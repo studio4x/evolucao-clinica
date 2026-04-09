@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Professional": {
+      "title": "Professional",
+      "description": "A healthcare professional using the app.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "google_email": { "type": "string" },
+        "full_name": { "type": "string" },
+        "photo_url": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "google_email", "full_name", "status"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "A patient registered by a professional.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "professional_id": { "type": "string" },
+        "full_name": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string" },
+        "google_doc_id": { "type": "string" },
+        "google_doc_name": { "type": "string" },
+        "google_doc_url": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "professional_id", "full_name", "status"]
+    },
+    "Evolution": {
+      "title": "Evolution",
+      "description": "A clinical evolution record for a patient.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "professional_id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "session_date": { "type": "string" },
+        "audio_storage_path": { "type": "string" },
+        "audio_url": { "type": "string" },
+        "transcription_status": { "type": "string" },
+        "transcription_text": { "type": "string" },
+        "google_doc_append_status": { "type": "string" },
+        "google_doc_append_at": { "type": "string", "format": "date-time" },
+        "error_message": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "professional_id", "patient_id", "session_date", "transcription_status", "google_doc_append_status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System notification for a user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "read_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "user_id", "type", "title", "message"]
+    },
+    "IntegrationLog": {
+      "title": "Integration Log",
+      "description": "Log of external API integrations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "patient_id": { "type": "string" },
+        "evolution_id": { "type": "string" },
+        "integration_type": { "type": "string" },
+        "status": { "type": "string" },
+        "request_summary": { "type": "string" },
+        "response_summary": { "type": "string" },
+        "error_message": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "user_id", "integration_type", "status"]
+    }
+  },
+  "firestore": {
+    "/professionals/{professionalId}": {
+      "schema": "Professional",
+      "description": "Professional profiles."
+    },
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Patients managed by professionals."
+    },
+    "/evolutions/{evolutionId}": {
+      "schema": "Evolution",
+      "description": "Clinical evolutions."
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications."
+    },
+    "/integration_logs/{logId}": {
+      "schema": "IntegrationLog",
+      "description": "Logs for integrations."
+    }
+  }
+}

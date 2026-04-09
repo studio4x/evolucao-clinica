@@ -1,0 +1,252 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: professionals
+    // Document ID: {professionalId} (matches auth.uid)
+    // Fields:
+    //   - id: string (required)
+    //   - google_email: string (required)
+    //   - full_name: string (required)
+    //   - photo_url: string (optional)
+    //   - role: string (optional)
+    //   - status: string (required)
+    //   - created_at: string (optional)
+    //   - updated_at: string (optional)
+    //
+    // Collection: patients
+    // Document ID: {patientId}
+    // Fields:
+    //   - id: string (required)
+    //   - professional_id: string (required)
+    //   - full_name: string (required)
+    //   - notes: string (optional)
+    //   - status: string (required)
+    //   - google_doc_id: string (optional)
+    //   - google_doc_name: string (optional)
+    //   - google_doc_url: string (optional)
+    //   - created_at: string (optional)
+    //   - updated_at: string (optional)
+    //
+    // Collection: evolutions
+    // Document ID: {evolutionId}
+    // Fields:
+    //   - id: string (required)
+    //   - professional_id: string (required)
+    //   - patient_id: string (required)
+    //   - session_date: string (required)
+    //   - audio_storage_path: string (optional)
+    //   - audio_url: string (optional)
+    //   - transcription_status: string (required)
+    //   - transcription_text: string (optional)
+    //   - google_doc_append_status: string (required)
+    //   - google_doc_append_at: string (optional)
+    //   - error_message: string (optional)
+    //   - created_at: string (optional)
+    //   - updated_at: string (optional)
+    //
+    // Collection: notifications
+    // Document ID: {notificationId}
+    // Fields:
+    //   - id: string (required)
+    //   - user_id: string (required)
+    //   - type: string (required)
+    //   - title: string (required)
+    //   - message: string (required)
+    //   - read_at: string (optional)
+    //   - created_at: string (optional)
+    //
+    // Collection: integration_logs
+    // Document ID: {logId}
+    // Fields:
+    //   - id: string (required)
+    //   - user_id: string (required)
+    //   - patient_id: string (optional)
+    //   - evolution_id: string (optional)
+    //   - integration_type: string (required)
+    //   - status: string (required)
+    //   - request_summary: string (optional)
+    //   - response_summary: string (optional)
+    //   - error_message: string (optional)
+    //   - created_at: string (optional)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function validStringLength(field, minLen, maxLen) {
+      return request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen;
+    }
+    
+    function validOptionalStringLength(field, minLen, maxLen) {
+      return !(field in request.resource.data) || 
+        (request.resource.data[field] is string &&
+        request.resource.data[field].size() >= minLen &&
+        request.resource.data[field].size() <= maxLen);
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidProfessional() {
+      let allowedFields = ['id', 'google_email', 'full_name', 'photo_url', 'role', 'status', 'created_at', 'updated_at'];
+      return hasRequiredFields(['id', 'google_email', 'full_name', 'status']) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             request.resource.data.id == request.auth.uid &&
+             validStringLength('id', 1, 100) &&
+             isValidEmail(request.resource.data.google_email) &&
+             validStringLength('full_name', 1, 200) &&
+             validOptionalStringLength('photo_url', 0, 1000) &&
+             validOptionalStringLength('role', 0, 50) &&
+             validStringLength('status', 1, 50) &&
+             validOptionalStringLength('created_at', 0, 50) &&
+             validOptionalStringLength('updated_at', 0, 50);
+    }
+
+    function isValidPatient() {
+      let allowedFields = ['id', 'professional_id', 'full_name', 'notes', 'status', 'google_doc_id', 'google_doc_name', 'google_doc_url', 'created_at', 'updated_at'];
+      return hasRequiredFields(['id', 'professional_id', 'full_name', 'status']) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             request.resource.data.professional_id == request.auth.uid &&
+             validStringLength('id', 1, 100) &&
+             validStringLength('professional_id', 1, 100) &&
+             validStringLength('full_name', 1, 200) &&
+             validOptionalStringLength('notes', 0, 5000) &&
+             validStringLength('status', 1, 50) &&
+             validOptionalStringLength('google_doc_id', 0, 200) &&
+             validOptionalStringLength('google_doc_name', 0, 500) &&
+             validOptionalStringLength('google_doc_url', 0, 1000) &&
+             validOptionalStringLength('created_at', 0, 50) &&
+             validOptionalStringLength('updated_at', 0, 50);
+    }
+
+    function isValidEvolution() {
+      let allowedFields = ['id', 'professional_id', 'patient_id', 'session_date', 'audio_storage_path', 'audio_url', 'transcription_status', 'transcription_text', 'google_doc_append_status', 'google_doc_append_at', 'error_message', 'created_at', 'updated_at'];
+      return hasRequiredFields(['id', 'professional_id', 'patient_id', 'session_date', 'transcription_status', 'google_doc_append_status']) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             request.resource.data.professional_id == request.auth.uid &&
+             validStringLength('id', 1, 100) &&
+             validStringLength('professional_id', 1, 100) &&
+             validStringLength('patient_id', 1, 100) &&
+             validStringLength('session_date', 1, 50) &&
+             validOptionalStringLength('audio_storage_path', 0, 500) &&
+             validOptionalStringLength('audio_url', 0, 1000) &&
+             validStringLength('transcription_status', 1, 50) &&
+             validOptionalStringLength('transcription_text', 0, 100000) &&
+             validStringLength('google_doc_append_status', 1, 50) &&
+             validOptionalStringLength('google_doc_append_at', 0, 50) &&
+             validOptionalStringLength('error_message', 0, 5000) &&
+             validOptionalStringLength('created_at', 0, 50) &&
+             validOptionalStringLength('updated_at', 0, 50);
+    }
+
+    function isValidNotification() {
+      let allowedFields = ['id', 'user_id', 'type', 'title', 'message', 'read_at', 'created_at'];
+      return hasRequiredFields(['id', 'user_id', 'type', 'title', 'message']) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             request.resource.data.user_id == request.auth.uid &&
+             validStringLength('id', 1, 100) &&
+             validStringLength('user_id', 1, 100) &&
+             validStringLength('type', 1, 50) &&
+             validStringLength('title', 1, 200) &&
+             validStringLength('message', 1, 2000) &&
+             validOptionalStringLength('read_at', 0, 50) &&
+             validOptionalStringLength('created_at', 0, 50);
+    }
+
+    function isValidIntegrationLog() {
+      let allowedFields = ['id', 'user_id', 'patient_id', 'evolution_id', 'integration_type', 'status', 'request_summary', 'response_summary', 'error_message', 'created_at'];
+      return hasRequiredFields(['id', 'user_id', 'integration_type', 'status']) &&
+             hasOnlyAllowedFields(allowedFields) &&
+             request.resource.data.user_id == request.auth.uid &&
+             validStringLength('id', 1, 100) &&
+             validStringLength('user_id', 1, 100) &&
+             validOptionalStringLength('patient_id', 0, 100) &&
+             validOptionalStringLength('evolution_id', 0, 100) &&
+             validStringLength('integration_type', 1, 100) &&
+             validStringLength('status', 1, 50) &&
+             validOptionalStringLength('request_summary', 0, 5000) &&
+             validOptionalStringLength('response_summary', 0, 5000) &&
+             validOptionalStringLength('error_message', 0, 5000) &&
+             validOptionalStringLength('created_at', 0, 50);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /professionals/{professionalId} {
+      allow read: if isOwner(professionalId);
+      allow create: if isOwner(professionalId) && isValidProfessional();
+      allow update: if isOwner(professionalId) && isValidProfessional() && 
+                    request.resource.data.id == resource.data.id &&
+                    request.resource.data.google_email == resource.data.google_email;
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAuthenticated() && resource.data.professional_id == request.auth.uid;
+      allow create: if isAuthenticated() && isValidPatient();
+      allow update: if isAuthenticated() && resource.data.professional_id == request.auth.uid && isValidPatient() &&
+                    request.resource.data.id == resource.data.id &&
+                    request.resource.data.professional_id == resource.data.professional_id;
+      allow delete: if isAuthenticated() && resource.data.professional_id == request.auth.uid;
+    }
+
+    match /evolutions/{evolutionId} {
+      allow read: if isAuthenticated() && resource.data.professional_id == request.auth.uid;
+      allow create: if isAuthenticated() && isValidEvolution();
+      allow update: if isAuthenticated() && resource.data.professional_id == request.auth.uid && isValidEvolution() &&
+                    request.resource.data.id == resource.data.id &&
+                    request.resource.data.professional_id == resource.data.professional_id;
+      allow delete: if isAuthenticated() && resource.data.professional_id == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && isValidNotification();
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid && isValidNotification() &&
+                    request.resource.data.id == resource.data.id &&
+                    request.resource.data.user_id == resource.data.user_id;
+      allow delete: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+    }
+
+    match /integration_logs/{logId} {
+      allow read: if isAuthenticated() && resource.data.user_id == request.auth.uid;
+      allow create: if isAuthenticated() && isValidIntegrationLog();
+      allow update: if isAuthenticated() && resource.data.user_id == request.auth.uid && isValidIntegrationLog() &&
+                    request.resource.data.id == resource.data.id &&
+                    request.resource.data.user_id == resource.data.user_id;
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Evolução Clínica Gemini",
+  "description": "Aplicativo para terapeutas ocupacionais registrarem evoluções de pacientes por áudio e inserirem automaticamente no Google Docs usando IA.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
