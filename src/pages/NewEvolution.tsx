@@ -165,6 +165,14 @@ export default function NewEvolution() {
     formData.append('patientName', patient.full_name);
     formData.append('sessionDate', sessionDate);
 
+    // Vercel Hobby tier limit is 4.5MB for request body
+    if (audioBlob.size > 4.4 * 1024 * 1024) {
+      const msg = "O arquivo de áudio é muito grande para o plano gratuito da Vercel (limite de 4.5MB). Tente gravar um áudio mais curto ou reduzir a qualidade.";
+      setErrorMessage(msg);
+      setStatus('error');
+      return;
+    }
+
     const maxRetries = 2;
     let retryCount = 0;
 
@@ -177,8 +185,21 @@ export default function NewEvolution() {
         });
 
         if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error || 'Erro ao processar evolução');
+          let errorMsg = 'Erro ao processar evolução';
+          try {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              const result = await response.json();
+              errorMsg = result.error || errorMsg;
+            } else {
+              const text = await response.text();
+              console.error("Server returned non-JSON error:", text);
+              errorMsg = `Erro do servidor (${response.status}): ${text.substring(0, 100)}...`;
+            }
+          } catch (e) {
+            errorMsg = `Erro do servidor (${response.status})`;
+          }
+          throw new Error(errorMsg);
         }
 
         const result = await response.json();

@@ -98,8 +98,21 @@ export default function PatientDetail() {
         });
 
         if (!response.ok) {
-          const result = await response.json();
-          throw new Error(result.error || 'Erro ao processar evolução');
+          let errorMsg = 'Erro ao processar evolução';
+          try {
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+              const result = await response.json();
+              errorMsg = result.error || errorMsg;
+            } else {
+              const text = await response.text();
+              console.error("Server returned non-JSON error:", text);
+              errorMsg = `Erro do servidor (${response.status}): ${text.substring(0, 100)}...`;
+            }
+          } catch (e) {
+            errorMsg = `Erro do servidor (${response.status})`;
+          }
+          throw new Error(errorMsg);
         }
 
         const result = await response.json();

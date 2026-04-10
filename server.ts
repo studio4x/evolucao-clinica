@@ -54,6 +54,17 @@ export async function startServer() {
       res.json({ status: "ok" });
     });
 
+    app.get("/api/debug-env", (req, res) => {
+      const envs = {
+        NODE_ENV: process.env.NODE_ENV,
+        VERCEL: process.env.VERCEL,
+        HAS_GEMINI_KEY: !!(process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY),
+        HAS_PICKER_KEY: !!process.env.VITE_GOOGLE_PICKER_API_KEY,
+        PORT: PORT
+      };
+      res.json(envs);
+    });
+
     app.get("/api/logs", (req, res) => {
       res.json({ logs: logHistory });
     });
@@ -103,14 +114,14 @@ export async function startServer() {
         if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
           console.error("[ERR] Chave da API Gemini não configurada ou usando placeholder.");
           return res.status(400).json({ 
-            error: "Chave da API Gemini não configurada. Por favor, configure sua chave real no painel de Segredos do AI Studio." 
+            error: "Chave da API Gemini não configurada. Por favor, configure sua chave real no painel de variáveis de ambiente da Vercel." 
           });
         }
 
         apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
-        console.log(`[LOG] Chave da API encontrada. Tamanho: ${apiKey.length}, Início: ${apiKey.substring(0, 4)}...`);
+        console.log(`[LOG] Chave da API encontrada. Tamanho: ${apiKey.length}`);
 
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new GoogleGenAI({ apiKey }) as any;
 
         // 1. Transcribe Audio with Gemini
         console.log("Iniciando transcrição com Gemini...");
@@ -118,20 +129,21 @@ export async function startServer() {
         
         const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: [
-            {
-              parts: [
-                { text: prompt },
-                { inlineData: { data: base64Audio, mimeType } }
-              ]
-            }
-          ]
-        });
+        const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
+        
+        const result = await model.generateContent([
+          prompt,
+          { inlineData: { data: base64Audio, mimeType } }
+        ]);
 
-        const transcriptionText = response.text;
-        console.log("Transcrição concluída com sucesso. Tamanho do texto:", transcriptionText?.length);
+        const response = await result.response;
+        const transcriptionText = response.text();
+        
+        if (!transcriptionText) {
+          throw new Error("A IA não retornou nenhuma transcrição para este áudio.");
+        }
+        
+        console.log("Transcrição concluída com sucesso. Tamanho do texto:", transcriptionText.length);
 
         // 2. Append to Google Docs
         console.log("Iniciando inserção no Google Docs...");
