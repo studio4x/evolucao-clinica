@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { appendToGoogleDoc } from '../services/googleDocs';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -144,43 +145,15 @@ export default function History() {
           throw new Error("A IA não retornou nenhuma transcrição.");
         }
 
-        console.log("Transcrição concluída. Enviando para o backend...");
+        console.log("Transcrição concluída. Inserindo no Google Docs...");
 
-        // 2. Send transcription to backend for Google Docs insertion
-        const response = await fetch('/api/process-evolution', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            googleAccessToken: currentToken!,
-            googleDocId: patient.google_doc_id,
-            patientName: patient.full_name,
-            sessionDate: evo.session_date,
-            transcription
-          }),
-          signal: controller.signal
-        });
-
-        if (!response.ok) {
-          let errorMsg = 'Erro ao inserir no Google Docs';
-          try {
-            const contentType = response.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-              const result = await response.json();
-              errorMsg = result.error || errorMsg;
-            } else {
-              const text = await response.text();
-              console.error("Server returned non-JSON error:", text);
-              errorMsg = `Erro do servidor (${response.status}): ${text.substring(0, 100)}...`;
-            }
-          } catch (e) {
-            errorMsg = `Erro do servidor (${response.status})`;
-          }
-          throw new Error(errorMsg);
-        }
-
-        const result = await response.json();
+        // 2. Insert transcription to Google Docs directly from frontend
+        await appendToGoogleDoc(
+          currentToken!,
+          patient.google_doc_id,
+          evo.session_date,
+          transcription
+        );
 
         // Update Firestore with success
         await updateDoc(doc(db, 'evolutions', evo.id), {
