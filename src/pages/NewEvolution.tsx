@@ -7,6 +7,19 @@ import { db, auth, googleProvider, storage } from '../firebase';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2 } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
+
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
 
 export default function NewEvolution() {
   const { id } = useParams();
@@ -178,14 +191,53 @@ export default function NewEvolution() {
 
     const attemptProcess = async () => {
       try {
+        // 1. Transcribe with Gemini (Frontend)
+        setStatus('processing');
+        console.log("Iniciando transcrição no frontend...");
+        
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+          throw new Error("Chave da API Gemini não encontrada no ambiente.");
+        }
+
+        const ai = new GoogleGenAI({ apiKey });
+        const base64Audio = await blobToBase64(audioBlob);
+        
+        const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+
+        const geminiResponse = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: {
+            parts: [
+              { text: prompt },
+              { inlineData: { data: base64Audio, mimeType: audioBlob.type || 'audio/webm' } }
+            ]
+          }
+        });
+
+        const transcription = geminiResponse.text;
+        if (!transcription) {
+          throw new Error("A IA não retornou nenhuma transcrição.");
+        }
+
+        console.log("Transcrição concluída. Enviando para o backend...");
+
+        // 2. Send transcription to backend for Google Docs insertion
+        const backendFormData = new FormData();
+        backendFormData.append('googleAccessToken', googleAccessToken);
+        backendFormData.append('googleDocId', patient.google_doc_id);
+        backendFormData.append('patientName', patient.full_name);
+        backendFormData.append('sessionDate', sessionDate);
+        backendFormData.append('transcription', transcription);
+
         const response = await fetch('/api/process-evolution', {
           method: 'POST',
-          body: formData,
+          body: backendFormData,
           signal: controller.signal
         });
 
         if (!response.ok) {
-          let errorMsg = 'Erro ao processar evolução';
+          let errorMsg = 'Erro ao inserir no Google Docs';
           try {
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
@@ -208,7 +260,7 @@ export default function NewEvolution() {
         await setDoc(doc(db, 'evolutions', evolutionId), {
           ...evolutionData,
           transcription_status: 'completed',
-          transcription_text: result.transcription,
+          transcription_text: transcription,
           google_doc_append_status: 'completed',
           google_doc_append_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

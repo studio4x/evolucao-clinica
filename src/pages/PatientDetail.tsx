@@ -5,6 +5,19 @@ import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { db, auth, googleProvider } from '../firebase';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2 } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
+
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
 
 export default function PatientDetail() {
   const { id } = useParams();
@@ -91,14 +104,56 @@ export default function PatientDetail() {
 
     const attemptProcess = async () => {
       try {
+        // 1. Fetch audio and transcribe with Gemini (Frontend)
+        console.log("Iniciando transcrição no frontend...");
+        
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+          throw new Error("Chave da API Gemini não encontrada no ambiente.");
+        }
+
+        const audioResponse = await fetch(evo.audio_url);
+        if (!audioResponse.ok) throw new Error("Falha ao baixar áudio para reprocessamento.");
+        const audioBlob = await audioResponse.blob();
+        
+        const ai = new GoogleGenAI({ apiKey });
+        const base64Audio = await blobToBase64(audioBlob);
+        
+        const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+
+        const geminiResponse = await ai.models.generateContent({
+          model: "gemini-3-flash-preview",
+          contents: {
+            parts: [
+              { text: prompt },
+              { inlineData: { data: base64Audio, mimeType: audioBlob.type || 'audio/webm' } }
+            ]
+          }
+        });
+
+        const transcription = geminiResponse.text;
+        if (!transcription) {
+          throw new Error("A IA não retornou nenhuma transcrição.");
+        }
+
+        console.log("Transcrição concluída. Enviando para o backend...");
+
+        // 2. Send transcription to backend for Google Docs insertion
+        const backendFormData = new FormData();
+        backendFormData.append('googleAccessToken', currentToken!);
+        backendFormData.append('googleDocId', patient.google_doc_id);
+        backendFormData.append('patientName', patient.full_name);
+        backendFormData.append('sessionDate', evo.session_date);
+        backendFormData.append('transcription', transcription);
+
         const response = await fetch('/api/process-evolution', {
           method: 'POST',
-          body: formData,
+          body: backendFormData,
           signal: controller.signal
         });
 
         if (!response.ok) {
-          let errorMsg = 'Erro ao processar evolução';
+          let errorMsg = 'Erro ao inserir no Google Docs';
           try {
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
@@ -120,7 +175,7 @@ export default function PatientDetail() {
         // Update Firestore with success
         await updateDoc(doc(db, 'evolutions', evo.id), {
           transcription_status: 'completed',
-          transcription_text: result.transcription,
+          transcription_text: transcription,
           google_doc_append_status: 'completed',
           google_doc_append_at: new Date().toISOString(),
           error_message: null,

@@ -2,8 +2,6 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import multer from "multer";
-import { GoogleGenAI } from "@google/genai";
-import admin from "firebase-admin";
 import { google } from "googleapis";
 import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
@@ -34,7 +32,7 @@ const PORT = Number(process.env.PORT) || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Set up multer for audio uploads using memory storage
+// Set up multer for audio uploads (no longer used for transcription but kept for compatibility if needed)
 const upload = multer({ 
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB
@@ -60,84 +58,32 @@ app.get("/api/logs", (req, res) => {
   res.json({ logs: logHistory });
 });
 
-// Process Evolution Route
+// Process Evolution Route - Now only handles Google Docs insertion
 app.post("/api/process-evolution", upload.single("audio"), async (req, res) => {
-  console.log("--- INICIANDO PROCESSAMENTO DE EVOLUÇÃO ---");
-  console.log("Request size (Content-Length):", req.headers['content-length']);
+  console.log("--- INICIANDO INSERÇÃO NO GOOGLE DOCS ---");
   try {
-    const { googleAccessToken, googleDocId, patientName, sessionDate, audioUrl } = req.body;
-    let fileBuffer: Buffer;
-    let mimeType: string;
+    const { googleAccessToken, googleDocId, patientName, sessionDate, transcription } = req.body;
 
     console.log("Dados recebidos:", { 
       hasGoogleToken: !!googleAccessToken, 
       googleDocId, 
       patientName, 
       sessionDate, 
-      audioUrl,
-      hasFile: !!req.file 
+      hasTranscription: !!transcription
     });
-
-    if (req.file) {
-      console.log("Usando arquivo de áudio enviado diretamente.");
-      fileBuffer = req.file.buffer;
-      mimeType = req.file.mimetype || "audio/webm";
-    } else if (audioUrl) {
-      console.log("Baixando áudio da URL do Firebase Storage...");
-      const response = await fetch(audioUrl);
-      if (!response.ok) throw new Error(`Failed to fetch audio from URL: ${response.statusText}`);
-      const arrayBuffer = await response.arrayBuffer();
-      fileBuffer = Buffer.from(arrayBuffer);
-      mimeType = response.headers.get("content-type") || "audio/webm";
-      console.log("Áudio baixado com sucesso. Tamanho:", fileBuffer.length, "bytes");
-    } else {
-      console.log("Erro: Nenhum áudio fornecido.");
-      return res.status(400).json({ error: "No audio file or URL provided" });
-    }
 
     if (!googleAccessToken || !googleDocId) {
       console.log("Erro: Credenciais do Google ou Doc ID ausentes.");
       return res.status(400).json({ error: "Missing Google credentials or Doc ID" });
     }
 
-    // Initialize Gemini
-    let apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-      console.error("[ERR] Chave da API Gemini não configurada ou usando placeholder.");
-      return res.status(400).json({ 
-        error: "Chave da API Gemini não configurada. Por favor, configure sua chave real no painel de variáveis de ambiente da Vercel." 
-      });
+    if (!transcription) {
+      console.log("Erro: Transcrição ausente.");
+      return res.status(400).json({ error: "Missing transcription" });
     }
-
-    apiKey = apiKey.trim().replace(/^["']|["']$/g, '');
-    console.log(`[LOG] Chave da API encontrada. Tamanho: ${apiKey.length}`);
-
-    const ai = new GoogleGenAI({ apiKey }) as any;
-
-    // 1. Transcribe Audio with Gemini
-    console.log("Iniciando transcrição com Gemini...");
-    const base64Audio = fileBuffer.toString("base64");
-    
-    const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
-
-    const model = ai.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { data: base64Audio, mimeType } }
-    ]);
-
-    const response = await result.response;
-    const transcriptionText = response.text();
-    
-    if (!transcriptionText) {
-      throw new Error("A IA não retornou nenhuma transcrição para este áudio.");
-    }
-    
-    console.log("Transcrição concluída com sucesso. Tamanho do texto:", transcriptionText.length);
 
     // 2. Append to Google Docs
-    console.log("Iniciando inserção no Google Docs...");
+    console.log("Iniciando batchUpdate no Google Docs...");
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({ access_token: googleAccessToken });
 
@@ -152,7 +98,7 @@ app.post("/api/process-evolution", upload.single("audio"), async (req, res) => {
       formattedDate = `${day}/${month}/${year}`;
     }
     
-    const textToAppend = `Data da sessão: ${formattedDate} às ${formattedTime}\n\nEvolução:\n${transcriptionText}\n\n----------------------------------------\n\n`;
+    const textToAppend = `Data da sessão: ${formattedDate} às ${formattedTime}\n\nEvolução:\n${transcription}\n\n----------------------------------------\n\n`;
 
     await docs.documents.batchUpdate({
       documentId: googleDocId,
@@ -171,12 +117,12 @@ app.post("/api/process-evolution", upload.single("audio"), async (req, res) => {
 
     res.json({ 
       success: true, 
-      transcription: transcriptionText 
+      transcription: transcription 
     });
-    console.log("--- PROCESSAMENTO FINALIZADO COM SUCESSO ---");
+    console.log("--- PROCESSO FINALIZADO ---");
 
   } catch (error: any) {
-    console.error("Erro durante o processamento da evolução:", error);
+    console.error("Erro durante a inserção no Google Docs:", error);
     res.status(500).json({ error: error.message || "Internal server error" });
   }
 });
@@ -186,12 +132,25 @@ app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
 });
 
+// Error handling middleware to ensure JSON responses for API errors
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Express error:", err);
+  if (req.path && req.path.startsWith('/api/')) {
+    return res.status(err.status || 500).json({ 
+      error: err.message || "Internal Server Error",
+      details: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+  } else {
+    next(err);
+  }
+});
+
 export async function startServer() {
   try {
     // Startup check for Gemini API Key
-    const startupKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY;
-    if (!startupKey || startupKey === "MY_GEMINI_API_KEY") {
-      console.warn("Chave da API Gemini não detectada ou usando placeholder no início do servidor.");
+    const startupKey = process.env.GEMINI_API_KEY;
+    if (!startupKey) {
+      console.warn("Chave da API Gemini não detectada no início do servidor.");
     } else {
       console.log(`Servidor iniciado com chave Gemini detectada.`);
     }
@@ -210,19 +169,6 @@ export async function startServer() {
         res.sendFile(path.join(distPath, "index.html"));
       });
     }
-
-    // Error handling middleware to ensure JSON responses for API errors
-    app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-      console.error("Express error:", err);
-      if (req.path.startsWith('/api/')) {
-        return res.status(err.status || 500).json({ 
-          error: err.message || "Internal Server Error",
-          details: err.stack
-        });
-      } else {
-        next(err);
-      }
-    });
 
     if (!process.env.VERCEL) {
       const server = app.listen(PORT, "0.0.0.0", () => {
