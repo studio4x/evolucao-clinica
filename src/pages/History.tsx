@@ -83,6 +83,63 @@ export default function History() {
 
     setProcessingId(evo.id);
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
+    
+    // Call backend
+    const formData = new FormData();
+    formData.append('audioUrl', evo.audio_url);
+    formData.append('googleAccessToken', currentToken!);
+    formData.append('googleDocId', patient.google_doc_id);
+    formData.append('patientName', patient.full_name);
+    formData.append('sessionDate', evo.session_date);
+
+    const maxRetries = 2;
+    let retryCount = 0;
+
+    const attemptProcess = async () => {
+      try {
+        const response = await fetch('/api/process-evolution', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Erro ao processar evolução');
+        }
+
+        const result = await response.json();
+
+        // Update Firestore with success
+        await updateDoc(doc(db, 'evolutions', evo.id), {
+          transcription_status: 'completed',
+          transcription_text: result.transcription,
+          google_doc_append_status: 'completed',
+          google_doc_append_at: new Date().toISOString(),
+          error_message: null,
+          updated_at: new Date().toISOString()
+        });
+
+        clearTimeout(timeoutId);
+        await fetchHistory();
+        alert("Evolução reprocessada com sucesso!");
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          throw error;
+        }
+
+        if (retryCount < maxRetries && (error.message === 'Failed to fetch' || error.message?.includes('network'))) {
+          retryCount++;
+          console.log(`Retrying process-evolution... Attempt ${retryCount}`);
+          await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+          return attemptProcess();
+        }
+        throw error;
+      }
+    };
+
     try {
       // Update status to processing
       await updateDoc(doc(db, 'evolutions', evo.id), {
@@ -91,47 +148,23 @@ export default function History() {
         updated_at: new Date().toISOString()
       });
 
-      // Call backend
-      const formData = new FormData();
-      formData.append('audioUrl', evo.audio_url);
-      formData.append('googleAccessToken', currentToken!);
-      formData.append('googleDocId', patient.google_doc_id);
-      formData.append('patientName', patient.full_name);
-      formData.append('sessionDate', evo.session_date);
-
-      const response = await fetch('/api/process-evolution', {
-        method: 'POST',
-        body: formData,
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao processar evolução');
-      }
-
-      // Update Firestore with success
-      await updateDoc(doc(db, 'evolutions', evo.id), {
-        transcription_status: 'completed',
-        transcription_text: result.transcription,
-        google_doc_append_status: 'completed',
-        google_doc_append_at: new Date().toISOString(),
-        error_message: null,
-        updated_at: new Date().toISOString()
-      });
-
-      // Refresh history
-      await fetchHistory();
-      alert("Evolução reprocessada com sucesso!");
+      await attemptProcess();
     } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error("Reprocessing error:", error);
+      
+      let msg = error.message || "Erro desconhecido";
+      if (error.name === 'AbortError') {
+        msg = "O processamento demorou muito tempo e foi cancelado.";
+      }
+      
       await updateDoc(doc(db, 'evolutions', evo.id), {
         transcription_status: 'failed',
-        error_message: error.message || "Erro desconhecido",
+        error_message: msg,
         updated_at: new Date().toISOString()
       });
       await fetchHistory();
-      alert(`Erro ao reprocessar: ${error.message}`);
+      alert(`Erro ao reprocessar: ${msg}`);
     } finally {
       setProcessingId(null);
     }

@@ -146,54 +146,82 @@ export default function NewEvolution() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
     
+    // 1. Prepare data
+    const evolutionData = {
+      id: evolutionId,
+      professional_id: auth.currentUser.uid,
+      patient_id: patient.id,
+      session_date: sessionDate,
+      transcription_status: 'processing',
+      google_doc_append_status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const formData = new FormData();
+    formData.append('audio', audioBlob);
+    formData.append('googleAccessToken', googleAccessToken);
+    formData.append('googleDocId', patient.google_doc_id);
+    formData.append('patientName', patient.full_name);
+    formData.append('sessionDate', sessionDate);
+
+    const maxRetries = 2;
+    let retryCount = 0;
+
+    const attemptProcess = async () => {
+      try {
+        const response = await fetch('/api/process-evolution', {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Erro ao processar evolução');
+        }
+
+        const result = await response.json();
+
+        // 3. Update Firestore with success
+        await setDoc(doc(db, 'evolutions', evolutionId), {
+          ...evolutionData,
+          transcription_status: 'completed',
+          transcription_text: result.transcription,
+          google_doc_append_status: 'completed',
+          google_doc_append_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+        setStatus('success');
+        clearTimeout(timeoutId);
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          throw error;
+        }
+
+        let responseStatus = 0;
+        try {
+          // If we have a response object from a previous failed attempt (e.g. 500 error)
+          // we might want to check its status. But here 'response' is local to the try block.
+        } catch (e) {}
+
+        if (retryCount < maxRetries && (error.message === 'Failed to fetch' || error.message?.includes('network'))) {
+          retryCount++;
+          console.log(`Retrying process-evolution... Attempt ${retryCount}`);
+          await new Promise(resolve => setTimeout(resolve, 2000 * retryCount));
+          return attemptProcess();
+        }
+        throw error;
+      }
+    };
+
     try {
       // 1. Save initial state to Firestore
-      const evolutionData = {
-        id: evolutionId,
-        professional_id: auth.currentUser.uid,
-        patient_id: patient.id,
-        session_date: sessionDate,
-        transcription_status: 'processing',
-        google_doc_append_status: 'pending',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
       await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
 
       // 2. Send to Backend
-      const formData = new FormData();
-      formData.append('audio', audioBlob);
-      formData.append('googleAccessToken', googleAccessToken);
-      formData.append('googleDocId', patient.google_doc_id);
-      formData.append('patientName', patient.full_name);
-      formData.append('sessionDate', sessionDate);
-
-      const response = await fetch('/api/process-evolution', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao processar evolução');
-      }
-
-      // 3. Update Firestore with success
-      await setDoc(doc(db, 'evolutions', evolutionId), {
-        ...evolutionData,
-        transcription_status: 'completed',
-        transcription_text: result.transcription,
-        google_doc_append_status: 'completed',
-        google_doc_append_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-
-      setStatus('success');
+      await attemptProcess();
     } catch (error: any) {
       clearTimeout(timeoutId);
       console.error("Processing error:", error);
