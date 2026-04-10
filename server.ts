@@ -27,10 +27,10 @@ console.error = function (...args) {
   originalError.apply(console, args);
 };
 
-const app = express();
-const PORT = 3000;
+export const app = express();
+const PORT = Number(process.env.PORT) || 3000;
 
-async function startServer() {
+export async function startServer() {
   try {
     // Startup check for Gemini API Key
     const startupKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY;
@@ -211,17 +211,23 @@ async function startServer() {
       }
     });
 
-    const server = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
+    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+      const server = app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
 
-    // Increase timeout to 5 minutes for long audio processing
-    server.timeout = 300000;
-    server.keepAliveTimeout = 301000;
-    server.headersTimeout = 302000;
+      // Increase timeout to 5 minutes for long audio processing
+      server.timeout = 300000;
+      server.keepAliveTimeout = 301000;
+      server.headersTimeout = 302000;
+    }
   } catch (err) {
     console.error("CRITICAL STARTUP ERROR:", err);
   }
 }
 
-startServer();
+// Only start the server if this file is run directly and not imported as a module
+// or if we're not in a Vercel environment
+if (import.meta.url === `file://${process.argv[1]}` || (process.env.NODE_ENV !== "production" && !process.env.VERCEL)) {
+  startServer();
+}
