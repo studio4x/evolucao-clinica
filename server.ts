@@ -211,7 +211,7 @@ export async function startServer() {
       }
     });
 
-    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    if (!process.env.VERCEL) {
       const server = app.listen(PORT, "0.0.0.0", () => {
         console.log(`Server running on http://localhost:${PORT}`);
       });
@@ -226,8 +226,7 @@ export async function startServer() {
   }
 }
 
-// Only start the server if this file is run directly and not imported as a module
-// or if we're not in a Vercel environment
-if (import.meta.url === `file://${process.argv[1]}` || (process.env.NODE_ENV !== "production" && !process.env.VERCEL)) {
+// Start the server if not in a Vercel environment
+if (!process.env.VERCEL) {
   startServer();
 }
