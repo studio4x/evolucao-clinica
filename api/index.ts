@@ -1,10 +1,8 @@
 import { app, startServer } from "../server";
 
-// Ensure the server is initialized (routes, etc.)
-try {
-  await startServer();
-} catch (error) {
-  console.error("Failed to start server in Vercel:", error);
-}
+// Initialize server logic
+startServer().catch(err => {
+  console.error("Failed to initialize server:", err);
+});
 
 export default app;
