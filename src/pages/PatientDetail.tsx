@@ -220,6 +220,9 @@ export default function PatientDetail() {
       let msg = error.message || "Erro desconhecido";
       if (error.name === 'AbortError') {
         msg = "O processamento demorou muito tempo e foi cancelado.";
+      } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
+        msg = "Sua sessão do Google expirou. Por favor, renove a autenticação clicando no botão 'Renovar Autenticação Google' no topo da página.";
+        setGoogleAccessToken(null);
       }
       
       await updateDoc(doc(db, 'evolutions', evo.id), {

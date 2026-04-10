@@ -302,6 +302,9 @@ export default function NewEvolution() {
         msg = "O processamento demorou muito tempo (mais de 5 minutos) e foi cancelado. Tente com um áudio mais curto ou verifique sua conexão.";
       } else if (msg === 'Failed to fetch') {
         msg = "Não foi possível conectar ao servidor. Verifique sua conexão com a internet ou tente novamente em instantes.";
+      } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
+        msg = "Sua sessão do Google expirou. Por favor, renove a autenticação clicando no botão abaixo.";
+        setGoogleAccessToken(null);
       }
       
       setErrorMessage(msg);

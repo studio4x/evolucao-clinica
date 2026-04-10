@@ -1,25 +1,5 @@
 import express from "express";
 import path from "path";
-import { v4 as uuidv4 } from "uuid";
-
-// --- LOGGING INTERCEPTOR FOR DEBUGGING ---
-const logHistory: string[] = [];
-const originalLog = console.log;
-const originalError = console.error;
-
-console.log = function (...args) {
-  const msg = `[LOG] ${new Date().toISOString()} - ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`;
-  logHistory.push(msg);
-  if (logHistory.length > 100) logHistory.shift();
-  originalLog.apply(console, args);
-};
-
-console.error = function (...args) {
-  const msg = `[ERR] ${new Date().toISOString()} - ${args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ')}`;
-  logHistory.push(msg);
-  if (logHistory.length > 100) logHistory.shift();
-  originalError.apply(console, args);
-};
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -42,10 +22,6 @@ app.get("/api/debug-env", (req, res) => {
     PORT: PORT
   };
   res.json(envs);
-});
-
-app.get("/api/logs", (req, res) => {
-  res.json({ logs: logHistory });
 });
 
 // Process Evolution Route - Now only handles Google Docs insertion via JSON
@@ -88,28 +64,43 @@ app.post("/api/process-evolution", async (req, res) => {
 
     const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
     
-    const googleResponse = await fetch(googleDocsUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${googleAccessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        requests: [
-          {
-            insertText: {
-              location: { index: 1 },
-              text: textToAppend,
-            },
-          },
-        ],
-      })
-    });
+    // Add an AbortController to timeout the request before Vercel kills the function (10s limit on Hobby)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 seconds timeout
 
-    if (!googleResponse.ok) {
-      const errorText = await googleResponse.text();
-      console.error("Erro na API do Google Docs:", errorText);
-      throw new Error(`Google Docs API error: ${googleResponse.status} - ${errorText}`);
+    try {
+      const googleResponse = await fetch(googleDocsUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${googleAccessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          requests: [
+            {
+              insertText: {
+                location: { index: 1 },
+                text: textToAppend,
+              },
+            },
+          ],
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!googleResponse.ok) {
+        const errorText = await googleResponse.text();
+        console.error("Erro na API do Google Docs:", errorText);
+        throw new Error(`Google Docs API error: ${googleResponse.status} - ${errorText}`);
+      }
+    } catch (fetchError: any) {
+      clearTimeout(timeoutId);
+      if (fetchError.name === 'AbortError') {
+        throw new Error("A requisição para o Google Docs demorou muito e foi cancelada (Timeout).");
+      }
+      throw fetchError;
     }
 
     console.log("Inserção no Google Docs concluída com sucesso.");

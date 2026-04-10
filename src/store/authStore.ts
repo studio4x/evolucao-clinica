@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import { User } from 'firebase/auth';
 
 interface AuthState {
@@ -10,11 +11,20 @@ interface AuthState {
   setAuthReady: (ready: boolean) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  googleAccessToken: null,
-  isAuthReady: false,
-  setUser: (user) => set({ user }),
-  setGoogleAccessToken: (token) => set({ googleAccessToken: token }),
-  setAuthReady: (ready) => set({ isAuthReady: ready }),
-}));
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set) => ({
+      user: null,
+      googleAccessToken: null,
+      isAuthReady: false,
+      setUser: (user) => set({ user }),
+      setGoogleAccessToken: (token) => set({ googleAccessToken: token }),
+      setAuthReady: (ready) => set({ isAuthReady: ready }),
+    }),
+    {
+      name: 'auth-storage',
+      // Only persist the googleAccessToken, as Firebase handles the user session
+      partialize: (state) => ({ googleAccessToken: state.googleAccessToken }),
+    }
+  )
+);
