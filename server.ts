@@ -1,9 +1,7 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import multer from "multer";
 import { google } from "googleapis";
-import fs from "fs";
 import { v4 as uuidv4 } from "uuid";
 
 // --- LOGGING INTERCEPTOR FOR DEBUGGING ---
@@ -58,18 +56,18 @@ app.get("/api/logs", (req, res) => {
   res.json({ logs: logHistory });
 });
 
-// Process Evolution Route - Now only handles Google Docs insertion
-app.post("/api/process-evolution", upload.single("audio"), async (req, res) => {
+// Process Evolution Route - Now only handles Google Docs insertion via JSON
+app.post("/api/process-evolution", async (req, res) => {
   console.log("--- INICIANDO INSERÇÃO NO GOOGLE DOCS ---");
   try {
     const { googleAccessToken, googleDocId, patientName, sessionDate, transcription } = req.body;
 
-    console.log("Dados recebidos:", { 
+    console.log("Dados recebidos (JSON):", { 
       hasGoogleToken: !!googleAccessToken, 
       googleDocId, 
       patientName, 
       sessionDate, 
-      hasTranscription: !!transcription
+      transcriptionLength: transcription?.length
     });
 
     if (!googleAccessToken || !googleDocId) {
@@ -157,6 +155,7 @@ export async function startServer() {
 
     // Vite middleware for development
     if (process.env.NODE_ENV !== "production") {
+      const { createServer: createViteServer } = await import("vite");
       const vite = await createViteServer({
         server: { middlewareMode: true },
         appType: "spa",

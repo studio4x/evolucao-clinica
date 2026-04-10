@@ -147,16 +147,18 @@ export default function History() {
         console.log("Transcrição concluída. Enviando para o backend...");
 
         // 2. Send transcription to backend for Google Docs insertion
-        const backendFormData = new FormData();
-        backendFormData.append('googleAccessToken', currentToken!);
-        backendFormData.append('googleDocId', patient.google_doc_id);
-        backendFormData.append('patientName', patient.full_name);
-        backendFormData.append('sessionDate', evo.session_date);
-        backendFormData.append('transcription', transcription);
-
         const response = await fetch('/api/process-evolution', {
           method: 'POST',
-          body: backendFormData,
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            googleAccessToken: currentToken!,
+            googleDocId: patient.google_doc_id,
+            patientName: patient.full_name,
+            sessionDate: evo.session_date,
+            transcription
+          }),
           signal: controller.signal
         });
 
