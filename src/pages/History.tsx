@@ -196,8 +196,10 @@ export default function History() {
         await fetchHistory();
         alert("Evolução reprocessada com sucesso!");
       } catch (error: any) {
-        if (error.name === 'AbortError') {
-          throw error;
+        if (error.name === 'AbortError' || error.message?.includes('aborted')) {
+          const abortError = new Error("O processamento demorou muito tempo ou foi cancelado pelo navegador.");
+          abortError.name = 'AbortError';
+          throw abortError;
         }
 
         if (retryCount < maxRetries && (error.message === 'Failed to fetch' || error.message?.includes('network'))) {

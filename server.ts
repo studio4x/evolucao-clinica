@@ -1,7 +1,5 @@
 import express from "express";
 import path from "path";
-import multer from "multer";
-import { google } from "googleapis";
 import { v4 as uuidv4 } from "uuid";
 
 // --- LOGGING INTERCEPTOR FOR DEBUGGING ---
@@ -27,14 +25,8 @@ export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 
 // Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
-
-// Set up multer for audio uploads (no longer used for transcription but kept for compatibility if needed)
-const upload = multer({ 
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
-});
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // API Routes
 app.get("/api/health", (req, res) => {
@@ -80,15 +72,11 @@ app.post("/api/process-evolution", async (req, res) => {
       return res.status(400).json({ error: "Missing transcription" });
     }
 
-    // 2. Append to Google Docs
-    console.log("Iniciando batchUpdate no Google Docs...");
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({ access_token: googleAccessToken });
-
-    const docs = google.docs({ version: "v1", auth: oauth2Client });
+    // 2. Append to Google Docs via REST API (lighter than googleapis)
+    console.log("Iniciando inserção via REST API no Google Docs...");
     
     const now = new Date();
-    const formattedTime = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const formattedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     
     let formattedDate = sessionDate;
     if (sessionDate && sessionDate.includes('-')) {
@@ -98,9 +86,15 @@ app.post("/api/process-evolution", async (req, res) => {
     
     const textToAppend = `Data da sessão: ${formattedDate} às ${formattedTime}\n\nEvolução:\n${transcription}\n\n----------------------------------------\n\n`;
 
-    await docs.documents.batchUpdate({
-      documentId: googleDocId,
-      requestBody: {
+    const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
+    
+    const googleResponse = await fetch(googleDocsUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${googleAccessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
         requests: [
           {
             insertText: {
@@ -109,8 +103,15 @@ app.post("/api/process-evolution", async (req, res) => {
             },
           },
         ],
-      },
+      })
     });
+
+    if (!googleResponse.ok) {
+      const errorText = await googleResponse.text();
+      console.error("Erro na API do Google Docs:", errorText);
+      throw new Error(`Google Docs API error: ${googleResponse.status} - ${errorText}`);
+    }
+
     console.log("Inserção no Google Docs concluída com sucesso.");
 
     res.json({ 
