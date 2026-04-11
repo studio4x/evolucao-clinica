@@ -1,10 +1,33 @@
-const CACHE_NAME = 'evolucao-cache-v1';
+const CACHE_NAME = 'evolucao-cache-v2';
+const URLS_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png'
+];
 
 self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(URLS_TO_CACHE);
+    })
+  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
   event.waitUntil(self.clients.claim());
 });
 
@@ -19,17 +42,33 @@ self.addEventListener('fetch', (event) => {
         const audioFile = formData.get('audio');
 
         if (audioFile) {
-          // Save to IndexedDB
           await saveSharedFile(audioFile);
         }
-
-        // Redirect to the frontend route to handle the UI
         return Response.redirect('/share-target', 303);
       } catch (error) {
         console.error('Error processing share target:', error);
         return Response.redirect('/?error=share_failed', 303);
       }
     })());
+    return;
+  }
+
+  // Offline fallback for GET requests
+  if (event.request.method === 'GET') {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        return caches.match(event.request).then((response) => {
+          if (response) {
+            return response;
+          }
+          // If it's a navigation request, return index.html
+          if (event.request.mode === 'navigate') {
+            return caches.match('/');
+          }
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+        });
+      })
+    );
   }
 });
 
@@ -49,7 +88,6 @@ function saveSharedFile(file) {
       const transaction = db.transaction('files', 'readwrite');
       const store = transaction.objectStore('files');
       
-      // We store it under a fixed key 'shared-audio'
       const putRequest = store.put(file, 'shared-audio');
       
       putRequest.onsuccess = () => resolve();
