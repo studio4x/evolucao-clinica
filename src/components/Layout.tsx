@@ -2,14 +2,45 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 export default function Layout() {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // Prevent the mini-infobar from appearing on mobile
+      e.preventDefault();
+      // Stash the event so it can be triggered later.
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    // Show the install prompt
+    deferredPrompt.prompt();
+    // Wait for the user to respond to the prompt
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      console.log('User accepted the install prompt');
+    } else {
+      console.log('User dismissed the install prompt');
+    }
+    // We've used the prompt, and can't use it again, throw it away
+    setDeferredPrompt(null);
+  };
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -79,7 +110,16 @@ export default function Layout() {
           </nav>
         </div>
 
-        <div className="absolute bottom-0 w-full p-4 border-t border-brand-border bg-white">
+        <div className="absolute bottom-0 w-full p-4 border-t border-brand-border bg-white space-y-2">
+          {deferredPrompt && (
+            <button
+              onClick={handleInstallClick}
+              className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
+            >
+              <Download size={20} />
+              <span className="font-medium">Instalar App</span>
+            </button>
+          )}
           <button
             onClick={handleLogout}
             className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors"
