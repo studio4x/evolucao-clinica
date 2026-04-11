@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="100%" height="100%">
+  <defs>
+    <style>
+      .text-title { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 72px; fill: #005C13; letter-spacing: 2px; }
+      .text-subtitle { font-family: 'Inter', sans-serif; font-weight: 500; font-size: 42px; fill: #5C4716; }
+      .trunk { fill: #5C4716; }
+      .leaf-dark { fill: #005C13; }
+      .leaf-light { fill: #8CC63F; }
+    </style>
+  </defs>
+  
+  <!-- Tree Icon (Left) -->
+  <g transform="translate(20, 10) scale(0.9)">
+    <!-- Trunk (Hands) -->
+    <path class="trunk" d="M100,180 C100,140 80,120 60,100 C70,110 85,120 90,140 C105,110 130,90 150,80 C130,100 110,120 110,180 Z" />
+    <path class="trunk" d="M60,100 C50,90 40,80 30,70 C45,85 55,95 65,110 Z" />
+    <path class="trunk" d="M150,80 C160,75 170,70 180,65 C165,80 155,90 140,105 Z" />
+    
+    <!-- Leaves (Simplified representation) -->
+    <ellipse class="leaf-dark" cx="100" cy="40" rx="15" ry="25" transform="rotate(15 100 40)" />
+    <ellipse class="leaf-light" cx="70" cy="50" rx="12" ry="20" transform="rotate(-30 70 50)" />
+    <ellipse class="leaf-dark" cx="130" cy="50" rx="12" ry="20" transform="rotate(30 130 50)" />
+    <ellipse class="leaf-light" cx="50" cy="80" rx="10" ry="18" transform="rotate(-60 50 80)" />
+    <ellipse class="leaf-dark" cx="150" cy="80" rx="10" ry="18" transform="rotate(60 150 80)" />
+    <ellipse class="leaf-light" cx="85" cy="25" rx="10" ry="18" transform="rotate(-15 85 25)" />
+    <ellipse class="leaf-dark" cx="115" cy="25" rx="10" ry="18" transform="rotate(15 115 25)" />
+    <ellipse class="leaf-light" cx="40" cy="110" rx="8" ry="15" transform="rotate(-75 40 110)" />
+    <ellipse class="leaf-dark" cx="160" cy="110" rx="8" ry="15" transform="rotate(75 160 110)" />
+    
+    <ellipse class="leaf-dark" cx="80" cy="70" rx="12" ry="20" transform="rotate(-20 80 70)" />
+    <ellipse class="leaf-light" cx="120" cy="70" rx="12" ry="20" transform="rotate(20 120 70)" />
+  </g>
+
+  <!-- Text (Right) -->
+  <text x="220" y="90" class="text-title">CONEXÃO SERES</text>
+  <text x="225" y="150" class="text-subtitle">Terapia Ocupacional</text>
+</svg>

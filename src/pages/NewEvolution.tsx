@@ -298,39 +298,39 @@ export default function NewEvolution() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Nova Evolução</h1>
-        <span className="text-sm font-medium text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+        <h1 className="text-2xl font-display font-semibold text-brand-primary">Nova Evolução</h1>
+        <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">
           {patient.full_name}
         </span>
       </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-sm border space-y-6">
+      <div className="card p-6 space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Data da Sessão</label>
+          <label className="block text-sm font-medium text-brand-text mb-1">Data da Sessão</label>
           <input
             type="date"
             required
             value={sessionDate}
             onChange={e => setSessionDate(e.target.value)}
-            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+            className="input-field p-2"
           />
         </div>
 
-        <div className="border-t pt-6">
-          <label className="block text-sm font-medium text-gray-700 mb-4">Áudio da Evolução</label>
+        <div className="border-t border-brand-border pt-6">
+          <label className="block text-sm font-medium text-brand-text mb-4">Áudio da Evolução</label>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Record Audio */}
-            <div className="border rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4 bg-gray-50">
+            <div className="border border-brand-border rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4 bg-brand-bg/50">
               {isRecording ? (
                 <>
                   <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
                     <Mic className="text-red-600 w-8 h-8" />
                   </div>
-                  <div className="text-2xl font-mono text-gray-900">{formatTime(recordingTime)}</div>
+                  <div className="text-2xl font-mono text-brand-text">{formatTime(recordingTime)}</div>
                   <button
                     onClick={stopRecording}
-                    className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+                    className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-colors"
                   >
                     <Square size={16} />
                     <span>Parar Gravação</span>
@@ -338,13 +338,13 @@ export default function NewEvolution() {
                 </>
               ) : (
                 <>
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
-                    <Mic className="text-blue-600 w-8 h-8" />
+                  <div className="w-16 h-16 bg-brand-primary/10 rounded-full flex items-center justify-center">
+                    <Mic className="text-brand-primary w-8 h-8" />
                   </div>
-                  <p className="text-sm text-gray-600">Grave o áudio diretamente pelo navegador</p>
+                  <p className="text-sm text-brand-text-muted">Grave o áudio diretamente pelo navegador</p>
                   <button
                     onClick={startRecording}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+                    className="btn-primary"
                   >
                     Iniciar Gravação
                   </button>
@@ -353,12 +353,12 @@ export default function NewEvolution() {
             </div>
 
             {/* Upload Audio */}
-            <div className="border rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4 bg-gray-50">
-              <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-                <Upload className="text-gray-600 w-8 h-8" />
+            <div className="border border-brand-border rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4 bg-brand-bg/50">
+              <div className="w-16 h-16 bg-brand-bg rounded-full flex items-center justify-center border border-brand-border">
+                <Upload className="text-brand-text-muted w-8 h-8" />
               </div>
-              <p className="text-sm text-gray-600">Ou envie um arquivo de áudio do seu dispositivo</p>
-              <label className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 cursor-pointer">
+              <p className="text-sm text-brand-text-muted">Ou envie um arquivo de áudio do seu dispositivo</p>
+              <label className="btn-outline cursor-pointer">
                 <span>Escolher Arquivo</span>
                 <input
                   type="file"
@@ -371,9 +371,9 @@ export default function NewEvolution() {
           </div>
 
           {audioUrl && !isRecording && (
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
+            <div className="mt-6 p-4 bg-brand-primary/5 rounded-xl border border-brand-primary/20 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-blue-900">Áudio selecionado:</p>
+                <p className="text-sm font-medium text-brand-primary">Áudio selecionado:</p>
                 <button
                   onClick={handleClearAudio}
                   className="flex items-center space-x-1 text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
@@ -388,9 +388,9 @@ export default function NewEvolution() {
         </div>
 
         {/* Status and Submit */}
-        <div className="border-t pt-6">
+        <div className="border-t border-brand-border pt-6">
           {!googleAccessToken ? (
-            <div className="flex flex-col items-center justify-center p-6 bg-yellow-50 rounded-lg border border-yellow-100 space-y-3">
+            <div className="flex flex-col items-center justify-center p-6 bg-yellow-50 rounded-xl border border-yellow-100 space-y-3">
               <AlertCircle className="w-8 h-8 text-yellow-600" />
               <p className="text-yellow-900 font-medium text-center">
                 Seu token de acesso ao Google expirou ou não foi encontrado.
@@ -398,7 +398,7 @@ export default function NewEvolution() {
               <button
                 onClick={handleReauthenticate}
                 disabled={isReauthenticating}
-                className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50"
+                className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
               >
                 {isReauthenticating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -412,33 +412,33 @@ export default function NewEvolution() {
             <button
               onClick={handleSubmit}
               disabled={!audioBlob}
-              className="w-full bg-blue-600 text-white py-3 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full btn-primary py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Enviar para Processamento
             </button>
           )}
 
           {status === 'processing' && (
-            <div className="flex flex-col items-center justify-center p-6 bg-blue-50 rounded-lg border border-blue-100 space-y-3">
-              <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-              <p className="text-blue-900 font-medium">Processando evolução...</p>
-              <p className="text-sm text-blue-700 text-center">
+            <div className="flex flex-col items-center justify-center p-6 bg-brand-primary/5 rounded-xl border border-brand-primary/20 space-y-3">
+              <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
+              <p className="text-brand-primary font-medium">Processando evolução...</p>
+              <p className="text-sm text-brand-text-muted text-center">
                 A IA está transcrevendo o áudio e inserindo no prontuário do paciente. Isso pode levar alguns segundos.
               </p>
             </div>
           )}
 
           {status === 'success' && (
-            <div className="flex flex-col items-center justify-center p-6 bg-green-50 rounded-lg border border-green-100 space-y-3">
-              <CheckCircle className="w-10 h-10 text-green-600" />
-              <p className="text-green-900 font-medium text-lg">Evolução registrada com sucesso!</p>
-              <p className="text-sm text-green-700 text-center">
+            <div className="flex flex-col items-center justify-center p-6 bg-brand-accent/10 rounded-xl border border-brand-accent/20 space-y-3">
+              <CheckCircle className="w-10 h-10 text-brand-primary" />
+              <p className="text-brand-primary font-medium text-lg">Evolução registrada com sucesso!</p>
+              <p className="text-sm text-brand-text-muted text-center">
                 A transcrição foi adicionada ao final do documento Google Docs do paciente.
               </p>
               <div className="flex space-x-3 mt-4">
                 <button
                   onClick={() => navigate(`/patients/${id}`)}
-                  className="px-4 py-2 bg-white border border-green-200 text-green-700 rounded-lg hover:bg-green-100"
+                  className="btn-outline"
                 >
                   Voltar ao Paciente
                 </button>
@@ -448,7 +448,7 @@ export default function NewEvolution() {
                     setAudioUrl(null);
                     setStatus('idle');
                   }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  className="btn-primary"
                 >
                   Nova Gravação
                 </button>
@@ -457,13 +457,13 @@ export default function NewEvolution() {
           )}
 
           {status === 'error' && (
-            <div className="flex flex-col items-center justify-center p-6 bg-red-50 rounded-lg border border-red-100 space-y-3">
+            <div className="flex flex-col items-center justify-center p-6 bg-red-50 rounded-xl border border-red-100 space-y-3">
               <AlertCircle className="w-10 h-10 text-red-600" />
               <p className="text-red-900 font-medium text-lg">Falha no processamento</p>
               <p className="text-sm text-red-700 text-center">{errorMessage}</p>
               <button
                 onClick={handleSubmit}
-                className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                className="mt-4 px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors"
               >
                 Tentar Novamente
               </button>

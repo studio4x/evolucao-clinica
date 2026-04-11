@@ -242,18 +242,18 @@ export default function ShareTarget() {
   if (status === 'loading') {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 text-indigo-600 animate-spin" />
-        <span className="ml-2 text-gray-600">Carregando arquivo compartilhado...</span>
+        <Loader2 className="h-8 w-8 text-brand-primary animate-spin" />
+        <span className="ml-2 text-brand-text-muted">Carregando arquivo compartilhado...</span>
       </div>
     );
   }
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 bg-indigo-50/50">
-          <h2 className="text-xl font-semibold text-gray-900">Áudio Recebido</h2>
-          <p className="text-sm text-gray-500 mt-1">
+      <div className="card overflow-hidden">
+        <div className="p-6 border-b border-brand-border bg-brand-bg/50">
+          <h2 className="text-xl font-display font-semibold text-brand-primary">Áudio Recebido</h2>
+          <p className="text-sm text-brand-text-muted mt-1">
             Selecione o paciente para processar este áudio.
           </p>
         </div>
@@ -261,14 +261,14 @@ export default function ShareTarget() {
         <div className="p-6 space-y-6">
           {status === 'success' ? (
             <div className="text-center py-8">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-brand-accent/20 mb-4">
+                <CheckCircle className="h-6 w-6 text-brand-primary" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Evolução Processada!</h3>
-              <p className="text-gray-500 mb-6">O áudio foi transcrito e inserido no Google Docs com sucesso.</p>
+              <h3 className="text-lg font-display font-medium text-brand-text mb-2">Evolução Processada!</h3>
+              <p className="text-brand-text-muted mb-6">O áudio foi transcrito e inserido no Google Docs com sucesso.</p>
               <button
                 onClick={() => navigate('/')}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+                className="btn-primary"
               >
                 Voltar ao Início
               </button>
@@ -276,20 +276,20 @@ export default function ShareTarget() {
           ) : (
             <>
               {audioUrl && (
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Áudio Compartilhado:</p>
+                <div className="bg-brand-bg p-4 rounded-xl border border-brand-border">
+                  <p className="text-sm font-medium text-brand-text mb-2">Áudio Compartilhado:</p>
                   <audio src={audioUrl} controls className="w-full" />
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-brand-text mb-1">
                   Paciente
                 </label>
                 <select
                   value={selectedPatientId}
                   onChange={(e) => setSelectedPatientId(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="input-field p-2"
                   disabled={status === 'processing'}
                 >
                   <option value="">Selecione um paciente...</option>
@@ -302,20 +302,20 @@ export default function ShareTarget() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-brand-text mb-1">
                   Data da Sessão
                 </label>
                 <input
                   type="date"
                   value={sessionDate}
                   onChange={(e) => setSessionDate(e.target.value)}
-                  className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="input-field p-2"
                   disabled={status === 'processing'}
                 />
               </div>
 
               {status === 'error' && (
-                <div className="bg-red-50 border border-red-200 rounded-md p-4">
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                   <div className="flex">
                     <AlertCircle className="h-5 w-5 text-red-400" />
                     <div className="ml-3">
@@ -327,7 +327,7 @@ export default function ShareTarget() {
                         <button
                           onClick={handleReauthenticate}
                           disabled={isReauthenticating}
-                          className="mt-3 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-red-700 bg-red-100 hover:bg-red-200"
+                          className="mt-3 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-red-700 bg-red-100 hover:bg-red-200 transition-colors"
                         >
                           {isReauthenticating ? (
                             <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -346,7 +346,7 @@ export default function ShareTarget() {
                 <button
                   onClick={handleProcess}
                   disabled={status === 'processing' || !selectedPatientId || !audioFile}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {status === 'processing' ? (
                     <>

@@ -56,30 +56,28 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-brand-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="bg-blue-600 p-3 rounded-full">
-            <Stethoscope className="w-10 h-10 text-white" />
-          </div>
+          <img src="/logo.svg" alt="Conexão Seres" className="h-24 w-auto" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          Evolução Clínica Gemini
+        <h2 className="mt-8 text-center text-3xl font-display font-semibold text-brand-primary">
+          Evolução Clínica
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="mt-2 text-center text-sm text-brand-text-muted">
           Automatize suas evoluções com IA e Google Docs
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="card py-8 px-4 sm:px-10">
           <button
             onClick={handleLogin}
-            className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="btn-primary w-full py-3 text-base"
           >
             Entrar com Google
           </button>
-          <p className="mt-4 text-xs text-center text-gray-500">
+          <p className="mt-6 text-xs text-center text-brand-text-muted">
             O aplicativo solicitará acesso ao seu Google Drive para salvar os prontuários.
           </p>
         </div>

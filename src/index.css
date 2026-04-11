@@ -1,1 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
+
+  /* Conexão Seres Color Palette */
+  --color-brand-primary: #005C13; /* Dark Green */
+  --color-brand-primary-hover: #00470e;
+  --color-brand-secondary: #5C4716; /* Brown */
+  --color-brand-secondary-hover: #4a3912;
+  --color-brand-accent: #8CC63F; /* Light Green */
+  --color-brand-accent-hover: #7ab332;
+  
+  --color-brand-bg: #fdfbf7; /* Warm off-white */
+  --color-brand-surface: #ffffff;
+  --color-brand-text: #1c1917; /* Stone 900 */
+  --color-brand-text-muted: #57534e; /* Stone 500 */
+  --color-brand-border: #e7e5e4; /* Stone 200 */
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-brand-text font-sans antialiased selection:bg-brand-accent/30;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight text-brand-primary;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-brand-primary hover:bg-brand-primary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary transition-all duration-200 active:scale-95;
+  }
+  
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-xl shadow-sm text-white bg-brand-secondary hover:bg-brand-secondary-hover focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-secondary transition-all duration-200 active:scale-95;
+  }
+
+  .btn-outline {
+    @apply inline-flex items-center justify-center px-4 py-2 border border-brand-border text-sm font-medium rounded-xl text-brand-text bg-white hover:bg-brand-bg hover:border-brand-primary/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary transition-all duration-200 active:scale-95;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-brand-border overflow-hidden transition-all duration-200 hover:shadow-md;
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border-brand-border shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm transition-colors duration-200 bg-white;
+  }
+}

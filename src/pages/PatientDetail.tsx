@@ -244,9 +244,9 @@ export default function PatientDetail() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{patient.full_name}</h1>
+          <h1 className="text-2xl font-display font-semibold text-brand-primary">{patient.full_name}</h1>
           <div className="flex items-center space-x-2 mt-2">
-            <span className={`px-2 py-1 text-xs rounded-full ${patient.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+            <span className={`px-2 py-1 text-xs rounded-full ${patient.status === 'active' ? 'bg-brand-accent/20 text-brand-primary' : 'bg-gray-100 text-gray-700'}`}>
               {patient.status === 'active' ? 'Ativo' : 'Inativo'}
             </span>
           </div>
@@ -254,15 +254,15 @@ export default function PatientDetail() {
         <div className="flex space-x-3">
           <Link 
             to={`/patients/${id}/edit`}
-            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            className="btn-outline"
           >
             Editar
           </Link>
           <Link 
             to={`/patients/${id}/evolutions/new`}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:bg-blue-700 transition-colors"
+            className="btn-primary"
           >
-            <Plus size={20} />
+            <Plus size={20} className="mr-2" />
             <span>Nova Evolução</span>
           </Link>
         </div>
@@ -270,47 +270,47 @@ export default function PatientDetail() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 space-y-6">
-          <div className="bg-white p-6 rounded-xl shadow-sm border">
-            <h3 className="font-semibold text-gray-900 mb-4">Prontuário Vinculado</h3>
+          <div className="card p-6">
+            <h3 className="font-semibold text-brand-text mb-4">Prontuário Vinculado</h3>
             {patient.google_doc_id ? (
               <div className="space-y-3">
                 <div className="flex items-start space-x-3">
-                  <FileText className="text-blue-600 mt-1 flex-shrink-0" size={20} />
-                  <p className="text-sm font-medium text-gray-900 break-words">{patient.google_doc_name}</p>
+                  <FileText className="text-brand-primary mt-1 flex-shrink-0" size={20} />
+                  <p className="text-sm font-medium text-brand-text break-words">{patient.google_doc_name}</p>
                 </div>
                 <a 
                   href={patient.google_doc_url} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors text-sm font-medium"
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition-colors text-sm font-medium"
                 >
                   <ExternalLink size={16} />
                   <span>Abrir no Google Docs</span>
                 </a>
               </div>
             ) : (
-              <div className="text-sm text-gray-500 text-center py-4">
-                Nenhum documento vinculado. <Link to={`/patients/${id}/edit`} className="text-blue-600 hover:underline">Vincular agora</Link>.
+              <div className="text-sm text-brand-text-muted text-center py-4">
+                Nenhum documento vinculado. <Link to={`/patients/${id}/edit`} className="text-brand-primary hover:underline">Vincular agora</Link>.
               </div>
             )}
           </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-sm border">
-            <h3 className="font-semibold text-gray-900 mb-2">Observações</h3>
-            <p className="text-sm text-gray-600 whitespace-pre-wrap">
+          <div className="card p-6">
+            <h3 className="font-semibold text-brand-text mb-2">Observações</h3>
+            <p className="text-sm text-brand-text-muted whitespace-pre-wrap">
               {patient.notes || 'Nenhuma observação registrada.'}
             </p>
           </div>
         </div>
 
         <div className="md:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="px-6 py-4 border-b flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-900">Histórico de Evoluções</h2>
+          <div className="card">
+            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
+              <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
               {evolutions.length > 0 && (
                 <button 
                   onClick={() => setShowClearConfirm(true)}
-                  className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium"
+                  className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
                 >
                   <Trash2 size={16} />
                   <span>Limpar Tudo</span>
@@ -329,14 +329,14 @@ export default function PatientDetail() {
                   <button 
                     onClick={handleClearEvolutions}
                     disabled={isClearing}
-                    className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2"
+                    className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2 transition-colors"
                   >
                     {isClearing && <Loader2 size={14} className="animate-spin" />}
                     <span>Confirmar Limpeza</span>
                   </button>
                   <button 
                     onClick={() => setShowClearConfirm(false)}
-                    className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50"
+                    className="btn-outline"
                   >
                     Cancelar
                   </button>
@@ -344,25 +344,25 @@ export default function PatientDetail() {
               </div>
             )}
 
-            <div className="divide-y">
+            <div className="divide-y divide-brand-border">
               {evolutions.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
+                <div className="p-8 text-center text-brand-text-muted">
                   Nenhuma evolução registrada para este paciente.
                 </div>
               ) : (
                 evolutions.map((evo) => (
-                  <div key={evo.id} className="p-6 hover:bg-gray-50">
+                  <div key={evo.id} className="p-6 hover:bg-brand-bg transition-colors">
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center space-x-2">
-                        <Clock size={16} className="text-gray-400" />
-                        <span className="font-medium text-gray-900">{formatDateTime(evo.created_at)}</span>
+                        <Clock size={16} className="text-brand-text-muted" />
+                        <span className="font-medium text-brand-text">{formatDateTime(evo.created_at)}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         {evo.transcription_status === 'failed' && evo.audio_url && (
                           <button 
                             onClick={() => handleReprocess(evo)}
                             disabled={processingId === evo.id}
-                            className="flex items-center space-x-1 text-xs bg-blue-600 text-white px-2 py-1 rounded-md hover:bg-blue-700 disabled:opacity-50 mr-2"
+                            className="flex items-center space-x-1 text-xs btn-primary px-2 py-1 mr-2"
                           >
                             {processingId === evo.id ? (
                               <Loader2 size={12} className="animate-spin" />
@@ -373,9 +373,9 @@ export default function PatientDetail() {
                           </button>
                         )}
                         <span className={`px-2 py-1 text-xs rounded-full ${
-                          evo.transcription_status === 'completed' ? 'bg-green-100 text-green-700' : 
+                          evo.transcription_status === 'completed' ? 'bg-brand-primary/10 text-brand-primary' : 
                           evo.transcription_status === 'failed' ? 'bg-red-100 text-red-700' : 
-                          'bg-yellow-100 text-yellow-700'
+                          'bg-brand-secondary/10 text-brand-secondary'
                         }`}>
                           {evo.transcription_status === 'completed' ? 'Concluído' : 
                            evo.transcription_status === 'failed' ? 'Falha' : 'Processando'}
@@ -383,7 +383,7 @@ export default function PatientDetail() {
                       </div>
                     </div>
                     {evo.transcription_text && (
-                      <div className="mt-3 text-sm text-gray-600 bg-gray-50 p-3 rounded border">
+                      <div className="mt-4 text-sm text-brand-text-muted bg-brand-bg p-4 rounded-xl border border-brand-border">
                         <p className="line-clamp-3">{evo.transcription_text}</p>
                       </div>
                     )}
