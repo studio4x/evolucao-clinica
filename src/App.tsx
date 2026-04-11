@@ -11,6 +11,7 @@ import PatientForm from './pages/PatientForm';
 import PatientDetail from './pages/PatientDetail';
 import NewEvolution from './pages/NewEvolution';
 import History from './pages/History';
+import ShareTarget from './pages/ShareTarget';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady } = useAuthStore();
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="patients/:id" element={<PatientDetail />} />
           <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
           <Route path="history" element={<History />} />
+          <Route path="share-target" element={<ShareTarget />} />
         </Route>
       </Routes>
     </Router>
