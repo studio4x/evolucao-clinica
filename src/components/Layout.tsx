@@ -11,8 +11,19 @@ export default function Layout() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallModal, setShowInstallModal] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   useEffect(() => {
+    // Check if running as standalone (installed PWA)
+    const checkStandalone = () => {
+      const isStandAlone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+      setIsStandalone(isStandAlone);
+    };
+    
+    checkStandalone();
+    window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
+
     const handleBeforeInstallPrompt = (e: Event) => {
       // Prevent the mini-infobar from appearing on mobile
       e.preventDefault();
@@ -23,23 +34,28 @@ export default function Layout() {
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     return () => {
+      window.matchMedia('(display-mode: standalone)').removeEventListener('change', checkStandalone);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-    // Show the install prompt
-    deferredPrompt.prompt();
-    // Wait for the user to respond to the prompt
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
+    if (deferredPrompt) {
+      // Show the install prompt
+      deferredPrompt.prompt();
+      // Wait for the user to respond to the prompt
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      } else {
+        console.log('User dismissed the install prompt');
+      }
+      // We've used the prompt, and can't use it again, throw it away
+      setDeferredPrompt(null);
     } else {
-      console.log('User dismissed the install prompt');
+      // If the prompt isn't available (iOS, or already dismissed), show manual instructions
+      setShowInstallModal(true);
     }
-    // We've used the prompt, and can't use it again, throw it away
-    setDeferredPrompt(null);
   };
 
   const handleLogout = async () => {
@@ -111,7 +127,7 @@ export default function Layout() {
         </div>
 
         <div className="absolute bottom-0 w-full p-4 border-t border-brand-border bg-white space-y-2">
-          {deferredPrompt && (
+          {!isStandalone && (
             <button
               onClick={handleInstallClick}
               className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
@@ -136,6 +152,47 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Install Instructions Modal */}
+      {showInstallModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-display font-semibold text-brand-primary">Como instalar o aplicativo</h3>
+              <button onClick={() => setShowInstallModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="space-y-4 text-sm text-brand-text">
+              <p>O seu navegador bloqueou a instalação automática ou você está usando um iPhone. Siga os passos abaixo para instalar manualmente:</p>
+              
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h4 className="font-semibold mb-2 flex items-center"><span className="text-lg mr-2">🍎</span> No iPhone (Safari)</h4>
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>Abra este link no navegador <strong>Safari</strong>.</li>
+                  <li>Toque no ícone de <strong>Compartilhar</strong> (um quadrado com uma seta para cima, na barra inferior).</li>
+                  <li>Role a lista para baixo e toque em <strong>"Adicionar à Tela de Início"</strong>.</li>
+                </ol>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h4 className="font-semibold mb-2 flex items-center"><span className="text-lg mr-2">🤖</span> No Android (Chrome/Edge)</h4>
+                <ol className="list-decimal pl-5 space-y-2">
+                  <li>Toque no ícone de <strong>Menu</strong> (três pontinhos no canto superior direito).</li>
+                  <li>Selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.</li>
+                </ol>
+              </div>
+            </div>
+            <button 
+              onClick={() => setShowInstallModal(false)}
+              className="w-full btn-primary mt-4"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
