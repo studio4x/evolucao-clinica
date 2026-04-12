@@ -2,42 +2,17 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
+import { usePWAStore } from '../store/pwaStore';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 export default function Layout() {
   const { user } = useAuthStore();
+  const { deferredPrompt, setDeferredPrompt, isStandalone } = usePWAStore();
   const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-
-  useEffect(() => {
-    // Check if running as standalone (installed PWA)
-    const checkStandalone = () => {
-      const isStandAlone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-      setIsStandalone(isStandAlone);
-    };
-    
-    checkStandalone();
-    window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
-
-    const handleBeforeInstallPrompt = (e: Event) => {
-      // Prevent the mini-infobar from appearing on mobile
-      e.preventDefault();
-      // Stash the event so it can be triggered later.
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.matchMedia('(display-mode: standalone)').removeEventListener('change', checkStandalone);
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -144,7 +119,7 @@ export default function Layout() {
             <span className="font-medium">Sair</span>
           </button>
           <div className="text-center pt-2">
-            <span className="text-[10px] text-brand-text-muted">Build v1.0.4</span>
+            <span className="text-[10px] text-brand-text-muted">Build v1.0.5</span>
           </div>
         </div>
       </div>
