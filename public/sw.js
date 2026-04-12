@@ -1,6 +1,7 @@
-const CACHE_NAME = 'evolucao-cache-v2';
+const CACHE_NAME = 'evolucao-cache-v3';
 const URLS_TO_CACHE = [
   '/',
+  '/?mode=standalone',
   '/index.html',
   '/manifest.json',
   '/icon-192.png',
