@@ -127,15 +127,13 @@ export default function Layout() {
         </div>
 
         <div className="absolute bottom-0 w-full p-4 border-t border-brand-border bg-white space-y-2">
-          {!isStandalone && (
-            <button
-              onClick={handleInstallClick}
-              className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
-            >
-              <Download size={20} />
-              <span className="font-medium">Instalar App</span>
-            </button>
-          )}
+          <button
+            onClick={handleInstallClick}
+            className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
+          >
+            <Download size={20} />
+            <span className="font-medium">Instalar App</span>
+          </button>
           <button
             onClick={handleLogout}
             className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors"
@@ -143,6 +141,9 @@ export default function Layout() {
             <LogOut size={20} />
             <span className="font-medium">Sair</span>
           </button>
+          <div className="text-center pt-2">
+            <span className="text-[10px] text-brand-text-muted">Build v1.0.1</span>
+          </div>
         </div>
       </div>
 
