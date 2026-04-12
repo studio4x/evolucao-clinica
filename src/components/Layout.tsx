@@ -81,52 +81,54 @@ export default function Layout() {
 
       {/* Sidebar */}
       <div className={`
-        ${isMobileMenuOpen ? 'block' : 'hidden'} 
-        md:block w-full md:w-64 bg-white border-r border-brand-border min-h-screen flex-shrink-0
-        fixed md:sticky top-[73px] md:top-0 z-10 md:z-0 h-[calc(100vh-73px)] md:h-screen overflow-y-auto shadow-sm
+        ${isMobileMenuOpen ? 'flex' : 'hidden'} 
+        md:flex flex-col w-full md:w-64 bg-white border-r border-brand-border flex-shrink-0
+        fixed md:sticky top-[73px] md:top-0 z-10 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
       `}>
-        <div className="p-6 hidden md:block border-b border-brand-border/50">
-          <img src="/logo.svg" alt="Conexão Seres" className="h-12 w-auto mb-2" />
-        </div>
-
-        <div className="px-4 py-6">
-          <div className="flex items-center space-x-3 px-4 py-3 mb-6 bg-brand-bg rounded-xl border border-brand-border/50">
-            <img 
-              src={user?.photoURL || 'https://ui-avatars.com/api/?name=' + user?.displayName + '&background=005C13&color=fff'} 
-              alt="Profile" 
-              className="w-10 h-10 rounded-full border border-brand-border"
-              referrerPolicy="no-referrer"
-            />
-            <div className="overflow-hidden">
-              <p className="text-sm font-medium text-brand-text truncate">{user?.displayName}</p>
-              <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
-            </div>
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 hidden md:block border-b border-brand-border/50">
+            <img src="/logo.svg" alt="Conexão Seres" className="h-12 w-auto mb-2" />
           </div>
 
-          <nav className="space-y-2">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
-              return (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                    isActive 
-                      ? 'bg-brand-primary text-white shadow-sm' 
-                      : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                  }`}
-                >
-                  <Icon size={20} />
-                  <span className="font-medium">{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <div className="px-4 py-6">
+            <div className="flex items-center space-x-3 px-4 py-3 mb-6 bg-brand-bg rounded-xl border border-brand-border/50">
+              <img 
+                src={user?.photoURL || 'https://ui-avatars.com/api/?name=' + user?.displayName + '&background=005C13&color=fff'} 
+                alt="Profile" 
+                className="w-10 h-10 rounded-full border border-brand-border"
+                referrerPolicy="no-referrer"
+              />
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium text-brand-text truncate">{user?.displayName}</p>
+                <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
+              </div>
+            </div>
+
+            <nav className="space-y-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.path}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                      isActive 
+                        ? 'bg-brand-primary text-white shadow-sm' 
+                        : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                    }`}
+                  >
+                    <Icon size={20} />
+                    <span className="font-medium">{item.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
         </div>
 
-        <div className="absolute bottom-0 w-full p-4 border-t border-brand-border bg-white space-y-2">
+        <div className="p-4 border-t border-brand-border bg-white space-y-2">
           <button
             onClick={handleInstallClick}
             className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
@@ -142,7 +144,7 @@ export default function Layout() {
             <span className="font-medium">Sair</span>
           </button>
           <div className="text-center pt-2">
-            <span className="text-[10px] text-brand-text-muted">Build v1.0.1</span>
+            <span className="text-[10px] text-brand-text-muted">Build v1.0.2</span>
           </div>
         </div>
       </div>
