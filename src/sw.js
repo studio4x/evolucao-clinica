@@ -1,34 +1,13 @@
-const CACHE_NAME = 'evolucao-cache-v3';
-const URLS_TO_CACHE = [
-  '/',
-  '/?mode=standalone',
-  '/index.html',
-  '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
-];
+import { precacheAndRoute } from 'workbox-precaching';
+
+// Inject precache manifest from vite-plugin-pwa
+precacheAndRoute(self.__WB_MANIFEST || []);
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(URLS_TO_CACHE);
-    })
-  );
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
-  );
   event.waitUntil(self.clients.claim());
 });
 
@@ -52,24 +31,6 @@ self.addEventListener('fetch', (event) => {
       }
     })());
     return;
-  }
-
-  // Offline fallback for GET requests
-  if (event.request.method === 'GET') {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        return caches.match(event.request).then((response) => {
-          if (response) {
-            return response;
-          }
-          // If it's a navigation request, return index.html
-          if (event.request.mode === 'navigate') {
-            return caches.match('/');
-          }
-          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
-        });
-      })
-    );
   }
 });
 

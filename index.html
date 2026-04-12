@@ -4,26 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#005C13" />
-    <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <title>Conexão Seres</title>
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(
-            (registration) => {
-              console.log('ServiceWorker registration successful with scope: ', registration.scope);
-            },
-            (err) => {
-              console.log('ServiceWorker registration failed: ', err);
-            }
-          );
-        });
-      }
-    </script>
     <script>
       // Fix for "Cannot set property fetch of #<Window> which has only a getter"
       // This error occurs when a script (like Google APIs) tries to overwrite fetch
