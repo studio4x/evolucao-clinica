@@ -119,7 +119,7 @@ export default function Layout() {
             <span className="font-medium">Sair</span>
           </button>
           <div className="text-center pt-2">
-            <span className="text-[10px] text-brand-text-muted">Build v1.0.5</span>
+            <span className="text-[10px] text-brand-text-muted">Build v1.0.6</span>
           </div>
         </div>
       </div>

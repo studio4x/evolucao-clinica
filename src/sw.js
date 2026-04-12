@@ -1,7 +1,21 @@
-import { precacheAndRoute } from 'workbox-precaching';
+import { precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching';
+import { NavigationRoute, registerRoute } from 'workbox-routing';
 
 // Inject precache manifest from vite-plugin-pwa
 precacheAndRoute(self.__WB_MANIFEST || []);
+
+// Set up navigation fallback for SPA routing
+try {
+  const handler = createHandlerBoundToURL('/index.html');
+  const navigationRoute = new NavigationRoute(handler, {
+    denylist: [
+      new RegExp('^/share-target'),
+    ],
+  });
+  registerRoute(navigationRoute);
+} catch (e) {
+  console.log('Navigation route registration failed', e);
+}
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
