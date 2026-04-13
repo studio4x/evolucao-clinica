@@ -14,16 +14,16 @@ export interface SiteConfig {
 }
 
 const defaultConfig: SiteConfig = {
-  pwa_app_name: "HomeCare Match",
-  pwa_short_name: "HomeCare",
-  pwa_description: "Conectando profissionais de saúde às melhores oportunidades em Home Care.",
-  pwa_theme_color: "#0f172a",
+  pwa_app_name: "Evolução Clínica",
+  pwa_short_name: "Evolução",
+  pwa_description: "Gerenciamento de Evoluções Clínicas com IA e Google Docs - Conexão Seres",
+  pwa_theme_color: "#1e3a8a",
   pwa_background_color: "#ffffff",
   pwa_icon_192_url: "logo.svg",
   pwa_icon_512_url: "logo.svg",
   pwa_maskable_icon_url: "logo.svg",
-  pwa_install_title: "Instale o app HomeCare Match",
-  pwa_install_description: "Acesse mais rápido pelo seu celular, direto da tela inicial."
+  pwa_install_title: "Instale o app Evolução Clínica",
+  pwa_install_description: "Acesse seus prontuários rapidamente pela tela inicial com o app oficial."
 };
 
 export const useSiteConfig = () => {
