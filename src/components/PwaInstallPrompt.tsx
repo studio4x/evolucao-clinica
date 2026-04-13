@@ -22,10 +22,9 @@ export const PwaInstallPrompt = () => {
   useEffect(() => {
     // Check if dismissed (localStorage as per spec)
     const isDismissed = localStorage.getItem('hcm-pwa-dismissed') === 'true';
-    const hasCookieConsent = localStorage.getItem('cookie-consent') === 'true';
     
     // Auto-show for Android/Chrome when deferredPrompt is available
-    if (deferredPrompt && !isStandalone && !isDismissed && hasCookieConsent) {
+    if (deferredPrompt && !isStandalone && !isDismissed) {
       const timer = setTimeout(() => {
         setIsVisible(true);
         window.dispatchEvent(new Event("hcm-pwa-prompt-visible"));
@@ -34,7 +33,7 @@ export const PwaInstallPrompt = () => {
     }
 
     // Manual show for iOS (since they don't have beforeinstallprompt)
-    if (platform === 'ios' && !isStandalone && !isDismissed && hasCookieConsent) {
+    if (platform === 'ios' && !isStandalone && !isDismissed) {
       const timer = setTimeout(() => {
         setIsVisible(true);
       }, 5000);
@@ -42,7 +41,7 @@ export const PwaInstallPrompt = () => {
     }
 
     // Force show manual instructions for Android if native prompt fails to fire after 15s
-    if (platform === 'android' && !deferredPrompt && !isStandalone && !isDismissed && hasCookieConsent) {
+    if (platform === 'android' && !deferredPrompt && !isStandalone && !isDismissed) {
       const timer = setTimeout(() => {
         setIsVisible(true);
       }, 15000);
