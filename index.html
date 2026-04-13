@@ -5,7 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     
     <!-- PWA Primary Meta Tags -->
-    <title>HomeCare Match</title>
+    <!-- PWA Primary Capture -->
+    <script>
+      window.deferredPWAPrompt = null;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        window.deferredPWAPrompt = e;
+        console.log('[PWA] Native prompt event captured early');
+        // Dispatch custom event for the store to pick up if it's already loaded
+        window.dispatchEvent(new CustomEvent('pwa-prompt-ready', { detail: e }));
+      });
+    </script>
     <meta name="description" content="Conectando profissionais de saúde às melhores oportunidades em Home Care." />
     <meta name="theme-color" content="#0f172a" />
 

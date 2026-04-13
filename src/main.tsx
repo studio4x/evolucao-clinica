@@ -5,9 +5,17 @@ import './index.css';
 import { usePWAStore } from './store/pwaStore';
 
 // Capture the install prompt globally immediately
+if ((window as any).deferredPWAPrompt) {
+  usePWAStore.getState().setDeferredPrompt((window as any).deferredPWAPrompt);
+}
+
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   usePWAStore.getState().setDeferredPrompt(e);
+});
+
+window.addEventListener('pwa-prompt-ready' as any, (e: any) => {
+  usePWAStore.getState().setDeferredPrompt(e.detail);
 });
 
 // Manual Service Worker Registration
