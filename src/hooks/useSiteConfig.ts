@@ -19,9 +19,9 @@ const defaultConfig: SiteConfig = {
   pwa_description: "Conectando profissionais de saúde às melhores oportunidades em Home Care.",
   pwa_theme_color: "#0f172a",
   pwa_background_color: "#ffffff",
-  pwa_icon_192_url: "/icon-192x192.png",
-  pwa_icon_512_url: "/icon-512x512.png",
-  pwa_maskable_icon_url: "/icon-512x512-maskable.png",
+  pwa_icon_192_url: "logo.svg",
+  pwa_icon_512_url: "logo.svg",
+  pwa_maskable_icon_url: "logo.svg",
   pwa_install_title: "Instale o app HomeCare Match",
   pwa_install_description: "Acesse mais rápido pelo seu celular, direto da tela inicial."
 };
