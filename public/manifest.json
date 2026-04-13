@@ -10,6 +10,15 @@
   "orientation": "portrait",
   "theme_color": "#0f172a",
   "background_color": "#ffffff",
+  "categories": ["medical", "productivity", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Nova Evolução",
+      "short_name": "Evolução",
+      "url": "/",
+      "icons": [{ "src": "/icon-192x192.png", "sizes": "192x192" }]
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192x192.png",
