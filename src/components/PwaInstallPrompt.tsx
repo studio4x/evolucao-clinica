@@ -90,7 +90,24 @@ export const PwaInstallPrompt = () => {
   };
 
   const handleReload = () => {
+    // Clear dismissed flag and reload to retry
+    localStorage.removeItem('hcm-pwa-dismissed');
     window.location.reload();
+  };
+
+  // Try to use the Web Share API to hint at install (works on some Android browsers)
+  const handleShareFallback = async () => {
+    try {
+      if ((navigator as any).share) {
+        await (navigator as any).share({
+          title: config.pwa_app_name,
+          text: config.pwa_install_description,
+          url: window.location.origin
+        });
+      }
+    } catch (e) {
+      // User cancelled or not supported — that's fine
+    }
   };
 
   if (!isVisible && !swJustInstalled) return null;
@@ -166,11 +183,18 @@ export const PwaInstallPrompt = () => {
               )}
             </div>
           </div>
-          <button onClick={handleReload}
-            className="w-full border border-gray-200 text-gray-600 py-2.5 rounded-xl text-sm font-medium hover:bg-gray-50 flex items-center justify-center space-x-2">
-            <RefreshCw size={14} />
-            <span>Tentar novamente</span>
-          </button>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+            <button onClick={handleReload}
+              className="border border-gray-200 text-gray-500 py-2.5 rounded-xl text-xs font-medium hover:bg-gray-50 flex items-center justify-center space-x-1.5">
+              <RefreshCw size={13} />
+              <span>Recarregar</span>
+            </button>
+            <button onClick={handleShareFallback}
+              className="bg-blue-600 text-white py-2.5 rounded-xl text-xs font-semibold hover:opacity-90 flex items-center justify-center space-x-1.5">
+              <Share size={13} />
+              <span>Compartilhar</span>
+            </button>
+          </div>
         </div>
       ) : (
         <div className="flex space-x-3">
