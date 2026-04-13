@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePWAStore } from '../store/pwaStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { Download, X, Share } from 'lucide-react';
+import { Download, X, Share, MoreVertical } from 'lucide-react';
 
 export const PwaInstallPrompt = () => {
   const { deferredPrompt, setDeferredPrompt, isStandalone } = usePWAStore();
@@ -49,38 +49,17 @@ export const PwaInstallPrompt = () => {
     }
   }, [deferredPrompt, isStandalone, platform]);
 
-  // Listen for cookie consent
-  useEffect(() => {
-    const handleCookieAccepted = () => {
-      const isDismissed = localStorage.getItem('hcm-pwa-dismissed') === 'true';
-      if (!isStandalone && !isDismissed && (deferredPrompt || platform === 'ios')) {
-        setIsVisible(true);
-      }
-    };
-    window.addEventListener("cookie-consent-accepted", handleCookieAccepted);
-    return () => window.removeEventListener("cookie-consent-accepted", handleCookieAccepted);
-  }, [deferredPrompt, isStandalone, platform]);
-
   const handleInstall = async () => {
-    if (platform === 'ios') {
-      return;
-    }
-
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-        setIsVisible(false);
-        localStorage.setItem('hcm-pwa-prompt-handled', 'true');
-        window.dispatchEvent(new Event("hcm-pwa-prompt-handled"));
-      }
-    } else {
-      // Fallback: Se não houver o prompt nativo (ex: o usuário demorou pra clicar e o evento expirou ou o navegador não disparou)
-      // Mostramos um alerta com instrução manual rápida
-      alert("Para instalar: toque no menu do seu navegador (três pontinhos) e selecione 'Instalar aplicativo' ou 'Adicionar à tela inicial'.");
-      handleDismiss();
+    if (!deferredPrompt) return;
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setIsVisible(false);
+      localStorage.setItem('hcm-pwa-prompt-handled', 'true');
+      window.dispatchEvent(new Event("hcm-pwa-prompt-handled"));
     }
   };
 
@@ -91,6 +70,8 @@ export const PwaInstallPrompt = () => {
   };
 
   if (!isVisible || isStandalone) return null;
+
+  const showManualInstructions = platform === 'ios' || (platform === 'android' && !deferredPrompt);
 
   return (
     <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-white rounded-2xl shadow-2xl z-[60] border border-gray-100 p-5 animate-in slide-in-from-bottom-full duration-500">
@@ -114,16 +95,23 @@ export const PwaInstallPrompt = () => {
       
       <p className="text-sm text-gray-600 mb-5 leading-relaxed">
         {platform === 'ios' 
-          ? "Instale o app no seu iPhone: toque no ícone de compartilhar e selecione 'Adicionar à Tela de Início'."
+          ? "Instale o app no seu iPhone para acesso rápido."
           : (!deferredPrompt && platform === 'android')
-            ? "Instale o app no seu Android: toque nos três pontinhos do navegador e selecione 'Instalar aplicativo'."
+            ? "Adicione o app à sua tela inicial no Android."
             : config.pwa_install_description}
       </p>
       
-      {platform === 'ios' ? (
-        <div className="bg-blue-50 p-3 rounded-xl flex items-center space-x-3 text-blue-700">
-          <Share size={20} className="shrink-0" />
-          <span className="text-xs font-medium">Toque em compartilhar e 'Adicionar à Tela de Início'</span>
+      {showManualInstructions ? (
+        <div className="bg-blue-50 p-4 rounded-xl flex items-start space-x-3 text-blue-700">
+          {platform === 'ios' ? <Share size={20} className="shrink-0 mt-0.5" /> : <MoreVertical size={20} className="shrink-0 mt-0.5" />}
+          <div className="text-xs font-medium space-y-1">
+            <p className="font-bold">Como instalar:</p>
+            {platform === 'ios' ? (
+              <p>Toque no ícone de compartilhar abaixo e selecione <span className="underline">"Adicionar à Tela de Início"</span>.</p>
+            ) : (
+              <p>Toque nos três pontinhos do navegador (canto superior) e selecione <span className="underline">"Instalar aplicativo"</span> ou "Adicionar à tela inicial".</p>
+            )}
+          </div>
         </div>
       ) : (
         <div className="flex space-x-3">
