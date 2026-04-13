@@ -14,12 +14,16 @@ export default defineConfig(({mode}) => {
         strategies: 'injectManifest',
         srcDir: 'src',
         filename: 'sw.js',
-        registerType: 'autoUpdate',
         injectRegister: false,
         manifest: false,
+        injectManifest: {
+          swSrc: 'src/sw.js',
+          swDest: 'dist/sw.js',
+          injectionPoint: 'self.__WB_MANIFEST'
+        },
         devOptions: {
           enabled: true,
-          type: 'module', // Alterado para module pois usamos imports no sw.js
+          type: 'module',
         }
       })
     ],

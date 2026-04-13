@@ -1,11 +1,8 @@
-/*
- * HOMECARE MATCH - SERVICE WORKER
- * Versão: 1.0.3
- */
+import { precacheAndRoute } from 'workbox-precaching';
 
 // Injection point for vite-plugin-pwa assets
 // @ts-ignore
-const manifest = self.__WB_MANIFEST;
+precacheAndRoute(self.__WB_MANIFEST || []);
 
 const CACHE_VERSION = "hcm-pwa-v2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
