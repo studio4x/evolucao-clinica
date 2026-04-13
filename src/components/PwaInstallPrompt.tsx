@@ -32,7 +32,7 @@ export const PwaInstallPrompt = () => {
       return () => clearTimeout(timer);
     }
 
-    // Manual show for iOS (since they don't have beforeinstallprompt)
+    // Manual show for iOS
     if (platform === 'ios' && !isStandalone && !isDismissed) {
       const timer = setTimeout(() => {
         setIsVisible(true);
@@ -71,18 +71,26 @@ export const PwaInstallPrompt = () => {
 
   if (!isVisible || isStandalone) return null;
 
-  const showManualInstructions = platform === 'ios' || (platform === 'android' && !deferredPrompt);
+  const isManualMode = platform === 'ios' || (platform === 'android' && !deferredPrompt);
 
   return (
     <div className="fixed bottom-6 left-4 right-4 md:left-auto md:right-8 md:w-96 bg-white rounded-2xl shadow-2xl z-[60] border border-gray-100 p-5 animate-in slide-in-from-bottom-full duration-500">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-[#0f172a] rounded-xl flex items-center justify-center text-white shadow-lg overflow-hidden">
-            <img src={config.pwa_icon_192_url} alt="App Icon" className="w-full h-full object-cover" />
+          <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-md overflow-hidden border border-gray-100 p-1">
+            <img 
+              src={config.pwa_icon_192_url} 
+              alt="App Icon" 
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                // Fallback direct to logo.svg if something fails
+                (e.target as HTMLImageElement).src = '/logo.svg';
+              }}
+            />
           </div>
           <div>
             <h3 className="font-bold text-gray-900 leading-tight">{config.pwa_app_name}</h3>
-            <p className="text-xs text-gray-500">Web App Oficial</p>
+            <p className="text-[10px] text-brand-primary font-medium tracking-wider uppercase">App Oficial</p>
           </div>
         </div>
         <button 
@@ -93,23 +101,23 @@ export const PwaInstallPrompt = () => {
         </button>
       </div>
       
-      <p className="text-sm text-gray-600 mb-5 leading-relaxed">
+      <p className="text-sm text-gray-600 mb-5 leading-relaxed font-medium">
         {platform === 'ios' 
-          ? "Instale o app no seu iPhone para acesso rápido."
+          ? "Acesse mais rápido pelo seu iPhone."
           : (!deferredPrompt && platform === 'android')
-            ? "Adicione o app à sua tela inicial no Android."
-            : config.pwa_install_description}
+            ? "Instale o app para uma experiência completa."
+            : "Instale o app e acesse direto da sua tela inicial."}
       </p>
       
-      {showManualInstructions ? (
-        <div className="bg-blue-50 p-4 rounded-xl flex items-start space-x-3 text-blue-700">
+      {isManualMode ? (
+        <div className="bg-brand-bg border border-brand-border p-4 rounded-xl flex items-start space-x-3 text-brand-primary shadow-sm">
           {platform === 'ios' ? <Share size={20} className="shrink-0 mt-0.5" /> : <MoreVertical size={20} className="shrink-0 mt-0.5" />}
-          <div className="text-xs font-medium space-y-1">
-            <p className="font-bold">Como instalar:</p>
+          <div className="text-xs space-y-2">
+            <p className="font-bold uppercase tracking-tight">Instalação Manual:</p>
             {platform === 'ios' ? (
-              <p>Toque no ícone de compartilhar abaixo e selecione <span className="underline">"Adicionar à Tela de Início"</span>.</p>
+              <p className="leading-normal">Toque no botão <span className="font-bold">Compartilhar</span> na barra do Safari e selecione <span className="underline font-bold">"Adicionar à Tela de Início"</span>.</p>
             ) : (
-              <p>Toque nos três pontinhos do navegador (canto superior) e selecione <span className="underline">"Instalar aplicativo"</span> ou "Adicionar à tela inicial".</p>
+              <p className="leading-normal">Toque nos <span className="font-bold">três pontinhos</span> do Chrome (topo ou base) e selecione <span className="underline font-bold">"Instalar aplicativo"</span>.</p>
             )}
           </div>
         </div>
@@ -117,7 +125,7 @@ export const PwaInstallPrompt = () => {
         <div className="flex space-x-3">
           <button 
             onClick={handleInstall}
-            className="flex-1 bg-[#0f172a] text-white py-3 rounded-xl font-semibold text-sm hover:opacity-90 transition-all shadow-md active:scale-95 flex items-center justify-center space-x-2"
+            className="flex-1 bg-brand-primary text-white py-3 rounded-xl font-semibold text-sm hover:opacity-90 transition-all shadow-md active:scale-95 flex items-center justify-center space-x-2"
           >
             <Download size={18} />
             <span>Instalar Agora</span>
