@@ -9,8 +9,9 @@ export const PwaInstallPrompt = () => {
   useEffect(() => {
     // Check if dismissed in this session
     const isDismissed = sessionStorage.getItem('pwa-prompt-dismissed');
+    const hasCookieConsent = localStorage.getItem('cookie-consent') === 'true';
     
-    if (deferredPrompt && !isStandalone && !isDismissed) {
+    if (deferredPrompt && !isStandalone && !isDismissed && hasCookieConsent) {
       // Small delay before showing
       const timer = setTimeout(() => {
         setIsVisible(true);
@@ -18,6 +19,19 @@ export const PwaInstallPrompt = () => {
       }, 3000);
       return () => clearTimeout(timer);
     }
+  }, [deferredPrompt, isStandalone]);
+
+  // Listen for cookie consent even if already loaded
+  useEffect(() => {
+    const handleCookieAccepted = () => {
+      // Force re-check
+      const isDismissed = sessionStorage.getItem('pwa-prompt-dismissed');
+      if (deferredPrompt && !isStandalone && !isDismissed) {
+        setIsVisible(true);
+      }
+    };
+    window.addEventListener("cookie-consent-accepted", handleCookieAccepted);
+    return () => window.removeEventListener("cookie-consent-accepted", handleCookieAccepted);
   }, [deferredPrompt, isStandalone]);
 
   const handleInstall = async () => {
