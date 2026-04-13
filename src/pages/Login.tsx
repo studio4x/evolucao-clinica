@@ -1,55 +1,91 @@
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
 import { auth, googleProvider, db } from '../firebase';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { Stethoscope } from 'lucide-react';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { AppVersion } from '../components/layout/AppVersion';
+import { useEffect, useState } from 'react';
+
+// Detect if running as installed PWA (standalone mode)
+const isStandalone = () =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  (window.navigator as any).standalone === true;
 
 export default function Login() {
   const navigate = useNavigate();
   const { setGoogleAccessToken, setUser } = useAuthStore();
+  const [loading, setLoading] = useState(false);
+
+  // Handle redirect result when returning from Google OAuth in PWA mode
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          setLoading(true);
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.accessToken) {
+            setGoogleAccessToken(credential.accessToken);
+          }
+          await handleUserProfile(result.user);
+          navigate('/');
+        }
+      } catch (error: any) {
+        console.error('Redirect login error:', error);
+        setLoading(false);
+        if (error.code !== 'auth/popup-closed-by-user') {
+          alert(`Erro ao fazer login: ${error.message || error.code || 'Erro desconhecido'}`);
+        }
+      }
+    };
+    handleRedirectResult();
+  }, []);
+
+  const handleUserProfile = async (user: any) => {
+    setUser(user);
+    const docRef = doc(db, 'professionals', user.uid);
+    const docSnap = await getDoc(docRef);
+
+    if (!docSnap.exists()) {
+      const professionalData: any = {
+        id: user.uid,
+        google_email: user.email || '',
+        full_name: user.displayName || 'Usuário',
+        role: 'therapist',
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      if (user.photoURL) {
+        professionalData.photo_url = user.photoURL;
+      }
+      await setDoc(docRef, professionalData);
+    }
+  };
 
   const handleLogin = async () => {
     try {
+      setLoading(true);
+
+      // In standalone PWA mode, use redirect flow (popups don't work)
+      if (isStandalone()) {
+        await signInWithRedirect(auth, googleProvider);
+        // Page will redirect — no code runs after this
+        return;
+      }
+
+      // In browser mode, use popup flow (better UX)
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         setGoogleAccessToken(credential.accessToken);
       }
-
-      const user = result.user;
-      
-      // Update store immediately to prevent ProtectedRoute from redirecting back
-      setUser(user);
-      
-      // Check if professional exists, if not create
-      const docRef = doc(db, 'professionals', user.uid);
-      const docSnap = await getDoc(docRef);
-      
-      if (!docSnap.exists()) {
-        const professionalData: any = {
-          id: user.uid,
-          google_email: user.email || '',
-          full_name: user.displayName || 'Usuário',
-          role: 'therapist',
-          status: 'active',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        if (user.photoURL) {
-          professionalData.photo_url = user.photoURL;
-        }
-
-        await setDoc(docRef, professionalData);
-      }
-
+      await handleUserProfile(result.user);
       navigate('/');
     } catch (error: any) {
       console.error('Login error:', error);
+      setLoading(false);
       if (error.code === 'auth/popup-closed-by-user') {
-        // User closed the popup, no need to show an alert
         return;
       }
       alert(`Erro ao fazer login: ${error.message || error.code || 'Erro desconhecido'}`);
@@ -74,9 +110,10 @@ export default function Login() {
         <div className="card py-8 px-4 sm:px-10">
           <button
             onClick={handleLogin}
-            className="btn-primary w-full py-3 text-base"
+            disabled={loading}
+            className="btn-primary w-full py-3 text-base disabled:opacity-50"
           >
-            Entrar com Google
+            {loading ? 'Entrando...' : 'Entrar com Google'}
           </button>
           <p className="mt-6 text-xs text-center text-brand-text-muted">
             O aplicativo solicitará acesso ao seu Google Drive para salvar os prontuários.

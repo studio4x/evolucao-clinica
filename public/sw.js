@@ -41,12 +41,17 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Skip external APIs
+  // Skip external APIs and auth flows
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('googleapis.com') ||
     url.hostname.includes('accounts.google.com') ||
-    url.hostname.includes('apis.google.com')
+    url.hostname.includes('apis.google.com') ||
+    url.hostname.includes('firebaseapp.com') ||
+    url.hostname.includes('firebase.googleapis.com') ||
+    url.hostname.includes('firebaseinstallations.googleapis.com') ||
+    url.hostname.includes('identitytoolkit.googleapis.com') ||
+    url.hostname.includes('securetoken.googleapis.com')
   ) {
     return;
   }
