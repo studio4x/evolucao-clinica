@@ -183,15 +183,21 @@ export const PwaInstallPrompt = () => {
               )}
             </div>
           </div>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-            <button onClick={handleReload}
-              className="border border-gray-200 text-gray-500 py-2.5 rounded-xl text-xs font-medium hover:bg-gray-50 flex items-center justify-center space-x-1.5">
-              <RefreshCw size={13} />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleReload}
+              className="bg-gray-800 text-white py-3 rounded-xl text-sm font-semibold hover:bg-gray-700 active:scale-95 transition-all flex items-center justify-center space-x-2"
+            >
+              <RefreshCw size={15} />
               <span>Recarregar</span>
             </button>
-            <button onClick={handleShareFallback}
-              className="bg-blue-600 text-white py-2.5 rounded-xl text-xs font-semibold hover:opacity-90 flex items-center justify-center space-x-1.5">
-              <Share size={13} />
+            <button
+              type="button"
+              onClick={handleShareFallback}
+              className="bg-blue-600 text-white py-3 rounded-xl text-sm font-semibold hover:bg-blue-700 active:scale-95 transition-all flex items-center justify-center space-x-2"
+            >
+              <Share size={15} />
               <span>Compartilhar</span>
             </button>
           </div>
