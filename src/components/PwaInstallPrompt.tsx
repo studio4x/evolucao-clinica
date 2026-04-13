@@ -168,15 +168,15 @@ export const PwaInstallPrompt = () => {
             <ol className="space-y-2 text-sm text-gray-600">
               <li className="flex items-start space-x-2">
                 <span className="bg-blue-100 text-blue-700 font-bold rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0 mt-0.5">1</span>
-                <span>Toque nos <strong>três pontinhos</strong> <MoreVertical size={14} className="inline" /> no canto superior direito do Chrome</span>
+                <span>Toque nos <strong>três pontinhos</strong> <MoreVertical size={14} className="inline" /> no canto superior direito</span>
               </li>
               <li className="flex items-start space-x-2">
                 <span className="bg-blue-100 text-blue-700 font-bold rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0 mt-0.5">2</span>
-                <span>Selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong></span>
+                <span>Procure e selecione <strong>"Instalar aplicativo"</strong> (não selecione "Add atalho")</span>
               </li>
               <li className="flex items-start space-x-2">
                 <span className="bg-blue-100 text-blue-700 font-bold rounded-full w-5 h-5 flex items-center justify-center text-xs shrink-0 mt-0.5">3</span>
-                <span>Confirme tocando em <strong>"Instalar"</strong></span>
+                <span>Toque em <strong>"Instalar"</strong> para transformar em um App nativo</span>
               </li>
             </ol>
           )}

@@ -1,15 +1,16 @@
 {
   "name": "Evolução Clínica",
   "short_name": "Evolução",
-  "description": "Gerenciamento de Evoluções Clínicas com IA e Google Docs - Conexão Seres",
+  "description": "Prontuário eletrônico e evolução clínica profissional com IA para fisioterapeutas e profissionais da saúde.",
   "lang": "pt-BR",
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
   "theme_color": "#1e3a8a",
   "background_color": "#ffffff",
-  "categories": ["medical", "productivity"],
+  "categories": ["medical", "productivity", "health"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icon-192x192.png",
@@ -28,6 +29,22 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-1.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "label": "Tela de Login",
+      "form_factor": "wide"
+    },
+    {
+      "src": "/screenshot-2.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "label": "Painel de Controle",
+      "form_factor": "wide"
     }
   ]
 }
