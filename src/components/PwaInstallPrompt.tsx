@@ -63,20 +63,24 @@ export const PwaInstallPrompt = () => {
 
   const handleInstall = async () => {
     if (platform === 'ios') {
-      // iOS just stays visible to show instructions
       return;
     }
 
-    if (!deferredPrompt) return;
-    
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-      setIsVisible(false);
-      localStorage.setItem('hcm-pwa-prompt-handled', 'true');
-      window.dispatchEvent(new Event("hcm-pwa-prompt-handled"));
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        setIsVisible(false);
+        localStorage.setItem('hcm-pwa-prompt-handled', 'true');
+        window.dispatchEvent(new Event("hcm-pwa-prompt-handled"));
+      }
+    } else {
+      // Fallback: Se não houver o prompt nativo (ex: o usuário demorou pra clicar e o evento expirou ou o navegador não disparou)
+      // Mostramos um alerta com instrução manual rápida
+      alert("Para instalar: toque no menu do seu navegador (três pontinhos) e selecione 'Instalar aplicativo' ou 'Adicionar à tela inicial'.");
+      handleDismiss();
     }
   };
 

@@ -125,8 +125,8 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body,
-    icon: "/icon-192x192.png",
-    badge: "/favicon.png",
+    icon: new URL("/icon-192x192.png", self.location.origin).href,
+    badge: new URL("/favicon.png", self.location.origin).href,
     data: data.link || "/",
     vibrate: [100, 50, 100],
     actions: [
