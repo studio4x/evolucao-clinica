@@ -13,8 +13,8 @@ const PRECACHE_URLS = [
   "/",
   "/offline.html",
   "/favicon.png",
-  "/placeholder.svg",
-  "/logo.svg"
+  "/logo.svg",
+  "/icon-192x192.png"
 ];
 
 // Helper para verificar se é um asset estático
