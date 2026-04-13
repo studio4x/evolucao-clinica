@@ -119,10 +119,13 @@ export default function Layout() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-x-hidden">
-        <main className="p-4 md:p-8 max-w-5xl mx-auto">
+      <div className="flex-1 overflow-x-hidden flex flex-col">
+        <main className="p-4 md:p-8 max-w-5xl mx-auto flex-1 w-full">
           <Outlet />
         </main>
+        <footer className="p-8 mt-auto opacity-50">
+          <AppVersion />
+        </footer>
       </div>
 
       {/* Install Instructions Modal */}

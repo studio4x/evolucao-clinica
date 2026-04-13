@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { Stethoscope } from 'lucide-react';
+import { AppVersion } from '../components/layout/AppVersion';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -81,6 +82,10 @@ export default function Login() {
             O aplicativo solicitará acesso ao seu Google Drive para salvar os prontuários.
           </p>
         </div>
+      </div>
+      
+      <div className="mt-auto py-8">
+        <AppVersion />
       </div>
     </div>
   );
