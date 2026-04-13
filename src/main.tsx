@@ -4,6 +4,12 @@ import App from './App.tsx';
 import './index.css';
 import { usePWAStore } from './store/pwaStore';
 
+// Capture the install prompt globally immediately
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  usePWAStore.getState().setDeferredPrompt(e);
+});
+
 // Manual Service Worker Registration
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
@@ -14,12 +20,6 @@ if ("serviceWorker" in navigator) {
     });
   });
 }
-
-// Capture the install prompt globally
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  usePWAStore.getState().setDeferredPrompt(e);
-});
 
 // Check if running as standalone
 const checkStandalone = () => {

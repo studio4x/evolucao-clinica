@@ -40,6 +40,14 @@ export const PwaInstallPrompt = () => {
       }, 5000);
       return () => clearTimeout(timer);
     }
+
+    // Force show manual instructions for Android if native prompt fails to fire after 15s
+    if (platform === 'android' && !deferredPrompt && !isStandalone && !isDismissed && hasCookieConsent) {
+      const timer = setTimeout(() => {
+        setIsVisible(true);
+      }, 15000);
+      return () => clearTimeout(timer);
+    }
   }, [deferredPrompt, isStandalone, platform]);
 
   // Listen for cookie consent
@@ -104,7 +112,9 @@ export const PwaInstallPrompt = () => {
       <p className="text-sm text-gray-600 mb-5 leading-relaxed">
         {platform === 'ios' 
           ? "Instale o app no seu iPhone: toque no ícone de compartilhar e selecione 'Adicionar à Tela de Início'."
-          : config.pwa_install_description}
+          : (!deferredPrompt && platform === 'android')
+            ? "Instale o app no seu Android: toque nos três pontinhos do navegador e selecione 'Instalar aplicativo'."
+            : config.pwa_install_description}
       </p>
       
       {platform === 'ios' ? (
