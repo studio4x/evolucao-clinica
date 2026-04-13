@@ -12,14 +12,14 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         strategies: 'injectManifest',
-        srcDir: 'public',
+        srcDir: 'src',
         filename: 'sw.js',
         registerType: 'autoUpdate',
         injectRegister: false,
-        manifest: false, // Usando o manifest.webmanifest manual em public/
+        manifest: false,
         devOptions: {
           enabled: true,
-          type: 'classic',
+          type: 'module', // Alterado para module pois usamos imports no sw.js
         }
       })
     ],

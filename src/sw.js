@@ -1,75 +1,165 @@
-import { precacheAndRoute, createHandlerBoundToURL } from 'workbox-precaching';
-import { NavigationRoute, registerRoute } from 'workbox-routing';
+/*
+ * HOMECARE MATCH - SERVICE WORKER
+ * Versão: 1.0.3
+ */
 
-// Inject precache manifest from vite-plugin-pwa
-precacheAndRoute(self.__WB_MANIFEST || []);
+// Injection point for vite-plugin-pwa assets
+// @ts-ignore
+const manifest = self.__WB_MANIFEST;
 
-// Set up navigation fallback for SPA routing
-try {
-  const handler = createHandlerBoundToURL('/index.html');
-  const navigationRoute = new NavigationRoute(handler, {
-    denylist: [
-      new RegExp('^/share-target'),
-    ],
-  });
-  registerRoute(navigationRoute);
-} catch (e) {
-  console.log('Navigation route registration failed', e);
-}
+const CACHE_VERSION = "hcm-pwa-v2";
+const SHELL_CACHE = `${CACHE_VERSION}-shell`;
+const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
+// URLs para pré-cache (App Shell)
+const PRECACHE_URLS = [
+  "/",
+  "/offline.html",
+  "/favicon.png",
+  "/placeholder.svg",
+  "/logo.svg"
+];
+
+// Helper para verificar se é um asset estático
+const isAssetPath = (url) => {
+  const assets = [".js", ".css", ".png", ".jpg", ".jpeg", ".svg", ".woff2", ".ico"];
+  return assets.some(ext => url.toLowerCase().endsWith(ext));
+};
+
+// Evento de Instalação: Salva o App Shell
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches
+      .open(SHELL_CACHE)
+      .then((cache) => {
+        console.log("[SW] Pré-cacheando App Shell");
+        return cache.addAll(PRECACHE_URLS);
+      })
+      .then(() => self.skipWaiting())
+      .catch((err) => console.error("[SW] Erro no install:", err))
+  );
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim());
+// Evento de Ativação: Limpa caches antigos
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName !== SHELL_CACHE && cacheName !== RUNTIME_CACHE)
+          .map((cacheName) => {
+            console.log("[SW] Removendo cache antigo:", cacheName);
+            return caches.delete(cacheName);
+          })
+      );
+    }).then(() => self.clients.claim())
+  );
 });
 
-self.addEventListener('fetch', (event) => {
+// Estratégia de Fetch: Network-First com Fallback para Cache
+self.addEventListener("fetch", (event) => {
+  // Apenas métodos GET
+  if (event.request.method !== "GET") return;
+
   const url = new URL(event.request.url);
 
-  // Intercept POST requests to /share-target
-  if (event.request.method === 'POST' && url.pathname === '/share-target') {
-    event.respondWith((async () => {
-      try {
-        const formData = await event.request.formData();
-        const audioFile = formData.get('audio');
-
-        if (audioFile) {
-          await saveSharedFile(audioFile);
-        }
-        return Response.redirect('/share-target', 303);
-      } catch (error) {
-        console.error('Error processing share target:', error);
-        return Response.redirect('/?error=share_failed', 303);
-      }
-    })());
+  // Ignorar requisições para Supabase/API (Network Only)
+  if (url.hostname.includes("supabase.co") || url.hostname.includes("googleapis.com")) {
     return;
   }
+
+  // Estratégia para Documentos (Navegação)
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          // Salva no runtime cache para uso offline
+          const copy = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(event.request, copy));
+          return response;
+        })
+        .catch(() => {
+          // Se falhar a rede, tenta o cache
+          return caches.match(event.request).then((cachedResponse) => {
+            if (cachedResponse) return cachedResponse;
+            // Se não houver no cache, retorna a página offline
+            return caches.match("/offline.html");
+          });
+        })
+    );
+    return;
+  }
+
+  // Estratégia para Assets (Stale-While-Revalidate)
+  if (isAssetPath(url.pathname)) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.ok) {
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(event.request, networkResponse.clone()));
+          }
+          return networkResponse;
+        }).catch(() => null);
+
+        return cachedResponse || fetchPromise;
+      })
+    );
+    return;
+  }
+
+  // Padrão: Network First
+  event.respondWith(
+    fetch(event.request)
+      .catch(() => caches.match(event.request))
+  );
 });
 
-function saveSharedFile(file) {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('SharedFilesDB', 1);
+// Push Notifications
+self.addEventListener("push", (event) => {
+  let data = { title: "HomeCare Match", body: "Nova notificação!" };
+  
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { ...data, body: event.data.text() };
+    }
+  }
 
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('files')) {
-        db.createObjectStore('files');
+  const options = {
+    body: data.body,
+    icon: "/icon-192x192.png",
+    badge: "/favicon.png",
+    data: data.link || "/",
+    vibrate: [100, 50, 100],
+    actions: [
+      { action: "open", title: "Ver Detalhes" }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// Clique na Notificação
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  
+  const targetUrl = event.notification.data || "/";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window" }).then((clientList) => {
+      // Se já houver uma janela aberta, foca nela e navega
+      for (const client of clientList) {
+        if (client.url.includes(new URL(targetUrl, self.location.origin).pathname) && "focus" in client) {
+          return client.focus();
+        }
       }
-    };
-
-    request.onsuccess = (event) => {
-      const db = event.target.result;
-      const transaction = db.transaction('files', 'readwrite');
-      const store = transaction.objectStore('files');
-      
-      const putRequest = store.put(file, 'shared-audio');
-      
-      putRequest.onsuccess = () => resolve();
-      putRequest.onerror = () => reject(putRequest.error);
-    };
-
-    request.onerror = () => reject(request.error);
-  });
-}
+      // Se não, abre uma nova
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
