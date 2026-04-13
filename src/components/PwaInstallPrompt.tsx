@@ -40,11 +40,11 @@ export const PwaInstallPrompt = () => {
       return () => clearTimeout(timer);
     }
 
-    // Force show manual instructions for Android if native prompt fails to fire after 15s
+    // Force show manual instructions for Android if native prompt fails to fire after 25s
     if (platform === 'android' && !deferredPrompt && !isStandalone && !isDismissed) {
       const timer = setTimeout(() => {
         setIsVisible(true);
-      }, 15000);
+      }, 25000);
       return () => clearTimeout(timer);
     }
   }, [deferredPrompt, isStandalone, platform]);
