@@ -4,7 +4,7 @@ import { signOut } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download } from 'lucide-react';
-import { useState } from 'react';
+import { AppVersion } from './layout/AppVersion';
 
 export default function Layout() {
   const { user } = useAuthStore();
@@ -16,19 +16,13 @@ export default function Layout() {
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
-      // Show the install prompt
       deferredPrompt.prompt();
-      // Wait for the user to respond to the prompt
       const { outcome } = await deferredPrompt.userChoice;
       if (outcome === 'accepted') {
         console.log('User accepted the install prompt');
-      } else {
-        console.log('User dismissed the install prompt');
       }
-      // We've used the prompt, and can't use it again, throw it away
       setDeferredPrompt(null);
     } else {
-      // If the prompt isn't available (iOS, or already dismissed), show manual instructions
       setShowInstallModal(true);
     }
   };
@@ -48,7 +42,7 @@ export default function Layout() {
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-        <img src="/logo.svg" alt="Conexão Seres" className="h-8 w-auto" />
+        <img src="/logo.svg" alt="HomeCare Match" className="h-8 w-auto" />
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-brand-primary">
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -62,7 +56,7 @@ export default function Layout() {
       `}>
         <div className="flex-1 overflow-y-auto">
           <div className="p-6 hidden md:block border-b border-brand-border/50">
-            <img src="/logo.svg" alt="Conexão Seres" className="h-12 w-auto mb-2" />
+            <img src="/logo.svg" alt="HomeCare Match" className="h-12 w-auto mb-2" />
           </div>
 
           <div className="px-4 py-6">
@@ -104,13 +98,15 @@ export default function Layout() {
         </div>
 
         <div className="p-4 border-t border-brand-border bg-white space-y-2">
-          <button
-            onClick={handleInstallClick}
-            className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
-          >
-            <Download size={20} />
-            <span className="font-medium">Instalar App</span>
-          </button>
+          {!isStandalone && (
+            <button
+              onClick={handleInstallClick}
+              className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
+            >
+              <Download size={20} />
+              <span className="font-medium">Instalar App</span>
+            </button>
+          )}
           <button
             onClick={handleLogout}
             className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors"
@@ -118,9 +114,7 @@ export default function Layout() {
             <LogOut size={20} />
             <span className="font-medium">Sair</span>
           </button>
-          <div className="text-center pt-2">
-            <span className="text-[10px] text-brand-text-muted">Build v1.0.6</span>
-          </div>
+          <AppVersion />
         </div>
       </div>
 

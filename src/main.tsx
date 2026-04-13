@@ -3,12 +3,19 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { usePWAStore } from './store/pwaStore';
-import { registerSW } from 'virtual:pwa-register';
 
-// Register Service Worker
-registerSW({ immediate: true });
+// Manual Service Worker Registration
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((registration) => {
+      console.log("[PWA] Service Worker registrado com sucesso:", registration.scope);
+    }).catch((error) => {
+      console.warn("[PWA] Falha ao registrar service worker:", error);
+    });
+  });
+}
 
-// Capture the install prompt globally before React even renders
+// Capture the install prompt globally
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   usePWAStore.getState().setDeferredPrompt(e);
