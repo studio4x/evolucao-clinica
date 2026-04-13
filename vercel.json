@@ -8,6 +8,15 @@
   "rewrites": [
     { "source": "/sw.js", "destination": "/sw.js" },
     { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/icon-192x192.png", "destination": "/icon-192x192.png" },
+    { "source": "/icon-512x512.png", "destination": "/icon-512x512.png" },
+    { "source": "/icon-512x512-maskable.png", "destination": "/icon-512x512-maskable.png" },
+    { "source": "/favicon.png", "destination": "/favicon.png" },
+    { "source": "/logo.svg", "destination": "/logo.svg" },
+    { "source": "/screenshot-1.png", "destination": "/screenshot-1.png" },
+    { "source": "/screenshot-2.png", "destination": "/screenshot-2.png" },
+    { "source": "/offline.html", "destination": "/offline.html" },
+    { "source": "/apple-touch-icon.png", "destination": "/apple-touch-icon.png" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -23,6 +32,13 @@
       "headers": [
         { "key": "Content-Type", "value": "application/json" },
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/icon-(.*).png",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=2592000, immutable" },
+        { "key": "Content-Type", "value": "image/png" }
       ]
     }
   ]
