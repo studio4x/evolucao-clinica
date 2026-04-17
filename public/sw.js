@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.5.0";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.5.2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -41,9 +41,52 @@ self.addEventListener("activate", (event) => {
 
 // Fetch Strategy
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-
   const url = new URL(event.request.url);
+
+  // --- SHARE TARGET INTERCEPTION ---
+  if (event.request.method === "POST" && url.pathname.includes("/share-target")) {
+    event.respondWith(
+      (async () => {
+        try {
+          const formData = await event.request.formData();
+          const audioFile = formData.get("audio");
+
+          if (audioFile) {
+            // Save to IndexedDB so the React app can read it
+            const idb = await new Promise((resolve, reject) => {
+              const request = indexedDB.open('SharedFilesDB', 1);
+              request.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('files')) {
+                  db.createObjectStore('files');
+                }
+              };
+              request.onsuccess = (e) => resolve(e.target.result);
+              request.onerror = () => reject(request.error);
+            });
+
+            await new Promise((resolve, reject) => {
+              const transaction = idb.transaction('files', 'readwrite');
+              const store = transaction.objectStore('files');
+              store.put(audioFile, 'shared-audio');
+              transaction.oncomplete = () => resolve();
+              transaction.onerror = () => reject(transaction.error);
+            });
+          }
+
+          // Redirect to the React route
+          return Response.redirect("/share-target", 303);
+        } catch (error) {
+          console.error("[PWA] Erro ao processar Share Target:", error);
+          return Response.redirect("/", 303);
+        }
+      })()
+    );
+    return;
+  }
+
+  // Se nao for GET, e nao for share_target, apenas passa direto
+  if (event.request.method !== "GET") return;
 
   // Skip external APIs e Auth flows (Firebase/Google/Supabase)
   if (
