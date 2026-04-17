@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, query, where, orderBy } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { db, auth, googleProvider, storage } from '../firebase';
@@ -78,8 +78,16 @@ export default function ShareTarget() {
     const loadData = async () => {
       try {
         // Load patients
-        const querySnapshot = await getDocs(collection(db, 'patients'));
-        const patientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let patientsData: any[] = [];
+        if (auth.currentUser) {
+          const q = query(
+            collection(db, 'patients'),
+            where('professional_id', '==', auth.currentUser.uid),
+            orderBy('full_name')
+          );
+          const querySnapshot = await getDocs(q);
+          patientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        }
         setPatients(patientsData);
 
         // Load shared file
@@ -92,10 +100,10 @@ export default function ShareTarget() {
           setStatus('error');
           setErrorMessage('Nenhum áudio recebido. Tente compartilhar novamente a partir do WhatsApp.');
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error loading shared file:", error);
         setStatus('error');
-        setErrorMessage('Erro ao carregar o arquivo compartilhado.');
+        setErrorMessage('Erro ao carregar: ' + (error?.message || error?.name || JSON.stringify(error)));
       }
     };
     loadData();
