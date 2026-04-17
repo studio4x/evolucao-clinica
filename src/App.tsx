@@ -15,10 +15,7 @@ import NewEvolution from './pages/NewEvolution';
 import History from './pages/History';
 import ShareTarget from './pages/ShareTarget';
 
-// PWA Components
-import { PwaMetaManager } from './components/layout/PwaMetaManager';
-import { PwaInstallPrompt } from './components/PwaInstallPrompt';
-import { PushManager } from './components/PushManager';
+import { InstallPrompt } from './components/common/InstallPrompt';
 import { CookieConsent } from './components/CookieConsent';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -48,10 +45,8 @@ export default function App() {
 
   return (
     <Router>
-      <PwaMetaManager />
-      <PushManager />
       <CookieConsent />
-      <PwaInstallPrompt />
+      <InstallPrompt />
       
       <Routes>
         <Route path="/login" element={<Login />} />

@@ -4,16 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
-    <!-- PWA Primary Capture -->
-    <script>
-      window.deferredPWAPrompt = null;
-      window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        window.deferredPWAPrompt = e;
-        console.log('[PWA] Native prompt event captured early');
-        window.dispatchEvent(new CustomEvent('pwa-prompt-ready', { detail: e }));
-      });
-    </script>
+
     <title>Evolução Clínica</title>
     <meta name="description" content="Gerenciamento de Evoluções Clínicas com IA e Google Docs - Conexão Seres" />
     <meta name="theme-color" content="#1e3a8a" />

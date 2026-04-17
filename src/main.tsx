@@ -1,41 +1,37 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-import { usePWAStore } from './store/pwaStore';
+import { APP_VERSION } from './components/layout/AppVersion';
 
-// Capture the install prompt globally immediately
-if ((window as any).deferredPWAPrompt) {
-  usePWAStore.getState().setDeferredPrompt((window as any).deferredPWAPrompt);
+// 1. Limpeza por versao
+const previousVersion = window.localStorage.getItem("evolucao-clinica:runtime-version");
+if (previousVersion !== APP_VERSION) {
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function(registrations) {
+      for(let registration of registrations) {
+        registration.unregister();
+      }
+    });
+  }
+  if ('caches' in window) {
+    caches.keys().then((keyList) => {
+      return Promise.all(keyList.map((key) => caches.delete(key)));
+    });
+  }
+  window.localStorage.setItem("evolucao-clinica:runtime-version", APP_VERSION);
+  // Se quiser que force o recarregamento ao trocar a versão:
+  // window.location.reload();
 }
 
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  usePWAStore.getState().setDeferredPrompt(e);
-});
-
-window.addEventListener('pwa-prompt-ready' as any, (e: any) => {
-  usePWAStore.getState().setDeferredPrompt(e.detail);
-});
-
-// Manual Service Worker Registration
+// 2. Registro do Service Worker
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js", { scope: "/" }).then((registration) => {
-      console.log("[PWA] Service Worker registrado com sucesso:", registration.scope);
-    }).catch((error) => {
+    void navigator.serviceWorker.register("/sw.js").catch((error) => {
       console.warn("[PWA] Falha ao registrar service worker:", error);
     });
   });
 }
-
-// Check if running as standalone
-const checkStandalone = () => {
-  const isStandAlone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-  usePWAStore.getState().setIsStandalone(isStandAlone);
-};
-checkStandalone();
-window.matchMedia('(display-mode: standalone)').addEventListener('change', checkStandalone);
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
