@@ -6,40 +6,12 @@ import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useEffect, useState } from 'react';
 
-// Detect if running as installed PWA (standalone mode)
-const isStandalone = () =>
-  window.matchMedia('(display-mode: standalone)').matches ||
-  (window.navigator as any).standalone === true;
-
 export default function Login() {
   const navigate = useNavigate();
   const { setGoogleAccessToken, setUser } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
-  // Handle redirect result when returning from Google OAuth in PWA mode
-  useEffect(() => {
-    const handleRedirectResult = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result) {
-          setLoading(true);
-          const credential = GoogleAuthProvider.credentialFromResult(result);
-          if (credential?.accessToken) {
-            setGoogleAccessToken(credential.accessToken);
-          }
-          await handleUserProfile(result.user);
-          navigate('/');
-        }
-      } catch (error: any) {
-        console.error('Redirect login error:', error);
-        setLoading(false);
-        if (error.code !== 'auth/popup-closed-by-user') {
-          alert(`Erro ao fazer login: ${error.message || error.code || 'Erro desconhecido'}`);
-        }
-      }
-    };
-    handleRedirectResult();
-  }, []);
+  // No longer using redirect flows
 
   const handleUserProfile = async (user: any) => {
     setUser(user);
@@ -66,25 +38,28 @@ export default function Login() {
   const handleLogin = async () => {
     setLoading(true);
     try {
-      if (isStandalone()) {
-        await signInWithRedirect(auth, googleProvider);
-        return;
-      }
-      
       const result = await signInWithPopup(auth, googleProvider);
+      
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         setGoogleAccessToken(credential.accessToken);
       }
-      await handleUserProfile(result.user);
+
+      // Evita travamento infinito caso o Firestore do Firebase falhe de responder
+      const profilePromise = handleUserProfile(result.user);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("O banco de dados demorou muito para responder (Timeout/Offline).")), 10000)
+      );
+      
+      await Promise.race([profilePromise, timeoutPromise]);
       navigate('/');
+      
     } catch (error: any) {
       console.error('Login error:', error);
+      setLoading(false);
       if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
         alert(`Erro de autenticação: ${error.message}`);
       }
-    } finally {
-      if (!isStandalone()) setLoading(false);
     }
   };
 
