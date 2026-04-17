@@ -64,17 +64,13 @@ export default function Login() {
   };
 
   const handleLogin = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-
-      // In standalone PWA mode, use redirect flow (popups don't work)
       if (isStandalone()) {
         await signInWithRedirect(auth, googleProvider);
-        // Page will redirect — no code runs after this
         return;
       }
-
-      // In browser mode, use popup flow (better UX)
+      
       const result = await signInWithPopup(auth, googleProvider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
@@ -84,11 +80,11 @@ export default function Login() {
       navigate('/');
     } catch (error: any) {
       console.error('Login error:', error);
-      setLoading(false);
-      if (error.code === 'auth/popup-closed-by-user') {
-        return;
+      if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
+        alert(`Erro de autenticação: ${error.message}`);
       }
-      alert(`Erro ao fazer login: ${error.message || error.code || 'Erro desconhecido'}`);
+    } finally {
+      if (!isStandalone()) setLoading(false);
     }
   };
 
