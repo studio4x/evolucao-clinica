@@ -187,7 +187,7 @@ export default function ShareTarget() {
       const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
       const geminiResponse = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.0-flash",
         contents: {
           parts: [
             { text: prompt },
@@ -350,7 +350,15 @@ export default function ShareTarget() {
                 </div>
               )}
 
-              <div className="pt-4 flex justify-end">
+              <div className="pt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => navigate('/')}
+                  disabled={status === 'processing'}
+                  className="btn-outline disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
                 <button
                   onClick={handleProcess}
                   disabled={status === 'processing' || !selectedPatientId || !audioFile}
