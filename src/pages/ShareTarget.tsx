@@ -167,11 +167,8 @@ export default function ShareTarget() {
     };
 
     try {
-      // 1. Upload Audio
-      console.log("Fazendo upload do áudio...");
-      await uploadBytes(storageRef, audioFile);
-      const downloadURL = await getDownloadURL(storageRef);
-      evolutionData.audio_url = downloadURL;
+      // 1. (Upload de áudio removido pois Blobs do Android Intent podem travar no Firebase Storage)
+      // evolutionData.audio_url = '';
 
       // Save initial state to Firestore
       await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
@@ -186,12 +183,17 @@ export default function ShareTarget() {
       
       const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
+      let mimeType = audioFile.type;
+      if (!mimeType || mimeType === 'application/octet-stream' || mimeType.includes('opus')) {
+        mimeType = 'audio/ogg';
+      }
+
       const geminiResponse = await ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents: {
           parts: [
             { text: prompt },
-            { inlineData: { data: base64Audio, mimeType: audioFile.type || 'audio/webm' } }
+            { inlineData: { data: base64Audio, mimeType } }
           ]
         }
       });
