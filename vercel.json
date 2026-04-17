@@ -7,7 +7,7 @@
   },
   "rewrites": [
     { "source": "/sw.js", "destination": "/sw.js" },
-    { "source": "/manifest.json", "destination": "/manifest.json" },
+    { "source": "/manifest.webmanifest", "destination": "/manifest.webmanifest" },
     { "source": "/icon-192x192.png", "destination": "/icon-192x192.png" },
     { "source": "/icon-512x512.png", "destination": "/icon-512x512.png" },
     { "source": "/icon-512x512-maskable.png", "destination": "/icon-512x512-maskable.png" },
@@ -28,9 +28,9 @@
       ]
     },
     {
-      "source": "/manifest.json",
+      "source": "/manifest.webmanifest",
       "headers": [
-        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Content-Type", "value": "application/manifest+json" },
         { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
       ]
     },
