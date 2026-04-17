@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.6.1";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.6.2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 

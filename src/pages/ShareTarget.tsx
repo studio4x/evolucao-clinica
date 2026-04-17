@@ -156,6 +156,7 @@ export default function ShareTarget() {
     
     const evolutionData = {
       id: evolutionId,
+      professional_id: auth.currentUser?.uid || '',
       patient_id: selectedPatientId,
       session_date: sessionDate,
       audio_url: '',
