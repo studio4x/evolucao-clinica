@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.6.2";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.6.3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -44,7 +44,8 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   // --- SHARE TARGET INTERCEPTION ---
-  if (event.request.method === "POST" && url.pathname.includes("/share-target")) {
+  if (event.request.method === "POST") {
+    // É uma tentativa do PWA de jogar arquivo via POST
     event.respondWith(
       (async () => {
         try {
@@ -74,11 +75,18 @@ self.addEventListener("fetch", (event) => {
             });
           }
 
-          // Redirect to the React route
+          // Retorna o HTML principal do PWA diretamente do Cache para engolir o POST
+          // Sem isso, a Vercel recebe um POST no index.html e retorna erro 405
+          const cachedHtml = await caches.match('/') || await caches.match('/index.html');
+          if (cachedHtml) {
+            return cachedHtml;
+          }
+          
           return Response.redirect("/share-target", 303);
         } catch (error) {
           console.error("[PWA] Erro ao processar Share Target:", error);
-          return Response.redirect("/", 303);
+          const fallback = await caches.match('/');
+          return fallback || Response.redirect("/", 303);
         }
       })()
     );
