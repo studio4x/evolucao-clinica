@@ -11,7 +11,6 @@
         e.preventDefault();
         window.deferredPWAPrompt = e;
         console.log('[PWA] Native prompt event captured early');
-        // Dispatch custom event for the store to pick up if it's already loaded
         window.dispatchEvent(new CustomEvent('pwa-prompt-ready', { detail: e }));
       });
     </script>
@@ -22,7 +21,7 @@
     <!-- iOS Support / Native App Feel -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Evolução" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="apple-touch-fullscreen" content="yes" />
@@ -31,7 +30,7 @@
     <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- Manifest -->
-    <link rel="manifest" href="/manifest.json" />
+    <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Favicon -->
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />

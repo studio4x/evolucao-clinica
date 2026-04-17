@@ -5,56 +5,42 @@ export const PwaMetaManager = () => {
   const config = useSiteConfig();
 
   useEffect(() => {
-    // 1. Atualizar Título e Descrição Fundamental
+    // 1. Título e Descrição
     document.title = config.pwa_app_name;
     
-    let metaDescription = document.querySelector('meta[name="description"]');
-    if (!metaDescription) {
-      metaDescription = document.createElement('meta');
-      metaDescription.setAttribute('name', 'description');
-      document.head.appendChild(metaDescription);
-    }
-    metaDescription.setAttribute('content', config.pwa_description);
-
-    // 2. Cor do Tema
-    let metaThemeColor = document.querySelector('meta[name="theme-color"]');
-    if (!metaThemeColor) {
-      metaThemeColor = document.createElement('meta');
-      metaThemeColor.setAttribute('name', 'theme-color');
-      document.head.appendChild(metaThemeColor);
-    }
-    metaThemeColor.setAttribute('content', config.pwa_theme_color);
-
-    // 3. Apple Mobile Web App
-    const appleTags = [
-      { name: 'apple-mobile-web-app-capable', content: 'yes' },
-      { name: 'apple-mobile-web-app-title', content: config.pwa_short_name },
-      { name: 'apple-mobile-web-app-status-bar-style', content: 'default' }
-    ];
-
-    appleTags.forEach(tag => {
-      let el = document.querySelector(`meta[name="${tag.name}"]`);
+    const updateMeta = (name: string, content: string, attr = 'name') => {
+      let el = document.querySelector(`meta[${attr}="${name}"]`);
       if (!el) {
         el = document.createElement('meta');
-        el.setAttribute('name', tag.name);
+        el.setAttribute(attr, name);
         document.head.appendChild(el);
       }
-      el.setAttribute('content', tag.content);
-    });
-
-    // 4. Manifest Dinâmico (conforme mencionado na spec - OPCIONAL se arquivo estático existir)
-    // Se quiséssemos gerar um Blob URL:
-    /*
-    const manifest = {
-      name: config.pwa_app_name,
-      short_name: config.pwa_short_name,
-      // ... rest of config
+      el.setAttribute('content', content);
     };
-    const stringManifest = JSON.stringify(manifest);
-    const blob = new Blob([stringManifest], {type: 'application/json'});
-    const manifestURL = URL.createObjectURL(blob);
-    document.querySelector('link[rel="manifest"]')?.setAttribute('href', manifestURL);
-    */
+
+    updateMeta('description', config.pwa_description);
+    updateMeta('theme-color', config.pwa_theme_color);
+
+    // 2. Apple / iOS tags
+    updateMeta('apple-mobile-web-app-capable', 'yes');
+    updateMeta('apple-mobile-web-app-title', config.pwa_short_name);
+    updateMeta('apple-mobile-web-app-status-bar-style', 'default');
+    
+    // 3. Android tags
+    updateMeta('mobile-web-app-capable', 'yes');
+
+    // 4. Open Graph / SEO
+    updateMeta('og:title', config.pwa_app_name, 'property');
+    updateMeta('og:description', config.pwa_description, 'property');
+    updateMeta('og:type', 'website', 'property');
+
+    // 5. Twitter
+    updateMeta('twitter:title', config.pwa_app_name);
+    updateMeta('twitter:description', config.pwa_description);
+
+    // 6. Manifest link (opcional se quiser trocar dinamicamente)
+    // const manifestLink = document.querySelector('link[rel="manifest"]');
+    // if (manifestLink) manifestLink.setAttribute('href', '/manifest.json');
 
   }, [config]);
 
