@@ -76,7 +76,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="card p-6">
+        <Link to="/patients" className="card p-6 block hover:shadow-md hover:border-brand-primary/30 transition-all cursor-pointer">
           <div className="flex items-center space-x-4">
             <div className="bg-brand-primary/10 p-3 rounded-xl text-brand-primary">
               <Users size={24} />
@@ -86,9 +86,9 @@ export default function Dashboard() {
               <p className="text-2xl font-display font-bold text-brand-text">{stats.totalPatients}</p>
             </div>
           </div>
-        </div>
+        </Link>
 
-        <div className="card p-6">
+        <Link to="/history" className="card p-6 block hover:shadow-md hover:border-brand-primary/30 transition-all cursor-pointer">
           <div className="flex items-center space-x-4">
             <div className="bg-brand-accent/20 p-3 rounded-xl text-brand-primary">
               <FileAudio size={24} />
@@ -98,9 +98,9 @@ export default function Dashboard() {
               <p className="text-2xl font-display font-bold text-brand-text">{stats.recentEvolutions}</p>
             </div>
           </div>
-        </div>
+        </Link>
 
-        <div className="card p-6">
+        <Link to="/history" className="card p-6 block hover:shadow-md hover:border-red-400/50 transition-all cursor-pointer">
           <div className="flex items-center space-x-4">
             <div className="bg-red-50 p-3 rounded-xl text-red-600">
               <AlertCircle size={24} />
@@ -110,7 +110,7 @@ export default function Dashboard() {
               <p className="text-2xl font-display font-bold text-brand-text">{stats.errorEvolutions}</p>
             </div>
           </div>
-        </div>
+        </Link>
       </div>
 
       <div className="card">

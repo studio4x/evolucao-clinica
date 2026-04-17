@@ -43,7 +43,9 @@ export default function Layout() {
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-        <img src="/logo.svg" alt="HomeCare Match" className="h-8 w-auto" />
+        <Link to="/">
+          <img src="/logo.svg" alt="HomeCare Match" className="h-8 w-auto" />
+        </Link>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-brand-primary">
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
@@ -57,7 +59,9 @@ export default function Layout() {
       `}>
         <div className="flex-1 overflow-y-auto">
           <div className="p-6 hidden md:block border-b border-brand-border/50">
-            <img src="/logo.svg" alt="HomeCare Match" className="h-12 w-auto mb-2" />
+            <Link to="/">
+              <img src="/logo.svg" alt="HomeCare Match" className="h-12 w-auto mb-2" />
+            </Link>
           </div>
 
           <div className="px-4 py-6">
