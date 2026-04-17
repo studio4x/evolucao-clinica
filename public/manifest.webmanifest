@@ -58,7 +58,18 @@
       "files": [
         {
           "name": "audio",
-          "accept": ["audio/*", "video/*"]
+          "accept": [
+            "audio/*",
+            "video/*",
+            "application/ogg",
+            ".opus",
+            ".ogg",
+            ".mp3",
+            ".wav",
+            ".m4a",
+            ".weba",
+            "*/*"
+          ]
         }
       ]
     }
