@@ -30,6 +30,7 @@ export default function NewEvolution() {
   const [patient, setPatient] = useState<any>(null);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -40,6 +41,30 @@ export default function NewEvolution() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+
+  // Helper para salvar backup no IndexedDB
+  const saveRecordingBackup = async (blobs: Blob[]) => {
+    try {
+      const mergedBlob = new Blob(blobs, { type: 'audio/webm' });
+      const idb = await new Promise<IDBDatabase>((resolve, reject) => {
+        const request = indexedDB.open('EvolutionBackupDB', 1);
+        request.onupgradeneeded = (e: any) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('backups')) {
+            db.createObjectStore('backups');
+          }
+        };
+        request.onsuccess = (e: any) => resolve(e.target.result);
+        request.onerror = () => reject(request.error);
+      });
+
+      const transaction = idb.transaction('backups', 'readwrite');
+      const store = transaction.objectStore('backups');
+      store.put(mergedBlob, 'current-recording');
+    } catch (err) {
+      console.warn("Falha ao salvar backup silencioso:", err);
+    }
+  };
 
   useEffect(() => {
     const fetchPatient = async () => {
@@ -84,19 +109,27 @@ export default function NewEvolution() {
       chunksRef.current = [];
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          // Salva backup a cada fatia de áudio recebida
+          saveRecordingBackup(chunksRef.current);
+        }
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        const url = URL.createObjectURL(blob);
-        setAudioUrl(url);
+        if (chunksRef.current.length > 0) {
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+          setAudioBlob(blob);
+          const url = URL.createObjectURL(blob);
+          setAudioUrl(url);
+        }
         stream.getTracks().forEach(track => track.stop());
       };
 
-      mediaRecorder.start();
+      // Inicia gravando e emitindo dados a cada 5 segundos para backup
+      mediaRecorder.start(5000);
       setIsRecording(true);
+      setIsPaused(false);
       setRecordingTime(0);
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => prev + 1);
@@ -107,10 +140,47 @@ export default function NewEvolution() {
     }
   };
 
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && isRecording && !isPaused) {
+      mediaRecorderRef.current.pause();
+      setIsPaused(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && isRecording && isPaused) {
+      mediaRecorderRef.current.resume();
+      setIsPaused(false);
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    }
+  };
+
+  const discardRecording = () => {
+    if (window.confirm("Certeza que deseja descartar esta gravação? Toda a captura atual será perdida.")) {
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop();
+      }
+      if (timerRef.current) clearInterval(timerRef.current);
+      setIsRecording(false);
+      setIsPaused(false);
+      setRecordingTime(0);
+      chunksRef.current = [];
+      setAudioBlob(null);
+      setAudioUrl(null);
+      
+      // Limpa backup do IDB
+      indexedDB.deleteDatabase('EvolutionBackupDB');
+    }
+  };
+
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      setIsPaused(false);
       if (timerRef.current) clearInterval(timerRef.current);
     }
   };
@@ -321,30 +391,62 @@ export default function NewEvolution() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Record Audio */}
-            <div className="border border-brand-border rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4 bg-brand-bg/50">
+            <div className="border border-brand-border rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4 bg-brand-bg/50 relative overflow-hidden">
               {isRecording ? (
                 <>
-                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
-                    <Mic className="text-red-600 w-8 h-8" />
+                  <div className={`w-16 h-16 ${isPaused ? 'bg-yellow-100' : 'bg-red-100'} rounded-full flex items-center justify-center ${!isPaused && 'animate-pulse'}`}>
+                    <Mic className={`${isPaused ? 'text-yellow-600' : 'text-red-600'} w-8 h-8`} />
                   </div>
-                  <div className="text-2xl font-mono text-brand-text">{formatTime(recordingTime)}</div>
-                  <button
-                    onClick={stopRecording}
-                    className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-colors"
-                  >
-                    <Square size={16} />
-                    <span>Parar Gravação</span>
-                  </button>
+                  <div className="text-2xl font-mono text-brand-text flex items-center">
+                    {formatTime(recordingTime)}
+                    {isPaused && <span className="text-xs ml-2 bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded uppercase font-bold tracking-tighter">Pausado</span>}
+                  </div>
+                  
+                  <div className="flex flex-wrap justify-center gap-3">
+                    {isPaused ? (
+                      <button
+                        onClick={resumeRecording}
+                        className="flex items-center space-x-2 bg-brand-primary text-white px-4 py-2 rounded-xl hover:bg-brand-primary-hover transition-colors"
+                      >
+                        <RefreshCw size={16} />
+                        <span>Retomar</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={pauseRecording}
+                        className="flex items-center space-x-2 bg-yellow-500 text-white px-4 py-2 rounded-xl hover:bg-yellow-600 transition-colors"
+                      >
+                        <Square size={14} className="rounded-sm fill-current" />
+                        <span>Pausar</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={stopRecording}
+                      className="flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/20"
+                    >
+                      <CheckCircle size={16} />
+                      <span>Finalizar</span>
+                    </button>
+
+                    <button
+                      onClick={discardRecording}
+                      className="flex items-center space-x-2 bg-slate-200 text-slate-700 px-4 py-2 rounded-xl hover:bg-slate-300 transition-colors"
+                    >
+                      <Trash2 size={16} />
+                      <span>Descartar</span>
+                    </button>
+                  </div>
                 </>
               ) : (
                 <>
                   <div className="w-16 h-16 bg-brand-primary/10 rounded-full flex items-center justify-center">
                     <Mic className="text-brand-primary w-8 h-8" />
                   </div>
-                  <p className="text-sm text-brand-text-muted">Grave o áudio diretamente pelo navegador</p>
+                  <p className="text-sm text-brand-text-muted px-4">Grave o áudio da sessão com segurança (Backup automático ativo)</p>
                   <button
                     onClick={startRecording}
-                    className="btn-primary"
+                    className="btn-primary w-full py-3"
                   >
                     Iniciar Gravação
                   </button>
