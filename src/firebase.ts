@@ -10,6 +10,7 @@ export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const apiKey = firebaseConfig.apiKey;
+export const projectId = firebaseConfig.projectId;
 
 export const googleProvider = new GoogleAuthProvider();
 // Request scopes for Google Drive and Docs

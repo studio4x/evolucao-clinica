@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { db, auth, apiKey } from '../firebase';
+import { db, auth, apiKey, projectId } from '../firebase';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { FileText, Link as LinkIcon } from 'lucide-react';
@@ -82,6 +82,7 @@ export default function PatientForm() {
               .addView(uploadView)
               .setOAuthToken(googleAccessToken)
               .setDeveloperKey(pickerApiKey)
+              .setAppId(projectId)
               .setCallback((data: any) => {
                 if (data.action === window.google.picker.Action.PICKED) {
                   const doc = data.docs[0];
