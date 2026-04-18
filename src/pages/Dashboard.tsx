@@ -93,7 +93,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link to="/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
           <div className="p-6 relative z-10">
@@ -113,17 +113,6 @@ export default function Dashboard() {
             </div>
             <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Evoluções Realizadas</p>
             <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.recentEvolutions}</p>
-          </div>
-        </Link>
-
-        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent" />
-          <div className="p-6 relative z-10">
-            <div className="bg-red-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
-              <AlertCircle size={24} />
-            </div>
-            <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Falhas Reportadas</p>
-            <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.errorEvolutions}</p>
           </div>
         </Link>
       </div>
