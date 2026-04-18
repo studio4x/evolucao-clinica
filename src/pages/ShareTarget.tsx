@@ -277,12 +277,20 @@ export default function ShareTarget() {
               </div>
               <h3 className="text-lg font-display font-medium text-brand-text mb-2">Evolução Processada!</h3>
               <p className="text-brand-text-muted mb-6">O áudio foi transcrito e inserido no Google Docs com sucesso.</p>
-              <button
-                onClick={() => navigate('/')}
-                className="btn-primary"
-              >
-                Voltar ao Início
-              </button>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                <button
+                  onClick={() => navigate(`/patients/${selectedPatientId}`)}
+                  className="btn-primary w-full sm:w-auto"
+                >
+                  Ver Perfil do Paciente
+                </button>
+                <button
+                  onClick={() => navigate('/')}
+                  className="btn-outline w-full sm:w-auto"
+                >
+                  Ir para Home
+                </button>
+              </div>
             </div>
           ) : (
             <>
