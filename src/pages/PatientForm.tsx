@@ -4,7 +4,8 @@ import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { db, auth, apiKey, projectId } from '../firebase';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon } from 'lucide-react';
+import { FileText, Link as LinkIcon, Plus, Loader2 } from 'lucide-react';
+import { createGoogleDoc } from '../services/googleDocs';
 
 declare global {
   interface Window {
@@ -19,6 +20,7 @@ export default function PatientForm() {
   const { googleAccessToken } = useAuthStore();
   
   const [loading, setLoading] = useState(false);
+  const [creatingDoc, setCreatingDoc] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
     notes: '',
@@ -49,6 +51,35 @@ export default function PatientForm() {
     }
   }, [id]);
 
+  const handleCreateDoc = async () => {
+    if (!googleAccessToken) {
+      alert('Token do Google não encontrado. Por favor, faça login novamente.');
+      return;
+    }
+
+    if (!formData.full_name) {
+      alert('Por favor, preencha o nome do paciente antes de criar o prontuário.');
+      return;
+    }
+
+    setCreatingDoc(true);
+    try {
+      const title = `Prontuário - ${formData.full_name}`;
+      const newDoc = await createGoogleDoc(googleAccessToken, title);
+      setFormData(prev => ({
+        ...prev,
+        google_doc_id: newDoc.id,
+        google_doc_name: newDoc.name,
+        google_doc_url: newDoc.url
+      }));
+    } catch (error: any) {
+      console.error("Erro ao criar documento:", error);
+      alert("Erro ao criar prontuário no Google Docs.");
+    } finally {
+      setCreatingDoc(false);
+    }
+  };
+
   const handlePicker = () => {
     if (!googleAccessToken) {
       alert('Token do Google não encontrado. Por favor, faça login novamente.');
@@ -71,18 +102,17 @@ export default function PatientForm() {
             }
 
             const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCUMENTS)
-              .setMimeTypes('application/vnd.google-apps.document');
-
-            const uploadView = new window.google.picker.DocsUploadView();
+              .setMimeTypes('application/vnd.google-apps.document')
+              .setIncludeFolders(true); // Permite navegar em pastas
 
             const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY || apiKey;
 
             const picker = new window.google.picker.PickerBuilder()
               .addView(view)
-              .addView(uploadView)
               .setOAuthToken(googleAccessToken)
               .setDeveloperKey(pickerApiKey)
               .setAppId(projectId)
+              .enableFeature(window.google.picker.Feature.NAV_HIDDEN) // Design mais limpo
               .setCallback((data: any) => {
                 if (data.action === window.google.picker.Action.PICKED) {
                   const doc = data.docs[0];
@@ -205,17 +235,37 @@ export default function PatientForm() {
               </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={handlePicker}
-              className="w-full flex items-center justify-center space-x-2 p-4 border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-colors bg-brand-bg/50 hover:bg-brand-primary/5"
-            >
-              <FileText size={24} />
-              <span className="font-medium">Selecionar prontuário no Google Drive</span>
-            </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={handleCreateDoc}
+                disabled={creatingDoc || !formData.full_name}
+                className="flex items-center justify-center space-x-2 p-4 border-2 border-brand-primary border-dashed rounded-xl text-brand-primary hover:bg-brand-primary/5 transition-colors disabled:opacity-50"
+              >
+                {creatingDoc ? (
+                  <Loader2 size={24} className="animate-spin" />
+                ) : (
+                  <Plus size={24} />
+                )}
+                <span className="font-medium">Criar novo prontuário</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePicker}
+                className="flex items-center justify-center space-x-2 p-4 border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-colors bg-brand-bg/50 hover:bg-brand-primary/5"
+              >
+                <FileText size={24} />
+                <span className="font-medium">Selecionar existente</span>
+              </button>
+            </div>
           )}
           <p className="text-xs text-brand-text-muted mt-2">
-            Selecione o documento onde as evoluções serão inseridas automaticamente.
+            {!formData.full_name && !formData.google_doc_id ? (
+              <span className="text-red-500">Preencha o nome do paciente para liberar a criação do prontuário.</span>
+            ) : (
+              "Selecione ou crie o documento onde as evoluções serão inseridas automaticamente."
+            )}
           </p>
         </div>
 
