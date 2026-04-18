@@ -158,29 +158,32 @@ export default function ShareTarget() {
     };
 
     try {
-      // 1. (Upload de áudio removido pois Blobs do Android Intent podem travar no Firebase Storage)
-      // evolutionData.audio_url = '';
+      setStatus('processing');
+      setErrorMessage("Etapa 1/4: Salvando registro inicial...");
 
-      // Save initial state to Firestore
+      // 1. Save initial state
       await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
 
       // 2. Transcribe with AI
-      console.log("Iniciando transcrição com serviço unificado...");
+      setErrorMessage("Etapa 2/4: Transcrevendo áudio com IA (Gemini 2.0)...");
       let mimeType = audioFile.type;
-      if (!mimeType || mimeType === 'application/octet-stream' || mimeType.includes('opus')) {
-        mimeType = 'audio/ogg';
+      
+      if (!mimeType || mimeType === 'application/octet-stream') {
+        mimeType = 'audio/ogg'; // WhatsApp PWA costuma vir com esse mimeType genérico
       }
 
       const transcription = await transcribeAudio({
         audioBlob: audioFile,
         mimeType,
         onRetry: (attempt, delay, isFallback) => {
-          console.log(`[ShareTarget] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
+          setErrorMessage(`Etapa 2/4: Retentativa IA ${attempt}/3 em ${Math.round(delay/1000)}s...`);
         }
       });
 
+      if (!transcription) throw new Error("A IA retornou um texto vazio.");
+
       // 3. Append to Google Docs
-      console.log("Inserindo no Google Docs...");
+      setErrorMessage("Etapa 3/4: Inserindo no prontuário (Google Docs)...");
       await appendToGoogleDoc(
         googleAccessToken,
         patient.google_doc_id,
@@ -189,6 +192,7 @@ export default function ShareTarget() {
       );
 
       // 4. Update Firestore
+      setErrorMessage("Etapa 4/4: Finalizando...");
       await setDoc(doc(db, 'evolutions', evolutionId), {
         ...evolutionData,
         transcription_status: 'completed',
@@ -198,31 +202,34 @@ export default function ShareTarget() {
         updated_at: new Date().toISOString()
       });
 
-      // Clear the shared file
-      await clearSharedFile();
+      await clearSharedFile().catch(e => console.warn("Erro ao limpar IDB:", e));
       setStatus('success');
+      setErrorMessage('');
 
     } catch (error: any) {
-      console.error("Processing error:", error);
+      console.error("ERRO CRÍTICO NO SHARE TARGET:", error);
       let msg = error.message || "Erro desconhecido";
       
-      if (msg.includes('UNAUTHENTICATED') || msg.includes('401') || msg.includes('Invalid Credentials')) {
-        msg = "Sua sessão do Google expirou. Por favor, renove a autenticação.";
+      if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Credentials')) {
+        msg = "Sua sessão do Google expirou. Por favor, renove a autenticação abaixo.";
         setGoogleAccessToken(null);
+      } else if (msg.includes('timeout') || msg.includes('55s')) {
+        msg = "O Google demorou demais para responder. Tente um áudio mais curto ou tente novamente.";
       }
       
       setErrorMessage(msg);
       setStatus('error');
       
-      // Update Firestore with error
-      if (evolutionData.audio_url) {
+      // Update Firestore with error if possible
+      try {
         await setDoc(doc(db, 'evolutions', evolutionId), {
           ...evolutionData,
           transcription_status: 'error',
-          google_doc_append_status: 'error',
           error_message: msg,
           updated_at: new Date().toISOString()
         });
+      } catch (f) {
+        console.error("Falha ao salvar erro no Firestore:", f);
       }
     }
   };
