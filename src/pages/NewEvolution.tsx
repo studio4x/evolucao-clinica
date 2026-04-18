@@ -289,9 +289,15 @@ export default function NewEvolution() {
       try {
         // 1. Transcribe with Gemini (Frontend)
         setStatus('processing');
-        console.log("Iniciando transcrição no frontend...");
+        console.log(`Iniciando transcrição (Tentativa ${retryCount + 1})...`);
         
-        const apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+        // Lógica de Contingência (Fallback)
+        const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+        const backupKey = (process as any).env?.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+        
+        // Se já falhou uma vez e temos a chave real, usamos ela
+        const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
+
         if (!apiKey) {
           throw new Error("Chave da API Gemini não encontrada no ambiente.");
         }

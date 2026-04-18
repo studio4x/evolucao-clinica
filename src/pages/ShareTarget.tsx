@@ -194,6 +194,16 @@ export default function ShareTarget() {
 
       const attemptTranscription = async (): Promise<string> => {
         try {
+          // Lógica de Contingência (Fallback)
+          const mainKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+          const backupKey = (process as any).env?.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+          
+          // Se já falhou uma vez e temos a chave real, usamos ela
+          const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
+
+          if (!apiKey) throw new Error("Chave da API Gemini não encontrada.");
+
+          const ai = new GoogleGenAI({ apiKey });
           const geminiResponse = await ai.models.generateContent({
             model: "gemini-2.0-flash",
             contents: {
@@ -211,9 +221,9 @@ export default function ShareTarget() {
           const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
           if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
             retryCount++;
-            // Aumenta drasticamente o delay para erros de cota (mínimo 15 segundos)
-            const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
-            console.log(`Retrying transcription... Attempt ${retryCount} after ${delay}ms`);
+            // Se for erro de cota, troca de chave na próxima tentativa se houver backup
+            const delay = isQuotaError ? 3000 * retryCount : 2000 * retryCount;
+            console.log(`Retrying transcription... Attempt ${retryCount} using fallback logic in ${delay}ms`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return attemptTranscription();
           }
