@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Link } from 'react-router-dom';
-import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2 } from 'lucide-react';
+import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Dashboard() {
@@ -63,128 +63,123 @@ export default function Dashboard() {
   if (loading) return <div>Carregando...</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-display font-semibold text-brand-primary">Dashboard</h1>
-        <Link 
-          to="/patients" 
-          className="btn-primary"
-        >
-          <Plus size={20} className="mr-2" />
-          <span>Nova Evolução</span>
-        </Link>
+    <div className="space-y-8 animate-in fade-in duration-700">
+      {/* Welcome Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-brand-primary">
+            Olá, {auth.currentUser?.displayName?.split(' ')[0] || 'Terapeuta'}!
+          </h1>
+          <p className="text-brand-text-muted mt-1">
+            Aqui está o resumo dos seus atendimentos clínicos.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Link 
+            to="/tutorial" 
+            className="btn-outline flex items-center space-x-2 bg-white"
+          >
+            <BookOpen size={18} />
+            <span>Ver Tutorial</span>
+          </Link>
+          <Link 
+            to="/patients/new" 
+            className="btn-primary flex items-center shadow-lg shadow-brand-primary/20"
+          >
+            <Plus size={20} className="mr-2" />
+            <span>Novo Paciente</span>
+          </Link>
+        </div>
       </div>
 
+      {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Link to="/patients" className="card p-6 block hover:shadow-md hover:border-brand-primary/30 transition-all cursor-pointer">
-          <div className="flex items-center space-x-4">
-            <div className="bg-brand-primary/10 p-3 rounded-xl text-brand-primary">
+        <Link to="/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
+          <div className="p-6 relative z-10">
+            <div className="bg-blue-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
               <Users size={24} />
             </div>
-            <div>
-              <p className="text-sm text-brand-text-muted font-medium">Pacientes Ativos</p>
-              <p className="text-2xl font-display font-bold text-brand-text">{stats.totalPatients}</p>
-            </div>
+            <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Pacientes Ativos</p>
+            <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.totalPatients}</p>
           </div>
         </Link>
 
-        <Link to="/history" className="card p-6 block hover:shadow-md hover:border-brand-primary/30 transition-all cursor-pointer">
-          <div className="flex items-center space-x-4">
-            <div className="bg-brand-accent/20 p-3 rounded-xl text-brand-primary">
+        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all">
+          <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 to-transparent" />
+          <div className="p-6 relative z-10">
+            <div className="bg-brand-primary w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
               <FileAudio size={24} />
             </div>
-            <div>
-              <p className="text-sm text-brand-text-muted font-medium">Evoluções Recentes</p>
-              <p className="text-2xl font-display font-bold text-brand-text">{stats.recentEvolutions}</p>
-            </div>
+            <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Evoluções Realizadas</p>
+            <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.recentEvolutions}</p>
           </div>
         </Link>
 
-        <Link to="/history" className="card p-6 block hover:shadow-md hover:border-red-400/50 transition-all cursor-pointer">
-          <div className="flex items-center space-x-4">
-            <div className="bg-red-50 p-3 rounded-xl text-red-600">
+        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent" />
+          <div className="p-6 relative z-10">
+            <div className="bg-red-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
               <AlertCircle size={24} />
             </div>
-            <div>
-              <p className="text-sm text-brand-text-muted font-medium">Falhas de Processamento</p>
-              <p className="text-2xl font-display font-bold text-brand-text">{stats.errorEvolutions}</p>
-            </div>
+            <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Falhas Reportadas</p>
+            <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.errorEvolutions}</p>
           </div>
         </Link>
       </div>
 
-      <div className="card">
-        <div className="px-6 py-4 border-b border-brand-border flex items-center space-x-2 bg-brand-bg/50">
-          <BookOpen className="text-brand-primary" size={20} />
-          <h2 className="text-lg font-display font-semibold text-brand-primary">Como utilizar o App</h2>
-        </div>
-        <div className="p-6 grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="space-y-3">
-            <div className="w-10 h-10 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary font-bold">1</div>
-            <h3 className="font-semibold text-brand-text flex items-center space-x-2">
-              <Users size={18} className="text-brand-primary/70" />
-              <span>Cadastrar</span>
+      {/* Quick Actions & Recent Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Latest Activity Summary */}
+        <div className="card p-0 overflow-hidden shadow-sm">
+          <div className="px-6 py-4 border-b border-brand-border bg-brand-bg/30 flex items-center justify-between">
+            <h3 className="font-display font-semibold text-brand-text flex items-center">
+              <HistoryIcon size={18} className="mr-2 text-brand-primary" />
+              Atividade Recente
             </h3>
-            <p className="text-sm text-brand-text-muted">
-              Cadastre seus pacientes e vincule o <strong>ID do Google Docs</strong> onde as evoluções serão salvas.
-            </p>
+            <Link to="/history" className="text-xs font-semibold text-brand-primary hover:underline uppercase tracking-tighter">Ver Tudo</Link>
           </div>
-
-          <div className="space-y-3">
-            <div className="w-10 h-10 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary font-bold">2</div>
-            <h3 className="font-semibold text-brand-text flex items-center space-x-2">
-              <Mic size={18} className="text-brand-primary/70" />
-              <span>Gravar Áudio</span>
-            </h3>
-            <p className="text-sm text-brand-text-muted">
-              Na página do paciente, clique em <strong>Nova Evolução</strong> e grave seu relato clínico ou envie um arquivo.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="w-10 h-10 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary font-bold">3</div>
-            <h3 className="font-semibold text-brand-text flex items-center space-x-2">
-              <FileText size={18} className="text-brand-primary/70" />
-              <span>Processar</span>
-            </h3>
-            <p className="text-sm text-brand-text-muted">
-              A IA transcreve o áudio, corrige vícios de fala e formata o texto para um padrão profissional.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="w-10 h-10 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary font-bold">4</div>
-            <h3 className="font-semibold text-brand-text flex items-center space-x-2">
-              <CheckCircle2 size={18} className="text-brand-primary/70" />
-              <span>Google Docs</span>
-            </h3>
-            <p className="text-sm text-brand-text-muted">
-              O texto é inserido automaticamente no <strong>início do documento</strong> vinculado, empurrando o conteúdo antigo para baixo.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="px-6 py-4 border-b border-brand-border bg-brand-bg/50">
-          <h2 className="text-lg font-display font-semibold text-brand-primary">Últimas Evoluções</h2>
-        </div>
-        <div className="divide-y divide-brand-border">
-          {recentEvolutionsList.length === 0 ? (
-            <div className="p-6 text-center text-brand-text-muted">Nenhuma evolução registrada ainda.</div>
-          ) : (
-            recentEvolutionsList.map((evo) => (
-              <div key={evo.id} className="p-6 flex items-center justify-between hover:bg-brand-bg transition-colors">
-                <div>
-                  <p className="font-medium text-brand-text">Sessão: {evo.session_date}</p>
-                  <p className="text-sm text-brand-text-muted">Status: {evo.transcription_status}</p>
-                </div>
-                <Link to={`/patients/${evo.patient_id}`} className="text-brand-primary hover:text-brand-primary-hover hover:underline text-sm font-medium">
-                  Ver Paciente
+          <div className="p-2">
+            {recentEvolutionsList.length === 0 ? (
+              <div className="p-8 text-center text-brand-text-muted italic">Nenhuma atividade recente.</div>
+            ) : (
+              recentEvolutionsList.map((evo) => (
+                <Link 
+                  key={evo.id} 
+                  to={`/patients/${evo.patient_id}`}
+                  className="flex items-center p-3 rounded-xl hover:bg-brand-bg transition-colors group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-all mr-4">
+                    <Mic size={18} />
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="font-medium text-brand-text truncate">Nova evolução enviada</p>
+                    <p className="text-xs text-brand-text-muted">{evo.session_date}</p>
+                  </div>
+                  <ArrowRight size={16} className="text-brand-border group-hover:text-brand-primary transform group-hover:translate-x-1 transition-all" />
                 </Link>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Support/Quick Guide Card */}
+        <div className="card p-8 bg-slate-900 text-white flex flex-col justify-between relative overflow-hidden shadow-2xl">
+          <div className="absolute -top-12 -right-12 w-48 h-48 bg-brand-primary/20 rounded-full blur-3xl" />
+          <div className="relative z-10">
+            <BookOpen className="text-brand-primary mb-4" size={40} />
+            <h3 className="text-2xl font-display font-bold mb-2">Central de Ajuda</h3>
+            <p className="text-slate-400 text-sm leading-relaxed mb-6">
+              Ainda tem dúvidas de como o Evolução Clínica pode agilizar seu dia a dia? Conheça nosso tutorial completo e aprenda a usar a IA ao seu favor.
+            </p>
+          </div>
+          <Link 
+            to="/tutorial" 
+            className="bg-brand-primary text-white py-3 px-6 rounded-xl font-bold text-center hover:bg-brand-primary-hover transition-all flex items-center justify-center space-x-2 relative z-10 group"
+          >
+            <span>Acessar Guia Completo</span>
+            <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+          </Link>
         </div>
       </div>
     </div>

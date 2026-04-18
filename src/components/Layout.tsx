@@ -4,7 +4,7 @@ import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 
 export default function Layout() {
@@ -37,6 +37,7 @@ export default function Layout() {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Pacientes', path: '/patients', icon: Users },
     { name: 'Histórico', path: '/history', icon: HistoryIcon },
+    { name: 'Como Usar', path: '/tutorial', icon: BookOpen },
   ];
 
   return (

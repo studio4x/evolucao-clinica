@@ -14,6 +14,7 @@ import PatientDetail from './pages/PatientDetail';
 import NewEvolution from './pages/NewEvolution';
 import History from './pages/History';
 import ShareTarget from './pages/ShareTarget';
+import Tutorial from './pages/Tutorial';
 
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { CookieConsent } from './components/CookieConsent';
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="patients/:id" element={<PatientDetail />} />
           <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
           <Route path="history" element={<History />} />
+          <Route path="tutorial" element={<Tutorial />} />
           <Route path="share-target" element={<ShareTarget />} />
         </Route>
       </Routes>
