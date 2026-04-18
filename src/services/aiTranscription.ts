@@ -28,19 +28,19 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
 
   const attemptTranscription = async (): Promise<string> => {
     try {
-      // Prioridade: literais diretos para o Vite substituir estaticamente
+      // Prioridade total para a chave de produção (REAL) conforme solicitado
       const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
       const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
       
-      // Lógica de Contingência: Na falha (retryCount > 0), prioriza a chave REAL se disponível
-      const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
+      // Inverte a lógica: Tenta primeiro a REAL (backupKey), se falhar ou não existir, usa a GRATUITA (mainKey)
+      const apiKey = backupKey ? backupKey : mainKey;
 
       if (!apiKey) {
-        console.error("[AI-Service] ERRO: Chave da API Gemini não encontrada. Verifique as variáveis de ambiente.");
-        throw new Error("Configuração de API pendente. Contate o suporte.");
+        console.error("[AI-Service] ERRO: Nenhuma chave da API Gemini encontrada.");
+        throw new Error("Configuração de API ausente. Verifique as chaves.");
       }
 
-      console.log(`[AI-Service] Iniciando geração de conteúdo (Tentativa ${retryCount + 1})...`);
+      console.log(`[AI-Service] Usando chave ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'} - Tentativa ${retryCount + 1}`);
 
       const ai = new GoogleGenAI({ apiKey });
       
