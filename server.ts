@@ -63,7 +63,14 @@ export async function startServer() {
     } else {
       const distPath = path.join(process.cwd(), "dist");
       app.use(express.static(distPath));
-      app.get("*", (req, res) => {
+      
+      // Suporte para Share Target POST (Evita erro 405 caso o SW nao intercepte a tempo)
+      app.post("/share-target", (req, res) => {
+        console.log("Recebido POST /share-target via Servidor. Redirecionando para APP...");
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+
+      app.all("*", (req, res) => {
         res.sendFile(path.join(distPath, "index.html"));
       });
     }
