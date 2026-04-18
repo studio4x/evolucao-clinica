@@ -4,7 +4,7 @@ import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2 } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 
 export default function Layout() {
@@ -113,6 +113,16 @@ export default function Layout() {
               <span className="font-medium">Instalar App</span>
             </button>
           )}
+          <button
+            onClick={() => {
+              const text = "Olá! Estou usando o aplicativo Evolução Clínica para gerenciar meus prontuários com IA e achei fantástico. Facilita muito o dia a dia! Dá uma olhada: " + window.location.origin;
+              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+            }}
+            className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary hover:bg-brand-bg transition-colors"
+          >
+            <Share2 size={20} />
+            <span className="font-medium">Compartilhar App</span>
+          </button>
           <button
             onClick={handleLogout}
             className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors"
