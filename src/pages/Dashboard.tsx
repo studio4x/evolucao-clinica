@@ -143,18 +143,18 @@ export default function Dashboard() {
         </Link>
 
         {/* Support/Quick Guide Card */}
-        <div className="card p-8 bg-slate-900 text-white flex flex-col justify-between relative overflow-hidden shadow-2xl border-0">
-          <div className="absolute -top-12 -right-12 w-48 h-48 bg-brand-primary/20 rounded-full blur-3xl" />
+        <div className="card p-8 bg-brand-primary text-white flex flex-col justify-between relative overflow-hidden shadow-2xl border-0">
+          <div className="absolute -top-12 -right-12 w-48 h-48 bg-white/15 rounded-full blur-3xl" />
           <div className="relative z-10">
-            <BookOpen className="text-brand-primary mb-4" size={40} />
-            <h3 className="text-2xl font-display font-bold mb-2">Central de Ajuda</h3>
-            <p className="text-slate-400 text-sm leading-relaxed mb-6">
+            <BookOpen className="text-white mb-4" size={40} />
+            <h3 className="text-2xl font-display font-bold mb-2 text-white">Central de Ajuda</h3>
+            <p className="text-white/80 text-sm leading-relaxed mb-6">
               Ainda tem dúvidas de como o Evolução Clínica pode agilizar seu dia a dia? Conheça nosso guia completo.
             </p>
           </div>
           <Link 
             to="/tutorial" 
-            className="bg-brand-primary text-white py-3 px-6 rounded-xl font-bold text-center hover:bg-brand-primary-hover transition-all flex items-center justify-center space-x-2 relative z-10 group"
+            className="bg-white text-brand-primary py-3 px-6 rounded-xl font-bold text-center hover:bg-gray-100 transition-all flex items-center justify-center space-x-2 relative z-10 group"
           >
             <span>Acessar Tutorial</span>
             <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
