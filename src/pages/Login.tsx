@@ -67,7 +67,7 @@ export default function Login() {
     <div className="min-h-screen bg-brand-bg flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <img src="/logo.svg" alt="Conexão Seres" className="h-24 w-auto" />
+          <img src="/logotipo-transparente-1024.png" alt="Evolução Clínica" className="h-28 w-auto object-contain max-w-xs" />
         </div>
         <h2 className="mt-8 text-center text-3xl font-display font-semibold text-brand-primary">
           Evolução Clínica

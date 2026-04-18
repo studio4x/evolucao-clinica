@@ -7,7 +7,7 @@
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "theme_color": "#1e3a8a",
+  "theme_color": "#005C13",
   "background_color": "#ffffff",
   "categories": ["medical", "productivity", "health"],
   "prefer_related_applications": false,
@@ -29,6 +29,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/logotipo-transparente-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ],
   "screenshots": [
