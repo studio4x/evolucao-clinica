@@ -189,18 +189,38 @@ export default function ShareTarget() {
         mimeType = 'audio/ogg';
       }
 
-      const geminiResponse = await ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents: {
-          parts: [
-            { text: prompt },
-            { inlineData: { data: base64Audio, mimeType } }
-          ]
-        }
-      });
+      const maxRetries = 3;
+      let retryCount = 0;
 
-      const transcription = geminiResponse.text;
-      if (!transcription) throw new Error("A IA não retornou nenhuma transcrição.");
+      const attemptTranscription = async (): Promise<string> => {
+        try {
+          const geminiResponse = await ai.models.generateContent({
+            model: "gemini-1.5-flash-latest",
+            contents: {
+              parts: [
+                { text: prompt },
+                { inlineData: { data: base64Audio, mimeType } }
+              ]
+            }
+          });
+
+          const transcription = geminiResponse.text;
+          if (!transcription) throw new Error("A IA não retornou nenhuma transcrição.");
+          return transcription;
+        } catch (error: any) {
+          const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
+          if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
+            retryCount++;
+            const delay = isQuotaError ? 5000 * retryCount : 2000 * retryCount;
+            console.log(`Retrying transcription... Attempt ${retryCount} after ${delay}ms`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return attemptTranscription();
+          }
+          throw error;
+        }
+      };
+
+      const transcription = await attemptTranscription();
 
       // 3. Append to Google Docs
       console.log("Inserindo no Google Docs...");
