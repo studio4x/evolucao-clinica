@@ -73,7 +73,7 @@ export default function Tutorial() {
         <div className="absolute top-0 right-0 opacity-10 -mr-12 -mt-12">
           <CheckCircle2 size={240} />
         </div>
-        <h2 className="text-2xl font-display font-bold relative z-10">Pronto para começar?</h2>
+        <h2 className="text-2xl font-display font-bold relative z-10 text-white">Pronto para começar?</h2>
         <p className="opacity-90 relative z-10">Crie seu primeiro paciente e automatize seus atendimentos hoje mesmo.</p>
         <button 
           onClick={() => navigate('/patients/new')}

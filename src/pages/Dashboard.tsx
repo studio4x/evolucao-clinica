@@ -128,56 +128,46 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* Quick Actions & Recent Section */}
+      {/* Quick Actions & Navigation Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Latest Activity Summary */}
-        <div className="card p-0 overflow-hidden shadow-sm">
-          <div className="px-6 py-4 border-b border-brand-border bg-brand-bg/30 flex items-center justify-between">
-            <h3 className="font-display font-semibold text-brand-text flex items-center">
-              <HistoryIcon size={18} className="mr-2 text-brand-primary" />
-              Atividade Recente
-            </h3>
-            <Link to="/history" className="text-xs font-semibold text-brand-primary hover:underline uppercase tracking-tighter">Ver Tudo</Link>
+        {/* Full History Card */}
+        <Link 
+          to="/history" 
+          className="group relative overflow-hidden card p-8 bg-white flex flex-col justify-between shadow-lg hover:shadow-xl transition-all border-0"
+        >
+          <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 group-hover:opacity-10 transition-all text-brand-primary">
+            <HistoryIcon size={160} />
           </div>
-          <div className="p-2">
-            {recentEvolutionsList.length === 0 ? (
-              <div className="p-8 text-center text-brand-text-muted italic">Nenhuma atividade recente.</div>
-            ) : (
-              recentEvolutionsList.map((evo) => (
-                <Link 
-                  key={evo.id} 
-                  to={`/patients/${evo.patient_id}`}
-                  className="flex items-center p-3 rounded-xl hover:bg-brand-bg transition-colors group"
-                >
-                  <div className="w-10 h-10 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary group-hover:bg-brand-primary group-hover:text-white transition-all mr-4">
-                    <Mic size={18} />
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <p className="font-medium text-brand-text truncate">Nova evolução enviada</p>
-                    <p className="text-xs text-brand-text-muted">{evo.session_date}</p>
-                  </div>
-                  <ArrowRight size={16} className="text-brand-border group-hover:text-brand-primary transform group-hover:translate-x-1 transition-all" />
-                </Link>
-              ))
-            )}
+          <div className="relative z-10">
+            <div className="bg-brand-primary/10 w-12 h-12 rounded-xl flex items-center justify-center text-brand-primary mb-6">
+              <HistoryIcon size={24} />
+            </div>
+            <h3 className="text-2xl font-display font-bold text-brand-text mb-2">Histórico Completo</h3>
+            <p className="text-brand-text-muted text-sm leading-relaxed mb-6 max-w-xs">
+              Acesse todas as suas evoluções passadas, revise transcrições e monitore o status do Google Docs.
+            </p>
           </div>
-        </div>
+          <div className="flex items-center text-brand-primary font-bold text-sm tracking-wide uppercase relative z-10">
+            <span>Explorar Histórico</span>
+            <ArrowRight size={18} className="ml-2 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
 
         {/* Support/Quick Guide Card */}
-        <div className="card p-8 bg-slate-900 text-white flex flex-col justify-between relative overflow-hidden shadow-2xl">
+        <div className="card p-8 bg-slate-900 text-white flex flex-col justify-between relative overflow-hidden shadow-2xl border-0">
           <div className="absolute -top-12 -right-12 w-48 h-48 bg-brand-primary/20 rounded-full blur-3xl" />
           <div className="relative z-10">
             <BookOpen className="text-brand-primary mb-4" size={40} />
             <h3 className="text-2xl font-display font-bold mb-2">Central de Ajuda</h3>
             <p className="text-slate-400 text-sm leading-relaxed mb-6">
-              Ainda tem dúvidas de como o Evolução Clínica pode agilizar seu dia a dia? Conheça nosso tutorial completo e aprenda a usar a IA ao seu favor.
+              Ainda tem dúvidas de como o Evolução Clínica pode agilizar seu dia a dia? Conheça nosso guia completo.
             </p>
           </div>
           <Link 
             to="/tutorial" 
             className="bg-brand-primary text-white py-3 px-6 rounded-xl font-bold text-center hover:bg-brand-primary-hover transition-all flex items-center justify-center space-x-2 relative z-10 group"
           >
-            <span>Acessar Guia Completo</span>
+            <span>Acessar Tutorial</span>
             <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
           </Link>
         </div>
