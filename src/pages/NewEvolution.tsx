@@ -41,6 +41,7 @@ export default function NewEvolution() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const isDiscardingRef = useRef(false);
 
   // Helper para salvar backup no IndexedDB
   const saveRecordingBackup = async (blobs: Blob[]) => {
@@ -103,6 +104,7 @@ export default function NewEvolution() {
 
   const startRecording = async () => {
     try {
+      isDiscardingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
@@ -112,12 +114,14 @@ export default function NewEvolution() {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data);
           // Salva backup a cada fatia de áudio recebida
-          saveRecordingBackup(chunksRef.current);
+          if (!isDiscardingRef.current) {
+            saveRecordingBackup(chunksRef.current);
+          }
         }
       };
 
       mediaRecorder.onstop = () => {
-        if (chunksRef.current.length > 0) {
+        if (chunksRef.current.length > 0 && !isDiscardingRef.current) {
           const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
           setAudioBlob(blob);
           const url = URL.createObjectURL(blob);
@@ -160,16 +164,21 @@ export default function NewEvolution() {
 
   const discardRecording = () => {
     if (window.confirm("Certeza que deseja descartar esta gravação? Toda a captura atual será perdida.")) {
-      if (mediaRecorderRef.current) {
+      isDiscardingRef.current = true;
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
       if (timerRef.current) clearInterval(timerRef.current);
+      
+      // Reset absoluto de estados
       setIsRecording(false);
       setIsPaused(false);
       setRecordingTime(0);
-      chunksRef.current = [];
       setAudioBlob(null);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
+      chunksRef.current = [];
       
       // Limpa backup do IDB
       indexedDB.deleteDatabase('EvolutionBackupDB');
@@ -184,6 +193,22 @@ export default function NewEvolution() {
       if (timerRef.current) clearInterval(timerRef.current);
     }
   };
+
+  // Efeito para forçar o cálculo de duração em Blobs WebM (evita bug de tempo infinito/errado)
+  useEffect(() => {
+    if (audioUrl) {
+      const audio = new Audio(audioUrl);
+      audio.addEventListener('loadedmetadata', () => {
+        if (audio.duration === Infinity) {
+          audio.currentTime = 1e101;
+          audio.ontimeupdate = function() {
+            this.ontimeupdate = () => {};
+            audio.currentTime = 0;
+          };
+        }
+      });
+    }
+  }, [audioUrl]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
