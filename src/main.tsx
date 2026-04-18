@@ -4,30 +4,12 @@ import App from './App.tsx';
 import './index.css';
 import { APP_VERSION } from './components/layout/AppVersion';
 
-// 1. Limpeza por versao
-const previousVersion = window.localStorage.getItem("evolucao-clinica:runtime-version");
-if (previousVersion !== APP_VERSION) {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function(registrations) {
-      for(let registration of registrations) {
-        registration.unregister();
-      }
-    });
-  }
-  if ('caches' in window) {
-    caches.keys().then((keyList) => {
-      return Promise.all(keyList.map((key) => caches.delete(key)));
-    });
-  }
-  window.localStorage.setItem("evolucao-clinica:runtime-version", APP_VERSION);
-  // Se quiser que force o recarregamento ao trocar a versão:
-  // window.location.reload();
-}
-
-// 2. Registro do Service Worker
+// Registro do Service Worker
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js").catch((error) => {
+    void navigator.serviceWorker.register("/sw.js", { scope: '/' }).then(reg => {
+      console.log("[PWA] Service Worker registrado com escopo:", reg.scope);
+    }).catch((error) => {
       console.warn("[PWA] Falha ao registrar service worker:", error);
     });
   });

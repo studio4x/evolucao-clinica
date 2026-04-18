@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.1";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -14,28 +14,28 @@ const PRECACHE_URLS = [
 
 // Install: precache app shell
 self.addEventListener("install", (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches
       .open(SHELL_CACHE)
       .then((cache) => cache.addAll(PRECACHE_URLS))
       .catch((err) => console.warn("[PWA] Falha no precache:", err))
-      .finally(() => self.skipWaiting())
   );
 });
 
 // Activate: clear old caches
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((keys) =>
         Promise.all(
           keys
             .filter((key) => key !== SHELL_CACHE && key !== RUNTIME_CACHE)
             .map((key) => caches.delete(key))
         )
       )
-      .finally(() => self.clients.claim())
+    ])
   );
 });
 
@@ -44,8 +44,12 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   // --- SHARE TARGET INTERCEPTION ---
-  if (event.request.method === "POST" && url.origin === self.location.origin && url.pathname.includes("/api/share-target")) {
-    // É uma tentativa do PWA de jogar arquivo via POST
+  const isShareTarget = event.request.method === "POST" && 
+                       url.origin === self.location.origin && 
+                       (url.pathname.includes("/share-target") || url.pathname.includes("/api/share-target"));
+
+  if (isShareTarget) {
+    console.log("[PWA] Interceptando Share Target POST:", url.pathname);
     event.respondWith(
       (async () => {
         try {

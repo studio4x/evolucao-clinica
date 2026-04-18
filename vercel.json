@@ -16,7 +16,8 @@
     { "source": "/screenshot-1.png", "destination": "/screenshot-1.png" },
     { "source": "/screenshot-2.png", "destination": "/screenshot-2.png" },
     { "source": "/offline.html", "destination": "/offline.html" },
-    { "source": "/apple-touch-icon.png", "destination": "/apple-touch-icon.png" },
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/share-target", "destination": "/api/share-target" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
