@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.0";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.1";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -44,7 +44,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   // --- SHARE TARGET INTERCEPTION ---
-  if (event.request.method === "POST" && url.origin === self.location.origin && url.pathname.includes("/share-target")) {
+  if (event.request.method === "POST" && url.origin === self.location.origin && url.pathname.includes("/api/share-target")) {
     // É uma tentativa do PWA de jogar arquivo via POST
     event.respondWith(
       (async () => {

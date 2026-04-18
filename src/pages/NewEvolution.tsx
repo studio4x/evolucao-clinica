@@ -10,17 +10,7 @@ import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Tras
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
 
-const blobToBase64 = (blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = (reader.result as string).split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
+import { transcribeAudio } from '../services/aiTranscription';
 
 export default function NewEvolution() {
   const { id } = useParams();
@@ -287,40 +277,15 @@ export default function NewEvolution() {
 
     const attemptProcess = async () => {
       try {
-        // 1. Transcribe with Gemini (Frontend)
         setStatus('processing');
-        console.log(`Iniciando transcrição (Tentativa ${retryCount + 1})...`);
         
-        // Lógica de Contingência (Fallback)
-        const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
-        const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
-        
-        // Se já falhou uma vez e temos a chave real, usamos ela
-        const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
-
-        if (!apiKey) {
-          throw new Error("Chave da API Gemini não encontrada no ambiente.");
-        }
-
-        const ai = new GoogleGenAI({ apiKey });
-        const base64Audio = await blobToBase64(audioBlob);
-        
-        const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
-
-        const geminiResponse = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: {
-            parts: [
-              { text: prompt },
-              { inlineData: { data: base64Audio, mimeType: audioBlob.type || 'audio/webm' } }
-            ]
+        const transcription = await transcribeAudio({
+          audioBlob,
+          mimeType: audioBlob.type || 'audio/webm',
+          onRetry: (attempt, delay, isFallback) => {
+            console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
           }
         });
-
-        const transcription = geminiResponse.text;
-        if (!transcription) {
-          throw new Error("A IA não retornou nenhuma transcrição.");
-        }
 
         console.log("Transcrição concluída. Inserindo no Google Docs...");
 
@@ -351,16 +316,6 @@ export default function NewEvolution() {
           throw abortError;
         }
 
-        const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
-
-        if (retryCount < maxRetries && (error.message === 'Failed to fetch' || error.message?.includes('network') || isQuotaError)) {
-          retryCount++;
-          // Aumenta o delay para erros de cota (mínimo 10 segundos para troca de chave)
-          const delay = isQuotaError ? 10000 * retryCount : 2000 * retryCount;
-          console.log(`Retrying process-evolution... Attempt ${retryCount} after ${delay}ms`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          return attemptProcess();
-        }
         throw error;
       }
     };

@@ -7,7 +7,7 @@ import { db, auth, googleProvider, storage } from '../firebase';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { transcribeAudio } from '../services/aiTranscription';
 import { appendToGoogleDoc } from '../services/googleDocs';
 
 // Simple IndexedDB wrapper for the shared file
@@ -49,17 +49,7 @@ const clearSharedFile = (): Promise<void> => {
   });
 };
 
-const blobToBase64 = (blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = (reader.result as string).split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
+
 
 export default function ShareTarget() {
   const navigate = useNavigate();
@@ -174,64 +164,20 @@ export default function ShareTarget() {
       // Save initial state to Firestore
       await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
 
-      // 2. Transcribe with Gemini
-      console.log("Iniciando transcrição...");
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-      if (!apiKey) throw new Error("Chave da API Gemini não encontrada.");
-
-      const ai = new GoogleGenAI({ apiKey });
-      const base64Audio = await blobToBase64(audioFile);
-      
-      const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
-
+      // 2. Transcribe with AI
+      console.log("Iniciando transcrição com serviço unificado...");
       let mimeType = audioFile.type;
       if (!mimeType || mimeType === 'application/octet-stream' || mimeType.includes('opus')) {
         mimeType = 'audio/ogg';
       }
 
-      const maxRetries = 3;
-      let retryCount = 0;
-
-      const attemptTranscription = async (): Promise<string> => {
-        try {
-          // Lógica de Contingência (Fallback) - Usando literais diretos para o Vite substituir
-          const mainKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-          const backupKey = import.meta.env.VITE_GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY_REAL;
-          
-          // Se já falhou uma vez e temos a chave real, usamos ela
-          const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
-
-          if (!apiKey) throw new Error("Chave da API Gemini não encontrada.");
-
-          const ai = new GoogleGenAI({ apiKey });
-          const geminiResponse = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
-            contents: {
-              parts: [
-                { text: prompt },
-                { inlineData: { data: base64Audio, mimeType } }
-              ]
-            }
-          });
-
-          const transcription = geminiResponse.text;
-          if (!transcription) throw new Error("A IA não retornou nenhuma transcrição.");
-          return transcription;
-        } catch (error: any) {
-          const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
-          if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
-            retryCount++;
-            // Se for erro de cota, troca de chave na próxima tentativa e espera mais tempo (mínimo 10s)
-            const delay = isQuotaError ? 10000 * retryCount : 2000 * retryCount;
-            console.log(`Retrying transcription... Attempt ${retryCount} using fallback key logic in ${delay}ms`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            return attemptTranscription();
-          }
-          throw error;
+      const transcription = await transcribeAudio({
+        audioBlob: audioFile,
+        mimeType,
+        onRetry: (attempt, delay, isFallback) => {
+          console.log(`[ShareTarget] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
         }
-      };
-
-      const transcription = await attemptTranscription();
+      });
 
       // 3. Append to Google Docs
       console.log("Inserindo no Google Docs...");
