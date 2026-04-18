@@ -28,15 +28,16 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
 
   const attemptTranscription = async (): Promise<string> => {
     try {
-      // Prioridade: process.env (Vercel injection) > import.meta.env (Vite discovery)
-      const mainKey = (process as any).env?.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
-      const backupKey = (process as any).env?.GEMINI_API_KEY_REAL || (import.meta as any).env?.VITE_GEMINI_API_KEY_REAL;
+      // Prioridade: literais diretos para o Vite substituir estaticamente
+      const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+      const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
       
       // Lógica de Contingência: Na falha (retryCount > 0), prioriza a chave REAL se disponível
       const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
 
       if (!apiKey) {
-        throw new Error("Chave da API Gemini não encontrada no ambiente.");
+        console.error("[AI-Service] ERRO: Chave da API Gemini não encontrada. Verifique as variáveis de ambiente.");
+        throw new Error("Configuração de API pendente. Contate o suporte.");
       }
 
       console.log(`[AI-Service] Tentativa ${retryCount + 1} usando ${apiKey === backupKey ? 'Chave Reserva' : 'Chave Principal'}`);
