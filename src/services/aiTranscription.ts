@@ -69,15 +69,26 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
       console.log("[AI-Service] Transcrição concluída com sucesso.");
       return transcription;
     } catch (error: any) {
-      console.error("[AI-Service] Erro na tentativa:", retryCount + 1, error.message);
-      const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
+      // Detecção aprimorada de erro de cota (429)
+      const errorContent = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+      const isQuotaError = errorContent.includes('429') || 
+                           errorContent.includes('exhausted') || 
+                           errorContent.includes('RESOURCE_EXHAUSTED') ||
+                           error.status === 429;
+
+      console.error("[AI-Service] Erro detectado:", errorContent);
       
       if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
         retryCount++;
-        const isFallbackActive = !!(((process as any).env?.GEMINI_API_KEY_REAL || (import.meta as any).env?.VITE_GEMINI_API_KEY_REAL) && retryCount > 0);
-        const delay = isQuotaError ? 10000 * retryCount : 2000 * retryCount;
+        const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+        const isFallbackNext = !!(backupKey && retryCount > 0);
         
-        if (onRetry) onRetry(retryCount, delay, isFallbackActive);
+        // Aumenta o delay significativamente para erros de cota (mínimo 15 segundos)
+        const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
+        
+        console.log(`[AI-Service] Retrying in ${delay}ms... (Next is Fallback: ${isFallbackNext})`);
+        
+        if (onRetry) onRetry(retryCount, delay, isFallbackNext);
         
         await new Promise(resolve => setTimeout(resolve, delay));
         return attemptTranscription();
