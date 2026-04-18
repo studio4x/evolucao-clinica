@@ -194,9 +194,9 @@ export default function ShareTarget() {
 
       const attemptTranscription = async (): Promise<string> => {
         try {
-          // Lógica de Contingência (Fallback)
+          // Lógica de Contingência (Fallback) - Usando literais diretos para o Vite substituir
           const mainKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-          const backupKey = (process as any).env?.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+          const backupKey = import.meta.env.VITE_GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY_REAL;
           
           // Se já falhou uma vez e temos a chave real, usamos ela
           const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
@@ -221,9 +221,9 @@ export default function ShareTarget() {
           const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
           if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
             retryCount++;
-            // Se for erro de cota, troca de chave na próxima tentativa se houver backup
-            const delay = isQuotaError ? 3000 * retryCount : 2000 * retryCount;
-            console.log(`Retrying transcription... Attempt ${retryCount} using fallback logic in ${delay}ms`);
+            // Se for erro de cota, troca de chave na próxima tentativa e espera mais tempo (mínimo 10s)
+            const delay = isQuotaError ? 10000 * retryCount : 2000 * retryCount;
+            console.log(`Retrying transcription... Attempt ${retryCount} using fallback key logic in ${delay}ms`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return attemptTranscription();
           }

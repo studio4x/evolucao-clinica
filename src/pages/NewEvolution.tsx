@@ -293,7 +293,7 @@ export default function NewEvolution() {
         
         // Lógica de Contingência (Fallback)
         const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
-        const backupKey = (process as any).env?.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+        const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
         
         // Se já falhou uma vez e temos a chave real, usamos ela
         const apiKey = (retryCount > 0 && backupKey) ? backupKey : (mainKey || backupKey);
@@ -355,8 +355,8 @@ export default function NewEvolution() {
 
         if (retryCount < maxRetries && (error.message === 'Failed to fetch' || error.message?.includes('network') || isQuotaError)) {
           retryCount++;
-          // Aumenta drasticamente o delay para erros de cota (mínimo 15 segundos)
-          const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
+          // Aumenta o delay para erros de cota (mínimo 10 segundos para troca de chave)
+          const delay = isQuotaError ? 10000 * retryCount : 2000 * retryCount;
           console.log(`Retrying process-evolution... Attempt ${retryCount} after ${delay}ms`);
           await new Promise(resolve => setTimeout(resolve, delay));
           return attemptProcess();
