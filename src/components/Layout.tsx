@@ -43,7 +43,7 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+      <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <Link to="/">
           <img src="/logo.svg" alt="HomeCare Match" className="h-8 w-auto" />
         </Link>
@@ -56,7 +56,7 @@ export default function Layout() {
       <div className={`
         ${isMobileMenuOpen ? 'flex' : 'hidden'} 
         md:flex flex-col w-full md:w-64 bg-white border-r border-brand-border flex-shrink-0
-        fixed md:sticky top-[73px] md:top-0 z-10 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
+        fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
       `}>
         <div className="flex-1 overflow-y-auto">
           <div className="p-6 hidden md:block border-b border-brand-border/50">
