@@ -11,6 +11,7 @@ import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
 
 import { transcribeAudio } from '../services/aiTranscription';
+import { addPendingEvolution } from '../services/offlineQueue';
 
 export default function NewEvolution() {
   const { id } = useParams();
@@ -321,9 +322,13 @@ export default function NewEvolution() {
     };
 
     try {
-      // 1. Save initial state to Firestore
+      // 1. Prepare/Save initial state to Firestore
+      // Firestore vai tentar sincronizar, se tiver offline ele guarda em cache
       await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
 
+      if (!navigator.onLine) {
+        throw new Error("offline");
+      }
       // 2. Send to Backend
       await attemptProcess();
     } catch (error: any) {
@@ -331,10 +336,33 @@ export default function NewEvolution() {
       console.error("Processing error:", error);
       
       let msg = error.message || "Erro desconhecido";
-      if (error.name === 'AbortError') {
+      
+      // Checagem de modo Offline
+      if (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) {
+        try {
+          await addPendingEvolution({
+            id: evolutionId,
+            patientId: patient.id,
+            patientName: patient.full_name,
+            googleDocId: patient.google_doc_id,
+            sessionDate,
+            audioBlob,
+            mimeType: audioBlob.type || 'audio/webm',
+            source: 'new',
+            createdAt: new Date().toISOString(),
+            evolutionData
+          });
+          
+          setStatus('success'); // Vamos fingir sucesso para limpar a tela
+          setErrorMessage(''); 
+          alert("Você está sem internet! A evolução foi salva com segurança na sua Fila Offline. O aplicativo irá mantê-la no seu celular até você sincronizar.");
+          return; // Para não rodar o código de error embaixo
+        } catch (queueErr) {
+          console.error("Erro ao salvar na fila offline:", queueErr);
+          msg = "Você está sem internet e houve uma falha ao salvar no armazenamento local do navegador. Não feche o aplicativo e espere a conexão voltar.";
+        }
+      } else if (error.name === 'AbortError') {
         msg = "O processamento demorou muito tempo (mais de 5 minutos) e foi cancelado. Tente com um áudio mais curto ou verifique sua conexão.";
-      } else if (msg === 'Failed to fetch') {
-        msg = "Não foi possível conectar ao servidor. Verifique sua conexão com a internet ou tente novamente em instantes.";
       } else if (msg.includes('429') || msg.includes('exhausted')) {
         msg = "O limite de processamento gratuito da Google (Gemini) foi atingido. Aguarde cerca de 60 segundos e clique em 'Tentar Novamente'.";
       } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
@@ -346,12 +374,16 @@ export default function NewEvolution() {
       setStatus('error');
       
       // Update Firestore with error
-      await setDoc(doc(db, 'evolutions', evolutionId), {
-        transcription_status: 'failed',
-        google_doc_append_status: 'failed',
-        error_message: error.message || "Erro desconhecido",
-        updated_at: new Date().toISOString()
-      }, { merge: true });
+      try {
+        await setDoc(doc(db, 'evolutions', evolutionId), {
+          transcription_status: 'failed',
+          google_doc_append_status: 'failed',
+          error_message: msg,
+          updated_at: new Date().toISOString()
+        }, { merge: true });
+      } catch (fError) {
+        console.error("Failed to update firestore with error state (likely offline):", fError);
+      }
     }
   };
 

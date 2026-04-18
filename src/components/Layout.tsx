@@ -6,6 +6,7 @@ import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2 } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
+import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 
 export default function Layout() {
   const { user } = useAuthStore();
@@ -184,6 +185,9 @@ export default function Layout() {
           </div>
         </div>
       )}
+
+      {/* Fila de Sincronização Offline */}
+      <OfflineQueueMonitor />
     </div>
   );
 }

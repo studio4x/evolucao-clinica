@@ -6,9 +6,11 @@ import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { db, auth, googleProvider, storage } from '../firebase';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { getPatientFromIdb, getSharedFileFromIdb, clearSharedFile } from '../services/idbStorage';
 import { transcribeAudio } from '../services/aiTranscription';
+import { addPendingEvolution } from '../services/offlineQueue';
 import { appendToGoogleDoc } from '../services/googleDocs';
+import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 
 // Simple IndexedDB wrapper for the shared file
 const getSharedFile = (): Promise<File | null> => {
@@ -162,7 +164,12 @@ export default function ShareTarget() {
       setErrorMessage("Etapa 1/4: Salvando registro inicial...");
 
       // 1. Save initial state
+      // Firestore tenta sincronizar e mantem offline em cache se preciso
       await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
+
+      if (!navigator.onLine) {
+        throw new Error("offline");
+      }
 
       // 2. Transcribe with AI
       setErrorMessage("Etapa 2/4: Transcrevendo áudio com IA (Gemini 2.0)...");
@@ -210,7 +217,31 @@ export default function ShareTarget() {
       console.error("ERRO CRÍTICO NO SHARE TARGET:", error);
       let msg = error.message || "Erro desconhecido";
       
-      if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Credentials')) {
+      if (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) {
+        try {
+          await addPendingEvolution({
+            id: evolutionId,
+            patientId: selectedPatientId,
+            patientName: patient?.full_name || 'Paciente',
+            googleDocId: patient?.google_doc_id || '',
+            sessionDate,
+            audioBlob: audioFile,
+            mimeType: audioFile.type || 'audio/ogg',
+            source: 'share',
+            createdAt: new Date().toISOString(),
+            evolutionData
+          });
+          
+          await clearSharedFile().catch(e => console.warn("Erro IDB:", e));
+          setStatus('success');
+          setErrorMessage('');
+          alert("Sem internet! O áudio do WhatsApp foi salvo na sua Fila Offline e será enviado quando a conexão retornar.");
+          return;
+        } catch (queueErr) {
+          console.error("Erro ao salvar offline:", queueErr);
+          msg = "Você está sem internet e ocorreu um erro ao guardar na fila local.";
+        }
+      } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Credentials')) {
         msg = "Sua sessão do Google expirou. Por favor, renove a autenticação abaixo.";
         setGoogleAccessToken(null);
       } else if (msg.includes('timeout') || msg.includes('55s')) {
