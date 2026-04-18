@@ -40,10 +40,12 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         throw new Error("Configuração de API pendente. Contate o suporte.");
       }
 
-      console.log(`[AI-Service] Tentativa ${retryCount + 1} usando ${apiKey === backupKey ? 'Chave Reserva' : 'Chave Principal'}`);
+      console.log(`[AI-Service] Iniciando geração de conteúdo (Tentativa ${retryCount + 1})...`);
 
       const ai = new GoogleGenAI({ apiKey });
-      const geminiResponse = await ai.models.generateContent({
+      
+      // Timeout de 55 segundos para a chamada da IA
+      const transcriptionPromise = ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents: {
           parts: [
@@ -53,13 +55,21 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         }
       });
 
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout: A IA demorou muito para responder (55s).")), 55000)
+      );
+
+      const geminiResponse = await Promise.race([transcriptionPromise, timeoutPromise]) as any;
+
       const transcription = geminiResponse.text;
       if (!transcription) {
         throw new Error("A IA não retornou nenhuma transcrição.");
       }
 
+      console.log("[AI-Service] Transcrição concluída com sucesso.");
       return transcription;
     } catch (error: any) {
+      console.error("[AI-Service] Erro na tentativa:", retryCount + 1, error.message);
       const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
       
       if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
