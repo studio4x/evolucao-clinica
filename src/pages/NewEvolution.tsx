@@ -302,7 +302,7 @@ export default function NewEvolution() {
         const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
         const geminiResponse = await ai.models.generateContent({
-          model: "gemini-1.5-flash-latest",
+          model: "gemini-2.0-flash",
           contents: {
             parts: [
               { text: prompt },
@@ -349,7 +349,8 @@ export default function NewEvolution() {
 
         if (retryCount < maxRetries && (error.message === 'Failed to fetch' || error.message?.includes('network') || isQuotaError)) {
           retryCount++;
-          const delay = isQuotaError ? 5000 * retryCount : 2000 * retryCount;
+          // Aumenta drasticamente o delay para erros de cota (mínimo 15 segundos)
+          const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
           console.log(`Retrying process-evolution... Attempt ${retryCount} after ${delay}ms`);
           await new Promise(resolve => setTimeout(resolve, delay));
           return attemptProcess();

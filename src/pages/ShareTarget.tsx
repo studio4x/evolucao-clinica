@@ -195,7 +195,7 @@ export default function ShareTarget() {
       const attemptTranscription = async (): Promise<string> => {
         try {
           const geminiResponse = await ai.models.generateContent({
-            model: "gemini-1.5-flash-latest",
+            model: "gemini-2.0-flash",
             contents: {
               parts: [
                 { text: prompt },
@@ -211,7 +211,8 @@ export default function ShareTarget() {
           const isQuotaError = error.message?.includes('429') || error.message?.includes('exhausted');
           if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
             retryCount++;
-            const delay = isQuotaError ? 5000 * retryCount : 2000 * retryCount;
+            // Aumenta drasticamente o delay para erros de cota (mínimo 15 segundos)
+            const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
             console.log(`Retrying transcription... Attempt ${retryCount} after ${delay}ms`);
             await new Promise(resolve => setTimeout(resolve, delay));
             return attemptTranscription();
