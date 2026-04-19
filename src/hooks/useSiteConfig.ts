@@ -15,9 +15,9 @@ export interface SiteConfig {
 
 const defaultConfig: SiteConfig = {
   pwa_app_name: "Evolução Clínica",
-  pwa_short_name: "Evolução",
+  pwa_short_name: "Evolução Clínica",
   pwa_description: "Gerenciamento de Evoluções Clínicas com IA e Google Docs - Conexão Seres",
-  pwa_theme_color: "#1e3a8a",
+  pwa_theme_color: "#005C13",
   pwa_background_color: "#ffffff",
   pwa_icon_192_url: "logo.svg",
   pwa_icon_512_url: "logo.svg",
