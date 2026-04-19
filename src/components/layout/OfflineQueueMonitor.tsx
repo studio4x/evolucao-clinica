@@ -13,7 +13,7 @@ export function OfflineQueueMonitor() {
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const { googleAccessToken } = useAuthStore();
+  const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
 
   const loadQueue = async () => {
     if (isSyncing) return;
@@ -107,7 +107,14 @@ export function OfflineQueueMonitor() {
       } catch (err: any) {
         console.error("Sync error para", item.id, err);
         setHasError(true);
-        setSyncStatus(`Erro em ${item.patientName}: ${err.message}`);
+        let msg = err.message || "Erro desconhecido";
+        
+        if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Credentials')) {
+          msg = "Sessão do Google expirada =(. A fila pausou. Entre na página de Nova Evolução para Renovar Autenticação.";
+          setGoogleAccessToken(null); // Apaga o token inválido para forçar login
+        }
+        
+        setSyncStatus(`Erro em ${item.patientName}: ${msg}`);
         setIsSyncing(false);
         return; // Interrompe para o usuário tratar o erro ou reiniciar
       }
