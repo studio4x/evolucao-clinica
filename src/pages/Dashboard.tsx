@@ -94,25 +94,35 @@ export default function Dashboard() {
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Link to="/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all">
+        <Link to="/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-          <div className="p-6 relative z-10">
-            <div className="bg-blue-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
-              <Users size={24} />
+          <div className="p-6 relative z-10 flex grow justify-between items-start">
+            <div>
+              <div className="bg-blue-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
+                <Users size={24} />
+              </div>
+              <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Pacientes Ativos</p>
+              <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.totalPatients}</p>
             </div>
-            <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Pacientes Ativos</p>
-            <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.totalPatients}</p>
+            <div className="bg-blue-100 p-2 rounded-full text-blue-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
+              <ArrowRight size={20} />
+            </div>
           </div>
         </Link>
 
-        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all">
+        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 to-transparent" />
-          <div className="p-6 relative z-10">
-            <div className="bg-brand-primary w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
-              <FileAudio size={24} />
+          <div className="p-6 relative z-10 flex grow justify-between items-start">
+            <div>
+              <div className="bg-brand-primary w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
+                <FileAudio size={24} />
+              </div>
+              <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Evoluções Realizadas</p>
+              <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.recentEvolutions}</p>
             </div>
-            <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Evoluções Realizadas</p>
-            <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.recentEvolutions}</p>
+            <div className="bg-brand-accent/20 p-2 rounded-full text-brand-primary opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
+              <ArrowRight size={20} />
+            </div>
           </div>
         </Link>
       </div>
