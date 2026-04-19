@@ -160,16 +160,15 @@ export default function ShareTarget() {
     };
 
     try {
+      if (!navigator.onLine) {
+        throw new Error("offline");
+      }
+
       setStatus('processing');
       setErrorMessage("Etapa 1/4: Salvando registro inicial...");
 
       // 1. Save initial state
-      // Firestore tenta sincronizar e mantem offline em cache se preciso
       await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
-
-      if (!navigator.onLine) {
-        throw new Error("offline");
-      }
 
       // 2. Transcribe with AI
       setErrorMessage("Etapa 2/4: Transcrevendo áudio com IA (Gemini 2.0)...");

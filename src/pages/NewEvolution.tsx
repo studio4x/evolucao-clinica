@@ -322,13 +322,13 @@ export default function NewEvolution() {
     };
 
     try {
-      // 1. Prepare/Save initial state to Firestore
-      // Firestore vai tentar sincronizar, se tiver offline ele guarda em cache
-      await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
-
       if (!navigator.onLine) {
         throw new Error("offline");
       }
+      
+      // 1. Prepare/Save initial state to Firestore
+      await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
+
       // 2. Send to Backend
       await attemptProcess();
     } catch (error: any) {
