@@ -96,32 +96,38 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link to="/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-          <div className="p-6 relative z-10 flex grow justify-between items-start">
-            <div>
+          <div className="p-6 relative z-10 flex grow justify-between items-center">
+            <div className="space-y-1">
               <div className="bg-blue-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
                 <Users size={24} />
               </div>
               <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Pacientes Ativos</p>
-              <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.totalPatients}</p>
+              <div className="flex items-center text-blue-600 font-bold text-sm group-hover:underline">
+                <span>Visualizar lista</span>
+                <ArrowRight size={14} className="ml-1 group-hover:translate-x-1 transition-transform" />
+              </div>
             </div>
-            <div className="bg-blue-100 p-2 rounded-full text-blue-600 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
-              <ArrowRight size={20} />
+            <div className="text-right">
+              <p className="text-5xl font-display font-bold text-brand-text/20 group-hover:text-blue-500/40 transition-colors">{stats.totalPatients}</p>
             </div>
           </div>
         </Link>
 
         <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 to-transparent" />
-          <div className="p-6 relative z-10 flex grow justify-between items-start">
-            <div>
+          <div className="p-6 relative z-10 flex grow justify-between items-center">
+            <div className="space-y-1">
               <div className="bg-brand-primary w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
                 <FileAudio size={24} />
               </div>
               <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Evoluções Realizadas</p>
-              <p className="text-4xl font-display font-bold text-brand-text mt-1">{stats.recentEvolutions}</p>
+              <div className="flex items-center text-brand-primary font-bold text-sm group-hover:underline">
+                <span>Acessar histórico</span>
+                <ArrowRight size={14} className="ml-1 group-hover:translate-x-1 transition-transform" />
+              </div>
             </div>
-            <div className="bg-brand-accent/20 p-2 rounded-full text-brand-primary opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all">
-              <ArrowRight size={20} />
+            <div className="text-right">
+              <p className="text-5xl font-display font-bold text-brand-text/20 group-hover:text-brand-primary/40 transition-colors">{stats.recentEvolutions}</p>
             </div>
           </div>
         </Link>
