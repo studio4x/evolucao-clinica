@@ -12,6 +12,7 @@ export function OfflineQueueMonitor() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [hasError, setHasError] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const { googleAccessToken } = useAuthStore();
 
   const loadQueue = async () => {
@@ -27,12 +28,29 @@ export function OfflineQueueMonitor() {
   useEffect(() => {
     loadQueue();
     const interval = setInterval(loadQueue, 5000); // Poll de 5s para refletir adições em outras telas
-    window.addEventListener('online', loadQueue);
+    
+    const onOnline = () => {
+      setIsOnline(true);
+      loadQueue();
+    };
+    const onOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    
     return () => {
       clearInterval(interval);
-      window.removeEventListener('online', loadQueue);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
     };
   }, [isSyncing]);
+
+  useEffect(() => {
+    // Sincronização automática
+    if (isOnline && queue.length > 0 && !isSyncing && !hasError && googleAccessToken) {
+      handleSync();
+    }
+  }, [isOnline, queue.length, isSyncing, hasError, googleAccessToken]);
 
   if (queue.length === 0) return null;
 
@@ -120,7 +138,7 @@ export function OfflineQueueMonitor() {
       </div>
       
       <p className="text-xs text-slate-300 mb-4 h-8 flex items-center leading-relaxed">
-        {syncStatus || (hasError ? 'Falha na sincronização. Tente novamente.' : 'Estes áudios estão seguros no seu aparelho. Clique para enviar quando a internet voltar.')}
+        {syncStatus || (hasError ? 'Falha na sincronização. Tente novamente.' : 'Estes áudios estão seguros no seu aparelho. O envio será automático assim que encontrar internet.')}
       </p>
 
       {!isSyncing && queue.length > 0 && (
