@@ -138,6 +138,24 @@ export default function PatientForm() {
     }
   }, [showExplorer, explorerPath]);
 
+  const handleExplorerReauthenticate = async () => {
+    setIsReauthenticating(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        setGoogleAccessToken(credential.accessToken);
+        // Recarregar pastas após re-autenticação
+        const current = explorerPath[explorerPath.length - 1];
+        loadExplorerFolders(current.id);
+      }
+    } catch (error) {
+      console.error("Reauth error:", error);
+    } finally {
+      setIsReauthenticating(false);
+    }
+  };
+
   const handleCreateNewFolder = async () => {
     if (!googleAccessToken) return;
     
@@ -506,10 +524,22 @@ export default function PatientForm() {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center h-64 text-brand-text-muted space-y-2">
+                  <div className="flex flex-col items-center justify-center min-h-[300px] text-brand-text-muted space-y-4 px-8 text-center">
                     <Folder className="opacity-20" size={64} />
-                    <p className="font-medium">Nenhuma subpasta encontrada</p>
-                    <p className="text-xs">Crie uma nova ou selecione esta pasta atual.</p>
+                    <div>
+                      <p className="font-bold text-brand-text">Nenhuma subpasta encontrada</p>
+                      <p className="text-sm mt-1">Crie uma nova ou selecione esta pasta atual.</p>
+                    </div>
+                    <div className="pt-4 border-t border-brand-border w-full">
+                      <p className="text-xs mb-3">Não está vendo suas pastas do Drive?</p>
+                      <button
+                        onClick={handleExplorerReauthenticate}
+                        className="btn-outline text-xs py-2"
+                      >
+                        {isReauthenticating ? <Loader2 size={14} className="animate-spin mr-2" /> : <Plus size={14} className="mr-2" />}
+                        Renovar Acesso ao Drive
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
