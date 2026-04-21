@@ -268,20 +268,33 @@ export default function PatientForm() {
     setLoading(true);
     try {
       const patientId = id || uuidv4();
-      const patientData = {
+      
+      // Sanitizar dados para o Firestore: enviar apenas campos permitidos pelas regras de segurança
+      const patientData: any = {
         id: patientId,
         professional_id: auth.currentUser.uid,
-        ...formData,
+        full_name: formData.full_name,
+        notes: formData.notes,
+        status: formData.status,
         updated_at: new Date().toISOString()
       };
+
+      // Só inclui campos do Google Drive se eles tiverem valor (para não quebrar regras de validação de string)
+      if (formData.google_doc_id) {
+        patientData.google_doc_id = formData.google_doc_id;
+        patientData.google_doc_name = formData.google_doc_name;
+        patientData.google_doc_url = formData.google_doc_url;
+      }
+      if (formData.target_folder_id) {
+        patientData.target_folder_id = formData.target_folder_id;
+        patientData.target_folder_name = formData.target_folder_name;
+      }
 
       if (id) {
         await updateDoc(doc(db, 'patients', id), patientData);
       } else {
-        await setDoc(doc(db, 'patients', patientId), {
-          ...patientData,
-          created_at: new Date().toISOString()
-        });
+        patientData.created_at = new Date().toISOString();
+        await setDoc(doc(db, 'patients', patientId), patientData);
       }
       navigate('/patients');
     } catch (error) {
@@ -461,7 +474,7 @@ export default function PatientForm() {
                   <FolderOpen size={20} />
                   <span>{explorerMode === 'folder' ? 'Selecionar Pasta de Destino' : 'Selecionar Prontuário Existente'}</span>
                 </div>
-                <button onClick={() => setShowExplorer(false)} className="p-1 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
+                <button type="button" onClick={() => setShowExplorer(false)} className="p-1 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
                   <X size={24} />
                 </button>
               </div>
@@ -472,6 +485,7 @@ export default function PatientForm() {
                   <React.Fragment key={item.id}>
                     {index > 0 && <ChevronRight size={14} className="text-brand-text-muted flex-shrink-0" />}
                     <button
+                      type="button"
                       onClick={() => handleNavigateUp(index)}
                       className={`hover:text-brand-primary transition-colors flex items-center space-x-1 ${index === explorerPath.length - 1 ? 'font-bold text-brand-text' : 'text-brand-text-muted'}`}
                     >
@@ -495,6 +509,7 @@ export default function PatientForm() {
                     <span className="sm:hidden">Criar</span>
                   </button>
                   <button
+                    type="button"
                     onClick={() => {
                       const current = explorerPath[explorerPath.length - 1];
                       loadExplorerFolders(current.id);
@@ -526,6 +541,7 @@ export default function PatientForm() {
                       
                       return (
                         <button
+                          type="button"
                           key={item.id}
                           onClick={() => handleSelectItem(item)}
                           className={`flex items-center space-x-3 p-4 bg-white border rounded-xl transition-all text-left group relative
@@ -550,6 +566,7 @@ export default function PatientForm() {
                           
                           <div className="flex items-center space-x-1">
                             <button
+                              type="button"
                               onClick={(e) => handleDeleteFolder(e, item.id, item.name)}
                               className="p-2 text-brand-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                               title="Excluir"
@@ -572,6 +589,7 @@ export default function PatientForm() {
                     <div className="pt-4 border-t border-brand-border w-full">
                       <p className="text-xs mb-3">Não está vendo suas pastas do Drive?</p>
                       <button
+                        type="button"
                         onClick={handleExplorerReauthenticate}
                         className="btn-outline text-xs py-2"
                       >
@@ -586,12 +604,14 @@ export default function PatientForm() {
               {/* Footer Actions */}
               <div className="p-4 bg-white border-t border-brand-border flex items-center justify-between">
                 <button
+                  type="button"
                   onClick={() => setShowExplorer(false)}
                   className="btn-outline border-brand-border"
                 >
                   Cancelar
                 </button>
                   <button
+                    type="button"
                     onClick={handleSelectCurrentFolder}
                     disabled={explorerMode !== 'folder'}
                     className={`btn-primary min-w-[200px] ${explorerMode !== 'folder' ? 'opacity-0 pointer-events-none' : ''}`}
