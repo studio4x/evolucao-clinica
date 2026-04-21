@@ -114,11 +114,13 @@ export default function PatientForm() {
     }
   };
 
-  const loadExplorerFolders = async (parentId: string) => {
-    if (!googleAccessToken) return;
+  const loadExplorerFolders = async (parentId: string, tokenOverride?: string) => {
+    const token = tokenOverride || googleAccessToken;
+    if (!token) return;
+    
     setIsLoadingExplorer(true);
     try {
-      const files = await listGoogleFolders(googleAccessToken, parentId);
+      const files = await listGoogleFolders(token, parentId);
       setExplorerFolders(files.sort((a: any, b: any) => a.name.localeCompare(b.name)));
     } catch (error: any) {
       console.error("Explorer load error:", error);
@@ -145,9 +147,9 @@ export default function PatientForm() {
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         setGoogleAccessToken(credential.accessToken);
-        // Recarregar pastas após re-autenticação
+        // Recarregar pastas após re-autenticação usando o novo token imediatamente
         const current = explorerPath[explorerPath.length - 1];
-        loadExplorerFolders(current.id);
+        loadExplorerFolders(current.id, credential.accessToken);
       }
     } catch (error) {
       console.error("Reauth error:", error);
