@@ -152,6 +152,11 @@ export default function PatientForm() {
           picker.setVisible(true);
         }
       });
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
   const handleCreateNewFolder = async () => {
     if (!googleAccessToken) return;
     

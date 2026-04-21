@@ -47,7 +47,6 @@ export async function appendToGoogleDoc(
 }
 
 export async function createGoogleDoc(googleAccessToken: string, title: string, folderId?: string) {
-  // Usamos a Drive API em vez da Docs API para poder especificar a pasta (parents)
   const url = `https://www.googleapis.com/drive/v3/files`;
   
   const body: any = {
@@ -73,7 +72,7 @@ export async function createGoogleDoc(googleAccessToken: string, title: string, 
     if (response.status === 401) {
       throw new Error("UNAUTHENTICATED: " + errorText);
     }
-    throw new Error(`Google Drive API error: ${response.status} - ${errorText}`);
+    throw new Error(`Google Drive API error (Doc): ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
