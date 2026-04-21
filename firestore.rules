@@ -135,7 +135,7 @@ service cloud.firestore {
     }
 
     function isValidPatient() {
-      let allowedFields = ['id', 'professional_id', 'full_name', 'notes', 'status', 'google_doc_id', 'google_doc_name', 'google_doc_url', 'created_at', 'updated_at'];
+      let allowedFields = ['id', 'professional_id', 'full_name', 'notes', 'status', 'google_doc_id', 'google_doc_name', 'google_doc_url', 'target_folder_id', 'target_folder_name', 'created_at', 'updated_at'];
       return hasRequiredFields(['id', 'professional_id', 'full_name', 'status']) &&
              hasOnlyAllowedFields(allowedFields) &&
              request.resource.data.professional_id == request.auth.uid &&
@@ -147,6 +147,8 @@ service cloud.firestore {
              validOptionalStringLength('google_doc_id', 0, 200) &&
              validOptionalStringLength('google_doc_name', 0, 500) &&
              validOptionalStringLength('google_doc_url', 0, 1000) &&
+             validOptionalStringLength('target_folder_id', 0, 200) &&
+             validOptionalStringLength('target_folder_name', 0, 500) &&
              validOptionalStringLength('created_at', 0, 50) &&
              validOptionalStringLength('updated_at', 0, 50);
     }
