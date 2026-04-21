@@ -124,7 +124,7 @@ export default function PatientForm() {
           if (!window.google || !window.google.picker) return;
 
           const view = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
-            .setSelectableMimeTypes('application/vnd.google-apps.folder')
+            .setMimeTypes('application/vnd.google-apps.folder')
             .setIncludeFolders(true);
 
           const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY || apiKey;
