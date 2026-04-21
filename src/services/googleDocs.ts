@@ -83,9 +83,19 @@ export async function createGoogleDoc(googleAccessToken: string, title: string, 
   };
 }
 
-export async function listGoogleFiles(googleAccessToken: string, parentId: string = 'root') {
-  const q = `'${parentId}' in parents and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/vnd.google-apps.document') and trashed = false`;
-  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)`;
+export async function listGoogleFiles(googleAccessToken: string, parentId: string = 'root', searchTerm: string = '', isGlobalSearch: boolean = false) {
+  let q = `trashed = false and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/vnd.google-apps.document')`;
+  
+  if (searchTerm) {
+    q += ` and name contains '${searchTerm.replace(/'/g, "\\'")}'`;
+    if (!isGlobalSearch) {
+      q += ` and '${parentId}' in parents`;
+    }
+  } else {
+    q += ` and '${parentId}' in parents`;
+  }
+
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)&pageSize=50`;
 
   const response = await fetch(url, {
     method: 'GET',
@@ -103,7 +113,7 @@ export async function listGoogleFiles(googleAccessToken: string, parentId: strin
   }
 
   const data = await response.json();
-  return data.files;
+  return data.files || [];
 }
 
 export async function createGoogleFolder(googleAccessToken: string, folderName: string, parentFolderId?: string) {

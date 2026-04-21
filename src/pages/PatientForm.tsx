@@ -28,6 +28,8 @@ export default function PatientForm() {
   const [explorerPath, setExplorerPath] = useState<{id: string, name: string}[]>([{id: 'root', name: 'Meu Drive'}]);
   const [explorerFolders, setExplorerFolders] = useState<any[]>([]);
   const [isLoadingExplorer, setIsLoadingExplorer] = useState(false);
+  const [explorerSearch, setExplorerSearch] = useState('');
+  const [isGlobalSearch, setIsGlobalSearch] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
@@ -115,13 +117,13 @@ export default function PatientForm() {
     }
   };
 
-  const loadExplorerFolders = async (parentId: string, tokenOverride?: string) => {
+  const loadExplorerFolders = async (parentId: string, tokenOverride?: string, searchTerm: string = '', isGlobal: boolean = false) => {
     const token = tokenOverride || googleAccessToken;
     if (!token) return;
     
     setIsLoadingExplorer(true);
     try {
-      const files = await listGoogleFiles(token, parentId);
+      const files = await listGoogleFiles(token, parentId, searchTerm, isGlobal);
       // Ordenar: pastas primeiro, depois arquivos
       const sorted = files.sort((a: any, b: any) => {
         if (a.mimeType === b.mimeType) return a.name.localeCompare(b.name);
@@ -138,6 +140,18 @@ export default function PatientForm() {
       setIsLoadingExplorer(false);
     }
   };
+
+  // Debounced Search Effect
+  useEffect(() => {
+    if (!showExplorer) return;
+    
+    const timer = setTimeout(() => {
+      const current = explorerPath[explorerPath.length - 1];
+      loadExplorerFolders(current.id, undefined, explorerSearch, isGlobalSearch);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [explorerSearch, isGlobalSearch, showExplorer]);
 
   useEffect(() => {
     if (showExplorer) {
@@ -497,32 +511,63 @@ export default function PatientForm() {
               </div>
 
               {/* Toolbar */}
-              <div className="p-3 bg-brand-bg/30 flex items-center justify-between border-b border-brand-border gap-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCreateNewFolder}
-                    disabled={isCreatingFolder}
-                    className="flex items-center space-x-2 px-4 py-2 bg-white border border-brand-primary/20 rounded-xl text-brand-primary hover:bg-brand-primary/5 transition-all text-sm font-bold shadow-sm"
-                  >
-                    {isCreatingFolder ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
-                    <span className="hidden sm:inline">Criar Pasta</span>
-                    <span className="sm:hidden">Criar</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const current = explorerPath[explorerPath.length - 1];
-                      loadExplorerFolders(current.id);
-                    }}
-                    disabled={isLoadingExplorer}
-                    className="p-2 bg-white border border-brand-border rounded-xl text-brand-text-muted hover:text-brand-primary transition-all shadow-sm"
-                    title="Atualizar lista"
-                  >
-                    <RefreshCw size={18} className={isLoadingExplorer ? 'animate-spin' : ''} />
-                  </button>
+              <div className="p-3 bg-brand-bg/30 flex flex-col space-y-3 border-b border-brand-border">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCreateNewFolder}
+                      disabled={isCreatingFolder}
+                      className="flex items-center space-x-2 px-4 py-2 bg-white border border-brand-primary/20 rounded-xl text-brand-primary hover:bg-brand-primary/5 transition-all text-sm font-bold shadow-sm"
+                    >
+                      {isCreatingFolder ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
+                      <span className="hidden sm:inline">Criar Pasta</span>
+                      <span className="sm:hidden">Criar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = explorerPath[explorerPath.length - 1];
+                        loadExplorerFolders(current.id, undefined, explorerSearch, isGlobalSearch);
+                      }}
+                      disabled={isLoadingExplorer}
+                      className="p-2 bg-white border border-brand-border rounded-xl text-brand-text-muted hover:text-brand-primary transition-all shadow-sm"
+                      title="Atualizar lista"
+                    >
+                      <RefreshCw size={18} className={isLoadingExplorer ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <label className="flex items-center space-x-1 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={isGlobalSearch}
+                        onChange={(e) => setIsGlobalSearch(e.target.checked)}
+                        className="rounded border-brand-border text-brand-primary focus:ring-brand-primary"
+                      />
+                      <span className="text-xs text-brand-text-muted">Busca Global</span>
+                    </label>
+                  </div>
                 </div>
-                <div className="text-xs text-brand-text-muted italic hidden md:block">
-                  Navegue até a pasta desejada
+
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" size={18} />
+                  <input
+                    type="text"
+                    value={explorerSearch}
+                    onChange={(e) => setExplorerSearch(e.target.value)}
+                    placeholder={isGlobalSearch ? "Pesquisar em todo o Drive..." : "Pesquisar nesta pasta..."}
+                    className="w-full pl-10 pr-4 py-2 bg-white border border-brand-border rounded-xl focus:ring-2 focus:ring-brand-primary focus:border-brand-primary outline-none text-sm transition-all shadow-inner"
+                  />
+                  {explorerSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setExplorerSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
 
