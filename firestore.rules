@@ -135,12 +135,17 @@ service cloud.firestore {
     }
 
     function isValidPatient() {
-      let allowedFields = ['id', 'professional_id', 'full_name', 'notes', 'status', 'google_doc_id', 'google_doc_name', 'google_doc_url', 'target_folder_id', 'target_folder_name', 'created_at', 'updated_at'];
-      return hasRequiredFields(['id', 'professional_id', 'full_name', 'status']) &&
+      let allowedFields = ['id', 'professional_id', 'professionalId', 'userId', 'full_name', 'notes', 'status', 'google_doc_id', 'google_doc_name', 'google_doc_url', 'target_folder_id', 'target_folder_name', 'created_at', 'updated_at', 'createdAt', 'updatedAt'];
+      let isProfOwner = (('professional_id' in request.resource.data) && request.resource.data.professional_id == request.auth.uid) ||
+                        (('userId' in request.resource.data) && request.resource.data.userId == request.auth.uid) ||
+                        (('professionalId' in request.resource.data) && request.resource.data.professionalId == request.auth.uid);
+      
+      return hasRequiredFields(['id', 'full_name', 'status']) &&
              hasOnlyAllowedFields(allowedFields) &&
-             request.resource.data.professional_id == request.auth.uid &&
+             isProfOwner &&
              validStringLength('id', 1, 100) &&
-             validStringLength('professional_id', 1, 100) &&
+             validOptionalStringLength('professional_id', 1, 100) &&
+             validOptionalStringLength('userId', 1, 100) &&
              validStringLength('full_name', 1, 200) &&
              validOptionalStringLength('notes', 0, 5000) &&
              validStringLength('status', 1, 50) &&
@@ -217,12 +222,11 @@ service cloud.firestore {
     }
 
     match /patients/{patientId} {
-      allow read: if isAuthenticated() && resource.data.professional_id == request.auth.uid;
+      allow read: if isAuthenticated() && (resource.data.professional_id == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.professionalId == request.auth.uid);
       allow create: if isAuthenticated() && isValidPatient();
-      allow update: if isAuthenticated() && resource.data.professional_id == request.auth.uid && isValidPatient() &&
-                    request.resource.data.id == resource.data.id &&
-                    request.resource.data.professional_id == resource.data.professional_id;
-      allow delete: if isAuthenticated() && resource.data.professional_id == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.professional_id == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.professionalId == request.auth.uid) && isValidPatient() &&
+                    request.resource.data.id == resource.data.id;
+      allow delete: if isAuthenticated() && (resource.data.professional_id == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.professionalId == request.auth.uid);
     }
 
     match /evolutions/{evolutionId} {
