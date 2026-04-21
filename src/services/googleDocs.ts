@@ -83,9 +83,9 @@ export async function createGoogleDoc(googleAccessToken: string, title: string, 
   };
 }
 
-export async function listGoogleFolders(googleAccessToken: string, parentId: string = 'root') {
-  const q = `'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
-  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)`;
+export async function listGoogleFiles(googleAccessToken: string, parentId: string = 'root') {
+  const q = `'${parentId}' in parents and (mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/vnd.google-apps.document') and trashed = false`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)`;
 
   const response = await fetch(url, {
     method: 'GET',

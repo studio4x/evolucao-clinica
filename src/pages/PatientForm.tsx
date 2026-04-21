@@ -5,8 +5,8 @@ import { db, auth, apiKey, projectId, googleProvider } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2 } from 'lucide-react';
-import { createGoogleDoc, createGoogleFolder, listGoogleFolders, deleteGoogleFile } from '../services/googleDocs';
+import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File } from 'lucide-react';
+import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 
 declare global {
   interface Window {
@@ -24,6 +24,7 @@ export default function PatientForm() {
   
   // Custom Folder Explorer State
   const [showExplorer, setShowExplorer] = useState(false);
+  const [explorerMode, setExplorerMode] = useState<'folder' | 'file'>('folder');
   const [explorerPath, setExplorerPath] = useState<{id: string, name: string}[]>([{id: 'root', name: 'Meu Drive'}]);
   const [explorerFolders, setExplorerFolders] = useState<any[]>([]);
   const [isLoadingExplorer, setIsLoadingExplorer] = useState(false);
@@ -120,8 +121,13 @@ export default function PatientForm() {
     
     setIsLoadingExplorer(true);
     try {
-      const files = await listGoogleFolders(token, parentId);
-      setExplorerFolders(files.sort((a: any, b: any) => a.name.localeCompare(b.name)));
+      const files = await listGoogleFiles(token, parentId);
+      // Ordenar: pastas primeiro, depois arquivos
+      const sorted = files.sort((a: any, b: any) => {
+        if (a.mimeType === b.mimeType) return a.name.localeCompare(b.name);
+        return a.mimeType === 'application/vnd.google-apps.folder' ? -1 : 1;
+      });
+      setExplorerFolders(sorted);
     } catch (error: any) {
       console.error("Explorer load error:", error);
       if (error.message?.includes('401')) {
@@ -231,65 +237,28 @@ export default function PatientForm() {
     setShowExplorer(false);
   };
 
+  const handleSelectItem = (item: any) => {
+    if (item.mimeType === 'application/vnd.google-apps.folder') {
+      handleNavigateDown(item.id, item.name);
+    } else if (explorerMode === 'file') {
+      // É um arquivo e estamos em modo de seleção de arquivo
+      setFormData(prev => ({
+        ...prev,
+        google_doc_id: item.id,
+        google_doc_name: item.name,
+        google_doc_url: `https://docs.google.com/document/d/${item.id}/edit`
+      }));
+      setShowExplorer(false);
+    }
+  };
+
+  const openExplorer = (mode: 'folder' | 'file') => {
+    setExplorerMode(mode);
+    setShowExplorer(true);
+  };
+
   const handlePicker = () => {
-    if (!googleAccessToken) {
-      alert('Token do Google não encontrado. Por favor, faça login novamente.');
-      return;
-    }
-
-    try {
-      if (!window.gapi) {
-        alert('A API do Google ainda não foi carregada. Tente novamente em alguns segundos.');
-        return;
-      }
-
-      // Load the Picker API
-      window.gapi.load('picker', {
-        callback: () => {
-          try {
-            if (!window.google || !window.google.picker) {
-              alert('Erro ao inicializar o Google Picker.');
-              return;
-            }
-
-            const view = new window.google.picker.DocsView(window.google.picker.ViewId.DOCUMENTS)
-              .setMimeTypes('application/vnd.google-apps.document')
-              .setIncludeFolders(true); // Permite navegar em pastas
-
-            const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY || apiKey;
-
-            const picker = new window.google.picker.PickerBuilder()
-              .addView(view)
-              .setOAuthToken(googleAccessToken)
-              .setDeveloperKey(pickerApiKey)
-              .setAppId(projectId)
-              .enableFeature(window.google.picker.Feature.NAV_HIDDEN) // Design mais limpo
-              .setCallback((data: any) => {
-                if (data.action === window.google.picker.Action.PICKED) {
-                  const doc = data.docs[0];
-                  setFormData(prev => ({
-                    ...prev,
-                    google_doc_id: doc.id,
-                    google_doc_name: doc.name,
-                    google_doc_url: doc.url
-                  }));
-                }
-              })
-              .build();
-            picker.setVisible(true);
-          } catch (err) {
-            console.error("Erro dentro do callback do picker:", err);
-            alert("Ocorreu um erro ao abrir o seletor de arquivos.");
-          }
-        },
-        onerror: () => {
-          console.error("Erro ao carregar a API do picker");
-          alert("Falha ao carregar a interface do Google Drive.");
-        }
-      });
-    } catch (error) {
-      console.error("Erro geral no handlePicker:", error);
-    }
+    openExplorer('file');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -431,13 +400,13 @@ export default function PatientForm() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() => setShowExplorer(true)}
+                        onClick={() => openExplorer('folder')}
                         className="w-full flex items-center justify-center space-x-2 p-4 bg-white border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all group"
                       >
                         <FolderOpen size={24} className="group-hover:scale-110 transition-transform" />
                         <div className="text-left">
                           <p className="font-bold">Selecionar ou Criar Pasta</p>
-                          <p className="text-xs">Abra o explorador para escolher onde salvar.</p>
+                          <p className="text-xs">Escolha onde o novo arquivo será salvo.</p>
                         </div>
                       </button>
                     )}
@@ -490,7 +459,7 @@ export default function PatientForm() {
               <div className="p-4 border-b border-brand-border flex items-center justify-between bg-brand-bg/50">
                 <div className="flex items-center space-x-2 text-brand-primary font-bold">
                   <FolderOpen size={20} />
-                  <span>Explorador do Drive</span>
+                  <span>{explorerMode === 'folder' ? 'Selecionar Pasta de Destino' : 'Selecionar Prontuário Existente'}</span>
                 </div>
                 <button onClick={() => setShowExplorer(false)} className="p-1 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
                   <X size={24} />
@@ -551,28 +520,47 @@ export default function PatientForm() {
                   </div>
                 ) : explorerFolders.length > 0 ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2">
-                    {explorerFolders.map(folder => (
-                      <button
-                        key={folder.id}
-                        onClick={() => handleNavigateDown(folder.id, folder.name)}
-                        className="flex items-center space-x-3 p-4 bg-white border border-brand-border rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all text-left group relative"
-                      >
-                        <div className="p-2 bg-brand-primary/10 rounded-lg group-hover:bg-brand-primary group-hover:text-white transition-colors">
-                          <Folder size={20} className="text-brand-primary group-hover:text-white" />
-                        </div>
-                        <span className="font-medium text-brand-text truncate grow">{folder.name}</span>
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={(e) => handleDeleteFolder(e, folder.id, folder.name)}
-                            className="p-2 text-brand-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                            title="Excluir pasta"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                          <ChevronRight size={16} className="text-brand-text-muted group-hover:translate-x-1 transition-transform" />
-                        </div>
-                      </button>
-                    ))}
+                    {explorerFolders.map(item => {
+                      const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+                      const isSelectableFile = explorerMode === 'file' && item.mimeType === 'application/vnd.google-apps.document';
+                      
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => handleSelectItem(item)}
+                          className={`flex items-center space-x-3 p-4 bg-white border rounded-xl transition-all text-left group relative
+                            ${isFolder ? 'border-brand-border hover:border-brand-primary hover:bg-brand-primary/5' : ''}
+                            ${isSelectableFile ? 'border-brand-primary/30 hover:border-brand-primary hover:bg-brand-primary/5 shadow-sm' : 'border-dashed border-brand-border/40 opacity-70'}
+                          `}
+                          disabled={!isFolder && !isSelectableFile}
+                        >
+                          <div className={`p-2 rounded-lg transition-colors
+                            ${isFolder ? 'bg-brand-primary/10 text-brand-primary group-hover:bg-brand-primary group-hover:text-white' : 'bg-brand-bg text-brand-text-muted group-hover:bg-brand-primary group-hover:text-white'}
+                          `}>
+                            {isFolder ? <Folder size={20} /> : <FileText size={20} />}
+                          </div>
+                          <div className="grow truncate">
+                            <p className={`font-medium truncate ${isFolder ? 'text-brand-text' : 'text-brand-text-muted group-hover:text-brand-text'}`}>
+                              {item.name}
+                            </p>
+                            <p className="text-[10px] uppercase tracking-wider text-brand-text-muted mt-0.5">
+                              {isFolder ? 'Pasta' : 'Documento'}
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-1">
+                            <button
+                              onClick={(e) => handleDeleteFolder(e, item.id, item.name)}
+                              className="p-2 text-brand-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                              title="Excluir"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            {isFolder && <ChevronRight size={16} className="text-brand-text-muted group-hover:translate-x-1 transition-transform" />}
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center min-h-[300px] text-brand-text-muted space-y-4 px-8 text-center">
@@ -603,12 +591,13 @@ export default function PatientForm() {
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={handleSelectCurrentFolder}
-                  className="btn-primary min-w-[200px]"
-                >
-                  Selecionar esta pasta
-                </button>
+                  <button
+                    onClick={handleSelectCurrentFolder}
+                    disabled={explorerMode !== 'folder'}
+                    className={`btn-primary min-w-[200px] ${explorerMode !== 'folder' ? 'opacity-0 pointer-events-none' : ''}`}
+                  >
+                    Selecionar esta pasta
+                  </button>
               </div>
             </div>
           </div>
