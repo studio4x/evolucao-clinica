@@ -5,8 +5,8 @@ import { db, auth, apiKey, projectId, googleProvider } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X } from 'lucide-react';
-import { createGoogleDoc } from '../services/googleDocs';
+import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus } from 'lucide-react';
+import { createGoogleDoc, createGoogleFolder } from '../services/googleDocs';
 
 declare global {
   interface Window {
@@ -20,6 +20,7 @@ export default function PatientForm() {
   const navigate = useNavigate();
   const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
   const [isReauthenticating, setIsReauthenticating] = useState(false);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
@@ -151,8 +152,32 @@ export default function PatientForm() {
           picker.setVisible(true);
         }
       });
-    } catch (error) {
-      console.error(error);
+  const handleCreateNewFolder = async () => {
+    if (!googleAccessToken) return;
+    
+    const folderName = prompt("Digite o nome da nova pasta:");
+    if (!folderName) return;
+
+    setIsCreatingFolder(true);
+    try {
+      // Criar nova pasta (na raiz ou dentro da pasta atual se quiséssemos aninhamento, mas aqui vamos na raiz por simplicidade ou na última selecionada)
+      const newFolder = await createGoogleFolder(googleAccessToken, folderName);
+      
+      setFormData(prev => ({
+        ...prev,
+        target_folder_id: newFolder.id,
+        target_folder_name: newFolder.name
+      }));
+      
+      localStorage.setItem('last_google_folder_id', newFolder.id);
+      localStorage.setItem('last_google_folder_name', newFolder.name);
+      
+      alert(`Pasta "${folderName}" criada e selecionada com sucesso!`);
+    } catch (error: any) {
+      console.error("Erro ao criar pasta:", error);
+      alert("Erro ao criar pasta no Google Drive.");
+    } finally {
+      setIsCreatingFolder(false);
     }
   };
 
@@ -354,14 +379,25 @@ export default function PatientForm() {
                         </button>
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={handleFolderPicker}
-                        className="w-full flex items-center justify-center space-x-2 p-3 bg-white border border-brand-border rounded-xl text-sm text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all"
-                      >
-                        <FolderOpen size={16} />
-                        <span>Selecionar Pasta (Opcional)</span>
-                      </button>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <button
+                          type="button"
+                          onClick={handleFolderPicker}
+                          className="flex-1 flex items-center justify-center space-x-2 p-3 bg-white border border-brand-border rounded-xl text-sm text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all"
+                        >
+                          <FolderOpen size={16} />
+                          <span>Selecionar Pasta</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCreateNewFolder}
+                          disabled={isCreatingFolder}
+                          className="flex items-center justify-center space-x-2 p-3 bg-brand-primary/5 border border-brand-primary/20 rounded-xl text-sm text-brand-primary hover:bg-brand-primary/10 transition-all font-medium"
+                        >
+                          {isCreatingFolder ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
+                          <span>Nova Pasta</span>
+                        </button>
+                      </div>
                     )}
                   </div>
 

@@ -83,3 +83,35 @@ export async function createGoogleDoc(googleAccessToken: string, title: string, 
     url: `https://docs.google.com/document/d/${data.id}/edit`
   };
 }
+
+export async function createGoogleFolder(googleAccessToken: string, folderName: string, parentFolderId?: string) {
+  const url = `https://www.googleapis.com/drive/v3/files`;
+  
+  const body: any = {
+    name: folderName,
+    mimeType: 'application/vnd.google-apps.folder'
+  };
+
+  if (parentFolderId) {
+    body.parents = [parentFolderId];
+  }
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (response.status === 401) {
+      throw new Error("UNAUTHENTICATED: " + errorText);
+    }
+    throw new Error(`Google Drive API error (Folder): ${response.status} - ${errorText}`);
+  }
+
+  return await response.json();
+}
