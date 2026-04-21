@@ -171,8 +171,8 @@ export default function PatientForm() {
     try {
       const newFolder = await createGoogleFolder(googleAccessToken, folderName, currentFolder.id === 'root' ? undefined : currentFolder.id);
       
-      // Refresh folders list
-      await loadExplorerFolders(currentFolder.id);
+      // Entrar automaticamente na pasta criada para facilitar a navegação
+      handleNavigateDown(newFolder.id, newFolder.name);
       
       alert(`Pasta "${folderName}" criada com sucesso!`);
     } catch (error: any) {
