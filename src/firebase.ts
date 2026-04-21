@@ -15,4 +15,5 @@ export const projectId = firebaseConfig.projectId;
 export const googleProvider = new GoogleAuthProvider();
 // Request scopes for Google Drive and Docs
 googleProvider.addScope('https://www.googleapis.com/auth/drive.file');
+googleProvider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly');
 googleProvider.addScope('https://www.googleapis.com/auth/documents');

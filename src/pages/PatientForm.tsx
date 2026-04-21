@@ -5,8 +5,8 @@ import { db, auth, apiKey, projectId, googleProvider } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus } from 'lucide-react';
-import { createGoogleDoc, createGoogleFolder } from '../services/googleDocs';
+import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder } from 'lucide-react';
+import { createGoogleDoc, createGoogleFolder, listGoogleFolders } from '../services/googleDocs';
 
 declare global {
   interface Window {
@@ -21,6 +21,12 @@ export default function PatientForm() {
   const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  
+  // Custom Folder Explorer State
+  const [showExplorer, setShowExplorer] = useState(false);
+  const [explorerPath, setExplorerPath] = useState<{id: string, name: string}[]>([{id: 'root', name: 'Meu Drive'}]);
+  const [explorerFolders, setExplorerFolders] = useState<any[]>([]);
+  const [isLoadingExplorer, setIsLoadingExplorer] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
@@ -108,82 +114,75 @@ export default function PatientForm() {
     }
   };
 
-  const handleFolderPicker = () => {
-    if (!googleAccessToken) {
-      alert('Token do Google não encontrado. Por favor, renova sua autenticação.');
-      return;
-    }
-
+  const loadExplorerFolders = async (parentId: string) => {
+    if (!googleAccessToken) return;
+    setIsLoadingExplorer(true);
     try {
-      if (!window.gapi) {
-        alert('A API do Google ainda não foi carregada.');
-        return;
+      const files = await listGoogleFolders(googleAccessToken, parentId);
+      setExplorerFolders(files.sort((a: any, b: any) => a.name.localeCompare(b.name)));
+    } catch (error: any) {
+      console.error("Explorer load error:", error);
+      if (error.message?.includes('401')) {
+        setGoogleAccessToken(null);
+        setShowExplorer(false);
       }
-
-      window.gapi.load('picker', {
-        callback: () => {
-          if (!window.google || !window.google.picker) return;
-
-          const view = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
-            .setMimeTypes('application/vnd.google-apps.folder')
-            .setIncludeFolders(true);
-
-          const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY || apiKey;
-
-          const picker = new window.google.picker.PickerBuilder()
-            .addView(view)
-            .setOAuthToken(googleAccessToken)
-            .setDeveloperKey(pickerApiKey)
-            .setAppId(projectId)
-            .setCallback((data: any) => {
-              if (data.action === window.google.picker.Action.PICKED) {
-                const folder = data.docs[0];
-                setFormData(prev => ({
-                  ...prev,
-                  target_folder_id: folder.id,
-                  target_folder_name: folder.name
-                }));
-                // Salva como preferência para os próximos pacientes
-                localStorage.setItem('last_google_folder_id', folder.id);
-                localStorage.setItem('last_google_folder_name', folder.name);
-              }
-            })
-            .build();
-          picker.setVisible(true);
-        }
-      });
-    } catch (error) {
-      console.error(error);
+    } finally {
+      setIsLoadingExplorer(false);
     }
   };
+
+  useEffect(() => {
+    if (showExplorer) {
+      const current = explorerPath[explorerPath.length - 1];
+      loadExplorerFolders(current.id);
+    }
+  }, [showExplorer, explorerPath]);
 
   const handleCreateNewFolder = async () => {
     if (!googleAccessToken) return;
     
-    const folderName = prompt("Digite o nome da nova pasta:");
+    // Pegar o local atual do explorador
+    const currentFolder = explorerPath[explorerPath.length - 1];
+    
+    const folderName = prompt(`Criar nova pasta dentro de "${currentFolder.name}":`);
     if (!folderName) return;
 
     setIsCreatingFolder(true);
     try {
-      // Criar nova pasta (na raiz ou dentro da pasta atual se quiséssemos aninhamento, mas aqui vamos na raiz por simplicidade ou na última selecionada)
-      const newFolder = await createGoogleFolder(googleAccessToken, folderName);
+      const newFolder = await createGoogleFolder(googleAccessToken, folderName, currentFolder.id === 'root' ? undefined : currentFolder.id);
       
-      setFormData(prev => ({
-        ...prev,
-        target_folder_id: newFolder.id,
-        target_folder_name: newFolder.name
-      }));
+      // Refresh folders list
+      await loadExplorerFolders(currentFolder.id);
       
-      localStorage.setItem('last_google_folder_id', newFolder.id);
-      localStorage.setItem('last_google_folder_name', newFolder.name);
-      
-      alert(`Pasta "${folderName}" criada e selecionada com sucesso!`);
+      alert(`Pasta "${folderName}" criada com sucesso!`);
     } catch (error: any) {
       console.error("Erro ao criar pasta:", error);
       alert("Erro ao criar pasta no Google Drive.");
     } finally {
       setIsCreatingFolder(false);
     }
+  };
+
+  const handleNavigateDown = (folderId: string, folderName: string) => {
+    setExplorerPath(prev => [...prev, { id: folderId, name: folderName }]);
+  };
+
+  const handleNavigateUp = (index: number) => {
+    setExplorerPath(prev => prev.slice(0, index + 1));
+  };
+
+  const handleSelectCurrentFolder = () => {
+    const current = explorerPath[explorerPath.length - 1];
+    if (current.id === 'root') {
+      setFormData(prev => ({ ...prev, target_folder_id: '', target_folder_name: 'Meu Drive (Principal)' }));
+      localStorage.removeItem('last_google_folder_id');
+      localStorage.removeItem('last_google_folder_name');
+    } else {
+      setFormData(prev => ({ ...prev, target_folder_id: current.id, target_folder_name: current.name }));
+      localStorage.setItem('last_google_folder_id', current.id);
+      localStorage.setItem('last_google_folder_name', current.name);
+    }
+    setShowExplorer(false);
   };
 
   const handlePicker = () => {
@@ -384,25 +383,17 @@ export default function PatientForm() {
                         </button>
                       </div>
                     ) : (
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <button
-                          type="button"
-                          onClick={handleFolderPicker}
-                          className="flex-1 flex items-center justify-center space-x-2 p-3 bg-white border border-brand-border rounded-xl text-sm text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all"
-                        >
-                          <FolderOpen size={16} />
-                          <span>Selecionar Pasta</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCreateNewFolder}
-                          disabled={isCreatingFolder}
-                          className="flex items-center justify-center space-x-2 p-3 bg-brand-primary/5 border border-brand-primary/20 rounded-xl text-sm text-brand-primary hover:bg-brand-primary/10 transition-all font-medium"
-                        >
-                          {isCreatingFolder ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
-                          <span>Nova Pasta</span>
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowExplorer(true)}
+                        className="w-full flex items-center justify-center space-x-2 p-4 bg-white border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all group"
+                      >
+                        <FolderOpen size={24} className="group-hover:scale-110 transition-transform" />
+                        <div className="text-left">
+                          <p className="font-bold">Selecionar ou Criar Pasta</p>
+                          <p className="text-xs">Abra o explorador para escolher onde salvar.</p>
+                        </div>
+                      </button>
                     )}
                   </div>
 
@@ -436,14 +427,111 @@ export default function PatientForm() {
             {!formData.full_name && !formData.google_doc_id ? (
               <span className="text-red-500">Preencha o nome do paciente para liberar a criação do prontuário.</span>
             ) : !googleAccessToken ? (
-              <span className="text-yellow-600">É necessário renovar sua autenticação com o Google para gerenciar documentos.</span>
+              <span className="text-yellow-600">Sua sessão do Google expirou. Renove a autenticação para acessar o Drive.</span>
             ) : (
               formData.target_folder_id 
                 ? `O novo prontuário será criado dentro da pasta "${formData.target_folder_name}".`
-                : "Selecione ou crie o documento onde as evoluções serão inseridas automaticamente."
+                : "Selecione uma pasta de destino para organizar seus prontuários."
             )}
           </p>
         </div>
+
+        {/* Custom Folder Explorer Modal */}
+        {showExplorer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-primary/20 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[600px] max-h-[85vh] border border-brand-border animate-in zoom-in-95 duration-200">
+              {/* Header */}
+              <div className="p-4 border-b border-brand-border flex items-center justify-between bg-brand-bg/50">
+                <div className="flex items-center space-x-2 text-brand-primary font-bold">
+                  <FolderOpen size={20} />
+                  <span>Explorador do Drive</span>
+                </div>
+                <button onClick={() => setShowExplorer(false)} className="p-1 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              {/* Breadcrumbs */}
+              <div className="px-4 py-2 bg-white border-b border-brand-border flex items-center space-x-1 overflow-x-auto whitespace-nowrap text-sm scrollbar-hide">
+                {explorerPath.map((item, index) => (
+                  <React.Fragment key={item.id}>
+                    {index > 0 && <ChevronRight size={14} className="text-brand-text-muted flex-shrink-0" />}
+                    <button
+                      onClick={() => handleNavigateUp(index)}
+                      className={`hover:text-brand-primary transition-colors flex items-center space-x-1 ${index === explorerPath.length - 1 ? 'font-bold text-brand-text' : 'text-brand-text-muted'}`}
+                    >
+                      {index === 0 && <Home size={14} />}
+                      <span>{item.name}</span>
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+
+              {/* Toolbar */}
+              <div className="p-3 bg-brand-bg/30 flex items-center justify-between border-b border-brand-border">
+                <button
+                  onClick={handleCreateNewFolder}
+                  disabled={isCreatingFolder}
+                  className="flex items-center space-x-2 px-4 py-2 bg-white border border-brand-primary/20 rounded-xl text-brand-primary hover:bg-brand-primary/5 transition-all text-sm font-bold shadow-sm"
+                >
+                  {isCreatingFolder ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
+                  <span>Criar Pasta aqui</span>
+                </button>
+                <div className="text-xs text-brand-text-muted italic">
+                  Navegue até a pasta desejada
+                </div>
+              </div>
+
+              {/* Folder List */}
+              <div className="flex-grow overflow-y-auto p-2">
+                {isLoadingExplorer ? (
+                  <div className="flex flex-col items-center justify-center h-64 text-brand-text-muted space-y-4">
+                    <Loader2 size={40} className="animate-spin text-brand-primary" />
+                    <p className="animate-pulse">Acessando pastas do Google...</p>
+                  </div>
+                ) : explorerFolders.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2">
+                    {explorerFolders.map(folder => (
+                      <button
+                        key={folder.id}
+                        onClick={() => handleNavigateDown(folder.id, folder.name)}
+                        className="flex items-center space-x-3 p-4 bg-white border border-brand-border rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all text-left group"
+                      >
+                        <div className="p-2 bg-brand-primary/10 rounded-lg group-hover:bg-brand-primary group-hover:text-white transition-colors">
+                          <Folder size={20} className="text-brand-primary group-hover:text-white" />
+                        </div>
+                        <span className="font-medium text-brand-text truncate grow">{folder.name}</span>
+                        <ChevronRight size={16} className="text-brand-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-64 text-brand-text-muted space-y-2">
+                    <Folder className="opacity-20" size={64} />
+                    <p className="font-medium">Nenhuma subpasta encontrada</p>
+                    <p className="text-xs">Crie uma nova ou selecione esta pasta atual.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 bg-white border-t border-brand-border flex items-center justify-between">
+                <button
+                  onClick={() => setShowExplorer(false)}
+                  className="btn-outline border-brand-border"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSelectCurrentFolder}
+                  className="btn-primary min-w-[200px]"
+                >
+                  Selecionar esta pasta
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex justify-end space-x-3 pt-6 border-t border-brand-border">
           <button
