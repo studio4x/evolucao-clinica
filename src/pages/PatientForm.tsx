@@ -5,8 +5,8 @@ import { db, auth, apiKey, projectId, googleProvider } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder } from 'lucide-react';
-import { createGoogleDoc, createGoogleFolder, listGoogleFolders } from '../services/googleDocs';
+import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2 } from 'lucide-react';
+import { createGoogleDoc, createGoogleFolder, listGoogleFolders, deleteGoogleFile } from '../services/googleDocs';
 
 declare global {
   interface Window {
@@ -180,6 +180,32 @@ export default function PatientForm() {
       alert("Erro ao criar pasta no Google Drive.");
     } finally {
       setIsCreatingFolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async (e: React.MouseEvent, folderId: string, folderName: string) => {
+    e.stopPropagation(); // Não navegar para a pasta ao clicar no lixo
+    
+    if (!confirm(`Tem certeza que deseja excluir a pasta "${folderName}" permanentemente do Google Drive?`)) return;
+
+    try {
+      await deleteGoogleFile(googleAccessToken!, folderId);
+      
+      // Se a pasta excluída era a selecionada, limpa
+      if (formData.target_folder_id === folderId) {
+        setFormData(prev => ({ ...prev, target_folder_id: '', target_folder_name: '' }));
+        localStorage.removeItem('last_google_folder_id');
+        localStorage.removeItem('last_google_folder_name');
+      }
+
+      // Refresh list
+      const current = explorerPath[explorerPath.length - 1];
+      loadExplorerFolders(current.id);
+      
+      alert(`Pasta "${folderName}" excluída com sucesso.`);
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert("Erro ao excluir pasta.");
     }
   };
 
@@ -488,16 +514,30 @@ export default function PatientForm() {
               </div>
 
               {/* Toolbar */}
-              <div className="p-3 bg-brand-bg/30 flex items-center justify-between border-b border-brand-border">
-                <button
-                  onClick={handleCreateNewFolder}
-                  disabled={isCreatingFolder}
-                  className="flex items-center space-x-2 px-4 py-2 bg-white border border-brand-primary/20 rounded-xl text-brand-primary hover:bg-brand-primary/5 transition-all text-sm font-bold shadow-sm"
-                >
-                  {isCreatingFolder ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
-                  <span>Criar Pasta aqui</span>
-                </button>
-                <div className="text-xs text-brand-text-muted italic">
+              <div className="p-3 bg-brand-bg/30 flex items-center justify-between border-b border-brand-border gap-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleCreateNewFolder}
+                    disabled={isCreatingFolder}
+                    className="flex items-center space-x-2 px-4 py-2 bg-white border border-brand-primary/20 rounded-xl text-brand-primary hover:bg-brand-primary/5 transition-all text-sm font-bold shadow-sm"
+                  >
+                    {isCreatingFolder ? <Loader2 size={16} className="animate-spin" /> : <FolderPlus size={16} />}
+                    <span className="hidden sm:inline">Criar Pasta</span>
+                    <span className="sm:hidden">Criar</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const current = explorerPath[explorerPath.length - 1];
+                      loadExplorerFolders(current.id);
+                    }}
+                    disabled={isLoadingExplorer}
+                    className="p-2 bg-white border border-brand-border rounded-xl text-brand-text-muted hover:text-brand-primary transition-all shadow-sm"
+                    title="Atualizar lista"
+                  >
+                    <RefreshCw size={18} className={isLoadingExplorer ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+                <div className="text-xs text-brand-text-muted italic hidden md:block">
                   Navegue até a pasta desejada
                 </div>
               </div>
@@ -515,13 +555,22 @@ export default function PatientForm() {
                       <button
                         key={folder.id}
                         onClick={() => handleNavigateDown(folder.id, folder.name)}
-                        className="flex items-center space-x-3 p-4 bg-white border border-brand-border rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all text-left group"
+                        className="flex items-center space-x-3 p-4 bg-white border border-brand-border rounded-xl hover:border-brand-primary hover:bg-brand-primary/5 transition-all text-left group relative"
                       >
                         <div className="p-2 bg-brand-primary/10 rounded-lg group-hover:bg-brand-primary group-hover:text-white transition-colors">
                           <Folder size={20} className="text-brand-primary group-hover:text-white" />
                         </div>
                         <span className="font-medium text-brand-text truncate grow">{folder.name}</span>
-                        <ChevronRight size={16} className="text-brand-text-muted opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={(e) => handleDeleteFolder(e, folder.id, folder.name)}
+                            className="p-2 text-brand-text-muted hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            title="Excluir pasta"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <ChevronRight size={16} className="text-brand-text-muted group-hover:translate-x-1 transition-transform" />
+                        </div>
                       </button>
                     ))}
                   </div>

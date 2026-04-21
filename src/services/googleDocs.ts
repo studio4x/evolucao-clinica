@@ -137,3 +137,24 @@ export async function createGoogleFolder(googleAccessToken: string, folderName: 
 
   return await response.json();
 }
+
+export async function deleteGoogleFile(googleAccessToken: string, fileId: string) {
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
+  
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (response.status === 401) {
+      throw new Error("UNAUTHENTICATED: " + errorText);
+    }
+    throw new Error(`Google Drive API error (Delete): ${response.status} - ${errorText}`);
+  }
+
+  return true;
+}
