@@ -46,8 +46,18 @@ export async function appendToGoogleDoc(
   return await response.json();
 }
 
-export async function createGoogleDoc(googleAccessToken: string, title: string) {
-  const url = `https://docs.googleapis.com/v1/documents`;
+export async function createGoogleDoc(googleAccessToken: string, title: string, folderId?: string) {
+  // Usamos a Drive API em vez da Docs API para poder especificar a pasta (parents)
+  const url = `https://www.googleapis.com/drive/v3/files`;
+  
+  const body: any = {
+    name: title,
+    mimeType: 'application/vnd.google-apps.document'
+  };
+
+  if (folderId) {
+    body.parents = [folderId];
+  }
   
   const response = await fetch(url, {
     method: 'POST',
@@ -55,9 +65,7 @@ export async function createGoogleDoc(googleAccessToken: string, title: string) 
       'Authorization': `Bearer ${googleAccessToken}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({
-      title: title
-    })
+    body: JSON.stringify(body)
   });
 
   if (!response.ok) {
@@ -65,13 +73,13 @@ export async function createGoogleDoc(googleAccessToken: string, title: string) 
     if (response.status === 401) {
       throw new Error("UNAUTHENTICATED: " + errorText);
     }
-    throw new Error(`Google Docs API error: ${response.status} - ${errorText}`);
+    throw new Error(`Google Drive API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
   return {
-    id: data.documentId,
-    name: data.title,
-    url: `https://docs.google.com/document/d/${data.documentId}/edit`
+    id: data.id,
+    name: data.name,
+    url: `https://docs.google.com/document/d/${data.id}/edit`
   };
 }

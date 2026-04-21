@@ -5,7 +5,7 @@ import { db, auth, apiKey, projectId, googleProvider } from '../firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2 } from 'lucide-react';
+import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X } from 'lucide-react';
 import { createGoogleDoc } from '../services/googleDocs';
 
 declare global {
@@ -29,7 +29,9 @@ export default function PatientForm() {
     status: 'active',
     google_doc_id: '',
     google_doc_name: '',
-    google_doc_url: ''
+    google_doc_url: '',
+    target_folder_id: localStorage.getItem('last_google_folder_id') || '',
+    target_folder_name: localStorage.getItem('last_google_folder_name') || ''
   });
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export default function PatientForm() {
     setCreatingDoc(true);
     try {
       const title = `Prontuário - ${formData.full_name}`;
-      const newDoc = await createGoogleDoc(googleAccessToken, title);
+      const newDoc = await createGoogleDoc(googleAccessToken, title, formData.target_folder_id);
       setFormData(prev => ({
         ...prev,
         google_doc_id: newDoc.id,
@@ -102,6 +104,55 @@ export default function PatientForm() {
       }
     } finally {
       setCreatingDoc(false);
+    }
+  };
+
+  const handleFolderPicker = () => {
+    if (!googleAccessToken) {
+      alert('Token do Google não encontrado. Por favor, renova sua autenticação.');
+      return;
+    }
+
+    try {
+      if (!window.gapi) {
+        alert('A API do Google ainda não foi carregada.');
+        return;
+      }
+
+      window.gapi.load('picker', {
+        callback: () => {
+          if (!window.google || !window.google.picker) return;
+
+          const view = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
+            .setSelectableMimeTypes('application/vnd.google-apps.folder')
+            .setIncludeFolders(true);
+
+          const pickerApiKey = import.meta.env.VITE_GOOGLE_PICKER_API_KEY || apiKey;
+
+          const picker = new window.google.picker.PickerBuilder()
+            .addView(view)
+            .setOAuthToken(googleAccessToken)
+            .setDeveloperKey(pickerApiKey)
+            .setAppId(projectId)
+            .setCallback((data: any) => {
+              if (data.action === window.google.picker.Action.PICKED) {
+                const folder = data.docs[0];
+                setFormData(prev => ({
+                  ...prev,
+                  target_folder_id: folder.id,
+                  target_folder_name: folder.name
+                }));
+                // Salva como preferência para os próximos pacientes
+                localStorage.setItem('last_google_folder_id', folder.id);
+                localStorage.setItem('last_google_folder_name', folder.name);
+              }
+            })
+            .build();
+          picker.setVisible(true);
+        }
+      });
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -280,6 +331,40 @@ export default function PatientForm() {
                 </button>
               ) : (
                 <>
+                  <div className="col-span-1 md:col-span-2 space-y-2 mb-2">
+                    <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider">
+                      Onde salvar o novo arquivo?
+                    </label>
+                    {formData.target_folder_id ? (
+                      <div className="flex items-center justify-between p-3 bg-brand-bg border border-brand-border rounded-xl">
+                        <div className="flex items-center space-x-2 text-sm text-brand-text">
+                          <FolderOpen size={16} className="text-brand-primary" />
+                          <span className="font-medium truncate max-w-[200px]">{formData.target_folder_name}</span>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({ ...prev, target_folder_id: '', target_folder_name: '' }));
+                            localStorage.removeItem('last_google_folder_id');
+                            localStorage.removeItem('last_google_folder_name');
+                          }}
+                          className="text-brand-text-muted hover:text-red-500 transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleFolderPicker}
+                        className="w-full flex items-center justify-center space-x-2 p-3 bg-white border border-brand-border rounded-xl text-sm text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all"
+                      >
+                        <FolderOpen size={16} />
+                        <span>Selecionar Pasta (Opcional)</span>
+                      </button>
+                    )}
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleCreateDoc}
@@ -312,7 +397,9 @@ export default function PatientForm() {
             ) : !googleAccessToken ? (
               <span className="text-yellow-600">É necessário renovar sua autenticação com o Google para gerenciar documentos.</span>
             ) : (
-              "Selecione ou crie o documento onde as evoluções serão inseridas automaticamente."
+              formData.target_folder_id 
+                ? `O novo prontuário será criado dentro da pasta "${formData.target_folder_name}".`
+                : "Selecione ou crie o documento onde as evoluções serão inseridas automaticamente."
             )}
           </p>
         </div>
