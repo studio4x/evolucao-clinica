@@ -168,3 +168,124 @@ export async function deleteGoogleFile(googleAccessToken: string, fileId: string
 
   return true;
 }
+
+export async function getGoogleDocContent(googleAccessToken: string, googleDocId: string): Promise<string> {
+  const url = `https://docs.googleapis.com/v1/documents/${googleDocId}`;
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`,
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (response.status === 401) {
+      throw new Error("UNAUTHENTICATED: " + errorText);
+    }
+    throw new Error(`Google Docs API error (Get): ${response.status} - ${errorText}`);
+  }
+
+  const doc = await response.json();
+  
+  let text = '';
+  if (doc.body && doc.body.content) {
+    doc.body.content.forEach((element: any) => {
+      if (element.paragraph) {
+        element.paragraph.elements.forEach((el: any) => {
+          if (el.textRun && el.textRun.content) {
+            text += el.textRun.content;
+          }
+        });
+      } else if (element.table) {
+        element.table.tableRows.forEach((row: any) => {
+          row.tableCells.forEach((cell: any) => {
+            if (cell.content) {
+              cell.content.forEach((cellElement: any) => {
+                if (cellElement.paragraph) {
+                  cellElement.paragraph.elements.forEach((el: any) => {
+                    if (el.textRun && el.textRun.content) {
+                      text += el.textRun.content;
+                    }
+                  });
+                }
+              });
+            }
+          });
+        });
+      }
+    });
+  }
+  return text;
+}
+
+export async function updateGoogleDocContent(
+  googleAccessToken: string,
+  googleDocId: string,
+  newText: string
+) {
+  // 1. Obter o documento para saber a posição final (endIndex) do corpo
+  const getUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}`;
+  const getResponse = await fetch(getUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`,
+    }
+  });
+
+  if (!getResponse.ok) {
+    const errorText = await getResponse.text();
+    if (getResponse.status === 401) {
+      throw new Error("UNAUTHENTICATED: " + errorText);
+    }
+    throw new Error(`Google Docs API error (Get for Update): ${getResponse.status} - ${errorText}`);
+  }
+
+  const doc = await getResponse.json();
+  const content = doc.body.content;
+  const lastElement = content[content.length - 1];
+  const endIndex = lastElement.endIndex;
+
+  const requests: any[] = [];
+
+  // Apaga todo o conteúdo existente entre o índice 1 e o final (menos o \n terminal obrigatório)
+  if (endIndex > 2) {
+    requests.push({
+      deleteContentRange: {
+        range: {
+          startIndex: 1,
+          endIndex: endIndex - 1
+        }
+      }
+    });
+  }
+
+  // Insere o novo texto no índice 1
+  requests.push({
+    insertText: {
+      location: { index: 1 },
+      text: newText
+    }
+  });
+
+  const updateUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
+  const updateResponse = await fetch(updateUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ requests })
+  });
+
+  if (!updateResponse.ok) {
+    const errorText = await updateResponse.text();
+    if (updateResponse.status === 401) {
+      throw new Error("UNAUTHENTICATED: " + errorText);
+    }
+    throw new Error(`Google Docs API error (Update): ${updateResponse.status} - ${errorText}`);
+  }
+
+  return await updateResponse.json();
+}
