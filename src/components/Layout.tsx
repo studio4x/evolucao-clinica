@@ -4,9 +4,10 @@ import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
+import TrialBanner from './layout/TrialBanner';
 
 export default function Layout() {
   const { user, profileRole } = useAuthStore();
@@ -39,6 +40,7 @@ export default function Layout() {
     { name: 'Pacientes', path: '/patients', icon: Users },
     { name: 'Histórico', path: '/history', icon: HistoryIcon },
     { name: 'Como Usar', path: '/tutorial', icon: BookOpen },
+    { name: 'Assinatura', path: '/subscription', icon: CreditCard },
   ];
 
   if (profileRole === 'admin') {
@@ -141,6 +143,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-x-hidden flex flex-col">
+        <TrialBanner />
         <main className="p-4 md:p-8 max-w-5xl mx-auto flex-1 w-full">
           <Outlet />
         </main>

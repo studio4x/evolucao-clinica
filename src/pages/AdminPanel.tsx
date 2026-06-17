@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -15,6 +15,10 @@ interface Professional {
   role: 'admin' | 'therapist';
   status: 'active' | 'pending' | 'inactive';
   created_at?: string;
+  subscription_plan?: 'trial' | 'monthly' | 'yearly' | 'none';
+  subscription_status?: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid';
+  subscription_ends_at?: string;
+  trial_ends_at?: string;
 }
 
 interface UsageLog {
@@ -75,6 +79,13 @@ export default function AdminPanel() {
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState('');
+
+  // Estados do modal de edição de assinatura SaaS
+  const [editingProf, setEditingProf] = useState<Professional | null>(null);
+  const [editPlan, setEditPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none'>('trial');
+  const [editStatus, setEditStatus] = useState<'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid'>('trialing');
+  const [editEndsAt, setEditEndsAt] = useState('');
+  const [editUserStatus, setEditUserStatus] = useState<'active' | 'pending' | 'inactive'>('active');
 
   // Efeito para buscar profissionais caso seja admin logado
   useEffect(() => {
@@ -199,6 +210,40 @@ export default function AdminPanel() {
     } catch (error: any) {
       console.error("Erro ao atualizar status:", error);
       alert(`Falha ao atualizar status: ${error.message}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleOpenEditSubscription = (prof: Professional) => {
+    setEditingProf(prof);
+    setEditPlan(prof.subscription_plan || 'trial');
+    setEditStatus(prof.subscription_status || 'trialing');
+    setEditEndsAt(prof.subscription_ends_at ? prof.subscription_ends_at.substring(0, 16) : '');
+    setEditUserStatus(prof.status);
+  };
+
+  const handleSaveSubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProf) return;
+    setUpdatingId(editingProf.id);
+
+    try {
+      const docRef = doc(db, 'professionals', editingProf.id);
+      const updateData: any = {
+        subscription_plan: editPlan,
+        subscription_status: editStatus,
+        subscription_ends_at: editEndsAt ? new Date(editEndsAt).toISOString() : null,
+        status: editUserStatus,
+        updated_at: new Date().toISOString()
+      };
+
+      await updateDoc(docRef, updateData);
+      setEditingProf(null);
+      alert("Assinatura do profissional atualizada com sucesso!");
+    } catch (error: any) {
+      console.error("Erro ao atualizar assinatura:", error);
+      alert(`Erro ao atualizar assinatura: ${error.message}`);
     } finally {
       setUpdatingId(null);
     }
@@ -515,45 +560,57 @@ export default function AdminPanel() {
           <div className="flex-1 min-w-0">
             {activeTab === 'professionals' ? (
               <div className="space-y-6">
-                {/* Cards de Metricas */}
+                {/* Cards de Metricas SaaS */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="card p-5 bg-white flex items-center space-x-4">
+                  <div className="card p-5 bg-white flex items-center space-x-4 shadow-sm border border-brand-border/60">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
                       <Users className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total</p>
+                       <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider font-semibold">Total Usuários</p>
                       <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCount}</h3>
                     </div>
                   </div>
 
-                  <div className="card p-5 bg-white flex items-center space-x-4">
-                    <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
-                      <ShieldCheck className="w-6 h-6" />
+                  <div className="card p-5 bg-white flex items-center space-x-4 shadow-sm border border-brand-border/60">
+                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600 border border-emerald-100">
+                      <CreditCard className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Ativos</p>
-                      <h3 className="text-2xl font-bold font-display text-brand-primary">{activeCount}</h3>
+                       <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider font-semibold">Assinantes Pagos</p>
+                      <h3 className="text-2xl font-bold font-display text-brand-primary">
+                        {professionals.filter(p => (p.subscription_plan === 'monthly' || p.subscription_plan === 'yearly') && p.subscription_status === 'active' && p.status === 'active').length}
+                      </h3>
                     </div>
                   </div>
 
-                  <div className="card p-5 bg-white flex items-center space-x-4">
+                  <div className="card p-5 bg-white flex items-center space-x-4 shadow-sm border border-brand-border/60">
                     <div className="p-3 bg-amber-50 rounded-xl text-amber-600 border border-amber-100">
                       <Clock className="w-6 h-6 animate-pulse" />
                     </div>
                     <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Pendentes</p>
-                      <h3 className="text-2xl font-bold font-display text-brand-primary">{pendingCount}</h3>
+                       <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider font-semibold">Trials Ativos</p>
+                      <h3 className="text-2xl font-bold font-display text-brand-primary">
+                        {professionals.filter(p => p.subscription_plan === 'trial' && p.subscription_status === 'trialing' && p.status === 'active').length}
+                      </h3>
                     </div>
                   </div>
 
-                  <div className="card p-5 bg-white flex items-center space-x-4">
-                    <div className="p-3 bg-red-50 rounded-xl text-red-600 border border-red-100">
-                      <ShieldAlert className="w-6 h-6" />
+                  <div className="card p-5 bg-white flex items-center space-x-4 shadow-sm border border-brand-border/60">
+                    <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
+                      <Coins className="w-6 h-6" />
                     </div>
                     <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Inativos</p>
-                      <h3 className="text-2xl font-bold font-display text-brand-primary">{inactiveCount}</h3>
+                       <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider font-semibold">MRR Estimado</p>
+                      <h3 className="text-xl font-bold font-display text-brand-primary">
+                        {new Intl.NumberFormat('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL'
+                        }).format(
+                          (professionals.filter(p => p.subscription_plan === 'monthly' && p.subscription_status === 'active' && p.status === 'active').length * 49.90) +
+                          (professionals.filter(p => p.subscription_plan === 'yearly' && p.subscription_status === 'active' && p.status === 'active').length * (499.00 / 12))
+                        )}
+                      </h3>
                     </div>
                   </div>
                 </div>
@@ -615,8 +672,8 @@ export default function AdminPanel() {
                           <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
                             <th className="p-4 pl-6">Profissional</th>
                             <th className="p-4">Contato</th>
-                            <th className="p-4">Cadastro</th>
-                            <th className="p-4">Cargo</th>
+                            <th className="p-4">Assinatura / Plano</th>
+                            <th className="p-4">Vencimento</th>
                             <th className="p-4">Status</th>
                             <th className="p-4 pr-6 text-right">Acoes</th>
                           </tr>
@@ -649,18 +706,39 @@ export default function AdminPanel() {
                                   {prof.google_email}
                                 </td>
 
-                                <td className="p-4 text-brand-text-muted">
-                                  {formatDate(prof.created_at)}
+                                <td className="p-4">
+                                  <div className="flex flex-col space-y-0.5">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold w-max ${
+                                      prof.subscription_plan === 'monthly' || prof.subscription_plan === 'yearly'
+                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                        : prof.subscription_plan === 'trial'
+                                        ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                                        : 'bg-purple-50 text-purple-700 border border-purple-100'
+                                    }`}>
+                                      {prof.subscription_plan === 'monthly' && 'Plano Mensal'}
+                                      {prof.subscription_plan === 'yearly' && 'Plano Anual'}
+                                      {prof.subscription_plan === 'trial' && 'Teste (Trial)'}
+                                      {prof.subscription_plan === 'none' && 'Vitalício'}
+                                      {!prof.subscription_plan && 'Sem Plano'}
+                                    </span>
+                                    {prof.subscription_status && prof.subscription_plan !== 'none' && (
+                                      <span className="text-[10px] text-brand-text-muted capitalize">
+                                        Status: {prof.subscription_status === 'trialing' ? 'Testando' : prof.subscription_status}
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
 
-                                <td className="p-4">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                                    prof.role === 'admin' 
-                                      ? 'bg-brand-primary/10 text-brand-primary' 
-                                      : 'bg-stone-100 text-brand-text-muted'
-                                  }`}>
-                                    {prof.role === 'admin' ? 'Admin' : 'Terapeuta'}
-                                  </span>
+                                <td className="p-4 text-brand-text-muted whitespace-nowrap text-xs">
+                                  {prof.subscription_plan === 'none' ? (
+                                    <span className="text-purple-600 font-medium">Nunca Expira</span>
+                                  ) : prof.subscription_ends_at ? (
+                                    <span className={new Date(prof.subscription_ends_at) < new Date() ? 'text-red-600 font-bold' : ''}>
+                                      {formatDate(prof.subscription_ends_at)}
+                                    </span>
+                                  ) : (
+                                    '-'
+                                  )}
                                 </td>
 
                                 <td className="p-4">
@@ -686,15 +764,23 @@ export default function AdminPanel() {
                                   {isAdminSelf ? (
                                     <span className="text-xs text-brand-text-muted italic">Administrador Geral</span>
                                   ) : (
-                                    <div className="inline-flex gap-2">
+                                    <div className="inline-flex gap-1.5">
+                                      <button
+                                        onClick={() => handleOpenEditSubscription(prof)}
+                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-brand-bg hover:bg-brand-border/40 text-brand-primary border border-brand-border transition-colors cursor-pointer"
+                                        title="Gerenciar Assinatura"
+                                      >
+                                        <Settings className="w-3.5 h-3.5" />
+                                      </button>
+
                                       {prof.status !== 'active' && (
                                         <button
                                           onClick={() => handleUpdateStatus(prof.id, 'active')}
                                           disabled={updatingId !== null}
                                           className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 transition-colors disabled:opacity-50 cursor-pointer"
-                                          title="Aprovar Profissional"
+                                          title="Ativar Acesso"
                                         >
-                                          <Check className="w-4 h-4" />
+                                          <Check className="w-3.5 h-3.5" />
                                         </button>
                                       )}
                                       
@@ -703,9 +789,9 @@ export default function AdminPanel() {
                                           onClick={() => handleUpdateStatus(prof.id, 'inactive')}
                                           disabled={updatingId !== null}
                                           className="inline-flex items-center justify-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-colors disabled:opacity-50 cursor-pointer"
-                                          title="Desativar Profissional"
+                                          title="Suspender Acesso"
                                         >
-                                          <Ban className="w-4 h-4" />
+                                          <Ban className="w-3.5 h-3.5" />
                                         </button>
                                       )}
                                     </div>
@@ -1024,6 +1110,99 @@ export default function AdminPanel() {
             )}
           </div>
         </div>
+
+        {/* Modal de Gerenciamento de Assinatura SaaS */}
+        {editingProf && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 space-y-6 shadow-2xl border border-brand-primary/10 relative">
+              <div>
+                <h3 className="text-xl font-display font-bold text-brand-primary flex items-center space-x-2">
+                  <CreditCard className="w-5 h-5 text-brand-primary" />
+                  <span>Gerenciar Assinatura SaaS</span>
+                </h3>
+                <p className="text-xs text-brand-text-muted mt-1 leading-relaxed">
+                  Gerenciando o plano do profissional: <strong className="text-brand-text font-semibold">{editingProf.full_name}</strong> ({editingProf.google_email})
+                </p>
+              </div>
+
+              <form onSubmit={handleSaveSubscription} className="space-y-4">
+                {/* Campo Plano */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">Plano SaaS</label>
+                  <select
+                    value={editPlan}
+                    onChange={(e) => setEditPlan(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                  >
+                    <option value="trial">Período de Teste (Trial)</option>
+                    <option value="monthly">Plano Mensal (Pago)</option>
+                    <option value="yearly">Plano Anual (Pago)</option>
+                    <option value="none">Vitalício / Admin (Sem Limite)</option>
+                  </select>
+                </div>
+
+                {/* Status da Assinatura */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">Status do Pagamento</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                  >
+                    <option value="trialing">Em Período de Testes (Trialing)</option>
+                    <option value="active">Regular / Ativo (Active)</option>
+                    <option value="past_due">Pagamento Atrasado (Past Due)</option>
+                    <option value="canceled">Assinatura Cancelada (Canceled)</option>
+                    <option value="unpaid">Inadimplente (Unpaid)</option>
+                  </select>
+                </div>
+
+                {/* Data de Vencimento */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">Data de Vencimento</label>
+                  <input
+                    type="datetime-local"
+                    value={editEndsAt}
+                    onChange={(e) => setEditEndsAt(e.target.value)}
+                    disabled={editPlan === 'none'}
+                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 disabled:opacity-50 font-medium"
+                  />
+                </div>
+
+                {/* Status Geral da Conta */}
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">Status da Conta</label>
+                  <select
+                    value={editUserStatus}
+                    onChange={(e) => setEditUserStatus(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                  >
+                    <option value="active">Ativo (Acesso Liberado)</option>
+                    <option value="pending">Aguardando Liberação</option>
+                    <option value="inactive">Bloqueado / Desativado (Inactive)</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-3 pt-6 border-t border-brand-border/60">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProf(null)}
+                    className="flex-1 py-3 border border-brand-border text-brand-text font-bold rounded-xl text-sm hover:bg-brand-bg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={updatingId !== null}
+                    className="flex-1 py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-1.5 shadow"
+                  >
+                    {updatingId !== null ? 'Salvando...' : 'Salvar Alterações'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </main>
       <footer className="p-8 mt-auto opacity-50 text-center">
         <AppVersion />

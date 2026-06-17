@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -16,6 +16,7 @@ import NewEvolution from './pages/NewEvolution';
 import History from './pages/History';
 import ShareTarget from './pages/ShareTarget';
 import Tutorial from './pages/Tutorial';
+import Subscription from './pages/Subscription';
 
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { CookieConsent } from './components/CookieConsent';
@@ -24,7 +25,8 @@ import PendingApproval from './pages/PendingApproval';
 import AdminPanel from './pages/AdminPanel';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isAuthReady, profileStatus } = useAuthStore();
+  const { user, isAuthReady, profileStatus, profileRole, subscriptionEndsAt } = useAuthStore();
+  const location = useLocation();
   
   if (!isAuthReady) {
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
@@ -40,6 +42,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (profileStatus === 'inactive') {
     return <Navigate to="/pending?status=inactive" replace />;
+  }
+
+  // Pula a validação de expiração se o usuário já estiver na página de assinatura
+  if (location.pathname === '/subscription') {
+    return <>{children}</>;
+  }
+
+  // Se não for admin, verifica se a assinatura expirou
+  if (profileRole !== 'admin') {
+    const now = new Date();
+    const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+    const isExpired = endsAt ? endsAt < now : false;
+
+    if (isExpired) {
+      return <Navigate to="/subscription" replace />;
+    }
   }
   
   return <>{children}</>;
@@ -68,14 +86,46 @@ export default function App() {
         try {
           const docRef = doc(db, 'professionals', user.uid);
           const docSnap = await getDoc(docRef);
+          const now = new Date();
+          const trialDurationMs = 7 * 24 * 60 * 60 * 1000;
+
           if (docSnap.exists()) {
             const data = docSnap.data();
-            setProfileInfo(data.status, data.role || 'therapist');
+            
+            // Compatibilidade retroativa para usuários legados
+            let currentSubPlan = data.subscription_plan;
+            let currentSubStatus = data.subscription_status;
+            let currentSubEndsAt = data.subscription_ends_at || null;
+            let currentTrialEndsAt = data.trial_ends_at || null;
+
+            if (data.status === 'active' && !currentSubPlan) {
+              currentSubPlan = 'none';
+              currentSubStatus = 'active';
+              currentSubEndsAt = null;
+            } else if (!currentSubPlan) {
+              currentSubPlan = 'trial';
+              currentSubStatus = 'trialing';
+              const createdTime = data.created_at ? new Date(data.created_at).getTime() : now.getTime();
+              const calculatedEnds = new Date(createdTime + trialDurationMs).toISOString();
+              currentSubEndsAt = calculatedEnds;
+              currentTrialEndsAt = calculatedEnds;
+            }
+
+            setProfileInfo(
+              data.status,
+              data.role || 'therapist',
+              currentSubPlan,
+              currentSubStatus,
+              currentSubEndsAt,
+              currentTrialEndsAt
+            );
           } else {
             if (user.email === 'contato@studio4x.com.br') {
-              setProfileInfo('active', 'admin');
+              setProfileInfo('active', 'admin', 'none', 'active', null, null);
             } else {
-              setProfileInfo('pending', 'therapist');
+              // Caso o usuário exista no Auth mas não no Firestore, configuramos o trial na store
+              const trialEnds = new Date(now.getTime() + trialDurationMs).toISOString();
+              setProfileInfo('active', 'therapist', 'trial', 'trialing', trialEnds, trialEnds);
             }
           }
         } catch (error) {
@@ -83,7 +133,7 @@ export default function App() {
           setProfileInfo('pending', 'therapist');
         }
       } else {
-        setProfileInfo(null, null);
+        setProfileInfo(null, null, null, null, null, null);
       }
       setUser(user);
       setAuthReady(true);
@@ -111,6 +161,7 @@ export default function App() {
           <Route path="history" element={<History />} />
           <Route path="tutorial" element={<Tutorial />} />
           <Route path="share-target" element={<ShareTarget />} />
+          <Route path="subscription" element={<Subscription />} />
         </Route>
       </Routes>
     </Router>
