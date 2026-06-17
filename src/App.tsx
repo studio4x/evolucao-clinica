@@ -52,11 +52,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
   }
   
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-  
-  if (profileRole !== 'admin') {
+  if (user && profileRole !== 'admin') {
     return <Navigate to="/" replace />;
   }
   
