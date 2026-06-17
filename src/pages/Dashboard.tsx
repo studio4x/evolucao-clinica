@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 import { Link } from 'react-router-dom';
-import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon } from 'lucide-react';
+import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
     totalPatients: 0,
     recentEvolutions: 0,
-    errorEvolutions: 0
+    errorEvolutions: 0,
+    totalMinutes: 0
   });
   const [recentEvolutionsList, setRecentEvolutionsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,12 +42,22 @@ export default function Dashboard() {
         );
         const errorsSnap = await getDocs(errorsQ);
 
+        // Fetch professional's total transcribed minutes from usage_logs
+        const usageQ = query(collection(db, 'usage_logs'), where('professional_id', '==', uid));
+        const usageSnap = await getDocs(usageQ);
+        let totalSeconds = 0;
+        usageSnap.forEach(doc => {
+          totalSeconds += doc.data().audio_duration_seconds || 0;
+        });
+        const totalMinutes = totalSeconds / 60;
+
         const evolutions = evolutionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
         setStats({
           totalPatients: patientsSnap.size,
-          recentEvolutions: evolutionsSnap.size, // Just showing count of recent 5 for now, or total? Let's just show total patients
-          errorEvolutions: errorsSnap.size
+          recentEvolutions: evolutionsSnap.size,
+          errorEvolutions: errorsSnap.size,
+          totalMinutes: totalMinutes
         });
         
         setRecentEvolutionsList(evolutions);
@@ -93,7 +104,7 @@ export default function Dashboard() {
       </div>
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link to="/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
@@ -128,6 +139,27 @@ export default function Dashboard() {
             </div>
             <div className="text-right">
               <p className="text-5xl font-display font-bold text-brand-text/20 group-hover:text-brand-primary/40 transition-colors">{stats.recentEvolutions}</p>
+            </div>
+          </div>
+        </Link>
+
+        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col bg-white">
+          <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent" />
+          <div className="p-6 relative z-10 flex grow justify-between items-center">
+            <div className="space-y-1">
+              <div className="bg-purple-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
+                <Clock size={24} />
+              </div>
+              <p className="text-sm text-brand-text-muted font-medium uppercase tracking-wider">Minutos Transcritos</p>
+              <div className="flex items-center text-purple-600 font-bold text-sm group-hover:underline">
+                <span>Ver histórico</span>
+                <ArrowRight size={14} className="ml-1 group-hover:translate-x-1 transition-transform" />
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-5xl font-display font-bold text-brand-text/20 group-hover:text-purple-500/40 transition-colors">
+                {stats.totalMinutes.toFixed(1)}
+              </p>
             </div>
           </div>
         </Link>

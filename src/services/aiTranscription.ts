@@ -4,6 +4,7 @@ export interface TranscriptionOptions {
   audioBlob: Blob;
   mimeType: string;
   onRetry?: (attempt: number, delay: number, isFallback: boolean) => void;
+  audioDuration?: number; // em segundos
 }
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -19,7 +20,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 };
 
 export const transcribeAudio = async (options: TranscriptionOptions): Promise<string> => {
-  const { audioBlob, mimeType, onRetry } = options;
+  const { audioBlob, mimeType, onRetry, audioDuration } = options;
   const maxRetries = 3;
   let retryCount = 0;
 
@@ -117,6 +118,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
             candidates_tokens: candidatesTokens,
             total_tokens: totalTokens,
             cost_usd: costUsd,
+            audio_duration_seconds: audioDuration || 0,
             created_at: new Date().toISOString()
           });
           console.log("[AI-Service] Log de consumo gravado no Firestore com sucesso.");

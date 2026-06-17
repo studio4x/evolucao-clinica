@@ -35,6 +35,7 @@ export default function NewEvolution() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalSaving, setModalSaving] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [audioDuration, setAudioDuration] = useState<number>(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -215,6 +216,7 @@ export default function NewEvolution() {
       setIsRecording(false);
       setIsPaused(false);
       setRecordingTime(0);
+      setAudioDuration(0);
       setAudioBlob(null);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
@@ -231,6 +233,7 @@ export default function NewEvolution() {
       setIsRecording(false);
       setIsPaused(false);
       if (timerRef.current) clearInterval(timerRef.current);
+      setAudioDuration(recordingTime);
     }
   };
 
@@ -254,8 +257,27 @@ export default function NewEvolution() {
     const file = e.target.files?.[0];
     if (file) {
       setAudioBlob(file);
+      const url = URL.createObjectURL(file);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
-      setAudioUrl(URL.createObjectURL(file));
+      setAudioUrl(url);
+      
+      // Obter duração do arquivo de áudio carregado
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
+          setAudioDuration(audio.duration);
+        } else {
+          // Fallback para duração calculada se for exibida como infinita no início
+          audio.currentTime = 1e101;
+          audio.ontimeupdate = function() {
+            this.ontimeupdate = () => {};
+            audio.currentTime = 0;
+            if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
+              setAudioDuration(audio.duration);
+            }
+          };
+        }
+      });
       // Reset status if it was error or success
       if (status !== 'processing') setStatus('idle');
     }
@@ -266,6 +288,7 @@ export default function NewEvolution() {
     setAudioBlob(null);
     setAudioUrl(null);
     setRecordingTime(0);
+    setAudioDuration(0);
     if (status !== 'processing') setStatus('idle');
   };
 
@@ -303,6 +326,7 @@ export default function NewEvolution() {
       session_date: sessionDate,
       transcription_status: 'processing',
       google_doc_append_status: 'pending',
+      audio_duration_seconds: audioDuration || 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -332,6 +356,7 @@ export default function NewEvolution() {
         const transcription = await transcribeAudio({
           audioBlob,
           mimeType: audioBlob.type || 'audio/webm',
+          audioDuration: audioDuration || 0,
           onRetry: (attempt, delay, isFallback) => {
             console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
           }

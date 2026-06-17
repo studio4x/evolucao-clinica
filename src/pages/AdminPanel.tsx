@@ -27,6 +27,7 @@ interface UsageLog {
   candidates_tokens: number;
   total_tokens: number;
   cost_usd: number;
+  audio_duration_seconds?: number;
   created_at: string;
 }
 
@@ -39,6 +40,7 @@ interface UserUsageSummary {
   candidatesTokens: number;
   totalTokens: number;
   totalCostUsd: number;
+  totalDurationSeconds: number;
 }
 
 export default function AdminPanel() {
@@ -357,6 +359,7 @@ export default function AdminPanel() {
   // Métricas de Consumo
   const totalUsageCostUsd = usageLogs.reduce((acc, log) => acc + (log.cost_usd || 0), 0);
   const totalUsageTokens = usageLogs.reduce((acc, log) => acc + (log.total_tokens || 0), 0);
+  const totalUsageDurationSeconds = usageLogs.reduce((acc, log) => acc + (log.audio_duration_seconds || 0), 0);
   const totalCallsCount = usageLogs.length;
 
   // Agrupamento por Usuário
@@ -372,7 +375,8 @@ export default function AdminPanel() {
         promptTokens: 0,
         candidatesTokens: 0,
         totalTokens: 0,
-        totalCostUsd: 0
+        totalCostUsd: 0,
+        totalDurationSeconds: 0
       };
     }
     userSummaries[pid].callsCount += 1;
@@ -380,6 +384,7 @@ export default function AdminPanel() {
     userSummaries[pid].candidatesTokens += log.candidates_tokens;
     userSummaries[pid].totalTokens += log.total_tokens;
     userSummaries[pid].totalCostUsd += log.cost_usd;
+    userSummaries[pid].totalDurationSeconds += (log.audio_duration_seconds || 0);
   });
   
   // Filtragem e busca na aba de consumo
@@ -426,6 +431,13 @@ export default function AdminPanel() {
       style: 'currency',
       currency: 'BRL'
     }).format(usd * 5.50);
+  };
+
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return '0:00';
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
   };
 
   return (
@@ -798,7 +810,7 @@ export default function AdminPanel() {
               /* Aba de Consumo de Tokens (Consumo API) [NEW] */
               <div className="space-y-6">
                 {/* Cards de Metricas de Consumo */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="card p-5 bg-white flex items-center space-x-4">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
                       <Coins className="w-6 h-6" />
@@ -831,6 +843,21 @@ export default function AdminPanel() {
                         {new Intl.NumberFormat('pt-BR').format(totalUsageTokens)}
                       </h3>
                       <p className="text-[10px] text-brand-text-muted mt-0.5">Input & Output acumulados</p>
+                    </div>
+                  </div>
+
+                  <div className="card p-5 bg-white flex items-center space-x-4">
+                    <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
+                      <Clock className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Tempo Transcrito</p>
+                      <h3 className="text-2xl font-bold font-display text-brand-primary">
+                        {(totalUsageDurationSeconds / 60).toFixed(1)} min
+                      </h3>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">
+                        {new Intl.NumberFormat('pt-BR').format(totalUsageDurationSeconds)} s totais
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -893,6 +920,7 @@ export default function AdminPanel() {
                             <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
                               <th className="p-4 pl-6">Profissional</th>
                               <th className="p-4">Chamadas</th>
+                              <th className="p-4">Tempo Transcrito</th>
                               <th className="p-4">Tokens Entrada</th>
                               <th className="p-4">Tokens Saida</th>
                               <th className="p-4">Tokens Totais</th>
@@ -910,6 +938,9 @@ export default function AdminPanel() {
                                   </div>
                                 </td>
                                 <td className="p-4 font-semibold text-brand-text">{summary.callsCount}</td>
+                                <td className="p-4 font-medium text-brand-text">
+                                  {(summary.totalDurationSeconds / 60).toFixed(1)} min
+                                </td>
                                 <td className="p-4 text-brand-text-muted">
                                   {new Intl.NumberFormat('pt-BR').format(summary.promptTokens)}
                                 </td>
@@ -942,6 +973,7 @@ export default function AdminPanel() {
                               <th className="p-4 pl-6">Data/Hora</th>
                               <th className="p-4">Profissional</th>
                               <th className="p-4">Modelo</th>
+                              <th className="p-4">Duração</th>
                               <th className="p-4">Tokens Entrada</th>
                               <th className="p-4">Tokens Saida</th>
                               <th className="p-4">Tokens Totais</th>
@@ -964,6 +996,9 @@ export default function AdminPanel() {
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-100 text-brand-text-muted">
                                     {log.model}
                                   </span>
+                                </td>
+                                <td className="p-4 text-brand-text font-medium whitespace-nowrap">
+                                  {formatDuration(log.audio_duration_seconds)}
                                 </td>
                                 <td className="p-4 text-brand-text-muted">
                                   {new Intl.NumberFormat('pt-BR').format(log.prompt_tokens)}
