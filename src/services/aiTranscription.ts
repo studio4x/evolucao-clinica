@@ -63,7 +63,10 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         throw new Error("Configuração de API ausente. Verifique as chaves.");
       }
 
-      console.log(`[AI-Service] Usando chave ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'} - Tentativa ${retryCount + 1}`);
+      const keyLabel = keySource === 'firestore' 
+        ? 'configurada no Painel Admin' 
+        : 'estática do servidor';
+      console.log(`[AI-Service] Usando chave ${keyLabel} - Tentativa ${retryCount + 1}`);
 
       const ai = new GoogleGenAI({ apiKey });
       
