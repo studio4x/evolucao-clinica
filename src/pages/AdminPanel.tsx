@@ -5,6 +5,7 @@ import { db, auth } from '../firebase';
 import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
+import { AppVersion } from '../components/layout/AppVersion';
 
 interface Professional {
   id: string;
@@ -131,7 +132,7 @@ export default function AdminPanel() {
   // Se nao estiver logado ou nao for admin, renderiza o formulario de login
   if (!user || profileRole !== 'admin') {
     return (
-      <div className="min-h-[70vh] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 animate-fadeIn">
+      <div className="min-h-screen bg-brand-bg flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 animate-fadeIn">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <div className="mx-auto h-16 w-16 bg-brand-primary/10 rounded-2xl flex items-center justify-center border border-brand-primary/10">
@@ -193,7 +194,7 @@ export default function AdminPanel() {
               <button
                 type="submit"
                 disabled={loginLoading}
-                className="w-full btn-primary py-3.5 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-60"
+                className="w-full btn-primary py-3.5 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-60 cursor-pointer"
               >
                 {loginLoading ? (
                   <>
@@ -212,7 +213,7 @@ export default function AdminPanel() {
           <div className="text-center">
             <button
               onClick={() => navigate('/login')}
-              className="text-xs font-medium text-brand-primary hover:text-brand-primary-hover transition-colors underline"
+              className="text-xs font-medium text-brand-primary hover:text-brand-primary-hover transition-colors underline cursor-pointer"
             >
               Voltar para login de profissionais
             </button>
@@ -256,230 +257,243 @@ export default function AdminPanel() {
   };
 
   return (
-    <div className="space-y-8 animate-fadeIn">
-      {/* Cabecalho */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-display font-bold text-brand-primary">
-            Painel do Administrador
-          </h1>
-          <p className="text-sm text-brand-text-muted mt-1">
-            Gerencie e aprove os profissionais que possuem acesso a plataforma.
-          </p>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="self-start md:self-auto inline-flex items-center space-x-2 px-4 py-2 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 transition-colors text-sm font-semibold shadow-sm"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Sair Administrativo</span>
-        </button>
-      </div>
-
-      {/* Cards de Metricas */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="card p-5 bg-white flex items-center space-x-4">
-          <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
-            <Users className="w-6 h-6" />
-          </div>
+    <div className="min-h-screen bg-brand-bg flex flex-col">
+      <main className="p-4 md:p-8 max-w-5xl mx-auto flex-1 w-full space-y-8 animate-fadeIn">
+        {/* Cabecalho */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total</p>
-            <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCount}</h3>
-          </div>
-        </div>
-
-        <div className="card p-5 bg-white flex items-center space-x-4">
-          <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
-            <ShieldCheck className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Ativos</p>
-            <h3 className="text-2xl font-bold font-display text-brand-primary">{activeCount}</h3>
-          </div>
-        </div>
-
-        <div className="card p-5 bg-white flex items-center space-x-4">
-          <div className="p-3 bg-amber-50 rounded-xl text-amber-600 border border-amber-100">
-            <Clock className="w-6 h-6 animate-pulse" />
-          </div>
-          <div>
-            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Pendentes</p>
-            <h3 className="text-2xl font-bold font-display text-brand-primary">{pendingCount}</h3>
-          </div>
-        </div>
-
-        <div className="card p-5 bg-white flex items-center space-x-4">
-          <div className="p-3 bg-red-50 rounded-xl text-red-600 border border-red-100">
-            <ShieldAlert className="w-6 h-6" />
-          </div>
-          <div>
-            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Inativos</p>
-            <h3 className="text-2xl font-bold font-display text-brand-primary">{inactiveCount}</h3>
-          </div>
-        </div>
-      </div>
-
-      {/* Controles de Filtro e Busca */}
-      <div className="card p-6 bg-white space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
-          <input
-            type="text"
-            placeholder="Buscar por nome ou e-mail..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'all', label: 'Todos' },
-            { id: 'pending', label: 'Pendentes' },
-            { id: 'active', label: 'Ativos' },
-            { id: 'inactive', label: 'Inativos' }
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id as any)}
-              className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${
-                statusFilter === tab.id
-                  ? 'bg-brand-primary border-brand-primary text-white shadow-sm'
-                  : 'bg-white border-brand-border text-brand-text hover:bg-brand-bg'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tabela de Profissionais */}
-      <div className="card bg-white overflow-hidden border border-brand-border">
-        {loading ? (
-          <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
-            <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
-            <span className="text-sm">Carregando profissionais...</span>
-          </div>
-        ) : filteredProfessionals.length === 0 ? (
-          <div className="p-12 text-center text-brand-text-muted">
-            <Users className="w-12 h-12 mx-auto text-brand-border mb-3" />
-            <p className="font-medium text-brand-text">Nenhum profissional encontrado</p>
-            <p className="text-xs text-brand-text-muted mt-1">
-              Tente alterar os filtros de busca ou status.
+            <h1 className="text-3xl font-display font-bold text-brand-primary">
+              Painel do Administrador
+            </h1>
+            <p className="text-sm text-brand-text-muted mt-1">
+              Gerencie e aprove os profissionais que possuem acesso a plataforma.
             </p>
           </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
-                  <th className="p-4 pl-6">Profissional</th>
-                  <th className="p-4">Contato</th>
-                  <th className="p-4">Cadastro</th>
-                  <th className="p-4">Cargo</th>
-                  <th className="p-4">Status</th>
-                  <th className="p-4 pr-6 text-right">Acoes</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
-                {filteredProfessionals.map((prof) => {
-                  const isAdminSelf = prof.google_email === 'contato@studio4x.com.br';
-                  return (
-                    <tr key={prof.id} className="hover:bg-brand-bg/30 transition-colors">
-                      <td className="p-4 pl-6">
-                        <div className="flex items-center space-x-3">
-                          <img
-                            src={prof.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.full_name)}&background=005C13&color=fff`}
-                            alt={prof.full_name}
-                            className="w-10 h-10 rounded-full object-cover border border-brand-border"
-                            referrerPolicy="no-referrer"
-                          />
-                          <div>
-                            <p className="font-semibold text-brand-text">{prof.full_name}</p>
-                            {isAdminSelf && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-primary/10 text-brand-primary">
-                                Voce
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-
-                      <td className="p-4 text-brand-text-muted font-medium break-all">
-                        {prof.google_email}
-                      </td>
-
-                      <td className="p-4 text-brand-text-muted">
-                        {formatDate(prof.created_at)}
-                      </td>
-
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          prof.role === 'admin' 
-                            ? 'bg-brand-primary/10 text-brand-primary' 
-                            : 'bg-stone-100 text-brand-text-muted'
-                        }`}>
-                          {prof.role === 'admin' ? 'Admin' : 'Terapeuta'}
-                        </span>
-                      </td>
-
-                      <td className="p-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
-                          prof.status === 'active'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : prof.status === 'pending'
-                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                            : 'bg-red-50 text-red-700 border border-red-100'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
-                            prof.status === 'active'
-                              ? 'bg-emerald-500'
-                              : prof.status === 'pending'
-                              ? 'bg-amber-500 animate-pulse'
-                              : 'bg-red-500'
-                          }`} />
-                          {prof.status === 'active' ? 'Ativo' : prof.status === 'pending' ? 'Pendente' : 'Inativo'}
-                        </span>
-                      </td>
-
-                      <td className="p-4 pr-6 text-right whitespace-nowrap">
-                        {isAdminSelf ? (
-                          <span className="text-xs text-brand-text-muted italic">Administrador Geral</span>
-                        ) : (
-                          <div className="inline-flex gap-2">
-                            {prof.status !== 'active' && (
-                              <button
-                                onClick={() => handleUpdateStatus(prof.id, 'active')}
-                                disabled={updatingId !== null}
-                                className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 transition-colors disabled:opacity-50 cursor-pointer"
-                                title="Aprovar Profissional"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                            )}
-                            
-                            {prof.status !== 'inactive' && (
-                              <button
-                                onClick={() => handleUpdateStatus(prof.id, 'inactive')}
-                                disabled={updatingId !== null}
-                                className="inline-flex items-center justify-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-colors disabled:opacity-50 cursor-pointer"
-                                title="Desativar Profissional"
-                              >
-                                <Ban className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="flex gap-3 self-start md:self-auto">
+            <button
+              onClick={() => navigate('/')}
+              className="inline-flex items-center space-x-2 px-4 py-2 border border-brand-border text-brand-text bg-white rounded-xl hover:bg-brand-bg transition-colors text-sm font-semibold shadow-sm cursor-pointer"
+            >
+              <span>Ir para o Aplicativo</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center space-x-2 px-4 py-2 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 transition-colors text-sm font-semibold shadow-sm cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sair Administrativo</span>
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+
+        {/* Cards de Metricas */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="card p-5 bg-white flex items-center space-x-4">
+            <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+              <Users className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total</p>
+              <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCount}</h3>
+            </div>
+          </div>
+
+          <div className="card p-5 bg-white flex items-center space-x-4">
+            <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Ativos</p>
+              <h3 className="text-2xl font-bold font-display text-brand-primary">{activeCount}</h3>
+            </div>
+          </div>
+
+          <div className="card p-5 bg-white flex items-center space-x-4">
+            <div className="p-3 bg-amber-50 rounded-xl text-amber-600 border border-amber-100">
+              <Clock className="w-6 h-6 animate-pulse" />
+            </div>
+            <div>
+              <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Pendentes</p>
+              <h3 className="text-2xl font-bold font-display text-brand-primary">{pendingCount}</h3>
+            </div>
+          </div>
+
+          <div className="card p-5 bg-white flex items-center space-x-4">
+            <div className="p-3 bg-red-50 rounded-xl text-red-600 border border-red-100">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div>
+              <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Inativos</p>
+              <h3 className="text-2xl font-bold font-display text-brand-primary">{inactiveCount}</h3>
+            </div>
+          </div>
+        </div>
+
+        {/* Controles de Filtro e Busca */}
+        <div className="card p-6 bg-white space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou e-mail..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'all', label: 'Todos' },
+              { id: 'pending', label: 'Pendentes' },
+              { id: 'active', label: 'Ativos' },
+              { id: 'inactive', label: 'Inativos' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setStatusFilter(tab.id as any)}
+                className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${
+                  statusFilter === tab.id
+                    ? 'bg-brand-primary border-brand-primary text-white shadow-sm'
+                    : 'bg-white border-brand-border text-brand-text hover:bg-brand-bg'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tabela de Profissionais */}
+        <div className="card bg-white overflow-hidden border border-brand-border">
+          {loading ? (
+            <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+              <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+              <span className="text-sm">Carregando profissionais...</span>
+            </div>
+          ) : filteredProfessionals.length === 0 ? (
+            <div className="p-12 text-center text-brand-text-muted">
+              <Users className="w-12 h-12 mx-auto text-brand-border mb-3" />
+              <p className="font-medium text-brand-text">Nenhum profissional encontrado</p>
+              <p className="text-xs text-brand-text-muted mt-1">
+                Tente alterar os filtros de busca ou status.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
+                    <th className="p-4 pl-6">Profissional</th>
+                    <th className="p-4">Contato</th>
+                    <th className="p-4">Cadastro</th>
+                    <th className="p-4">Cargo</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4 pr-6 text-right">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
+                  {filteredProfessionals.map((prof) => {
+                    const isAdminSelf = prof.google_email === 'contato@studio4x.com.br';
+                    return (
+                      <tr key={prof.id} className="hover:bg-brand-bg/30 transition-colors">
+                        <td className="p-4 pl-6">
+                          <div className="flex items-center space-x-3">
+                            <img
+                              src={prof.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.full_name)}&background=005C13&color=fff`}
+                              alt={prof.full_name}
+                              className="w-10 h-10 rounded-full object-cover border border-brand-border"
+                              referrerPolicy="no-referrer"
+                            />
+                            <div>
+                              <p className="font-semibold text-brand-text">{prof.full_name}</p>
+                              {isAdminSelf && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-primary/10 text-brand-primary">
+                                  Voce
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="p-4 text-brand-text-muted font-medium break-all">
+                          {prof.google_email}
+                        </td>
+
+                        <td className="p-4 text-brand-text-muted">
+                          {formatDate(prof.created_at)}
+                        </td>
+
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            prof.role === 'admin' 
+                              ? 'bg-brand-primary/10 text-brand-primary' 
+                              : 'bg-stone-100 text-brand-text-muted'
+                          }`}>
+                            {prof.role === 'admin' ? 'Admin' : 'Terapeuta'}
+                          </span>
+                        </td>
+
+                        <td className="p-4">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                            prof.status === 'active'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                              : prof.status === 'pending'
+                              ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                              : 'bg-red-50 text-red-700 border border-red-100'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                              prof.status === 'active'
+                                ? 'bg-emerald-500'
+                                : prof.status === 'pending'
+                                ? 'bg-amber-500 animate-pulse'
+                                : 'bg-red-500'
+                            }`} />
+                            {prof.status === 'active' ? 'Ativo' : prof.status === 'pending' ? 'Pendente' : 'Inativo'}
+                          </span>
+                        </td>
+
+                        <td className="p-4 pr-6 text-right whitespace-nowrap">
+                          {isAdminSelf ? (
+                            <span className="text-xs text-brand-text-muted italic">Administrador Geral</span>
+                          ) : (
+                            <div className="inline-flex gap-2">
+                              {prof.status !== 'active' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(prof.id, 'active')}
+                                  disabled={updatingId !== null}
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                  title="Aprovar Profissional"
+                                >
+                                  <Check className="w-4 h-4" />
+                                </button>
+                              )}
+                              
+                              {prof.status !== 'inactive' && (
+                                <button
+                                  onClick={() => handleUpdateStatus(prof.id, 'inactive')}
+                                  disabled={updatingId !== null}
+                                  className="inline-flex items-center justify-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                  title="Desativar Profissional"
+                                >
+                                  <Ban className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </main>
+      <footer className="p-8 mt-auto opacity-50 text-center">
+        <AppVersion />
+      </footer>
     </div>
   );
 }

@@ -103,6 +103,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/pending" element={<PendingApproval />} />
+        <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route index element={<Dashboard />} />
@@ -114,7 +115,6 @@ export default function App() {
           <Route path="history" element={<History />} />
           <Route path="tutorial" element={<Tutorial />} />
           <Route path="share-target" element={<ShareTarget />} />
-          <Route path="admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         </Route>
       </Routes>
     </Router>
