@@ -27,6 +27,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
   const base64Audio = await blobToBase64(audioBlob);
 
   const attemptTranscription = async (): Promise<string> => {
+    let keySource: 'firestore' | 'env' | 'none' = 'none';
     try {
       let apiKey = '';
       
@@ -37,6 +38,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         const settingsSnap = await getDoc(settingsRef);
         if (settingsSnap.exists() && settingsSnap.data().api_key) {
           apiKey = settingsSnap.data().api_key;
+          keySource = 'firestore';
           console.log("[AI-Service] Usando chave do Gemini configurada no Firestore.");
         }
       } catch (dbError) {
@@ -51,6 +53,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         // Inverte a lógica: Tenta primeiro a REAL (backupKey), se falhar ou não existir, usa a GRATUITA (mainKey)
         apiKey = backupKey ? backupKey : mainKey;
         if (apiKey) {
+          keySource = 'env';
           console.log(`[AI-Service] Usando chave estática ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'}`);
         }
       }
@@ -146,7 +149,13 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         await new Promise(resolve => setTimeout(resolve, delay));
         return attemptTranscription();
       }
-      throw error;
+      
+      const sourceMsg = keySource === 'firestore' 
+        ? 'Chave configurada no Painel Admin' 
+        : 'Chave estática de fallback do servidor';
+      
+      const errorMessage = error.message || errorContent;
+      throw new Error(`${errorMessage} (Origem da chave: ${sourceMsg})`);
     }
   };
 
