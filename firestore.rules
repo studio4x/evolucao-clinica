@@ -242,6 +242,12 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /usage_logs/{logId} {
+      allow create: if isAuthenticated() && request.resource.data.professional_id == request.auth.uid;
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.professional_id == request.auth.uid);
+      allow write: if false;
+    }
+
     match /patients/{patientId} {
       allow read: if isAuthenticated() && (resource.data.professional_id == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.professionalId == request.auth.uid);
       allow create: if isAuthenticated() && isValidPatient();

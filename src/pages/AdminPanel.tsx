@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -17,12 +17,36 @@ interface Professional {
   created_at?: string;
 }
 
+interface UsageLog {
+  id: string;
+  professional_id: string;
+  professional_name: string;
+  professional_email: string;
+  model: string;
+  prompt_tokens: number;
+  candidates_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  created_at: string;
+}
+
+interface UserUsageSummary {
+  id: string;
+  name: string;
+  email: string;
+  callsCount: number;
+  promptTokens: number;
+  candidatesTokens: number;
+  totalTokens: number;
+  totalCostUsd: number;
+}
+
 export default function AdminPanel() {
   const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
 
   // Abas do Admin
-  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config'>('professionals');
+  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'token_usage'>('professionals');
 
   // Estados do Painel Administrativo
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -37,6 +61,12 @@ export default function AdminPanel() {
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Estados de Consumo de Tokens (usage_logs)
+  const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
+  const [loadingUsage, setLoadingUsage] = useState(true);
+  const [usageSearchTerm, setUsageSearchTerm] = useState('');
+  const [usageViewMode, setUsageViewMode] = useState<'by_user' | 'history'>('by_user');
 
   // Estados do Formulário de Login
   const [email, setEmail] = useState('');
@@ -86,6 +116,31 @@ export default function AdminPanel() {
     if (user && profileRole === 'admin' && activeTab === 'gemini_config') {
       fetchGeminiKey();
     }
+  }, [user, profileRole, activeTab]);
+
+  // Efeito para carregar os logs de consumo do Firestore
+  useEffect(() => {
+    if (!user || profileRole !== 'admin' || activeTab !== 'token_usage') {
+      return;
+    }
+
+    setLoadingUsage(true);
+    // Busca os logs ordenados por data decrescente
+    const q = query(collection(db, 'usage_logs'), orderBy('created_at', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: UsageLog[] = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() } as UsageLog);
+      });
+      setUsageLogs(list);
+      setLoadingUsage(false);
+    }, (error) => {
+      console.error("Erro ao escutar logs de consumo:", error);
+      setLoadingUsage(false);
+    });
+
+    return () => unsubscribe();
   }, [user, profileRole, activeTab]);
 
   // Manipulador de login do admin
@@ -282,13 +337,13 @@ export default function AdminPanel() {
     );
   }
 
-  // Contadores
+  // Contadores de Profissionais
   const totalCount = professionals.length;
   const activeCount = professionals.filter(p => p.status === 'active').length;
   const pendingCount = professionals.filter(p => p.status === 'pending').length;
   const inactiveCount = professionals.filter(p => p.status === 'inactive').length;
 
-  // Filtragem
+  // Filtragem de Profissionais
   const filteredProfessionals = professionals.filter((p) => {
     const matchesSearch = 
       p.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -298,6 +353,47 @@ export default function AdminPanel() {
 
     return matchesSearch && matchesStatus;
   });
+
+  // Métricas de Consumo
+  const totalUsageCostUsd = usageLogs.reduce((acc, log) => acc + (log.cost_usd || 0), 0);
+  const totalUsageTokens = usageLogs.reduce((acc, log) => acc + (log.total_tokens || 0), 0);
+  const totalCallsCount = usageLogs.length;
+
+  // Agrupamento por Usuário
+  const userSummaries: { [key: string]: UserUsageSummary } = {};
+  usageLogs.forEach(log => {
+    const pid = log.professional_id;
+    if (!userSummaries[pid]) {
+      userSummaries[pid] = {
+        id: pid,
+        name: log.professional_name,
+        email: log.professional_email,
+        callsCount: 0,
+        promptTokens: 0,
+        candidatesTokens: 0,
+        totalTokens: 0,
+        totalCostUsd: 0
+      };
+    }
+    userSummaries[pid].callsCount += 1;
+    userSummaries[pid].promptTokens += log.prompt_tokens;
+    userSummaries[pid].candidatesTokens += log.candidates_tokens;
+    userSummaries[pid].totalTokens += log.total_tokens;
+    userSummaries[pid].totalCostUsd += log.cost_usd;
+  });
+  
+  // Filtragem e busca na aba de consumo
+  const userSummariesList = Object.values(userSummaries)
+    .filter(u => 
+      u.name.toLowerCase().includes(usageSearchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(usageSearchTerm.toLowerCase())
+    )
+    .sort((a, b) => b.totalCostUsd - a.totalCostUsd);
+
+  const filteredHistoryLogs = usageLogs.filter(log =>
+    log.professional_name.toLowerCase().includes(usageSearchTerm.toLowerCase()) ||
+    log.professional_email.toLowerCase().includes(usageSearchTerm.toLowerCase())
+  );
 
   const formatDate = (isoString?: string) => {
     if (!isoString) return '-';
@@ -313,6 +409,23 @@ export default function AdminPanel() {
     } catch {
       return '-';
     }
+  };
+
+  const formatCost = (usd: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 4,
+      maximumFractionDigits: 4
+    }).format(usd);
+  };
+
+  const formatBRL = (usd: number) => {
+    // Conversão fixa informativa de R$ 5,50 por dólar
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(usd * 5.50);
   };
 
   return (
@@ -371,6 +484,17 @@ export default function AdminPanel() {
               >
                 <Key size={18} />
                 <span>Chave Gemini</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('token_usage')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'token_usage'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <BarChart3 size={18} />
+                <span>Consumo API</span>
               </button>
             </nav>
           </div>
@@ -584,7 +708,7 @@ export default function AdminPanel() {
                   )}
                 </div>
               </div>
-            ) : (
+            ) : activeTab === 'gemini_config' ? (
               /* Aba de Configuração da API do Gemini */
               <div className="space-y-6">
                 <div className="card bg-white p-6 md:p-8 border-brand-border">
@@ -668,6 +792,198 @@ export default function AdminPanel() {
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>
+            ) : (
+              /* Aba de Consumo de Tokens (Consumo API) [NEW] */
+              <div className="space-y-6">
+                {/* Cards de Metricas de Consumo */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="card p-5 bg-white flex items-center space-x-4">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Coins className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Custo Total (USD)</p>
+                      <h3 className="text-xl font-bold font-display text-brand-primary">{formatCost(totalUsageCostUsd)}</h3>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">Est. {formatBRL(totalUsageCostUsd)} BRL</p>
+                    </div>
+                  </div>
+
+                  <div className="card p-5 bg-white flex items-center space-x-4">
+                    <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
+                      <Activity className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total Transcricoes</p>
+                      <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCallsCount}</h3>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">Chamadas Gemini 2.0 Flash</p>
+                    </div>
+                  </div>
+
+                  <div className="card p-5 bg-white flex items-center space-x-4">
+                    <div className="p-3 bg-stone-100 rounded-xl text-brand-text-muted">
+                      <BarChart3 className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total de Tokens</p>
+                      <h3 className="text-2xl font-bold font-display text-brand-primary">
+                        {new Intl.NumberFormat('pt-BR').format(totalUsageTokens)}
+                      </h3>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">Input & Output acumulados</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-Navegacao e Busca do Consumo */}
+                <div className="card p-6 bg-white space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por profissional ou e-mail..."
+                      value={usageSearchTerm}
+                      onChange={(e) => setUsageSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
+                    />
+                  </div>
+
+                  <div className="flex bg-brand-bg border border-brand-border p-1 rounded-xl gap-1">
+                    <button
+                      onClick={() => setUsageViewMode('by_user')}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        usageViewMode === 'by_user'
+                          ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
+                          : 'text-brand-text-muted hover:text-brand-primary'
+                      }`}
+                    >
+                      Acumulado por Usuario
+                    </button>
+                    <button
+                      onClick={() => setUsageViewMode('history')}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        usageViewMode === 'history'
+                          ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
+                          : 'text-brand-text-muted hover:text-brand-primary'
+                      }`}
+                    >
+                      Historico de Chamadas
+                    </button>
+                  </div>
+                </div>
+
+                {/* Visualizacao do Consumo */}
+                <div className="card bg-white overflow-hidden border border-brand-border">
+                  {loadingUsage ? (
+                    <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                      <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                      <span className="text-sm">Carregando logs de consumo...</span>
+                    </div>
+                  ) : usageViewMode === 'by_user' ? (
+                    /* Acumulado por Usuario */
+                    userSummariesList.length === 0 ? (
+                      <div className="p-12 text-center text-brand-text-muted">
+                        <Users className="w-12 h-12 mx-auto text-brand-border mb-3" />
+                        <p className="font-medium text-brand-text">Nenhum registro de consumo encontrado</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
+                              <th className="p-4 pl-6">Profissional</th>
+                              <th className="p-4">Chamadas</th>
+                              <th className="p-4">Tokens Entrada</th>
+                              <th className="p-4">Tokens Saida</th>
+                              <th className="p-4">Tokens Totais</th>
+                              <th className="p-4">Custo USD</th>
+                              <th className="p-4 pr-6 text-right">Custo Est. BRL</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
+                            {userSummariesList.map((summary) => (
+                              <tr key={summary.id} className="hover:bg-brand-bg/30 transition-colors">
+                                <td className="p-4 pl-6">
+                                  <div>
+                                    <p className="font-semibold text-brand-text">{summary.name}</p>
+                                    <p className="text-xs text-brand-text-muted">{summary.email}</p>
+                                  </div>
+                                </td>
+                                <td className="p-4 font-semibold text-brand-text">{summary.callsCount}</td>
+                                <td className="p-4 text-brand-text-muted">
+                                  {new Intl.NumberFormat('pt-BR').format(summary.promptTokens)}
+                                </td>
+                                <td className="p-4 text-brand-text-muted">
+                                  {new Intl.NumberFormat('pt-BR').format(summary.candidatesTokens)}
+                                </td>
+                                <td className="p-4 text-brand-text-muted font-medium">
+                                  {new Intl.NumberFormat('pt-BR').format(summary.totalTokens)}
+                                </td>
+                                <td className="p-4 font-medium text-brand-primary">{formatCost(summary.totalCostUsd)}</td>
+                                <td className="p-4 pr-6 text-right font-bold text-brand-primary">{formatBRL(summary.totalCostUsd)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  ) : (
+                    /* Historico de Chamadas */
+                    filteredHistoryLogs.length === 0 ? (
+                      <div className="p-12 text-center text-brand-text-muted">
+                        <Activity className="w-12 h-12 mx-auto text-brand-border mb-3" />
+                        <p className="font-medium text-brand-text">Nenhum registro de historico encontrado</p>
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
+                              <th className="p-4 pl-6">Data/Hora</th>
+                              <th className="p-4">Profissional</th>
+                              <th className="p-4">Modelo</th>
+                              <th className="p-4">Tokens Entrada</th>
+                              <th className="p-4">Tokens Saida</th>
+                              <th className="p-4">Tokens Totais</th>
+                              <th className="p-4 pr-6 text-right">Custo USD</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
+                            {filteredHistoryLogs.map((log) => (
+                              <tr key={log.id} className="hover:bg-brand-bg/30 transition-colors">
+                                <td className="p-4 pl-6 text-brand-text-muted whitespace-nowrap">
+                                  {formatDate(log.created_at)}
+                                </td>
+                                <td className="p-4">
+                                  <div>
+                                    <p className="font-semibold text-brand-text">{log.professional_name}</p>
+                                    <p className="text-xs text-brand-text-muted">{log.professional_email}</p>
+                                  </div>
+                                </td>
+                                <td className="p-4">
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-100 text-brand-text-muted">
+                                    {log.model}
+                                  </span>
+                                </td>
+                                <td className="p-4 text-brand-text-muted">
+                                  {new Intl.NumberFormat('pt-BR').format(log.prompt_tokens)}
+                                </td>
+                                <td className="p-4 text-brand-text-muted">
+                                  {new Intl.NumberFormat('pt-BR').format(log.candidates_tokens)}
+                                </td>
+                                <td className="p-4 text-brand-text-muted font-medium">
+                                  {new Intl.NumberFormat('pt-BR').format(log.total_tokens)}
+                                </td>
+                                <td className="p-4 pr-6 text-right font-bold text-brand-primary">
+                                  {formatCost(log.cost_usd)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
             )}

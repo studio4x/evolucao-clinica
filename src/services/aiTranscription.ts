@@ -86,6 +86,39 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         throw new Error("A IA não retornou nenhuma transcrição.");
       }
 
+      // Captura e grava metadados de uso de tokens do Gemini
+      const usageMetadata = geminiResponse.usageMetadata;
+      if (usageMetadata) {
+        const promptTokens = usageMetadata.promptTokenCount || 0;
+        const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
+        const totalTokens = usageMetadata.totalTokenCount || 0;
+        
+        // Custo Gemini 2.0 Flash:
+        // Input: $0.075 / 1M tokens ($0.000000075 / token)
+        // Output: $0.30 / 1M tokens ($0.00000030 / token)
+        const costUsd = (promptTokens * 0.000000075) + (candidatesTokens * 0.00000030);
+
+        try {
+          const { collection, addDoc } = await import('firebase/firestore');
+          const { db, auth } = await import('../firebase');
+          
+          await addDoc(collection(db, 'usage_logs'), {
+            professional_id: auth.currentUser?.uid || 'unknown',
+            professional_name: auth.currentUser?.displayName || auth.currentUser?.email || 'Profissional',
+            professional_email: auth.currentUser?.email || '',
+            model: "gemini-2.0-flash",
+            prompt_tokens: promptTokens,
+            candidates_tokens: candidatesTokens,
+            total_tokens: totalTokens,
+            cost_usd: costUsd,
+            created_at: new Date().toISOString()
+          });
+          console.log("[AI-Service] Log de consumo gravado no Firestore com sucesso.");
+        } catch (dbError) {
+          console.error("[AI-Service] Erro ao salvar log de consumo no Firestore:", dbError);
+        }
+      }
+
       console.log("[AI-Service] Transcrição concluída com sucesso.");
       return transcription;
     } catch (error: any) {
