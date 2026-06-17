@@ -50,7 +50,7 @@ export default function Layout() {
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <Link to="/">
-          <img src="/logotipo-transparente-1024.png" alt="Conexão Ser" className="h-9 w-auto max-w-[200px] object-contain" />
+          <img src="/logotipo-transparente-1024.png" alt="Conexão Ser" className="h-14 w-auto max-w-[150px] object-contain" />
         </Link>
         <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-brand-primary">
           {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -64,9 +64,9 @@ export default function Layout() {
         fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
       `}>
         <div className="flex-1 overflow-y-auto">
-          <div className="p-6 hidden md:block border-b border-brand-border/50">
-            <Link to="/">
-              <img src="/logotipo-transparente-1024.png" alt="Conexão Ser" className="h-14 w-auto max-w-full object-contain mb-2" />
+          <div className="p-4 hidden md:block border-b border-brand-border/50">
+            <Link to="/" className="flex justify-center">
+              <img src="/logotipo-transparente-1024.png" alt="Conexão Ser" className="h-28 w-auto max-w-full object-contain" />
             </Link>
           </div>
 
