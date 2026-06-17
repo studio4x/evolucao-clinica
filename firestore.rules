@@ -163,7 +163,7 @@ service cloud.firestore {
     }
 
     function isValidEvolution() {
-      let allowedFields = ['id', 'professional_id', 'patient_id', 'session_date', 'audio_storage_path', 'audio_url', 'transcription_status', 'transcription_text', 'google_doc_append_status', 'google_doc_append_at', 'error_message', 'created_at', 'updated_at'];
+      let allowedFields = ['id', 'professional_id', 'patient_id', 'session_date', 'audio_storage_path', 'audio_url', 'transcription_status', 'transcription_text', 'google_doc_append_status', 'google_doc_append_at', 'audio_duration_seconds', 'error_message', 'created_at', 'updated_at'];
       return hasRequiredFields(['id', 'professional_id', 'patient_id', 'session_date', 'transcription_status', 'google_doc_append_status']) &&
              hasOnlyAllowedFields(allowedFields) &&
              request.resource.data.professional_id == request.auth.uid &&
@@ -177,6 +177,7 @@ service cloud.firestore {
              validOptionalStringLength('transcription_text', 0, 100000) &&
              validStringLength('google_doc_append_status', 1, 50) &&
              validOptionalStringLength('google_doc_append_at', 0, 50) &&
+             (!( 'audio_duration_seconds' in request.resource.data ) || request.resource.data.audio_duration_seconds is number) &&
              validOptionalStringLength('error_message', 0, 5000) &&
              validOptionalStringLength('created_at', 0, 50) &&
              validOptionalStringLength('updated_at', 0, 50);
