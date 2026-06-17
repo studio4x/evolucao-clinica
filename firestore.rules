@@ -233,6 +233,15 @@ service cloud.firestore {
       );
     }
 
+    match /settings/{settingId} {
+      allow read: if isAuthenticated() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/professionals/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/professionals/$(request.auth.uid)).data.status == 'active')
+      );
+      allow write: if isAdmin();
+    }
+
     match /patients/{patientId} {
       allow read: if isAuthenticated() && (resource.data.professional_id == request.auth.uid || resource.data.userId == request.auth.uid || resource.data.professionalId == request.auth.uid);
       allow create: if isAuthenticated() && isValidPatient();

@@ -28,12 +28,32 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
 
   const attemptTranscription = async (): Promise<string> => {
     try {
-      // Prioridade total para a chave de produção (REAL) conforme solicitado
-      const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
-      const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+      let apiKey = '';
       
-      // Inverte a lógica: Tenta primeiro a REAL (backupKey), se falhar ou não existir, usa a GRATUITA (mainKey)
-      const apiKey = backupKey ? backupKey : mainKey;
+      try {
+        const { doc, getDoc } = await import('firebase/firestore');
+        const { db } = await import('../firebase');
+        const settingsRef = doc(db, 'settings', 'gemini');
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists() && settingsSnap.data().api_key) {
+          apiKey = settingsSnap.data().api_key;
+          console.log("[AI-Service] Usando chave do Gemini configurada no Firestore.");
+        }
+      } catch (dbError) {
+        console.warn("[AI-Service] Falha ao ler chave do Gemini do Firestore, usando fallback:", dbError);
+      }
+
+      if (!apiKey) {
+        // Prioridade total para a chave de produção (REAL) conforme solicitado
+        const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+        const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+        
+        // Inverte a lógica: Tenta primeiro a REAL (backupKey), se falhar ou não existir, usa a GRATUITA (mainKey)
+        apiKey = backupKey ? backupKey : mainKey;
+        if (apiKey) {
+          console.log(`[AI-Service] Usando chave estática ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'}`);
+        }
+      }
 
       if (!apiKey) {
         console.error("[AI-Service] ERRO: Nenhuma chave da API Gemini encontrada.");
