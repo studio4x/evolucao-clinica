@@ -817,7 +817,7 @@ export default function AdminPanel() {
                     <div>
                       <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total Transcricoes</p>
                       <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCallsCount}</h3>
-                      <p className="text-[10px] text-brand-text-muted mt-0.5">Chamadas Gemini 2.0 Flash</p>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">Chamadas Gemini Flash</p>
                     </div>
                   </div>
 

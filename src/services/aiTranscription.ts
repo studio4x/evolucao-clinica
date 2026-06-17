@@ -72,7 +72,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
       
       // Timeout de 55 segundos para a chamada da IA
       const transcriptionPromise = ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         contents: {
           parts: [
             { text: prompt },
@@ -99,10 +99,10 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
         const totalTokens = usageMetadata.totalTokenCount || 0;
         
-        // Custo Gemini 2.0 Flash:
-        // Input: $0.075 / 1M tokens ($0.000000075 / token)
-        // Output: $0.30 / 1M tokens ($0.00000030 / token)
-        const costUsd = (promptTokens * 0.000000075) + (candidatesTokens * 0.00000030);
+        // Custo Gemini 2.5 Flash:
+        // Input: $0.30 / 1M tokens ($0.00000030 / token)
+        // Output: $2.50 / 1M tokens ($0.00000250 / token)
+        const costUsd = (promptTokens * 0.00000030) + (candidatesTokens * 0.00000250);
 
         try {
           const { collection, addDoc } = await import('firebase/firestore');
@@ -112,7 +112,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
             professional_id: auth.currentUser?.uid || 'unknown',
             professional_name: auth.currentUser?.displayName || auth.currentUser?.email || 'Profissional',
             professional_email: auth.currentUser?.email || '',
-            model: "gemini-2.0-flash",
+            model: "gemini-2.5-flash",
             prompt_tokens: promptTokens,
             candidates_tokens: candidatesTokens,
             total_tokens: totalTokens,
