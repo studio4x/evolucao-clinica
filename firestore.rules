@@ -85,6 +85,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == "contato@studio4x.com.br";
+    }
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
@@ -214,11 +218,19 @@ service cloud.firestore {
     // ===============================================================
 
     match /professionals/{professionalId} {
-      allow read: if isOwner(professionalId);
-      allow create: if isOwner(professionalId) && isValidProfessional();
-      allow update: if isOwner(professionalId) && isValidProfessional() && 
-                    request.resource.data.id == resource.data.id &&
-                    request.resource.data.google_email == resource.data.google_email;
+      allow read: if isOwner(professionalId) || isAdmin();
+      allow create: if isOwner(professionalId) && isValidProfessional() && (
+        (request.resource.data.google_email == "contato@studio4x.com.br" && request.resource.data.status == "active" && request.resource.data.role == "admin") ||
+        (request.resource.data.google_email != "contato@studio4x.com.br" && request.resource.data.status == "pending" && request.resource.data.role == "therapist")
+      );
+      allow update: if isAdmin() || (
+        isOwner(professionalId) && 
+        isValidProfessional() && 
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.google_email == resource.data.google_email &&
+        request.resource.data.status == resource.data.status && 
+        request.resource.data.role == resource.data.role
+      );
     }
 
     match /patients/{patientId} {

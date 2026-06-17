@@ -4,12 +4,12 @@ import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2 } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 
 export default function Layout() {
-  const { user } = useAuthStore();
+  const { user, profileRole } = useAuthStore();
   const { deferredPrompt, setDeferredPrompt, isStandalone } = usePWAStore();
   const navigate = useNavigate();
   const location = useLocation();
@@ -40,6 +40,10 @@ export default function Layout() {
     { name: 'Histórico', path: '/history', icon: HistoryIcon },
     { name: 'Como Usar', path: '/tutorial', icon: BookOpen },
   ];
+
+  if (profileRole === 'admin') {
+    navItems.push({ name: 'Painel Admin', path: '/admin', icon: ShieldCheck });
+  }
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">

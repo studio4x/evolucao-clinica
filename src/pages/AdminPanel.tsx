@@ -1,0 +1,485 @@
+import React, { useEffect, useState } from 'react';
+import { collection, query, orderBy, onSnapshot, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { db, auth } from '../firebase';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2 } from 'lucide-react';
+import { useAuthStore } from '../store/authStore';
+import { useNavigate } from 'react-router-dom';
+
+interface Professional {
+  id: string;
+  google_email: string;
+  full_name: string;
+  photo_url?: string;
+  role: 'admin' | 'therapist';
+  status: 'active' | 'pending' | 'inactive';
+  created_at?: string;
+}
+
+export default function AdminPanel() {
+  const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
+  const navigate = useNavigate();
+
+  // Estados do Painel Administrativo
+  const [professionals, setProfessionals] = useState<Professional[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive'>('all');
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Estados do Formulário de Login
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
+  // Efeito para buscar profissionais caso seja admin logado
+  useEffect(() => {
+    if (!user || profileRole !== 'admin') {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    const q = query(collection(db, 'professionals'), orderBy('created_at', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const list: Professional[] = [];
+      snapshot.forEach((doc) => {
+        list.push({ id: doc.id, ...doc.data() } as Professional);
+      });
+      setProfessionals(list);
+      setLoading(false);
+    }, (error) => {
+      console.error("Erro ao escutar profissionais:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user, profileRole]);
+
+  // Manipulador de login do admin
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setLoginError('Preencha todos os campos.');
+      return;
+    }
+
+    setLoginLoading(true);
+    setLoginError('');
+
+    try {
+      // Tenta autenticar no Firebase Auth com E-mail e Senha
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const loggedUser = userCredential.user;
+
+      // Busca o documento na colecao professionals para verificar se e admin
+      const docRef = doc(db, 'professionals', loggedUser.uid);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists() && docSnap.data().role === 'admin') {
+        const data = docSnap.data();
+        // Sincroniza a store
+        setProfileInfo(data.status, data.role);
+        setUser(loggedUser);
+      } else {
+        // Se logou com e-mail/senha mas nao possui permissao admin
+        await signOut(auth);
+        setUser(null);
+        setProfileInfo(null, null);
+        setLoginError('Acesso recusado. Esta conta nao possui privilegios de administrador.');
+      }
+    } catch (error: any) {
+      console.error("Erro no login do administrador:", error);
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        setLoginError('E-mail ou senha incorretos.');
+      } else if (error.code === 'auth/operation-not-allowed') {
+        setLoginError('O provedor de E-mail/Senha nao esta ativo no seu console do Firebase. Ative-o em Authentication > Sign-in method.');
+      } else {
+        setLoginError(`Falha na autenticacao: ${error.message}`);
+      }
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (profId: string, newStatus: 'active' | 'inactive') => {
+    if (updatingId) return;
+    setUpdatingId(profId);
+    try {
+      const docRef = doc(db, 'professionals', profId);
+      await updateDoc(docRef, {
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      });
+    } catch (error: any) {
+      console.error("Erro ao atualizar status:", error);
+      alert(`Falha ao atualizar status: ${error.message}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+    setUser(null);
+    setProfileInfo(null, null);
+    navigate('/login');
+  };
+
+  // Se nao estiver logado ou nao for admin, renderiza o formulario de login
+  if (!user || profileRole !== 'admin') {
+    return (
+      <div className="min-h-[70vh] flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 animate-fadeIn">
+        <div className="max-w-md w-full space-y-8">
+          <div className="text-center">
+            <div className="mx-auto h-16 w-16 bg-brand-primary/10 rounded-2xl flex items-center justify-center border border-brand-primary/10">
+              <ShieldCheck className="h-10 w-10 text-brand-primary" />
+            </div>
+            <h2 className="mt-6 text-center text-3xl font-display font-bold text-brand-primary tracking-tight">
+              Acesso ao Painel Admin
+            </h2>
+            <p className="mt-2 text-center text-sm text-brand-text-muted">
+              Insira as credenciais de administrador para acessar os controles de aprovacao.
+            </p>
+          </div>
+
+          <div className="card p-8 bg-white/95 shadow-xl border-brand-primary/10 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-brand-primary to-brand-accent" />
+            
+            <form className="space-y-6" onSubmit={handleAdminLogin}>
+              {loginError && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl flex items-start space-x-2 text-xs text-red-600 animate-shake">
+                  <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span className="leading-relaxed">{loginError}</span>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">
+                  E-mail do Administrador
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                  <input
+                    type="email"
+                    required
+                    placeholder="admin@exemplo.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors bg-brand-bg/10"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">
+                  Senha
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                  <input
+                    type="password"
+                    required
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors bg-brand-bg/10"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full btn-primary py-3.5 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-60"
+              >
+                {loginLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Autenticando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Entrar no Painel</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+
+          <div className="text-center">
+            <button
+              onClick={() => navigate('/login')}
+              className="text-xs font-medium text-brand-primary hover:text-brand-primary-hover transition-colors underline"
+            >
+              Voltar para login de profissionais
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Contadores
+  const totalCount = professionals.length;
+  const activeCount = professionals.filter(p => p.status === 'active').length;
+  const pendingCount = professionals.filter(p => p.status === 'pending').length;
+  const inactiveCount = professionals.filter(p => p.status === 'inactive').length;
+
+  // Filtragem
+  const filteredProfessionals = professionals.filter((p) => {
+    const matchesSearch = 
+      p.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.google_email.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const formatDate = (isoString?: string) => {
+    if (!isoString) return '-';
+    try {
+      const date = new Date(isoString);
+      return date.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return '-';
+    }
+  };
+
+  return (
+    <div className="space-y-8 animate-fadeIn">
+      {/* Cabecalho */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-display font-bold text-brand-primary">
+            Painel do Administrador
+          </h1>
+          <p className="text-sm text-brand-text-muted mt-1">
+            Gerencie e aprove os profissionais que possuem acesso a plataforma.
+          </p>
+        </div>
+        <button
+          onClick={handleLogout}
+          className="self-start md:self-auto inline-flex items-center space-x-2 px-4 py-2 border border-red-200 text-red-600 rounded-xl hover:bg-red-50 transition-colors text-sm font-semibold shadow-sm"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Sair Administrativo</span>
+        </button>
+      </div>
+
+      {/* Cards de Metricas */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="card p-5 bg-white flex items-center space-x-4">
+          <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+            <Users className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total</p>
+            <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCount}</h3>
+          </div>
+        </div>
+
+        <div className="card p-5 bg-white flex items-center space-x-4">
+          <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Ativos</p>
+            <h3 className="text-2xl font-bold font-display text-brand-primary">{activeCount}</h3>
+          </div>
+        </div>
+
+        <div className="card p-5 bg-white flex items-center space-x-4">
+          <div className="p-3 bg-amber-50 rounded-xl text-amber-600 border border-amber-100">
+            <Clock className="w-6 h-6 animate-pulse" />
+          </div>
+          <div>
+            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Pendentes</p>
+            <h3 className="text-2xl font-bold font-display text-brand-primary">{pendingCount}</h3>
+          </div>
+        </div>
+
+        <div className="card p-5 bg-white flex items-center space-x-4">
+          <div className="p-3 bg-red-50 rounded-xl text-red-600 border border-red-100">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <div>
+            <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Inativos</p>
+            <h3 className="text-2xl font-bold font-display text-brand-primary">{inactiveCount}</h3>
+          </div>
+        </div>
+      </div>
+
+      {/* Controles de Filtro e Busca */}
+      <div className="card p-6 bg-white space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+          <input
+            type="text"
+            placeholder="Buscar por nome ou e-mail..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'all', label: 'Todos' },
+            { id: 'pending', label: 'Pendentes' },
+            { id: 'active', label: 'Ativos' },
+            { id: 'inactive', label: 'Inativos' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setStatusFilter(tab.id as any)}
+              className={`px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${
+                statusFilter === tab.id
+                  ? 'bg-brand-primary border-brand-primary text-white shadow-sm'
+                  : 'bg-white border-brand-border text-brand-text hover:bg-brand-bg'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tabela de Profissionais */}
+      <div className="card bg-white overflow-hidden border border-brand-border">
+        {loading ? (
+          <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+            <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+            <span className="text-sm">Carregando profissionais...</span>
+          </div>
+        ) : filteredProfessionals.length === 0 ? (
+          <div className="p-12 text-center text-brand-text-muted">
+            <Users className="w-12 h-12 mx-auto text-brand-border mb-3" />
+            <p className="font-medium text-brand-text">Nenhum profissional encontrado</p>
+            <p className="text-xs text-brand-text-muted mt-1">
+              Tente alterar os filtros de busca ou status.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
+                  <th className="p-4 pl-6">Profissional</th>
+                  <th className="p-4">Contato</th>
+                  <th className="p-4">Cadastro</th>
+                  <th className="p-4">Cargo</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4 pr-6 text-right">Acoes</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
+                {filteredProfessionals.map((prof) => {
+                  const isAdminSelf = prof.google_email === 'contato@studio4x.com.br';
+                  return (
+                    <tr key={prof.id} className="hover:bg-brand-bg/30 transition-colors">
+                      <td className="p-4 pl-6">
+                        <div className="flex items-center space-x-3">
+                          <img
+                            src={prof.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.full_name)}&background=005C13&color=fff`}
+                            alt={prof.full_name}
+                            className="w-10 h-10 rounded-full object-cover border border-brand-border"
+                            referrerPolicy="no-referrer"
+                          />
+                          <div>
+                            <p className="font-semibold text-brand-text">{prof.full_name}</p>
+                            {isAdminSelf && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-brand-primary/10 text-brand-primary">
+                                Voce
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="p-4 text-brand-text-muted font-medium break-all">
+                        {prof.google_email}
+                      </td>
+
+                      <td className="p-4 text-brand-text-muted">
+                        {formatDate(prof.created_at)}
+                      </td>
+
+                      <td className="p-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          prof.role === 'admin' 
+                            ? 'bg-brand-primary/10 text-brand-primary' 
+                            : 'bg-stone-100 text-brand-text-muted'
+                        }`}>
+                          {prof.role === 'admin' ? 'Admin' : 'Terapeuta'}
+                        </span>
+                      </td>
+
+                      <td className="p-4">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                          prof.status === 'active'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                            : prof.status === 'pending'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-100'
+                            : 'bg-red-50 text-red-700 border border-red-100'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
+                            prof.status === 'active'
+                              ? 'bg-emerald-500'
+                              : prof.status === 'pending'
+                              ? 'bg-amber-500 animate-pulse'
+                              : 'bg-red-500'
+                          }`} />
+                          {prof.status === 'active' ? 'Ativo' : prof.status === 'pending' ? 'Pendente' : 'Inativo'}
+                        </span>
+                      </td>
+
+                      <td className="p-4 pr-6 text-right whitespace-nowrap">
+                        {isAdminSelf ? (
+                          <span className="text-xs text-brand-text-muted italic">Administrador Geral</span>
+                        ) : (
+                          <div className="inline-flex gap-2">
+                            {prof.status !== 'active' && (
+                              <button
+                                onClick={() => handleUpdateStatus(prof.id, 'active')}
+                                disabled={updatingId !== null}
+                                className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                title="Aprovar Profissional"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                            )}
+                            
+                            {prof.status !== 'inactive' && (
+                              <button
+                                onClick={() => handleUpdateStatus(prof.id, 'inactive')}
+                                disabled={updatingId !== null}
+                                className="inline-flex items-center justify-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                title="Desativar Profissional"
+                              >
+                                <Ban className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -9,23 +9,30 @@ import { ShieldCheck, Zap, Sparkles, Files } from 'lucide-react';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setGoogleAccessToken, setUser } = useAuthStore();
+  const { setGoogleAccessToken, setUser, setProfileInfo } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
   // No longer using redirect flows
 
   const handleUserProfile = async (user: any) => {
-    setUser(user);
     const docRef = doc(db, 'professionals', user.uid);
     const docSnap = await getDoc(docRef);
+
+    let status: 'active' | 'pending' | 'inactive' = 'pending';
+    let role: 'admin' | 'therapist' = 'therapist';
+
+    if (user.email === 'contato@studio4x.com.br') {
+      status = 'active';
+      role = 'admin';
+    }
 
     if (!docSnap.exists()) {
       const professionalData: any = {
         id: user.uid,
         google_email: user.email || '',
         full_name: user.displayName || 'Usuário',
-        role: 'therapist',
-        status: 'active',
+        role: role,
+        status: status,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
@@ -33,7 +40,13 @@ export default function Login() {
         professionalData.photo_url = user.photoURL;
       }
       await setDoc(docRef, professionalData);
+      setProfileInfo(status, role);
+    } else {
+      const data = docSnap.data();
+      setProfileInfo(data.status, data.role || 'therapist');
     }
+
+    setUser(user);
   };
 
   const handleLogin = async () => {
