@@ -268,13 +268,13 @@ export default function PatientDetail() {
         </div>
         <div className="flex space-x-3">
           <Link 
-            to={`/patients/${id}/edit`}
+            to={`/painel/patients/${id}/edit`}
             className="btn-outline"
           >
             Editar
           </Link>
           <Link 
-            to={`/patients/${id}/evolutions/new`}
+            to={`/painel/patients/${id}/evolutions/new`}
             className="btn-primary"
           >
             <Plus size={20} className="mr-2" />
@@ -305,7 +305,7 @@ export default function PatientDetail() {
               </div>
             ) : (
               <div className="text-sm text-brand-text-muted text-center py-4">
-                Nenhum documento vinculado. <Link to={`/patients/${id}/edit`} className="text-brand-primary hover:underline">Vincular agora</Link>.
+                Nenhum documento vinculado. <Link to={`/painel/patients/${id}/edit`} className="text-brand-primary hover:underline">Vincular agora</Link>.
               </div>
             )}
           </div>

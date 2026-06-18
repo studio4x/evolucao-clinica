@@ -352,7 +352,7 @@ export default function History() {
                         <Clock size={16} className="text-brand-text-muted" />
                         <span className="font-medium text-brand-text">{formatDateTime(evo.created_at)}</span>
                       </div>
-                      <Link to={`/patients/${evo.patient_id}`} className="text-brand-primary hover:text-brand-primary-hover hover:underline font-medium">
+                      <Link to={`/painel/patients/${evo.patient_id}`} className="text-brand-primary hover:text-brand-primary-hover hover:underline font-medium">
                         {patient?.full_name || 'Paciente Desconhecido'}
                       </Link>
                     </div>
@@ -391,7 +391,7 @@ export default function History() {
                       
                       {evo.transcription_status === 'failed' && !evo.audio_url && (
                         <Link 
-                          to={`/patients/${evo.patient_id}/evolutions/new`}
+                          to={`/painel/patients/${evo.patient_id}/evolutions/new`}
                           className="btn-outline px-3 py-1.5 text-xs"
                         >
                           Tentar Novamente

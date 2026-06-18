@@ -17,7 +17,7 @@ export default function PendingApproval() {
       navigate('/login', { replace: true });
     } else if (profileStatus === 'active') {
       // Se já estiver ativo, pode ir direto para a raiz
-      navigate('/', { replace: true });
+      navigate('/painel/dashboard', { replace: true });
     }
   }, [user, profileStatus, navigate]);
 

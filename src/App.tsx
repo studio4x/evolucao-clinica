@@ -46,7 +46,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   // Pula a validação de expiração se o usuário já estiver na página de assinatura
-  if (location.pathname === '/subscription') {
+  if (location.pathname === '/painel/subscription') {
     return <>{children}</>;
   }
 
@@ -57,7 +57,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const isExpired = endsAt ? endsAt < now : false;
 
     if (isExpired) {
-      return <Navigate to="/subscription" replace />;
+      return <Navigate to="/painel/subscription" replace />;
     }
   }
   
@@ -156,10 +156,14 @@ export default function App() {
         <Route path="/pending" element={<PendingApproval />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
-        <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         
-        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Dashboard />} />
+        {/* Admin Panel Routes */}
+        <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+        
+        {/* Client/Therapist Panel Routes */}
+        <Route path="/painel" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
           <Route path="patients" element={<Patients />} />
           <Route path="patients/new" element={<PatientForm />} />
           <Route path="patients/:id/edit" element={<PatientForm />} />
@@ -168,10 +172,14 @@ export default function App() {
           <Route path="history" element={<History />} />
           <Route path="tutorial" element={<Tutorial />} />
           <Route path="share-target" element={<ShareTarget />} />
-          <Route path="api/share-target" element={<Navigate to="/share-target" replace />} />
           <Route path="subscription" element={<Subscription />} />
           <Route path="profile" element={<Profile />} />
         </Route>
+
+        {/* Redirects */}
+        <Route path="/" element={<Navigate to="/painel/dashboard" replace />} />
+        <Route path="/share-target" element={<Navigate to="/painel/share-target" replace />} />
+        <Route path="/api/share-target" element={<Navigate to="/painel/share-target" replace />} />
       </Routes>
     </Router>
   );

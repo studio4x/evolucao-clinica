@@ -35,12 +35,12 @@ export default function Layout() {
   };
 
   const navItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Pacientes', path: '/patients', icon: Users },
-    { name: 'Histórico', path: '/history', icon: HistoryIcon },
-    { name: 'Como Usar', path: '/tutorial', icon: BookOpen },
-    { name: 'Meu Perfil', path: '/profile', icon: User },
-    { name: 'Assinatura', path: '/subscription', icon: CreditCard },
+    { name: 'Dashboard', path: '/painel/dashboard', icon: LayoutDashboard },
+    { name: 'Pacientes', path: '/painel/patients', icon: Users },
+    { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
+    { name: 'Como Usar', path: '/painel/tutorial', icon: BookOpen },
+    { name: 'Meu Perfil', path: '/painel/profile', icon: User },
+    { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
   ];
 
   if (profileRole === 'admin') {
@@ -89,7 +89,7 @@ export default function Layout() {
             <nav className="space-y-2">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(item.path));
+                const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
                 return (
                   <Link
                     key={item.name}

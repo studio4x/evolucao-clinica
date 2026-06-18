@@ -40,7 +40,7 @@ export default function Patients() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-2xl font-display font-semibold text-brand-primary">Pacientes</h1>
         <Link 
-          to="/patients/new" 
+          to="/painel/patients/new" 
           className="btn-primary w-full sm:w-auto"
         >
           <Plus size={20} className="mr-2" />
@@ -86,13 +86,13 @@ export default function Patients() {
                 </div>
                 <div className="flex items-center space-x-3">
                   <Link 
-                    to={`/patients/${patient.id}`}
+                    to={`/painel/patients/${patient.id}`}
                     className="btn-outline"
                   >
                     Ver Detalhes
                   </Link>
                   <Link 
-                    to={`/patients/${patient.id}/evolutions/new`}
+                    to={`/painel/patients/${patient.id}/evolutions/new`}
                     className="btn-primary bg-brand-primary/10 text-brand-primary hover:bg-brand-primary hover:text-white border-transparent"
                   >
                     Nova Evolução

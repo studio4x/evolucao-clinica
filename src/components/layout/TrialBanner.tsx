@@ -41,7 +41,7 @@ export default function TrialBanner() {
       </div>
       
       <Link 
-        to="/subscription" 
+        to="/painel/subscription" 
         className="hidden md:flex items-center space-x-1.5 bg-white text-brand-primary px-3 py-1 rounded-lg text-xs font-bold shadow hover:bg-brand-bg transition-colors duration-200"
       >
         <CreditCard className="w-3.5 h-3.5" />

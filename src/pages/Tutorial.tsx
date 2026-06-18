@@ -76,7 +76,7 @@ export default function Tutorial() {
         <h2 className="text-2xl font-display font-bold relative z-10 text-white">Pronto para começar?</h2>
         <p className="opacity-90 relative z-10">Crie seu primeiro paciente e automatize seus atendimentos hoje mesmo.</p>
         <button 
-          onClick={() => navigate('/patients/new')}
+          onClick={() => navigate('/painel/patients/new')}
           className="bg-white text-brand-primary px-8 py-3 rounded-xl font-bold hover:bg-brand-bg transition-colors flex items-center space-x-2 mx-auto relative z-10"
         >
           <span>Cadastrar Novo Paciente</span>

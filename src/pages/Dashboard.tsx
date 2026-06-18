@@ -93,14 +93,14 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-3">
           <Link 
-            to="/tutorial" 
+            to="/painel/tutorial" 
             className="btn-outline flex items-center space-x-2 bg-white"
           >
             <BookOpen size={18} />
             <span>Ver Tutorial</span>
           </Link>
           <Link 
-            to="/patients/new" 
+            to="/painel/patients/new" 
             className="btn-primary flex items-center shadow-lg shadow-brand-primary/20"
           >
             <Plus size={20} className="mr-2" />
@@ -111,7 +111,7 @@ export default function Dashboard() {
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Link to="/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
+        <Link to="/painel/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
             <div className="space-y-1">
@@ -130,7 +130,7 @@ export default function Dashboard() {
           </div>
         </Link>
 
-        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
+        <Link to="/painel/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
             <div className="space-y-1">
@@ -149,7 +149,7 @@ export default function Dashboard() {
           </div>
         </Link>
 
-        <Link to="/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col bg-white">
+        <Link to="/painel/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col bg-white">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
             <div className="space-y-1">
@@ -175,7 +175,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Full History Card */}
         <Link 
-          to="/history" 
+          to="/painel/history" 
           className="group relative overflow-hidden card p-8 bg-white flex flex-col justify-between shadow-lg hover:shadow-xl transition-all border-0"
         >
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:scale-110 group-hover:opacity-10 transition-all text-brand-primary">
@@ -207,7 +207,7 @@ export default function Dashboard() {
             </p>
           </div>
           <Link 
-            to="/tutorial" 
+            to="/painel/tutorial" 
             className="bg-white text-brand-primary py-3 px-6 rounded-xl font-bold text-center hover:bg-gray-100 transition-all flex items-center justify-center space-x-2 relative z-10 group"
           >
             <span>Acessar Tutorial</span>

@@ -673,7 +673,7 @@ export default function NewEvolution() {
 
               <div className="flex space-x-3 mt-2 border-t border-brand-primary/10 pt-4 w-full justify-center">
                 <button
-                  onClick={() => navigate(`/patients/${id}`)}
+                  onClick={() => navigate(`/painel/patients/${id}`)}
                   className="btn-outline px-4 py-2 text-sm"
                 >
                   Voltar ao Paciente

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 
 interface Professional {
@@ -49,7 +49,34 @@ export default function AdminPanel() {
   const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile'>('professionals');
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname === '/admin' || location.pathname === '/admin/') {
+      navigate('/admin/professionals', { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path.endsWith('/gemini-config')) return 'gemini_config';
+    if (path.endsWith('/google-pay-config')) return 'google_pay_config';
+    if (path.endsWith('/token-usage')) return 'token_usage';
+    if (path.endsWith('/plans')) return 'plans';
+    if (path.endsWith('/profile')) return 'profile';
+    return 'professionals'; // default
+  };
+
+  const activeTab = getActiveTab();
+
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile') => {
+    if (tab === 'professionals') navigate('/admin/professionals');
+    else if (tab === 'gemini_config') navigate('/admin/gemini-config');
+    else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
+    else if (tab === 'token_usage') navigate('/admin/token-usage');
+    else if (tab === 'plans') navigate('/admin/plans');
+    else if (tab === 'profile') navigate('/admin/profile');
+  };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
   const [paymentEnvironment, setPaymentEnvironment] = useState<'TEST' | 'PRODUCTION'>('TEST');
@@ -873,7 +900,7 @@ export default function AdminPanel() {
           </div>
           <div className="flex gap-3 self-start md:self-auto">
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/painel/dashboard')}
               className="inline-flex items-center space-x-2 px-4 py-2 border border-brand-border text-brand-text bg-white rounded-xl hover:bg-brand-bg transition-colors text-sm font-semibold shadow-sm cursor-pointer"
             >
               <span>Ir para o Aplicativo</span>

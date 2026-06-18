@@ -444,6 +444,7 @@ export default function Subscription() {
                         buttonType="subscribe"
                         buttonColor="black"
                         buttonSizeMode="fill"
+                        buttonLocale="pt"
                         paymentRequest={getGooglePayRequest(plan.price, paymentSettings)}
                         onLoadPaymentData={(paymentRequest) => {
                           handleGooglePaySuccess(plan.id, paymentRequest);

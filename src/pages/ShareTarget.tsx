@@ -377,13 +377,13 @@ export default function ShareTarget() {
 
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button
-                  onClick={() => navigate(`/patients/${selectedPatientId}`)}
+                  onClick={() => navigate(`/painel/patients/${selectedPatientId}`)}
                   className="btn-primary w-full sm:w-auto"
                 >
                   Ver Perfil do Paciente
                 </button>
                 <button
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/painel/dashboard')}
                   className="btn-outline w-full sm:w-auto"
                 >
                   Ir para Home
@@ -462,7 +462,7 @@ export default function ShareTarget() {
               <div className="pt-4 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => navigate('/')}
+                  onClick={() => navigate('/painel/dashboard')}
                   disabled={status === 'processing'}
                   className="btn-outline disabled:opacity-50"
                 >
