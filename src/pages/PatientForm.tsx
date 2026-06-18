@@ -173,16 +173,17 @@ export default function PatientForm() {
   const handleExplorerReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setGoogleAccessToken(credential.accessToken);
-        // Recarregar pastas após re-autenticação usando o novo token imediatamente
-        const current = explorerPath[explorerPath.length - 1];
-        loadExplorerFolders(current.id, credential.accessToken);
-      }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents',
+          redirectTo: window.location.origin + window.location.pathname
+        }
+      });
+      if (error) throw error;
     } catch (error) {
       console.error("Reauth error:", error);
+      alert("Erro ao reautenticar com o Google. Tente novamente.");
     } finally {
       setIsReauthenticating(false);
     }

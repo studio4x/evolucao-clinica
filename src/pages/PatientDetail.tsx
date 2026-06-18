@@ -147,15 +147,19 @@ export default function PatientDetail() {
           transcription
         );
 
-        // Update Firestore with success
-        await updateDoc(doc(db, 'evolutions', evo.id), {
-          transcription_status: 'completed',
-          transcription_text: transcription,
-          google_doc_append_status: 'completed',
-          google_doc_append_at: new Date().toISOString(),
-          error_message: null,
-          updated_at: new Date().toISOString()
-        });
+        // Update Supabase with success
+        const { error: updateError } = await supabase
+          .from('evolutions')
+          .update({
+            transcription_status: 'completed',
+            transcription_text: transcription,
+            google_doc_append_status: 'completed',
+            google_doc_append_at: new Date().toISOString(),
+            error_message: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', evo.id);
+        if (updateError) throw updateError;
 
         clearTimeout(timeoutId);
         await fetchData();
@@ -179,11 +183,15 @@ export default function PatientDetail() {
 
     try {
       // Update status to processing
-      await updateDoc(doc(db, 'evolutions', evo.id), {
-        transcription_status: 'processing',
-        google_doc_append_status: 'pending',
-        updated_at: new Date().toISOString()
-      });
+      const { error: updateError } = await supabase
+        .from('evolutions')
+        .update({
+          transcription_status: 'processing',
+          google_doc_append_status: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evo.id);
+      if (updateError) throw updateError;
 
       await attemptProcess();
     } catch (error: any) {

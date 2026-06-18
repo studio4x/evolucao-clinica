@@ -81,7 +81,7 @@ export default function PendingApproval() {
 
             <div className="w-full border-t border-brand-border/60 pt-6 mb-4">
               <div className="flex items-center justify-center space-x-3 text-xs text-brand-text mb-4">
-                <span className="font-semibold">{user?.displayName}</span>
+                <span className="font-semibold">{user?.user_metadata?.full_name || user?.email}</span>
                 <span className="text-brand-text-muted">({user?.email})</span>
               </div>
             </div>

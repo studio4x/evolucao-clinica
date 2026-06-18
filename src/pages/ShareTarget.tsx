@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { getPatientFromIdb, getSharedFileFromIdb, clearSharedFile } from '../services/idbStorage';
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution } from '../services/offlineQueue';
-import { appendToGoogleDoc } from '../services/googleDocs';
-import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
+import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink } from 'lucide-react';
 
 // Simple IndexedDB wrapper for the shared file
 const getSharedFile = (): Promise<File | null> => {
@@ -62,6 +61,13 @@ export default function ShareTarget() {
   const [status, setStatus] = useState<'loading' | 'idle' | 'processing' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
+
+  // Estados para visualização/edição do prontuário no modal
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalText, setModalText] = useState('');
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalSaving, setModalSaving] = useState(false);
+  const [modalError, setModalError] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
@@ -120,6 +126,50 @@ export default function ShareTarget() {
       alert("Erro ao renovar autenticação. Tente novamente.");
     } finally {
       setIsReauthenticating(false);
+    }
+  };
+
+  const handleOpenModal = async () => {
+    const patient = patients.find(p => p.id === selectedPatientId);
+    if (!patient || !patient.google_doc_id || !googleAccessToken) return;
+    setIsModalOpen(true);
+    setModalLoading(true);
+    setModalError('');
+    try {
+      const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
+      setModalText(content);
+    } catch (err: any) {
+      console.error("Erro ao carregar prontuário:", err);
+      let msg = err.message || "Erro desconhecido ao carregar prontuário.";
+      if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
+        msg = "Sua sessão do Google expirou. Feche o modal e renove a autenticação.";
+        setGoogleAccessToken(null);
+      }
+      setModalError(msg);
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleSaveModalText = async () => {
+    const patient = patients.find(p => p.id === selectedPatientId);
+    if (!patient || !patient.google_doc_id || !googleAccessToken) return;
+    setModalSaving(true);
+    setModalError('');
+    try {
+      await updateGoogleDocContent(googleAccessToken, patient.google_doc_id, modalText);
+      alert("Texto do prontuário atualizado com sucesso no Google Docs!");
+      setIsModalOpen(false);
+    } catch (err: any) {
+      console.error("Erro ao salvar prontuário:", err);
+      let msg = err.message || "Erro desconhecido ao salvar prontuário.";
+      if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
+        msg = "Sua sessão do Google expirou. Por favor, renove sua autenticação.";
+        setGoogleAccessToken(null);
+      }
+      setModalError(msg);
+    } finally {
+      setModalSaving(false);
     }
   };
 
@@ -297,6 +347,34 @@ export default function ShareTarget() {
               </div>
               <h3 className="text-lg font-display font-medium text-brand-text mb-2">Evolução Processada!</h3>
               <p className="text-brand-text-muted mb-6">O áudio foi transcrito e inserido no Google Docs com sucesso.</p>
+              
+              {(() => {
+                const patient = patients.find(p => p.id === selectedPatientId);
+                if (patient && patient.google_doc_id) {
+                  return (
+                    <div className="flex flex-col sm:flex-row gap-3 w-full justify-center mt-4 mb-6 border-b border-brand-border/30 pb-6">
+                      <a
+                        href={`https://docs.google.com/document/d/${patient.google_doc_id}/edit`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-white text-brand-primary border border-brand-primary/20 rounded-xl hover:bg-brand-primary/5 font-medium transition-colors text-sm w-full sm:w-auto"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                        <span>Acessar Documento no Google Drive</span>
+                      </a>
+                      <button
+                        onClick={handleOpenModal}
+                        className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 font-medium transition-colors text-sm w-full sm:w-auto"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>Ver/Editar Evolução</span>
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
                 <button
                   onClick={() => navigate(`/patients/${selectedPatientId}`)}
@@ -412,6 +490,110 @@ export default function ShareTarget() {
           )}
         </div>
       </div>
+
+      {/* Modal de visualização/edição */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm transition-opacity">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] border border-brand-border animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border">
+              <div>
+                <h3 className="text-lg font-bold font-display text-brand-primary">
+                  Documento de Evolução (Google Docs)
+                </h3>
+                <p className="text-xs text-brand-text-muted mt-0.5">
+                  {patients.find(p => p.id === selectedPatientId)?.full_name}
+                </p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 rounded-lg text-brand-text-muted hover:bg-stone-100 hover:text-brand-text transition-colors"
+                disabled={modalSaving}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {modalLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                  <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
+                  <p className="text-sm font-medium text-brand-primary">Carregando prontuário do Google Docs...</p>
+                </div>
+              ) : modalError ? (
+                <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-center space-y-3">
+                  <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
+                  <p className="text-sm text-red-700 font-medium">{modalError}</p>
+                  {!googleAccessToken && (
+                    <button
+                      onClick={handleReauthenticate}
+                      className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
+                    >
+                      Renovar Autenticação
+                    </button>
+                  )}
+                  {googleAccessToken && (
+                    <button
+                      onClick={handleOpenModal}
+                      className="px-4 py-2 bg-stone-800 text-white rounded-xl hover:bg-stone-700 text-sm font-medium transition-colors"
+                    >
+                      Tentar Novamente
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-brand-text">
+                    Texto Completo do Prontuário:
+                  </label>
+                  <textarea
+                    value={modalText}
+                    onChange={(e) => setModalText(e.target.value)}
+                    rows={12}
+                    className="w-full input-field p-3 font-mono text-sm leading-relaxed focus:ring-1 focus:ring-brand-primary border border-brand-border outline-none rounded-xl resize-y"
+                    placeholder="Conteúdo do prontuário..."
+                    disabled={modalSaving}
+                  />
+                  <p className="text-[11px] text-brand-text-muted">
+                    Nota: Ao salvar, todo o conteúdo exibido acima substituirá o texto atual do documento no Google Docs.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            {!modalLoading && !modalError && (
+              <div className="px-6 py-4 border-t border-brand-border flex items-center justify-end space-x-3 bg-stone-50 rounded-b-2xl">
+                <button
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 bg-white border border-brand-border rounded-xl text-sm font-medium text-brand-text hover:bg-stone-100 transition-colors"
+                  disabled={modalSaving}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveModalText}
+                  className="flex items-center space-x-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-50 text-white rounded-xl text-sm font-medium transition-colors"
+                  disabled={modalSaving}
+                >
+                  {modalSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Salvando no Google Docs...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      <span>Salvar Alterações</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

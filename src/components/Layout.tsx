@@ -74,13 +74,13 @@ export default function Layout() {
           <div className="px-4 py-6">
             <div className="flex items-center space-x-3 px-4 py-3 mb-6 bg-brand-bg rounded-xl border border-brand-border/50">
               <img 
-                src={user?.photoURL || 'https://ui-avatars.com/api/?name=' + user?.displayName + '&background=005C13&color=fff'} 
+                src={user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=' + (user?.user_metadata?.full_name || user?.email) + '&background=005C13&color=fff'} 
                 alt="Profile" 
                 className="w-10 h-10 rounded-full border border-brand-border"
                 referrerPolicy="no-referrer"
               />
               <div className="overflow-hidden">
-                <p className="text-sm font-medium text-brand-text truncate">{user?.displayName}</p>
+                <p className="text-sm font-medium text-brand-text truncate">{user?.user_metadata?.full_name || user?.email}</p>
                 <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
               </div>
             </div>
