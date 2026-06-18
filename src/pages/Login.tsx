@@ -1,5 +1,5 @@
 import { supabase } from '../supabaseClient';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState } from 'react';
@@ -104,9 +104,14 @@ export default function Login() {
         </div>
       </div>
       
-      <div className="mt-auto pt-12 relative z-10 text-center">
+      <div className="mt-auto pt-12 relative z-10 text-center flex flex-col items-center gap-3">
         <div className="inline-block px-4 py-1.5 bg-white/50 backdrop-blur-md rounded-full border border-brand-primary/5 shadow-sm">
           <AppVersion />
+        </div>
+        <div className="flex gap-4 text-xs font-medium text-brand-text-muted">
+          <Link to="/privacy" className="hover:text-brand-primary transition-colors">Política de Privacidade</Link>
+          <span className="text-brand-border">|</span>
+          <Link to="/terms" className="hover:text-brand-primary transition-colors">Termos de Serviço</Link>
         </div>
       </div>
     </div>

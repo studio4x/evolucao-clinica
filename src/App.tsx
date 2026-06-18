@@ -21,6 +21,8 @@ import { CookieConsent } from './components/CookieConsent';
 
 import PendingApproval from './pages/PendingApproval';
 import AdminPanel from './pages/AdminPanel';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionEndsAt } = useAuthStore();
@@ -145,6 +147,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/pending" element={<PendingApproval />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
         <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         
         <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>

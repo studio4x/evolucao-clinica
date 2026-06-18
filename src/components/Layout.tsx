@@ -146,8 +146,13 @@ export default function Layout() {
         <main className="p-4 md:p-8 max-w-5xl mx-auto flex-1 w-full">
           <Outlet />
         </main>
-        <footer className="p-8 mt-auto opacity-50">
+        <footer className="p-8 mt-auto flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-brand-border/30 text-brand-text-muted">
           <AppVersion />
+          <div className="flex gap-4 text-xs font-medium">
+            <Link to="/privacy" className="hover:text-brand-primary transition-colors">Política de Privacidade</Link>
+            <span className="text-brand-border">|</span>
+            <Link to="/terms" className="hover:text-brand-primary transition-colors">Termos de Serviço</Link>
+          </div>
         </footer>
       </div>
 
