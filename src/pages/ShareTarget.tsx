@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, setDoc, query, where, orderBy } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { db, auth, googleProvider, storage } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { getPatientFromIdb, getSharedFileFromIdb, clearSharedFile } from '../services/idbStorage';
@@ -32,7 +29,7 @@ const getSharedFile = (): Promise<File | null> => {
   });
 };
 
-const clearSharedFile = (): Promise<void> => {
+const clearSharedFileLocal = (): Promise<void> => {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('SharedFilesDB', 1);
     request.onerror = () => reject(request.error);
@@ -55,7 +52,7 @@ const clearSharedFile = (): Promise<void> => {
 
 export default function ShareTarget() {
   const navigate = useNavigate();
-  const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
   
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -71,14 +68,14 @@ export default function ShareTarget() {
       try {
         // Load patients
         let patientsData: any[] = [];
-        if (auth.currentUser) {
-          const q = query(
-            collection(db, 'patients'),
-            where('professional_id', '==', auth.currentUser.uid),
-            orderBy('full_name')
-          );
-          const querySnapshot = await getDocs(q);
-          patientsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        if (user) {
+          const { data, error } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('professional_id', user.id)
+            .order('full_name');
+          if (error) throw error;
+          patientsData = data || [];
         }
         setPatients(patientsData);
 
@@ -99,7 +96,7 @@ export default function ShareTarget() {
       }
     };
     loadData();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     return () => {
@@ -110,12 +107,14 @@ export default function ShareTarget() {
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setGoogleAccessToken(credential.accessToken);
-        alert("Autenticação renovada com sucesso! Você já pode enviar a evolução.");
-      }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents',
+          redirectTo: window.location.origin + window.location.pathname
+        }
+      });
+      if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
       alert("Erro ao renovar autenticação. Tente novamente.");
@@ -144,11 +143,10 @@ export default function ShareTarget() {
     setErrorMessage('');
 
     const evolutionId = uuidv4();
-    const storageRef = ref(storage, `evolutions/${selectedPatientId}/${evolutionId}.webm`);
     
     const evolutionData = {
       id: evolutionId,
-      professional_id: auth.currentUser?.uid || '',
+      professional_id: user?.id || '',
       patient_id: selectedPatientId,
       session_date: sessionDate,
       audio_url: '',
@@ -168,7 +166,10 @@ export default function ShareTarget() {
       setErrorMessage("Etapa 1/4: Salvando registro inicial...");
 
       // 1. Save initial state
-      await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
+      const { error: insertError } = await supabase
+        .from('evolutions')
+        .insert(evolutionData);
+      if (insertError) throw insertError;
 
       // 2. Transcribe with AI
       setErrorMessage("Etapa 2/4: Transcrevendo áudio com IA (Gemini 2.0)...");
@@ -197,18 +198,21 @@ export default function ShareTarget() {
         transcription
       );
 
-      // 4. Update Firestore
+      // 4. Update Supabase
       setErrorMessage("Etapa 4/4: Finalizando...");
-      await setDoc(doc(db, 'evolutions', evolutionId), {
-        ...evolutionData,
-        transcription_status: 'completed',
-        transcription_text: transcription,
-        google_doc_append_status: 'completed',
-        google_doc_append_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
+      const { error: updateError } = await supabase
+        .from('evolutions')
+        .update({
+          transcription_status: 'completed',
+          transcription_text: transcription,
+          google_doc_append_status: 'completed',
+          google_doc_append_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evolutionId);
+      if (updateError) throw updateError;
 
-      await clearSharedFile().catch(e => console.warn("Erro ao limpar IDB:", e));
+      await clearSharedFileLocal().catch(e => console.warn("Erro ao limpar IDB:", e));
       setStatus('success');
       setErrorMessage('');
 
@@ -231,7 +235,7 @@ export default function ShareTarget() {
             evolutionData
           });
           
-          await clearSharedFile().catch(e => console.warn("Erro IDB:", e));
+          await clearSharedFileLocal().catch(e => console.warn("Erro IDB:", e));
           setStatus('success');
           setErrorMessage('');
           alert("Sem internet! O áudio do WhatsApp foi salvo na sua Fila Offline e será enviado quando a conexão retornar.");
@@ -250,16 +254,18 @@ export default function ShareTarget() {
       setErrorMessage(msg);
       setStatus('error');
       
-      // Update Firestore with error if possible
+      // Update Supabase with error if possible
       try {
-        await setDoc(doc(db, 'evolutions', evolutionId), {
-          ...evolutionData,
-          transcription_status: 'error',
-          error_message: msg,
-          updated_at: new Date().toISOString()
-        });
+        await supabase
+          .from('evolutions')
+          .update({
+            transcription_status: 'error',
+            error_message: msg,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', evolutionId);
       } catch (f) {
-        console.error("Falha ao salvar erro no Firestore:", f);
+        console.error("Falha ao salvar erro no Supabase:", f);
       }
     }
   };

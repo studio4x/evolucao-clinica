@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { db, auth } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
@@ -94,32 +92,45 @@ export default function AdminPanel() {
       return;
     }
 
-    setLoading(true);
-    const q = query(collection(db, 'professionals'), orderBy('created_at', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: Professional[] = [];
-      snapshot.forEach((doc) => {
-        list.push({ id: doc.id, ...doc.data() } as Professional);
-      });
-      setProfessionals(list);
+    const fetchProfessionals = async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('professionals')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error("Erro ao carregar profissionais:", error);
+      } else {
+        setProfessionals(data || []);
+      }
       setLoading(false);
-    }, (error) => {
-      console.error("Erro ao escutar profissionais:", error);
-      setLoading(false);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchProfessionals();
+
+    const channel = supabase
+      .channel('professionals-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'professionals' }, () => {
+        fetchProfessionals();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [user, profileRole]);
 
   // Efeito para carregar chave Gemini
   useEffect(() => {
     const fetchGeminiKey = async () => {
       try {
-        const settingsRef = doc(db, 'settings', 'gemini');
-        const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists()) {
-          setCurrentGeminiKey(settingsSnap.data().api_key || '');
+        const { data, error } = await supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'gemini')
+          .single();
+        if (!error && data) {
+          setCurrentGeminiKey(data.api_key || '');
         }
       } catch (error) {
         console.error("Erro ao buscar chave do Gemini:", error);
@@ -131,29 +142,55 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
-  // Efeito para carregar os logs de consumo do Firestore
+  // Efeito para carregar os logs de consumo do Supabase
   useEffect(() => {
     if (!user || profileRole !== 'admin' || activeTab !== 'token_usage') {
       return;
     }
 
-    setLoadingUsage(true);
-    // Busca os logs ordenados por data decrescente
-    const q = query(collection(db, 'usage_logs'), orderBy('created_at', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const list: UsageLog[] = [];
-      snapshot.forEach((doc) => {
-        list.push({ id: doc.id, ...doc.data() } as UsageLog);
-      });
-      setUsageLogs(list);
+    const fetchUsageLogs = async () => {
+      setLoadingUsage(true);
+      const { data, error } = await supabase
+        .from('usage_logs')
+        .select(`
+          id,
+          professional_id,
+          model,
+          prompt_tokens,
+          candidates_tokens,
+          total_tokens,
+          cost_usd,
+          audio_duration_seconds,
+          created_at,
+          professionals (
+            full_name,
+            google_email
+          )
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("Erro ao carregar logs de consumo:", error);
+      } else {
+        const formattedLogs = (data || []).map((log: any) => ({
+          id: log.id,
+          professional_id: log.professional_id,
+          professional_name: log.professionals?.full_name || 'Profissional',
+          professional_email: log.professionals?.google_email || '',
+          model: log.model,
+          prompt_tokens: log.prompt_tokens,
+          candidates_tokens: log.candidates_tokens,
+          total_tokens: log.total_tokens,
+          cost_usd: Number(log.cost_usd || 0),
+          audio_duration_seconds: Number(log.audio_duration_seconds || 0),
+          created_at: log.created_at
+        }));
+        setUsageLogs(formattedLogs);
+      }
       setLoadingUsage(false);
-    }, (error) => {
-      console.error("Erro ao escutar logs de consumo:", error);
-      setLoadingUsage(false);
-    });
+    };
 
-    return () => unsubscribe();
+    fetchUsageLogs();
   }, [user, profileRole, activeTab]);
 
   // Manipulador de login do admin
@@ -168,31 +205,44 @@ export default function AdminPanel() {
     setLoginError('');
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const loggedUser = userCredential.user;
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-      const docRef = doc(db, 'professionals', loggedUser.uid);
-      const docSnap = await getDoc(docRef);
+      if (signInError) throw signInError;
+      const loggedUser = signInData?.user;
 
-      if (docSnap.exists() && docSnap.data().role === 'admin') {
-        const data = docSnap.data();
-        setProfileInfo(data.status, data.role);
+      if (!loggedUser) {
+        throw new Error("Erro ao carregar usuário.");
+      }
+
+      // No Supabase, consultamos a tabela professionals para ver se o usuário é admin
+      const { data: profData, error: profError } = await supabase
+        .from('professionals')
+        .select('*')
+        .eq('id', loggedUser.id)
+        .single();
+
+      if (!profError && profData && profData.role === 'admin') {
+        setProfileInfo(
+          profData.status,
+          profData.role,
+          profData.subscription_plan,
+          profData.subscription_status,
+          profData.subscription_ends_at,
+          profData.trial_ends_at
+        );
         setUser(loggedUser);
       } else {
-        await signOut(auth);
+        await supabase.auth.signOut();
         setUser(null);
-        setProfileInfo(null, null);
+        setProfileInfo(null, null, null, null, null, null);
         setLoginError('Acesso recusado. Esta conta nao possui privilegios de administrador.');
       }
     } catch (error: any) {
       console.error("Erro no login do administrador:", error);
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-        setLoginError('E-mail ou senha incorretos.');
-      } else if (error.code === 'auth/operation-not-allowed') {
-        setLoginError('O provedor de E-mail/Senha nao esta ativo no seu console do Firebase. Ative-o em Authentication > Sign-in method.');
-      } else {
-        setLoginError(`Falha na autenticacao: ${error.message}`);
-      }
+      setLoginError(`Falha na autenticacao: ${error.message || error}`);
     } finally {
       setLoginLoading(false);
     }
@@ -202,11 +252,14 @@ export default function AdminPanel() {
     if (updatingId) return;
     setUpdatingId(profId);
     try {
-      const docRef = doc(db, 'professionals', profId);
-      await updateDoc(docRef, {
-        status: newStatus,
-        updated_at: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('professionals')
+        .update({
+          status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', profId);
+      if (error) throw error;
     } catch (error: any) {
       console.error("Erro ao atualizar status:", error);
       alert(`Falha ao atualizar status: ${error.message}`);
@@ -229,7 +282,6 @@ export default function AdminPanel() {
     setUpdatingId(editingProf.id);
 
     try {
-      const docRef = doc(db, 'professionals', editingProf.id);
       const updateData: any = {
         subscription_plan: editPlan,
         subscription_status: editStatus,
@@ -238,7 +290,11 @@ export default function AdminPanel() {
         updated_at: new Date().toISOString()
       };
 
-      await updateDoc(docRef, updateData);
+      const { error } = await supabase
+        .from('professionals')
+        .update(updateData)
+        .eq('id', editingProf.id);
+      if (error) throw error;
       setEditingProf(null);
       alert("Assinatura do profissional atualizada com sucesso!");
     } catch (error: any) {
@@ -249,7 +305,7 @@ export default function AdminPanel() {
     }
   };
 
-  // Salvar Chave Gemini no Firestore
+  // Salvar Chave Gemini no Supabase
   const handleSaveGeminiKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newGeminiKey) return;
@@ -258,12 +314,15 @@ export default function AdminPanel() {
     setSaveSuccess(false);
 
     try {
-      const settingsRef = doc(db, 'settings', 'gemini');
-      await setDoc(settingsRef, {
-        api_key: newGeminiKey,
-        updated_at: new Date().toISOString(),
-        updated_by: user?.email || 'admin'
-      });
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'gemini',
+          api_key: newGeminiKey,
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
+        });
+      if (error) throw error;
       setCurrentGeminiKey(newGeminiKey);
       setNewGeminiKey('');
       setSaveSuccess(true);
@@ -277,9 +336,9 @@ export default function AdminPanel() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     setUser(null);
-    setProfileInfo(null, null);
+    setProfileInfo(null, null, null, null, null, null);
     navigate('/login');
   };
 

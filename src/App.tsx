@@ -1,8 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from './firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { supabase } from './supabaseClient';
 import { useAuthStore } from './store/authStore';
 import { usePWAStore } from './store/pwaStore';
 import { Download, X } from 'lucide-react';
@@ -78,68 +76,66 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  const { setUser, setAuthReady, setProfileInfo } = useAuthStore();
+  const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken } = useAuthStore();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
+    const handleAuthSession = async (session: any) => {
+      if (session) {
+        setUser(session.user);
+        if (session.provider_token) {
+          setGoogleAccessToken(session.provider_token);
+        } else {
+          // Opcional: em alguns fluxos do Supabase o token do provedor pode ser guardado no localStorage
+          // se o redirecionamento limpar o provider_token após a primeira captura.
+        }
+
         try {
-          const docRef = doc(db, 'professionals', user.uid);
-          const docSnap = await getDoc(docRef);
-          const now = new Date();
-          const trialDurationMs = 7 * 24 * 60 * 60 * 1000;
+          const { data, error } = await supabase
+            .from('professionals')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
 
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            
-            // Compatibilidade retroativa para usuários legados
-            let currentSubPlan = data.subscription_plan;
-            let currentSubStatus = data.subscription_status;
-            let currentSubEndsAt = data.subscription_ends_at || null;
-            let currentTrialEndsAt = data.trial_ends_at || null;
-
-            if (data.status === 'active' && !currentSubPlan) {
-              currentSubPlan = 'none';
-              currentSubStatus = 'active';
-              currentSubEndsAt = null;
-            } else if (!currentSubPlan) {
-              currentSubPlan = 'trial';
-              currentSubStatus = 'trialing';
-              const createdTime = data.created_at ? new Date(data.created_at).getTime() : now.getTime();
-              const calculatedEnds = new Date(createdTime + trialDurationMs).toISOString();
-              currentSubEndsAt = calculatedEnds;
-              currentTrialEndsAt = calculatedEnds;
-            }
-
+          if (error) {
+            console.error("Erro ao buscar profissional no Supabase:", error);
+            // Tolerância para atraso no trigger: define valores padrão
+            setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+          } else if (data) {
             setProfileInfo(
               data.status,
               data.role || 'therapist',
-              currentSubPlan,
-              currentSubStatus,
-              currentSubEndsAt,
-              currentTrialEndsAt
+              data.subscription_plan,
+              data.subscription_status,
+              data.subscription_ends_at,
+              data.trial_ends_at
             );
-          } else {
-            if (user.email === 'contato@studio4x.com.br') {
-              setProfileInfo('active', 'admin', 'none', 'active', null, null);
-            } else {
-              // Caso o usuário exista no Auth mas não no Firestore, configuramos o trial na store
-              const trialEnds = new Date(now.getTime() + trialDurationMs).toISOString();
-              setProfileInfo('active', 'therapist', 'trial', 'trialing', trialEnds, trialEnds);
-            }
           }
         } catch (error) {
-          console.error("Erro ao buscar dados do perfil do profissional:", error);
+          console.error("Erro ao processar perfil do profissional:", error);
           setProfileInfo('pending', 'therapist');
         }
       } else {
+        setUser(null);
+        setGoogleAccessToken(null);
         setProfileInfo(null, null, null, null, null, null);
       }
-      setUser(user);
       setAuthReady(true);
+    };
+
+    // Pega a sessão inicial
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleAuthSession(session);
     });
-    return () => unsubscribe();
-  }, [setUser, setAuthReady, setProfileInfo]);
+
+    // Escuta mudanças no Auth
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      handleAuthSession(session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken]);
 
   return (
     <Router>

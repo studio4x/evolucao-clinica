@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { signOut } from 'firebase/auth';
-import { auth } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Clock, ShieldAlert, LogOut, Sparkles } from 'lucide-react';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -13,7 +12,7 @@ export default function PendingApproval() {
   const isInactive = searchParams.get('status') === 'inactive' || profileStatus === 'inactive';
 
   useEffect(() => {
-    // Redireciona de volta se não estiver autenticado no Firebase Auth
+    // Redireciona de volta se não estiver autenticado
     if (!user) {
       navigate('/login', { replace: true });
     } else if (profileStatus === 'active') {
@@ -24,7 +23,7 @@ export default function PendingApproval() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await supabase.auth.signOut();
       setUser(null);
       setProfileInfo(null, null);
       navigate('/login', { replace: true });

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { User } from 'firebase/auth';
+import { User } from '@supabase/supabase-js';
 
 interface AuthState {
   user: User | null;
@@ -52,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      // Only persist the googleAccessToken, as Firebase handles the user session
+      // Only persist the googleAccessToken, as Supabase handles the user session
       partialize: (state) => ({ googleAccessToken: state.googleAccessToken }),
     }
   )

@@ -1,9 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { db, auth, googleProvider, storage } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save } from 'lucide-react';
@@ -16,7 +13,7 @@ import { addPendingEvolution } from '../services/offlineQueue';
 export default function NewEvolution() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
   
   const [patient, setPatient] = useState<any>(null);
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
@@ -69,9 +66,17 @@ export default function NewEvolution() {
   useEffect(() => {
     const fetchPatient = async () => {
       if (!id) return;
-      const docSnap = await getDoc(doc(db, 'patients', id));
-      if (docSnap.exists()) {
-        setPatient(docSnap.data());
+      try {
+        const { data, error } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('id', id)
+          .single();
+        if (!error && data) {
+          setPatient(data);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar paciente:", err);
       }
     };
     fetchPatient();
@@ -87,12 +92,14 @@ export default function NewEvolution() {
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setGoogleAccessToken(credential.accessToken);
-        alert("Autenticação renovada com sucesso! Você já pode enviar a evolução.");
-      }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents',
+          redirectTo: window.location.origin + window.location.pathname
+        }
+      });
+      if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
       alert("Erro ao renovar autenticação. Tente novamente.");
@@ -299,7 +306,7 @@ export default function NewEvolution() {
   };
 
   const handleSubmit = async () => {
-    if (!audioBlob || !patient || !auth.currentUser) return;
+    if (!audioBlob || !patient || !user) return;
     
     if (!patient.google_doc_id) {
       alert("Este paciente não possui um prontuário vinculado. Por favor, edite o paciente e vincule um documento do Google Docs primeiro.");
@@ -321,7 +328,7 @@ export default function NewEvolution() {
     // 1. Prepare data
     const evolutionData = {
       id: evolutionId,
-      professional_id: auth.currentUser.uid,
+      professional_id: user.id,
       patient_id: patient.id,
       session_date: sessionDate,
       transcription_status: 'processing',
@@ -372,15 +379,18 @@ export default function NewEvolution() {
           transcription
         );
 
-        // 3. Update Firestore with success
-        await setDoc(doc(db, 'evolutions', evolutionId), {
-          ...evolutionData,
-          transcription_status: 'completed',
-          transcription_text: transcription,
-          google_doc_append_status: 'completed',
-          google_doc_append_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
+        // 3. Update Supabase with success
+        const { error: updateError } = await supabase
+          .from('evolutions')
+          .update({
+            transcription_status: 'completed',
+            transcription_text: transcription,
+            google_doc_append_status: 'completed',
+            google_doc_append_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', evolutionId);
+        if (updateError) throw updateError;
 
         setStatus('success');
         clearTimeout(timeoutId);
@@ -400,8 +410,11 @@ export default function NewEvolution() {
         throw new Error("offline");
       }
       
-      // 1. Prepare/Save initial state to Firestore
-      await setDoc(doc(db, 'evolutions', evolutionId), evolutionData);
+      // 1. Prepare/Save initial state to Supabase
+      const { error: insertError } = await supabase
+        .from('evolutions')
+        .insert(evolutionData);
+      if (insertError) throw insertError;
 
       // 2. Send to Backend
       await attemptProcess();
@@ -447,16 +460,19 @@ export default function NewEvolution() {
       setErrorMessage(msg);
       setStatus('error');
       
-      // Update Firestore with error
+      // Update Supabase with error
       try {
-        await setDoc(doc(db, 'evolutions', evolutionId), {
-          transcription_status: 'failed',
-          google_doc_append_status: 'failed',
-          error_message: msg,
-          updated_at: new Date().toISOString()
-        }, { merge: true });
+        await supabase
+          .from('evolutions')
+          .update({
+            transcription_status: 'failed',
+            google_doc_append_status: 'failed',
+            error_message: msg,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', evolutionId);
       } catch (fError) {
-        console.error("Failed to update firestore with error state (likely offline):", fError);
+        console.error("Failed to update supabase with error state (likely offline):", fError);
       }
     }
   };

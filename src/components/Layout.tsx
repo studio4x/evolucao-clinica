@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
-import { auth } from '../firebase';
-import { signOut } from 'firebase/auth';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard } from 'lucide-react';
@@ -31,7 +30,7 @@ export default function Layout() {
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate('/login');
   };
 

@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { db, auth, googleProvider } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2 } from 'lucide-react';
@@ -27,33 +25,37 @@ export default function History() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
 
   const fetchHistory = async () => {
-    if (!auth.currentUser) return;
+    if (!user) return;
     try {
-      const q = query(
-        collection(db, 'evolutions'),
-        where('professional_id', '==', auth.currentUser.uid),
-        orderBy('created_at', 'desc')
-      );
-      const snap = await getDocs(q);
-      const evos = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+      const { data: evos, error: evosError } = await supabase
+        .from('evolutions')
+        .select('*')
+        .eq('professional_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (evosError) throw evosError;
       
       // Fetch patient details for each evolution
       const pMap: Record<string, any> = { ...patientsMap };
-      const patientIds = [...new Set(evos.map(e => e.patient_id))];
+      const patientIds = [...new Set((evos || []).map(e => e.patient_id))];
       
       for (const pid of patientIds) {
         if (pMap[pid]) continue;
-        const pSnap = await getDoc(doc(db, 'patients', pid));
-        if (pSnap.exists()) {
-          pMap[pid] = pSnap.data();
+        const { data: pData, error: pError } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('id', pid)
+          .single();
+        if (!pError && pData) {
+          pMap[pid] = pData;
         }
       }
       
       setPatientsMap(pMap);
-      setEvolutions(evos);
+      setEvolutions(evos || []);
     } catch (error) {
       console.error("Error fetching history:", error);
     } finally {
@@ -63,25 +65,25 @@ export default function History() {
 
   useEffect(() => {
     fetchHistory();
-  }, []);
+  }, [user]);
 
   const handleReprocess = async (evo: any) => {
-    if (!auth.currentUser) return;
+    if (!user) return;
     
     let currentToken = googleAccessToken;
 
     // 1. Check for Google Token
     if (!currentToken) {
       try {
-        const result = await signInWithPopup(auth, googleProvider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (credential?.accessToken) {
-          currentToken = credential.accessToken;
-          setGoogleAccessToken(currentToken);
-        } else {
-          alert("Não foi possível obter o token do Google. Por favor, tente novamente.");
-          return;
-        }
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents',
+            redirectTo: window.location.origin + window.location.pathname
+          }
+        });
+        if (error) throw error;
+        return;
       } catch (error) {
         console.error("Re-auth error:", error);
         alert("Erro ao autenticar com o Google.");
@@ -100,14 +102,6 @@ export default function History() {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
     
-    // Call backend
-    const formData = new FormData();
-    formData.append('audioUrl', evo.audio_url);
-    formData.append('googleAccessToken', currentToken!);
-    formData.append('googleDocId', patient.google_doc_id);
-    formData.append('patientName', patient.full_name);
-    formData.append('sessionDate', evo.session_date);
-
     const maxRetries = 2;
     let retryCount = 0;
 
@@ -116,9 +110,27 @@ export default function History() {
         // 1. Fetch audio and transcribe with Gemini (Frontend)
         console.log("Iniciando transcrição no frontend...");
         
-        const apiKey = process.env.GEMINI_API_KEY;
+        let apiKey = '';
+        
+        try {
+          const { data, error } = await supabase
+            .from('settings')
+            .select('api_key')
+            .eq('id', 'gemini')
+            .single();
+          if (!error && data?.api_key) {
+            apiKey = data.api_key;
+          }
+        } catch (dbError) {
+          console.warn("[AI-Service] Falha ao ler chave do Gemini do Supabase:", dbError);
+        }
+
         if (!apiKey) {
-          throw new Error("Chave da API Gemini não encontrada no ambiente.");
+          apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
+        }
+
+        if (!apiKey) {
+          throw new Error("Chave da API Gemini não encontrada no ambiente ou banco de dados.");
         }
 
         const audioResponse = await fetch(evo.audio_url);
@@ -131,7 +143,7 @@ export default function History() {
         const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
         const geminiResponse = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-2.5-flash",
           contents: {
             parts: [
               { text: prompt },
@@ -155,15 +167,39 @@ export default function History() {
           transcription
         );
 
-        // Update Firestore with success
-        await updateDoc(doc(db, 'evolutions', evo.id), {
-          transcription_status: 'completed',
-          transcription_text: transcription,
-          google_doc_append_status: 'completed',
-          google_doc_append_at: new Date().toISOString(),
-          error_message: null,
-          updated_at: new Date().toISOString()
-        });
+        // Update Supabase with success
+        const { error: updateError } = await supabase
+          .from('evolutions')
+          .update({
+            transcription_status: 'completed',
+            transcription_text: transcription,
+            google_doc_append_status: 'completed',
+            google_doc_append_at: new Date().toISOString(),
+            error_message: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', evo.id);
+        if (updateError) throw updateError;
+
+        // Gravando log de uso no Supabase
+        const usageMetadata = (geminiResponse as any).usageMetadata;
+        if (usageMetadata) {
+          const promptTokens = usageMetadata.promptTokenCount || 0;
+          const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
+          const totalTokens = usageMetadata.totalTokenCount || 0;
+          const costUsd = (promptTokens * 0.00000030) + (candidatesTokens * 0.00000250);
+
+          await supabase.from('usage_logs').insert({
+            professional_id: user.id,
+            model: "gemini-2.5-flash",
+            prompt_tokens: promptTokens,
+            candidates_tokens: candidatesTokens,
+            total_tokens: totalTokens,
+            cost_usd: costUsd,
+            audio_duration_seconds: evo.audio_duration_seconds || 0,
+            created_at: new Date().toISOString()
+          });
+        }
 
         clearTimeout(timeoutId);
         await fetchHistory();
@@ -187,11 +223,15 @@ export default function History() {
 
     try {
       // Update status to processing
-      await updateDoc(doc(db, 'evolutions', evo.id), {
-        transcription_status: 'processing',
-        google_doc_append_status: 'pending',
-        updated_at: new Date().toISOString()
-      });
+      const { error: updateError } = await supabase
+        .from('evolutions')
+        .update({
+          transcription_status: 'processing',
+          google_doc_append_status: 'pending',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evo.id);
+      if (updateError) throw updateError;
 
       await attemptProcess();
     } catch (error: any) {
@@ -206,11 +246,16 @@ export default function History() {
         setGoogleAccessToken(null);
       }
       
-      await updateDoc(doc(db, 'evolutions', evo.id), {
-        transcription_status: 'failed',
-        error_message: msg,
-        updated_at: new Date().toISOString()
-      });
+      const { error: updateError } = await supabase
+        .from('evolutions')
+        .update({
+          transcription_status: 'failed',
+          error_message: msg,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evo.id);
+      if (updateError) throw updateError;
+      
       await fetchHistory();
       alert(`Erro ao reprocessar: ${msg}`);
     } finally {
@@ -221,9 +266,11 @@ export default function History() {
   const handleClearEvolutions = async () => {
     setIsClearing(true);
     try {
-      for (const evo of evolutions) {
-        await deleteDoc(doc(db, 'evolutions', evo.id));
-      }
+      const { error } = await supabase
+        .from('evolutions')
+        .delete()
+        .eq('professional_id', user.id);
+      if (error) throw error;
       setEvolutions([]);
       setShowClearConfirm(false);
     } catch (error) {

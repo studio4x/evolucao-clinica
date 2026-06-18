@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPendingEvolutions, removePendingEvolution, PendingEvolution } from '../../services/offlineQueue';
 import { transcribeAudio } from '../../services/aiTranscription';
 import { appendToGoogleDoc } from '../../services/googleDocs';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { supabase } from '../../supabaseClient';
 import { useAuthStore } from '../../store/authStore';
 import { CloudOff, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
 
@@ -90,14 +89,17 @@ export function OfflineQueueMonitor() {
         await appendToGoogleDoc(googleAccessToken, item.googleDocId, item.sessionDate, transcription);
 
         setSyncStatus(`Salvando ${item.patientName}...`);
-        await setDoc(doc(db, 'evolutions', item.id), {
-          ...item.evolutionData,
-          transcription_status: 'completed',
-          transcription_text: transcription,
-          google_doc_append_status: 'completed',
-          google_doc_append_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
+        const { error: upsertError } = await supabase
+          .from('evolutions')
+          .upsert({
+            ...item.evolutionData,
+            transcription_status: 'completed',
+            transcription_text: transcription,
+            google_doc_append_status: 'completed',
+            google_doc_append_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        if (upsertError) throw upsertError;
 
         // Removendo da fila
         await removePendingEvolution(item.id);

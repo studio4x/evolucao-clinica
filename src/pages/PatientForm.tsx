@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { db, auth, apiKey, projectId, googleProvider } from '../firebase';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File } from 'lucide-react';
@@ -18,7 +16,7 @@ declare global {
 export default function PatientForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   
@@ -47,18 +45,28 @@ export default function PatientForm() {
   useEffect(() => {
     if (id) {
       const fetchPatient = async () => {
-        const docRef = doc(db, 'patients', id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setFormData({
-            full_name: data.full_name || '',
-            notes: data.notes || '',
-            status: data.status || 'active',
-            google_doc_id: data.google_doc_id || '',
-            google_doc_name: data.google_doc_name || '',
-            google_doc_url: data.google_doc_url || ''
-          });
+        try {
+          const { data, error } = await supabase
+            .from('patients')
+            .select('*')
+            .eq('id', id)
+            .single();
+          
+          if (error) throw error;
+          if (data) {
+            setFormData({
+              full_name: data.full_name || '',
+              notes: data.notes || '',
+              status: data.status || 'active',
+              google_doc_id: data.google_doc_id || '',
+              google_doc_name: data.google_doc_name || '',
+              google_doc_url: data.google_doc_url || '',
+              target_folder_id: data.target_folder_id || '',
+              target_folder_name: data.target_folder_name || ''
+            });
+          }
+        } catch (error) {
+          console.error("Error fetching patient:", error);
         }
       };
       fetchPatient();
@@ -68,12 +76,14 @@ export default function PatientForm() {
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setGoogleAccessToken(credential.accessToken);
-        alert("Autenticação renovada com sucesso! Você já pode criar o prontuário.");
-      }
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents',
+          redirectTo: window.location.origin + window.location.pathname
+        }
+      });
+      if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
       alert("Erro ao renovar autenticação. Tente novamente.");
@@ -277,38 +287,40 @@ export default function PatientForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!auth.currentUser) return;
+    if (!user) return;
     
     setLoading(true);
     try {
       const patientId = id || uuidv4();
       
-      // Sanitizar dados para o Firestore: enviar apenas campos permitidos pelas regras de segurança
       const patientData: any = {
         id: patientId,
-        professional_id: auth.currentUser.uid,
+        professional_id: user.id,
         full_name: formData.full_name,
         notes: formData.notes,
         status: formData.status,
         updated_at: new Date().toISOString()
       };
 
-      // Só inclui campos do Google Drive se eles tiverem valor (para não quebrar regras de validação de string)
-      if (formData.google_doc_id) {
-        patientData.google_doc_id = formData.google_doc_id;
-        patientData.google_doc_name = formData.google_doc_name;
-        patientData.google_doc_url = formData.google_doc_url;
-      }
-      if (formData.target_folder_id) {
-        patientData.target_folder_id = formData.target_folder_id;
-        patientData.target_folder_name = formData.target_folder_name;
-      }
+      // Só inclui campos do Google Drive se eles tiverem valor (ou envia null de forma explícita)
+      patientData.google_doc_id = formData.google_doc_id || null;
+      patientData.google_doc_name = formData.google_doc_name || null;
+      patientData.google_doc_url = formData.google_doc_url || null;
+      patientData.target_folder_id = formData.target_folder_id || null;
+      patientData.target_folder_name = formData.target_folder_name || null;
 
       if (id) {
-        await updateDoc(doc(db, 'patients', id), patientData);
+        const { error } = await supabase
+          .from('patients')
+          .update(patientData)
+          .eq('id', id);
+        if (error) throw error;
       } else {
         patientData.created_at = new Date().toISOString();
-        await setDoc(doc(db, 'patients', patientId), patientData);
+        const { error } = await supabase
+          .from('patients')
+          .insert(patientData);
+        if (error) throw error;
       }
       navigate('/patients');
     } catch (error) {

@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { supabase } from "../supabaseClient";
 
 export interface TranscriptionOptions {
   audioBlob: Blob;
@@ -33,17 +34,18 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
       let apiKey = '';
       
       try {
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { db } = await import('../firebase');
-        const settingsRef = doc(db, 'settings', 'gemini');
-        const settingsSnap = await getDoc(settingsRef);
-        if (settingsSnap.exists() && settingsSnap.data().api_key) {
-          apiKey = settingsSnap.data().api_key;
+        const { data, error } = await supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'gemini')
+          .single();
+        if (!error && data?.api_key) {
+          apiKey = data.api_key;
           keySource = 'firestore';
-          console.log("[AI-Service] Usando chave do Gemini configurada no Firestore.");
+          console.log("[AI-Service] Usando chave do Gemini configurada no Supabase.");
         }
       } catch (dbError) {
-        console.warn("[AI-Service] Falha ao ler chave do Gemini do Firestore, usando fallback:", dbError);
+        console.warn("[AI-Service] Falha ao ler chave do Gemini do Supabase, usando fallback:", dbError);
       }
 
       if (!apiKey) {
@@ -106,13 +108,10 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         const costUsd = (promptTokens * 0.00000030) + (candidatesTokens * 0.00000250);
 
         try {
-          const { collection, addDoc } = await import('firebase/firestore');
-          const { db, auth } = await import('../firebase');
+          const { data: { user } } = await supabase.auth.getUser();
           
-          await addDoc(collection(db, 'usage_logs'), {
-            professional_id: auth.currentUser?.uid || 'unknown',
-            professional_name: auth.currentUser?.displayName || auth.currentUser?.email || 'Profissional',
-            professional_email: auth.currentUser?.email || '',
+          await supabase.from('usage_logs').insert({
+            professional_id: user?.id || 'unknown',
             model: "gemini-2.5-flash",
             prompt_tokens: promptTokens,
             candidates_tokens: candidatesTokens,
@@ -121,9 +120,9 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
             audio_duration_seconds: audioDuration || 0,
             created_at: new Date().toISOString()
           });
-          console.log("[AI-Service] Log de consumo gravado no Firestore com sucesso.");
+          console.log("[AI-Service] Log de consumo gravado no Supabase com sucesso.");
         } catch (dbError) {
-          console.error("[AI-Service] Erro ao salvar log de consumo no Firestore:", dbError);
+          console.error("[AI-Service] Erro ao salvar log de consumo no Supabase:", dbError);
         }
       }
 

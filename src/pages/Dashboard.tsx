@@ -1,66 +1,72 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { supabase } from '../supabaseClient';
+import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock } from 'lucide-react';
-import { format } from 'date-fns';
 
 export default function Dashboard() {
+  const { user } = useAuthStore();
   const [stats, setStats] = useState({
     totalPatients: 0,
     recentEvolutions: 0,
     errorEvolutions: 0,
     totalMinutes: 0
   });
-  const [recentEvolutionsList, setRecentEvolutionsList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      if (!auth.currentUser) return;
-      const uid = auth.currentUser.uid;
+      if (!user) return;
+      const uid = user.id;
 
       try {
-        // Fetch total patients
-        const patientsQ = query(collection(db, 'patients'), where('professional_id', '==', uid), where('status', '==', 'active'));
-        const patientsSnap = await getDocs(patientsQ);
-        
-        // Fetch recent evolutions
-        const evolutionsQ = query(
-          collection(db, 'evolutions'), 
-          where('professional_id', '==', uid),
-          orderBy('created_at', 'desc'),
-          limit(5)
-        );
-        const evolutionsSnap = await getDocs(evolutionsQ);
-        
-        // Fetch error evolutions
-        const errorsQ = query(
-          collection(db, 'evolutions'), 
-          where('professional_id', '==', uid),
-          where('transcription_status', '==', 'failed')
-        );
-        const errorsSnap = await getDocs(errorsQ);
+        // Busca total de pacientes
+        const { count: patientsCount, error: patientsError } = await supabase
+          .from('patients')
+          .select('*', { count: 'exact', head: true })
+          .eq('professional_id', uid)
+          .eq('status', 'active');
+          
+        if (patientsError) throw patientsError;
 
-        // Fetch professional's total transcribed minutes from usage_logs
-        const usageQ = query(collection(db, 'usage_logs'), where('professional_id', '==', uid));
-        const usageSnap = await getDocs(usageQ);
+        // Busca total de evoluções
+        const { count: evolutionsCount, error: evolutionsError } = await supabase
+          .from('evolutions')
+          .select('*', { count: 'exact', head: true })
+          .eq('professional_id', uid);
+          
+        if (evolutionsError) throw evolutionsError;
+
+        // Busca total de falhas em evoluções
+        const { count: errorsCount, error: errorsError } = await supabase
+          .from('evolutions')
+          .select('*', { count: 'exact', head: true })
+          .eq('professional_id', uid)
+          .eq('transcription_status', 'failed');
+          
+        if (errorsError) throw errorsError;
+
+        // Busca logs de uso para calcular total de minutos
+        const { data: usageLogs, error: usageError } = await supabase
+          .from('usage_logs')
+          .select('audio_duration_seconds')
+          .eq('professional_id', uid);
+
+        if (usageError) throw usageError;
+
         let totalSeconds = 0;
-        usageSnap.forEach(doc => {
-          totalSeconds += doc.data().audio_duration_seconds || 0;
+        usageLogs?.forEach(log => {
+          totalSeconds += Number(log.audio_duration_seconds || 0);
         });
         const totalMinutes = totalSeconds / 60;
 
-        const evolutions = evolutionsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
         setStats({
-          totalPatients: patientsSnap.size,
-          recentEvolutions: evolutionsSnap.size,
-          errorEvolutions: errorsSnap.size,
+          totalPatients: patientsCount || 0,
+          recentEvolutions: evolutionsCount || 0,
+          errorEvolutions: errorsCount || 0,
           totalMinutes: totalMinutes
         });
         
-        setRecentEvolutionsList(evolutions);
       } catch (error) {
         console.error("Error fetching dashboard data:", error);
       } finally {
@@ -69,7 +75,7 @@ export default function Dashboard() {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   if (loading) return <div>Carregando...</div>;
 
@@ -79,7 +85,7 @@ export default function Dashboard() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-display font-bold text-brand-primary">
-            Olá, {auth.currentUser?.displayName?.split(' ')[0] || 'Terapeuta'}!
+            Olá, {user?.user_metadata?.full_name?.split(' ')[0] || 'Terapeuta'}!
           </h1>
           <p className="text-brand-text-muted mt-1">
             Aqui está o resumo dos seus atendimentos clínicos.

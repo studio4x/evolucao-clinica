@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
-import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { db, auth, googleProvider } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -28,25 +26,27 @@ export default function PatientDetail() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const { googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
 
   const fetchData = async () => {
-    if (!id || !auth.currentUser) return;
+    if (!id || !user) return;
     try {
-      const docRef = doc(db, 'patients', id);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        setPatient({ id: docSnap.id, ...docSnap.data() });
-      }
+      const { data: patientData, error: patientError } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (patientError) throw patientError;
+      setPatient(patientData);
 
-      const q = query(
-        collection(db, 'evolutions'),
-        where('patient_id', '==', id),
-        where('professional_id', '==', auth.currentUser?.uid),
-        orderBy('created_at', 'desc')
-      );
-      const evosSnap = await getDocs(q);
-      setEvolutions(evosSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const { data: evosData, error: evosError } = await supabase
+        .from('evolutions')
+        .select('*')
+        .eq('patient_id', id)
+        .eq('professional_id', user.id)
+        .order('created_at', { ascending: false });
+      if (evosError) throw evosError;
+      setEvolutions(evosData || []);
     } catch (error) {
       console.error("Error fetching patient details:", error);
     } finally {
@@ -56,25 +56,25 @@ export default function PatientDetail() {
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [id, user]);
 
   const handleReprocess = async (evo: any) => {
-    if (!auth.currentUser) return;
+    if (!user) return;
     
     let currentToken = googleAccessToken;
 
     // 1. Check for Google Token
     if (!currentToken) {
       try {
-        const result = await signInWithPopup(auth, googleProvider);
-        const credential = GoogleAuthProvider.credentialFromResult(result);
-        if (credential?.accessToken) {
-          currentToken = credential.accessToken;
-          setGoogleAccessToken(currentToken);
-        } else {
-          alert("Não foi possível obter o token do Google. Por favor, tente novamente.");
-          return;
-        }
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents',
+            redirectTo: window.location.origin + window.location.pathname
+          }
+        });
+        if (error) throw error;
+        return;
       } catch (error) {
         console.error("Re-auth error:", error);
         alert("Erro ao autenticar com o Google.");
@@ -198,11 +198,15 @@ export default function PatientDetail() {
         setGoogleAccessToken(null);
       }
       
-      await updateDoc(doc(db, 'evolutions', evo.id), {
-        transcription_status: 'failed',
-        error_message: msg,
-        updated_at: new Date().toISOString()
-      });
+      const { error: updateError } = await supabase
+        .from('evolutions')
+        .update({
+          transcription_status: 'failed',
+          error_message: msg,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evo.id);
+      if (updateError) throw updateError;
       await fetchData();
       alert(`Erro ao reprocessar: ${msg}`);
     } finally {
@@ -213,9 +217,12 @@ export default function PatientDetail() {
   const handleClearEvolutions = async () => {
     setIsClearing(true);
     try {
-      for (const evo of evolutions) {
-        await deleteDoc(doc(db, 'evolutions', evo.id));
-      }
+      const { error } = await supabase
+        .from('evolutions')
+        .delete()
+        .eq('patient_id', id)
+        .eq('professional_id', user!.id);
+      if (error) throw error;
       setEvolutions([]);
       setShowClearConfirm(false);
     } catch (error) {

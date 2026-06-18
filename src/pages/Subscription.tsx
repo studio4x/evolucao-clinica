@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { db } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle } from 'lucide-react';
 
 export default function Subscription() {
@@ -36,7 +35,6 @@ export default function Subscription() {
     setSuccessMessage(null);
 
     try {
-      const docRef = doc(db, 'professionals', user.uid);
       const now = new Date();
       let durationMs = 0;
 
@@ -48,14 +46,17 @@ export default function Subscription() {
 
       const newExpirationDate = new Date(now.getTime() + durationMs).toISOString();
 
-      const updateData = {
-        subscription_plan: plan,
-        subscription_status: 'active',
-        subscription_ends_at: newExpirationDate,
-        updated_at: now.toISOString()
-      };
+      const { error } = await supabase
+        .from('professionals')
+        .update({
+          subscription_plan: plan,
+          subscription_status: 'active',
+          subscription_ends_at: newExpirationDate,
+          updated_at: now.toISOString()
+        })
+        .eq('id', user.id);
 
-      await updateDoc(docRef, updateData);
+      if (error) throw error;
 
       // Atualiza o estado global do Zustand
       setProfileInfo(
@@ -69,9 +70,9 @@ export default function Subscription() {
 
       setSuccessMessage(`Plano ${plan === 'monthly' ? 'Mensal' : 'Anual'} ativado com sucesso através da simulação!`);
       setTimeout(() => setSuccessMessage(null), 8000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao simular pagamento:", error);
-      alert("Erro ao processar assinatura simulada no Firestore. Verifique suas permissões.");
+      alert("Erro ao processar assinatura simulada no Supabase: " + (error.message || error));
     } finally {
       setLoadingPlan(null);
     }
@@ -81,17 +82,19 @@ export default function Subscription() {
     if (!user) return;
     setLoadingPlan('expire');
     try {
-      const docRef = doc(db, 'professionals', user.uid);
       const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-      const updateData = {
-        subscription_plan: 'trial',
-        subscription_status: 'canceled',
-        subscription_ends_at: yesterday,
-        updated_at: new Date().toISOString()
-      };
+      const { error } = await supabase
+        .from('professionals')
+        .update({
+          subscription_plan: 'trial',
+          subscription_status: 'canceled',
+          subscription_ends_at: yesterday,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
 
-      await updateDoc(docRef, updateData);
+      if (error) throw error;
 
       setProfileInfo(
         'active',
@@ -104,9 +107,9 @@ export default function Subscription() {
 
       setSuccessMessage("Conta simulada como EXPIRADA com sucesso! Você verá a tela de bloqueio nas outras páginas.");
       setTimeout(() => setSuccessMessage(null), 8000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro ao simular expiração:", error);
-      alert("Erro ao simular expiração no Firestore.");
+      alert("Erro ao simular expiração no Supabase: " + (error.message || error));
     } finally {
       setLoadingPlan(null);
     }

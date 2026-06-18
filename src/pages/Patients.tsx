@@ -1,25 +1,27 @@
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { supabase } from '../supabaseClient';
+import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { Plus, Search, FileText } from 'lucide-react';
 
 export default function Patients() {
+  const { user } = useAuthStore();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     const fetchPatients = async () => {
-      if (!auth.currentUser) return;
+      if (!user) return;
       try {
-        const q = query(
-          collection(db, 'patients'),
-          where('professional_id', '==', auth.currentUser.uid),
-          orderBy('full_name')
-        );
-        const snap = await getDocs(q);
-        setPatients(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const { data, error } = await supabase
+          .from('patients')
+          .select('*')
+          .eq('professional_id', user.id)
+          .order('full_name');
+        
+        if (error) throw error;
+        setPatients(data || []);
       } catch (error) {
         console.error("Error fetching patients:", error);
       } finally {
@@ -27,7 +29,7 @@ export default function Patients() {
       }
     };
     fetchPatients();
-  }, []);
+  }, [user]);
 
   const filteredPatients = patients.filter(p => 
     p.full_name.toLowerCase().includes(searchTerm.toLowerCase())

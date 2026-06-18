@@ -1,126 +1,29 @@
-import { signInWithPopup, signInWithRedirect, getRedirectResult, GoogleAuthProvider } from 'firebase/auth';
-import { auth, googleProvider, db } from '../firebase';
+import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { AppVersion } from '../components/layout/AppVersion';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ShieldCheck, Zap, Sparkles, Files } from 'lucide-react';
 
 export default function Login() {
   const navigate = useNavigate();
-  const { setGoogleAccessToken, setUser, setProfileInfo } = useAuthStore();
   const [loading, setLoading] = useState(false);
-
-  // No longer using redirect flows
-
-  const handleUserProfile = async (user: any) => {
-    const docRef = doc(db, 'professionals', user.uid);
-    const docSnap = await getDoc(docRef);
-
-    let status: 'active' | 'pending' | 'inactive' = 'active'; // Novos usuários entram direto como ativo/trial
-    let role: 'admin' | 'therapist' = 'therapist';
-    
-    // Configurações de Assinatura para novos usuários
-    const now = new Date();
-    const trialDurationMs = 7 * 24 * 60 * 60 * 1000; // 7 dias
-    const trialEnds = new Date(now.getTime() + trialDurationMs).toISOString();
-
-    let subPlan: 'trial' | 'monthly' | 'yearly' | 'none' = 'trial';
-    let subStatus: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' = 'trialing';
-    let subEndsAt: string | null = trialEnds;
-    let trialEndsAt: string | null = trialEnds;
-
-    if (user.email === 'contato@studio4x.com.br') {
-      status = 'active';
-      role = 'admin';
-      subPlan = 'none';
-      subStatus = 'active';
-      subEndsAt = null;
-      trialEndsAt = null;
-    }
-
-    if (!docSnap.exists()) {
-      const professionalData: any = {
-        id: user.uid,
-        google_email: user.email || '',
-        full_name: user.displayName || 'Usuário',
-        role: role,
-        status: status,
-        subscription_plan: subPlan,
-        subscription_status: subStatus,
-        subscription_ends_at: subEndsAt,
-        trial_ends_at: trialEndsAt,
-        created_at: now.toISOString(),
-        updated_at: now.toISOString()
-      };
-      if (user.photoURL) {
-        professionalData.photo_url = user.photoURL;
-      }
-      await setDoc(docRef, professionalData);
-      setProfileInfo(status, role, subPlan, subStatus, subEndsAt, trialEndsAt);
-    } else {
-      const data = docSnap.data();
-      
-      // Tratamento de compatibilidade para usuários antigos que já eram ativos
-      let currentSubPlan = data.subscription_plan;
-      let currentSubStatus = data.subscription_status;
-      let currentSubEndsAt = data.subscription_ends_at || null;
-      let currentTrialEndsAt = data.trial_ends_at || null;
-
-      if (data.status === 'active' && !currentSubPlan) {
-        // Usuário antigo que já estava ativo ganha plano ilimitado/vitalício
-        currentSubPlan = 'none';
-        currentSubStatus = 'active';
-        currentSubEndsAt = null;
-      } else if (!currentSubPlan) {
-        // Caso não tenha plano mas tenha status pendente, ou algo do tipo
-        currentSubPlan = 'trial';
-        currentSubStatus = 'trialing';
-        const createdTime = data.created_at ? new Date(data.created_at).getTime() : now.getTime();
-        const calculatedEnds = new Date(createdTime + trialDurationMs).toISOString();
-        currentSubEndsAt = calculatedEnds;
-        currentTrialEndsAt = calculatedEnds;
-      }
-
-      setProfileInfo(
-        data.status,
-        data.role || 'therapist',
-        currentSubPlan,
-        currentSubStatus,
-        currentSubEndsAt,
-        currentTrialEndsAt
-      );
-    }
-
-    setUser(user);
-  };
 
   const handleLogin = async () => {
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential?.accessToken) {
-        setGoogleAccessToken(credential.accessToken);
-      }
-
-      // Evita travamento infinito caso o Firestore do Firebase falhe de responder
-      const profilePromise = handleUserProfile(result.user);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("O banco de dados demorou muito para responder (Timeout/Offline).")), 10000)
-      );
-      
-      await Promise.race([profilePromise, timeoutPromise]);
-      navigate('/');
-      
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents',
+          redirectTo: window.location.origin
+        }
+      });
+      if (error) throw error;
     } catch (error: any) {
       console.error('Login error:', error);
       setLoading(false);
-      if (error.code !== 'auth/popup-closed-by-user' && error.code !== 'auth/cancelled-popup-request') {
-        alert(`Erro de autenticação: ${error.message}`);
-      }
+      alert(`Erro de autenticação: ${error.message}`);
     }
   };
 
