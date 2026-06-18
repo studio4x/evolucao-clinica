@@ -136,9 +136,9 @@ export default function Profile() {
         {/* Card Lateral do Avatar */}
         <div className="card p-6 bg-white flex flex-col items-center text-center space-y-4 shadow-sm border border-brand-border/60 self-start">
           <div className="relative">
-            {user?.user_metadata?.avatar_url || user?.photoURL ? (
+            {user?.user_metadata?.avatar_url ? (
               <img
-                src={user?.user_metadata?.avatar_url || user?.photoURL}
+                src={user?.user_metadata?.avatar_url}
                 alt={displayName}
                 className="w-24 h-24 rounded-full object-cover border-2 border-brand-accent shadow-sm"
                 referrerPolicy="no-referrer"

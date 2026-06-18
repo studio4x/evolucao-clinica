@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle } from 'lucide-react';
+import GooglePayButton from '@google-pay/button-react';
+import { getGooglePayRequest, GOOGLE_PAY_ENVIRONMENT } from '../services/googlePay';
 
 const DEFAULT_PLANS = [
   {
@@ -156,6 +158,57 @@ export default function Subscription() {
     } catch (error: any) {
       console.error("Erro ao simular expiração:", error);
       alert("Erro ao simular expiração no Supabase: " + (error.message || error));
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+
+  const handleGooglePaySuccess = async (plan: 'monthly' | 'yearly', paymentData: any) => {
+    if (!user) return;
+    setLoadingPlan(plan);
+    setSuccessMessage(null);
+
+    try {
+      console.log("Token do Google Pay recebido com sucesso:", paymentData.paymentMethodData?.tokenizationData?.token);
+      
+      const now = new Date();
+      let durationMs = 0;
+
+      if (plan === 'monthly') {
+        durationMs = 30 * 24 * 60 * 60 * 1000; // 30 dias
+      } else if (plan === 'yearly') {
+        durationMs = 365 * 24 * 60 * 60 * 1000; // 365 dias
+      }
+
+      const newExpirationDate = new Date(now.getTime() + durationMs).toISOString();
+
+      const { error } = await supabase
+        .from('professionals')
+        .update({
+          subscription_plan: plan,
+          subscription_status: 'active',
+          subscription_ends_at: newExpirationDate,
+          updated_at: now.toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      // Atualiza o estado global do Zustand
+      setProfileInfo(
+        'active', 
+        profileRole || 'therapist',
+        plan,
+        'active',
+        newExpirationDate,
+        trialEndsAt
+      );
+
+      setSuccessMessage(`Plano ${plan === 'monthly' ? 'Mensal' : 'Anual'} ativado com sucesso via Google Pay!`);
+      setTimeout(() => setSuccessMessage(null), 8000);
+    } catch (error: any) {
+      console.error("Erro ao processar assinatura via Google Pay:", error);
+      alert("Erro ao processar assinatura no Supabase: " + (error.message || error));
     } finally {
       setLoadingPlan(null);
     }
@@ -347,28 +400,56 @@ export default function Subscription() {
                 )}
               </div>
 
-              <div className="mt-8 pt-4">
-                <button
-                  onClick={() => handleSimulatePayment(plan.id)}
-                  disabled={loadingPlan !== null}
-                  className={`w-full py-3.5 px-4 font-bold rounded-2xl transition-all duration-200 flex items-center justify-center space-x-2 ${
-                    isCurrentPlan
-                      ? 'bg-brand-bg text-brand-primary border border-brand-primary/20 cursor-default'
-                      : 'btn-primary shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform hover:-translate-y-0.5 active:translate-y-0'
-                  }`}
-                >
-                  {loadingPlan === plan.id ? (
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  ) : (
-                    <>
-                      <CreditCard className="w-5 h-5" />
-                      <span>{isCurrentPlan ? 'Plano Ativo' : plan.button_text_simulate}</span>
-                    </>
-                  )}
-                </button>
+              <div className="mt-8 pt-4 space-y-3">
+                {isCurrentPlan ? (
+                  <button
+                    disabled
+                    className="w-full py-3.5 px-4 font-bold rounded-2xl bg-brand-bg text-brand-primary border border-brand-primary/20 cursor-default flex items-center justify-center space-x-2"
+                  >
+                    <CreditCard className="w-5 h-5" />
+                    <span>Plano Ativo</span>
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="w-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                      <GooglePayButton
+                        environment={GOOGLE_PAY_ENVIRONMENT}
+                        buttonType="subscribe"
+                        buttonColor="black"
+                        buttonSizeMode="fill"
+                        paymentRequest={getGooglePayRequest(plan.price)}
+                        onLoadPaymentData={(paymentRequest) => {
+                          handleGooglePaySuccess(plan.id, paymentRequest);
+                        }}
+                        onError={(error) => {
+                          console.error('Erro na API do Google Pay:', error);
+                        }}
+                        onCancel={(reason) => {
+                          console.log('Pagamento cancelado pelo usuário:', reason);
+                        }}
+                        style={{ width: '100%', height: '48px' }}
+                      />
+                    </div>
+                    
+                    <button
+                      onClick={() => handleSimulatePayment(plan.id)}
+                      disabled={loadingPlan !== null}
+                      className="w-full py-2 px-4 text-xs font-semibold text-brand-text-muted hover:text-brand-primary border border-dashed border-brand-border hover:border-brand-primary/45 rounded-xl transition-all flex items-center justify-center space-x-1.5 bg-brand-bg/30 hover:bg-brand-bg"
+                    >
+                      {loadingPlan === plan.id ? (
+                        <svg className="animate-spin h-4 w-4 text-brand-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>Simular Ativação Rápida</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           );

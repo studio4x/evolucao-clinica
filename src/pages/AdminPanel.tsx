@@ -196,6 +196,19 @@ export default function AdminPanel() {
   const [plansError, setPlansError] = useState('');
   const [plansSuccess, setPlansSuccess] = useState('');
 
+  // Estados do Formulário de Login (Administrativo)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
+  // Estados do modal de edição de assinatura SaaS
+  const [editingProf, setEditingProf] = useState<Professional | null>(null);
+  const [editPlan, setEditPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none'>('trial');
+  const [editStatus, setEditStatus] = useState<'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid'>('trialing');
+  const [editEndsAt, setEditEndsAt] = useState('');
+  const [editUserStatus, setEditUserStatus] = useState<'active' | 'pending' | 'inactive'>('active');
+
   const fetchPlans = async () => {
     setLoadingPlans(true);
     setPlansError('');
