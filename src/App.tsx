@@ -100,8 +100,9 @@ export default function App() {
 
           if (error) {
             console.error("Erro ao buscar profissional no Supabase:", error);
-            // Tolerância para atraso no trigger: define valores padrão
-            setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+            // Se o usuário acabou de se cadastrar ou o registro não foi propagado ainda,
+            // definimos o status padrão como 'pending' para aguardar a liberação.
+            setProfileInfo('pending', 'therapist', 'trial', 'trialing', null, null);
           } else if (data) {
             setProfileInfo(
               data.status,
