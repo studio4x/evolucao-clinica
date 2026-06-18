@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -49,8 +49,22 @@ export default function AdminPanel() {
   const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
 
-  // Abas do Admin
-  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'token_usage' | 'plans' | 'profile'>('professionals');
+  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile'>('professionals');
+
+  // Estados de Configuração de Pagamento (Google Pay & Stripe)
+  const [paymentEnvironment, setPaymentEnvironment] = useState<'TEST' | 'PRODUCTION'>('TEST');
+  const [googleMerchantId, setGoogleMerchantId] = useState('');
+  const [stripeProdPublishableKey, setStripeProdPublishableKey] = useState('');
+  const [stripeProdSecretKey, setStripeProdSecretKey] = useState('');
+  const [stripeSandboxPublishableKey, setStripeSandboxPublishableKey] = useState('');
+  const [stripeSandboxSecretKey, setStripeSandboxSecretKey] = useState('');
+  const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(false);
+  const [paymentSaveSuccess, setPaymentSaveSuccess] = useState(false);
+  const [paymentSaveLoading, setPaymentSaveLoading] = useState(false);
+
+  // Controle de exibição de chaves secretas
+  const [showStripeProdSecret, setShowStripeProdSecret] = useState(false);
+  const [showStripeSandboxSecret, setShowStripeSandboxSecret] = useState(false);
 
   // Estados do Perfil do Admin
   const [adminFirstName, setAdminFirstName] = useState('');
@@ -362,6 +376,46 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
+  // Efeito para carregar as chaves de Pagamento do Google Pay/Stripe
+  useEffect(() => {
+    const fetchPaymentSettings = async () => {
+      setPaymentSettingsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'payment_settings')
+          .single();
+        
+        if (!error && data && data.api_key) {
+          const parsed = JSON.parse(data.api_key);
+          setPaymentEnvironment(parsed.environment || 'TEST');
+          setGoogleMerchantId(parsed.googleMerchantId || '');
+          setStripeProdPublishableKey(parsed.stripeProdPublishableKey || '');
+          setStripeProdSecretKey(parsed.stripeProdSecretKey || '');
+          setStripeSandboxPublishableKey(parsed.stripeSandboxPublishableKey || '');
+          setStripeSandboxSecretKey(parsed.stripeSandboxSecretKey || '');
+        } else {
+          // Preencher com as credenciais padrão se não houver dados salvos
+          setPaymentEnvironment('TEST');
+          setGoogleMerchantId('BCR2DN7TTCHMTFAJ');
+          setStripeProdPublishableKey('pk_live_wDyGJo2Rl2ikV2HaBXzZey1o');
+          setStripeProdSecretKey('');
+          setStripeSandboxPublishableKey('pk_test_0b7fQSiyaxD7OjUH6lKL6Slh');
+          setStripeSandboxSecretKey('');
+        }
+      } catch (err) {
+        console.error("Erro ao buscar configurações de pagamento:", err);
+      } finally {
+        setPaymentSettingsLoading(false);
+      }
+    };
+
+    if (user && profileRole === 'admin' && activeTab === 'google_pay_config') {
+      fetchPaymentSettings();
+    }
+  }, [user, profileRole, activeTab]);
+
   // Efeito para carregar os logs de consumo do Supabase
   useEffect(() => {
     if (!user || profileRole !== 'admin' || activeTab !== 'token_usage') {
@@ -552,6 +606,42 @@ export default function AdminPanel() {
       alert(`Erro ao salvar chave do Gemini: ${error.message}`);
     } finally {
       setSaveLoading(false);
+    }
+  };
+
+  // Salvar Configurações de Pagamento (Google Pay & Stripe)
+  const handleSavePaymentSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPaymentSaveLoading(true);
+    setPaymentSaveSuccess(false);
+
+    try {
+      const payload = {
+        environment: paymentEnvironment,
+        googleMerchantId,
+        stripeProdPublishableKey,
+        stripeProdSecretKey,
+        stripeSandboxPublishableKey,
+        stripeSandboxSecretKey
+      };
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'payment_settings',
+          api_key: JSON.stringify(payload),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
+        });
+
+      if (error) throw error;
+      setPaymentSaveSuccess(true);
+      setTimeout(() => setPaymentSaveSuccess(false), 5000);
+    } catch (error: any) {
+      console.error("Erro ao salvar configurações de pagamento:", error);
+      alert(`Erro ao salvar configurações de pagamento: ${error.message}`);
+    } finally {
+      setPaymentSaveLoading(false);
     }
   };
 
@@ -842,6 +932,17 @@ export default function AdminPanel() {
               >
                 <Coins size={18} />
                 <span>Planos SaaS</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('google_pay_config')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'google_pay_config'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <CreditCard size={18} />
+                <span>Google Pay & Stripe</span>
               </button>
               <button
                 onClick={() => setActiveTab('profile')}
@@ -1191,6 +1292,266 @@ export default function AdminPanel() {
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>
+            ) : activeTab === 'google_pay_config' ? (
+              /* Aba de Configuração do Google Pay & Stripe */
+              <div className="space-y-6">
+                <div className="card bg-white p-6 md:p-8 border-brand-border">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <CreditCard className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary">
+                        Configuração do Google Pay & Stripe
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Gerencie as credenciais e defina se a plataforma opera em modo sandbox ou produção.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Painel de Status de Integração */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div className="p-5 bg-brand-bg/50 border border-brand-border/60 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-semibold">Ambiente Ativo</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          paymentEnvironment === 'PRODUCTION' 
+                            ? 'bg-emerald-100 text-emerald-800' 
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {paymentEnvironment === 'PRODUCTION' ? 'Produção' : 'Sandbox (Testes)'}
+                        </span>
+                      </div>
+                      <div className="text-sm font-bold text-brand-primary flex items-center space-x-1.5 pt-1">
+                        <Activity className="w-4 h-4 text-brand-primary" />
+                        <span>
+                          {paymentEnvironment === 'PRODUCTION' ? 'Processando Vendas' : 'Pagamentos Simulados'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="p-5 bg-brand-bg/50 border border-brand-border/60 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-semibold">Google Pay API</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          googleMerchantId ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {googleMerchantId ? 'Configurado' : 'Pendente'}
+                        </span>
+                      </div>
+                      <div className="text-xs font-mono font-semibold text-brand-text truncate pt-1">
+                        ID: {googleMerchantId || 'Não definido'}
+                      </div>
+                    </div>
+
+                    <div className="p-5 bg-brand-bg/50 border border-brand-border/60 rounded-2xl space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-semibold">Gateway Stripe</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          stripeSandboxPublishableKey && stripeProdPublishableKey ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {stripeSandboxPublishableKey && stripeProdPublishableKey ? 'Chaves OK' : 'Incompleto'}
+                        </span>
+                      </div>
+                      <div className="text-xs font-semibold text-brand-text flex items-center space-x-1 pt-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                        <span>Sandbox: {stripeSandboxPublishableKey ? 'Ativa' : 'Ausente'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {paymentSettingsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                      <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
+                      <p className="text-sm text-brand-text-muted">Carregando credenciais...</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSavePaymentSettings} className="space-y-8">
+                      {/* Seletor de Ambiente (Toggle Switch) */}
+                      <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="space-y-0.5">
+                          <h3 className="text-sm font-semibold text-brand-primary flex items-center">
+                            <Globe className="w-4 h-4 mr-2 text-brand-primary" />
+                            Modo de Operação
+                          </h3>
+                          <p className="text-xs text-brand-text-muted">
+                            Alternar o ambiente afeta todos os usuários da plataforma em tempo real.
+                          </p>
+                        </div>
+                        <div className="flex items-center space-x-3 bg-white p-2 rounded-xl border border-brand-border/60 shadow-sm">
+                          <button
+                            type="button"
+                            onClick={() => setPaymentEnvironment('TEST')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                              paymentEnvironment === 'TEST'
+                                ? 'bg-amber-100 text-amber-800 shadow-sm'
+                                : 'text-brand-text-muted hover:text-brand-primary'
+                            }`}
+                          >
+                            Sandbox (Testes)
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentEnvironment('PRODUCTION')}
+                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                              paymentEnvironment === 'PRODUCTION'
+                                ? 'bg-emerald-100 text-emerald-800 shadow-sm'
+                                : 'text-brand-text-muted hover:text-brand-primary'
+                            }`}
+                          >
+                            Produção
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Google Pay Merchant ID */}
+                      <div className="space-y-4">
+                        <h3 className="text-xs font-bold text-brand-text uppercase tracking-wider border-b border-brand-border/60 pb-1.5">
+                          Google Pay API (Geral)
+                        </h3>
+                        <div className="space-y-2">
+                          <label className="text-xs font-semibold text-brand-text-muted block">
+                            Google Pay Merchant ID (Produção)
+                          </label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                            <input
+                              type="text"
+                              required
+                              placeholder="Digite seu Google Merchant ID (ex: BCR2DN...)"
+                              value={googleMerchantId}
+                              onChange={(e) => setGoogleMerchantId(e.target.value)}
+                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Credenciais de Testes (Sandbox) */}
+                      <div className="space-y-4 pt-2">
+                        <h3 className="text-xs font-bold text-amber-700 uppercase tracking-wider border-b border-amber-200/60 pb-1.5 flex items-center">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 mr-2"></span>
+                          Credenciais do Stripe - Sandbox (Testes)
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-brand-text-muted block">
+                              Publishable Key (Chave Pública)
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="pk_test_..."
+                              value={stripeSandboxPublishableKey}
+                              onChange={(e) => setStripeSandboxPublishableKey(e.target.value)}
+                              className="w-full px-4 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-brand-text-muted block">
+                              Secret Key (Chave Privada)
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showStripeSandboxSecret ? "text" : "password"}
+                                required
+                                placeholder="sk_test_..."
+                                value={stripeSandboxSecretKey}
+                                onChange={(e) => setStripeSandboxSecretKey(e.target.value)}
+                                className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowStripeSandboxSecret(!showStripeSandboxSecret)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                              >
+                                {showStripeSandboxSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Credenciais de Vendas (Produção) */}
+                      <div className="space-y-4 pt-2">
+                        <h3 className="text-xs font-bold text-emerald-700 uppercase tracking-wider border-b border-emerald-200/60 pb-1.5 flex items-center">
+                          <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 mr-2"></span>
+                          Credenciais do Stripe - Produção (Real)
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-brand-text-muted block">
+                              Publishable Key (Chave Pública)
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder="pk_live_..."
+                              value={stripeProdPublishableKey}
+                              onChange={(e) => setStripeProdPublishableKey(e.target.value)}
+                              className="w-full px-4 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
+                            />
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <label className="text-xs font-semibold text-brand-text-muted block">
+                              Secret Key (Chave Privada)
+                            </label>
+                            <div className="relative">
+                              <input
+                                type={showStripeProdSecret ? "text" : "password"}
+                                required
+                                placeholder="sk_live_..."
+                                value={stripeProdSecretKey}
+                                onChange={(e) => setStripeProdSecretKey(e.target.value)}
+                                className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowStripeProdSecret(!showStripeProdSecret)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                              >
+                                {showStripeProdSecret ? <EyeOff size={16} /> : <Eye size={16} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {paymentSaveSuccess && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center space-x-2 text-xs text-emerald-700 animate-fadeIn">
+                          <Check className="w-4 h-4 flex-shrink-0" />
+                          <span>Configurações de pagamento salvas e sincronizadas com sucesso!</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end pt-4">
+                        <button
+                          type="submit"
+                          disabled={paymentSaveLoading}
+                          className="btn-primary py-3 px-6 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-50 cursor-pointer"
+                        >
+                          {paymentSaveLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Salvando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              <span>Salvar Configurações</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               </div>
             ) : activeTab === 'token_usage' ? (

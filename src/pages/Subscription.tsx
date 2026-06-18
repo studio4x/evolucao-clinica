@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle } from 'lucide-react';
 import GooglePayButton from '@google-pay/button-react';
-import { getGooglePayRequest, GOOGLE_PAY_ENVIRONMENT } from '../services/googlePay';
+import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
 
 const DEFAULT_PLANS = [
   {
@@ -47,6 +47,31 @@ export default function Subscription() {
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
+
+  useEffect(() => {
+    const fetchPaymentSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'payment_settings')
+          .single();
+        
+        if (!error && data && data.api_key) {
+          const parsed = JSON.parse(data.api_key);
+          setPaymentSettings({
+            ...DEFAULT_PAYMENT_SETTINGS,
+            ...parsed
+          });
+        }
+      } catch (err) {
+        console.error("Erro ao carregar configurações de pagamento do banco:", err);
+      }
+    };
+    
+    fetchPaymentSettings();
+  }, []);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -413,11 +438,11 @@ export default function Subscription() {
                   <div className="space-y-3">
                     <div className="w-full rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                       <GooglePayButton
-                        environment={GOOGLE_PAY_ENVIRONMENT}
+                        environment={paymentSettings.environment}
                         buttonType="subscribe"
                         buttonColor="black"
                         buttonSizeMode="fill"
-                        paymentRequest={getGooglePayRequest(plan.price)}
+                        paymentRequest={getGooglePayRequest(plan.price, paymentSettings)}
                         onLoadPaymentData={(paymentRequest) => {
                           handleGooglePaySuccess(plan.id, paymentRequest);
                         }}

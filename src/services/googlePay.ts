@@ -1,18 +1,28 @@
 /**
  * Serviço de Configuração da Google Pay API
- * Define as especificações padrão para pagamentos via Google Pay em ambiente de teste (sandbox) e produção.
+ * Define as especificações dinâmicas para pagamentos via Google Pay.
  */
 
-// Chaves de configuração via variáveis de ambiente
-export const GOOGLE_PAY_MERCHANT_ID = import.meta.env.VITE_GOOGLE_PAY_MERCHANT_ID || '01234567890123456789';
-export const GOOGLE_PAY_MERCHANT_NAME = import.meta.env.VITE_GOOGLE_PAY_MERCHANT_NAME || 'Evolução Clínica';
-export const GOOGLE_PAY_ENVIRONMENT = (import.meta.env.VITE_GOOGLE_PAY_ENVIRONMENT as 'TEST' | 'PRODUCTION') || 'TEST';
-export const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_51P...'; // Substituir pela chave de teste/produção do Stripe
+export interface PaymentSettings {
+  environment: 'TEST' | 'PRODUCTION';
+  googleMerchantId: string;
+  stripeProdPublishableKey: string;
+  stripeProdSecretKey: string;
+  stripeSandboxPublishableKey: string;
+  stripeSandboxSecretKey: string;
+}
 
-// Métodos de autenticação autorizados pelo Google Pay
+// Chaves e configurações padrão fornecidas pelo usuário
+export const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
+  environment: 'TEST',
+  googleMerchantId: 'BCR2DN7TTCHMTFAJ',
+  stripeProdPublishableKey: 'pk_live_wDyGJo2Rl2ikV2HaBXzZey1o',
+  stripeProdSecretKey: '',
+  stripeSandboxPublishableKey: 'pk_test_0b7fQSiyaxD7OjUH6lKL6Slh',
+  stripeSandboxSecretKey: ''
+};
+
 const ALLOWED_AUTH_METHODS = ['PAN_ONLY', 'CRYPTOGRAM_3DS'];
-
-// Redes de cartões aceitas no Brasil/Internacional
 const ALLOWED_CARD_NETWORKS = ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'];
 
 /**
@@ -34,30 +44,38 @@ export function getBaseCardPaymentMethod() {
 }
 
 /**
- * Retorna a especificação de tokenização para o Gateway de Pagamentos parceiro (Stripe é o padrão recomendado)
+ * Retorna a especificação de tokenização para o Stripe baseada nas chaves dinâmicas
  */
-export function getTokenizationSpecification() {
+export function getTokenizationSpecification(publishableKey: string) {
   return {
     type: 'PAYMENT_GATEWAY',
     parameters: {
       gateway: 'stripe',
       'stripe:version': '2020-08-27',
-      'stripe:publishableKey': STRIPE_PUBLISHABLE_KEY,
+      'stripe:publishableKey': publishableKey,
     },
   };
 }
 
 /**
- * Gera o payload de requisição completo para ser consumido pelo botão do Google Pay
+ * Gera o payload de requisição completo de forma dinâmica
  * @param planPrice Preço do plano selecionado
+ * @param settings Configurações de pagamento dinâmicas carregadas do banco de dados
  * @param currencyCode Código da moeda (padrão BRL)
  */
 export function getGooglePayRequest(
   planPrice: number,
+  settings: PaymentSettings,
   currencyCode = 'BRL'
 ) {
   const cardPaymentMethod: any = getBaseCardPaymentMethod();
-  cardPaymentMethod.tokenizationSpecification = getTokenizationSpecification();
+  
+  // Define qual chave pública usar com base no ambiente ativo
+  const stripeKey = settings.environment === 'PRODUCTION' 
+    ? settings.stripeProdPublishableKey 
+    : settings.stripeSandboxPublishableKey;
+    
+  cardPaymentMethod.tokenizationSpecification = getTokenizationSpecification(stripeKey);
 
   return {
     apiVersion: 2,
@@ -71,8 +89,9 @@ export function getGooglePayRequest(
       countryCode: 'BR',
     },
     merchantInfo: {
-      merchantId: GOOGLE_PAY_ENVIRONMENT === 'PRODUCTION' ? GOOGLE_PAY_MERCHANT_ID : undefined,
-      merchantName: GOOGLE_PAY_MERCHANT_NAME,
+      // O Google Pay exige Merchant ID válido apenas em produção
+      merchantId: settings.environment === 'PRODUCTION' ? settings.googleMerchantId : undefined,
+      merchantName: 'Evolução Clínica',
     },
   };
 }
