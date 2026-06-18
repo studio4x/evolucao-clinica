@@ -341,22 +341,24 @@ export default function Subscription() {
           </div>
         </div>
 
-        {/* Simuladores de Desenvolvimento */}
-        <div className="mt-8 pt-6 border-t border-brand-border/60 flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex items-center space-x-2 text-xs text-brand-text-muted">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            <span>Simulador de Homologação SaaS (ideal para testes locais e validação técnica)</span>
+        {/* Simuladores de Desenvolvimento (Exibido apenas para Admin) */}
+        {profileRole === 'admin' && (
+          <div className="mt-8 pt-6 border-t border-brand-border/60 flex flex-wrap gap-3 items-center justify-between">
+            <div className="flex items-center space-x-2 text-xs text-brand-text-muted">
+              <AlertTriangle className="w-4 h-4 text-amber-500" />
+              <span>Simulador de Homologação SaaS (ideal para testes locais e validação técnica)</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSimulateExpiration}
+                disabled={loadingPlan !== null}
+                className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1 cursor-pointer"
+              >
+                <span>Simular Expiração de Acesso</span>
+              </button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleSimulateExpiration}
-              disabled={loadingPlan !== null}
-              className="px-3 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 text-xs font-semibold rounded-lg transition-colors flex items-center space-x-1"
-            >
-              <span>Simular Expiração de Acesso</span>
-            </button>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Cartões dos Planos de Assinatura */}
@@ -456,23 +458,25 @@ export default function Subscription() {
                       />
                     </div>
                     
-                    <button
-                      onClick={() => handleSimulatePayment(plan.id)}
-                      disabled={loadingPlan !== null}
-                      className="w-full py-2 px-4 text-xs font-semibold text-brand-text-muted hover:text-brand-primary border border-dashed border-brand-border hover:border-brand-primary/45 rounded-xl transition-all flex items-center justify-center space-x-1.5 bg-brand-bg/30 hover:bg-brand-bg"
-                    >
-                      {loadingPlan === plan.id ? (
-                        <svg className="animate-spin h-4 w-4 text-brand-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Simular Ativação Rápida</span>
-                        </>
-                      )}
-                    </button>
+                    {profileRole === 'admin' && (
+                      <button
+                        onClick={() => handleSimulatePayment(plan.id)}
+                        disabled={loadingPlan !== null}
+                        className="w-full py-2 px-4 text-xs font-semibold text-brand-text-muted hover:text-brand-primary border border-dashed border-brand-border hover:border-brand-primary/45 rounded-xl transition-all flex items-center justify-center space-x-1.5 bg-brand-bg/30 hover:bg-brand-bg cursor-pointer"
+                      >
+                        {loadingPlan === plan.id ? (
+                          <svg className="animate-spin h-4 w-4 text-brand-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Simular Ativação Rápida</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -481,42 +485,43 @@ export default function Subscription() {
         })}
       </div>
 
-      {/* Manual de Integração Stripe/Asaas (Ajuda técnica do SaaS) */}
-      <div className="card border-brand-primary/5 bg-white shadow p-6">
-        <button
-          onClick={() => setShowWebhookGuide(!showWebhookGuide)}
-          className="w-full flex items-center justify-between text-left focus:outline-none"
-        >
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary">
-              <Code className="w-5 h-5" />
+      {/* Manual de Integração Stripe/Asaas (Ajuda técnica do SaaS - Exibido apenas para Admin) */}
+      {profileRole === 'admin' && (
+        <div className="card border-brand-primary/5 bg-white shadow p-6">
+          <button
+            onClick={() => setShowWebhookGuide(!showWebhookGuide)}
+            className="w-full flex items-center justify-between text-left focus:outline-none cursor-pointer"
+          >
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-brand-primary/10 rounded-xl text-brand-primary">
+                <Code className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-brand-text">Como integrar com Stripe ou Asaas em produção?</h3>
+                <p className="text-xs text-brand-text-muted">Clique aqui para ver a arquitetura recomendada e código de webhooks</p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-bold text-brand-text">Como integrar com Stripe ou Asaas em produção?</h3>
-              <p className="text-xs text-brand-text-muted">Clique aqui para ver a arquitetura recomendada e código de webhooks</p>
-            </div>
-          </div>
-          <HelpCircle className={`w-5 h-5 text-brand-text-muted transition-transform duration-200 ${showWebhookGuide ? 'rotate-180 text-brand-primary' : ''}`} />
-        </button>
+            <HelpCircle className={`w-5 h-5 text-brand-text-muted transition-transform duration-200 ${showWebhookGuide ? 'rotate-180 text-brand-primary' : ''}`} />
+          </button>
 
-        {showWebhookGuide && (
-          <div className="mt-6 pt-6 border-t border-brand-border/60 space-y-4 text-sm text-brand-text leading-relaxed">
-            <p>
-              Para disponibilizar este SaaS comercialmente, você deve conectar os planos a um gateway de pagamentos real. O fluxo de produção recomendado é:
-            </p>
-            
-            <ol className="list-decimal pl-5 space-y-2 text-xs">
-              <li><strong>Checkout</strong>: O botão de assinatura redireciona o usuário para o Stripe Checkout Session ou gera um Pix/Boleto no Asaas.</li>
-              <li><strong>Metadata</strong>: Você passa o `uid` do usuário do Firebase Auth como metadata na transação.</li>
-              <li><strong>Webhook</strong>: Quando o pagamento é confirmado, o gateway envia um evento POST (webhook) para o seu servidor.</li>
-              <li><strong>Atualização no Firestore</strong>: O servidor valida o webhook e atualiza o documento correspondente na coleção `professionals` no Firestore.</li>
-            </ol>
-
-            <div className="mt-4">
-              <p className="font-semibold text-xs text-brand-primary mb-2 flex items-center">
-                <span>Exemplo de endpoint de Webhook Node.js / Express (Stripe):</span>
+          {showWebhookGuide && (
+            <div className="mt-6 pt-6 border-t border-brand-border/60 space-y-4 text-sm text-brand-text leading-relaxed">
+              <p>
+                Para disponibilizar este SaaS comercialmente, você deve conectar os planos a um gateway de pagamentos real. O fluxo de produção recomendado é:
               </p>
-              <pre className="bg-gray-900 text-emerald-400 p-4 rounded-xl font-mono text-[11px] overflow-x-auto">
+              
+              <ol className="list-decimal pl-5 space-y-2 text-xs">
+                <li><strong>Checkout</strong>: O botão de assinatura redireciona o usuário para o Stripe Checkout Session ou gera um Pix/Boleto no Asaas.</li>
+                <li><strong>Metadata</strong>: Você passa o `uid` do usuário do Firebase Auth como metadata na transação.</li>
+                <li><strong>Webhook</strong>: Quando o pagamento é confirmado, o gateway envia um evento POST (webhook) para o seu servidor.</li>
+                <li><strong>Atualização no Firestore</strong>: O servidor valida o webhook e atualiza o documento correspondente na coleção `professionals` no Firestore.</li>
+              </ol>
+
+              <div className="mt-4">
+                <p className="font-semibold text-xs text-brand-primary mb-2 flex items-center">
+                  <span>Exemplo de endpoint de Webhook Node.js / Express (Stripe):</span>
+                </p>
+                <pre className="bg-gray-900 text-emerald-400 p-4 rounded-xl font-mono text-[11px] overflow-x-auto">
 {`const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const admin = require('firebase-admin');
 
@@ -527,7 +532,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
   } catch (err) {
-    return res.status(400).send(\\\`Webhook Error: \\\${err.message}\\\`);
+    return res.status(400).send(\`Webhook Error: \${err.message}\`);
   }
 
   if (event.type === 'checkout.session.completed') {
@@ -549,11 +554,12 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 
   res.json({ received: true });
 });`}
-              </pre>
+                </pre>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
