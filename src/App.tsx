@@ -15,6 +15,7 @@ import History from './pages/History';
 import ShareTarget from './pages/ShareTarget';
 import Tutorial from './pages/Tutorial';
 import Subscription from './pages/Subscription';
+import Profile from './pages/Profile';
 
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { CookieConsent } from './components/CookieConsent';
@@ -164,6 +165,7 @@ export default function App() {
           <Route path="share-target" element={<ShareTarget />} />
           <Route path="api/share-target" element={<Navigate to="/share-target" replace />} />
           <Route path="subscription" element={<Subscription />} />
+          <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
     </Router>

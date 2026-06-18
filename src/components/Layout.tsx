@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
@@ -39,6 +39,7 @@ export default function Layout() {
     { name: 'Pacientes', path: '/patients', icon: Users },
     { name: 'Histórico', path: '/history', icon: HistoryIcon },
     { name: 'Como Usar', path: '/tutorial', icon: BookOpen },
+    { name: 'Meu Perfil', path: '/profile', icon: User },
     { name: 'Assinatura', path: '/subscription', icon: CreditCard },
   ];
 
@@ -74,13 +75,13 @@ export default function Layout() {
           <div className="px-4 py-6">
             <div className="flex items-center space-x-3 px-4 py-3 mb-6 bg-brand-bg rounded-xl border border-brand-border/50">
               <img 
-                src={user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=' + (user?.user_metadata?.full_name || user?.email) + '&background=005C13&color=fff'} 
+                src={user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user?.user_metadata?.full_name || user?.email || 'Profissional') + '&background=005C13&color=fff'} 
                 alt="Profile" 
-                className="w-10 h-10 rounded-full border border-brand-border"
+                className="w-10 h-10 rounded-full border border-brand-border object-cover"
                 referrerPolicy="no-referrer"
               />
               <div className="overflow-hidden">
-                <p className="text-sm font-medium text-brand-text truncate">{user?.user_metadata?.full_name || user?.email}</p>
+                <p className="text-sm font-medium text-brand-text truncate">{user?.user_metadata?.full_name || user?.email || 'Profissional'}</p>
                 <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
               </div>
             </div>

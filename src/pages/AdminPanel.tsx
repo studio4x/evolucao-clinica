@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -50,7 +50,123 @@ export default function AdminPanel() {
   const navigate = useNavigate();
 
   // Abas do Admin
-  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'token_usage'>('professionals');
+  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'token_usage' | 'profile'>('professionals');
+
+  // Estados do Perfil do Admin
+  const [adminFirstName, setAdminFirstName] = useState('');
+  const [adminLastName, setAdminLastName] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
+  const [adminProfileLoading, setAdminProfileLoading] = useState(false);
+  const [adminProfileSaving, setAdminProfileSaving] = useState(false);
+  const [adminSuccessMsg, setAdminSuccessMsg] = useState('');
+  const [adminErrorMsg, setAdminErrorMsg] = useState('');
+  const [showAdminPassInput, setShowAdminPassInput] = useState(false);
+  const [showAdminConfirmPassInput, setShowAdminConfirmPassInput] = useState(false);
+
+  // Efeito para carregar dados do Perfil do Admin
+  useEffect(() => {
+    if (user && activeTab === 'profile') {
+      const loadAdminProfile = async () => {
+        setAdminProfileLoading(true);
+        setAdminErrorMsg('');
+        try {
+          const { data, error } = await supabase
+            .from('professionals')
+            .select('full_name')
+            .eq('id', user.id)
+            .single();
+
+          if (error) throw error;
+
+          if (data && data.full_name) {
+            const parts = data.full_name.trim().split(' ');
+            setAdminFirstName(parts[0] || '');
+            setAdminLastName(parts.slice(1).join(' ') || '');
+          }
+        } catch (err: any) {
+          console.error("Erro ao carregar dados do admin:", err);
+          const name = user.user_metadata?.full_name || '';
+          const parts = name.trim().split(' ');
+          setAdminFirstName(parts[0] || '');
+          setAdminLastName(parts.slice(1).join(' ') || '');
+        } finally {
+          setAdminProfileLoading(false);
+        }
+      };
+
+      loadAdminProfile();
+    }
+  }, [user, activeTab]);
+
+  // Manipulador para salvar o perfil do Admin
+  const handleSaveAdminProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+
+    setAdminProfileSaving(true);
+    setAdminSuccessMsg('');
+    setAdminErrorMsg('');
+
+    if (adminPassword && adminPassword !== adminConfirmPassword) {
+      setAdminErrorMsg('As senhas não coincidem.');
+      setAdminProfileSaving(false);
+      return;
+    }
+
+    if (adminPassword && adminPassword.length < 6) {
+      setAdminErrorMsg('A senha deve ter pelo menos 6 caracteres.');
+      setAdminProfileSaving(false);
+      return;
+    }
+
+    const fullName = `${adminFirstName.trim()} ${adminLastName.trim()}`.trim();
+
+    try {
+      // 1. Atualiza profissionais no DB
+      const { error: dbError } = await supabase
+        .from('professionals')
+        .update({
+          full_name: fullName,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (dbError) throw dbError;
+
+      // 2. Prepara atualização do auth
+      const updateData: any = {
+        data: {
+          full_name: fullName,
+          name: adminFirstName.trim(),
+          family_name: adminLastName.trim()
+        }
+      };
+
+      if (adminPassword) {
+        updateData.password = adminPassword;
+      }
+
+      // 3. Atualiza dados de Auth do Supabase
+      const { data: authData, error: authError } = await supabase.auth.updateUser(updateData);
+
+      if (authError) throw authError;
+
+      if (authData?.user) {
+        setUser(authData.user);
+      }
+
+      setAdminPassword('');
+      setAdminConfirmPassword('');
+      setAdminSuccessMsg('Perfil e credenciais do administrador atualizados com sucesso!');
+      setTimeout(() => setAdminSuccessMsg(''), 5000);
+    } catch (err: any) {
+      console.error("Erro ao salvar perfil do admin:", err);
+      setAdminErrorMsg(err.message || 'Ocorreu um erro ao salvar o perfil.');
+    } finally {
+      setAdminProfileSaving(false);
+    }
+  };
 
   // Estados do Painel Administrativo
   const [professionals, setProfessionals] = useState<Professional[]>([]);
@@ -612,6 +728,17 @@ export default function AdminPanel() {
                 <BarChart3 size={18} />
                 <span>Consumo API</span>
               </button>
+              <button
+                onClick={() => setActiveTab('profile')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'profile'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <User size={18} />
+                <span>Meu Perfil</span>
+              </button>
             </nav>
           </div>
 
@@ -951,7 +1078,7 @@ export default function AdminPanel() {
                   </form>
                 </div>
               </div>
-            ) : (
+            ) : activeTab === 'token_usage' ? (
               /* Aba de Consumo de Tokens (Consumo API) [NEW] */
               <div className="space-y-6">
                 {/* Cards de Metricas de Consumo */}
@@ -1163,6 +1290,177 @@ export default function AdminPanel() {
                         </table>
                       </div>
                     )
+                  )}
+                </div>
+              </div>
+            ) : (
+              /* Aba de Perfil Admin [NEW] */
+              <div className="space-y-6">
+                <div className="card bg-white p-6 md:p-8 border-brand-border">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <User className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Meu Perfil Administrador
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Gerencie suas informações de exibição e credenciais de acesso ao Painel Admin.
+                      </p>
+                    </div>
+                  </div>
+
+                  {adminProfileLoading ? (
+                    <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                      <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                      <span className="text-sm">Carregando dados do perfil...</span>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveAdminProfile} className="space-y-6">
+                      {adminSuccessMsg && (
+                        <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center space-x-2 text-sm text-emerald-700 animate-fadeIn">
+                          <Check className="w-5 h-5 flex-shrink-0 text-emerald-600" />
+                          <span className="font-medium">{adminSuccessMsg}</span>
+                        </div>
+                      )}
+
+                      {adminErrorMsg && (
+                        <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl flex items-center space-x-2 text-sm text-red-700 animate-fadeIn">
+                          <ShieldAlert className="w-5 h-5 flex-shrink-0 text-red-600" />
+                          <span className="font-medium">{adminErrorMsg}</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                            Nome
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={adminFirstName}
+                            onChange={(e) => setAdminFirstName(e.target.value)}
+                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary"
+                            placeholder="Seu primeiro nome"
+                            disabled={adminProfileSaving}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                            Sobrenome
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={adminLastName}
+                            onChange={(e) => setAdminLastName(e.target.value)}
+                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary"
+                            placeholder="Seu sobrenome"
+                            disabled={adminProfileSaving}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                          E-mail Administrativo
+                        </label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                          <input
+                            type="email"
+                            value={user?.email || ''}
+                            disabled
+                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border text-sm bg-brand-bg/40 text-brand-text-muted cursor-not-allowed outline-none"
+                          />
+                        </div>
+                        <p className="text-[10px] text-brand-text-muted">
+                          O e-mail administrativo é fixo e vinculado à conta principal do proprietário.
+                        </p>
+                      </div>
+
+                      <div className="space-y-4 pt-2">
+                        <h3 className="text-sm font-semibold text-brand-primary flex items-center border-b border-brand-border/40 pb-2">
+                          <Lock className="w-4 h-4 mr-2" />
+                          Alterar Senha do Administrador
+                        </h3>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                              Nova Senha
+                            </label>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                              <input
+                                type={showAdminPassInput ? "text" : "password"}
+                                value={adminPassword}
+                                onChange={(e) => setAdminPassword(e.target.value)}
+                                className="w-full pl-10 pr-10 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary"
+                                placeholder="Mínimo 6 caracteres"
+                                disabled={adminProfileSaving}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowAdminPassInput(!showAdminPassInput)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                              >
+                                {showAdminPassInput ? <EyeOff size={14} /> : <Eye size={14} />}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                              Confirmar Nova Senha
+                            </label>
+                            <div className="relative">
+                              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                              <input
+                                type={showAdminConfirmPassInput ? "text" : "password"}
+                                value={adminConfirmPassword}
+                                onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                                className="w-full pl-10 pr-10 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary"
+                                placeholder="Confirme a nova senha"
+                                disabled={adminProfileSaving}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowAdminConfirmPassInput(!showAdminConfirmPassInput)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                              >
+                                {showAdminConfirmPassInput ? <EyeOff size={14} /> : <Eye size={14} />}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[10px] text-brand-text-muted">
+                          * Deixe os campos de senha em branco se desejar manter a senha atual.
+                        </p>
+                      </div>
+
+                      <div className="flex justify-end pt-4 border-t border-brand-border/40">
+                        <button
+                          type="submit"
+                          disabled={adminProfileSaving || !adminFirstName.trim() || !adminLastName.trim()}
+                          className="btn-primary py-3 px-6 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {adminProfileSaving ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Salvando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Salvar Alterações</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
                   )}
                 </div>
               </div>
