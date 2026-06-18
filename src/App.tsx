@@ -101,9 +101,13 @@ export default function App() {
 
           if (error) {
             console.error("Erro ao buscar profissional no Supabase:", error);
-            // Se o usuário acabou de se cadastrar ou o registro não foi propagado ainda,
-            // definimos o status padrão como 'pending' para aguardar a liberação.
-            setProfileInfo('pending', 'therapist', 'trial', 'trialing', null, null);
+            // Se for PGRST116 (registro não encontrado/novo cadastro), aguarda liberação
+            if (error.code === 'PGRST116') {
+              setProfileInfo('pending', 'therapist', 'trial', 'trialing', null, null);
+            } else {
+              // Outros erros (ex: offline). Assume 'active' por tolerância de rede
+              setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+            }
           } else if (data) {
             setProfileInfo(
               data.status,
@@ -116,7 +120,8 @@ export default function App() {
           }
         } catch (error) {
           console.error("Erro ao processar perfil do profissional:", error);
-          setProfileInfo('pending', 'therapist');
+          // Em caso de exceção (ex: offline), assume 'active' por tolerância de rede
+          setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
         }
       } else {
         setUser(null);

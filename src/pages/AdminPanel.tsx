@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -50,7 +50,7 @@ export default function AdminPanel() {
   const navigate = useNavigate();
 
   // Abas do Admin
-  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'token_usage' | 'profile'>('professionals');
+  const [activeTab, setActiveTab] = useState<'professionals' | 'gemini_config' | 'token_usage' | 'plans' | 'profile'>('professionals');
 
   // Estados do Perfil do Admin
   const [adminFirstName, setAdminFirstName] = useState('');
@@ -188,18 +188,109 @@ export default function AdminPanel() {
   const [usageSearchTerm, setUsageSearchTerm] = useState('');
   const [usageViewMode, setUsageViewMode] = useState<'by_user' | 'history'>('by_user');
 
-  // Estados do Formulário de Login
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState('');
+  // Estados para Edição de Planos (SaaS)
+  const [plans, setPlans] = useState<any[]>([]);
+  const [editingPlans, setEditingPlans] = useState<Record<string, any>>({});
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
+  const [plansError, setPlansError] = useState('');
+  const [plansSuccess, setPlansSuccess] = useState('');
 
-  // Estados do modal de edição de assinatura SaaS
-  const [editingProf, setEditingProf] = useState<Professional | null>(null);
-  const [editPlan, setEditPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none'>('trial');
-  const [editStatus, setEditStatus] = useState<'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid'>('trialing');
-  const [editEndsAt, setEditEndsAt] = useState('');
-  const [editUserStatus, setEditUserStatus] = useState<'active' | 'pending' | 'inactive'>('active');
+  const fetchPlans = async () => {
+    setLoadingPlans(true);
+    setPlansError('');
+    try {
+      const { data, error } = await supabase
+        .from('plans')
+        .select('*')
+        .order('price', { ascending: true });
+      if (error) throw error;
+      setPlans(data || []);
+      
+      const editData: Record<string, any> = {};
+      if (data) {
+        data.forEach(plan => {
+          editData[plan.id] = {
+            name: plan.name,
+            description: plan.description || '',
+            price: plan.price.toString(),
+            equivalent_monthly_price: plan.equivalent_monthly_price ? plan.equivalent_monthly_price.toString() : '',
+            tag_text: plan.tag_text || '',
+            discount_text: plan.discount_text || '',
+            button_text_simulate: plan.button_text_simulate || '',
+            featuresText: plan.features ? plan.features.join('\n') : ''
+          };
+        });
+      }
+      setEditingPlans(editData);
+    } catch (err: any) {
+      console.error("Erro ao buscar planos:", err);
+      setPlansError('Falha ao carregar planos: ' + err.message);
+    } finally {
+      setLoadingPlans(false);
+    }
+  };
+
+  const handlePlanFieldChange = (planId: string, field: string, value: string) => {
+    setEditingPlans(prev => ({
+      ...prev,
+      [planId]: {
+        ...prev[planId],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleSavePlan = async (planId: string, updatedPlanData: any) => {
+    setSavingPlanId(planId);
+    setPlansError('');
+    setPlansSuccess('');
+    try {
+      const priceVal = parseFloat(updatedPlanData.price);
+      if (isNaN(priceVal)) throw new Error("Preço inválido.");
+      
+      const equivPriceVal = updatedPlanData.equivalent_monthly_price ? parseFloat(updatedPlanData.equivalent_monthly_price) : null;
+      if (updatedPlanData.equivalent_monthly_price && isNaN(equivPriceVal as number)) {
+        throw new Error("Preço mensal equivalente inválido.");
+      }
+
+      const featuresArray = updatedPlanData.featuresText
+        .split('\n')
+        .map((f: string) => f.trim())
+        .filter((f: string) => f.length > 0);
+
+      const { error } = await supabase
+        .from('plans')
+        .update({
+          name: updatedPlanData.name,
+          description: updatedPlanData.description || null,
+          price: priceVal,
+          equivalent_monthly_price: equivPriceVal,
+          tag_text: updatedPlanData.tag_text || null,
+          discount_text: updatedPlanData.discount_text || null,
+          button_text_simulate: updatedPlanData.button_text_simulate,
+          features: featuresArray,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', planId);
+
+      if (error) throw error;
+      setPlansSuccess(`Plano "${updatedPlanData.name}" atualizado com sucesso!`);
+      await fetchPlans();
+      setTimeout(() => setPlansSuccess(''), 5000);
+    } catch (err: any) {
+      console.error("Erro ao salvar plano:", err);
+      setPlansError('Erro ao salvar plano: ' + err.message);
+    } finally {
+      setSavingPlanId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (user && activeTab === 'plans') {
+      fetchPlans();
+    }
+  }, [user, activeTab]);
 
   // Efeito para buscar profissionais caso seja admin logado
   useEffect(() => {
@@ -727,6 +818,17 @@ export default function AdminPanel() {
               >
                 <BarChart3 size={18} />
                 <span>Consumo API</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('plans')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'plans'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Coins size={18} />
+                <span>Planos SaaS</span>
               </button>
               <button
                 onClick={() => setActiveTab('profile')}
@@ -1290,6 +1392,168 @@ export default function AdminPanel() {
                         </table>
                       </div>
                     )
+                  )}
+                </div>
+              </div>
+            ) : activeTab === 'plans' ? (
+              <div className="space-y-6">
+                <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Coins className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Configuração de Planos (SaaS)
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Gerencie os valores, recursos e descrições dos planos de assinatura exibidos para os terapeutas.
+                      </p>
+                    </div>
+                  </div>
+
+                  {plansSuccess && (
+                    <div className="p-3.5 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center space-x-2 text-sm text-emerald-700 animate-fadeIn mb-4">
+                      <Check className="w-5 h-5 flex-shrink-0 text-emerald-600" />
+                      <span className="font-medium">{plansSuccess}</span>
+                    </div>
+                  )}
+
+                  {plansError && (
+                    <div className="p-3.5 bg-red-50 border border-red-100 rounded-xl flex items-center space-x-2 text-sm text-red-700 animate-fadeIn mb-4">
+                      <ShieldAlert className="w-5 h-5 flex-shrink-0 text-red-600" />
+                      <span className="font-medium">{plansError}</span>
+                    </div>
+                  )}
+
+                  {loadingPlans ? (
+                    <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                      <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                      <span className="text-sm">Carregando planos da base de dados...</span>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {plans.map((plan) => {
+                        const editData = editingPlans[plan.id] || {};
+                        return (
+                          <div key={plan.id} className="p-6 bg-brand-bg/30 rounded-2xl border border-brand-border/60 space-y-4 shadow-inner">
+                            <div className="flex justify-between items-center pb-2 border-b border-brand-border/50">
+                              <h3 className="font-bold text-brand-primary text-base uppercase tracking-wider">{plan.name} ({plan.id})</h3>
+                              <span className="text-xs text-brand-text-muted">Última atualização: {plan.updated_at ? new Date(plan.updated_at).toLocaleDateString('pt-BR') : 'N/A'}</span>
+                            </div>
+
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Nome Exibido</label>
+                                  <input
+                                    type="text"
+                                    value={editData.name || ''}
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'name', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Tag Exibida</label>
+                                  <input
+                                    type="text"
+                                    value={editData.tag_text || ''}
+                                    placeholder="Ex: Popular, Recorrente"
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'tag_text', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-brand-text uppercase block">Descrição Curta</label>
+                                <input
+                                  type="text"
+                                  value={editData.description || ''}
+                                  onChange={(e) => handlePlanFieldChange(plan.id, 'description', e.target.value)}
+                                  className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-3 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Preço (R$)</label>
+                                  <input
+                                    type="text"
+                                    value={editData.price || ''}
+                                    placeholder="Ex: 49.90"
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'price', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium font-mono"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Mensal Equiv. (R$)</label>
+                                  <input
+                                    type="text"
+                                    value={editData.equivalent_monthly_price || ''}
+                                    placeholder="Ex: 41.58"
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'equivalent_monthly_price', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium font-mono"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Tag Desconto</label>
+                                  <input
+                                    type="text"
+                                    value={editData.discount_text || ''}
+                                    placeholder="Ex: 17% OFF"
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'discount_text', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-brand-text uppercase block">Texto Botão Simulação</label>
+                                <input
+                                  type="text"
+                                  value={editData.button_text_simulate || ''}
+                                  onChange={(e) => handlePlanFieldChange(plan.id, 'button_text_simulate', e.target.value)}
+                                  className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
+                                />
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-brand-text uppercase block">Recursos / Benefícios (Um por linha)</label>
+                                <textarea
+                                  value={editData.featuresText || ''}
+                                  rows={5}
+                                  onChange={(e) => handlePlanFieldChange(plan.id, 'featuresText', e.target.value)}
+                                  className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium resize-y font-sans leading-relaxed"
+                                  placeholder="Recurso 1&#10;Recurso 2&#10;Recurso 3"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end pt-3">
+                              <button
+                                type="button"
+                                onClick={() => handleSavePlan(plan.id, editData)}
+                                disabled={savingPlanId !== null || !editData.name || !editData.price}
+                                className="btn-primary py-2 px-4 text-xs font-semibold flex items-center justify-center space-x-1.5 shadow active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                              >
+                                {savingPlanId === plan.id ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Salvando...</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save size={14} />
+                                    <span>Salvar Plano</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               </div>
