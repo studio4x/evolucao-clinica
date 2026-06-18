@@ -161,6 +161,7 @@ export default function App() {
           <Route path="history" element={<History />} />
           <Route path="tutorial" element={<Tutorial />} />
           <Route path="share-target" element={<ShareTarget />} />
+          <Route path="api/share-target" element={<Navigate to="/share-target" replace />} />
           <Route path="subscription" element={<Subscription />} />
         </Route>
       </Routes>
