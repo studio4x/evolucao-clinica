@@ -1557,6 +1557,75 @@ export default function AdminPanel() {
                     </form>
                   )}
                 </div>
+
+                {/* Guia de Configuração do Webhook do Stripe */}
+                <div className="card bg-white p-6 md:p-8 border-brand-border mt-6">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Globe className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary">
+                        Configuração de Webhooks do Stripe
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Instruções para receber notificações de pagamentos assíncronos e renovações automáticas de assinaturas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6 text-sm text-brand-text">
+                    <div className="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-5 space-y-4">
+                      <div>
+                        <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-bold block mb-1">
+                          URL do Endpoint do Webhook
+                        </span>
+                        <div className="bg-white border border-brand-border/60 rounded-xl px-4 py-3 font-mono text-xs text-brand-primary font-bold break-all shadow-inner flex justify-between items-center select-all">
+                          <span>
+                            {window.location.origin.includes('localhost') 
+                              ? 'https://kvxboovgrrhhttaqinld.supabase.co/functions/v1/stripe-webhook' 
+                              : `${window.location.origin}/api/webhook/stripe`}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-brand-text-muted mt-2 leading-relaxed">
+                          * Insira a URL acima na seção **Webhooks** no painel da sua conta Stripe. Se o seu servidor for local (development), utilize uma ferramenta como o **ngrok** ou a CLI do Stripe (`stripe listen --forward-to`) para repassar as requisições para a porta local.
+                        </p>
+                      </div>
+
+                      <div className="pt-2">
+                        <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-bold block mb-2">
+                          Eventos Obrigatórios para Escutar (Stripe Events)
+                        </span>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="bg-white border border-brand-border/40 p-4 rounded-xl space-y-2">
+                            <span className="text-xs font-bold text-brand-primary flex items-center">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500 mr-1.5"></span>
+                              Assinaturas e Checkout
+                            </span>
+                            <ul className="list-disc pl-4 text-xs space-y-1.5 text-brand-text-muted">
+                              <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">checkout.session.completed</code><br />Disparado ao concluir a primeira assinatura de plano.</li>
+                              <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">customer.subscription.updated</code><br />Ocorre em upgrades, downgrades ou renovação.</li>
+                              <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">customer.subscription.deleted</code><br />Disparado ao cancelar definitivamente o plano.</li>
+                            </ul>
+                          </div>
+
+                          <div className="bg-white border border-brand-border/40 p-4 rounded-xl space-y-2">
+                            <span className="text-xs font-bold text-brand-primary flex items-center">
+                              <span className="h-2 w-2 rounded-full bg-emerald-500 mr-1.5"></span>
+                              Faturamento e Cobranças
+                            </span>
+                            <ul className="list-disc pl-4 text-xs space-y-1.5 text-brand-text-muted">
+                              <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">invoice.paid</code><br />Ocorre a cada renovação mensal/anual paga com sucesso.</li>
+                              <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">invoice.payment_failed</code><br />Notifica quando uma tentativa de renovação automática falha.</li>
+                              <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">charge.succeeded</code><br />Confirmação genérica de cobrança bem-sucedida.</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             ) : activeTab === 'token_usage' ? (
               /* Aba de Consumo de Tokens (Consumo API) [NEW] */
