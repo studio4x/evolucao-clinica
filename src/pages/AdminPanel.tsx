@@ -245,6 +245,8 @@ export default function AdminPanel() {
             tag_text: plan.tag_text || '',
             discount_text: plan.discount_text || '',
             button_text_simulate: plan.button_text_simulate || '',
+            stripe_sandbox_price_id: plan.stripe_sandbox_price_id || '',
+            stripe_prod_price_id: plan.stripe_prod_price_id || '',
             featuresText: plan.features ? plan.features.join('\n') : ''
           };
         });
@@ -296,6 +298,8 @@ export default function AdminPanel() {
           tag_text: updatedPlanData.tag_text || null,
           discount_text: updatedPlanData.discount_text || null,
           button_text_simulate: updatedPlanData.button_text_simulate,
+          stripe_sandbox_price_id: updatedPlanData.stripe_sandbox_price_id || null,
+          stripe_prod_price_id: updatedPlanData.stripe_prod_price_id || null,
           features: featuresArray,
           updated_at: new Date().toISOString()
         })
@@ -1878,6 +1882,29 @@ export default function AdminPanel() {
                                     placeholder="Ex: 17% OFF"
                                     onChange={(e) => handlePlanFieldChange(plan.id, 'discount_text', e.target.value)}
                                     className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Stripe Price ID (Sandbox)</label>
+                                  <input
+                                    type="text"
+                                    value={editData.stripe_sandbox_price_id || ''}
+                                    placeholder="Ex: price_1P..."
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'stripe_sandbox_price_id', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium font-mono"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Stripe Price ID (Produção)</label>
+                                  <input
+                                    type="text"
+                                    value={editData.stripe_prod_price_id || ''}
+                                    placeholder="Ex: price_1P..."
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'stripe_prod_price_id', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium font-mono"
                                   />
                                 </div>
                               </div>
