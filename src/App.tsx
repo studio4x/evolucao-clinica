@@ -83,7 +83,21 @@ export default function App() {
 
   useEffect(() => {
     const handleAuthSession = async (session: any) => {
+      const currentState = useAuthStore.getState();
+
       if (session) {
+        const isSameUser = currentState.user?.id === session.user.id;
+        const hasProfile = currentState.profileStatus !== null;
+
+        if (isSameUser && hasProfile) {
+          // Se o provider_token do Google mudou ou foi fornecido, atualiza
+          if (session.provider_token && currentState.googleAccessToken !== session.provider_token) {
+            setGoogleAccessToken(session.provider_token);
+          }
+          setAuthReady(true);
+          return;
+        }
+
         setUser(session.user);
         if (session.provider_token) {
           setGoogleAccessToken(session.provider_token);
@@ -124,9 +138,11 @@ export default function App() {
           setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
         }
       } else {
-        setUser(null);
-        setGoogleAccessToken(null);
-        setProfileInfo(null, null, null, null, null, null);
+        if (currentState.user !== null || currentState.profileStatus !== null) {
+          setUser(null);
+          setGoogleAccessToken(null);
+          setProfileInfo(null, null, null, null, null, null);
+        }
       }
       setAuthReady(true);
     };
