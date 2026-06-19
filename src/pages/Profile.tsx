@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { User as UserIcon, Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key } from 'lucide-react';
+import { User as UserIcon, Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase } from 'lucide-react';
 
 export default function Profile() {
   const { user, setUser } = useAuthStore();
@@ -9,6 +9,7 @@ export default function Profile() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [professionalTitle, setProfessionalTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -25,22 +26,26 @@ export default function Profile() {
         // Busca os dados da tabela professionals
         const { data, error } = await supabase
           .from('professionals')
-          .select('full_name')
+          .select('full_name, professional_title')
           .eq('id', user.id)
           .single();
 
         if (error) throw error;
 
-        if (data && data.full_name) {
-          const nameParts = data.full_name.trim().split(' ');
-          setFirstName(nameParts[0] || '');
-          setLastName(nameParts.slice(1).join(' ') || '');
+        if (data) {
+          if (data.full_name) {
+            const nameParts = data.full_name.trim().split(' ');
+            setFirstName(nameParts[0] || '');
+            setLastName(nameParts.slice(1).join(' ') || '');
+          }
+          setProfessionalTitle(data.professional_title || 'Terapeuta');
         } else {
           // Fallback para metadados do auth
           const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
           const nameParts = fullName.trim().split(' ');
           setFirstName(nameParts[0] || '');
           setLastName(nameParts.slice(1).join(' ') || '');
+          setProfessionalTitle(user.user_metadata?.professional_title || 'Terapeuta');
         }
       } catch (err: any) {
         console.error("Erro ao carregar perfil:", err);
@@ -49,6 +54,7 @@ export default function Profile() {
         const nameParts = fullName.trim().split(' ');
         setFirstName(nameParts[0] || '');
         setLastName(nameParts.slice(1).join(' ') || '');
+        setProfessionalTitle(user.user_metadata?.professional_title || 'Terapeuta');
       } finally {
         setLoading(false);
       }
@@ -73,6 +79,7 @@ export default function Profile() {
         .from('professionals')
         .update({
           full_name: fullName,
+          professional_title: professionalTitle.trim(),
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -84,7 +91,8 @@ export default function Profile() {
         data: {
           full_name: fullName,
           name: firstName.trim(),
-          family_name: lastName.trim()
+          family_name: lastName.trim(),
+          professional_title: professionalTitle.trim()
         }
       });
 
@@ -154,7 +162,7 @@ export default function Profile() {
               {displayName}
             </h3>
             <p className="text-xs text-brand-text-muted font-medium bg-brand-primary/5 px-2 py-0.5 rounded-full inline-block border border-brand-primary/10">
-              Terapeuta
+              {professionalTitle || 'Terapeuta'}
             </p>
           </div>
           <div className="w-full border-t border-brand-border/40 pt-4 text-left space-y-2 text-xs text-brand-text-muted">
@@ -218,6 +226,27 @@ export default function Profile() {
                   disabled={saving}
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                Rótulo Profissional
+              </label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                <input
+                  type="text"
+                  required
+                  value={professionalTitle}
+                  onChange={(e) => setProfessionalTitle(e.target.value)}
+                  className="input-field pl-10 pr-4 py-3"
+                  placeholder="Ex: Terapeuta, Fisioterapeuta, Psicólogo"
+                  disabled={saving}
+                />
+              </div>
+              <p className="text-[10px] text-brand-text-muted">
+                Este rótulo será exibido abaixo do seu nome no perfil e em outros locais da plataforma.
+              </p>
             </div>
 
             <div className="space-y-2">
