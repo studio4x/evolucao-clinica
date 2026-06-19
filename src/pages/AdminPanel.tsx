@@ -704,12 +704,29 @@ export default function AdminPanel() {
             })
           });
 
+          const resData = await res.json().catch(() => ({}));
+
           if (res.ok) {
-            successCount++;
-            setEmailSendQueue(prev => prev.map(item => item.id === targetId ? { ...item, status: 'success' } : item));
+            // Verifica se o e-mail foi realmente enviado
+            const emailInfo = resData.email;
+            if (emailInfo && !emailInfo.sent && emailInfo.error) {
+              // Notificação in-app criada, mas e-mail NÃO foi enviado
+              errorMsg = emailInfo.error;
+              setEmailSendQueue(prev => prev.map(item =>
+                item.id === targetId
+                  ? { ...item, status: 'error', error: `Notificação criada, mas e-mail não enviado: ${emailInfo.error}` }
+                  : item
+              ));
+            } else {
+              successCount++;
+              setEmailSendQueue(prev => prev.map(item =>
+                item.id === targetId
+                  ? { ...item, status: 'success', email: emailInfo?.to || undefined }
+                  : item
+              ));
+            }
           } else {
-            const errData = await res.json().catch(() => ({}));
-            const msg = errData.error || 'Erro no envio';
+            const msg = resData.error || 'Erro no envio';
             errorMsg = msg;
             setEmailSendQueue(prev => prev.map(item => item.id === targetId ? { ...item, status: 'error', error: msg } : item));
           }

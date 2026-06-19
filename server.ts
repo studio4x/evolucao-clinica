@@ -257,10 +257,31 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
     }
 
     // C. Enviar e-mail por SMTP se configurado
+    let emailSent = false;
+    let emailError: string | null = null;
+    let emailTo: string | null = null;
+
     if (settings.smtp_host && settings.smtp_user && settings.smtp_pass) {
       try {
-        const { data: targetUserData } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
-        const targetEmail = targetUserData?.user?.email;
+        // Busca o e-mail do profissional diretamente da tabela professionals (mais confiável que auth.admin)
+        const { data: profData } = await supabaseAdmin
+          .from("professionals")
+          .select("google_email")
+          .eq("id", targetUserId)
+          .single();
+
+        // Fallback: tenta também pelo auth se o profissional não tiver google_email
+        let targetEmail = profData?.google_email || null;
+        if (!targetEmail) {
+          try {
+            const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
+            targetEmail = authUser?.user?.email || null;
+          } catch (_) {
+            // ignora se falhar, já tentamos pelo profissional
+          }
+        }
+
+        emailTo = targetEmail;
 
         if (targetEmail) {
           const transporter = nodemailer.createTransport({
@@ -303,16 +324,30 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
           };
 
           await transporter.sendMail(mailOptions);
+          emailSent = true;
           console.log(`[Email] Notificação de e-mail enviada com sucesso para ${targetEmail}`);
+        } else {
+          emailError = "E-mail do destinatário não encontrado no cadastro do profissional.";
+          console.warn(`[Email] E-mail não encontrado para userId: ${targetUserId}`);
         }
       } catch (emailErr: any) {
+        emailError = emailErr.message || "Erro desconhecido no envio SMTP";
         console.error("Erro ao enviar e-mail via SMTP:", emailErr.message);
       }
     } else {
+      emailError = "Servidor SMTP não configurado no painel admin.";
       console.log(`[Notifications] SMTP nao configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
     }
 
-    res.json({ success: true, notification });
+    res.json({
+      success: true,
+      notification,
+      email: {
+        sent: emailSent,
+        to: emailTo,
+        error: emailError
+      }
+    });
   } catch (err: any) {
     console.error("Erro ao disparar notificacao:", err);
     res.status(500).json({ error: err.message });
