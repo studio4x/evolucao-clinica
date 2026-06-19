@@ -309,7 +309,7 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
             greetingTimeout: 10000,
             socketTimeout: 15000,
             tls: { rejectUnauthorized: false }
-          });
+          } as any);
 
           const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
           const viewUrl = `${origin}${link || "/painel/notifications"}`;
@@ -405,7 +405,7 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
       greetingTimeout: 10000,
       socketTimeout: 15000,
       tls: { rejectUnauthorized: false }
-    });
+    } as any);
 
     const mailOptions = {
       from: buildFromField(smtpFrom, smtpUser),

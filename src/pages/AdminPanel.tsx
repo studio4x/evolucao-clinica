@@ -4,6 +4,7 @@ import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
+import EmailHistory from './EmailHistory';
 
 interface Professional {
   id: string;
@@ -68,6 +69,7 @@ export default function AdminPanel() {
     if (path.endsWith('/transactions')) return 'transactions';
     if (path.endsWith('/push-notifications')) return 'push_notifications';
     if (path.endsWith('/email-notifications')) return 'email_notifications';
+    if (path.endsWith('/email-history')) return 'email_history';
     if (path.endsWith('/vapid-keys')) return 'vapid_keys';
     if (path.endsWith('/profile')) return 'profile';
     return 'professionals'; // default
@@ -75,7 +77,7 @@ export default function AdminPanel() {
 
   const activeTab = getActiveTab();
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'vapid_keys') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -85,6 +87,7 @@ export default function AdminPanel() {
     else if (tab === 'transactions') navigate('/admin/transactions');
     else if (tab === 'push_notifications') navigate('/admin/push-notifications');
     else if (tab === 'email_notifications') navigate('/admin/email-notifications');
+    else if (tab === 'email_history') navigate('/admin/email-history');
     else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
   };
 
@@ -1553,6 +1556,17 @@ export default function AdminPanel() {
               >
                 <Mail size={18} />
                 <span>E-mails do Sistema</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('email_history')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'email_history'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Clock size={18} />
+                <span>Histórico de E-mails</span>
               </button>
               <button
                 onClick={() => setActiveTab('vapid_keys')}
@@ -3251,72 +3265,29 @@ export default function AdminPanel() {
                     </div>
                   )}
 
-                  {/* Histórico e Auditoria de E-mails */}
-                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
-                    <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
-                      <Clock size={18} className="text-brand-primary" />
-                      <span>Histórico de E-mails Enviados</span>
-                    </h3>
-
-                    {loadingAdminNotifications ? (
-                      <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
-                        <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
-                        <span className="text-sm">Carregando logs...</span>
+                  {/* Acesso ao Histórico de E-mails */}
+                  <button
+                    onClick={() => setActiveTab('email_history')}
+                    className="w-full card p-5 bg-white shadow-sm border border-brand-border/60 flex items-center justify-between hover:border-brand-primary/40 hover:shadow-md transition-all duration-200 cursor-pointer group text-left"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 rounded-xl bg-brand-primary/10 group-hover:bg-brand-primary/20 transition-colors">
+                        <Clock size={22} className="text-brand-primary" />
                       </div>
-                    ) : adminNotifications.length === 0 ? (
-                      <div className="p-12 text-center text-brand-text-muted text-sm italic">
-                        Nenhum e-mail registrado no histórico.
+                      <div>
+                        <h3 className="text-sm font-bold text-brand-text">Histórico de E-mails Enviados</h3>
+                        <p className="text-xs text-brand-text-muted mt-0.5">
+                          Visualize, pesquise e gerencie todos os registros de notificações enviadas pela plataforma.
+                        </p>
                       </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm border-collapse">
-                          <thead>
-                            <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider">
-                              <th className="py-2.5 px-3">Profissional</th>
-                              <th className="py-2.5 px-3">Assunto / Mensagem</th>
-                              <th className="py-2.5 px-3">Enviado em</th>
-                              <th className="py-2.5 px-3 text-right">Ação</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-brand-border/30 text-xs">
-                            {adminNotifications.map((n) => (
-                              <tr key={n.id} className="hover:bg-brand-bg/10 transition-colors">
-                                <td className="py-2.5 px-3">
-                                  <p className="font-semibold text-brand-text">
-                                    {n.professionals?.full_name || 'Profissional'}
-                                  </p>
-                                  <p className="text-[10px] text-brand-text-muted">
-                                    {n.professionals?.google_email || ''}
-                                  </p>
-                                </td>
-                                <td className="py-2.5 px-3 max-w-sm">
-                                  <p className="font-medium text-brand-text truncate">{n.title}</p>
-                                  <p className="text-brand-text-muted truncate text-[10px]">{n.message}</p>
-                                </td>
-                                <td className="py-2.5 px-3 text-brand-text-muted">
-                                  {n.created_at ? new Date(n.created_at).toLocaleDateString('pt-BR', {
-                                    day: '2-digit',
-                                    month: '2-digit',
-                                    hour: '2-digit',
-                                    minute: '2-digit'
-                                  }) : 'N/A'}
-                                </td>
-                                <td className="py-2.5 px-3 text-right">
-                                  <button
-                                    onClick={() => handleDeleteNotification(n.id)}
-                                    disabled={deletingNotifId === n.id}
-                                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
+                    </div>
+                    <div className="flex-shrink-0 ml-4 flex items-center gap-1.5 text-xs font-semibold text-brand-primary group-hover:gap-2.5 transition-all">
+                      <span>Ver histórico</span>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="transition-transform group-hover:translate-x-0.5">
+                        <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  </button>
 
                   {/* SMTP Config */}
                   <form onSubmit={handleSaveAdminSmtp} className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
@@ -3448,6 +3419,8 @@ export default function AdminPanel() {
                     </div>
                   </form>
               </div>
+            ) : activeTab === 'email_history' ? (
+              <EmailHistory />
             ) : activeTab === 'vapid_keys' ? (
               <div className="space-y-6 max-w-4xl">
                 {/* VAPID Details */}

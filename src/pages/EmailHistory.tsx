@@ -1,0 +1,342 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { supabase } from '../supabaseClient';
+import {
+  Clock,
+  Loader2,
+  Trash2,
+  AlertTriangle,
+  RefreshCw,
+  Mail,
+  User,
+  CalendarDays,
+  Search,
+  ChevronLeft,
+  Inbox,
+  ShieldAlert,
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+interface NotificationRecord {
+  id: string;
+  title: string;
+  message: string;
+  type: string;
+  created_at: string;
+  user_id: string;
+  professionals?: {
+    full_name: string;
+    google_email: string;
+  } | null;
+}
+
+export default function EmailHistory() {
+  const navigate = useNavigate();
+
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const [search, setSearch] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+
+  const fetchHistory = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { data, error: fetchError } = await supabase
+        .from('notifications')
+        .select('*, professionals:user_id(full_name, google_email)')
+        .order('created_at', { ascending: false });
+
+      if (fetchError) throw fetchError;
+      setNotifications(data || []);
+    } catch (err: any) {
+      setError('Erro ao carregar histórico: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Excluir este registro do histórico?')) return;
+    setDeletingId(id);
+    try {
+      const { error } = await supabase.from('notifications').delete().eq('id', id);
+      if (error) throw error;
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (err: any) {
+      alert('Erro ao excluir: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearAll = async () => {
+    if (!confirmClearAll) {
+      setConfirmClearAll(true);
+      return;
+    }
+    setClearingAll(true);
+    setConfirmClearAll(false);
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // deleta tudo
+      if (error) throw error;
+      setNotifications([]);
+    } catch (err: any) {
+      alert('Erro ao limpar histórico: ' + err.message);
+    } finally {
+      setClearingAll(false);
+    }
+  };
+
+  const filtered = notifications.filter(n => {
+    const q = search.toLowerCase();
+    return (
+      n.title?.toLowerCase().includes(q) ||
+      n.message?.toLowerCase().includes(q) ||
+      n.professionals?.full_name?.toLowerCase().includes(q) ||
+      n.professionals?.google_email?.toLowerCase().includes(q)
+    );
+  });
+
+  const formatDate = (iso: string) =>
+    new Date(iso).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate('/admin/email-notifications')}
+            className="p-2 rounded-xl hover:bg-brand-border/30 text-brand-text-muted transition-colors cursor-pointer"
+            title="Voltar para E-mail Notifications"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <h2 className="text-xl font-bold text-brand-text flex items-center gap-2">
+              <Clock size={20} className="text-brand-primary" />
+              Histórico de E-mails Enviados
+            </h2>
+            <p className="text-xs text-brand-text-muted mt-0.5">
+              {notifications.length} registro{notifications.length !== 1 ? 's' : ''} no total
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchHistory}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-brand-border/60 text-brand-text-muted hover:bg-brand-bg/40 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+            Atualizar
+          </button>
+
+          {notifications.length > 0 && (
+            confirmClearAll ? (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-red-600 font-medium">Confirmar exclusão de todo o histórico?</span>
+                <button
+                  onClick={handleClearAll}
+                  disabled={clearingAll}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {clearingAll ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                  Sim, excluir tudo
+                </button>
+                <button
+                  onClick={() => setConfirmClearAll(false)}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-xl border border-brand-border/60 text-brand-text-muted hover:bg-brand-bg/40 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleClearAll}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                <Trash2 size={14} />
+                Limpar Histórico
+              </button>
+            )
+          )}
+        </div>
+      </div>
+
+      {/* Search */}
+      {notifications.length > 0 && (
+        <div className="relative">
+          <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-text-muted" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar por profissional, assunto ou mensagem..."
+            className="w-full pl-10 pr-4 py-2.5 text-sm border border-brand-border/60 rounded-xl bg-white focus:outline-none focus:border-brand-primary transition-all"
+          />
+        </div>
+      )}
+
+      {/* Erro */}
+      {error && (
+        <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
+          <AlertTriangle size={18} className="flex-shrink-0 text-red-500" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Conteúdo */}
+      <div className="card bg-white shadow-sm border border-brand-border/60 overflow-hidden">
+        {loading ? (
+          <div className="p-16 flex flex-col items-center justify-center text-brand-text-muted">
+            <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+            <span className="text-sm">Carregando histórico...</span>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-16 flex flex-col items-center justify-center text-brand-text-muted">
+            <Inbox size={40} className="mb-3 opacity-30" />
+            <p className="text-sm font-medium">
+              {search ? 'Nenhum resultado para sua busca.' : 'Nenhum e-mail no histórico.'}
+            </p>
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="mt-2 text-xs text-brand-primary hover:underline cursor-pointer"
+              >
+                Limpar busca
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-brand-border/60 bg-brand-bg/20">
+                  <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5">
+                      <User size={11} />
+                      Profissional
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5">
+                      <Mail size={11} />
+                      Assunto / Mensagem
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5">
+                      <CalendarDays size={11} />
+                      Enviado em
+                    </div>
+                  </th>
+                  <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider text-right">
+                    Ação
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border/20">
+                {filtered.map((n) => (
+                  <tr
+                    key={n.id}
+                    className="hover:bg-brand-bg/10 transition-colors group"
+                  >
+                    {/* Profissional */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-brand-primary/10 flex items-center justify-center flex-shrink-0">
+                          <User size={14} className="text-brand-primary" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-brand-text text-xs leading-tight">
+                            {n.professionals?.full_name || 'Profissional'}
+                          </p>
+                          <p className="text-[10px] text-brand-text-muted mt-0.5">
+                            {n.professionals?.google_email || '—'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Assunto / Mensagem */}
+                    <td className="py-3 px-4 max-w-sm">
+                      <p className="font-semibold text-brand-text text-xs truncate">{n.title}</p>
+                      <p className="text-[10px] text-brand-text-muted truncate mt-0.5">{n.message}</p>
+                    </td>
+
+                    {/* Data */}
+                    <td className="py-3 px-4">
+                      <span className="text-xs text-brand-text-muted whitespace-nowrap">
+                        {n.created_at ? formatDate(n.created_at) : '—'}
+                      </span>
+                    </td>
+
+                    {/* Ação */}
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => handleDelete(n.id)}
+                        disabled={deletingId === n.id}
+                        title="Excluir este registro"
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 cursor-pointer opacity-0 group-hover:opacity-100"
+                      >
+                        {deletingId === n.id
+                          ? <Loader2 size={15} className="animate-spin" />
+                          : <Trash2 size={15} />
+                        }
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Footer da tabela */}
+            <div className="px-4 py-2.5 border-t border-brand-border/30 bg-brand-bg/10 flex items-center justify-between">
+              <span className="text-[10px] text-brand-text-muted">
+                Exibindo {filtered.length} de {notifications.length} registros
+              </span>
+              {search && filtered.length < notifications.length && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="text-[10px] text-brand-primary hover:underline cursor-pointer"
+                >
+                  Limpar filtro
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Aviso de segurança */}
+      {notifications.length > 0 && (
+        <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
+          <ShieldAlert size={15} className="flex-shrink-0 text-amber-500 mt-0.5" />
+          <span>
+            <strong>Atenção:</strong> O histórico contém todas as notificações in-app e de e-mail enviadas pela plataforma.
+            A exclusão é permanente e não pode ser desfeita.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
