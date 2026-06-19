@@ -78,6 +78,18 @@ serve(async (req) => {
       );
     }
 
+    // Validar prazo de reembolso (7 dias conforme Art. 49 do CDC), exceto para admins
+    const createdAt = new Date(tx.created_at);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - createdAt.getTime());
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    if (diffDays > 7 && !isAdmin) {
+      return new Response(
+        JSON.stringify({ success: false, error: "O prazo de 7 dias para arrependimento e reembolso garantido pelo CDC já expirou para esta transação." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Se já estiver reembolsada, não faz nada
     if (tx.status === "refunded") {
       return new Response(

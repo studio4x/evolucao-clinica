@@ -58,6 +58,16 @@ export default function Subscription() {
   const [confirmPhrase, setConfirmPhrase] = useState('');
   const [loadingRefund, setLoadingRefund] = useState(false);
 
+  const isRefundable = (createdAtStr: string) => {
+    if (profileRole === 'admin') return true;
+    if (!createdAtStr) return false;
+    const createdAt = new Date(createdAtStr);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - createdAt.getTime());
+    const diffDays = diffTime / (1000 * 60 * 60 * 24);
+    return diffDays <= 7;
+  };
+
   useEffect(() => {
     const fetchPaymentSettings = async () => {
       try {
@@ -591,6 +601,16 @@ export default function Subscription() {
           </div>
         </div>
 
+        <div className="bg-amber-50/60 border border-amber-200/75 rounded-2xl p-4 flex items-start space-x-3 text-xs text-amber-800">
+          <ShieldCheck className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-900">Garantia de Arrependimento (Art. 49 do CDC)</p>
+            <p className="opacity-90 mt-0.5 leading-relaxed">
+              Conforme o Código de Defesa do Consumidor brasileiro, você tem direito ao reembolso integral de qualquer pagamento realizado em até <strong>7 dias</strong> a partir da data de assinatura. Após esse período, não é possível solicitar o reembolso automático.
+            </p>
+          </div>
+        </div>
+
         {loadingTransactions ? (
           <div className="py-8 flex flex-col items-center justify-center text-brand-text-muted">
             <Loader2 className="w-6 h-6 text-brand-primary animate-spin mb-2" />
@@ -659,15 +679,25 @@ export default function Subscription() {
                       )}
                       
                       {tx.status === 'paid' && (
-                        <button
-                          onClick={() => {
-                            setSelectedTxForRefund(tx);
-                            setShowPersuadeModal(true);
-                          }}
-                          className="inline-flex items-center px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors font-semibold text-[10px] cursor-pointer"
-                        >
-                          Solicitar Reembolso
-                        </button>
+                        isRefundable(tx.created_at) ? (
+                          <button
+                            onClick={() => {
+                              setSelectedTxForRefund(tx);
+                              setShowPersuadeModal(true);
+                            }}
+                            className="inline-flex items-center px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors font-semibold text-[10px] cursor-pointer"
+                          >
+                            Solicitar Reembolso
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="inline-flex items-center px-2.5 py-1.5 bg-gray-100 text-gray-400 border border-gray-200 rounded-lg font-medium text-[10px] cursor-not-allowed opacity-60"
+                            title="O prazo de arrependimento e reembolso de 7 dias (Art. 49 do CDC) expirou para esta transação."
+                          >
+                            Prazo Expirado (CDC)
+                          </button>
+                        )
                       )}
                     </td>
                   </tr>

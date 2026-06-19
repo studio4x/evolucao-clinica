@@ -246,6 +246,7 @@ export default function AdminPanel() {
   // Estados de Transações (Admin)
   const [adminTransactions, setAdminTransactions] = useState<any[]>([]);
   const [loadingAdminTransactions, setLoadingAdminTransactions] = useState(true);
+  const [selectedTxForReason, setSelectedTxForReason] = useState<any | null>(null);
 
   // Estados do Formulário de Login (Administrativo)
   const [email, setEmail] = useState('');
@@ -2236,7 +2237,7 @@ export default function AdminPanel() {
                               <td className="py-3.5 px-4 font-mono text-[10px] text-brand-text-muted">
                                 {tx.stripe_invoice_id || 'Simulado'}
                               </td>
-                              <td className="py-3.5 px-4 text-right">
+                              <td className="py-3.5 px-4 text-right space-y-1 sm:space-y-0 sm:space-x-2">
                                 {tx.stripe_invoice_url ? (
                                   <a
                                     href={tx.stripe_invoice_url}
@@ -2247,9 +2248,18 @@ export default function AdminPanel() {
                                     Ver Fatura Stripe
                                   </a>
                                 ) : (
-                                  <span className="text-[10px] text-brand-text-muted italic">
+                                  <span className="text-[10px] text-brand-text-muted italic mr-2">
                                     Simulado
                                   </span>
+                                )}
+
+                                {tx.refund_reason && (
+                                  <button
+                                    onClick={() => setSelectedTxForReason(tx)}
+                                    className="inline-flex items-center px-2.5 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors font-semibold text-[10px] cursor-pointer"
+                                  >
+                                    Ver Motivo
+                                  </button>
                                 )}
                               </td>
                             </tr>
@@ -2524,6 +2534,63 @@ export default function AdminPanel() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Motivo do Reembolso */}
+        {selectedTxForReason && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 space-y-6 shadow-2xl border border-brand-primary/10 relative animate-in zoom-in-95 duration-200">
+              <div>
+                <h3 className="text-xl font-display font-bold text-brand-primary flex items-center space-x-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-500" />
+                  <span>Motivo do Reembolso</span>
+                </h3>
+                <p className="text-xs text-brand-text-muted mt-1 leading-relaxed">
+                  Transação referente ao profissional <strong className="text-brand-text font-semibold">{selectedTxForReason.professionals?.full_name || 'Profissional'}</strong> ({selectedTxForReason.professionals?.google_email})
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 bg-brand-bg rounded-2xl border border-brand-border/60 text-sm text-brand-text leading-relaxed">
+                  <p className="font-semibold text-xs text-brand-text-muted uppercase tracking-wider mb-1.5">Motivo Informado pelo Cliente:</p>
+                  <p className="whitespace-pre-wrap italic">
+                    "{selectedTxForReason.refund_reason || 'Nenhum motivo específico fornecido.'}"
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div className="bg-brand-bg/50 p-3 rounded-xl border border-brand-border/30">
+                    <span className="text-brand-text-muted block uppercase tracking-wider text-[10px] font-semibold">Valor da Transação</span>
+                    <span className="font-bold text-brand-text">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: selectedTxForReason.currency?.toUpperCase() || 'BRL' }).format(selectedTxForReason.amount)}
+                    </span>
+                  </div>
+                  <div className="bg-brand-bg/50 p-3 rounded-xl border border-brand-border/30">
+                    <span className="text-brand-text-muted block uppercase tracking-wider text-[10px] font-semibold">Data da Transação</span>
+                    <span className="font-bold text-brand-text">
+                      {selectedTxForReason.created_at ? new Date(selectedTxForReason.created_at).toLocaleDateString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-brand-border/60">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTxForReason(null)}
+                  className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors shadow shadow-brand-primary/20 cursor-pointer text-center block"
+                >
+                  Fechar Janela
+                </button>
+              </div>
             </div>
           </div>
         )}
