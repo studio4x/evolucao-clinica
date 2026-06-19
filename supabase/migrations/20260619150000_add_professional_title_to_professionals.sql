@@ -1,1 +1,1 @@
-ALTER TABLE public.professionals ADD COLUMN professional_title text DEFAULT 'Terapeuta';
+ALTER TABLE public.professionals ADD COLUMN IF NOT EXISTS professional_title text DEFAULT 'Terapeuta';

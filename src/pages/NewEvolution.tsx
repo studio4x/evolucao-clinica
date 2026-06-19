@@ -9,6 +9,7 @@ import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '
 
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution } from '../services/offlineQueue';
+import { sendNotification } from '../services/notificationHelper';
 
 export default function NewEvolution() {
   const { id } = useParams();
@@ -394,6 +395,14 @@ export default function NewEvolution() {
 
         setStatus('success');
         clearTimeout(timeoutId);
+
+        // Dispara notificação in-app/push/email de sucesso
+        void sendNotification({
+          title: "Evolução Criada com Sucesso 🎉",
+          content: `A evolução clínica do paciente ${patient.full_name} foi processada e adicionada ao prontuário no Google Docs.`,
+          type: "success",
+          link: `/painel/patients/${patient.id}`
+        });
       } catch (error: any) {
         if (error.name === 'AbortError' || error.message?.includes('aborted')) {
           const abortError = new Error("O processamento demorou muito tempo ou foi cancelado pelo navegador.");
@@ -459,6 +468,14 @@ export default function NewEvolution() {
       
       setErrorMessage(msg);
       setStatus('error');
+      
+      // Dispara notificação de erro
+      void sendNotification({
+        title: "Erro ao Criar Evolução ⚠️",
+        content: `O processamento da evolução do paciente ${patient.full_name} falhou: ${msg}`,
+        type: "error",
+        link: `/painel/patients/${patient.id}`
+      });
       
       // Update Supabase with error
       try {

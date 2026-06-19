@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution } from '../services/offlineQueue';
+import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink } from 'lucide-react';
 
@@ -266,6 +267,14 @@ export default function ShareTarget() {
       setStatus('success');
       setErrorMessage('');
 
+      // Dispara notificação in-app/push/email de sucesso para áudio compartilhado
+      void sendNotification({
+        title: "Áudio do WhatsApp Processado 🎙️",
+        content: `A evolução do áudio compartilhado para ${patient?.full_name || 'Paciente'} foi criada e inserida no Google Docs com sucesso.`,
+        type: "success",
+        link: `/painel/patients/${selectedPatientId}`
+      });
+
     } catch (error: any) {
       console.error("ERRO CRÍTICO NO SHARE TARGET:", error);
       let msg = error.message || "Erro desconhecido";
@@ -303,6 +312,14 @@ export default function ShareTarget() {
       
       setErrorMessage(msg);
       setStatus('error');
+
+      // Dispara notificação de erro para áudio compartilhado
+      void sendNotification({
+        title: "Erro no Áudio Compartilhado ⚠️",
+        content: `Falha ao processar áudio compartilhado para ${patient?.full_name || 'Paciente'}: ${msg}`,
+        type: "error",
+        link: `/painel/patients/${selectedPatientId}`
+      });
       
       // Update Supabase with error if possible
       try {

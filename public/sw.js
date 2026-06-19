@@ -150,3 +150,64 @@ self.addEventListener("fetch", (event) => {
     })
   );
 });
+
+// --- PUSH NOTIFICATIONS ---
+self.addEventListener("push", (event) => {
+  let data = { title: "Evolução Clínica", body: "Nova notificação!" };
+
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { ...data, body: event.data.text() };
+    }
+  }
+
+  const options = {
+    body: data.body || data.message || "Nova notificação recebida.",
+    icon: new URL("/icon-192x192.png", self.location.origin).href,
+    badge: new URL("/favicon.png", self.location.origin).href,
+    data: data.link || "/",
+    vibrate: [100, 50, 100],
+    actions: [
+      { action: "open", title: "Ver Detalhes" }
+    ]
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title, options)
+  );
+});
+
+// Clique na Notificação
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  
+  const targetUrl = event.notification.data || "/";
+
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      // Se já houver uma janela aberta do app, foca nela e navega
+      for (const client of clientList) {
+        const clientUrl = new URL(client.url);
+        const targetPath = new URL(targetUrl, self.location.origin).pathname;
+        if (clientUrl.pathname === targetPath && "focus" in client) {
+          return client.focus();
+        }
+      }
+      
+      // Caso contrário, tenta focar em qualquer janela aberta do app e redirecionar
+      for (const client of clientList) {
+        if ("focus" in client && "navigate" in client) {
+          client.focus();
+          return client.navigate(targetUrl);
+        }
+      }
+
+      // Se não houver janelas abertas, abre uma nova
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+    })
+  );
+});

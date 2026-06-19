@@ -1,0 +1,682 @@
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
+import { useAuthStore } from '../store/authStore';
+import { 
+  Bell, BellOff, CheckCheck, Trash2, Mail, Settings, Shield, 
+  Info, AlertTriangle, CheckCircle2, XCircle, Send, Loader2 
+} from 'lucide-react';
+
+interface Notification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read_at: string | null;
+  link: string | null;
+  created_at: string;
+}
+
+export default function Notifications() {
+  const { user, profileRole } = useAuthStore();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Push states
+  const [isPushSupported, setIsPushSupported] = useState(false);
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [pushLoading, setPushLoading] = useState(false);
+  
+  // SMTP settings states (for admin)
+  const [smtpHost, setSmtpHost] = useState('');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUser, setSmtpUser] = useState('');
+  const [smtpPass, setSmtpPass] = useState('');
+  const [smtpFrom, setSmtpFrom] = useState('');
+  const [vapidPublic, setVapidPublic] = useState('');
+  const [vapidPrivate, setVapidPrivate] = useState('');
+  const [smtpSaving, setSmtpSaving] = useState(false);
+  const [smtpSuccess, setSmtpSuccess] = useState(false);
+
+  // Test notification states
+  const [testSending, setTestSending] = useState(false);
+  const [testStatus, setTestStatus] = useState<'success' | 'error' | null>(null);
+  const [testMessage, setTestMessage] = useState('');
+
+  // 1. Carregar Notificações do Banco
+  const fetchNotifications = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Erro ao buscar notificacoes:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 2. Carregar Configurações SMTP (Apenas Admin)
+  const fetchSmtpSettings = async () => {
+    if (profileRole !== 'admin') return;
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'notification_settings')
+        .single();
+        
+      if (!error && data && data.api_key) {
+        const parsed = JSON.parse(data.api_key);
+        setSmtpHost(parsed.smtp_host || '');
+        setSmtpPort(parsed.smtp_port || '587');
+        setSmtpUser(parsed.smtp_user || '');
+        setSmtpPass(parsed.smtp_pass || '');
+        setSmtpFrom(parsed.smtp_from || '');
+        setVapidPublic(parsed.vapid_public_key || '');
+        setVapidPrivate(parsed.vapid_private_key || '');
+      }
+    } catch (err) {
+      console.error('Erro ao buscar configuracoes SMTP:', err);
+    }
+  };
+
+  // 3. Checar suporte e estado de Push
+  const checkPushSubscription = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setIsPushSupported(false);
+      return;
+    }
+    setIsPushSupported(true);
+    setPushPermission(Notification.permission);
+    
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setIsPushSubscribed(!!sub);
+    } catch (err) {
+      console.error('Erro ao verificar inscricao de push:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchNotifications();
+      checkPushSubscription();
+      fetchSmtpSettings();
+
+      // Realtime subscription para receber novas notificacoes instantaneamente
+      const channel = supabase
+        .channel('realtime:notifications')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+          () => {
+            fetchNotifications();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        void supabase.removeChannel(channel);
+      };
+    }
+  }, [user, profileRole]);
+
+  // Converter string VAPID para Uint8Array
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  // 4. Habilitar Notificações Push
+  const subscribePush = async () => {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      // Solicitar permissao
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      
+      if (permission !== 'granted') {
+        throw new Error('Permissao de notificacao nao concedida.');
+      }
+
+      // Buscar VAPID public key da API do Express
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      
+      const keyRes = await fetch('/api/notifications/vapid-public-key');
+      const { publicKey } = await keyRes.json();
+      if (!publicKey) throw new Error('Falha ao obter chave publica VAPID do servidor.');
+
+      const reg = await navigator.serviceWorker.ready;
+      
+      // Inscrever no push manager
+      const subscription = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(publicKey)
+      });
+
+      // Salvar inscricao no backend Express
+      const res = await fetch('/api/notifications/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ subscription })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Erro ao registrar inscricao no servidor.');
+      }
+
+      setIsPushSubscribed(true);
+    } catch (err: any) {
+      console.error('Erro ao ativar push:', err);
+      alert(err.message || 'Erro ao ativar notificações push.');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // 5. Desativar Notificações Push
+  const unsubscribePush = async () => {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      
+      if (sub) {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+        // Remover no servidor Express
+        await fetch('/api/notifications/unsubscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ endpoint: sub.endpoint })
+        });
+
+        // Cancelar inscricao no navegador
+        await sub.unsubscribe();
+      }
+      
+      setIsPushSubscribed(false);
+    } catch (err: any) {
+      console.error('Erro ao desativar push:', err);
+      alert('Erro ao desativar notificações push.');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // 6. Marcar Notificação específica como lida
+  const markAsRead = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('id', id);
+        
+      if (error) throw error;
+      setNotifications(prev => 
+        prev.map(n => n.id === id ? { ...n, read_at: new Date().toISOString() } : n)
+      );
+    } catch (err) {
+      console.error('Erro ao marcar como lida:', err);
+    }
+  };
+
+  // 7. Marcar todas como lidas
+  const markAllAsRead = async () => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('user_id', user?.id)
+        .is('read_at', null);
+        
+      if (error) throw error;
+      setNotifications(prev => prev.map(n => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
+    } catch (err) {
+      console.error('Erro ao marcar todas como lidas:', err);
+    }
+  };
+
+  // 8. Limpar todas as notificações
+  const clearAllNotifications = async () => {
+    if (!confirm('Deseja realmente excluir todas as suas notificações?')) return;
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', user?.id);
+        
+      if (error) throw error;
+      setNotifications([]);
+    } catch (err) {
+      console.error('Erro ao excluir notificações:', err);
+    }
+  };
+
+  // 9. Salvar Configurações SMTP (Admin)
+  const saveSmtpSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSmtpSaving(true);
+    setSmtpSuccess(false);
+
+    try {
+      const settings = {
+        smtp_host: smtpHost,
+        smtp_port: smtpPort,
+        smtp_user: smtpUser,
+        smtp_pass: smtpPass,
+        smtp_from: smtpFrom,
+        vapid_public_key: vapidPublic,
+        vapid_private_key: vapidPrivate,
+        vapid_subject: `mailto:${smtpUser || 'suporte@conexaoseres.com.br'}`
+      };
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'notification_settings',
+          api_key: JSON.stringify(settings)
+        });
+
+      if (error) throw error;
+      setSmtpSuccess(true);
+      setTimeout(() => setSmtpSuccess(false), 3000);
+    } catch (err) {
+      console.error('Erro ao salvar configuracoes SMTP:', err);
+      alert('Erro ao salvar configurações do servidor.');
+    } finally {
+      setSmtpSaving(false);
+    }
+  };
+
+  // 10. Enviar Notificação de Teste
+  const sendTestNotification = async () => {
+    setTestSending(true);
+    setTestStatus(null);
+    setTestMessage('');
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const res = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title: "Notificação de Teste 🚀",
+          content: "Esta é uma notificação de demonstração enviada para testar o sistema In-App, Push de navegador e e-mail via SMTP.",
+          type: "success",
+          link: "/painel/notifications"
+        })
+      });
+
+      const data = await keyResData(res);
+      
+      if (res.ok) {
+        setTestStatus('success');
+        setTestMessage('Notificação enviada com sucesso! Verifique a lista abaixo, seu navegador e sua caixa de entrada.');
+      } else {
+        setTestStatus('error');
+        setTestMessage(data.error || 'Erro desconhecido ao disparar notificação.');
+      }
+    } catch (err: any) {
+      setTestStatus('error');
+      setTestMessage(err.message || 'Falha de rede ao conectar ao servidor.');
+    } finally {
+      setTestSending(false);
+    }
+  };
+
+  const keyResData = async (res: Response) => {
+    try {
+      return await res.json();
+    } catch (e) {
+      return { error: 'Falha ao processar resposta do servidor.' };
+    }
+  };
+
+  // Formatar data
+  const formatDate = (dateString: string) => {
+    const d = new Date(dateString);
+    return d.toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Unread count
+  const unreadCount = notifications.filter(n => !n.read_at).length;
+
+  return (
+    <div className="space-y-8 animate-fade-in pb-12">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-display font-bold text-brand-primary">Central de Notificações</h1>
+        <p className="text-brand-text-muted mt-1">Gerencie seus alertas na plataforma, notificações push e configurações de e-mail.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* Lado Esquerdo: Lista de Notificações In-App (2/3 de largura no desktop) */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-2xl border border-brand-border/60 shadow-sm p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-brand-border/40 pb-4 mb-6">
+              <div className="flex items-center space-x-2">
+                <Bell className="text-brand-primary w-5 h-5" />
+                <h2 className="text-lg font-semibold text-brand-text">Notificações Recentes</h2>
+                {unreadCount > 0 && (
+                  <span className="bg-brand-primary text-white text-xs font-semibold px-2 py-0.5 rounded-full">
+                    {unreadCount} não {unreadCount === 1 ? 'lida' : 'lidas'}
+                  </span>
+                )}
+              </div>
+              
+              {notifications.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={markAllAsRead}
+                    disabled={unreadCount === 0}
+                    className="flex items-center space-x-1.5 text-sm text-brand-primary hover:text-brand-primary-dark font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <CheckCheck size={16} />
+                    <span>Ler todas</span>
+                  </button>
+                  <span className="text-brand-border/40">|</span>
+                  <button 
+                    onClick={clearAllNotifications}
+                    className="flex items-center space-x-1.5 text-sm text-red-600 hover:text-red-700 font-medium transition-colors"
+                  >
+                    <Trash2 size={16} />
+                    <span>Limpar histórico</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
+                <p className="text-brand-text-muted text-sm">Carregando notificações...</p>
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="text-center py-16 space-y-4">
+                <div className="w-16 h-16 bg-brand-bg rounded-full flex items-center justify-center mx-auto text-brand-text-muted">
+                  <BellOff size={28} />
+                </div>
+                <div className="max-w-xs mx-auto">
+                  <h3 className="font-semibold text-brand-text">Nenhuma notificação por aqui</h3>
+                  <p className="text-sm text-brand-text-muted mt-1">Você está em dia com seus prontuários e alertas do sistema!</p>
+                </div>
+              </div>
+            ) : (
+              <div className="divide-y divide-brand-border/40 max-h-[550px] overflow-y-auto pr-1">
+                {notifications.map((item) => {
+                  const Icon = 
+                    item.type === 'success' ? CheckCircle2 :
+                    item.type === 'error' ? XCircle :
+                    item.type === 'warning' ? AlertTriangle : Info;
+                    
+                  const colorClass = 
+                    item.type === 'success' ? 'text-emerald-500 bg-emerald-50 border-emerald-100' :
+                    item.type === 'error' ? 'text-red-500 bg-red-50 border-red-100' :
+                    item.type === 'warning' ? 'text-amber-500 bg-amber-50 border-amber-100' :
+                    'text-brand-primary bg-brand-bg border-brand-border';
+
+                  return (
+                    <div 
+                      key={item.id} 
+                      onClick={() => !item.read_at && markAsRead(item.id)}
+                      className={`py-4 px-3 flex gap-4 items-start transition-all rounded-xl hover:bg-brand-bg/50 cursor-pointer ${!item.read_at ? 'bg-brand-primary/5 border-l-4 border-l-brand-primary' : ''}`}
+                    >
+                      <div className={`p-2 rounded-lg border flex-shrink-0 ${colorClass}`}>
+                        <Icon size={18} />
+                      </div>
+                      
+                      <div className="flex-1 space-y-1 overflow-hidden">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`text-sm font-semibold truncate ${!item.read_at ? 'text-brand-primary font-bold' : 'text-brand-text'}`}>
+                            {item.title}
+                          </p>
+                          <span className="text-[10px] text-brand-text-muted flex-shrink-0">{formatDate(item.created_at)}</span>
+                        </div>
+                        <p className="text-sm text-brand-text-muted line-clamp-2 leading-relaxed">
+                          {item.message}
+                        </p>
+                        
+                        {item.link && (
+                          <a 
+                            href={item.link} 
+                            onClick={(e) => e.stopPropagation()} 
+                            className="inline-block text-xs font-semibold text-brand-primary hover:underline mt-2"
+                          >
+                            Ver detalhes &rarr;
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Lado Direito: Controles Push & SMTP Admin (1/3 de largura) */}
+        <div className="space-y-6">
+          
+          {/* Caixa de Configurações Push do Usuário */}
+          <div className="bg-white rounded-2xl border border-brand-border/60 shadow-sm p-6 space-y-5">
+            <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+              <Bell className="text-brand-primary w-5 h-5" />
+              <span>Notificações no Navegador</span>
+            </h3>
+            
+            {!isPushSupported ? (
+              <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex gap-3 text-amber-800">
+                <AlertTriangle className="flex-shrink-0 mt-0.5" size={18} />
+                <div className="text-xs space-y-1">
+                  <p className="font-semibold">Navegador não suportado</p>
+                  <p>Seu navegador atual ou modo de navegação privada não possui suporte a notificações push nativas.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between bg-brand-bg/50 p-4 rounded-xl border border-brand-border/40">
+                  <div>
+                    <p className="text-xs font-semibold text-brand-text">Status do Browser</p>
+                    <p className="text-xs text-brand-text-muted mt-0.5">
+                      {pushPermission === 'granted' ? 'Permitido ✅' :
+                       pushPermission === 'denied' ? 'Bloqueado ❌' : 'Não Solicitado 🔔'}
+                    </p>
+                  </div>
+                  
+                  {pushPermission === 'denied' && (
+                    <span className="text-[10px] text-red-600 bg-red-50 px-2 py-1 rounded font-medium border border-red-100">Desbloqueie no cadeado</span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {isPushSubscribed ? (
+                    <button
+                      onClick={unsubscribePush}
+                      disabled={pushLoading}
+                      className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-medium transition-colors text-sm disabled:opacity-50"
+                    >
+                      {pushLoading ? <Loader2 className="animate-spin" size={18} /> : <BellOff size={18} />}
+                      <span>Desativar Notificações Push</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={subscribePush}
+                      disabled={pushLoading || pushPermission === 'denied'}
+                      className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white hover:bg-brand-primary-dark font-medium transition-colors text-sm disabled:opacity-50"
+                    >
+                      {pushLoading ? <Loader2 className="animate-spin" size={18} /> : <Bell size={18} />}
+                      <span>Ativar Notificações Push</span>
+                    </button>
+                  )}
+                  
+                  <p className="text-[10px] text-brand-text-muted leading-relaxed text-center">
+                    Permite receber notificações do app diretamente na área de trabalho ou tela de bloqueio do celular, mesmo que o navegador esteja fechado.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Caixa de Ações de Teste */}
+          <div className="bg-white rounded-2xl border border-brand-border/60 shadow-sm p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+              <Send className="text-brand-primary w-5 h-5" />
+              <span>Testar Conexão</span>
+            </h3>
+            
+            <p className="text-xs text-brand-text-muted">
+              Dispare um teste geral. Você receberá instantaneamente um aviso no painel de Notificações, um balão de push de navegador e um e-mail de sistema.
+            </p>
+
+            <button
+              onClick={sendTestNotification}
+              disabled={testSending}
+              className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 font-semibold text-sm transition-all disabled:opacity-50"
+            >
+              {testSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+              <span>Disparar Notificação de Teste</span>
+            </button>
+
+            {testStatus && (
+              <div className={`p-3 rounded-xl border text-xs flex gap-2 ${testStatus === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                {testStatus === 'success' ? <CheckCircle2 className="flex-shrink-0 mt-0.5" size={16} /> : <XCircle className="flex-shrink-0 mt-0.5" size={16} />}
+                <span>{testMessage}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Configurações de SMTP para Administrador */}
+          {profileRole === 'admin' && (
+            <form onSubmit={saveSmtpSettings} className="bg-white rounded-2xl border border-brand-border/60 shadow-sm p-6 space-y-4">
+              <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                <Settings className="text-brand-primary w-5 h-5" />
+                <span>Configurar Servidor SMTP</span>
+              </h3>
+              
+              <p className="text-xs text-brand-text-muted">
+                (Apenas Administradores) Defina os dados de conexão SMTP para que a plataforma envie e-mails de notificação aos profissionais.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] font-bold text-brand-text block mb-1">HOST SMTP</label>
+                  <input
+                    type="text"
+                    value={smtpHost}
+                    onChange={e => setSmtpHost(e.target.value)}
+                    placeholder="ex: smtp.gmail.com"
+                    required
+                    className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-bold text-brand-text block mb-1">USUÁRIO SMTP</label>
+                    <input
+                      type="text"
+                      value={smtpUser}
+                      onChange={e => setSmtpUser(e.target.value)}
+                      placeholder="seu-email@dominio.com"
+                      required
+                      className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-brand-text block mb-1">PORTA</label>
+                    <input
+                      type="text"
+                      value={smtpPort}
+                      onChange={e => setSmtpPort(e.target.value)}
+                      placeholder="587"
+                      required
+                      className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-brand-text block mb-1">SENHA SMTP</label>
+                  <input
+                    type="password"
+                    value={smtpPass}
+                    onChange={e => setSmtpPass(e.target.value)}
+                    placeholder="Sua senha do servidor"
+                    required
+                    className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-bold text-brand-text block mb-1">E-MAIL REMETENTE (FROM)</label>
+                  <input
+                    type="text"
+                    value={smtpFrom}
+                    onChange={e => setSmtpFrom(e.target.value)}
+                    placeholder='"Suporte Ser" <email@dominio.com>'
+                    className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={smtpSaving}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white hover:bg-brand-primary-dark font-medium transition-colors text-sm disabled:opacity-50"
+              >
+                {smtpSaving ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+                <span>Salvar Servidor SMTP</span>
+              </button>
+
+              {smtpSuccess && (
+                <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-xs flex gap-2 text-emerald-800">
+                  <CheckCircle2 className="flex-shrink-0" size={16} />
+                  <span>Configurações SMTP salvas com sucesso!</span>
+                </div>
+              )}
+            </form>
+          )}
+
+        </div>
+      </div>
+    </div>
+  );
+}

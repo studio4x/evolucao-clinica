@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
@@ -15,6 +15,45 @@ export default function Layout() {
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('notifications')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .is('read_at', null);
+
+        if (!error && count !== null) {
+          setUnreadCount(count);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar contagem de nao lidas:', err);
+      }
+    };
+
+    fetchUnreadCount();
+
+    // Realtime subscription para atualizar contagem instantaneamente
+    const channel = supabase
+      .channel('layout-notifications-count')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          fetchUnreadCount();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user]);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -39,6 +78,7 @@ export default function Layout() {
     { name: 'Pacientes', path: '/painel/patients', icon: Users },
     { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
     { name: 'Como Usar', path: '/painel/tutorial', icon: BookOpen },
+    { name: 'Notificações', path: '/painel/notifications', icon: Bell },
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
   ];
@@ -54,9 +94,19 @@ export default function Layout() {
         <Link to="/">
           <img src="/logotipo-transparente-1024.png" alt="Conexão Ser" className="h-14 w-auto max-w-[150px] object-contain" />
         </Link>
-        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-brand-primary">
-          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        <div className="flex items-center space-x-2">
+          <Link to="/painel/notifications" className="p-2 text-brand-primary relative">
+            <Bell size={22} />
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                {unreadCount}
+              </span>
+            )}
+          </Link>
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-brand-primary">
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {/* Sidebar */}
@@ -95,14 +145,23 @@ export default function Layout() {
                     key={item.name}
                     to={item.path}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
                       isActive 
                         ? 'bg-brand-primary text-white shadow-sm' 
                         : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
                     }`}
                   >
-                    <Icon size={20} />
-                    <span className="font-medium">{item.name}</span>
+                    <div className="flex items-center space-x-3">
+                      <Icon size={20} />
+                      <span className="font-medium">{item.name}</span>
+                    </div>
+                    {item.name === 'Notificações' && unreadCount > 0 && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isActive ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white animate-pulse'
+                      }`}>
+                        {unreadCount}
+                      </span>
+                    )}
                   </Link>
                 );
               })}

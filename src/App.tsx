@@ -16,6 +16,7 @@ import ShareTarget from './pages/ShareTarget';
 import Tutorial from './pages/Tutorial';
 import Subscription from './pages/Subscription';
 import Profile from './pages/Profile';
+import Notifications from './pages/Notifications';
 
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { CookieConsent } from './components/CookieConsent';
@@ -190,6 +191,7 @@ export default function App() {
           <Route path="share-target" element={<ShareTarget />} />
           <Route path="subscription" element={<Subscription />} />
           <Route path="profile" element={<Profile />} />
+          <Route path="notifications" element={<Notifications />} />
         </Route>
 
         {/* Redirects */}
