@@ -23,6 +23,27 @@ serve(async (req) => {
       throw new Error("Parâmetros obrigatórios ausentes: userId, planId, paymentToken.");
     }
 
+    // Resolve o token ID real de forma robusta (Google Pay retorna JSON ou Objeto)
+    let tokenId = "";
+    if (typeof paymentToken === "string") {
+      if (paymentToken.trim().startsWith("{")) {
+        try {
+          const parsed = JSON.parse(paymentToken);
+          tokenId = parsed.id || paymentToken;
+        } catch (_) {
+          tokenId = paymentToken;
+        }
+      } else {
+        tokenId = paymentToken;
+      }
+    } else if (typeof paymentToken === "object" && paymentToken !== null) {
+      tokenId = paymentToken.id || "";
+    }
+
+    if (!tokenId) {
+      throw new Error("Token de pagamento inválido ou não fornecido.");
+    }
+
     // 1. Inicializar cliente administrativo do Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -103,7 +124,7 @@ serve(async (req) => {
 
     // 5.2. Associar o Token do Google Pay (tok_...) ao cliente como fonte de pagamento padrão
     const source = await stripe.customers.createSource(customer.id, {
-      source: paymentToken,
+      source: tokenId,
     });
 
     await stripe.customers.update(customer.id, {
