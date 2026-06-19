@@ -472,7 +472,9 @@ export default function AdminPanel() {
         .from('settings')
         .upsert({
           id: 'notification_settings',
-          api_key: JSON.stringify(settings)
+          api_key: JSON.stringify(settings),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
         });
 
       if (error) throw error;
