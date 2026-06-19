@@ -95,18 +95,21 @@ serve(async (req) => {
             const amountPaid = invoice.amount_paid ? invoice.amount_paid / 100 : 0;
             const { error: txInsertError } = await supabaseAdmin
               .from("transactions")
-              .insert({
-                professional_id: userId,
-                stripe_invoice_id: invoice.id,
-                stripe_subscription_id: subscriptionId,
-                amount: amountPaid,
-                currency: invoice.currency || 'brl',
-                plan_id: planId,
-                status: "paid",
-                stripe_invoice_url: invoice.hosted_invoice_url,
-                invoice_pdf_url: invoice.invoice_pdf,
-                created_at: new Date().toISOString()
-              });
+              .upsert(
+                {
+                  professional_id: userId,
+                  stripe_invoice_id: invoice.id,
+                  stripe_subscription_id: subscriptionId,
+                  amount: amountPaid,
+                  currency: invoice.currency || 'brl',
+                  plan_id: planId,
+                  status: "paid",
+                  stripe_invoice_url: invoice.hosted_invoice_url,
+                  invoice_pdf_url: invoice.invoice_pdf,
+                  created_at: new Date().toISOString()
+                },
+                { onConflict: 'stripe_invoice_id' }
+              );
 
             if (txInsertError) {
               console.error(`Erro ao registrar transação no webhook: ${txInsertError.message}`);

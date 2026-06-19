@@ -165,6 +165,33 @@ serve(async (req) => {
       throw new Error(`Erro ao atualizar o perfil do profissional no banco: ${dbError.message}`);
     }
 
+    // 8. Registrar a transação no banco de dados
+    const invoice = subscription.latest_invoice as any;
+    if (invoice) {
+      const amountPaid = invoice.amount_paid ? invoice.amount_paid / 100 : 0;
+      const { error: txInsertError } = await supabaseAdmin
+        .from("transactions")
+        .upsert(
+          {
+            professional_id: userId,
+            stripe_invoice_id: invoice.id,
+            stripe_subscription_id: subscription.id,
+            amount: amountPaid,
+            currency: invoice.currency || 'brl',
+            plan_id: planId,
+            status: "paid",
+            stripe_invoice_url: invoice.hosted_invoice_url,
+            invoice_pdf_url: invoice.invoice_pdf,
+            created_at: new Date().toISOString()
+          },
+          { onConflict: 'stripe_invoice_id' }
+        );
+
+      if (txInsertError) {
+        console.error(`Erro ao registrar transação no process-google-pay: ${txInsertError.message}`);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
