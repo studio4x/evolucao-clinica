@@ -767,7 +767,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             <div className="space-y-2">
               <h3 className="text-lg font-display font-bold text-brand-primary">Processando seu pagamento...</h3>
               <p className="text-xs text-brand-text-muted leading-relaxed">
-                Estamos validando sua transação com segurança no Stripe. Por favor, não feche ou recarregue esta página.
+                Estamos validando sua transação com segurança no Google Pay. Por favor, não feche ou recarregue esta página.
               </p>
             </div>
           </div>
