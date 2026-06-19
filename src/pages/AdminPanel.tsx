@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2 } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -54,6 +54,8 @@ export default function AdminPanel() {
   useEffect(() => {
     if (location.pathname === '/admin' || location.pathname === '/admin/') {
       navigate('/admin/professionals', { replace: true });
+    } else if (location.pathname.endsWith('/notifications-config') || location.pathname.endsWith('/notifications-config/')) {
+      navigate('/admin/push-notifications', { replace: true });
     }
   }, [location.pathname, navigate]);
 
@@ -64,14 +66,15 @@ export default function AdminPanel() {
     if (path.endsWith('/token-usage')) return 'token_usage';
     if (path.endsWith('/plans')) return 'plans';
     if (path.endsWith('/transactions')) return 'transactions';
-    if (path.endsWith('/notifications-config')) return 'notifications_config';
+    if (path.endsWith('/push-notifications')) return 'push_notifications';
+    if (path.endsWith('/email-notifications')) return 'email_notifications';
     if (path.endsWith('/profile')) return 'profile';
     return 'professionals'; // default
   };
 
   const activeTab = getActiveTab();
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'notifications_config') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -79,7 +82,8 @@ export default function AdminPanel() {
     else if (tab === 'plans') navigate('/admin/plans');
     else if (tab === 'profile') navigate('/admin/profile');
     else if (tab === 'transactions') navigate('/admin/transactions');
-    else if (tab === 'notifications_config') navigate('/admin/notifications-config');
+    else if (tab === 'push_notifications') navigate('/admin/push-notifications');
+    else if (tab === 'email_notifications') navigate('/admin/email-notifications');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -278,6 +282,108 @@ export default function AdminPanel() {
   const [notifContent, setNotifContent] = useState('');
   const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
   const [notifLink, setNotifLink] = useState('');
+  const [notifImageUrl, setNotifImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+      const filePath = `notif-covers/${fileName}`;
+
+      const { error } = await supabase.storage
+        .from('notifications')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) throw error;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('notifications')
+        .getPublicUrl(filePath);
+
+      if (publicUrlData?.publicUrl) {
+        setNotifImageUrl(publicUrlData.publicUrl);
+      }
+    } catch (err: any) {
+      console.error('Erro ao fazer upload da imagem:', err);
+      alert('Erro ao fazer upload da imagem: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setUploadingImage(false);
+      e.target.value = '';
+    }
+  };
+ 
+  const [resendingNotifId, setResendingNotifId] = useState<string | null>(null);
+ 
+  const handleCopyNotification = (notification: any) => {
+    setNotifTitle(notification.title || '');
+    setNotifContent(notification.message || '');
+    setNotifType(notification.type || 'info');
+    setNotifLink(notification.link || '');
+    setNotifImageUrl(notification.image_url || '');
+    if (notification.user_id) {
+      setBroadcastTarget('specific');
+      setSelectedProfessionalId(notification.user_id);
+    } else {
+      setBroadcastTarget('all');
+      setSelectedProfessionalId('');
+    }
+    const formElement = document.getElementById('notif-image-upload')?.closest('form');
+    if (formElement) {
+      formElement.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+ 
+  const handleResendNotification = async (notification: any) => {
+    if (!confirm('Deseja realmente reenviar esta notificação agora?')) return;
+    setResendingNotifId(notification.id);
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+ 
+      const res = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          userId: notification.user_id,
+          title: notification.title,
+          content: notification.message,
+          type: notification.type,
+          link: notification.link || undefined,
+          imageUrl: notification.image_url || undefined
+        })
+      });
+ 
+      if (res.ok) {
+        alert('Notificação reenviada com sucesso!');
+        const { data } = await supabase
+          .from('notifications')
+          .select('*, professionals:user_id(full_name, google_email)')
+          .order('created_at', { ascending: false });
+        if (data) setAdminNotifications(data);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Erro ao reenviar notificação.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao reenviar notificação:', err);
+      alert('Erro ao reenviar: ' + err.message);
+    } finally {
+      setResendingNotifId(null);
+    }
+  };
+
   const [notifSending, setNotifSending] = useState(false);
   const [notifSendSuccess, setNotifSendSuccess] = useState(false);
   const [notifSendError, setNotifSendError] = useState('');
@@ -285,6 +391,12 @@ export default function AdminPanel() {
   const [adminNotifications, setAdminNotifications] = useState<any[]>([]);
   const [loadingAdminNotifications, setLoadingAdminNotifications] = useState(false);
   const [deletingNotifId, setDeletingNotifId] = useState<string | null>(null);
+
+  // Test email states
+  const [testEmailTarget, setTestEmailTarget] = useState('');
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailStatus, setTestEmailStatus] = useState<'success' | 'error' | null>(null);
+  const [testEmailMessage, setTestEmailMessage] = useState('');
 
   // Efeito para carregar as configurações SMTP e Logs de notificações
   useEffect(() => {
@@ -331,7 +443,7 @@ export default function AdminPanel() {
       }
     };
 
-    if (user && profileRole === 'admin' && activeTab === 'notifications_config') {
+    if (user && profileRole === 'admin' && (activeTab === 'push_notifications' || activeTab === 'email_notifications')) {
       fetchSmtpAndLogs();
     }
   }, [user, profileRole, activeTab]);
@@ -436,7 +548,8 @@ export default function AdminPanel() {
               title: notifTitle,
               content: notifContent,
               type: notifType,
-              link: notifLink || undefined
+              link: notifLink || undefined,
+              imageUrl: notifImageUrl || undefined
             })
           });
 
@@ -456,6 +569,7 @@ export default function AdminPanel() {
         setNotifTitle('');
         setNotifContent('');
         setNotifLink('');
+        setNotifImageUrl('');
         // Recarregar os logs
         const { data } = await supabase
           .from('notifications')
@@ -472,6 +586,128 @@ export default function AdminPanel() {
       setNotifSending(false);
     }
   };
+
+  const handleSendTestEmail = async () => {
+    if (!testEmailTarget) return;
+    setTestEmailSending(true);
+    setTestEmailStatus(null);
+    setTestEmailMessage('');
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      const res = await fetch('/api/notifications/test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          toEmail: testEmailTarget,
+          smtpHost: adminSmtpHost,
+          smtpPort: adminSmtpPort,
+          smtpUser: adminSmtpUser,
+          smtpPass: adminSmtpPass,
+          smtpFrom: adminSmtpFrom
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok) {
+        setTestEmailStatus('success');
+        setTestEmailMessage('E-mail de teste enviado com sucesso!');
+      } else {
+        setTestEmailStatus('error');
+        setTestEmailMessage(data.error || 'Erro ao enviar e-mail de teste.');
+      }
+    } catch (err: any) {
+      setTestEmailStatus('error');
+      setTestEmailMessage(err.message || 'Falha na conexão.');
+    } finally {
+      setTestEmailSending(false);
+    }
+  };
+
+  const handleSendEmailNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (broadcastTarget === 'specific' && !selectedProfessionalId) {
+      alert('Selecione um profissional para enviar o e-mail.');
+      return;
+    }
+
+    setNotifSending(true);
+    setNotifSendSuccess(false);
+    setNotifSendError('');
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      let targets: string[] = [];
+      if (broadcastTarget === 'all') {
+        targets = professionals.map(p => p.id);
+      } else {
+        targets = [selectedProfessionalId];
+      }
+
+      if (targets.length === 0) {
+        throw new Error('Nenhum profissional destinatário encontrado.');
+      }
+
+      let successCount = 0;
+      let errorMsg = '';
+
+      for (const targetId of targets) {
+        try {
+          const res = await fetch('/api/notifications/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              userId: targetId,
+              title: notifTitle,
+              content: notifContent,
+              type: 'info'
+            })
+          });
+
+          if (res.ok) {
+            successCount++;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            errorMsg = errData.error || 'Erro no envio';
+          }
+        } catch (err: any) {
+          errorMsg = err.message;
+        }
+      }
+
+      if (successCount > 0) {
+        setNotifSendSuccess(true);
+        setNotifTitle('');
+        setNotifContent('');
+        // Recarregar os logs
+        const { data } = await supabase
+          .from('notifications')
+          .select('*, professionals:user_id(full_name, google_email)')
+          .order('created_at', { ascending: false });
+        if (data) setAdminNotifications(data);
+      } else {
+        setNotifSendError(errorMsg || 'Falha ao enviar e-mails.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao disparar e-mails:', err);
+      setNotifSendError(err.message || 'Erro inesperado.');
+    } finally {
+      setNotifSending(false);
+    }
+  };
+
   const [editEndsAt, setEditEndsAt] = useState('');
   const [editUserStatus, setEditUserStatus] = useState<'active' | 'pending' | 'inactive'>('active');
 
@@ -1248,15 +1484,26 @@ export default function AdminPanel() {
                 <span>Transações</span>
               </button>
               <button
-                onClick={() => setActiveTab('notifications_config')}
+                onClick={() => setActiveTab('push_notifications')}
                 className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'notifications_config'
+                  activeTab === 'push_notifications'
                     ? 'bg-brand-primary text-white shadow-sm'
                     : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
                 }`}
               >
                 <Bell size={18} />
-                <span>Notificações & SMTP</span>
+                <span>Notificações Push</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('email_notifications')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'email_notifications'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Mail size={18} />
+                <span>E-mails do Sistema</span>
               </button>
               <button
                 onClick={() => setActiveTab('profile')}
@@ -2495,7 +2742,7 @@ export default function AdminPanel() {
                   )}
                 </div>
               </div>
-            ) : activeTab === 'notifications_config' ? (
+            ) : activeTab === 'push_notifications' ? (
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
                 {/* Lado Esquerdo: Envio de Notificações e Histórico (2/3) */}
                 <div className="xl:col-span-2 space-y-6">
@@ -2507,10 +2754,10 @@ export default function AdminPanel() {
                       </div>
                       <div>
                         <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                          Disparar Nova Notificação
+                          Disparar Nova Notificação Push
                         </h2>
                         <p className="text-xs text-brand-text-muted mt-0.5">
-                          Envie um aviso para um profissional específico ou faça um broadcast para toda a plataforma.
+                          Envie um alerta push/in-app para um profissional específico ou faça um broadcast para toda a plataforma.
                         </p>
                       </div>
                     </div>
@@ -2614,6 +2861,49 @@ export default function AdminPanel() {
                         />
                       </div>
 
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block font-semibold text-brand-text">Imagem de Capa (URL ou Upload)</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={notifImageUrl}
+                            onChange={(e) => setNotifImageUrl(e.target.value)}
+                            placeholder="Insira a URL da imagem ou faça upload ao lado..."
+                            className="flex-1 px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                          />
+                          <div className="relative">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              id="notif-image-upload"
+                              className="hidden"
+                              onChange={handleImageUpload}
+                              disabled={uploadingImage}
+                            />
+                            <label
+                              htmlFor="notif-image-upload"
+                              className={`px-4 py-2.5 bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 font-semibold text-sm rounded-xl border border-brand-primary/20 flex items-center justify-center gap-1.5 cursor-pointer h-full transition-all ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            >
+                              {uploadingImage ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                              <span>{uploadingImage ? 'Enviando...' : 'Upload'}</span>
+                            </label>
+                          </div>
+                        </div>
+                        {notifImageUrl && (
+                          <div className="mt-2.5 relative inline-block rounded-xl overflow-hidden border border-brand-border max-w-xs shadow-sm bg-brand-bg/30">
+                            <img src={notifImageUrl} alt="Preview da capa" className="max-h-32 object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setNotifImageUrl('')}
+                              className="absolute top-1.5 right-1.5 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors shadow-md"
+                              title="Remover Imagem"
+                            >
+                              <XCircle size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
                       <div className="pt-2">
                         <button
                           type="submit"
@@ -2621,7 +2911,7 @@ export default function AdminPanel() {
                           className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
                         >
                           {notifSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                          <span>Disparar Notificação</span>
+                          <span>Disparar Notificação Push</span>
                         </button>
                       </div>
                     </form>
@@ -2631,7 +2921,7 @@ export default function AdminPanel() {
                   <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
                     <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
                       <Clock size={18} className="text-brand-primary" />
-                      <span>Auditoria de Alertas Enviados</span>
+                      <span>Auditoria de Alertas Push Enviados</span>
                     </h3>
 
                     {loadingAdminNotifications ? (
@@ -2668,8 +2958,19 @@ export default function AdminPanel() {
                                   </p>
                                 </td>
                                 <td className="py-2.5 px-3 max-w-xs">
-                                  <p className="font-medium text-brand-text">{n.title}</p>
-                                  <p className="text-brand-text-muted truncate text-[10px]">{n.message}</p>
+                                  <div className="flex items-center gap-2">
+                                    {n.image_url && (
+                                      <img 
+                                        src={n.image_url} 
+                                        alt="Capa" 
+                                        className="w-8 h-8 rounded object-cover flex-shrink-0 border border-brand-border/40" 
+                                      />
+                                    )}
+                                    <div className="overflow-hidden">
+                                      <p className="font-medium text-brand-text truncate">{n.title}</p>
+                                      <p className="text-brand-text-muted truncate text-[10px]">{n.message}</p>
+                                    </div>
+                                  </div>
                                 </td>
                                 <td className="py-2.5 px-3">
                                   <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
@@ -2701,6 +3002,226 @@ export default function AdminPanel() {
                                 </td>
                                 <td className="py-2.5 px-3 text-right">
                                   <button
+                                    onClick={() => handleCopyNotification(n)}
+                                    className="p-1 text-brand-primary hover:bg-brand-bg rounded transition-colors mr-1 cursor-pointer"
+                                    title="Reaproveitar Conteúdo (Copiar)"
+                                  >
+                                    <Copy size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleResendNotification(n)}
+                                    disabled={resendingNotifId === n.id}
+                                    className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors mr-1 disabled:opacity-50 cursor-pointer"
+                                    title="Reenviar Notificação Imediatamente"
+                                  >
+                                    {resendingNotifId === n.id ? <Loader2 className="animate-spin" size={15} /> : <RefreshCw size={15} />}
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteNotification(n.id)}
+                                    disabled={deletingNotifId === n.id}
+                                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lado Direito: Config VAPID (1/3) */}
+                <div className="space-y-6">
+                  {/* VAPID Details */}
+                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-3 text-xs">
+                    <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2 border-b border-brand-border/40 pb-2 mb-2">
+                      <Shield className="text-brand-primary w-5 h-5" />
+                      <span>Chaves Web Push VAPID</span>
+                    </h3>
+                    <p className="text-brand-text-muted leading-relaxed">
+                      Essas chaves são usadas para assinar e criptografar as mensagens enviadas aos navegadores através da Push API.
+                    </p>
+                    <div className="space-y-2">
+                      <div>
+                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PÚBLICA (VAPID PUBLIC KEY)</span>
+                        <input
+                          type="text"
+                          readOnly
+                          value={adminVapidPublic}
+                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
+                        />
+                      </div>
+                      <div>
+                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PRIVADA (VAPID PRIVATE KEY)</span>
+                        <input
+                          type="password"
+                          readOnly
+                          value={adminVapidPrivate}
+                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : activeTab === 'email_notifications' ? (
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                {/* Lado Esquerdo: Envio de E-mails e Histórico (2/3) */}
+                <div className="xl:col-span-2 space-y-6">
+                  {/* Formulário de Envio de E-mail */}
+                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                        <Mail className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                          Disparar E-mail Informativo
+                        </h2>
+                        <p className="text-xs text-brand-text-muted mt-0.5">
+                          Envie uma notificação por e-mail (via SMTP) para um profissional específico ou broadcast para todos.
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSendEmailNotification} className="space-y-4">
+                      {notifSendSuccess && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
+                          <Check className="flex-shrink-0 text-emerald-600" size={16} />
+                          <span>E-mail(s) disparado(s) com sucesso para o(s) destinatário(s)!</span>
+                        </div>
+                      )}
+
+                      {notifSendError && (
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs flex gap-2">
+                          <ShieldAlert className="flex-shrink-0 text-red-600" size={16} />
+                          <span>{notifSendError}</span>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Destinatário</label>
+                        <select
+                          value={broadcastTarget}
+                          onChange={(e) => setBroadcastTarget(e.target.value as any)}
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                        >
+                          <option value="all">Todos os Profissionais (Broadcast)</option>
+                          <option value="specific">Profissional Específico</option>
+                        </select>
+                      </div>
+
+                      {broadcastTarget === 'specific' && (
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Selecionar Profissional</label>
+                          <select
+                            value={selectedProfessionalId}
+                            onChange={(e) => setSelectedProfessionalId(e.target.value)}
+                            required
+                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                          >
+                            <option value="">-- Escolha o Profissional --</option>
+                            {professionals.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.full_name} ({p.google_email || 'Sem e-mail'})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Assunto do E-mail</label>
+                        <input
+                          type="text"
+                          value={notifTitle}
+                          onChange={(e) => setNotifTitle(e.target.value)}
+                          placeholder="ex: Atualização de Termos de Uso"
+                          required
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Conteúdo / Mensagem</label>
+                        <textarea
+                          value={notifContent}
+                          onChange={(e) => setNotifContent(e.target.value)}
+                          placeholder="Digite o corpo do e-mail que será enviado..."
+                          required
+                          rows={6}
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium resize-none"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={notifSending}
+                          className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
+                        >
+                          {notifSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                          <span>Disparar E-mail Informativo</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Histórico e Auditoria de E-mails */}
+                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                    <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
+                      <Clock size={18} className="text-brand-primary" />
+                      <span>Histórico de E-mails Enviados</span>
+                    </h3>
+
+                    {loadingAdminNotifications ? (
+                      <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                        <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                        <span className="text-sm">Carregando logs...</span>
+                      </div>
+                    ) : adminNotifications.length === 0 ? (
+                      <div className="p-12 text-center text-brand-text-muted text-sm italic">
+                        Nenhum e-mail registrado no histórico.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                            <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider">
+                              <th className="py-2.5 px-3">Profissional</th>
+                              <th className="py-2.5 px-3">Assunto / Mensagem</th>
+                              <th className="py-2.5 px-3">Enviado em</th>
+                              <th className="py-2.5 px-3 text-right">Ação</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-brand-border/30 text-xs">
+                            {adminNotifications.map((n) => (
+                              <tr key={n.id} className="hover:bg-brand-bg/10 transition-colors">
+                                <td className="py-2.5 px-3">
+                                  <p className="font-semibold text-brand-text">
+                                    {n.professionals?.full_name || 'Profissional'}
+                                  </p>
+                                  <p className="text-[10px] text-brand-text-muted">
+                                    {n.professionals?.google_email || ''}
+                                  </p>
+                                </td>
+                                <td className="py-2.5 px-3 max-w-sm">
+                                  <p className="font-medium text-brand-text truncate">{n.title}</p>
+                                  <p className="text-brand-text-muted truncate text-[10px]">{n.message}</p>
+                                </td>
+                                <td className="py-2.5 px-3 text-brand-text-muted">
+                                  {n.created_at ? new Date(n.created_at).toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'N/A'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  <button
                                     onClick={() => handleDeleteNotification(n.id)}
                                     disabled={deletingNotifId === n.id}
                                     className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
@@ -2717,7 +3238,7 @@ export default function AdminPanel() {
                   </div>
                 </div>
 
-                {/* Lado Direito: Servidor SMTP e Config VAPID (1/3) */}
+                {/* Lado Direito: Servidor SMTP Global (1/3) */}
                 <div className="space-y-6">
                   {/* SMTP Config */}
                   <form onSubmit={handleSaveAdminSmtp} className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
@@ -2802,42 +3323,40 @@ export default function AdminPanel() {
 
                     {adminSmtpSuccess && (
                       <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-xs flex gap-2 text-emerald-800 animate-fade-in">
-                        <Check size={16} className="text-emerald-600 flex-shrink-0" />
-                        <span>Configurações SMTP atualizadas!</span>
+                        <Check className="text-emerald-600 flex-shrink-0" />
+                        <span>Configurações SMTP updated!</span>
                       </div>
                     )}
-                  </form>
 
-                  {/* VAPID Details */}
-                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-3 text-xs">
-                    <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2 border-b border-brand-border/40 pb-2 mb-2">
-                      <Shield className="text-brand-primary w-5 h-5" />
-                      <span>Chaves Web Push VAPID</span>
-                    </h3>
-                    <p className="text-brand-text-muted leading-relaxed">
-                      Essas chaves são usadas para assinar e criptografar as mensagens enviadas aos navegadores através da Push API.
-                    </p>
-                    <div className="space-y-2">
-                      <div>
-                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PÚBLICA (VAPID PUBLIC KEY)</span>
+                    {/* Seção de Teste de E-mail SMTP */}
+                    <div className="border-t border-brand-border/40 pt-4 mt-4 space-y-3">
+                      <label className="text-[10px] font-bold text-brand-text block uppercase tracking-wider animate-fade-in">Testar Configuração SMTP</label>
+                      <div className="flex gap-2">
                         <input
-                          type="text"
-                          readOnly
-                          value={adminVapidPublic}
-                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
+                          type="email"
+                          value={testEmailTarget}
+                          onChange={e => setTestEmailTarget(e.target.value)}
+                          placeholder="Digite o e-mail de destino..."
+                          className="flex-1 text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
                         />
+                        <button
+                          type="button"
+                          onClick={handleSendTestEmail}
+                          disabled={testEmailSending || !testEmailTarget}
+                          className="px-4 py-2.5 bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 font-semibold text-sm rounded-xl border border-brand-primary/20 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          {testEmailSending ? <Loader2 className="animate-spin" size={16} /> : <Mail size={16} />}
+                          <span>Testar</span>
+                        </button>
                       </div>
-                      <div>
-                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PRIVADA (VAPID PRIVATE KEY)</span>
-                        <input
-                          type="password"
-                          readOnly
-                          value={adminVapidPrivate}
-                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
-                        />
-                      </div>
+                      {testEmailStatus && (
+                        <div className={`p-2.5 rounded-xl border text-[11px] flex gap-2 ${testEmailStatus === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                          <Check size={14} className="text-emerald-600 flex-shrink-0 mt-0.5" />
+                          <span>{testEmailMessage}</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  </form>
                 </div>
               </div>
             ) : (

@@ -14,6 +14,7 @@ interface Notification {
   type: 'info' | 'success' | 'warning' | 'error';
   read_at: string | null;
   link: string | null;
+  image_url: string | null;
   created_at: string;
 }
 
@@ -43,6 +44,55 @@ export default function Notifications() {
   const [testSending, setTestSending] = useState(false);
   const [testStatus, setTestStatus] = useState<'success' | 'error' | null>(null);
   const [testMessage, setTestMessage] = useState('');
+ 
+  // Test email states
+  const [testEmailTarget, setTestEmailTarget] = useState('');
+  const [testEmailSending, setTestEmailSending] = useState(false);
+  const [testEmailStatus, setTestEmailStatus] = useState<'success' | 'error' | null>(null);
+  const [testEmailMessage, setTestEmailMessage] = useState('');
+ 
+  const handleSendTestEmail = async () => {
+    if (!testEmailTarget) return;
+    setTestEmailSending(true);
+    setTestEmailStatus(null);
+    setTestEmailMessage('');
+ 
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+ 
+      const res = await fetch('/api/notifications/test-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          toEmail: testEmailTarget,
+          smtpHost: smtpHost,
+          smtpPort: smtpPort,
+          smtpUser: smtpUser,
+          smtpPass: smtpPass,
+          smtpFrom: smtpFrom
+        })
+      });
+ 
+      const data = await res.json().catch(() => ({}));
+ 
+      if (res.ok) {
+        setTestEmailStatus('success');
+        setTestEmailMessage('E-mail de teste enviado com sucesso!');
+      } else {
+        setTestEmailStatus('error');
+        setTestEmailMessage(data.error || 'Erro ao enviar e-mail de teste.');
+      }
+    } catch (err: any) {
+      setTestEmailStatus('error');
+      setTestEmailMessage(err.message || 'Falha na conexão.');
+    } finally {
+      setTestEmailSending(false);
+    }
+  };
 
   // 1. Carregar Notificações do Banco
   const fetchNotifications = async () => {
@@ -300,7 +350,9 @@ export default function Notifications() {
         .from('settings')
         .upsert({
           id: 'notification_settings',
-          api_key: JSON.stringify(settings)
+          api_key: JSON.stringify(settings),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
         });
 
       if (error) throw error;
@@ -440,7 +492,7 @@ export default function Notifications() {
                 </div>
               </div>
             ) : (
-              <div className="divide-y divide-brand-border/40 max-h-[550px] overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3.5 max-h-[550px] overflow-y-auto pr-1">
                 {notifications.map((item) => {
                   const Icon = 
                     item.type === 'success' ? CheckCircle2 :
@@ -457,7 +509,7 @@ export default function Notifications() {
                     <div 
                       key={item.id} 
                       onClick={() => !item.read_at && markAsRead(item.id)}
-                      className={`py-4 px-3 flex gap-4 items-start transition-all rounded-xl hover:bg-brand-bg/50 cursor-pointer ${!item.read_at ? 'bg-brand-primary/5 border-l-4 border-l-brand-primary' : ''}`}
+                      className={`py-4 px-4 flex gap-4 items-start transition-all rounded-xl hover:bg-brand-bg/30 cursor-pointer border shadow-sm ${!item.read_at ? 'bg-brand-primary/5 border-brand-primary/20 border-l-4 border-l-brand-primary' : 'bg-white border-brand-border/50'}`}
                     >
                       <div className={`p-2 rounded-lg border flex-shrink-0 ${colorClass}`}>
                         <Icon size={18} />
@@ -474,11 +526,21 @@ export default function Notifications() {
                           {item.message}
                         </p>
                         
+                        {item.image_url && (
+                          <div className="mt-3 rounded-xl overflow-hidden border border-brand-border/40 max-w-lg shadow-sm">
+                            <img 
+                              src={item.image_url} 
+                              alt="Capa da notificação" 
+                              className="max-h-48 w-full object-cover"
+                            />
+                          </div>
+                        )}
+                        
                         {item.link && (
                           <a 
                             href={item.link} 
                             onClick={(e) => e.stopPropagation()} 
-                            className="inline-block text-xs font-semibold text-brand-primary hover:underline mt-2"
+                            className="inline-block text-xs font-semibold text-brand-primary hover:underline mt-2.5"
                           >
                             Ver detalhes &rarr;
                           </a>
@@ -672,6 +734,35 @@ export default function Notifications() {
                   <span>Configurações SMTP salvas com sucesso!</span>
                 </div>
               )}
+
+              {/* Seção de Teste de E-mail SMTP */}
+              <div className="border-t border-brand-border/40 pt-4 mt-4 space-y-3">
+                <label className="text-[10px] font-bold text-brand-text block uppercase tracking-wider">Testar Configuração SMTP</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={testEmailTarget}
+                    onChange={e => setTestEmailTarget(e.target.value)}
+                    placeholder="Digite o e-mail de destino..."
+                    className="flex-1 text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendTestEmail}
+                    disabled={testEmailSending || !testEmailTarget}
+                    className="px-4 py-2.5 bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 font-semibold text-sm rounded-xl border border-brand-primary/20 flex items-center justify-center gap-1.5 transition-all disabled:opacity-50"
+                  >
+                    {testEmailSending ? <Loader2 className="animate-spin" size={16} /> : <Mail size={16} />}
+                    <span>Testar</span>
+                  </button>
+                </div>
+                {testEmailStatus && (
+                  <div className={`p-2.5 rounded-xl border text-[11px] flex gap-2 ${testEmailStatus === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                    <CheckCircle2 className="flex-shrink-0 mt-0.5" size={14} />
+                    <span>{testEmailMessage}</span>
+                  </div>
+                )}
+              </div>
             </form>
           )}
 

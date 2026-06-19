@@ -166,7 +166,7 @@ app.post("/api/notifications/unsubscribe", requireAuth, async (req: any, res) =>
 
 // 4. Enviar Notificação (In-App, Push e E-mail)
 app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
-  const { userId, title, content, type = "info", link } = req.body;
+  const { userId, title, content, type = "info", link, imageUrl } = req.body;
   
   if (!title || !content) {
     return res.status(400).json({ error: "Titulo e mensagem sao obrigatorios" });
@@ -201,7 +201,8 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
         title,
         message: content, // Ajustado ao banco existente
         type,
-        link
+        link,
+        image_url: imageUrl
       })
       .select()
       .single();
@@ -227,7 +228,8 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
         const payload = JSON.stringify({
           title,
           body: content,
-          link: link || "/painel/notifications"
+          link: link || "/painel/notifications",
+          image: imageUrl
         });
 
         for (const sub of subscriptions) {
@@ -285,6 +287,7 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
                   <h2 style="margin: 0; font-size: 22px;">Notificação do Sistema</h2>
                 </div>
                 <div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6;">
+                  ${imageUrl ? `<div style="margin-bottom: 20px; text-align: center; border-radius: 6px; overflow: hidden;"><img src="${imageUrl}" alt="Imagem de Capa" style="max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 6px;" /></div>` : ""}
                   <p style="font-size: 16px; font-weight: bold; color: #111111;">${title}</p>
                   <p style="font-size: 15px; margin-bottom: 24px;">${content}</p>
                   <div style="text-align: center; margin: 30px 0;">
@@ -313,6 +316,65 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   } catch (err: any) {
     console.error("Erro ao disparar notificacao:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Testar Servidor SMTP (Apenas Admin)
+app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => {
+  try {
+    // A. Verificar se o usuario logado e administrador
+    const { data: prof, error: profError } = await supabaseAdmin
+      .from("professionals")
+      .select("role")
+      .eq("id", req.user.id)
+      .single();
+      
+    if (profError || !prof || prof.role !== "admin") {
+      return res.status(403).json({ error: "Nao autorizado. Apenas administradores podem testar o servidor SMTP." });
+    }
+
+    const { toEmail, smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom } = req.body;
+    
+    if (!toEmail || !smtpHost || !smtpUser || !smtpPass) {
+      return res.status(400).json({ error: "E-mail de destino, Host, Usuario e Senha SMTP sao obrigatorios" });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: Number(smtpPort) || 587,
+      secure: Number(smtpPort) === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass
+      }
+    });
+
+    const mailOptions = {
+      from: smtpFrom || `"Teste SMTP" <${smtpUser}>`,
+      to: toEmail,
+      subject: "[Evolução Clínica] Teste de Conexão SMTP 🎉",
+      text: "Se você recebeu este e-mail, significa que as configurações do seu servidor SMTP global estão corretas e prontas para uso no sistema de notificações!",
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+          <div style="background-color: #005C13; padding: 20px; text-align: center; color: white;">
+            <h2 style="margin: 0; font-size: 22px;">Teste de SMTP Globals</h2>
+          </div>
+          <div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6;">
+            <p style="font-size: 16px; font-weight: bold; color: #111111;">Conexão SMTP Funcionando! 🎉</p>
+            <p style="font-size: 15px; margin-bottom: 24px;">Este é um e-mail de teste disparado a partir das configurações preenchidas na plataforma. Seu servidor está configurado corretamente.</p>
+          </div>
+          <div style="background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee;">
+            <p style="margin: 0;">Evolução Clínica - Plataforma Inteligente</p>
+          </div>
+        </div>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Erro ao enviar e-mail de teste:", err);
+    res.status(500).json({ error: err.message || "Erro desconhecido ao disparar e-mail de teste." });
   }
 });
 
