@@ -269,6 +269,13 @@ export default function AdminPanel() {
 
   // Estados para aba de Notificações & SMTP no Painel Admin
   const [adminSmtpHost, setAdminSmtpHost] = useState('');
+  const [emailSendQueue, setEmailSendQueue] = useState<{
+    id: string;
+    name: string;
+    email: string;
+    status: 'pending' | 'sending' | 'success' | 'error';
+    error?: string;
+  }[]>([]);
   const [adminSmtpPort, setAdminSmtpPort] = useState('587');
   const [adminSmtpSecure, setAdminSmtpSecure] = useState(false);
   const [adminSmtpUser, setAdminSmtpUser] = useState('');
@@ -668,7 +675,20 @@ export default function AdminPanel() {
       let successCount = 0;
       let errorMsg = '';
 
+      // Inicializa a fila de envio
+      const initialQueue = targets.map(targetId => {
+        const prof = professionals.find(p => p.id === targetId);
+        return {
+          id: targetId,
+          name: prof?.full_name || 'Profissional',
+          email: prof?.google_email || 'Sem e-mail',
+          status: 'pending' as const
+        };
+      });
+      setEmailSendQueue(initialQueue);
+
       for (const targetId of targets) {
+        setEmailSendQueue(prev => prev.map(item => item.id === targetId ? { ...item, status: 'sending' } : item));
         try {
           const res = await fetch('/api/notifications/send', {
             method: 'POST',
@@ -686,12 +706,16 @@ export default function AdminPanel() {
 
           if (res.ok) {
             successCount++;
+            setEmailSendQueue(prev => prev.map(item => item.id === targetId ? { ...item, status: 'success' } : item));
           } else {
             const errData = await res.json().catch(() => ({}));
-            errorMsg = errData.error || 'Erro no envio';
+            const msg = errData.error || 'Erro no envio';
+            errorMsg = msg;
+            setEmailSendQueue(prev => prev.map(item => item.id === targetId ? { ...item, status: 'error', error: msg } : item));
           }
         } catch (err: any) {
           errorMsg = err.message;
+          setEmailSendQueue(prev => prev.map(item => item.id === targetId ? { ...item, status: 'error', error: err.message } : item));
         }
       }
 
@@ -3149,6 +3173,66 @@ export default function AdminPanel() {
                       </div>
                     </form>
                   </div>
+
+                  {/* Fila de Envio em Tempo Real */}
+                  {emailSendQueue.length > 0 && (
+                    <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
+                      <div className="flex items-center justify-between border-b border-brand-border/40 pb-2">
+                        <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                          <Activity size={18} className="text-brand-primary animate-pulse" />
+                          <span>Fila de Envio de E-mails</span>
+                        </h3>
+                        <button
+                          onClick={() => setEmailSendQueue([])}
+                          className="text-xs text-brand-text-muted hover:text-brand-primary font-medium cursor-pointer"
+                        >
+                          Limpar Fila
+                        </button>
+                      </div>
+
+                      <div className="max-h-60 overflow-y-auto divide-y divide-brand-border/30 text-xs">
+                        {emailSendQueue.map((item) => (
+                          <div key={item.id} className="py-2.5 flex items-center justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-semibold text-brand-text truncate">{item.name}</p>
+                              <p className="text-brand-text-muted truncate text-[10px]">{item.email}</p>
+                              {item.status === 'error' && item.error && (
+                                <p className="text-[10px] text-red-500 font-medium mt-0.5 bg-red-50 px-2 py-0.5 rounded-lg border border-red-100 inline-block">
+                                  {item.error}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {item.status === 'pending' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-100">
+                                  <Clock size={12} className="animate-pulse" />
+                                  Pendente
+                                </span>
+                              )}
+                              {item.status === 'sending' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                                  <Loader2 size={12} className="animate-spin" />
+                                  Enviando
+                                </span>
+                              )}
+                              {item.status === 'success' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                                  <Check size={12} />
+                                  Sucesso
+                                </span>
+                              )}
+                              {item.status === 'error' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-red-50 text-red-700 border border-red-100">
+                                  <XCircle size={12} />
+                                  Erro
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Histórico e Auditoria de E-mails */}
                   <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
