@@ -82,7 +82,7 @@ export function getGooglePayRequest(
     apiVersionMinor: 0,
     allowedPaymentMethods: [cardPaymentMethod],
     transactionInfo: {
-      totalPriceStatus: 'FINAL',
+      totalPriceStatus: 'FINAL' as const,
       totalPriceLabel: 'Total',
       totalPrice: planPrice.toFixed(2),
       currencyCode: currencyCode,
