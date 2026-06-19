@@ -266,7 +266,7 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
           const transporter = nodemailer.createTransport({
             host: settings.smtp_host,
             port: Number(settings.smtp_port) || 587,
-            secure: Number(settings.smtp_port) === 465,
+            secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
             auth: {
               user: settings.smtp_user,
               pass: settings.smtp_pass
@@ -333,7 +333,7 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
       return res.status(403).json({ error: "Nao autorizado. Apenas administradores podem testar o servidor SMTP." });
     }
 
-    const { toEmail, smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom } = req.body;
+    const { toEmail, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass, smtpFrom } = req.body;
     
     if (!toEmail || !smtpHost || !smtpUser || !smtpPass) {
       return res.status(400).json({ error: "E-mail de destino, Host, Usuario e Senha SMTP sao obrigatorios" });
@@ -342,7 +342,7 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: Number(smtpPort) || 587,
-      secure: Number(smtpPort) === 465,
+      secure: smtpSecure !== undefined ? smtpSecure : Number(smtpPort) === 465,
       auth: {
         user: smtpUser,
         pass: smtpPass

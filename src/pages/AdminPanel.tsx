@@ -270,6 +270,7 @@ export default function AdminPanel() {
   // Estados para aba de Notificações & SMTP no Painel Admin
   const [adminSmtpHost, setAdminSmtpHost] = useState('');
   const [adminSmtpPort, setAdminSmtpPort] = useState('587');
+  const [adminSmtpSecure, setAdminSmtpSecure] = useState(false);
   const [adminSmtpUser, setAdminSmtpUser] = useState('');
   const [adminSmtpPass, setAdminSmtpPass] = useState('');
   const [adminSmtpFrom, setAdminSmtpFrom] = useState('');
@@ -417,6 +418,7 @@ export default function AdminPanel() {
           const parsed = JSON.parse(data.api_key);
           setAdminSmtpHost(parsed.smtp_host || '');
           setAdminSmtpPort(parsed.smtp_port || '587');
+          setAdminSmtpSecure(parsed.smtp_secure !== undefined ? parsed.smtp_secure : parsed.smtp_port === '465');
           setAdminSmtpUser(parsed.smtp_user || '');
           setAdminSmtpPass(parsed.smtp_pass || '');
           setAdminSmtpFrom(parsed.smtp_from || '');
@@ -460,6 +462,7 @@ export default function AdminPanel() {
       const settings = {
         smtp_host: adminSmtpHost,
         smtp_port: adminSmtpPort,
+        smtp_secure: adminSmtpSecure,
         smtp_user: adminSmtpUser,
         smtp_pass: adminSmtpPass,
         smtp_from: adminSmtpFrom,
@@ -611,6 +614,7 @@ export default function AdminPanel() {
           toEmail: testEmailTarget,
           smtpHost: adminSmtpHost,
           smtpPort: adminSmtpPort,
+          smtpSecure: adminSmtpSecure,
           smtpUser: adminSmtpUser,
           smtpPass: adminSmtpPass,
           smtpFrom: adminSmtpFrom
@@ -3259,6 +3263,18 @@ export default function AdminPanel() {
                             className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
                           />
                         </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">CONEXÃO SEGURA (SSL)</label>
+                        <select
+                          value={adminSmtpSecure ? 'ssl' : 'no_ssl'}
+                          onChange={e => setAdminSmtpSecure(e.target.value === 'ssl')}
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                        >
+                          <option value="no_ssl">Sem SSL (TLS / STARTTLS - Portas 587, 25)</option>
+                          <option value="ssl">Com SSL (Porta 465)</option>
+                        </select>
                       </div>
 
                       <div>
