@@ -15,6 +15,17 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// Helper para formatar o campo 'from' corretamente (ex: "Nome" <email@dominio>)
+function buildFromField(smtpFrom: string, smtpUser: string): string {
+  if (!smtpFrom) return `"Evolução Clínica" <${smtpUser}>`;
+  // Já tem formato correto com <email>
+  if (smtpFrom.includes('<') && smtpFrom.includes('>')) return smtpFrom;
+  // É só um e-mail
+  if (smtpFrom.includes('@')) return smtpFrom;
+  // É só um nome — adiciona o e-mail
+  return `"${smtpFrom}" <${smtpUser}>`;
+}
+
 // Helper para obter/gerar configurações de notificações
 async function getNotificationSettings() {
   try {
@@ -291,14 +302,20 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
             auth: {
               user: settings.smtp_user,
               pass: settings.smtp_pass
-            }
+            },
+            // Necessário para ambiente serverless (Vercel): sem pool de conexões persistentes
+            pool: false,
+            connectionTimeout: 15000,
+            greetingTimeout: 10000,
+            socketTimeout: 15000,
+            tls: { rejectUnauthorized: false }
           });
 
           const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
           const viewUrl = `${origin}${link || "/painel/notifications"}`;
 
           const mailOptions = {
-            from: settings.smtp_from || `"Evolução Clínica" <${settings.smtp_user}>`,
+            from: buildFromField(settings.smtp_from, settings.smtp_user),
             to: targetEmail,
             subject: `[Notificação] ${title}`,
             text: `${content}\n\nVer detalhes no app: ${viewUrl}`,
@@ -381,11 +398,17 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
       auth: {
         user: smtpUser,
         pass: smtpPass
-      }
+      },
+      // Necessário para ambiente serverless (Vercel)
+      pool: false,
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: { rejectUnauthorized: false }
     });
 
     const mailOptions = {
-      from: smtpFrom || `"Teste SMTP" <${smtpUser}>`,
+      from: buildFromField(smtpFrom, smtpUser),
       to: toEmail,
       subject: "[Evolução Clínica] Teste de Conexão SMTP 🎉",
       text: "Se você recebeu este e-mail, significa que as configurações do seu servidor SMTP global estão corretas e prontas para uso no sistema de notificações!",
