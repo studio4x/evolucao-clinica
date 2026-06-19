@@ -1609,9 +1609,7 @@ export default function AdminPanel() {
                         </span>
                         <div className="bg-white border border-brand-border/60 rounded-xl px-4 py-3 font-mono text-xs text-brand-primary font-bold break-all shadow-inner flex justify-between items-center select-all">
                           <span>
-                            {window.location.origin.includes('localhost') 
-                              ? 'https://kvxboovgrrhhttaqinld.supabase.co/functions/v1/stripe-webhook' 
-                              : `${window.location.origin}/api/webhook/stripe`}
+                            {`${import.meta.env.VITE_SUPABASE_URL || 'https://kvxboovgrrhhttaqinld.supabase.co'}/functions/v1/stripe-webhook`}
                           </span>
                         </div>
                         <p className="text-[11px] text-brand-text-muted mt-2 leading-relaxed">

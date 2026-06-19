@@ -194,38 +194,34 @@ export default function Subscription() {
     setSuccessMessage(null);
 
     try {
-      console.log("Token do Google Pay recebido com sucesso:", paymentData.paymentMethodData?.tokenizationData?.token);
+      const token = paymentData.paymentMethodData?.tokenizationData?.token;
+      console.log("Token do Google Pay recebido com sucesso:", token);
       
-      const now = new Date();
-      let durationMs = 0;
-
-      if (plan === 'monthly') {
-        durationMs = 30 * 24 * 60 * 60 * 1000; // 30 dias
-      } else if (plan === 'yearly') {
-        durationMs = 365 * 24 * 60 * 60 * 1000; // 365 dias
+      if (!token) {
+        throw new Error("Token de pagamento não retornado pela API do Google Pay.");
       }
 
-      const newExpirationDate = new Date(now.getTime() + durationMs).toISOString();
+      // Invoca a Edge Function do Supabase para processar a assinatura real na Stripe
+      const { data, error: functionError } = await supabase.functions.invoke('process-google-pay', {
+        body: {
+          userId: user.id,
+          planId: plan,
+          paymentToken: token
+        }
+      });
 
-      const { error } = await supabase
-        .from('professionals')
-        .update({
-          subscription_plan: plan,
-          subscription_status: 'active',
-          subscription_ends_at: newExpirationDate,
-          updated_at: now.toISOString()
-        })
-        .eq('id', user.id);
+      if (functionError) throw functionError;
+      if (!data || !data.success) {
+        throw new Error(data?.error || "Ocorreu um erro no processamento do pagamento.");
+      }
 
-      if (error) throw error;
-
-      // Atualiza o estado global do Zustand
+      // Atualiza o estado global do Zustand com os dados reais retornados pelo backend
       setProfileInfo(
         'active', 
         profileRole || 'therapist',
         plan,
-        'active',
-        newExpirationDate,
+        data.status || 'active',
+        data.endsAt,
         trialEndsAt
       );
 
@@ -233,7 +229,7 @@ export default function Subscription() {
       setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error: any) {
       console.error("Erro ao processar assinatura via Google Pay:", error);
-      alert("Erro ao processar assinatura no Supabase: " + (error.message || error));
+      alert("Erro ao processar pagamento real: " + (error.message || error));
     } finally {
       setLoadingPlan(null);
     }
