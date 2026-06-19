@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle } from 'lucide-react';
+import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2 } from 'lucide-react';
 import GooglePayButton from '@google-pay/button-react';
 import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
 
@@ -49,6 +49,15 @@ export default function Subscription() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
 
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loadingTransactions, setLoadingTransactions] = useState(true);
+  const [showPersuadeModal, setShowPersuadeModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [selectedTxForRefund, setSelectedTxForRefund] = useState<any>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [confirmPhrase, setConfirmPhrase] = useState('');
+  const [loadingRefund, setLoadingRefund] = useState(false);
+
   useEffect(() => {
     const fetchPaymentSettings = async () => {
       try {
@@ -91,6 +100,29 @@ export default function Subscription() {
     fetchPlans();
   }, []);
 
+  const fetchTransactions = async () => {
+    if (!user) return;
+    setLoadingTransactions(true);
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('professional_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (e) {
+      console.error("Error fetching transactions:", e);
+    } finally {
+      setLoadingTransactions(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [user]);
+
   // Calcula o status e tempo restante
   const now = new Date();
   const endsAtDate = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
@@ -131,6 +163,26 @@ export default function Subscription() {
 
       if (error) throw error;
 
+      // Inserir registro de transação simulada
+      const { error: txError } = await supabase
+        .from('transactions')
+        .insert({
+          professional_id: user.id,
+          stripe_invoice_id: null,
+          stripe_subscription_id: null,
+          amount: plan === 'monthly' ? 49.90 : 499.00,
+          currency: 'brl',
+          plan_id: plan,
+          status: 'paid',
+          stripe_invoice_url: null,
+          invoice_pdf_url: null,
+          created_at: new Date().toISOString()
+        });
+
+      if (txError) {
+        console.error("Erro ao inserir transação simulada:", txError);
+      }
+
       // Atualiza o estado global do Zustand
       setProfileInfo(
         'active', 
@@ -142,6 +194,7 @@ export default function Subscription() {
       );
 
       setSuccessMessage(`Plano ${plan === 'monthly' ? 'Mensal' : 'Anual'} ativado com sucesso através da simulação!`);
+      fetchTransactions();
       setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error: any) {
       console.error("Erro ao simular pagamento:", error);
@@ -226,12 +279,56 @@ export default function Subscription() {
       );
 
       setSuccessMessage(`Plano ${plan === 'monthly' ? 'Mensal' : 'Anual'} ativado com sucesso via Google Pay!`);
+      fetchTransactions();
       setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error: any) {
       console.error("Erro ao processar assinatura via Google Pay:", error);
       alert("Erro ao processar pagamento real: " + (error.message || error));
     } finally {
       setLoadingPlan(null);
+    }
+  };
+
+  const handleRequestRefund = async () => {
+    if (!selectedTxForRefund) return;
+    if (confirmPhrase !== 'REEMBOLSAR') {
+      alert("Por favor, digite 'REEMBOLSAR' para confirmar.");
+      return;
+    }
+
+    setLoadingRefund(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('process-refund', {
+        body: {
+          transactionId: selectedTxForRefund.id,
+          refundReason: refundReason
+        }
+      });
+
+      if (error) throw error;
+      
+      alert("Reembolso solicitado e assinatura cancelada com sucesso!");
+      
+      setProfileInfo(
+        'active',
+        profileRole || 'therapist',
+        'trial',
+        'canceled',
+        subscriptionEndsAt,
+        trialEndsAt
+      );
+
+      setShowConfirmModal(false);
+      setSelectedTxForRefund(null);
+      setRefundReason('');
+      setConfirmPhrase('');
+      
+      fetchTransactions();
+    } catch (err: any) {
+      console.error("Erro ao solicitar reembolso:", err);
+      alert("Falha ao processar reembolso: " + (err.message || err));
+    } finally {
+      setLoadingRefund(false);
     }
   };
 
@@ -482,6 +579,105 @@ export default function Subscription() {
         })}
       </div>
 
+      {/* Seção de Transações Efetuadas */}
+      <div className="card border-brand-border/60 bg-white shadow p-6 space-y-6">
+        <div className="flex items-center space-x-3 pb-4 border-b border-brand-border/60">
+          <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+            <Clock className="w-6 h-6" />
+          </div>
+          <div>
+            <h3 className="text-lg font-display font-bold text-brand-primary border-none p-0 pb-0">Histórico de Transações</h3>
+            <p className="text-xs text-brand-text-muted mt-0.5">Veja seus pagamentos e gerencie reembolsos ou faturas.</p>
+          </div>
+        </div>
+
+        {loadingTransactions ? (
+          <div className="py-8 flex flex-col items-center justify-center text-brand-text-muted">
+            <Loader2 className="w-6 h-6 text-brand-primary animate-spin mb-2" />
+            <span className="text-xs">Carregando histórico de pagamentos...</span>
+          </div>
+        ) : transactions.length === 0 ? (
+          <div className="py-8 text-center text-brand-text-muted text-xs leading-relaxed">
+            Nenhuma transação efetuada até o momento.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-brand-border/60 text-brand-text font-bold">
+                  <th className="py-3 px-2">Plano</th>
+                  <th className="py-3 px-2">Data</th>
+                  <th className="py-3 px-2">Valor</th>
+                  <th className="py-3 px-2">Status</th>
+                  <th className="py-3 px-2 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border/30">
+                {transactions.map((tx) => (
+                  <tr key={tx.id} className="hover:bg-brand-bg/20 transition-colors">
+                    <td className="py-3.5 px-2 font-medium text-brand-text">
+                      {tx.plan_id === 'monthly' ? 'Plano Mensal' : tx.plan_id === 'yearly' ? 'Plano Anual' : tx.plan_id}
+                    </td>
+                    <td className="py-3.5 px-2 text-brand-text-muted">
+                      {formatDateTime(tx.created_at)}
+                    </td>
+                    <td className="py-3.5 px-2 font-semibold text-brand-text">
+                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: tx.currency?.toUpperCase() || 'BRL' }).format(tx.amount)}
+                    </td>
+                    <td className="py-3.5 px-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                        tx.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                        tx.status === 'refunded' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                        tx.status === 'refund_requested' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                        tx.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                        'bg-amber-50 text-amber-700 border-amber-200'
+                      }`}>
+                        {tx.status === 'paid' ? 'Pago' :
+                         tx.status === 'refunded' ? 'Reembolsado' :
+                         tx.status === 'refund_requested' ? 'Reembolso Solicitado' :
+                         tx.status === 'failed' ? 'Falhou' : tx.status}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-2 text-right space-x-2">
+                      {tx.stripe_invoice_url ? (
+                        <a
+                          href={tx.stripe_invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center px-2.5 py-1.5 border border-brand-border text-brand-text hover:text-brand-primary hover:border-brand-primary/45 rounded-lg transition-colors font-medium text-[10px]"
+                        >
+                          Ver Fatura
+                        </a>
+                      ) : (
+                        <button
+                          disabled
+                          className="inline-flex items-center px-2.5 py-1.5 border border-brand-border/40 text-brand-text-muted rounded-lg font-medium text-[10px] cursor-not-allowed opacity-55"
+                          title="Fatura não disponível para transações simuladas"
+                        >
+                          Sem Fatura
+                        </button>
+                      )}
+                      
+                      {tx.status === 'paid' && (
+                        <button
+                          onClick={() => {
+                            setSelectedTxForRefund(tx);
+                            setShowPersuadeModal(true);
+                          }}
+                          className="inline-flex items-center px-2.5 py-1.5 bg-red-50 text-red-600 hover:bg-red-100 rounded-lg transition-colors font-semibold text-[10px] cursor-pointer"
+                        >
+                          Solicitar Reembolso
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Manual de Integração Stripe/Asaas (Ajuda técnica do SaaS - Exibido apenas para Admin) */}
       {profileRole === 'admin' && (
         <div className="card border-brand-primary/5 bg-white shadow p-6">
@@ -555,6 +751,164 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Overlay de carregamento do Google Pay */}
+      {loadingPlan && (loadingPlan === 'monthly' || loadingPlan === 'yearly') && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-8 text-center space-y-6 shadow-2xl border border-brand-primary/10 animate-in zoom-in-95 duration-200">
+            <div className="relative flex justify-center animate-bounce">
+              <div className="w-16 h-16 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                <CreditCard className="w-8 h-8" />
+              </div>
+              <div className="absolute top-0 w-16 h-16 rounded-full border-4 border-brand-primary/20 border-t-brand-primary animate-spin" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-display font-bold text-brand-primary">Processando seu pagamento...</h3>
+              <p className="text-xs text-brand-text-muted leading-relaxed">
+                Estamos validando sua transação com segurança no Stripe. Por favor, não feche ou recarregue esta página.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 1: Persuasão para Reembolso */}
+      {showPersuadeModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 space-y-6 shadow-2xl border border-brand-primary/10 relative animate-in zoom-in-95 duration-200">
+            <div>
+              <h3 className="text-xl font-display font-bold text-brand-primary flex items-center space-x-2">
+                <AlertTriangle className="w-5 h-5 text-yellow-500" />
+                <span>Deseja mesmo solicitar reembolso?</span>
+              </h3>
+              <p className="text-xs text-brand-text-muted mt-2 leading-relaxed">
+                Ao cancelar sua assinatura e obter o reembolso, você perderá acesso imediato aos seguintes recursos exclusivos:
+              </p>
+            </div>
+
+            <div className="space-y-3 bg-brand-bg/50 p-4 rounded-2xl border border-brand-border/40 text-xs text-brand-text leading-relaxed">
+              <div className="flex items-start space-x-2.5">
+                <Check className="w-4 h-4 text-brand-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <strong className="font-semibold block">Evoluções com IA Ilimitadas</strong>
+                  <span>Você não poderá mais transcrever e resumir seus áudios clínicos com a inteligência artificial, tendo que voltar a digitar tudo manualmente.</span>
+                </div>
+              </div>
+              <div className="flex items-start space-x-2.5">
+                <Check className="w-4 h-4 text-brand-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <strong className="font-semibold block">Integração em tempo real com Google Docs</strong>
+                  <span>As evoluções deixarão de ser inseridas automaticamente nos seus prontuários no Google Drive.</span>
+                </div>
+              </div>
+              <div className="flex items-start space-x-2.5">
+                <Check className="w-4 h-4 text-brand-primary mt-0.5 flex-shrink-0" />
+                <div>
+                  <strong className="font-semibold block">Histórico de Atendimentos Centralizado</strong>
+                  <span>Busca rápida de evoluções e controle de pacientes direto pela nossa plataforma segura.</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-2">
+              <button
+                onClick={() => {
+                  setShowPersuadeModal(false);
+                  setSelectedTxForRefund(null);
+                }}
+                className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors shadow shadow-brand-primary/20 cursor-pointer"
+              >
+                Desistir do reembolso e manter benefícios
+              </button>
+              <button
+                onClick={() => {
+                  setShowPersuadeModal(false);
+                  setShowConfirmModal(true);
+                }}
+                className="w-full py-2.5 border border-brand-border text-brand-text-muted hover:text-red-600 hover:bg-red-50 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Prosseguir com o cancelamento e reembolso
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: Motivo e Confirmação de Reembolso */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 md:p-8 space-y-5 shadow-2xl border border-brand-primary/10 relative animate-in zoom-in-95 duration-200">
+            <div>
+              <h3 className="text-xl font-display font-bold text-red-600 flex items-center space-x-2">
+                <AlertTriangle className="w-5 h-5" />
+                <span>Confirmar Reembolso</span>
+              </h3>
+              <p className="text-xs text-brand-text-muted mt-1 leading-relaxed">
+                Por favor, preencha os detalhes abaixo para que possamos efetuar o reembolso e o cancelamento de sua assinatura.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Motivo do Cancelamento */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-brand-text block">Motivo do Reembolso</label>
+                <textarea
+                  value={refundReason}
+                  onChange={(e) => setRefundReason(e.target.value)}
+                  placeholder="Conte-nos brevemente o motivo (ex: não me adaptei, problemas técnicos, etc.)"
+                  rows={3}
+                  className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary resize-none"
+                />
+              </div>
+
+              {/* Confirmação por Escrito */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-brand-text block">
+                  Digite <strong className="text-brand-primary font-bold">REEMBOLSAR</strong> para confirmar:
+                </label>
+                <input
+                  type="text"
+                  value={confirmPhrase}
+                  onChange={(e) => setConfirmPhrase(e.target.value)}
+                  placeholder="Digite REEMBOLSAR"
+                  className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary font-mono uppercase"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4 border-t border-brand-border/60">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setSelectedTxForRefund(null);
+                  setRefundReason('');
+                  setConfirmPhrase('');
+                }}
+                disabled={loadingRefund}
+                className="flex-1 py-3 border border-brand-border text-brand-text font-bold rounded-xl text-sm hover:bg-brand-bg transition-colors cursor-pointer"
+              >
+                Desistir do reembolso
+              </button>
+              <button
+                type="button"
+                onClick={handleRequestRefund}
+                disabled={loadingRefund || confirmPhrase !== 'REEMBOLSAR'}
+                className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-sm hover:bg-red-700 transition-colors flex items-center justify-center space-x-1.5 shadow disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {loadingRefund ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : (
+                  <span>Efetuar reembolso</span>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

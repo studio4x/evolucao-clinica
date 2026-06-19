@@ -63,19 +63,21 @@ export default function AdminPanel() {
     if (path.endsWith('/google-pay-config')) return 'google_pay_config';
     if (path.endsWith('/token-usage')) return 'token_usage';
     if (path.endsWith('/plans')) return 'plans';
+    if (path.endsWith('/transactions')) return 'transactions';
     if (path.endsWith('/profile')) return 'profile';
     return 'professionals'; // default
   };
 
   const activeTab = getActiveTab();
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
     else if (tab === 'token_usage') navigate('/admin/token-usage');
     else if (tab === 'plans') navigate('/admin/plans');
     else if (tab === 'profile') navigate('/admin/profile');
+    else if (tab === 'transactions') navigate('/admin/transactions');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -240,6 +242,10 @@ export default function AdminPanel() {
   const [savingPlanId, setSavingPlanId] = useState<string | null>(null);
   const [plansError, setPlansError] = useState('');
   const [plansSuccess, setPlansSuccess] = useState('');
+
+  // Estados de Transações (Admin)
+  const [adminTransactions, setAdminTransactions] = useState<any[]>([]);
+  const [loadingAdminTransactions, setLoadingAdminTransactions] = useState(true);
 
   // Estados do Formulário de Login (Administrativo)
   const [email, setEmail] = useState('');
@@ -504,6 +510,36 @@ export default function AdminPanel() {
     };
 
     fetchUsageLogs();
+  }, [user, profileRole, activeTab]);
+
+  // Efeito para carregar as transações
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      setLoadingAdminTransactions(true);
+      try {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select(`
+            *,
+            professionals (
+              full_name,
+              google_email
+            )
+          `)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setAdminTransactions(data || []);
+      } catch (err) {
+        console.error("Erro ao buscar transações no admin:", err);
+      } finally {
+        setLoadingAdminTransactions(false);
+      }
+    };
+
+    if (user && profileRole === 'admin' && activeTab === 'transactions') {
+      fetchTransactions();
+    }
   }, [user, profileRole, activeTab]);
 
   // Manipulador de login do admin
@@ -984,6 +1020,17 @@ export default function AdminPanel() {
               >
                 <CreditCard size={18} />
                 <span>Google Pay & Stripe</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('transactions')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'transactions'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Clock size={18} />
+                <span>Transações</span>
               </button>
               <button
                 onClick={() => setActiveTab('profile')}
@@ -2102,6 +2149,113 @@ export default function AdminPanel() {
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : activeTab === 'transactions' ? (
+              <div className="space-y-6">
+                <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Clock className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Transações Efetuadas
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Acompanhe o histórico de assinaturas reais e simuladas integradas com a Stripe.
+                      </p>
+                    </div>
+                  </div>
+
+                  {loadingAdminTransactions ? (
+                    <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                      <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                      <span className="text-sm">Carregando transações...</span>
+                    </div>
+                  ) : adminTransactions.length === 0 ? (
+                    <div className="p-12 text-center text-brand-text-muted text-sm leading-relaxed">
+                      Nenhuma transação registrada na plataforma.
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider">
+                            <th className="py-3 px-4">Profissional</th>
+                            <th className="py-3 px-4">Plano</th>
+                            <th className="py-3 px-4">Data</th>
+                            <th className="py-3 px-4">Valor</th>
+                            <th className="py-3 px-4">Status</th>
+                            <th className="py-3 px-4">Stripe ID</th>
+                            <th className="py-3 px-4 text-right">Ação</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand-border/30 text-xs">
+                          {adminTransactions.map((tx) => (
+                            <tr key={tx.id} className="hover:bg-brand-bg/10 transition-colors">
+                              <td className="py-3.5 px-4">
+                                <p className="font-semibold text-brand-text">
+                                  {tx.professionals?.full_name || 'Profissional'}
+                                </p>
+                                <p className="text-[10px] text-brand-text-muted">
+                                  {tx.professionals?.google_email || ''}
+                                </p>
+                              </td>
+                              <td className="py-3.5 px-4 font-medium text-brand-text">
+                                {tx.plan_id === 'monthly' ? 'Mensal' : tx.plan_id === 'yearly' ? 'Anual' : tx.plan_id}
+                              </td>
+                              <td className="py-3.5 px-4 text-brand-text-muted">
+                                {tx.created_at ? new Date(tx.created_at).toLocaleDateString('pt-BR', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                }) : 'N/A'}
+                              </td>
+                              <td className="py-3.5 px-4 font-bold text-brand-text">
+                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: tx.currency?.toUpperCase() || 'BRL' }).format(tx.amount)}
+                              </td>
+                              <td className="py-3.5 px-4">
+                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold border ${
+                                  tx.status === 'paid' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                                  tx.status === 'refunded' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                                  tx.status === 'refund_requested' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                  tx.status === 'failed' ? 'bg-red-50 text-red-700 border-red-200' :
+                                  'bg-amber-50 text-amber-700 border-amber-200'
+                                }`}>
+                                  {tx.status === 'paid' ? 'Pago' :
+                                   tx.status === 'refunded' ? 'Reembolsado' :
+                                   tx.status === 'refund_requested' ? 'Reembolso Solicitado' :
+                                   tx.status === 'failed' ? 'Falhou' : tx.status}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-4 font-mono text-[10px] text-brand-text-muted">
+                                {tx.stripe_invoice_id || 'Simulado'}
+                              </td>
+                              <td className="py-3.5 px-4 text-right">
+                                {tx.stripe_invoice_url ? (
+                                  <a
+                                    href={tx.stripe_invoice_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center px-3 py-1.5 bg-brand-primary text-white hover:bg-brand-primary-hover rounded-xl transition-colors font-semibold text-[10px] shadow-sm hover:shadow"
+                                  >
+                                    Ver Fatura Stripe
+                                  </a>
+                                ) : (
+                                  <span className="text-[10px] text-brand-text-muted italic">
+                                    Simulado
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
