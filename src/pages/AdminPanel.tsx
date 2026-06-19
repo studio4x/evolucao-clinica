@@ -68,13 +68,14 @@ export default function AdminPanel() {
     if (path.endsWith('/transactions')) return 'transactions';
     if (path.endsWith('/push-notifications')) return 'push_notifications';
     if (path.endsWith('/email-notifications')) return 'email_notifications';
+    if (path.endsWith('/vapid-keys')) return 'vapid_keys';
     if (path.endsWith('/profile')) return 'profile';
     return 'professionals'; // default
   };
 
   const activeTab = getActiveTab();
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'vapid_keys') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -84,6 +85,7 @@ export default function AdminPanel() {
     else if (tab === 'transactions') navigate('/admin/transactions');
     else if (tab === 'push_notifications') navigate('/admin/push-notifications');
     else if (tab === 'email_notifications') navigate('/admin/email-notifications');
+    else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -443,7 +445,7 @@ export default function AdminPanel() {
       }
     };
 
-    if (user && profileRole === 'admin' && (activeTab === 'push_notifications' || activeTab === 'email_notifications')) {
+    if (user && profileRole === 'admin' && (activeTab === 'push_notifications' || activeTab === 'email_notifications' || activeTab === 'vapid_keys')) {
       fetchSmtpAndLogs();
     }
   }, [user, profileRole, activeTab]);
@@ -1504,6 +1506,17 @@ export default function AdminPanel() {
               >
                 <Mail size={18} />
                 <span>E-mails do Sistema</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('vapid_keys')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'vapid_keys'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Key size={18} />
+                <span>Chaves Web Push</span>
               </button>
               <button
                 onClick={() => setActiveTab('profile')}
@@ -2743,9 +2756,7 @@ export default function AdminPanel() {
                 </div>
               </div>
             ) : activeTab === 'push_notifications' ? (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                {/* Lado Esquerdo: Envio de Notificações e Histórico (2/3) */}
-                <div className="xl:col-span-2 space-y-6">
+              <div className="space-y-6">
                   {/* Formulário de Envio */}
                   <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
                     <div className="flex items-center space-x-3 mb-6">
@@ -3031,46 +3042,9 @@ export default function AdminPanel() {
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Lado Direito: Config VAPID (1/3) */}
-                <div className="space-y-6">
-                  {/* VAPID Details */}
-                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-3 text-xs">
-                    <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2 border-b border-brand-border/40 pb-2 mb-2">
-                      <Shield className="text-brand-primary w-5 h-5" />
-                      <span>Chaves Web Push VAPID</span>
-                    </h3>
-                    <p className="text-brand-text-muted leading-relaxed">
-                      Essas chaves são usadas para assinar e criptografar as mensagens enviadas aos navegadores através da Push API.
-                    </p>
-                    <div className="space-y-2">
-                      <div>
-                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PÚBLICA (VAPID PUBLIC KEY)</span>
-                        <input
-                          type="text"
-                          readOnly
-                          value={adminVapidPublic}
-                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
-                        />
-                      </div>
-                      <div>
-                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PRIVADA (VAPID PRIVATE KEY)</span>
-                        <input
-                          type="password"
-                          readOnly
-                          value={adminVapidPrivate}
-                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             ) : activeTab === 'email_notifications' ? (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                {/* Lado Esquerdo: Envio de E-mails e Histórico (2/3) */}
-                <div className="xl:col-span-2 space-y-6">
+              <div className="space-y-6">
                   {/* Formulário de Envio de E-mail */}
                   <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
                     <div className="flex items-center space-x-3 mb-6">
@@ -3236,10 +3210,7 @@ export default function AdminPanel() {
                       </div>
                     )}
                   </div>
-                </div>
 
-                {/* Lado Direito: Servidor SMTP Global (1/3) */}
-                <div className="space-y-6">
                   {/* SMTP Config */}
                   <form onSubmit={handleSaveAdminSmtp} className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
                     <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
@@ -3357,6 +3328,45 @@ export default function AdminPanel() {
                       )}
                     </div>
                   </form>
+              </div>
+            ) : activeTab === 'vapid_keys' ? (
+              <div className="space-y-6 max-w-4xl">
+                {/* VAPID Details */}
+                <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Key className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Chaves Web Push VAPID
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Essas chaves são usadas para assinar e criptografar as mensagens enviadas aos navegadores através da Push API.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">CHAVE PÚBLICA (VAPID PUBLIC KEY)</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={adminVapidPublic}
+                        className="w-full border border-brand-border/85 bg-brand-bg/40 px-3 py-2.5 rounded-xl font-mono text-xs select-all cursor-text outline-none focus:border-brand-primary transition-all font-medium"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">CHAVE PRIVADA (VAPID PRIVATE KEY)</label>
+                      <input
+                        type="password"
+                        readOnly
+                        value={adminVapidPrivate}
+                        className="w-full border border-brand-border/85 bg-brand-bg/40 px-3 py-2.5 rounded-xl font-mono text-xs select-all cursor-text outline-none focus:border-brand-primary transition-all font-medium"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
