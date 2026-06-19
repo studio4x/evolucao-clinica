@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -64,13 +64,14 @@ export default function AdminPanel() {
     if (path.endsWith('/token-usage')) return 'token_usage';
     if (path.endsWith('/plans')) return 'plans';
     if (path.endsWith('/transactions')) return 'transactions';
+    if (path.endsWith('/notifications-config')) return 'notifications_config';
     if (path.endsWith('/profile')) return 'profile';
     return 'professionals'; // default
   };
 
   const activeTab = getActiveTab();
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'notifications_config') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -78,6 +79,7 @@ export default function AdminPanel() {
     else if (tab === 'plans') navigate('/admin/plans');
     else if (tab === 'profile') navigate('/admin/profile');
     else if (tab === 'transactions') navigate('/admin/transactions');
+    else if (tab === 'notifications_config') navigate('/admin/notifications-config');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -258,6 +260,218 @@ export default function AdminPanel() {
   const [editingProf, setEditingProf] = useState<Professional | null>(null);
   const [editPlan, setEditPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none'>('trial');
   const [editStatus, setEditStatus] = useState<'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid'>('trialing');
+
+  // Estados para aba de Notificações & SMTP no Painel Admin
+  const [adminSmtpHost, setAdminSmtpHost] = useState('');
+  const [adminSmtpPort, setAdminSmtpPort] = useState('587');
+  const [adminSmtpUser, setAdminSmtpUser] = useState('');
+  const [adminSmtpPass, setAdminSmtpPass] = useState('');
+  const [adminSmtpFrom, setAdminSmtpFrom] = useState('');
+  const [adminVapidPublic, setAdminVapidPublic] = useState('');
+  const [adminVapidPrivate, setAdminVapidPrivate] = useState('');
+  const [adminSmtpSaving, setAdminSmtpSaving] = useState(false);
+  const [adminSmtpSuccess, setAdminSmtpSuccess] = useState(false);
+
+  const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
+  const [selectedProfessionalId, setSelectedProfessionalId] = useState('');
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifContent, setNotifContent] = useState('');
+  const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
+  const [notifLink, setNotifLink] = useState('');
+  const [notifSending, setNotifSending] = useState(false);
+  const [notifSendSuccess, setNotifSendSuccess] = useState(false);
+  const [notifSendError, setNotifSendError] = useState('');
+
+  const [adminNotifications, setAdminNotifications] = useState<any[]>([]);
+  const [loadingAdminNotifications, setLoadingAdminNotifications] = useState(false);
+  const [deletingNotifId, setDeletingNotifId] = useState<string | null>(null);
+
+  // Efeito para carregar as configurações SMTP e Logs de notificações
+  useEffect(() => {
+    const fetchSmtpAndLogs = async () => {
+      if (!user || profileRole !== 'admin') return;
+      
+      // 1. Carregar configurações SMTP
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'notification_settings')
+          .single();
+          
+        if (!error && data && data.api_key) {
+          const parsed = JSON.parse(data.api_key);
+          setAdminSmtpHost(parsed.smtp_host || '');
+          setAdminSmtpPort(parsed.smtp_port || '587');
+          setAdminSmtpUser(parsed.smtp_user || '');
+          setAdminSmtpPass(parsed.smtp_pass || '');
+          setAdminSmtpFrom(parsed.smtp_from || '');
+          setAdminVapidPublic(parsed.vapid_public_key || '');
+          setAdminVapidPrivate(parsed.vapid_private_key || '');
+        }
+      } catch (err) {
+        console.error('Erro ao buscar configuracoes SMTP:', err);
+      }
+
+      // 2. Carregar Logs de notificações
+      setLoadingAdminNotifications(true);
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('*, professionals:user_id(full_name, google_email)')
+          .order('created_at', { ascending: false });
+
+        if (!error) {
+          setAdminNotifications(data || []);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar logs de notificacoes:", err);
+      } finally {
+        setLoadingAdminNotifications(false);
+      }
+    };
+
+    if (user && profileRole === 'admin' && activeTab === 'notifications_config') {
+      fetchSmtpAndLogs();
+    }
+  }, [user, profileRole, activeTab]);
+
+  // Salvar configurações SMTP
+  const handleSaveAdminSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminSmtpSaving(true);
+    setAdminSmtpSuccess(false);
+
+    try {
+      const settings = {
+        smtp_host: adminSmtpHost,
+        smtp_port: adminSmtpPort,
+        smtp_user: adminSmtpUser,
+        smtp_pass: adminSmtpPass,
+        smtp_from: adminSmtpFrom,
+        vapid_public_key: adminVapidPublic,
+        vapid_private_key: adminVapidPrivate,
+        vapid_subject: `mailto:${adminSmtpUser || 'suporte@conexaoseres.com.br'}`
+      };
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'notification_settings',
+          api_key: JSON.stringify(settings)
+        });
+
+      if (error) throw error;
+      setAdminSmtpSuccess(true);
+      setTimeout(() => setAdminSmtpSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Erro ao salvar SMTP:', err);
+      alert('Erro ao salvar configurações: ' + err.message);
+    } finally {
+      setAdminSmtpSaving(false);
+    }
+  };
+
+  // Excluir notificação específica do histórico geral
+  const handleDeleteNotification = async (id: string) => {
+    if (!confirm('Tem certeza que deseja excluir esta notificação?')) return;
+    setDeletingNotifId(id);
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      setAdminNotifications(prev => prev.filter(n => n.id !== id));
+    } catch (err: any) {
+      console.error('Erro ao deletar notificação:', err);
+      alert('Erro ao deletar: ' + err.message);
+    } finally {
+      setDeletingNotifId(null);
+    }
+  };
+
+  // Disparar notificação (para todos ou um profissional)
+  const handleSendNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (broadcastTarget === 'specific' && !selectedProfessionalId) {
+      alert('Selecione um profissional para enviar a notificação.');
+      return;
+    }
+
+    setNotifSending(true);
+    setNotifSendSuccess(false);
+    setNotifSendError('');
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      let targets: string[] = [];
+      if (broadcastTarget === 'all') {
+        targets = professionals.map(p => p.id);
+      } else {
+        targets = [selectedProfessionalId];
+      }
+
+      if (targets.length === 0) {
+        throw new Error('Nenhum profissional destinatário encontrado.');
+      }
+
+      let successCount = 0;
+      let errorMsg = '';
+
+      for (const targetId of targets) {
+        try {
+          const res = await fetch('/api/notifications/send', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              userId: targetId,
+              title: notifTitle,
+              content: notifContent,
+              type: notifType,
+              link: notifLink || undefined
+            })
+          });
+
+          if (res.ok) {
+            successCount++;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            errorMsg = errData.error || 'Erro no envio';
+          }
+        } catch (err: any) {
+          errorMsg = err.message;
+        }
+      }
+
+      if (successCount > 0) {
+        setNotifSendSuccess(true);
+        setNotifTitle('');
+        setNotifContent('');
+        setNotifLink('');
+        // Recarregar os logs
+        const { data } = await supabase
+          .from('notifications')
+          .select('*, professionals:user_id(full_name, google_email)')
+          .order('created_at', { ascending: false });
+        if (data) setAdminNotifications(data);
+      } else {
+        setNotifSendError(errorMsg || 'Falha ao enviar notificações.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao disparar notificações:', err);
+      setNotifSendError(err.message || 'Erro inesperado.');
+    } finally {
+      setNotifSending(false);
+    }
+  };
   const [editEndsAt, setEditEndsAt] = useState('');
   const [editUserStatus, setEditUserStatus] = useState<'active' | 'pending' | 'inactive'>('active');
 
@@ -1032,6 +1246,17 @@ export default function AdminPanel() {
               >
                 <Clock size={18} />
                 <span>Transações</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('notifications_config')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'notifications_config'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Bell size={18} />
+                <span>Notificações & SMTP</span>
               </button>
               <button
                 onClick={() => setActiveTab('profile')}
@@ -2268,6 +2493,351 @@ export default function AdminPanel() {
                       </table>
                     </div>
                   )}
+                </div>
+              </div>
+            ) : activeTab === 'notifications_config' ? (
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                {/* Lado Esquerdo: Envio de Notificações e Histórico (2/3) */}
+                <div className="xl:col-span-2 space-y-6">
+                  {/* Formulário de Envio */}
+                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                        <Bell className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                          Disparar Nova Notificação
+                        </h2>
+                        <p className="text-xs text-brand-text-muted mt-0.5">
+                          Envie um aviso para um profissional específico ou faça um broadcast para toda a plataforma.
+                        </p>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleSendNotification} className="space-y-4">
+                      {notifSendSuccess && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
+                          <Check className="flex-shrink-0 text-emerald-600" size={16} />
+                          <span>Notificação disparada com sucesso para o(s) destinatário(s)!</span>
+                        </div>
+                      )}
+
+                      {notifSendError && (
+                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs flex gap-2">
+                          <ShieldAlert className="flex-shrink-0 text-red-600" size={16} />
+                          <span>{notifSendError}</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Destinatário</label>
+                          <select
+                            value={broadcastTarget}
+                            onChange={(e) => setBroadcastTarget(e.target.value as any)}
+                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                          >
+                            <option value="all">Todos os Profissionais (Broadcast)</option>
+                            <option value="specific">Profissional Específico</option>
+                          </select>
+                        </div>
+
+                        {broadcastTarget === 'specific' && (
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Selecionar Profissional</label>
+                            <select
+                              value={selectedProfessionalId}
+                              onChange={(e) => setSelectedProfessionalId(e.target.value)}
+                              required
+                              className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                            >
+                              <option value="">-- Escolha o Profissional --</option>
+                              {professionals.map(p => (
+                                <option key={p.id} value={p.id}>
+                                  {p.full_name} ({p.google_email || 'Sem e-mail'})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-2 space-y-1">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Título do Alerta</label>
+                          <input
+                            type="text"
+                            value={notifTitle}
+                            onChange={(e) => setNotifTitle(e.target.value)}
+                            placeholder="ex: Atualização do Sistema"
+                            required
+                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Tipo de Alerta</label>
+                          <select
+                            value={notifType}
+                            onChange={(e) => setNotifType(e.target.value as any)}
+                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                          >
+                            <option value="info">Info (Azul)</option>
+                            <option value="success">Sucesso (Verde)</option>
+                            <option value="warning">Alerta (Amarelo)</option>
+                            <option value="error">Erro (Vermelho)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Conteúdo / Mensagem</label>
+                        <textarea
+                          value={notifContent}
+                          onChange={(e) => setNotifContent(e.target.value)}
+                          placeholder="Digite o texto detalhado da notificação..."
+                          required
+                          rows={3}
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium resize-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Link de Redirecionamento (Opcional)</label>
+                        <input
+                          type="text"
+                          value={notifLink}
+                          onChange={(e) => setNotifLink(e.target.value)}
+                          placeholder="ex: /painel/subscription"
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                        />
+                      </div>
+
+                      <div className="pt-2">
+                        <button
+                          type="submit"
+                          disabled={notifSending}
+                          className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
+                        >
+                          {notifSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                          <span>Disparar Notificação</span>
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Histórico e Auditoria */}
+                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                    <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
+                      <Clock size={18} className="text-brand-primary" />
+                      <span>Auditoria de Alertas Enviados</span>
+                    </h3>
+
+                    {loadingAdminNotifications ? (
+                      <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                        <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                        <span className="text-sm">Carregando logs...</span>
+                      </div>
+                    ) : adminNotifications.length === 0 ? (
+                      <div className="p-12 text-center text-brand-text-muted text-sm italic">
+                        Nenhuma notificação cadastrada no sistema.
+                      </div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                            <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider">
+                              <th className="py-2.5 px-3">Profissional</th>
+                              <th className="py-2.5 px-3">Título / Mensagem</th>
+                              <th className="py-2.5 px-3">Tipo</th>
+                              <th className="py-2.5 px-3">Lido em</th>
+                              <th className="py-2.5 px-3">Enviado em</th>
+                              <th className="py-2.5 px-3 text-right">Ação</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-brand-border/30 text-xs">
+                            {adminNotifications.map((n) => (
+                              <tr key={n.id} className="hover:bg-brand-bg/10 transition-colors">
+                                <td className="py-2.5 px-3">
+                                  <p className="font-semibold text-brand-text">
+                                    {n.professionals?.full_name || 'Profissional'}
+                                  </p>
+                                  <p className="text-[10px] text-brand-text-muted">
+                                    {n.professionals?.google_email || ''}
+                                  </p>
+                                </td>
+                                <td className="py-2.5 px-3 max-w-xs">
+                                  <p className="font-medium text-brand-text">{n.title}</p>
+                                  <p className="text-brand-text-muted truncate text-[10px]">{n.message}</p>
+                                </td>
+                                <td className="py-2.5 px-3">
+                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                    n.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-150' :
+                                    n.type === 'error' ? 'bg-red-50 text-red-700 border border-red-150' :
+                                    n.type === 'warning' ? 'bg-amber-50 text-amber-700 border border-amber-150' :
+                                    'bg-blue-50 text-blue-700 border border-blue-150'
+                                  }`}>
+                                    {n.type}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 text-brand-text-muted">
+                                  {n.read_at ? new Date(n.read_at).toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : (
+                                    <span className="text-[10px] text-red-500 font-semibold uppercase">Não lido</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 text-brand-text-muted">
+                                  {n.created_at ? new Date(n.created_at).toLocaleDateString('pt-BR', {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  }) : 'N/A'}
+                                </td>
+                                <td className="py-2.5 px-3 text-right">
+                                  <button
+                                    onClick={() => handleDeleteNotification(n.id)}
+                                    disabled={deletingNotifId === n.id}
+                                    className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lado Direito: Servidor SMTP e Config VAPID (1/3) */}
+                <div className="space-y-6">
+                  {/* SMTP Config */}
+                  <form onSubmit={handleSaveAdminSmtp} className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
+                    <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                      <Settings className="text-brand-primary w-5 h-5" />
+                      <span>Servidor SMTP Global</span>
+                    </h3>
+                    <p className="text-xs text-brand-text-muted leading-relaxed">
+                      Configure os dados SMTP globais da plataforma para que todas as notificações disparadas enviem e-mails reais de sistema aos terapeutas.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">HOST SMTP</label>
+                        <input
+                          type="text"
+                          value={adminSmtpHost}
+                          onChange={e => setAdminSmtpHost(e.target.value)}
+                          placeholder="smtp.gmail.com"
+                          required
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="col-span-2">
+                          <label className="text-[10px] font-bold text-brand-text block mb-1">USUÁRIO SMTP</label>
+                          <input
+                            type="text"
+                            value={adminSmtpUser}
+                            onChange={e => setAdminSmtpUser(e.target.value)}
+                            placeholder="suporte@conexaoseres.com.br"
+                            required
+                            className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-brand-text block mb-1">PORTA</label>
+                          <input
+                            type="text"
+                            value={adminSmtpPort}
+                            onChange={e => setAdminSmtpPort(e.target.value)}
+                            placeholder="587"
+                            required
+                            className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">SENHA SMTP</label>
+                        <input
+                          type="password"
+                          value={adminSmtpPass}
+                          onChange={e => setAdminSmtpPass(e.target.value)}
+                          placeholder="Senha de app ou do servidor"
+                          required
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">REMETENTE (FROM)</label>
+                        <input
+                          type="text"
+                          value={adminSmtpFrom}
+                          onChange={e => setAdminSmtpFrom(e.target.value)}
+                          placeholder='"Evolução Clínica" <suporte@...>'
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={adminSmtpSaving}
+                      className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold transition-colors text-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      {adminSmtpSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                      <span>Salvar Configuração SMTP</span>
+                    </button>
+
+                    {adminSmtpSuccess && (
+                      <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-xs flex gap-2 text-emerald-800 animate-fade-in">
+                        <Check size={16} className="text-emerald-600 flex-shrink-0" />
+                        <span>Configurações SMTP atualizadas!</span>
+                      </div>
+                    )}
+                  </form>
+
+                  {/* VAPID Details */}
+                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-3 text-xs">
+                    <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2 border-b border-brand-border/40 pb-2 mb-2">
+                      <Shield className="text-brand-primary w-5 h-5" />
+                      <span>Chaves Web Push VAPID</span>
+                    </h3>
+                    <p className="text-brand-text-muted leading-relaxed">
+                      Essas chaves são usadas para assinar e criptografar as mensagens enviadas aos navegadores através da Push API.
+                    </p>
+                    <div className="space-y-2">
+                      <div>
+                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PÚBLICA (VAPID PUBLIC KEY)</span>
+                        <input
+                          type="text"
+                          readOnly
+                          value={adminVapidPublic}
+                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
+                        />
+                      </div>
+                      <div>
+                        <span className="font-bold text-[10px] text-brand-text block mb-0.5">CHAVE PRIVADA (VAPID PRIVATE KEY)</span>
+                        <input
+                          type="password"
+                          readOnly
+                          value={adminVapidPrivate}
+                          className="w-full border border-brand-border/65 bg-brand-bg p-2 rounded font-mono text-[9px] select-all cursor-text outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
