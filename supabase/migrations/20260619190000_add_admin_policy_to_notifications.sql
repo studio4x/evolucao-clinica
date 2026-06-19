@@ -1,1 +1,1 @@
-CREATE POLICY "Admins can perform all actions on notifications" ON public.notifications FOR ALL USING (is_admin());
+DROP POLICY IF EXISTS "Admins can perform all actions on notifications" ON public.notifications; CREATE POLICY "Admins can perform all actions on notifications" ON public.notifications FOR ALL USING (is_admin());
