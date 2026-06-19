@@ -85,6 +85,8 @@ export default function AdminPanel() {
   const [stripeProdSecretKey, setStripeProdSecretKey] = useState('');
   const [stripeSandboxPublishableKey, setStripeSandboxPublishableKey] = useState('');
   const [stripeSandboxSecretKey, setStripeSandboxSecretKey] = useState('');
+  const [stripeWebhookSecretProd, setStripeWebhookSecretProd] = useState('');
+  const [stripeWebhookSecretSandbox, setStripeWebhookSecretSandbox] = useState('');
   const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(false);
   const [paymentSaveSuccess, setPaymentSaveSuccess] = useState(false);
   const [paymentSaveLoading, setPaymentSaveLoading] = useState(false);
@@ -92,6 +94,8 @@ export default function AdminPanel() {
   // Controle de exibição de chaves secretas
   const [showStripeProdSecret, setShowStripeProdSecret] = useState(false);
   const [showStripeSandboxSecret, setShowStripeSandboxSecret] = useState(false);
+  const [showStripeWebhookSecretProd, setShowStripeWebhookSecretProd] = useState(false);
+  const [showStripeWebhookSecretSandbox, setShowStripeWebhookSecretSandbox] = useState(false);
 
   // Estados do Perfil do Admin
   const [adminFirstName, setAdminFirstName] = useState('');
@@ -426,6 +430,8 @@ export default function AdminPanel() {
           setStripeProdSecretKey(parsed.stripeProdSecretKey || '');
           setStripeSandboxPublishableKey(parsed.stripeSandboxPublishableKey || '');
           setStripeSandboxSecretKey(parsed.stripeSandboxSecretKey || '');
+          setStripeWebhookSecretProd(parsed.stripeWebhookSecretProd || '');
+          setStripeWebhookSecretSandbox(parsed.stripeWebhookSecretSandbox || '');
         } else {
           // Preencher com as credenciais padrão se não houver dados salvos
           setPaymentEnvironment('TEST');
@@ -434,6 +440,8 @@ export default function AdminPanel() {
           setStripeProdSecretKey('');
           setStripeSandboxPublishableKey('pk_test_0b7fQSiyaxD7OjUH6lKL6Slh');
           setStripeSandboxSecretKey('');
+          setStripeWebhookSecretProd('');
+          setStripeWebhookSecretSandbox('');
         }
       } catch (err) {
         console.error("Erro ao buscar configurações de pagamento:", err);
@@ -653,7 +661,9 @@ export default function AdminPanel() {
         stripeProdPublishableKey,
         stripeProdSecretKey,
         stripeSandboxPublishableKey,
-        stripeSandboxSecretKey
+        stripeSandboxSecretKey,
+        stripeWebhookSecretProd,
+        stripeWebhookSecretSandbox
       };
 
       const { error } = await supabase
@@ -1506,6 +1516,28 @@ export default function AdminPanel() {
                             </div>
                           </div>
                         </div>
+
+                        <div className="space-y-2 mt-3">
+                          <label className="text-xs font-semibold text-brand-text-muted block">
+                            Webhook Signing Secret (Segredo de Assinatura do Webhook - Sandbox)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showStripeWebhookSecretSandbox ? "text" : "password"}
+                              placeholder="whsec_..."
+                              value={stripeWebhookSecretSandbox}
+                              onChange={(e) => setStripeWebhookSecretSandbox(e.target.value)}
+                              className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowStripeWebhookSecretSandbox(!showStripeWebhookSecretSandbox)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                            >
+                              {showStripeWebhookSecretSandbox ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Credenciais de Vendas (Produção) */}
@@ -1551,6 +1583,28 @@ export default function AdminPanel() {
                                 {showStripeProdSecret ? <EyeOff size={16} /> : <Eye size={16} />}
                               </button>
                             </div>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2 mt-3">
+                          <label className="text-xs font-semibold text-brand-text-muted block">
+                            Webhook Signing Secret (Segredo de Assinatura do Webhook - Produção)
+                          </label>
+                          <div className="relative">
+                            <input
+                              type={showStripeWebhookSecretProd ? "text" : "password"}
+                              placeholder="whsec_..."
+                              value={stripeWebhookSecretProd}
+                              onChange={(e) => setStripeWebhookSecretProd(e.target.value)}
+                              className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowStripeWebhookSecretProd(!showStripeWebhookSecretProd)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                            >
+                              {showStripeWebhookSecretProd ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
                           </div>
                         </div>
                       </div>
