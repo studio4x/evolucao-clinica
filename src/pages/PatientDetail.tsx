@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
-import { appendToGoogleDoc, appendTextToGoogleDoc } from '../services/googleDocs';
+import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -55,6 +55,17 @@ export default function PatientDetail() {
   const [recipientEmail, setRecipientEmail] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+
+  // Estados para histórico de relatórios
+  const [reports, setReports] = useState<any[]>([]);
+  const [showViewReportModal, setShowViewReportModal] = useState(false);
+  const [viewingReport, setViewingReport] = useState<any>(null);
+  
+  // Estados para fluxo de salvamento customizado no GDocs
+  const [lastGeneratedReportId, setLastGeneratedReportId] = useState<string | null>(null);
+  const [showExportOptions, setShowExportOptions] = useState(false);
+  const [exportDestination, setExportDestination] = useState<'same_doc' | 'new_doc'>('same_doc');
+  const [newDocName, setNewDocName] = useState('');
 
   useEffect(() => {
     if (patient) {
@@ -137,6 +148,16 @@ export default function PatientDetail() {
         .order('created_at', { ascending: false });
       if (evosError) throw evosError;
       setEvolutions(evosData || []);
+
+      const { data: reportsData, error: reportsError } = await supabase
+        .from('patient_reports')
+        .select('*')
+        .eq('patient_id', id)
+        .eq('professional_id', user.id)
+        .order('created_at', { ascending: false });
+      if (!reportsError) {
+        setReports(reportsData || []);
+      }
     } catch (error) {
       console.error("Error fetching patient details:", error);
     } finally {
@@ -186,6 +207,27 @@ export default function PatientDetail() {
       setGeneratedReport(result.report);
       const docLabel = aiReportType === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
       setEmailSubject(`[Evolução Clínica] ${docLabel} - ${patient?.full_name}`);
+
+      // Gravar o relatório gerado na tabela patient_reports no Supabase
+      const periodLabel = aiPeriod === '3_months' ? 'Últimos 3 meses' : aiPeriod === '6_months' ? 'Últimos 6 meses' : 'Período Personalizado';
+      const { data: savedReport, error: saveError } = await supabase
+        .from('patient_reports')
+        .insert({
+          patient_id: id,
+          professional_id: user.id,
+          type: aiReportType,
+          period_label: periodLabel,
+          content: result.report
+        })
+        .select()
+        .single();
+      
+      if (saveError) {
+        console.error("Erro ao salvar relatório no banco:", saveError);
+      } else if (savedReport) {
+        setReports(prev => [savedReport, ...prev]);
+        setLastGeneratedReportId(savedReport.id);
+      }
     } catch (err: any) {
       console.error("Erro na geração de relatório por IA:", err);
       setAiError(err.message || "Erro desconhecido");
@@ -208,7 +250,11 @@ export default function PatientDetail() {
   };
 
   const handleExportToGoogleDoc = async () => {
-    if (!generatedReport || !patient?.google_doc_id) return;
+    const reportText = generatedReport || viewingReport?.content;
+    const reportId = lastGeneratedReportId || viewingReport?.id;
+    const reportType = aiReportType || viewingReport?.type;
+
+    if (!reportText) return;
     setExportingDoc(true);
     try {
       let currentToken = googleAccessToken;
@@ -225,12 +271,48 @@ export default function PatientDetail() {
         return;
       }
 
-      const docLabel = aiReportType === 'evolution_report' ? 'Relatório de Evolução por IA' : 'Plano de Desenvolvimento Individual (PDI) por IA';
-      const now = new Date().toLocaleDateString('pt-BR');
-      const textToAppend = `=== ${docLabel} ===\nGerado em: ${now}\n\n${generatedReport}`;
+      let docUrl = '';
 
-      await appendTextToGoogleDoc(currentToken, patient.google_doc_id, textToAppend);
-      alert("Relatório adicionado com sucesso no início do seu Google Docs!");
+      if (exportDestination === 'same_doc') {
+        if (!patient?.google_doc_id) {
+          alert("Prontuário principal não encontrado.");
+          setExportingDoc(false);
+          return;
+        }
+        const docLabel = reportType === 'evolution_report' ? 'Relatório de Evolução por IA' : 'Plano de Desenvolvimento Individual (PDI) por IA';
+        const now = new Date().toLocaleDateString('pt-BR');
+        const textToAppend = `=== ${docLabel} ===\nGerado em: ${now}\n\n${reportText}`;
+
+        await appendTextToGoogleDoc(currentToken, patient.google_doc_id, textToAppend);
+        docUrl = patient.google_doc_url;
+        alert("Relatório adicionado com sucesso no início do seu Google Docs!");
+      } else {
+        const targetTitle = newDocName.trim() || `${patient?.full_name} - Relatório por IA`;
+        const folderId = patient.target_folder_id || undefined;
+        
+        const newDoc = await createGoogleDoc(currentToken, targetTitle, folderId);
+        await updateGoogleDocContent(currentToken, newDoc.id, reportText);
+        docUrl = newDoc.url;
+        alert(`Novo documento do Google Docs criado com sucesso!\nTítulo: ${targetTitle}`);
+      }
+
+      if (reportId && docUrl) {
+        const { error: updateError } = await supabase
+          .from('patient_reports')
+          .update({ google_doc_url: docUrl })
+          .eq('id', reportId);
+
+        if (updateError) {
+          console.error("Erro ao atualizar link do GDocs no banco:", updateError);
+        } else {
+          setReports(prev => prev.map(r => r.id === reportId ? { ...r, google_doc_url: docUrl } : r));
+          if (viewingReport && viewingReport.id === reportId) {
+            setViewingReport((prev: any) => ({ ...prev, google_doc_url: docUrl }));
+          }
+        }
+      }
+
+      setShowExportOptions(false);
     } catch (err: any) {
       console.error("Erro ao exportar:", err);
       let msg = err.message || "Erro desconhecido";
@@ -841,6 +923,81 @@ export default function PatientDetail() {
               )}
             </div>
           </div>
+
+          {/* Seção de Relatórios Clínicos Emitidos */}
+          <div className="card mt-6">
+            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
+              <div className="flex items-center space-x-2">
+                <FileText className="text-brand-primary" size={20} />
+                <h2 className="text-lg font-display font-semibold text-brand-primary">Relatórios & PDI Emitidos</h2>
+              </div>
+              <span className="text-xs font-semibold px-2 py-0.5 bg-brand-primary/10 text-brand-primary rounded-full">
+                {reports.length} {reports.length === 1 ? 'emitido' : 'emitidos'}
+              </span>
+            </div>
+
+            <div className="divide-y divide-brand-border">
+              {reports.length === 0 ? (
+                <div className="p-8 text-center text-brand-text-muted text-sm leading-relaxed">
+                  Nenhum relatório ou PDI foi emitido por IA para este paciente ainda.
+                  <br />
+                  Use o botão na barra lateral para gerar o primeiro!
+                </div>
+              ) : (
+                reports.map((rep) => {
+                  const formattedDate = new Date(rep.created_at).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  const docLabel = rep.type === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
+                  
+                  return (
+                    <div key={rep.id} className="p-5 hover:bg-brand-bg/30 transition-colors flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${
+                            rep.type === 'evolution_report' ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'bg-purple-50 text-purple-700 border border-purple-100'
+                          }`}>
+                            {docLabel}
+                          </span>
+                          <span className="text-xs text-brand-text-muted">{rep.period_label}</span>
+                        </div>
+                        <p className="text-xs font-medium text-brand-text-muted">Emitido em: {formattedDate}</p>
+                      </div>
+                      <div className="flex items-center gap-2 w-full sm:w-auto font-sans">
+                        {rep.google_doc_url && (
+                          <a 
+                            href={rep.google_doc_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-center space-x-1.5 px-3 py-1.5 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/5 rounded-lg text-xs font-medium transition-colors"
+                            title="Abrir documento no Google Docs"
+                          >
+                            <ExternalLink size={14} />
+                            <span>Docs</span>
+                          </a>
+                        )}
+                        <button
+                          onClick={() => {
+                            setViewingReport(rep);
+                            setShowViewReportModal(true);
+                            setShowEmailInput(false);
+                            setShowExportOptions(false);
+                          }}
+                          className="flex-1 sm:flex-initial btn-primary py-1.5 px-4 text-xs font-medium cursor-pointer"
+                        >
+                          Visualizar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1061,6 +1218,86 @@ export default function PatientDetail() {
                     </form>
                   )}
 
+                  {/* Opções de Exportação GDocs */}
+                  {showExportOptions && (
+                    <div className="p-4 bg-brand-primary/5 rounded-xl border border-brand-primary/10 space-y-4">
+                      <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Salvar no Google Docs</p>
+                      <div className="space-y-3">
+                        <label className="flex items-start space-x-2 text-xs text-brand-text cursor-pointer">
+                          <input
+                            type="radio"
+                            name="exportDest"
+                            checked={exportDestination === 'same_doc'}
+                            onChange={() => setExportDestination('same_doc')}
+                            className="mt-0.5"
+                          />
+                          <div>
+                            <span className="font-semibold block">No mesmo arquivo de evoluções</span>
+                            <span className="text-brand-text-muted text-[10px]">Insere no prontuário principal: {patient?.google_doc_name || 'Documento'}</span>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start space-x-2 text-xs text-brand-text cursor-pointer">
+                          <input
+                            type="radio"
+                            name="exportDest"
+                            checked={exportDestination === 'new_doc'}
+                            onChange={() => {
+                              setExportDestination('new_doc');
+                              // Pre-preencher nome
+                              const docTypeLabel = aiReportType === 'evolution_report' ? 'Relatório de Evolução' : 'PDI';
+                              const cleanDate = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+                              setNewDocName(`${patient?.full_name} - ${docTypeLabel} - ${cleanDate}`);
+                            }}
+                            className="mt-0.5"
+                          />
+                          <div>
+                            <span className="font-semibold block">Em um novo documento</span>
+                            <span className="text-brand-text-muted text-[10px]">Criará um novo arquivo DOC no seu Google Drive.</span>
+                          </div>
+                        </label>
+
+                        {exportDestination === 'new_doc' && (
+                          <div className="pl-6 pt-1">
+                            <label className="block text-[10px] font-semibold text-brand-text-muted uppercase mb-1">Nome do Novo Arquivo</label>
+                            <input
+                              type="text"
+                              value={newDocName}
+                              onChange={(e) => setNewDocName(e.target.value)}
+                              className="input-field p-2 text-xs w-full bg-white"
+                              placeholder="Ex: Nome do Paciente - Relatório de Evolução"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex space-x-2 justify-end pt-2 border-t border-brand-border">
+                        <button
+                          type="button"
+                          onClick={() => setShowExportOptions(false)}
+                          className="px-3 py-1.5 border border-brand-border text-xs rounded-lg hover:bg-gray-100 text-brand-text-muted transition-colors cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleExportToGoogleDoc}
+                          disabled={exportingDoc}
+                          className="px-4 py-1.5 btn-primary text-xs rounded-lg flex items-center space-x-1.5 cursor-pointer"
+                        >
+                          {exportingDoc ? (
+                            <>
+                              <Loader2 size={12} className="animate-spin" />
+                              <span>Exportando...</span>
+                            </>
+                          ) : (
+                            <span>Exportar</span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Ações do Relatório */}
                   <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-brand-border">
                     <div className="flex flex-wrap gap-2">
@@ -1085,21 +1322,14 @@ export default function PatientDetail() {
                       {patient?.google_doc_id && (
                         <button
                           type="button"
-                          onClick={handleExportToGoogleDoc}
-                          disabled={exportingDoc}
+                          onClick={() => {
+                            setShowExportOptions(true);
+                            setExportDestination('same_doc');
+                          }}
                           className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
                         >
-                          {exportingDoc ? (
-                            <>
-                              <Loader2 size={14} className="animate-spin" />
-                              <span>Salvando no Drive...</span>
-                            </>
-                          ) : (
-                            <>
-                              <FileText size={14} />
-                              <span>Salvar no Google Docs</span>
-                            </>
-                          )}
+                          <FileText size={14} />
+                          <span>Salvar no Google Docs</span>
                         </button>
                       )}
 
@@ -1151,6 +1381,266 @@ export default function PatientDetail() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Visualizar Relatório Histórico */}
+      {showViewReportModal && viewingReport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh] border border-brand-border">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50 rounded-t-2xl">
+              <div className="flex items-center space-x-2 text-brand-primary">
+                <FileText size={20} className="text-brand-primary" />
+                <h3 className="text-lg font-display font-semibold text-brand-primary mb-0">
+                  {viewingReport.type === 'evolution_report' ? 'Relatório de Evolução Histórico' : 'PDI Histórico'}
+                </h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowViewReportModal(false);
+                  setViewingReport(null);
+                  setShowEmailInput(false);
+                  setShowExportOptions(false);
+                }}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="flex justify-between items-center text-xs text-brand-text-muted bg-brand-bg/50 p-3 rounded-lg border border-brand-border/50">
+                <p><span className="font-semibold text-brand-text">Período:</span> {viewingReport.period_label}</p>
+                <p><span className="font-semibold text-brand-text">Gerado em:</span> {new Date(viewingReport.created_at).toLocaleDateString('pt-BR')}</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-2">
+                  Conteúdo do Relatório
+                </label>
+                <textarea
+                  readOnly
+                  value={viewingReport.content}
+                  rows={14}
+                  className="w-full input-field font-sans text-sm p-4 leading-relaxed border border-brand-border bg-gray-50 rounded-xl resize-none cursor-text select-text"
+                />
+              </div>
+
+              {/* Form de E-mail */}
+              {showEmailInput && (
+                <form onSubmit={handleSendReportEmail} className="p-4 bg-brand-bg rounded-xl border border-brand-border space-y-3">
+                  <p className="text-xs font-bold text-brand-text uppercase tracking-wider">Enviar Relatório por E-mail</p>
+                  <div className="space-y-2">
+                    <input
+                      type="email"
+                      placeholder="E-mail do destinatário"
+                      value={recipientEmail}
+                      onChange={(e) => setRecipientEmail(e.target.value)}
+                      required
+                      className="input-field p-2 text-xs w-full"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Assunto"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      required
+                      className="input-field p-2 text-xs w-full"
+                    />
+                  </div>
+                  <div className="flex space-x-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmailInput(false)}
+                      className="px-3 py-1.5 border border-brand-border text-xs rounded-lg hover:bg-gray-100 text-brand-text-muted transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={sendingEmail}
+                      className="px-4 py-1.5 btn-primary text-xs rounded-lg flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      {sendingEmail ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Enviando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={12} />
+                          <span>Enviar E-mail</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Opções de Exportação GDocs (Histórico) */}
+              {showExportOptions && (
+                <div className="p-4 bg-brand-primary/5 rounded-xl border border-brand-primary/10 space-y-4">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Salvar no Google Docs</p>
+                  <div className="space-y-3">
+                    <label className="flex items-start space-x-2 text-xs text-brand-text cursor-pointer">
+                      <input
+                        type="radio"
+                        name="exportDestHist"
+                        checked={exportDestination === 'same_doc'}
+                        onChange={() => setExportDestination('same_doc')}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <span className="font-semibold block">No mesmo arquivo de evoluções</span>
+                        <span className="text-brand-text-muted text-[10px]">Insere no prontuário principal: {patient?.google_doc_name || 'Documento'}</span>
+                      </div>
+                    </label>
+
+                    <label className="flex items-start space-x-2 text-xs text-brand-text cursor-pointer">
+                      <input
+                        type="radio"
+                        name="exportDestHist"
+                        checked={exportDestination === 'new_doc'}
+                        onChange={() => {
+                          setExportDestination('new_doc');
+                          // Pre-preencher nome
+                          const docTypeLabel = viewingReport.type === 'evolution_report' ? 'Relatório de Evolução' : 'PDI';
+                          const cleanDate = new Date(viewingReport.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                          setNewDocName(`${patient?.full_name} - ${docTypeLabel} - ${cleanDate}`);
+                        }}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <span className="font-semibold block">Em um novo documento</span>
+                        <span className="text-brand-text-muted text-[10px]">Criará um novo arquivo DOC no seu Google Drive.</span>
+                      </div>
+                    </label>
+
+                    {exportDestination === 'new_doc' && (
+                      <div className="pl-6 pt-1">
+                        <label className="block text-[10px] font-semibold text-brand-text-muted uppercase mb-1">Nome do Novo Arquivo</label>
+                        <input
+                          type="text"
+                          value={newDocName}
+                          onChange={(e) => setNewDocName(e.target.value)}
+                          className="input-field p-2 text-xs w-full bg-white"
+                          placeholder="Ex: Nome do Paciente - Relatório de Evolução"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex space-x-2 justify-end pt-2 border-t border-brand-border">
+                    <button
+                      type="button"
+                      onClick={() => setShowExportOptions(false)}
+                      className="px-3 py-1.5 border border-brand-border text-xs rounded-lg hover:bg-gray-100 text-brand-text-muted transition-colors cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleExportToGoogleDoc}
+                      disabled={exportingDoc}
+                      className="px-4 py-1.5 btn-primary text-xs rounded-lg flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      {exportingDoc ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Exportando...</span>
+                        </>
+                      ) : (
+                        <span>Exportar</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Botões do Histórico */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-brand-border">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(viewingReport.content)
+                        .then(() => {
+                          setIsCopied(true);
+                          setTimeout(() => setIsCopied(false), 2000);
+                        })
+                        .catch(() => alert("Erro ao copiar."));
+                    }}
+                    className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text"
+                  >
+                    {isCopied ? (
+                      <>
+                        <Check size={14} className="text-green-600" />
+                        <span className="text-green-600 font-semibold">Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>Copiar Texto</span>
+                      </>
+                    )}
+                  </button>
+
+                  {!viewingReport.google_doc_url ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowExportOptions(true);
+                        setExportDestination('same_doc');
+                      }}
+                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
+                    >
+                      <FileText size={14} />
+                      <span>Salvar no Google Docs</span>
+                    </button>
+                  ) : (
+                    <a
+                      href={viewingReport.google_doc_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
+                    >
+                      <ExternalLink size={14} />
+                      <span>Ver no Google Docs</span>
+                    </a>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const docLabel = viewingReport.type === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
+                      setEmailSubject(`[Evolução Clínica] ${docLabel} - ${patient?.full_name}`);
+                      setRecipientEmail('');
+                      setShowEmailInput(true);
+                    }}
+                    className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
+                  >
+                    <Mail size={14} />
+                    <span>Enviar por E-mail</span>
+                  </button>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowViewReportModal(false);
+                    setViewingReport(null);
+                    setShowEmailInput(false);
+                    setShowExportOptions(false);
+                  }}
+                  className="btn-primary py-2 px-4 text-xs cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
