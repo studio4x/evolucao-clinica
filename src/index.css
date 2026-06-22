@@ -51,3 +51,30 @@
     @apply w-full rounded-xl border-brand-border shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm transition-colors duration-200 bg-white;
   }
 }
+
+/* Estilos de Impressão Limpa */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  
+  #print-area, #print-area * {
+    visibility: visible;
+  }
+  
+  #print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 24px;
+    background: white;
+    color: #1c1917;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+}
+
