@@ -40,7 +40,10 @@ export default function PatientForm() {
     google_doc_name: '',
     google_doc_url: '',
     target_folder_id: localStorage.getItem('last_google_folder_id') || '',
-    target_folder_name: localStorage.getItem('last_google_folder_name') || ''
+    target_folder_name: localStorage.getItem('last_google_folder_name') || '',
+    evolution_reminder_active: false,
+    session_days: [] as number[],
+    session_time: ''
   });
 
   useEffect(() => {
@@ -63,7 +66,10 @@ export default function PatientForm() {
               google_doc_name: data.google_doc_name || '',
               google_doc_url: data.google_doc_url || '',
               target_folder_id: data.target_folder_id || '',
-              target_folder_name: data.target_folder_name || ''
+              target_folder_name: data.target_folder_name || '',
+              evolution_reminder_active: data.evolution_reminder_active ?? false,
+              session_days: data.session_days || [],
+              session_time: data.session_time ? data.session_time.substring(0, 5) : ''
             });
           }
         } catch (error) {
@@ -301,7 +307,10 @@ export default function PatientForm() {
         full_name: formData.full_name,
         notes: formData.notes,
         status: formData.status,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        evolution_reminder_active: formData.evolution_reminder_active,
+        session_days: formData.evolution_reminder_active ? formData.session_days : [],
+        session_time: (formData.evolution_reminder_active && formData.session_time) ? formData.session_time : null
       };
 
       // Só inclui campos do Google Drive se eles tiverem valor (ou envia null de forma explícita)
@@ -383,6 +392,77 @@ export default function PatientForm() {
             <option value="active">Ativo</option>
             <option value="inactive">Inativo</option>
           </select>
+        </div>
+
+        <div className="border-t border-brand-border pt-6 space-y-4">
+          <h3 className="text-lg font-medium text-brand-text">Lembretes de Evolução</h3>
+          
+          <div className="space-y-4">
+            <label className="flex items-center space-x-2 text-sm text-brand-text cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.evolution_reminder_active}
+                onChange={e => setFormData({ ...formData, evolution_reminder_active: e.target.checked })}
+                className="h-4 w-4 rounded border-brand-border text-brand-primary focus:ring-brand-primary"
+              />
+              <span className="font-medium">Ativar lembretes de evolução para este paciente</span>
+            </label>
+
+            {formData.evolution_reminder_active && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                <div>
+                  <label className="block text-sm font-medium text-brand-text mb-2">Dias de Atendimento</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { val: 1, label: 'S' },
+                      { val: 2, label: 'T' },
+                      { val: 3, label: 'Q' },
+                      { val: 4, label: 'Q' },
+                      { val: 5, label: 'S' },
+                      { val: 6, label: 'S' },
+                      { val: 0, label: 'D' }
+                    ].map((day, idx) => {
+                      const isSelected = formData.session_days.includes(day.val);
+                      const weekdayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          title={weekdayNames[day.val]}
+                          onClick={() => {
+                            const newDays = isSelected
+                              ? formData.session_days.filter((d: number) => d !== day.val)
+                              : [...formData.session_days, day.val].sort();
+                            setFormData({ ...formData, session_days: newDays });
+                          }}
+                          className={`w-9 h-9 text-sm font-semibold rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
+                            isSelected
+                              ? 'bg-brand-primary text-white shadow-sm border border-brand-primary'
+                              : 'bg-brand-bg text-brand-text-muted hover:bg-brand-border border border-brand-border'
+                          }`}
+                        >
+                          {day.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-brand-text mb-1">Horário do Atendimento</label>
+                  <input
+                    type="time"
+                    value={formData.session_time}
+                    onChange={e => setFormData({ ...formData, session_time: e.target.value })}
+                    className="input-field p-2"
+                  />
+                  <p className="text-xs text-brand-text-muted mt-1">
+                    Você receberá lembretes nos dias selecionados após este horário para registrar as evoluções clínicas.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="border-t border-brand-border pt-6">

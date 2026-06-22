@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2 } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
@@ -31,6 +31,59 @@ export default function PatientDetail() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
+
+  // Estados para as configurações de lembretes
+  const [reminderActive, setReminderActive] = useState(false);
+  const [sessionDays, setSessionDays] = useState<number[]>([]);
+  const [sessionTime, setSessionTime] = useState('');
+  const [savingReminders, setSavingReminders] = useState(false);
+
+  useEffect(() => {
+    if (patient) {
+      setReminderActive(patient.evolution_reminder_active ?? false);
+      setSessionDays(patient.session_days || []);
+      setSessionTime(patient.session_time ? patient.session_time.substring(0, 5) : '');
+    }
+  }, [patient]);
+
+  const handleSaveReminders = async () => {
+    setSavingReminders(true);
+    try {
+      const { error } = await supabase
+        .from('patients')
+        .update({
+          evolution_reminder_active: reminderActive,
+          session_days: reminderActive ? sessionDays : [],
+          session_time: (reminderActive && sessionTime) ? sessionTime : null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setPatient((prev: any) => ({
+        ...prev,
+        evolution_reminder_active: reminderActive,
+        session_days: reminderActive ? sessionDays : [],
+        session_time: reminderActive ? sessionTime : null
+      }));
+
+      // Dispara uma notificação interna no frontend para avisar o usuário
+      void sendNotification({
+        title: 'ℹ️ Configurações de Lembrete Salvas',
+        content: `As configurações de lembrete de evolução de ${patient?.full_name} foram atualizadas com sucesso.`,
+        type: 'info',
+        link: `/painel/patients/${id}`
+      });
+
+      alert("Configurações de lembrete atualizadas com sucesso!");
+    } catch (err: any) {
+      console.error("Error saving reminders:", err);
+      alert("Erro ao salvar configurações de lembrete: " + (err.message || err));
+    } finally {
+      setSavingReminders(false);
+    }
+  };
 
   const fetchData = async () => {
     if (!id || !user) return;
@@ -393,6 +446,98 @@ export default function PatientDetail() {
                 Nenhum documento vinculado. <Link to={`/painel/patients/${id}/edit`} className="text-brand-primary hover:underline">Vincular agora</Link>.
               </div>
             )}
+          </div>
+
+          <div className="card p-6 space-y-4">
+            <div className="flex items-center space-x-2 text-brand-primary">
+              <Bell size={20} className="text-brand-primary" />
+              <h3 className="font-semibold text-brand-text mb-0">Lembretes de Evolução</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <label className="flex items-center space-x-2 text-sm text-brand-text cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={reminderActive}
+                  onChange={(e) => setReminderActive(e.target.checked)}
+                  className="h-4 w-4 rounded border-brand-border text-brand-primary focus:ring-brand-primary"
+                />
+                <span className="font-medium">Ativar lembretes</span>
+              </label>
+
+              {reminderActive && (
+                <div className="space-y-3 pt-2 border-t border-brand-border/50">
+                  <div>
+                    <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-2">
+                      Dias da Semana
+                    </label>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { val: 1, label: 'S' },
+                        { val: 2, label: 'T' },
+                        { val: 3, label: 'Q' },
+                        { val: 4, label: 'Q' },
+                        { val: 5, label: 'S' },
+                        { val: 6, label: 'S' },
+                        { val: 0, label: 'D' }
+                      ].map((day, idx) => {
+                        const isSelected = sessionDays.includes(day.val);
+                        const weekdayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            title={weekdayNames[day.val]}
+                            onClick={() => {
+                              setSessionDays(prev => 
+                                prev.includes(day.val) 
+                                  ? prev.filter(d => d !== day.val) 
+                                  : [...prev, day.val].sort()
+                              );
+                            }}
+                            className={`w-8 h-8 text-xs font-semibold rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
+                              isSelected
+                                ? 'bg-brand-primary text-white shadow-sm border border-brand-primary'
+                                : 'bg-brand-bg text-brand-text-muted hover:bg-brand-border border border-brand-border'
+                            }`}
+                          >
+                            {day.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-1">
+                      Horário do Atendimento
+                    </label>
+                    <input
+                      type="time"
+                      value={sessionTime}
+                      onChange={(e) => setSessionTime(e.target.value)}
+                      className="input-field p-2"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleSaveReminders}
+                disabled={savingReminders}
+                className="w-full btn-primary py-2 text-xs flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                {savingReminders ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <span>Salvar Lembrete</span>
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="card p-6">

@@ -175,6 +175,203 @@ app.post("/api/notifications/unsubscribe", requireAuth, async (req: any, res) =>
   }
 });
 
+// Helper para enviar notificação (In-App, Push e E-mail)
+async function sendNotificationInternal(
+  targetUserId: string,
+  title: string,
+  content: string,
+  type: string = "info",
+  link?: string,
+  imageUrl?: string
+) {
+  // A. Criar no banco (In-App)
+  const { data: notification, error: insertError } = await supabaseAdmin
+    .from("notifications")
+    .insert({
+      user_id: targetUserId,
+      title,
+      message: content, // Ajustado ao banco existente
+      type,
+      link,
+      image_url: imageUrl
+    })
+    .select()
+    .single();
+
+  if (insertError) throw insertError;
+
+  const settings = await getNotificationSettings();
+
+  // B. Enviar Push Notification (se houver inscricoes)
+  try {
+    webpush.setVapidDetails(
+      settings.vapid_subject,
+      settings.vapid_public_key,
+      settings.vapid_private_key
+    );
+
+    const { data: subscriptions } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("*")
+      .eq("user_id", targetUserId);
+
+    if (subscriptions && subscriptions.length > 0) {
+      const payload = JSON.stringify({
+        title,
+        body: content,
+        link: link || "/painel/notifications",
+        image: imageUrl
+      });
+
+      for (const sub of subscriptions) {
+        try {
+          await webpush.sendNotification(
+            {
+              endpoint: sub.endpoint,
+              keys: sub.keys
+            },
+            payload
+          );
+        } catch (pushErr: any) {
+          console.warn("Falha no envio do push para endpoint:", sub.endpoint, pushErr.message);
+          if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+            await supabaseAdmin
+              .from("push_subscriptions")
+              .delete()
+              .eq("id", sub.id);
+          }
+        }
+      }
+    }
+  } catch (pushGeneralError: any) {
+    console.error("Erro geral no disparo de Push:", pushGeneralError.message);
+  }
+
+  // C. Enviar e-mail por SMTP se configurado
+  let emailSent = false;
+  let emailError: string | null = null;
+  let emailTo: string | null = null;
+
+  if (settings.smtp_host && settings.smtp_user && settings.smtp_pass) {
+    try {
+      // Busca o e-mail do profissional diretamente da tabela professionals (mais confiável que auth.admin)
+      const { data: profData } = await supabaseAdmin
+        .from("professionals")
+        .select("google_email")
+        .eq("id", targetUserId)
+        .single();
+
+      // Fallback: tenta também pelo auth se o profissional não tiver google_email
+      let targetEmail = profData?.google_email || null;
+      if (!targetEmail) {
+        try {
+          const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
+          targetEmail = authUser?.user?.email || null;
+        } catch (_) {
+          // ignora se falhar, já tentamos pelo profissional
+        }
+      }
+
+      emailTo = targetEmail;
+
+      if (targetEmail) {
+        const transporter = nodemailer.createTransport({
+          host: settings.smtp_host,
+          port: Number(settings.smtp_port) || 587,
+          secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
+          auth: {
+            user: settings.smtp_user,
+            pass: settings.smtp_pass
+          },
+          // Necessário para ambiente serverless (Vercel): sem pool de conexões persistentes
+          pool: false,
+          connectionTimeout: 15000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
+          tls: { rejectUnauthorized: false }
+        } as any);
+
+        const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
+        const viewUrl = `${origin}${link || "/painel/notifications"}`;
+
+        // Paleta de cores e ícones por tipo de notificação
+        const typeConfig: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
+          success: { color: "#166534", bg: "#f0fdf4", border: "#bbf7d0", icon: "✅", label: "Sucesso" },
+          error:   { color: "#991b1b", bg: "#fff1f2", border: "#fecdd3", icon: "⚠️", label: "Erro" },
+          warning: { color: "#92400e", bg: "#fffbeb", border: "#fde68a", icon: "🔔", label: "Atenção" },
+          info:    { color: "#1e3a5f", bg: "#eff6ff", border: "#bfdbfe", icon: "ℹ️", label: "Informação" },
+        };
+        const tc = typeConfig[type] || typeConfig.info;
+
+        const mailOptions = {
+          from: buildFromField(settings.smtp_from, settings.smtp_user),
+          to: targetEmail,
+          subject: `${tc.icon} ${title}`,
+          text: `${title}\n\n${content}\n\nVer detalhes no app: ${viewUrl}`,
+          html: `
+            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+              
+              <!-- Header -->
+              <div style="background-color: #005C13; padding: 24px 28px; text-align: left;">
+                <p style="margin: 0 0 4px 0; font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 1px; text-transform: uppercase; font-weight: 600;">Evolução Clínica</p>
+                <h1 style="margin: 0; font-size: 20px; color: #ffffff; font-weight: 700;">Notificação do Sistema</h1>
+              </div>
+
+              <!-- Tipo badge -->
+              <div style="background-color: ${tc.bg}; border-bottom: 1px solid ${tc.border}; padding: 12px 28px; display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 18px;">${tc.icon}</span>
+                <span style="font-size: 13px; font-weight: 700; color: ${tc.color}; text-transform: uppercase; letter-spacing: 0.5px;">${tc.label}</span>
+              </div>
+
+              <!-- Conteúdo -->
+              <div style="padding: 28px; color: #1f2937; line-height: 1.7;">
+                ${imageUrl ? `<div style="margin-bottom: 20px; border-radius: 8px; overflow: hidden;"><img src="${imageUrl}" alt="Imagem" style="max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px;" /></div>` : ""}
+                
+                <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #111827; line-height: 1.4;">${title}</h2>
+                <p style="margin: 0 0 24px 0; font-size: 15px; color: #374151;">${content}</p>
+
+                <!-- CTA -->
+                <div style="text-align: center; margin: 28px 0 8px 0;">
+                  <a href="${viewUrl}" 
+                     style="display: inline-block; background-color: #005C13; color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 700; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,92,19,0.3); letter-spacing: 0.2px;">
+                    Ver no Aplicativo →
+                  </a>
+                </div>
+              </div>
+
+              <!-- Divisor -->
+              <div style="border-top: 1px solid #f3f4f6; margin: 0 28px;"></div>
+
+              <!-- Footer -->
+              <div style="padding: 18px 28px; background-color: #f9fafb;">
+                <p style="margin: 0; font-size: 12px; color: #6b7280; line-height: 1.6;">
+                  Esta mensagem foi enviada automaticamente pela plataforma <strong>Evolução Clínica</strong>.<br/>
+                  Por favor, não responda a este e-mail.
+                </p>
+              </div>
+            </div>
+          `
+        };
+
+        await transporter.sendMail(mailOptions);
+        emailSent = true;
+        console.log(`[Email] Notificação de e-mail enviada com sucesso para ${targetEmail}`);
+      } else {
+        emailError = "E-mail do destinatário não encontrado no cadastro do profissional.";
+        console.warn(`[Email] E-mail não encontrado para userId: ${targetUserId}`);
+      }
+    } catch (emailErr: any) {
+      emailError = emailErr.message || "Erro desconhecido no envio SMTP";
+      console.error("Erro ao enviar e-mail via SMTP:", emailErr.message);
+    }
+  } else {
+    emailError = "Servidor SMTP não configurado no painel admin.";
+    console.log(`[Notifications] SMTP nao configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
+  }
+
+  return { notification, emailSent, emailTo, emailError };
+}
+
 // 4. Enviar Notificação (In-App, Push e E-mail)
 app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   const { userId, title, content, type = "info", link, imageUrl } = req.body;
@@ -204,202 +401,142 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   }
 
   try {
-    // A. Criar no banco (In-App)
-    const { data: notification, error: insertError } = await supabaseAdmin
-      .from("notifications")
-      .insert({
-        user_id: targetUserId,
-        title,
-        message: content, // Ajustado ao banco existente
-        type,
-        link,
-        image_url: imageUrl
-      })
-      .select()
-      .single();
-
-    if (insertError) throw insertError;
-
-    const settings = await getNotificationSettings();
-
-    // B. Enviar Push Notification (se houver inscricoes)
-    try {
-      webpush.setVapidDetails(
-        settings.vapid_subject,
-        settings.vapid_public_key,
-        settings.vapid_private_key
-      );
-
-      const { data: subscriptions } = await supabaseAdmin
-        .from("push_subscriptions")
-        .select("*")
-        .eq("user_id", targetUserId);
-
-      if (subscriptions && subscriptions.length > 0) {
-        const payload = JSON.stringify({
-          title,
-          body: content,
-          link: link || "/painel/notifications",
-          image: imageUrl
-        });
-
-        for (const sub of subscriptions) {
-          try {
-            await webpush.sendNotification(
-              {
-                endpoint: sub.endpoint,
-                keys: sub.keys
-              },
-              payload
-            );
-          } catch (pushErr: any) {
-            console.warn("Falha no envio do push para endpoint:", sub.endpoint, pushErr.message);
-            if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
-              await supabaseAdmin
-                .from("push_subscriptions")
-                .delete()
-                .eq("id", sub.id);
-            }
-          }
-        }
-      }
-    } catch (pushGeneralError: any) {
-      console.error("Erro geral no disparo de Push:", pushGeneralError.message);
-    }
-
-    // C. Enviar e-mail por SMTP se configurado
-    let emailSent = false;
-    let emailError: string | null = null;
-    let emailTo: string | null = null;
-
-    if (settings.smtp_host && settings.smtp_user && settings.smtp_pass) {
-      try {
-        // Busca o e-mail do profissional diretamente da tabela professionals (mais confiável que auth.admin)
-        const { data: profData } = await supabaseAdmin
-          .from("professionals")
-          .select("google_email")
-          .eq("id", targetUserId)
-          .single();
-
-        // Fallback: tenta também pelo auth se o profissional não tiver google_email
-        let targetEmail = profData?.google_email || null;
-        if (!targetEmail) {
-          try {
-            const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
-            targetEmail = authUser?.user?.email || null;
-          } catch (_) {
-            // ignora se falhar, já tentamos pelo profissional
-          }
-        }
-
-        emailTo = targetEmail;
-
-        if (targetEmail) {
-          const transporter = nodemailer.createTransport({
-            host: settings.smtp_host,
-            port: Number(settings.smtp_port) || 587,
-            secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
-            auth: {
-              user: settings.smtp_user,
-              pass: settings.smtp_pass
-            },
-            // Necessário para ambiente serverless (Vercel): sem pool de conexões persistentes
-            pool: false,
-            connectionTimeout: 15000,
-            greetingTimeout: 10000,
-            socketTimeout: 15000,
-            tls: { rejectUnauthorized: false }
-          } as any);
-
-          const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
-          const viewUrl = `${origin}${link || "/painel/notifications"}`;
-
-          // Paleta de cores e ícones por tipo de notificação
-          const typeConfig: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
-            success: { color: "#166534", bg: "#f0fdf4", border: "#bbf7d0", icon: "✅", label: "Sucesso" },
-            error:   { color: "#991b1b", bg: "#fff1f2", border: "#fecdd3", icon: "⚠️", label: "Erro" },
-            warning: { color: "#92400e", bg: "#fffbeb", border: "#fde68a", icon: "🔔", label: "Atenção" },
-            info:    { color: "#1e3a5f", bg: "#eff6ff", border: "#bfdbfe", icon: "ℹ️", label: "Informação" },
-          };
-          const tc = typeConfig[type] || typeConfig.info;
-
-          const mailOptions = {
-            from: buildFromField(settings.smtp_from, settings.smtp_user),
-            to: targetEmail,
-            subject: `${tc.icon} ${title}`,
-            text: `${title}\n\n${content}\n\nVer detalhes no app: ${viewUrl}`,
-            html: `
-              <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
-                
-                <!-- Header -->
-                <div style="background-color: #005C13; padding: 24px 28px; text-align: left;">
-                  <p style="margin: 0 0 4px 0; font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 1px; text-transform: uppercase; font-weight: 600;">Evolução Clínica</p>
-                  <h1 style="margin: 0; font-size: 20px; color: #ffffff; font-weight: 700;">Notificação do Sistema</h1>
-                </div>
-
-                <!-- Tipo badge -->
-                <div style="background-color: ${tc.bg}; border-bottom: 1px solid ${tc.border}; padding: 12px 28px; display: flex; align-items: center; gap: 8px;">
-                  <span style="font-size: 18px;">${tc.icon}</span>
-                  <span style="font-size: 13px; font-weight: 700; color: ${tc.color}; text-transform: uppercase; letter-spacing: 0.5px;">${tc.label}</span>
-                </div>
-
-                <!-- Conteúdo -->
-                <div style="padding: 28px; color: #1f2937; line-height: 1.7;">
-                  ${imageUrl ? `<div style="margin-bottom: 20px; border-radius: 8px; overflow: hidden;"><img src="${imageUrl}" alt="Imagem" style="max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px;" /></div>` : ""}
-                  
-                  <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #111827; line-height: 1.4;">${title}</h2>
-                  <p style="margin: 0 0 24px 0; font-size: 15px; color: #374151;">${content}</p>
-
-                  <!-- CTA -->
-                  <div style="text-align: center; margin: 28px 0 8px 0;">
-                    <a href="${viewUrl}" 
-                       style="display: inline-block; background-color: #005C13; color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 700; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,92,19,0.3); letter-spacing: 0.2px;">
-                      Ver no Aplicativo →
-                    </a>
-                  </div>
-                </div>
-
-                <!-- Divisor -->
-                <div style="border-top: 1px solid #f3f4f6; margin: 0 28px;"></div>
-
-                <!-- Footer -->
-                <div style="padding: 18px 28px; background-color: #f9fafb;">
-                  <p style="margin: 0; font-size: 12px; color: #6b7280; line-height: 1.6;">
-                    Esta mensagem foi enviada automaticamente pela plataforma <strong>Evolução Clínica</strong>.<br/>
-                    Por favor, não responda a este e-mail.
-                  </p>
-                </div>
-              </div>
-            `
-          };
-
-          await transporter.sendMail(mailOptions);
-          emailSent = true;
-          console.log(`[Email] Notificação de e-mail enviada com sucesso para ${targetEmail}`);
-        } else {
-          emailError = "E-mail do destinatário não encontrado no cadastro do profissional.";
-          console.warn(`[Email] E-mail não encontrado para userId: ${targetUserId}`);
-        }
-      } catch (emailErr: any) {
-        emailError = emailErr.message || "Erro desconhecido no envio SMTP";
-        console.error("Erro ao enviar e-mail via SMTP:", emailErr.message);
-      }
-    } else {
-      emailError = "Servidor SMTP não configurado no painel admin.";
-      console.log(`[Notifications] SMTP nao configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
-    }
-
+    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl);
     res.json({
       success: true,
-      notification,
+      notification: result.notification,
       email: {
-        sent: emailSent,
-        to: emailTo,
-        error: emailError
+        sent: result.emailSent,
+        to: result.emailTo,
+        error: result.emailError
       }
     });
   } catch (err: any) {
     console.error("Erro ao disparar notificacao:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4.1. Cron para Enviar Lembretes de Evoluções Clínicas Pendentes
+app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
+  const authHeader = req.headers.authorization;
+  const cronSecret = process.env.CRON_SECRET;
+  
+  // Proteção da rota com segredo se configurado
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+    return res.status(401).json({ error: "Nao autorizado" });
+  }
+
+  try {
+    // 1. Obter data/hora atual no fuso horário do Brasil (America/Sao_Paulo: UTC-3)
+    const tzOffset = -3;
+    const now = new Date();
+    const brazilTime = new Date(now.getTime() + (tzOffset * 60 * 60 * 1000));
+    
+    const currentDayOfWeek = brazilTime.getUTCDay(); // 0 = Domingo, 1 = Segunda, ...
+    const currentDateStr = brazilTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentHour = brazilTime.getUTCHours();
+    const currentMinute = brazilTime.getUTCMinutes();
+    const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+
+    console.log(`[Cron] Iniciando verificação de lembretes. Horário Brasil: ${currentDateStr} ${currentTimeStr}, Dia da Semana: ${currentDayOfWeek}`);
+
+    // 2. Buscar todos os pacientes ativos com lembretes habilitados
+    const { data: patients, error: patientsError } = await supabaseAdmin
+      .from("patients")
+      .select("*")
+      .eq("status", "active")
+      .eq("evolution_reminder_active", true);
+
+    if (patientsError) throw patientsError;
+
+    if (!patients || patients.length === 0) {
+      return res.json({ success: true, message: "Nenhum paciente com lembrete de evolucao ativo." });
+    }
+
+    let notificationsSentCount = 0;
+
+    for (const patient of patients) {
+      // Verifica se o dia da semana atual está nos dias cadastrados
+      const days = patient.session_days || [];
+      if (!days.includes(currentDayOfWeek)) {
+        continue;
+      }
+
+      // Verifica se há horário configurado e se o horário atual já passou do horário da sessão
+      if (!patient.session_time) {
+        continue;
+      }
+
+      const sessionTimeStr = patient.session_time.substring(0, 5); // "HH:MM"
+      if (currentTimeStr < sessionTimeStr) {
+        continue; // Sessão ainda não ocorreu hoje
+      }
+
+      // Verifica se já existe evolução registrada para este paciente hoje
+      const { data: evolutions, error: evolutionsError } = await supabaseAdmin
+        .from("evolutions")
+        .select("id")
+        .eq("patient_id", patient.id)
+        .eq("session_date", currentDateStr)
+        .limit(1);
+
+      if (evolutionsError) {
+        console.error(`[Cron] Erro ao buscar evoluções do paciente ${patient.id}:`, evolutionsError.message);
+        continue;
+      }
+
+      // Se já evoluiu hoje, não precisa enviar lembrete
+      if (evolutions && evolutions.length > 0) {
+        continue;
+      }
+
+      // Verifica se o lembrete já foi enviado hoje para evitar duplicidade no mesmo dia
+      const startOfDay = new Date(brazilTime);
+      startOfDay.setUTCHours(0, 0, 0, 0);
+      const startOfDayUTC = new Date(startOfDay.getTime() - (tzOffset * 60 * 60 * 1000));
+
+      const { data: sentNotifications, error: sentNotificationsError } = await supabaseAdmin
+        .from("notifications")
+        .select("id")
+        .eq("user_id", patient.professional_id)
+        .eq("link", `/painel/patients/${patient.id}`)
+        .like("title", "%Lembrete de Evolução%")
+        .gte("created_at", startOfDayUTC.toISOString());
+
+      if (sentNotificationsError) {
+        console.error(`[Cron] Erro ao verificar lembretes enviados para o paciente ${patient.id}:`, sentNotificationsError.message);
+        continue;
+      }
+
+      if (sentNotifications && sentNotifications.length > 0) {
+        continue; // Lembrete já disparado hoje
+      }
+
+      // Dispara a notificação (In-App, Push e E-mail)
+      try {
+        console.log(`[Cron] Enviando lembrete de evolução para o profissional ${patient.professional_id} sobre o paciente ${patient.full_name}`);
+        
+        await sendNotificationInternal(
+          patient.professional_id,
+          `🔔 Lembrete de Evolução: ${patient.full_name}`,
+          `O atendimento do(a) paciente ${patient.full_name} foi agendado para hoje às ${sessionTimeStr}. Não se esqueça de preencher a evolução clínica correspondente.`,
+          "warning",
+          `/painel/patients/${patient.id}`
+        );
+        
+        notificationsSentCount++;
+      } catch (sendErr: any) {
+        console.error(`[Cron] Falha ao enviar lembrete do paciente ${patient.id}:`, sendErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Verificação de lembretes concluída. Lembretes enviados hoje: ${notificationsSentCount}`
+    });
+  } catch (err: any) {
+    console.error("[Cron] Erro no job de lembretes de evoluções:", err);
     res.status(500).json({ error: err.message });
   }
 });

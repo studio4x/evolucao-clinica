@@ -42,5 +42,11 @@
         { "key": "Content-Type", "value": "image/png" }
       ]
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/send-evolution-reminders",
+      "schedule": "0 * * * *"
+    }
   ]
 }
