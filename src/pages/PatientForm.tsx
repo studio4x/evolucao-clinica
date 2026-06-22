@@ -134,6 +134,26 @@ export default function PatientForm() {
     }
   };
 
+  const handleSendTestReminder = async () => {
+    if (!formData.full_name) {
+      alert('Por favor, preencha o nome do paciente para testar o lembrete.');
+      return;
+    }
+
+    try {
+      await sendNotification({
+        title: `🔔 Lembrete de Evolução (Teste): ${formData.full_name}`,
+        content: `Este é um lembrete de teste para o(a) paciente ${formData.full_name}. Quando ativo, você receberá notificações semelhantes após o horário de atendimento configurado nos dias selecionados.`,
+        type: 'warning',
+        link: id ? `/painel/patients/${id}` : '/painel/patients'
+      });
+      alert("Lembrete de teste enviado com sucesso! Verifique a página de notificações, e-mail ou push.");
+    } catch (err: any) {
+      console.error("Error sending test reminder:", err);
+      alert("Erro ao enviar lembrete de teste: " + (err.message || err));
+    }
+  };
+
   const loadExplorerFolders = async (parentId: string, tokenOverride?: string, searchTerm: string = '', isGlobal: boolean = false) => {
     const token = tokenOverride || googleAccessToken;
     if (!token) return;
@@ -460,6 +480,18 @@ export default function PatientForm() {
                     Você receberá lembretes nos dias selecionados após este horário para registrar as evoluções clínicas.
                   </p>
                 </div>
+              </div>
+            )}
+
+            {formData.evolution_reminder_active && (
+              <div className="pt-2 border-t border-brand-border/50">
+                <button
+                  type="button"
+                  onClick={handleSendTestReminder}
+                  className="inline-flex items-center justify-center px-4 py-2 border border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5 text-sm font-medium rounded-xl transition-all duration-200 cursor-pointer"
+                >
+                  <span>Enviar Lembrete de Teste</span>
+                </button>
               </div>
             )}
           </div>

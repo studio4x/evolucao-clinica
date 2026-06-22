@@ -85,6 +85,21 @@ export default function PatientDetail() {
     }
   };
 
+  const handleSendTestReminder = async () => {
+    try {
+      await sendNotification({
+        title: `🔔 Lembrete de Evolução (Teste): ${patient?.full_name}`,
+        content: `Este é um lembrete de teste para o(a) paciente ${patient?.full_name}. Quando ativo, você receberá notificações semelhantes após o horário de atendimento configurado nos dias selecionados.`,
+        type: 'warning',
+        link: `/painel/patients/${id}`
+      });
+      alert("Lembrete de teste enviado com sucesso! Verifique a página de notificações, e-mail ou push.");
+    } catch (err: any) {
+      console.error("Error sending test reminder:", err);
+      alert("Erro ao enviar lembrete de teste: " + (err.message || err));
+    }
+  };
+
   const fetchData = async () => {
     if (!id || !user) return;
     try {
@@ -522,21 +537,31 @@ export default function PatientDetail() {
                 </div>
               )}
 
-              <button
-                type="button"
-                onClick={handleSaveReminders}
-                disabled={savingReminders}
-                className="w-full btn-primary py-2 text-xs flex items-center justify-center space-x-1 cursor-pointer"
-              >
-                {savingReminders ? (
-                  <>
-                    <Loader2 size={12} className="animate-spin" />
-                    <span>Salvando...</span>
-                  </>
-                ) : (
-                  <span>Salvar Lembrete</span>
-                )}
-              </button>
+              <div className="flex flex-col gap-2 pt-2 border-t border-brand-border/50">
+                <button
+                  type="button"
+                  onClick={handleSaveReminders}
+                  disabled={savingReminders}
+                  className="w-full btn-primary py-2 text-xs flex items-center justify-center space-x-1 cursor-pointer"
+                >
+                  {savingReminders ? (
+                    <>
+                      <Loader2 size={12} className="animate-spin" />
+                      <span>Salvando...</span>
+                    </>
+                  ) : (
+                    <span>Salvar Lembrete</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSendTestReminder}
+                  className="w-full btn-outline py-2 text-xs flex items-center justify-center space-x-1 cursor-pointer border-brand-primary/30 text-brand-primary hover:bg-brand-primary/5"
+                >
+                  <span>Enviar Lembrete de Teste</span>
+                </button>
+              </div>
             </div>
           </div>
 
