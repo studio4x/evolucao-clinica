@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
+import { sendNotification } from '../services/notificationHelper';
 
 declare global {
   interface Window {
@@ -316,14 +317,26 @@ export default function PatientForm() {
           .update(patientData)
           .eq('id', id);
         if (error) throw error;
+        void sendNotification({
+          title: 'ℹ️ Dados do Paciente Atualizados',
+          content: `As informações do paciente ${formData.full_name} foram atualizadas com sucesso.`,
+          type: 'info',
+          link: `/painel/patients/${id}`
+        });
       } else {
         patientData.created_at = new Date().toISOString();
         const { error } = await supabase
           .from('patients')
           .insert(patientData);
         if (error) throw error;
+        void sendNotification({
+          title: '✅ Paciente Cadastrado com Sucesso',
+          content: `O paciente ${formData.full_name} foi registrado na plataforma e já está disponível no seu prontuário.`,
+          type: 'success',
+          link: `/painel/patients`
+        });
       }
-      navigate('/patients');
+      navigate('/painel/patients');
     } catch (error) {
       console.error("Error saving patient:", error);
       alert("Erro ao salvar paciente.");
@@ -684,7 +697,7 @@ export default function PatientForm() {
         <div className="flex justify-end space-x-3 pt-6 border-t border-brand-border">
           <button
             type="button"
-            onClick={() => navigate('/patients')}
+            onClick={() => navigate('/painel/patients')}
             className="btn-outline"
           >
             Cancelar

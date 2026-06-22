@@ -314,27 +314,60 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
           const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
           const viewUrl = `${origin}${link || "/painel/notifications"}`;
 
+          // Paleta de cores e ícones por tipo de notificação
+          const typeConfig: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
+            success: { color: "#166534", bg: "#f0fdf4", border: "#bbf7d0", icon: "✅", label: "Sucesso" },
+            error:   { color: "#991b1b", bg: "#fff1f2", border: "#fecdd3", icon: "⚠️", label: "Erro" },
+            warning: { color: "#92400e", bg: "#fffbeb", border: "#fde68a", icon: "🔔", label: "Atenção" },
+            info:    { color: "#1e3a5f", bg: "#eff6ff", border: "#bfdbfe", icon: "ℹ️", label: "Informação" },
+          };
+          const tc = typeConfig[type] || typeConfig.info;
+
           const mailOptions = {
             from: buildFromField(settings.smtp_from, settings.smtp_user),
             to: targetEmail,
-            subject: `[Notificação] ${title}`,
-            text: `${content}\n\nVer detalhes no app: ${viewUrl}`,
+            subject: `${tc.icon} ${title}`,
+            text: `${title}\n\n${content}\n\nVer detalhes no app: ${viewUrl}`,
             html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                <div style="background-color: #005C13; padding: 20px; text-align: center; color: white;">
-                  <h2 style="margin: 0; font-size: 22px;">Notificação do Sistema</h2>
+              <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
+                
+                <!-- Header -->
+                <div style="background-color: #005C13; padding: 24px 28px; text-align: left;">
+                  <p style="margin: 0 0 4px 0; font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 1px; text-transform: uppercase; font-weight: 600;">Evolução Clínica</p>
+                  <h1 style="margin: 0; font-size: 20px; color: #ffffff; font-weight: 700;">Notificação do Sistema</h1>
                 </div>
-                <div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6;">
-                  ${imageUrl ? `<div style="margin-bottom: 20px; text-align: center; border-radius: 6px; overflow: hidden;"><img src="${imageUrl}" alt="Imagem de Capa" style="max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 6px;" /></div>` : ""}
-                  <p style="font-size: 16px; font-weight: bold; color: #111111;">${title}</p>
-                  <p style="font-size: 15px; margin-bottom: 24px;">${content}</p>
-                  <div style="text-align: center; margin: 30px 0;">
-                    <a href="${viewUrl}" style="background-color: #005C13; color: #ffffff; text-decoration: none; padding: 12px 24px; font-weight: bold; border-radius: 6px; display: inline-block; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">Ver Detalhes no App</a>
+
+                <!-- Tipo badge -->
+                <div style="background-color: ${tc.bg}; border-bottom: 1px solid ${tc.border}; padding: 12px 28px; display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 18px;">${tc.icon}</span>
+                  <span style="font-size: 13px; font-weight: 700; color: ${tc.color}; text-transform: uppercase; letter-spacing: 0.5px;">${tc.label}</span>
+                </div>
+
+                <!-- Conteúdo -->
+                <div style="padding: 28px; color: #1f2937; line-height: 1.7;">
+                  ${imageUrl ? `<div style="margin-bottom: 20px; border-radius: 8px; overflow: hidden;"><img src="${imageUrl}" alt="Imagem" style="max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px;" /></div>` : ""}
+                  
+                  <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #111827; line-height: 1.4;">${title}</h2>
+                  <p style="margin: 0 0 24px 0; font-size: 15px; color: #374151;">${content}</p>
+
+                  <!-- CTA -->
+                  <div style="text-align: center; margin: 28px 0 8px 0;">
+                    <a href="${viewUrl}" 
+                       style="display: inline-block; background-color: #005C13; color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 700; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,92,19,0.3); letter-spacing: 0.2px;">
+                      Ver no Aplicativo →
+                    </a>
                   </div>
                 </div>
-                <div style="background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee;">
-                  <p style="margin: 0;">Evolução Clínica - Plataforma Inteligente</p>
-                  <p style="margin: 5px 0 0 0;">Não responda a este e-mail.</p>
+
+                <!-- Divisor -->
+                <div style="border-top: 1px solid #f3f4f6; margin: 0 28px;"></div>
+
+                <!-- Footer -->
+                <div style="padding: 18px 28px; background-color: #f9fafb;">
+                  <p style="margin: 0; font-size: 12px; color: #6b7280; line-height: 1.6;">
+                    Esta mensagem foi enviada automaticamente pela plataforma <strong>Evolução Clínica</strong>.<br/>
+                    Por favor, não responda a este e-mail.
+                  </p>
                 </div>
               </div>
             `

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
+import { sendNotification } from '../services/notificationHelper';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -20,12 +21,15 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 
 export default function PatientDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [patient, setPatient] = useState<any>(null);
   const [evolutions, setEvolutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
 
   const fetchData = async () => {
@@ -233,11 +237,54 @@ export default function PatientDetail() {
       if (error) throw error;
       setEvolutions([]);
       setShowClearConfirm(false);
+      // Notifica o terapeuta sobre a exclusão das evoluções
+      void sendNotification({
+        title: '🗑️ Evoluções Excluídas',
+        content: `Todas as evoluções do prontuário do paciente ${patient?.full_name || 'desconhecido'} foram removidas permanentemente.`,
+        type: 'warning',
+        link: `/painel/patients/${id}`
+      });
     } catch (error) {
       console.error("Error clearing evolutions:", error);
       alert("Erro ao limpar evoluções.");
     } finally {
       setIsClearing(false);
+    }
+  };
+
+  const handleDeletePatient = async () => {
+    setIsDeleting(true);
+    try {
+      // Deleta primeiro as evoluções para evitar qualquer erro de integridade referencial
+      const { error: evolutionsError } = await supabase
+        .from('evolutions')
+        .delete()
+        .eq('patient_id', id);
+      if (evolutionsError) throw evolutionsError;
+
+      // Deleta o paciente
+      const { error: patientError } = await supabase
+        .from('patients')
+        .delete()
+        .eq('id', id);
+      if (patientError) throw patientError;
+
+      // Notifica
+      void sendNotification({
+        title: '🗑️ Paciente Excluído',
+        content: `O paciente ${patient?.full_name || 'desconhecido'} foi excluído permanentemente da plataforma.`,
+        type: 'warning',
+        link: '/painel/patients'
+      });
+
+      // Redireciona
+      navigate('/painel/patients');
+    } catch (error: any) {
+      console.error("Error deleting patient:", error);
+      alert(`Erro ao excluir paciente: ${error.message || error}`);
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -266,7 +313,15 @@ export default function PatientDetail() {
             </span>
           </div>
         </div>
-        <div className="flex space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="btn-outline border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+          >
+            <Trash2 size={18} className="mr-1.5" />
+            <span>Excluir</span>
+          </button>
           <Link 
             to={`/painel/patients/${id}/edit`}
             className="btn-outline"
@@ -282,6 +337,36 @@ export default function PatientDetail() {
           </Link>
         </div>
       </div>
+
+      {showDeleteConfirm && (
+        <div className="p-6 bg-red-50 border border-red-100 rounded-2xl shadow-sm space-y-3">
+          <p className="text-red-900 font-semibold text-lg flex items-center gap-2">
+            <Trash2 size={20} className="text-red-600" />
+            Deseja realmente excluir este paciente?
+          </p>
+          <p className="text-sm text-red-700 leading-relaxed">
+            Esta ação é irreversível. O cadastro do paciente e todas as <strong>{evolutions.length} evoluções</strong> registradas nesta plataforma serão removidas permanentemente.
+            O documento no Google Docs <strong>NÃO</strong> será afetado.
+          </p>
+          <div className="flex space-x-3 pt-2">
+            <button 
+              onClick={handleDeletePatient}
+              disabled={isDeleting}
+              className="bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 flex items-center space-x-2 transition-colors"
+            >
+              {isDeleting && <Loader2 size={14} className="animate-spin" />}
+              <span>Confirmar Exclusão</span>
+            </button>
+            <button 
+              onClick={() => setShowDeleteConfirm(false)}
+              className="btn-outline bg-white border-brand-border"
+              disabled={isDeleting}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 space-y-6">

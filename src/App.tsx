@@ -196,8 +196,10 @@ export default function App() {
 
         {/* Redirects */}
         <Route path="/" element={<Navigate to="/painel/dashboard" replace />} />
+        <Route path="/patients" element={<Navigate to="/painel/patients" replace />} />
         <Route path="/share-target" element={<Navigate to="/painel/share-target" replace />} />
         <Route path="/api/share-target" element={<Navigate to="/painel/share-target" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
   );
