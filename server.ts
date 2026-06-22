@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import webpush from "web-push";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import { GoogleGenAI } from "@google/genai";
 
 dotenv.config();
 
@@ -598,6 +599,290 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
   } catch (err: any) {
     console.error("Erro ao enviar e-mail de teste:", err);
     res.status(500).json({ error: err.message || "Erro desconhecido ao disparar e-mail de teste." });
+  }
+});
+
+// --- API RELATÓRIOS E PDI POR IA ---
+
+// 1. Gerar Relatório ou PDI com Gemini IA
+app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
+  try {
+    const patientId = req.params.id;
+    const { period, startDate, endDate, type } = req.body;
+
+    if (!period || !type) {
+      return res.status(400).json({ error: "Parâmetros 'period' e 'type' são obrigatórios." });
+    }
+
+    // A. Validar se o paciente pertence ao profissional logado
+    const { data: patient, error: patientError } = await supabaseAdmin
+      .from("patients")
+      .select("*")
+      .eq("id", patientId)
+      .eq("professional_id", req.user.id)
+      .single();
+
+    if (patientError || !patient) {
+      return res.status(404).json({ error: "Paciente não encontrado ou não pertence a este profissional." });
+    }
+
+    // B. Obter informações do profissional logado
+    const { data: professional, error: profError } = await supabaseAdmin
+      .from("professionals")
+      .select("full_name, professional_title")
+      .eq("id", req.user.id)
+      .single();
+
+    const profName = professional?.full_name || req.user.user_metadata?.full_name || "Profissional";
+    const profTitle = professional?.professional_title || "Terapeuta";
+
+    // C. Determinar o intervalo de datas
+    let start: string | null = null;
+    let end: string | null = null;
+
+    const today = new Date();
+    if (period === "3_months") {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 3);
+      start = d.toISOString().split('T')[0];
+    } else if (period === "6_months") {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 6);
+      start = d.toISOString().split('T')[0];
+    } else if (period === "custom") {
+      if (!startDate) {
+        return res.status(400).json({ error: "Data inicial é obrigatória para o período personalizado." });
+      }
+      start = startDate;
+      if (endDate) {
+        end = endDate;
+      }
+    }
+
+    // D. Buscar evoluções concluídas no período
+    let query = supabaseAdmin
+      .from("evolutions")
+      .select("session_date, transcription_text")
+      .eq("patient_id", patientId)
+      .eq("professional_id", req.user.id)
+      .eq("transcription_status", "completed")
+      .order("session_date", { ascending: true });
+
+    if (start) {
+      query = query.gte("session_date", start);
+    }
+    if (end) {
+      query = query.lte("session_date", end);
+    }
+
+    const { data: evolutions, error: evosError } = await query;
+
+    if (evosError) {
+      throw evosError;
+    }
+
+    if (!evolutions || evolutions.length === 0) {
+      return res.status(400).json({ error: "Nenhuma evolução concluída encontrada no período selecionado." });
+    }
+
+    // E. Compilar os relatos clínicos
+    const compiledEvolutions = evolutions
+      .map(evo => {
+        let formattedDate = evo.session_date;
+        if (evo.session_date && evo.session_date.includes('-')) {
+          const [year, month, day] = evo.session_date.split('-');
+          formattedDate = `${day}/${month}/${year}`;
+        }
+        return `Data: ${formattedDate}\nEvolução: ${evo.transcription_text}\n`;
+      })
+      .join("\n---\n\n");
+
+    // F. Configurar a chave do Gemini
+    let apiKey = "";
+    try {
+      const { data: settingsData, error: settingsError } = await supabaseAdmin
+        .from("settings")
+        .select("api_key")
+        .eq("id", "gemini")
+        .single();
+      if (!settingsError && settingsData?.api_key) {
+        apiKey = settingsData.api_key;
+      }
+    } catch (e) {
+      console.warn("Erro ao ler chave do Gemini do banco:", e);
+    }
+
+    if (!apiKey) {
+      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+    }
+
+    if (!apiKey) {
+      return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
+    }
+
+    // G. Preparar prompt e chamar Gemini
+    const ai = new GoogleGenAI({ apiKey });
+
+    let systemPrompt = "";
+    if (type === "evolution_report") {
+      systemPrompt = `Você é um assistente de IA especializado na área da saúde e terapia (Terapia Ocupacional, Fonoaudiologia, Psicologia, etc.).
+Sua tarefa é analisar o histórico de evoluções clínicas de um paciente e gerar um "Relatório de Evolução Periódico" detalhado e profissional, com uma linguagem ética, científica e acolhedora, voltado para pais, médicos ou escolas.
+
+Estruture o relatório exatamente com as seguintes seções em português:
+1. IDENTIFICAÇÃO (Nome do Paciente, Período Analisado, Nome do Profissional, Cargo/Especialidade).
+2. RESUMO DO PERÍODO (Breve descrição geral de como foi o processo terapêutico no período analisado).
+3. MARCOS ALCANÇADOS (Destaque os principais progressos, conquistas, evolução comportamental, cognitiva, motora ou sensorial com base nas notas).
+4. PONTOS QUE PRECISAM DE ATENÇÃO (Objetivos em andamento, dificuldades observadas ou aspectos a serem mais trabalhados).
+5. RECOMENDAÇÕES E CONCLUSÃO (Sugestões práticas para o ambiente familiar/escolar e considerações finais).
+
+Dados do Paciente:
+- Nome: ${patient.full_name}
+- Notas gerais do prontuário: ${patient.notes || "Nenhuma nota cadastrada"}
+
+Dados do Profissional:
+- Nome: ${profName}
+- Especialidade/Cargo: ${profTitle}
+
+Período analisado: ${period === "3_months" ? "Últimos 3 meses" : period === "6_months" ? "Últimos 6 meses" : `De ${start ? start.split('-').reverse().join('/') : ''} até ${end ? end.split('-').reverse().join('/') : today.toLocaleDateString('pt-BR')}`}
+
+Histórico de Evoluções Clínicas:
+${compiledEvolutions}
+
+Escreva em português brasileiro de forma fluida, sem usar termos internos de formatação da IA, de maneira extremamente profissional e legível.`;
+    } else {
+      systemPrompt = `Você é um assistente de IA especializado na área da saúde e terapia (Terapia Ocupacional, Fonoaudiologia, Psicologia, etc.).
+Sua tarefa é analisar o histórico de evoluções clínicas de um paciente e criar um "Rascunho de Plano de Desenvolvimento Individual (PDI)" para orientar os próximos passos da terapia, bem como fornecer estratégias práticas para a escola e para a família.
+
+Estruture o PDI exatamente com as seguintes seções em português:
+1. IDENTIFICAÇÃO (Nome do Paciente, Data do Plano, Nome do Profissional, Especialidade/Cargo).
+2. OBJETIVOS TERAPÊUTICOS GERAIS (O que deve ser priorizado no desenvolvimento do paciente a médio prazo).
+3. ESTRATÉGIAS PARA A FAMÍLIA (Recomendações e atividades práticas de estimulação que os pais podem realizar em casa).
+4. ESTRATÉGIAS PARA A ESCOLA (Orientações pedagógicas, adaptações ambientais ou de manejo para os professores).
+5. PRÓXIMOS PASSOS NA TERAPIA (Metas específicas a serem trabalhadas nas próximas sessões).
+
+Dados do Paciente:
+- Nome: ${patient.full_name}
+- Notas gerais do prontuário: ${patient.notes || "Nenhuma nota cadastrada"}
+
+Dados do Profissional:
+- Nome: ${profName}
+- Especialidade/Cargo: ${profTitle}
+
+Período analisado para a base do PDI: ${period === "3_months" ? "Últimos 3 meses" : period === "6_months" ? "Últimos 6 meses" : `De ${start ? start.split('-').reverse().join('/') : ''} até ${end ? end.split('-').reverse().join('/') : today.toLocaleDateString('pt-BR')}`}
+
+Histórico de Evoluções Clínicas do Paciente:
+${compiledEvolutions}
+
+Escreva em português brasileiro de forma prática, detalhada e empática.`;
+    }
+
+    console.log(`[AI-Report] Enviando solicitação ao Gemini para o paciente ${patient.full_name} (${type})...`);
+    
+    const geminiResponse = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: systemPrompt
+    });
+
+    const reportText = geminiResponse.text;
+    if (!reportText) {
+      throw new Error("O Gemini não retornou nenhum texto.");
+    }
+
+    res.json({ report: reportText });
+
+  } catch (err: any) {
+    console.error("Erro na geração de relatório com IA:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao gerar o relatório." });
+  }
+});
+
+// 2. Enviar Relatório por E-mail
+app.post("/api/patients/:id/send-report-email", requireAuth, async (req: any, res) => {
+  try {
+    const patientId = req.params.id;
+    const { toEmail, subject, textContent } = req.body;
+
+    if (!toEmail || !subject || !textContent) {
+      return res.status(400).json({ error: "Parâmetros 'toEmail', 'subject' e 'textContent' são obrigatórios." });
+    }
+
+    // A. Validar se o paciente pertence ao profissional
+    const { data: patient, error: patientError } = await supabaseAdmin
+      .from("patients")
+      .select("*")
+      .eq("id", patientId)
+      .eq("professional_id", req.user.id)
+      .single();
+
+    if (patientError || !patient) {
+      return res.status(404).json({ error: "Paciente não encontrado ou não pertence a este profissional." });
+    }
+
+    // B. Obter configurações do SMTP
+    const { data: settingsData, error: settingsError } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "notification_settings")
+      .single();
+
+    let settings: any = {};
+    if (settingsData && settingsData.api_key) {
+      try {
+        settings = JSON.parse(settingsData.api_key);
+      } catch (e) {
+        console.error("Erro ao ler JSON de configuracoes de SMTP:", e);
+      }
+    }
+
+    if (!settings.smtp_host || !settings.smtp_user || !settings.smtp_pass) {
+      return res.status(500).json({ error: "Servidor SMTP de notificações não configurado na plataforma." });
+    }
+
+    const transporter = nodemailer.createTransport({
+      host: settings.smtp_host,
+      port: Number(settings.smtp_port) || 587,
+      secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
+      auth: {
+        user: settings.smtp_user,
+        pass: settings.smtp_pass
+      },
+      pool: false,
+      connectionTimeout: 15000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: { rejectUnauthorized: false }
+    } as any);
+
+    // Formatar como HTML (quebrando linhas)
+    const formattedHtml = `
+      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+        <div style="background-color: #005C13; padding: 24px; text-align: center; color: white;">
+          <h2 style="margin: 0; font-size: 20px; font-weight: 700;">Relatório de Desenvolvimento / Evolução</h2>
+          <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">Paciente: ${patient.full_name}</p>
+        </div>
+        <div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6; font-size: 15px; white-space: pre-wrap; font-family: inherit;">
+          ${textContent.replace(/\n/g, "<br/>")}
+        </div>
+        <div style="background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 11px; color: #888888; border-top: 1px solid #eeeeee;">
+          <p style="margin: 0;">Enviado com segurança via Evolução Clínica - Plataforma Inteligente</p>
+        </div>
+      </div>
+    `;
+
+    const mailOptions = {
+      from: buildFromField(settings.smtp_from, settings.smtp_user),
+      to: toEmail,
+      subject: subject,
+      text: textContent,
+      html: formattedHtml
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ success: true });
+
+  } catch (err: any) {
+    console.error("Erro ao enviar e-mail com relatório:", err);
+    res.status(500).json({ error: err.message || "Erro ao enviar e-mail." });
   }
 });
 

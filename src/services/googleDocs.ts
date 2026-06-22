@@ -46,6 +46,42 @@ export async function appendToGoogleDoc(
   return await response.json();
 }
 
+export async function appendTextToGoogleDoc(
+  googleAccessToken: string,
+  googleDocId: string,
+  text: string
+) {
+  const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
+  
+  const response = await fetch(googleDocsUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      requests: [
+        {
+          insertText: {
+            location: { index: 1 },
+            text: text + "\n\n----------------------------------------\n\n",
+          },
+        },
+      ],
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    if (response.status === 401) {
+      throw new Error("UNAUTHENTICATED: " + errorText);
+    }
+    throw new Error(`Google Docs API error: ${response.status} - ${errorText}`);
+  }
+
+  return await response.json();
+}
+
 export async function createGoogleDoc(googleAccessToken: string, title: string, folderId?: string) {
   const url = `https://www.googleapis.com/drive/v3/files`;
   
