@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
-import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent } from '../services/googleDocs';
+import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -66,6 +66,12 @@ export default function PatientDetail() {
   const [showExportOptions, setShowExportOptions] = useState(false);
   const [exportDestination, setExportDestination] = useState<'same_doc' | 'new_doc'>('same_doc');
   const [newDocName, setNewDocName] = useState('');
+  const [folderHierarchy, setFolderHierarchy] = useState<{ id: string; name: string }[]>([]);
+  const [loadingFolderHierarchy, setLoadingFolderHierarchy] = useState(false);
+
+  // Estados do Mural de Notas Rápidas
+  const [quickNotes, setQuickNotes] = useState('');
+  const [isSavingNotes, setIsSavingNotes] = useState(false);
 
   useEffect(() => {
     if (patient) {
@@ -74,6 +80,49 @@ export default function PatientDetail() {
       setSessionTime(patient.session_time ? patient.session_time.substring(0, 5) : '');
     }
   }, [patient]);
+
+  useEffect(() => {
+    if (!patient || quickNotes === (patient.quick_notes || '')) return;
+
+    const delayDebounce = setTimeout(async () => {
+      setIsSavingNotes(true);
+      try {
+        const { error } = await supabase
+          .from('patients')
+          .update({ quick_notes: quickNotes })
+          .eq('id', id);
+
+        if (error) throw error;
+        setPatient((prev: any) => prev ? { ...prev, quick_notes: quickNotes } : null);
+      } catch (err) {
+        console.error("Erro ao salvar notas rápidas:", err);
+      } finally {
+        setIsSavingNotes(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(delayDebounce);
+  }, [quickNotes, id, patient]);
+
+  useEffect(() => {
+    async function loadHierarchy() {
+      if (exportDestination === 'new_doc' && patient?.target_folder_id && googleAccessToken) {
+        setLoadingFolderHierarchy(true);
+        try {
+          const hierarchy = await getFolderHierarchy(googleAccessToken, patient.target_folder_id);
+          setFolderHierarchy(hierarchy);
+        } catch (err) {
+          console.error("Erro ao carregar hierarquia de pastas:", err);
+          setFolderHierarchy([]);
+        } finally {
+          setLoadingFolderHierarchy(false);
+        }
+      } else {
+        setFolderHierarchy([]);
+      }
+    }
+    loadHierarchy();
+  }, [exportDestination, patient?.target_folder_id, googleAccessToken]);
 
   const handleSaveReminders = async () => {
     setSavingReminders(true);
@@ -139,6 +188,7 @@ export default function PatientDetail() {
         .single();
       if (patientError) throw patientError;
       setPatient(patientData);
+      setQuickNotes(patientData.quick_notes || '');
 
       const { data: evosData, error: evosError } = await supabase
         .from('evolutions')
@@ -170,6 +220,18 @@ export default function PatientDetail() {
   }, [id, user]);
 
   const handleGenerateAiReport = async () => {
+    if (!googleAccessToken) {
+      alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
+          redirectTo: window.location.origin + window.location.pathname
+        }
+      });
+      return;
+    }
+
     setAiGenerating(true);
     setAiError('');
     setGeneratedReport('');
@@ -194,7 +256,8 @@ export default function PatientDetail() {
           period: aiPeriod,
           startDate: aiPeriod === 'custom' ? aiStartDate : undefined,
           endDate: aiPeriod === 'custom' ? aiEndDate : undefined,
-          type: aiReportType
+          type: aiReportType,
+          googleAccessToken: googleAccessToken
         })
       });
 
@@ -699,6 +762,36 @@ export default function PatientDetail() {
                 Nenhum documento vinculado. <Link to={`/painel/patients/${id}/edit`} className="text-brand-primary hover:underline">Vincular agora</Link>.
               </div>
             )}
+          </div>
+
+          {/* Mural de Notas Rápidas (Sticky Note) */}
+          <div className="card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/20 to-transparent pointer-events-none" />
+            
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center space-x-2 text-amber-800">
+                <Pin size={18} className="transform -rotate-45" />
+                <h3 className="font-semibold font-display text-sm tracking-wide mb-0">Notas Rápidas</h3>
+              </div>
+              <div className="text-[10px] text-amber-700/60 font-medium">
+                {isSavingNotes ? (
+                  <span className="flex items-center gap-1">
+                    <Loader2 size={10} className="animate-spin text-amber-600" />
+                    Salvando...
+                  </span>
+                ) : (
+                  <span>Salvo automaticamente</span>
+                )}
+              </div>
+            </div>
+
+            <textarea
+              value={quickNotes}
+              onChange={(e) => setQuickNotes(e.target.value)}
+              placeholder="Digite lembretes rápidos para a próxima sessão (ex: trazer jogo de blocos, mãe viaja terça)..."
+              rows={6}
+              className="w-full bg-transparent focus:outline-none text-xs text-amber-900 leading-relaxed placeholder-amber-700/40 resize-none font-sans"
+            />
           </div>
 
           <div className="card p-6 border-brand-primary/20 bg-brand-primary/5 hover:border-brand-primary/40 transition-all duration-200">
@@ -1258,15 +1351,52 @@ export default function PatientDetail() {
                         </label>
 
                         {exportDestination === 'new_doc' && (
-                          <div className="pl-6 pt-1">
-                            <label className="block text-[10px] font-semibold text-brand-text-muted uppercase mb-1">Nome do Novo Arquivo</label>
-                            <input
-                              type="text"
-                              value={newDocName}
-                              onChange={(e) => setNewDocName(e.target.value)}
-                              className="input-field p-2 text-xs w-full bg-white"
-                              placeholder="Ex: Nome do Paciente - Relatório de Evolução"
-                            />
+                          <div className="pl-6 pt-1 space-y-3">
+                            <div className="space-y-1">
+                              <label className="block text-[10px] font-semibold text-brand-text-muted uppercase tracking-wider">
+                                Pasta de Destino no Google Drive
+                              </label>
+                              {loadingFolderHierarchy ? (
+                                <div className="flex items-center space-x-2 text-xs text-brand-text-muted bg-white p-2 rounded-xl border border-brand-border">
+                                  <Loader2 size={12} className="animate-spin text-brand-primary" />
+                                  <span>Carregando estrutura de pastas...</span>
+                                </div>
+                              ) : !googleAccessToken ? (
+                                <div className="text-[10px] text-yellow-600 bg-yellow-50 p-2 rounded-xl border border-yellow-100">
+                                  Conecte sua conta Google para visualizar o caminho.
+                                </div>
+                              ) : folderHierarchy.length > 0 ? (
+                                <div className="flex flex-wrap items-center gap-1 text-[11px] text-brand-text bg-white p-2.5 rounded-xl border border-brand-border shadow-sm">
+                                  <Folder size={12} className="text-brand-primary shrink-0" />
+                                  {folderHierarchy.map((folder, index) => (
+                                    <span key={folder.id} className="flex items-center gap-1">
+                                      <span className="font-medium text-brand-primary hover:underline cursor-default" title={folder.id}>{folder.name}</span>
+                                      {index < folderHierarchy.length - 1 && (
+                                        <span className="text-gray-400 font-bold mx-0.5">/</span>
+                                      )}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 text-[11px] text-brand-text bg-white p-2.5 rounded-xl border border-brand-border shadow-sm">
+                                  <Folder size={12} className="text-brand-primary shrink-0" />
+                                  <span className="text-brand-text-muted italic">Meu Drive (Raiz)</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div>
+                              <label className="block text-[10px] font-semibold text-brand-text-muted uppercase mb-1">
+                                Nome do Novo Arquivo
+                              </label>
+                              <input
+                                type="text"
+                                value={newDocName}
+                                onChange={(e) => setNewDocName(e.target.value)}
+                                className="input-field p-2 text-xs w-full bg-white border border-brand-border focus:border-brand-primary rounded-xl focus:ring-1 focus:ring-brand-primary"
+                                placeholder="Ex: Nome do Paciente - Relatório de Evolução"
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1319,18 +1449,30 @@ export default function PatientDetail() {
                         )}
                       </button>
 
-                      {patient?.google_doc_id && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowExportOptions(true);
-                            setExportDestination('same_doc');
-                          }}
-                          className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
+                      {reports.find(r => r.id === lastGeneratedReportId)?.google_doc_url ? (
+                        <a
+                          href={reports.find(r => r.id === lastGeneratedReportId)?.google_doc_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
                         >
-                          <FileText size={14} />
-                          <span>Salvar no Google Docs</span>
-                        </button>
+                          <ExternalLink size={14} />
+                          <span>Ver no Google Drive</span>
+                        </a>
+                      ) : (
+                        patient?.google_doc_id && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowExportOptions(true);
+                              setExportDestination('same_doc');
+                            }}
+                            className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
+                          >
+                            <FileText size={14} />
+                            <span>Salvar no Google Docs</span>
+                          </button>
+                        )
                       )}
 
                       <button
@@ -1520,15 +1662,52 @@ export default function PatientDetail() {
                     </label>
 
                     {exportDestination === 'new_doc' && (
-                      <div className="pl-6 pt-1">
-                        <label className="block text-[10px] font-semibold text-brand-text-muted uppercase mb-1">Nome do Novo Arquivo</label>
-                        <input
-                          type="text"
-                          value={newDocName}
-                          onChange={(e) => setNewDocName(e.target.value)}
-                          className="input-field p-2 text-xs w-full bg-white"
-                          placeholder="Ex: Nome do Paciente - Relatório de Evolução"
-                        />
+                      <div className="pl-6 pt-1 space-y-3">
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-semibold text-brand-text-muted uppercase tracking-wider">
+                            Pasta de Destino no Google Drive
+                          </label>
+                          {loadingFolderHierarchy ? (
+                            <div className="flex items-center space-x-2 text-xs text-brand-text-muted bg-white p-2 rounded-xl border border-brand-border">
+                              <Loader2 size={12} className="animate-spin text-brand-primary" />
+                              <span>Carregando estrutura de pastas...</span>
+                            </div>
+                          ) : !googleAccessToken ? (
+                            <div className="text-[10px] text-yellow-600 bg-yellow-50 p-2 rounded-xl border border-yellow-100">
+                              Conecte sua conta Google para visualizar o caminho.
+                            </div>
+                          ) : folderHierarchy.length > 0 ? (
+                            <div className="flex flex-wrap items-center gap-1 text-[11px] text-brand-text bg-white p-2.5 rounded-xl border border-brand-border shadow-sm">
+                              <Folder size={12} className="text-brand-primary shrink-0" />
+                              {folderHierarchy.map((folder, index) => (
+                                <span key={folder.id} className="flex items-center gap-1">
+                                  <span className="font-medium text-brand-primary hover:underline cursor-default" title={folder.id}>{folder.name}</span>
+                                  {index < folderHierarchy.length - 1 && (
+                                    <span className="text-gray-400 font-bold mx-0.5">/</span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1.5 text-[11px] text-brand-text bg-white p-2.5 rounded-xl border border-brand-border shadow-sm">
+                              <Folder size={12} className="text-brand-primary shrink-0" />
+                              <span className="text-brand-text-muted italic">Meu Drive (Raiz)</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-semibold text-brand-text-muted uppercase mb-1">
+                            Nome do Novo Arquivo
+                          </label>
+                          <input
+                            type="text"
+                            value={newDocName}
+                            onChange={(e) => setNewDocName(e.target.value)}
+                            className="input-field p-2 text-xs w-full bg-white border border-brand-border focus:border-brand-primary rounded-xl focus:ring-1 focus:ring-brand-primary"
+                            placeholder="Ex: Nome do Paciente - Relatório de Evolução"
+                          />
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1608,7 +1787,7 @@ export default function PatientDetail() {
                       className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
                     >
                       <ExternalLink size={14} />
-                      <span>Ver no Google Docs</span>
+                      <span>Ver no Google Drive</span>
                     </a>
                   )}
 

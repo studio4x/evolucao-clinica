@@ -325,3 +325,41 @@ export async function updateGoogleDocContent(
 
   return await updateResponse.json();
 }
+
+export async function getFolderHierarchy(
+  googleAccessToken: string,
+  folderId: string
+): Promise<{ id: string; name: string }[]> {
+  const hierarchy: { id: string; name: string }[] = [];
+  let currentId = folderId;
+  let depth = 0;
+  const maxDepth = 5;
+
+  while (currentId && depth < maxDepth) {
+    const url = `https://www.googleapis.com/drive/v3/files/${currentId}?fields=id,name,parents`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${googleAccessToken}`,
+      }
+    });
+
+    if (!response.ok) {
+      break;
+    }
+
+    const data = await response.json();
+    if (!data.id) break;
+
+    hierarchy.push({ id: data.id, name: data.name });
+
+    if (data.parents && data.parents.length > 0) {
+      currentId = data.parents[0];
+      depth++;
+    } else {
+      break;
+    }
+  }
+
+  return hierarchy.reverse();
+}

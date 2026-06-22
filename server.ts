@@ -608,10 +608,14 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
 app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
   try {
     const patientId = req.params.id;
-    const { period, startDate, endDate, type } = req.body;
+    const { period, startDate, endDate, type, googleAccessToken } = req.body;
 
     if (!period || !type) {
       return res.status(400).json({ error: "Parâmetros 'period' e 'type' são obrigatórios." });
+    }
+
+    if (!googleAccessToken) {
+      return res.status(400).json({ error: "O token do Google Drive/Docs (googleAccessToken) é obrigatório para ler o prontuário." });
     }
 
     // A. Validar se o paciente pertence ao profissional logado
@@ -626,6 +630,10 @@ app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
       return res.status(404).json({ error: "Paciente não encontrado ou não pertence a este profissional." });
     }
 
+    if (!patient.google_doc_id) {
+      return res.status(400).json({ error: "Este paciente não possui um documento do Google Docs (prontuário) vinculado." });
+    }
+
     // B. Obter informações do profissional logado
     const { data: professional, error: profError } = await supabaseAdmin
       .from("professionals")
@@ -636,7 +644,7 @@ app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
     const profName = professional?.full_name || req.user.user_metadata?.full_name || "Profissional";
     const profTitle = professional?.professional_title || "Terapeuta";
 
-    // C. Determinar o intervalo de datas
+    // C. Determinar o intervalo de datas (para repassar ao prompt da IA)
     let start: string | null = null;
     let end: string | null = null;
 
@@ -659,45 +667,74 @@ app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
       }
     }
 
-    // D. Buscar evoluções concluídas no período
-    let query = supabaseAdmin
-      .from("evolutions")
-      .select("session_date, transcription_text")
-      .eq("patient_id", patientId)
-      .eq("professional_id", req.user.id)
-      .eq("transcription_status", "completed")
-      .order("session_date", { ascending: true });
+    const formatDateForPrompt = (dateStr: string | null) => {
+      if (!dateStr) return "";
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
+    };
 
-    if (start) {
-      query = query.gte("session_date", start);
+    const periodText = period === "3_months" 
+      ? "últimos 3 meses (desde " + formatDateForPrompt(start) + " até hoje)" 
+      : period === "6_months" 
+      ? "últimos 6 meses (desde " + formatDateForPrompt(start) + " até hoje)" 
+      : `período personalizado de ${formatDateForPrompt(start)} a ${end ? formatDateForPrompt(end) : 'hoje'}`;
+
+    // D. Buscar conteúdo do prontuário no Google Docs
+    console.log(`[AI-Report] Buscando conteúdo do documento GDocs: ${patient.google_doc_id}...`);
+    const docUrl = `https://docs.googleapis.com/v1/documents/${patient.google_doc_id}`;
+    const docRes = await fetch(docUrl, {
+      headers: {
+        "Authorization": `Bearer ${googleAccessToken}`
+      }
+    });
+
+    if (!docRes.ok) {
+      const errText = await docRes.text();
+      console.error(`[AI-Report] Erro ao buscar Google Doc (${docRes.status}):`, errText);
+      if (docRes.status === 401) {
+        return res.status(401).json({ error: "Sessão do Google expirada. Por favor, reautentique clicando no botão do Google no painel." });
+      }
+      return res.status(400).json({ error: `Erro da API do Google Docs (${docRes.status}): ${docRes.statusText}` });
     }
-    if (end) {
-      query = query.lte("session_date", end);
-    }
 
-    const { data: evolutions, error: evosError } = await query;
+    const doc: any = await docRes.json();
+    let docContent = "";
 
-    if (evosError) {
-      throw evosError;
-    }
-
-    if (!evolutions || evolutions.length === 0) {
-      return res.status(400).json({ error: "Nenhuma evolução concluída encontrada no período selecionado." });
-    }
-
-    // E. Compilar os relatos clínicos
-    const compiledEvolutions = evolutions
-      .map(evo => {
-        let formattedDate = evo.session_date;
-        if (evo.session_date && evo.session_date.includes('-')) {
-          const [year, month, day] = evo.session_date.split('-');
-          formattedDate = `${day}/${month}/${year}`;
+    if (doc.body && doc.body.content) {
+      doc.body.content.forEach((element: any) => {
+        if (element.paragraph && element.paragraph.elements) {
+          element.paragraph.elements.forEach((el: any) => {
+            if (el.textRun && el.textRun.content) {
+              docContent += el.textRun.content;
+            }
+          });
+        } else if (element.table && element.table.tableRows) {
+          element.table.tableRows.forEach((row: any) => {
+            if (row.tableCells) {
+              row.tableCells.forEach((cell: any) => {
+                if (cell.content) {
+                  cell.content.forEach((cellElement: any) => {
+                    if (cellElement.paragraph && cellElement.paragraph.elements) {
+                      cellElement.paragraph.elements.forEach((el: any) => {
+                        if (el.textRun && el.textRun.content) {
+                          docContent += el.textRun.content;
+                        }
+                      });
+                    }
+                  });
+                }
+              });
+            }
+          });
         }
-        return `Data: ${formattedDate}\nEvolução: ${evo.transcription_text}\n`;
-      })
-      .join("\n---\n\n");
+      });
+    }
 
-    // F. Configurar a chave do Gemini
+    if (!docContent.trim()) {
+      return res.status(400).json({ error: "O prontuário do paciente no Google Docs está vazio ou não possui texto clínico legível." });
+    }
+
+    // E. Configurar a chave do Gemini
     let apiKey = "";
     try {
       const { data: settingsData, error: settingsError } = await supabaseAdmin
@@ -720,18 +757,25 @@ app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
       return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
     }
 
-    // G. Preparar prompt e chamar Gemini
+    // F. Preparar prompt e chamar Gemini
     const ai = new GoogleGenAI({ apiKey });
 
     let systemPrompt = "";
     if (type === "evolution_report") {
       systemPrompt = `Você é um assistente de IA especializado na área da saúde e terapia (Terapia Ocupacional, Fonoaudiologia, Psicologia, etc.).
-Sua tarefa é analisar o histórico de evoluções clínicas de um paciente e gerar um "Relatório de Evolução Periódico" detalhado e profissional, com uma linguagem ética, científica e acolhedora, voltado para pais, médicos ou escolas.
+Sua tarefa é analisar o prontuário em texto corrido de um paciente (obtido diretamente de seu arquivo no Google Docs) e gerar um "Relatório de Evolução Periódico" detalhado e profissional, com uma linguagem ética, científica e acolhedora, voltado para pais, médicos ou escolas.
+
+FILTRAGEM DE PERÍODO CRÍTICA:
+O prontuário abaixo contém registros de várias sessões clínicas, geralmente contendo cabeçalhos ou prefixos como "Data da sessão: DD/MM/AAAA às HH:MM" ou semelhantes.
+Você DEVE identificar cronologicamente as sessões e analisar APENAS as sessões clínicas que ocorreram no seguinte período: ${periodText}.
+Ignore completamente qualquer relato de sessão ocorrido antes ou depois desse intervalo.
+Caso o documento não possua datas explícitas nas sessões, analise os registros clínicos mais recentes do documento que façam sentido temporal.
+Se o documento não contiver relatos suficientes para o período solicitado, avise em tom profissional e retorne um texto explicando isso.
 
 Estruture o relatório exatamente com as seguintes seções em português:
 1. IDENTIFICAÇÃO (Nome do Paciente, Período Analisado, Nome do Profissional, Cargo/Especialidade).
 2. RESUMO DO PERÍODO (Breve descrição geral de como foi o processo terapêutico no período analisado).
-3. MARCOS ALCANÇADOS (Destaque os principais progressos, conquistas, evolução comportamental, cognitiva, motora ou sensorial com base nas notas).
+3. MARCOS ALCANÇADOS (Destaque os principais progressos, conquistas, evolução comportamental, cognitiva, motora ou sensorial descritas nos relatos do período).
 4. PONTOS QUE PRECISAM DE ATENÇÃO (Objetivos em andamento, dificuldades observadas ou aspectos a serem mais trabalhados).
 5. RECOMENDAÇÕES E CONCLUSÃO (Sugestões práticas para o ambiente familiar/escolar e considerações finais).
 
@@ -743,15 +787,22 @@ Dados do Profissional:
 - Nome: ${profName}
 - Especialidade/Cargo: ${profTitle}
 
-Período analisado: ${period === "3_months" ? "Últimos 3 meses" : period === "6_months" ? "Últimos 6 meses" : `De ${start ? start.split('-').reverse().join('/') : ''} até ${end ? end.split('-').reverse().join('/') : today.toLocaleDateString('pt-BR')}`}
-
-Histórico de Evoluções Clínicas:
-${compiledEvolutions}
+Conteúdo do Prontuário Lido do Google Docs:
+----------------------------------------
+${docContent}
+----------------------------------------
 
 Escreva em português brasileiro de forma fluida, sem usar termos internos de formatação da IA, de maneira extremamente profissional e legível.`;
     } else {
       systemPrompt = `Você é um assistente de IA especializado na área da saúde e terapia (Terapia Ocupacional, Fonoaudiologia, Psicologia, etc.).
-Sua tarefa é analisar o histórico de evoluções clínicas de um paciente e criar um "Rascunho de Plano de Desenvolvimento Individual (PDI)" para orientar os próximos passos da terapia, bem como fornecer estratégias práticas para a escola e para a família.
+Sua tarefa é analisar o prontuário em texto corrido de um paciente (obtido diretamente de seu arquivo no Google Docs) e criar um "Rascunho de Plano de Desenvolvimento Individual (PDI)" para orientar os próximos passos da terapia, bem como fornecer estratégias práticas para a escola e para a família.
+
+FILTRAGEM DE PERÍODO CRÍTICA:
+O prontuário abaixo contém registros de várias sessões clínicas, geralmente contendo cabeçalhos ou prefixos como "Data da sessão: DD/MM/AAAA às HH:MM" ou semelhantes.
+Você DEVE identificar cronologicamente as sessões e analisar APENAS as sessões clínicas que ocorreram no seguinte período: ${periodText}.
+Ignore completamente qualquer relato de sessão ocorrido antes ou depois desse intervalo.
+Caso o documento não possua datas explícitas nas sessões, analise os registros clínicos mais recentes do documento que façam sentido temporal.
+Se o documento não contiver relatos suficientes para o período solicitado, avise em tom profissional e retorne um texto explicando isso.
 
 Estruture o PDI exatamente com as seguintes seções em português:
 1. IDENTIFICAÇÃO (Nome do Paciente, Data do Plano, Nome do Profissional, Especialidade/Cargo).
@@ -768,10 +819,10 @@ Dados do Profissional:
 - Nome: ${profName}
 - Especialidade/Cargo: ${profTitle}
 
-Período analisado para a base do PDI: ${period === "3_months" ? "Últimos 3 meses" : period === "6_months" ? "Últimos 6 meses" : `De ${start ? start.split('-').reverse().join('/') : ''} até ${end ? end.split('-').reverse().join('/') : today.toLocaleDateString('pt-BR')}`}
-
-Histórico de Evoluções Clínicas do Paciente:
-${compiledEvolutions}
+Conteúdo do Prontuário Lido do Google Docs:
+----------------------------------------
+${docContent}
+----------------------------------------
 
 Escreva em português brasileiro de forma prática, detalhada e empática.`;
     }
