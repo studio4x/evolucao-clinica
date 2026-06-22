@@ -772,12 +772,43 @@ Ignore completamente qualquer relato de sessão ocorrido antes ou depois desse i
 Caso o documento não possua datas explícitas nas sessões, analise os registros clínicos mais recentes do documento que façam sentido temporal.
 Se o documento não contiver relatos suficientes para o período solicitado, avise em tom profissional e retorne um texto explicando isso.
 
-Estruture o relatório exatamente com as seguintes seções em português:
-1. IDENTIFICAÇÃO (Nome do Paciente, Período Analisado, Nome do Profissional, Cargo/Especialidade).
-2. RESUMO DO PERÍODO (Breve descrição geral de como foi o processo terapêutico no período analisado).
-3. MARCOS ALCANÇADOS (Destaque os principais progressos, conquistas, evolução comportamental, cognitiva, motora ou sensorial descritas nos relatos do período).
-4. PONTOS QUE PRECISAM DE ATENÇÃO (Objetivos em andamento, dificuldades observadas ou aspectos a serem mais trabalhados).
-5. RECOMENDAÇÕES E CONCLUSÃO (Sugestões práticas para o ambiente familiar/escolar e considerações finais).
+FORMATO DE SAÍDA OBRIGATÓRIO — MARKDOWN:
+Você DEVE retornar o relatório inteiramente em formato Markdown, seguindo EXATAMENTE esta estrutura:
+
+# Relatório de Evolução Clínica
+**Paciente:** [Nome do Paciente]  
+**Período Analisado:** [Período]  
+**Profissional:** [Nome do Profissional]  
+**Especialidade:** [Cargo/Especialidade]  
+**Data de Emissão:** [Data de hoje em DD/MM/AAAA]
+
+---
+
+## 1. Resumo do Período
+[Parágrafo descritivo sobre o processo terapêutico no período]
+
+## 2. Marcos Alcançados
+- [Marco 1]
+- [Marco 2]
+- [Marco 3]
+(use quantos itens forem necessários)
+
+## 3. Pontos que Precisam de Atenção
+- [Ponto 1]
+- [Ponto 2]
+
+## 4. Recomendações e Conclusão
+[Parágrafos com sugestões práticas para família/escola e considerações finais]
+
+---
+*Documento gerado por ${profName} — ${profTitle}*
+
+Regras de formatação:
+- Use **negrito** para destacar termos clínicos importantes, nomes de habilidades ou conquistas relevantes.
+- Use listas com hífen (- item) para enumerar marcos e pontos de atenção.
+- Separe seções com linha horizontal (---) quando necessário.
+- NÃO use numeração tipo "1." no texto corrido das seções — apenas nos cabeçalhos de seção (## 1., ## 2., etc.).
+- NÃO inclua blocos de código, tabelas ou qualquer outro elemento Markdown além dos mencionados acima.
 
 Dados do Paciente:
 - Nome: ${patient.full_name}
@@ -792,7 +823,7 @@ Conteúdo do Prontuário Lido do Google Docs:
 ${docContent}
 ----------------------------------------
 
-Escreva em português brasileiro de forma fluida, sem usar termos internos de formatação da IA, de maneira extremamente profissional e legível.`;
+Escreva em português brasileiro de forma fluida, ética e extremamente profissional.`;
     } else {
       systemPrompt = `Você é um assistente de IA especializado na área da saúde e terapia (Terapia Ocupacional, Fonoaudiologia, Psicologia, etc.).
 Sua tarefa é analisar o prontuário em texto corrido de um paciente (obtido diretamente de seu arquivo no Google Docs) e criar um "Rascunho de Plano de Desenvolvimento Individual (PDI)" para orientar os próximos passos da terapia, bem como fornecer estratégias práticas para a escola e para a família.
@@ -804,12 +835,42 @@ Ignore completamente qualquer relato de sessão ocorrido antes ou depois desse i
 Caso o documento não possua datas explícitas nas sessões, analise os registros clínicos mais recentes do documento que façam sentido temporal.
 Se o documento não contiver relatos suficientes para o período solicitado, avise em tom profissional e retorne um texto explicando isso.
 
-Estruture o PDI exatamente com as seguintes seções em português:
-1. IDENTIFICAÇÃO (Nome do Paciente, Data do Plano, Nome do Profissional, Especialidade/Cargo).
-2. OBJETIVOS TERAPÊUTICOS GERAIS (O que deve ser priorizado no desenvolvimento do paciente a médio prazo).
-3. ESTRATÉGIAS PARA A FAMÍLIA (Recomendações e atividades práticas de estimulação que os pais podem realizar em casa).
-4. ESTRATÉGIAS PARA A ESCOLA (Orientações pedagógicas, adaptações ambientais ou de manejo para os professores).
-5. PRÓXIMOS PASSOS NA TERAPIA (Metas específicas a serem trabalhadas nas próximas sessões).
+FORMATO DE SAÍDA OBRIGATÓRIO — MARKDOWN:
+Você DEVE retornar o PDI inteiramente em formato Markdown, seguindo EXATAMENTE esta estrutura:
+
+# Plano de Desenvolvimento Individual (PDI)
+**Paciente:** [Nome do Paciente]  
+**Data do Plano:** [Data de hoje em DD/MM/AAAA]  
+**Profissional:** [Nome do Profissional]  
+**Especialidade:** [Cargo/Especialidade]
+
+---
+
+## 1. Objetivos Terapêuticos Gerais
+- [Objetivo 1]
+- [Objetivo 2]
+
+## 2. Estratégias para a Família
+- [Estratégia 1]
+- [Estratégia 2]
+
+## 3. Estratégias para a Escola
+- [Orientação 1]
+- [Orientação 2]
+
+## 4. Próximos Passos na Terapia
+- [Meta 1]
+- [Meta 2]
+
+---
+*Documento elaborado por ${profName} — ${profTitle}*
+
+Regras de formatação:
+- Use **negrito** para destacar termos clínicos importantes, objetivos prioritários ou estratégias-chave.
+- Use listas com hífen (- item) para todas as enumerações.
+- Separe seções com linha horizontal (---) quando necessário.
+- NÃO use numeração tipo "1." no texto corrido — apenas nos cabeçalhos de seção (## 1., ## 2., etc.).
+- NÃO inclua blocos de código, tabelas ou qualquer outro elemento Markdown além dos mencionados acima.
 
 Dados do Paciente:
 - Nome: ${patient.full_name}

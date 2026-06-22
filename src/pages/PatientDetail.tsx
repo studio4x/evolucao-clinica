@@ -2,10 +2,32 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
+
+// Converte Markdown para HTML seguro para renderização
+const parseMarkdown = (md: string): string => {
+  try {
+    return marked.parse(md, { breaks: true }) as string;
+  } catch {
+    return md;
+  }
+};
+
+// Remove marcadores Markdown para exportar texto limpo (Google Docs, e-mail)
+const stripMarkdown = (md: string): string => {
+  return md
+    .replace(/^#{1,6}\s+/gm, '')        // # títulos
+    .replace(/\*\*([^*]+)\*\*/g, '$1')  // **negrito**
+    .replace(/\*([^*]+)\*/g, '$1')      // *itálico*
+    .replace(/^-\s+/gm, '• ')           // - listas → •
+    .replace(/^---+$/gm, '───────────────') // separadores
+    .replace(/^\*(.+)\*$/gm, '$1')      // *rodapé itálico*
+    .trim();
+};
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -80,6 +102,10 @@ export default function PatientDetail() {
   const [printContent, setPrintContent] = useState('');
   const [printPeriodLabel, setPrintPeriodLabel] = useState('');
   const [printDocType, setPrintDocType] = useState('');
+
+  // Estados de toggle Visualizar/Editar relatório
+  const [reportEditMode, setReportEditMode] = useState(false);
+  const [historyEditMode, setHistoryEditMode] = useState(false);
 
   const handlePrintReport = (content: string, periodLabel: string, type: 'evolution_report' | 'pdi_draft') => {
     setPrintContent(content);
@@ -352,6 +378,8 @@ export default function PatientDetail() {
         return;
       }
 
+      // Converte Markdown para texto limpo antes de exportar para GDocs
+      const cleanText = stripMarkdown(reportText);
       let docUrl = '';
 
       if (exportDestination === 'same_doc') {
@@ -362,7 +390,7 @@ export default function PatientDetail() {
         }
         const docLabel = reportType === 'evolution_report' ? 'Relatório de Evolução por IA' : 'Plano de Desenvolvimento Individual (PDI) por IA';
         const now = new Date().toLocaleDateString('pt-BR');
-        const textToAppend = `=== ${docLabel} ===\nGerado em: ${now}\n\n${reportText}`;
+        const textToAppend = `=== ${docLabel} ===\nGerado em: ${now}\n\n${cleanText}`;
 
         await appendTextToGoogleDoc(currentToken, patient.google_doc_id, textToAppend);
         docUrl = patient.google_doc_url;
@@ -372,7 +400,7 @@ export default function PatientDetail() {
         const folderId = patient.target_folder_id || undefined;
         
         const newDoc = await createGoogleDoc(currentToken, targetTitle, folderId);
-        await updateGoogleDocContent(currentToken, newDoc.id, reportText);
+        await updateGoogleDocContent(currentToken, newDoc.id, cleanText);
         docUrl = newDoc.url;
         alert(`Novo documento do Google Docs criado com sucesso!\nTítulo: ${targetTitle}`);
       }
@@ -418,7 +446,9 @@ export default function PatientDetail() {
   const handleAutoSaveToLinkedDoc = async () => {
     const reportId = viewingReport?.id;
     const reportType = viewingReport?.type;
-    const reportText = viewingReportContent;
+    // Usa texto limpo (sem Markdown) para salvar no Google Docs
+    const reportText = stripMarkdown(viewingReportContent);
+    const rawContent = viewingReportContent; // preservar Markdown no banco
 
     if (!reportText || !reportId) return;
 
@@ -465,17 +495,18 @@ export default function PatientDetail() {
       // Atualiza no Supabase
       const { error: updateError } = await supabase
         .from('patient_reports')
-        .update({ google_doc_url: docUrl, content: reportText })
+        .update({ google_doc_url: docUrl, content: rawContent })
         .eq('id', reportId);
 
       if (updateError) {
         console.error("Erro ao salvar relatório:", updateError);
         alert("Erro ao salvar no banco de dados.");
       } else {
-        setReports(prev => prev.map(r => r.id === reportId ? { ...r, google_doc_url: docUrl, content: reportText } : r));
-        setViewingReport((prev: any) => ({ ...prev, google_doc_url: docUrl, content: reportText }));
-        // Atualiza o conteúdo de referência para o viewingReport.content também
-        // A condição viewingReportContent === viewingReport.content ficará true após este update
+        // Salva o Markdown original (rawContent) no banco, não o texto limpo
+        setReports(prev => prev.map(r => r.id === reportId ? { ...r, google_doc_url: docUrl, content: rawContent } : r));
+        setViewingReport((prev: any) => ({ ...prev, google_doc_url: docUrl, content: rawContent }));
+        setOriginalReportContent(rawContent);
+        setViewingReportContent(rawContent);
       }
     } catch (err: any) {
       console.error("Erro ao salvar no Google Docs:", err);
@@ -1352,15 +1383,36 @@ export default function PatientDetail() {
               {generatedReport && (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-2">
-                      Documento Gerado (Você pode editar diretamente)
-                    </label>
-                    <textarea
-                      value={generatedReport}
-                      onChange={(e) => setGeneratedReport(e.target.value)}
-                      rows={14}
-                      className="w-full input-field font-sans text-sm p-4 leading-relaxed border border-brand-border focus:border-brand-primary rounded-xl focus:ring-1 focus:ring-brand-primary resize-y"
-                    />
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider">
+                        Documento Gerado
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setReportEditMode(prev => !prev)}
+                        className="flex items-center space-x-1 text-xs text-brand-primary border border-brand-primary/30 px-2.5 py-1 rounded-lg hover:bg-brand-primary/5 transition-colors cursor-pointer"
+                      >
+                        {reportEditMode ? (
+                          <><Eye size={12} /><span>Visualizar</span></>
+                        ) : (
+                          <><Edit3 size={12} /><span>Editar</span></>
+                        )}
+                      </button>
+                    </div>
+                    {reportEditMode ? (
+                      <textarea
+                        value={generatedReport}
+                        onChange={(e) => setGeneratedReport(e.target.value)}
+                        rows={18}
+                        className="w-full input-field font-mono text-xs p-4 leading-relaxed border border-brand-border focus:border-brand-primary rounded-xl focus:ring-1 focus:ring-brand-primary resize-y"
+                        placeholder="Markdown do relatório..."
+                      />
+                    ) : (
+                      <div
+                        className="report-content w-full min-h-[350px] p-5 border border-brand-border rounded-xl bg-white overflow-y-auto"
+                        dangerouslySetInnerHTML={{ __html: parseMarkdown(generatedReport) }}
+                      />
+                    )}
                   </div>
 
                   {/* Formulário de E-mail Opcional */}
@@ -1675,15 +1727,36 @@ export default function PatientDetail() {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-2">
-                  Conteúdo do Relatório
-                </label>
-                <textarea
-                  value={viewingReportContent}
-                  onChange={(e) => setViewingReportContent(e.target.value)}
-                  rows={14}
-                  className="w-full input-field font-sans text-sm p-4 leading-relaxed border border-brand-border focus:border-brand-primary rounded-xl focus:ring-1 focus:ring-brand-primary resize-y"
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider">
+                    Conteúdo do Relatório
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryEditMode(prev => !prev)}
+                    className="flex items-center space-x-1 text-xs text-brand-primary border border-brand-primary/30 px-2.5 py-1 rounded-lg hover:bg-brand-primary/5 transition-colors cursor-pointer"
+                  >
+                    {historyEditMode ? (
+                      <><Eye size={12} /><span>Visualizar</span></>
+                    ) : (
+                      <><Edit3 size={12} /><span>Editar</span></>
+                    )}
+                  </button>
+                </div>
+                {historyEditMode ? (
+                  <textarea
+                    value={viewingReportContent}
+                    onChange={(e) => setViewingReportContent(e.target.value)}
+                    rows={18}
+                    className="w-full input-field font-mono text-xs p-4 leading-relaxed border border-brand-border focus:border-brand-primary rounded-xl focus:ring-1 focus:ring-brand-primary resize-y"
+                    placeholder="Markdown do relatório..."
+                  />
+                ) : (
+                  <div
+                    className="report-content w-full min-h-[350px] p-5 border border-brand-border rounded-xl bg-white overflow-y-auto"
+                    dangerouslySetInnerHTML={{ __html: parseMarkdown(viewingReportContent) }}
+                  />
+                )}
               </div>
 
               {/* Form de E-mail */}
@@ -1870,9 +1943,10 @@ export default function PatientDetail() {
         </div>
 
         {/* Conteudo do Relatório */}
-        <div className="whitespace-pre-wrap text-sm leading-relaxed text-stone-800 font-sans tracking-wide">
-          {printContent}
-        </div>
+        <div
+          className="report-content print-report-content text-sm text-stone-800"
+          dangerouslySetInnerHTML={{ __html: parseMarkdown(printContent) }}
+        />
 
         {/* Assinatura / Rodapé */}
         <div className="mt-16 pt-6 border-t border-stone-200 text-center space-y-4">
