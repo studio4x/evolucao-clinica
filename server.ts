@@ -317,11 +317,6 @@ async function sendNotificationInternal(
                 <h1 style="margin: 0; font-size: 20px; color: #ffffff; font-weight: 700;">Notificação do Sistema</h1>
               </div>
 
-              <!-- Tipo badge -->
-              <div style="background-color: ${tc.bg}; border-bottom: 1px solid ${tc.border}; padding: 12px 28px; display: flex; align-items: center; gap: 8px;">
-                <span style="font-size: 18px;">${tc.icon}</span>
-                <span style="font-size: 13px; font-weight: 700; color: ${tc.color}; text-transform: uppercase; letter-spacing: 0.5px;">${tc.label}</span>
-              </div>
 
               <!-- Conteúdo -->
               <div style="padding: 28px; color: #1f2937; line-height: 1.7;">
