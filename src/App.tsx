@@ -18,7 +18,6 @@ import Subscription from './pages/Subscription';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 
-import { InstallPrompt } from './components/common/InstallPrompt';
 import { CookieConsent } from './components/CookieConsent';
 
 import PendingApproval from './pages/PendingApproval';
@@ -166,7 +165,6 @@ export default function App() {
   return (
     <Router>
       <CookieConsent />
-      <InstallPrompt />
       
       <Routes>
         <Route path="/login" element={<Login />} />
