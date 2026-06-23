@@ -39,6 +39,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  if (profileStatus === null || profileRole === null) {
+    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+  }
   
   if (profileStatus === 'pending') {
     return <Navigate to="/pending" replace />;
@@ -74,6 +78,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   if (!isAuthReady) {
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
   }
+
+  if (user && profileRole === null) {
+    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+  }
   
   if (user && profileRole !== 'admin') {
     return <Navigate to="/" replace />;
@@ -90,6 +98,9 @@ function RootRoute() {
   }
 
   if (user) {
+    if (profileStatus === null || profileRole === null) {
+      return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    }
     if (profileStatus === 'pending') {
       return <Navigate to="/pending" replace />;
     }
