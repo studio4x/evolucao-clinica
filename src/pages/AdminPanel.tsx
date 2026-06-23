@@ -599,13 +599,24 @@ export default function AdminPanel() {
   };
 
   const handleOpenAdminNotification = async (notification: AdminInboxNotification) => {
-    if (!notification.read_at) {
-      await markAdminNotificationAsRead(notification.id);
-    }
+    try {
+      setAdminInboxActionId(notification.id);
 
-    if (notification.link) {
-      setAdminInboxOpen(false);
-      navigate(notification.link);
+      if (!notification.read_at) {
+        await markAdminNotificationAsRead(notification.id);
+      }
+
+      if (notification.link) {
+        setAdminInboxOpen(false);
+
+        if (/^https?:\/\//i.test(notification.link)) {
+          window.open(notification.link, '_blank', 'noopener,noreferrer');
+        } else {
+          navigate(notification.link);
+        }
+      }
+    } finally {
+      setAdminInboxActionId(null);
     }
   };
 
@@ -4765,8 +4776,9 @@ export default function AdminPanel() {
                         <button
                           key={notification.id}
                           type="button"
+                          disabled={adminInboxActionId === notification.id}
                           onClick={() => handleOpenAdminNotification(notification)}
-                          className={`w-full text-left rounded-2xl border p-4 md:p-4 transition-all hover:shadow-sm hover:-translate-y-px ${notification.read_at ? 'bg-white border-brand-border/60' : 'bg-brand-primary/5 border-brand-primary/20 ring-1 ring-brand-primary/5'}`}
+                          className={`w-full text-left rounded-2xl border p-4 md:p-4 transition-all hover:shadow-sm hover:-translate-y-px disabled:opacity-70 disabled:cursor-wait ${notification.read_at ? 'bg-white border-brand-border/60' : 'bg-brand-primary/5 border-brand-primary/20 ring-1 ring-brand-primary/5'}`}
                         >
                           <div className="flex items-start gap-3">
                             <div className={`p-2 rounded-xl border flex-shrink-0 ${palette}`}>
