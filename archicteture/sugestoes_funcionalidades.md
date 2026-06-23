@@ -22,13 +22,58 @@ graph TD
 
 ### 1.1 Templates Personalizados de Evolução (Ex: SOAP, ABA, Psicanálise)
 *   **Descrição:** Hoje o aplicativo usa um único padrão de IA para formatar a evolução. Esta funcionalidade permitirá que cada profissional escolha um template clínico antes de começar a ditar a sessão.
-*   **Templates Comuns:**
-    *   **SOAP:** *Subjective* (Subjetivo), *Objective* (Objetivo), *Assessment* (Avaliação), *Plan* (Plano). Muito usado na medicina, fisioterapia e terapia ocupacional.
-    *   **ABA (Análise do Comportamento Aplicada):** Focado em metas de aprendizagem, respostas a estímulos e comportamentos de barreira (ideal para terapeutas do espectro autista).
-    *   **Prontuário Narrativo:** Texto corrido, focado na livre associação (psicanálise clássica).
+*   **Templates Comuns & Estruturas de Exemplo:**
+    
+    #### 📋 Exemplo 1: Estrutura SOAP (Padrão Ouro Clínico)
+    Ideal para médicos, fisioterapeutas, fonoaudiólogos e terapeutas ocupacionais.
+    *   **S - Subjetivo:** Relato do paciente ou responsável sobre sintomas, queixas, humor e estado geral.
+        *   *Exemplo:* "Mãe relata que a criança esteve muito agitada e dormiu mal durante a semana."
+    *   **O - Objetivo:** Dados mensuráveis coletados pelo terapeuta (sinais vitais, testes aplicados, exercícios concluídos, postura).
+        *   *Exemplo:* "Paciente realizou treino de pinça fina com blocos de encaixe. Completou 3 ciclos de 5 minutos, necessitando de suporte verbal."
+    *   **A - Avaliação:** Diagnóstico clínico do dia, análise do progresso e resposta ao tratamento.
+        *   *Exemplo:* "Demonstra melhora gradual na coordenação motora fina, porém com tolerância à frustração reduzida em atividades de desafio."
+    *   **P - Plano:** Próximos passos do tratamento, ajustes de dosagem/exercícios ou tarefas para casa.
+        *   *Exemplo:* "Manter o treino de pinça na próxima sessão. Orientado aos pais repetir o estímulo com feijões em casa."
+
+    #### 🧩 Exemplo 2: Estrutura ABA (Análise do Comportamento Aplicada)
+    Muito utilizado para tratamento de autismo (TEA), psicopedagogia e desenvolvimento comportamental.
+    *   **Antecedente (A):** O estímulo ou instrução que desencadeou o comportamento.
+        *   *Exemplo:* "Solicitado ao paciente que organizasse os brinquedos na prateleira."
+    *   **Comportamento (B):** A ação observável e mensurável do paciente.
+        *   *Exemplo:* "Paciente gritou, jogou dois blocos no chão e se recusou a cumprir a tarefa por 3 minutos."
+    *   **Consequência (C):** A resposta do ambiente ou do aplicador ao comportamento do paciente.
+        *   *Exemplo:* "Terapeuta aplicou a técnica de redirecionamento com ajuda física parcial até o paciente recolher os blocos."
+    *   **Nível de Suporte (Prompting):** Independente, Verbal, Gestual, Físico Parcial ou Físico Total.
+        *   *Exemplo:* "Necessitou de ajuda física parcial (mão sobre mão) para iniciar."
+    *   **Comportamento de Barreira:** Estereotipias, agressividade, fuga de demanda.
+
+    #### 🗣️ Exemplo 3: Estrutura Narrativo / Psicanálise
+    Focado em associação livre, conteúdos latentes, e análise de transferência e contratransferência.
+    *   **Conteúdo Manifesto (Relato Livre):** Os temas abordados livremente pelo paciente durante a sessão.
+        *   *Exemplo:* "Paciente trouxe questões sobre a relação com a figura paterna e medos de abandono profissional."
+    *   **Análise Clínica / Conteúdo Latente:** A interpretação do analista sobre lapsos de linguagem, sonhos relatados e silêncios.
+        *   *Exemplo:* "Identificada resistência ao aprofundar a dinâmica familiar, expressada por meio de risos nervosos e desvios de assunto."
+    *   **Dinâmica Transferencial:** O vínculo estabelecido entre analista e analisando na sessão.
+        *   *Exemplo:* "Percepção de projeção de autoridade paterna sobre a figura do terapeuta."
+
+    #### ⚠️ 1.1.1 Como lidar se o áudio não possuir informações suficientes para o template?
+    Quando o profissional ditar uma sessão curta ou esquecer de mencionar dados essenciais exigidos pelo modelo (ex: escolheu SOAP mas não falou o plano "P"), a plataforma adotará as seguintes estratégias automáticas configuradas no prompt do Gemini:
+    
+    1.  **Notas de Preenchimento Neutro (Soft Placeholders):**
+        *   Em vez de inventar dados (alucinação) ou falhar, a IA deve preencher o campo ausente com uma marcação neutra e clara como `[Não relatado pelo profissional no áudio]` ou `[Não observado/mencionado]`.
+    2.  **Fallback Automático para Relato Geral (Modo Narrativo):**
+        *   Se o áudio contiver pouquíssima informação técnica (ex: menos de 20 segundos apenas com comentários vagos), o Gemini detecta a incompatibilidade estrutural e formata o texto como uma **"Anotação de Sessão Curta"** ou **"Anotação Geral"**, exibindo um aviso amigável na tela do app: *"Não identificamos dados suficientes para o padrão SOAP. Formatamos como texto corrido."*
+    3.  **Interface de Edição Prvia (Formulário Editável):**
+        *   Antes de enviar diretamente para o Google Docs, a evolução processada pela IA é exibida em uma tela de visualização no app. Os campos vazios ou marcados como `[Não relatado]` ficam destacados em cor amarela/âmbar, permitindo que o profissional simplesmente clique e digite o complemento em segundos.
+
 *   **Estrutura Técnica sugerida:**
     *   Tabela `evolution_templates` (`id`, `professional_id` (opcional para templates globais), `name`, `system_prompt_instruction`).
-    *   Dropdown na tela `NewEvolution.tsx` para selecionar o modelo desejado.
+    *   Alterar a tabela `patients` para incluir `default_template_id` (vinculando um template padrão por paciente).
+    *   Dropdown na tela `NewEvolution.tsx` que vem pré-selecionado com o `default_template_id` do paciente, mas permite alteração dinâmica na hora de iniciar a evolução.
+*   **Comportamento de UX (Recomendado):**
+    *   **Configuração Inicial:** O terapeuta escolhe a abordagem metodológica preferida (ex: ABA para um paciente com TEA, SOAP para fisioterapia motora) diretamente no cadastro do paciente.
+    *   **Fluxo Diário:** Ao clicar em "Nova Evolução", o sistema carrega o template correto instantaneamente de forma transparente, economizando cliques.
+    *   **Flexibilidade:** Se o terapeuta fizer uma sessão diferenciada (ex: uma anamnese ou avaliação inicial), ele pode trocar o template naquele atendimento específico sem alterar o padrão do paciente.
 *   **Valor:** Expande o mercado-alvo do app para qualquer especialidade de saúde.
 
 ### 1.2 Scratchpad de Apoio (Entrada Multimodal Texto + Áudio)
