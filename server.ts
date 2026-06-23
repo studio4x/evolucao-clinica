@@ -1737,6 +1737,10 @@ Caso o documento não possua datas explícitas nas sessões, analise os registro
 Se o documento não contiver relatos suficientes para o período solicitado, avise em tom profissional e retorne um texto explicando isso.
 
 FORMATO DE SAÍDA OBRIGATÓRIO — MARKDOWN:
+Você DEVE iniciar a sua resposta DIRETAMENTE com a linha de título "# Plano de Desenvolvimento Individual (PDI)".
+NÃO INCLUA nenhuma introdução, saudação, análise prévia de dados/sessão/nomes, justificativas ou qualquer comentário explicativo antes do título.
+O texto gerado deve começar imediatamente com a linha "# Plano de Desenvolvimento Individual (PDI)".
+
 Você DEVE retornar o PDI inteiramente em formato Markdown, seguindo EXATAMENTE esta estrutura:
 
 # Plano de Desenvolvimento Individual (PDI)
@@ -1799,12 +1803,27 @@ Escreva em português brasileiro de forma prática, detalhada e empática.`;
       contents: systemPrompt
     });
 
-    const reportText = geminiResponse.text;
+    let reportText = geminiResponse.text || "";
     if (!reportText) {
       throw new Error("O Gemini não retornou nenhum texto.");
     }
 
-    res.json({ report: reportText });
+    // Limpeza programática de qualquer introdução conversacional ou observação de metadados
+    if (type === "evolution_report") {
+      const targetHeader = "# Relatório de Evolução Clínica";
+      const index = reportText.indexOf(targetHeader);
+      if (index !== -1) {
+        reportText = reportText.substring(index);
+      }
+    } else {
+      const targetHeader = "# Plano de Desenvolvimento Individual (PDI)";
+      const index = reportText.indexOf(targetHeader);
+      if (index !== -1) {
+        reportText = reportText.substring(index);
+      }
+    }
+
+    res.json({ report: reportText.trim() });
 
   } catch (err: any) {
     console.error("Erro na geração de relatório com IA:", err);

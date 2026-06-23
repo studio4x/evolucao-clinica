@@ -1,14 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save } from 'lucide-react';
+import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 
 import { transcribeAudio } from '../services/aiTranscription';
-import { addPendingEvolution } from '../services/offlineQueue';
+import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
 
 export default function NewEvolution() {
@@ -37,32 +37,52 @@ export default function NewEvolution() {
   const [modalError, setModalError] = useState('');
   const [audioDuration, setAudioDuration] = useState<number>(0);
 
+  // Recuperação de rascunho interrompido
+  const [recoveredDraft, setRecoveredDraft] = useState<PendingEvolution | null>(null);
+  const draftIdRef = useRef<string | null>(null);
+  const recordingTimeRef = useRef<number>(0);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const isDiscardingRef = useRef(false);
 
-  // Helper para salvar backup no IndexedDB
-  const saveRecordingBackup = async (blobs: Blob[]) => {
+  // Helper para salvar/atualizar rascunho temporário no IndexedDB
+  const saveDraft = async (blobs: Blob[]) => {
+    if (!patient || !user) return;
     try {
       const mergedBlob = new Blob(blobs, { type: 'audio/webm' });
-      const idb = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open('EvolutionBackupDB', 1);
-        request.onupgradeneeded = (e: any) => {
-          const db = e.target.result;
-          if (!db.objectStoreNames.contains('backups')) {
-            db.createObjectStore('backups');
-          }
-        };
-        request.onsuccess = (e: any) => resolve(e.target.result);
-        request.onerror = () => reject(request.error);
-      });
+      const draftId = draftIdRef.current || uuidv4();
+      draftIdRef.current = draftId;
 
-      const transaction = idb.transaction('backups', 'readwrite');
-      const store = transaction.objectStore('backups');
-      store.put(mergedBlob, 'current-recording');
+      const draftItem: PendingEvolution = {
+        id: draftId,
+        patientId: patient.id,
+        patientName: patient.full_name,
+        googleDocId: patient.google_doc_id,
+        sessionDate: sessionDate,
+        audioBlob: mergedBlob,
+        mimeType: mergedBlob.type || 'audio/webm',
+        source: 'new',
+        createdAt: new Date().toISOString(),
+        status: 'draft',
+        recordingTime: recordingTimeRef.current,
+        evolutionData: {
+          id: draftId,
+          professional_id: user.id,
+          patient_id: patient.id,
+          session_date: sessionDate,
+          transcription_status: 'processing',
+          google_doc_append_status: 'pending',
+          audio_duration_seconds: recordingTimeRef.current,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      };
+
+      await addPendingEvolution(draftItem);
     } catch (err) {
-      console.warn("Falha ao salvar backup silencioso:", err);
+      console.warn("Falha ao salvar rascunho de gravação:", err);
     }
   };
 
@@ -85,12 +105,60 @@ export default function NewEvolution() {
     fetchPatient();
   }, [id]);
 
+  // Efeito para verificar rascunhos não finalizados
+  useEffect(() => {
+    const checkForDrafts = async () => {
+      if (!id) return;
+      const draftId = searchParams.get('draftId');
+      try {
+        if (draftId) {
+          const draft = await getPendingEvolutionById(draftId);
+          if (draft && draft.status === 'draft') {
+            setRecoveredDraft(draft);
+          }
+        } else {
+          const drafts = await getDraftEvolutions();
+          const patientDraft = drafts.find(d => d.patientId === id);
+          if (patientDraft) {
+            setRecoveredDraft(patientDraft);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao procurar rascunhos de gravação:", err);
+      }
+    };
+    checkForDrafts();
+  }, [id, searchParams]);
+
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);
+
+  const handleApplyRecoveredDraft = () => {
+    if (!recoveredDraft) return;
+    
+    setAudioBlob(recoveredDraft.audioBlob);
+    const url = URL.createObjectURL(recoveredDraft.audioBlob);
+    setAudioUrl(url);
+    setRecordingTime(recoveredDraft.recordingTime || 0);
+    setAudioDuration(recoveredDraft.recordingTime || 0);
+    setSessionDate(recoveredDraft.sessionDate);
+    draftIdRef.current = recoveredDraft.id;
+    recordingTimeRef.current = recoveredDraft.recordingTime || 0;
+    
+    setRecoveredDraft(null);
+  };
+
+  const handleDiscardRecoveredDraft = async () => {
+    if (!recoveredDraft) return;
+    if (window.confirm("Certeza que deseja excluir permanentemente esta gravação incompleta?")) {
+      await removePendingEvolution(recoveredDraft.id);
+      setRecoveredDraft(null);
+    }
+  };
 
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
@@ -161,12 +229,17 @@ export default function NewEvolution() {
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
+      // Inicializa identificadores do rascunho
+      const newDraftId = uuidv4();
+      draftIdRef.current = newDraftId;
+      recordingTimeRef.current = 0;
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data);
-          // Salva backup a cada fatia de áudio recebida
+          // Salva rascunho periodicamente
           if (!isDiscardingRef.current) {
-            saveRecordingBackup(chunksRef.current);
+            saveDraft(chunksRef.current);
           }
         }
       };
@@ -177,17 +250,24 @@ export default function NewEvolution() {
           setAudioBlob(blob);
           const url = URL.createObjectURL(blob);
           setAudioUrl(url);
+
+          // Salva o rascunho uma última vez com o áudio finalizado
+          saveDraft(chunksRef.current);
         }
         stream.getTracks().forEach(track => track.stop());
       };
 
-      // Inicia gravando e emitindo dados a cada 5 segundos para backup
-      mediaRecorder.start(5000);
+      // Inicia gravando e fatiando os dados a cada 3 segundos (3000ms)
+      mediaRecorder.start(3000);
       setIsRecording(true);
       setIsPaused(false);
       setRecordingTime(0);
       timerRef.current = window.setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          const next = prev + 1;
+          recordingTimeRef.current = next;
+          return next;
+        });
       }, 1000);
     } catch (err) {
       console.error("Error accessing microphone:", err);
@@ -208,12 +288,16 @@ export default function NewEvolution() {
       mediaRecorderRef.current.resume();
       setIsPaused(false);
       timerRef.current = window.setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          const next = prev + 1;
+          recordingTimeRef.current = next;
+          return next;
+        });
       }, 1000);
     }
   };
 
-  const discardRecording = () => {
+  const discardRecording = async () => {
     if (window.confirm("Certeza que deseja descartar esta gravação? Toda a captura atual será perdida.")) {
       isDiscardingRef.current = true;
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -226,13 +310,20 @@ export default function NewEvolution() {
       setIsRecording(false);
       setIsPaused(false);
       setRecordingTime(0);
+      recordingTimeRef.current = 0;
       setAudioDuration(0);
       setAudioBlob(null);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       setAudioUrl(null);
       chunksRef.current = [];
       
-      // Limpa backup do IDB
+      // Limpa rascunho do IndexedDB
+      if (draftIdRef.current) {
+        await removePendingEvolution(draftIdRef.current);
+        draftIdRef.current = null;
+      }
+      
+      // Limpa backup do IDB antigo
       indexedDB.deleteDatabase('EvolutionBackupDB');
     }
   };
@@ -293,13 +384,19 @@ export default function NewEvolution() {
     }
   };
 
-  const handleClearAudio = () => {
+  const handleClearAudio = async () => {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioBlob(null);
     setAudioUrl(null);
     setRecordingTime(0);
+    recordingTimeRef.current = 0;
     setAudioDuration(0);
     if (status !== 'processing') setStatus('idle');
+
+    if (draftIdRef.current) {
+      await removePendingEvolution(draftIdRef.current);
+      draftIdRef.current = null;
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -324,7 +421,7 @@ export default function NewEvolution() {
     setStatus('processing');
     setErrorMessage('');
 
-    const evolutionId = uuidv4();
+    const evolutionId = draftIdRef.current || uuidv4();
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
     
@@ -398,6 +495,12 @@ export default function NewEvolution() {
         setStatus('success');
         clearTimeout(timeoutId);
 
+        // Remove o rascunho do IndexedDB pós sucesso
+        if (draftIdRef.current) {
+          await removePendingEvolution(draftIdRef.current);
+          draftIdRef.current = null;
+        }
+
         // Dispara notificação in-app/push/email de sucesso
         void sendNotification({
           title: "Evolução Criada com Sucesso 🎉",
@@ -448,12 +551,15 @@ export default function NewEvolution() {
             mimeType: audioBlob.type || 'audio/webm',
             source: 'new',
             createdAt: new Date().toISOString(),
+            status: 'pending', // Converte rascunho para pendente para sincronização automática
             evolutionData
           });
           
           setStatus('success'); // Vamos fingir sucesso para limpar a tela
           setErrorMessage(''); 
           alert("Você está sem internet! A evolução foi salva com segurança na sua Fila Offline. O aplicativo irá mantê-la no seu celular até você sincronizar.");
+          
+          draftIdRef.current = null;
           return; // Para não rodar o código de error embaixo
         } catch (queueErr) {
           console.error("Erro ao salvar na fila offline:", queueErr);
@@ -501,11 +607,48 @@ export default function NewEvolution() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-display font-semibold text-brand-primary">Nova Evolução</h1>
+        <div className="flex items-center space-x-3">
+          <Link
+            to={`/painel/patients/${id}`}
+            className="p-2 rounded-2xl hover:bg-white text-brand-text-muted hover:text-brand-text border border-transparent hover:border-brand-border bg-white/40 backdrop-blur-sm transition-all shadow-sm flex items-center justify-center"
+            title="Voltar para o paciente"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <h1 className="text-2xl font-display font-semibold text-brand-primary">Nova Evolução</h1>
+        </div>
         <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">
           {patient.full_name}
         </span>
       </div>
+
+      {recoveredDraft && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center space-x-2 text-amber-800 font-semibold">
+            <AlertCircle className="w-5 h-5 text-amber-600" />
+            <span>Gravação Não Finalizada Encontrada</span>
+          </div>
+          <p className="text-sm text-amber-700 leading-relaxed">
+            Identificamos uma gravação que foi interrompida para este paciente em{" "}
+            <strong>{new Date(recoveredDraft.createdAt).toLocaleDateString('pt-BR')} às {new Date(recoveredDraft.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong> com{" "}
+            <strong>{formatTime(recoveredDraft.recordingTime || 0)}</strong> de áudio. Deseja recuperá-la para enviar ou descartá-la para iniciar uma nova?
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handleApplyRecoveredDraft}
+              className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            >
+              Recuperar Gravação
+            </button>
+            <button
+              onClick={handleDiscardRecoveredDraft}
+              className="bg-white border border-amber-300 text-amber-800 hover:bg-amber-100/50 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+            >
+              Descartar e Iniciar Nova
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card p-6 space-y-6">
         <div>

@@ -9,6 +9,8 @@ export interface PendingEvolution {
   source: 'new' | 'share';
   createdAt: string;
   evolutionData: any; // o objeto inicial que vai para o firestore também
+  status?: 'draft' | 'pending'; // 'draft' para gravação em progresso/interrompida, 'pending' para pronto para sync offline
+  recordingTime?: number; // duração em segundos gravada até agora
 }
 
 const DB_NAME = 'EvolutionOfflineSyncDB';
@@ -46,7 +48,37 @@ export const getPendingEvolutions = async (): Promise<PendingEvolution[]> => {
     const transaction = db.transaction(STORE_NAME, 'readonly');
     const store = transaction.objectStore(STORE_NAME);
     const request = store.getAll();
-    request.onsuccess = () => resolve(request.result);
+    request.onsuccess = () => {
+      const items: PendingEvolution[] = request.result || [];
+      // Filtra rascunhos para que o monitor automático de sincronização offline não tente enviá-los
+      resolve(items.filter(item => item.status !== 'draft'));
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const getDraftEvolutions = async (): Promise<PendingEvolution[]> => {
+  const db = await getOfflineDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      const items: PendingEvolution[] = request.result || [];
+      // Retorna apenas rascunhos
+      resolve(items.filter(item => item.status === 'draft'));
+    };
+    request.onerror = () => reject(request.error);
+  });
+};
+
+export const getPendingEvolutionById = async (id: string): Promise<PendingEvolution | null> => {
+  const db = await getOfflineDB();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(id);
+    request.onsuccess = () => resolve(request.result || null);
     request.onerror = () => reject(request.error);
   });
 };

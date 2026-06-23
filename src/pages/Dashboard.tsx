@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2, Cake } from 'lucide-react';
+import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2, Cake, Trash2 } from 'lucide-react';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
+import { getDraftEvolutions, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -69,6 +70,29 @@ export default function Dashboard() {
     totalMinutes: 0
   });
   const [loading, setLoading] = useState(true);
+
+  // Rascunhos de gravação de evolução pendentes de finalização
+  const [drafts, setDrafts] = useState<PendingEvolution[]>([]);
+
+  const fetchDrafts = useCallback(async () => {
+    try {
+      const items = await getDraftEvolutions();
+      setDrafts(items);
+    } catch (err) {
+      console.error("Erro ao carregar rascunhos de gravação:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDrafts();
+  }, [fetchDrafts]);
+
+  const handleDeleteDraft = async (id: string) => {
+    if (window.confirm("Certeza que deseja excluir permanentemente esta gravação incompleta?")) {
+      await removePendingEvolution(id);
+      fetchDrafts();
+    }
+  };
 
   // Estados da integração com o Google Calendar
   const [patients, setPatients] = useState<any[]>([]);
@@ -396,6 +420,50 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {drafts.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center space-x-2 text-amber-800 font-semibold">
+            <AlertCircle className="w-5 h-5 text-amber-600" />
+            <span className="font-display">Gravações Pendentes de Finalização</span>
+          </div>
+          <p className="text-sm text-amber-700 leading-relaxed">
+            Identificamos gravações que foram interrompidas (por queda de internet ou fechamento do aplicativo). Você pode recuperá-las para continuar e enviar ou descartá-las:
+          </p>
+          <div className="divide-y divide-amber-100/75 max-h-60 overflow-y-auto pr-2">
+            {drafts.map((draft) => (
+              <div key={draft.id} className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-4 first:pt-0 last:pb-0">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold text-amber-900">{draft.patientName}</p>
+                  <p className="text-xs text-amber-600 flex items-center gap-1.5 flex-wrap">
+                    <span>Sessão: {new Date(draft.sessionDate).toLocaleDateString('pt-BR')}</span>
+                    <span>•</span>
+                    <span>Duração: {Math.floor((draft.recordingTime || 0) / 60).toString().padStart(2, '0')}:{((draft.recordingTime || 0) % 60).toString().padStart(2, '0')}</span>
+                    <span>•</span>
+                    <span>Criado em: {new Date(draft.createdAt).toLocaleString('pt-BR')}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <Link
+                    to={`/painel/patients/${draft.patientId}/evolutions/new?draftId=${draft.id}`}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1 shadow-sm"
+                  >
+                    <span>Recuperar & Finalizar</span>
+                    <ArrowRight size={12} />
+                  </Link>
+                  <button
+                    onClick={() => handleDeleteDraft(draft.id)}
+                    className="text-amber-700 hover:text-red-600 hover:bg-red-50 p-1.5 rounded-lg transition-colors border border-amber-200 hover:border-red-200 bg-white shadow-sm"
+                    title="Excluir gravação permanentemente"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
