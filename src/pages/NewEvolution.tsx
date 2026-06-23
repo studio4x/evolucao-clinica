@@ -4,12 +4,21 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
+import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
+
+type AudioEvolutionItem = {
+  id: string;
+  blob: Blob;
+  url: string;
+  duration: number;
+  source: 'recording' | 'upload' | 'draft';
+  name: string;
+};
 
 export default function NewEvolution() {
   const { id } = useParams();
@@ -22,11 +31,11 @@ export default function NewEvolution() {
   const [sessionDate, setSessionDate] = useState(dateParam || new Date().toISOString().split('T')[0]);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioItems, setAudioItems] = useState<AudioEvolutionItem[]>([]);
   const [recordingTime, setRecordingTime] = useState(0);
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
+  const [processingMessage, setProcessingMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
 
   // Estados para visualização/edição do prontuário no modal
@@ -35,42 +44,91 @@ export default function NewEvolution() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalSaving, setModalSaving] = useState(false);
   const [modalError, setModalError] = useState('');
-  const [audioDuration, setAudioDuration] = useState<number>(0);
 
   // Recuperação de rascunho interrompido
   const [recoveredDraft, setRecoveredDraft] = useState<PendingEvolution | null>(null);
   const draftIdRef = useRef<string | null>(null);
   const recordingTimeRef = useRef<number>(0);
-  const previousAudioBlobRef = useRef<Blob | null>(null);
+  const audioItemsRef = useRef<AudioEvolutionItem[]>([]);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const isDiscardingRef = useRef(false);
 
-  // Helper para salvar/atualizar rascunho temporário no IndexedDB
-  const saveDraft = async (blobs: Blob[]) => {
+  useEffect(() => {
+    audioItemsRef.current = audioItems;
+  }, [audioItems]);
+
+  const getTotalAudioDuration = (items: AudioEvolutionItem[]) => {
+    return items.reduce((total, item) => total + (item.duration || 0), 0);
+  };
+
+  const getAudioDurationFromUrl = (url: string) => {
+    return new Promise<number>((resolve) => {
+      const audio = new Audio(url);
+      audio.addEventListener('loadedmetadata', () => {
+        if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
+          resolve(audio.duration);
+          return;
+        }
+
+        audio.currentTime = 1e101;
+        audio.ontimeupdate = function() {
+          this.ontimeupdate = () => {};
+          audio.currentTime = 0;
+          resolve(audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) ? audio.duration : 0);
+        };
+      });
+      audio.addEventListener('error', () => resolve(0));
+    });
+  };
+
+  const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string) => {
+    const url = URL.createObjectURL(blob);
+    const duration = await getAudioDurationFromUrl(url);
+
+    return {
+      id: uuidv4(),
+      blob,
+      url,
+      duration: Number.isFinite(duration) ? duration : 0,
+      source,
+      name
+    } as AudioEvolutionItem;
+  };
+
+  const persistDraft = async (items: AudioEvolutionItem[], currentRecordingBlob?: Blob) => {
     if (!patient || !user) return;
+
     try {
-      const newBlob = new Blob(blobs, { type: 'audio/webm' });
-      const mergedBlob = previousAudioBlobRef.current
-        ? new Blob([previousAudioBlobRef.current, newBlob], { type: 'audio/webm' })
-        : newBlob;
       const draftId = draftIdRef.current || uuidv4();
       draftIdRef.current = draftId;
+
+      const draftBlobs = [...items.map(item => item.blob)];
+      if (currentRecordingBlob) {
+        draftBlobs.push(currentRecordingBlob);
+      }
+
+      if (draftBlobs.length === 0) {
+        return;
+      }
+
+      const duration = getTotalAudioDuration(items) + (currentRecordingBlob ? recordingTimeRef.current : 0);
 
       const draftItem: PendingEvolution = {
         id: draftId,
         patientId: patient.id,
         patientName: patient.full_name,
         googleDocId: patient.google_doc_id,
-        sessionDate: sessionDate,
-        audioBlob: mergedBlob,
-        mimeType: mergedBlob.type || 'audio/webm',
+        sessionDate,
+        audioBlob: draftBlobs[0],
+        audioBlobs: draftBlobs,
+        mimeType: draftBlobs[0].type || 'audio/webm',
         source: 'new',
         createdAt: new Date().toISOString(),
         status: 'draft',
-        recordingTime: recordingTimeRef.current,
+        recordingTime: duration,
         evolutionData: {
           id: draftId,
           professional_id: user.id,
@@ -78,7 +136,7 @@ export default function NewEvolution() {
           session_date: sessionDate,
           transcription_status: 'processing',
           google_doc_append_status: 'pending',
-          audio_duration_seconds: recordingTimeRef.current,
+          audio_duration_seconds: duration,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
@@ -87,6 +145,24 @@ export default function NewEvolution() {
       await addPendingEvolution(draftItem);
     } catch (err) {
       console.warn("Falha ao salvar rascunho de gravação:", err);
+    }
+  };
+
+  const updateAudioItems = (nextItems: AudioEvolutionItem[]) => {
+    audioItemsRef.current = nextItems;
+    setAudioItems(nextItems);
+  };
+
+  const clearAllAudioItems = async () => {
+    audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
+    audioItemsRef.current = [];
+    setAudioItems([]);
+    setRecordingTime(0);
+    recordingTimeRef.current = 0;
+
+    if (draftIdRef.current) {
+      await removePendingEvolution(draftIdRef.current);
+      draftIdRef.current = null;
     }
   };
 
@@ -137,33 +213,60 @@ export default function NewEvolution() {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
     };
-  }, [audioUrl]);
+  }, []);
 
-  const handleApplyRecoveredDraftForSubmit = () => {
-    if (!recoveredDraft) return;
-    
-    setAudioBlob(recoveredDraft.audioBlob);
-    const url = URL.createObjectURL(recoveredDraft.audioBlob);
-    setAudioUrl(url);
-    setRecordingTime(recoveredDraft.recordingTime || 0);
-    setAudioDuration(recoveredDraft.recordingTime || 0);
-    setSessionDate(recoveredDraft.sessionDate);
-    draftIdRef.current = recoveredDraft.id;
-    recordingTimeRef.current = recoveredDraft.recordingTime || 0;
-    previousAudioBlobRef.current = null;
-    
-    setRecoveredDraft(null);
+  const hydrateAudioItems = async (blobs: Blob[], source: AudioEvolutionItem['source']) => {
+    const items = await Promise.all(
+      blobs.map((blob, index) => createAudioItem(blob, source, `Áudio ${index + 1}`))
+    );
+    return items;
   };
 
-  const handleApplyRecoveredDraftForContinue = () => {
+  const handleApplyRecoveredDraftForSubmit = async () => {
     if (!recoveredDraft) return;
-    
-    const draft = recoveredDraft;
-    setRecoveredDraft(null);
-    
-    void startRecording(draft);
+    try {
+      const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
+      const items = await hydrateAudioItems(blobs, 'draft');
+      audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
+      updateAudioItems(items);
+      setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
+      setSessionDate(recoveredDraft.sessionDate);
+      draftIdRef.current = recoveredDraft.id;
+      recordingTimeRef.current = recoveredDraft.recordingTime || 0;
+      setStatus('idle');
+      setErrorMessage('');
+      setProcessingMessage('');
+      
+      setRecoveredDraft(null);
+    } catch (err) {
+      console.error('Erro ao recuperar rascunho para envio:', err);
+      alert('Não foi possível recuperar o rascunho. Tente novamente.');
+    }
+  };
+
+  const handleApplyRecoveredDraftForContinue = async () => {
+    if (!recoveredDraft) return;
+    try {
+      const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
+      const items = await hydrateAudioItems(blobs, 'draft');
+      audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
+      updateAudioItems(items);
+      setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
+      setSessionDate(recoveredDraft.sessionDate);
+      draftIdRef.current = recoveredDraft.id;
+      recordingTimeRef.current = recoveredDraft.recordingTime || getTotalAudioDuration(items);
+      setStatus('idle');
+      setErrorMessage('');
+      setProcessingMessage('');
+      setRecoveredDraft(null);
+
+      void startRecording();
+    } catch (err) {
+      console.error('Erro ao recuperar rascunho para continuar:', err);
+      alert('Não foi possível recuperar o rascunho para continuar. Tente novamente.');
+    }
   };
 
   const handleDiscardRecoveredDraft = async () => {
@@ -235,56 +338,45 @@ export default function NewEvolution() {
     }
   };
 
-  const startRecording = async (recoveredDraftItem?: PendingEvolution) => {
+  const startRecording = async () => {
     try {
       isDiscardingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
-
-      // Inicializa identificadores do rascunho
-      if (recoveredDraftItem) {
-        draftIdRef.current = recoveredDraftItem.id;
-        recordingTimeRef.current = recoveredDraftItem.recordingTime || 0;
-        setRecordingTime(recoveredDraftItem.recordingTime || 0);
-        previousAudioBlobRef.current = recoveredDraftItem.audioBlob;
-        setSessionDate(recoveredDraftItem.sessionDate);
-      } else {
-        const newDraftId = uuidv4();
-        draftIdRef.current = newDraftId;
-        recordingTimeRef.current = 0;
-        setRecordingTime(0);
-        previousAudioBlobRef.current = null;
-      }
+      recordingTimeRef.current = 0;
+      setRecordingTime(0);
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data);
           // Salva rascunho periodicamente
           if (!isDiscardingRef.current) {
-            saveDraft(chunksRef.current);
+            const partialBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            void persistDraft(audioItemsRef.current, partialBlob);
           }
         }
       };
 
       mediaRecorder.onstop = () => {
         if (!isDiscardingRef.current) {
-          let mergedBlob = previousAudioBlobRef.current;
           if (chunksRef.current.length > 0) {
             const newBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-            mergedBlob = previousAudioBlobRef.current
-              ? new Blob([previousAudioBlobRef.current, newBlob], { type: 'audio/webm' })
-              : newBlob;
-
-            // Salva o rascunho uma última vez com o áudio finalizado
-            saveDraft(chunksRef.current);
-          }
-
-          if (mergedBlob) {
-            setAudioBlob(mergedBlob);
-            const url = URL.createObjectURL(mergedBlob);
-            setAudioUrl(url);
+            void (async () => {
+              const nextItem = await createAudioItem(
+                newBlob,
+                'recording',
+                `Gravação ${audioItemsRef.current.length + 1}`
+              );
+              const nextItems = [...audioItemsRef.current, nextItem];
+              updateAudioItems(nextItems);
+              recordingTimeRef.current = 0;
+              setRecordingTime(0);
+              setIsRecording(false);
+              setIsPaused(false);
+              await persistDraft(nextItems);
+            })();
           }
         }
         stream.getTracks().forEach(track => track.stop());
@@ -338,25 +430,19 @@ export default function NewEvolution() {
       }
       if (timerRef.current) clearInterval(timerRef.current);
       
-      // Reset absoluto de estados
+      // Reset dos estados da gravação atual
       setIsRecording(false);
       setIsPaused(false);
       setRecordingTime(0);
       recordingTimeRef.current = 0;
-      setAudioDuration(0);
-      setAudioBlob(null);
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
-      setAudioUrl(null);
       chunksRef.current = [];
-      
-      // Limpa rascunho do IndexedDB
-      if (draftIdRef.current) {
+
+      if (audioItemsRef.current.length > 0) {
+        await persistDraft(audioItemsRef.current);
+      } else if (draftIdRef.current) {
         await removePendingEvolution(draftIdRef.current);
         draftIdRef.current = null;
       }
-      
-      // Limpa backup do IDB antigo
-      indexedDB.deleteDatabase('EvolutionBackupDB');
     }
   };
 
@@ -366,69 +452,43 @@ export default function NewEvolution() {
       setIsRecording(false);
       setIsPaused(false);
       if (timerRef.current) clearInterval(timerRef.current);
-      setAudioDuration(recordingTime);
+      setProcessingMessage('');
     }
   };
 
-  // Efeito para forçar o cálculo de duração em Blobs WebM (evita bug de tempo infinito/errado)
-  useEffect(() => {
-    if (audioUrl) {
-      const audio = new Audio(audioUrl);
-      audio.addEventListener('loadedmetadata', () => {
-        if (audio.duration === Infinity) {
-          audio.currentTime = 1e101;
-          audio.ontimeupdate = function() {
-            this.ontimeupdate = () => {};
-            audio.currentTime = 0;
-          };
-        }
-      });
-    }
-  }, [audioUrl]);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setAudioBlob(file);
-      const url = URL.createObjectURL(file);
-      if (audioUrl) URL.revokeObjectURL(audioUrl);
-      setAudioUrl(url);
-      
-      // Obter duração do arquivo de áudio carregado
-      const audio = new Audio(url);
-      audio.addEventListener('loadedmetadata', () => {
-        if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
-          setAudioDuration(audio.duration);
-        } else {
-          // Fallback para duração calculada se for exibida como infinita no início
-          audio.currentTime = 1e101;
-          audio.ontimeupdate = function() {
-            this.ontimeupdate = () => {};
-            audio.currentTime = 0;
-            if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
-              setAudioDuration(audio.duration);
-            }
-          };
-        }
-      });
-      // Reset status if it was error or success
-      if (status !== 'processing') setStatus('idle');
+    if (files.length === 0) {
+      return;
     }
+
+    if (isRecording) {
+      alert('Finalize a gravação atual antes de adicionar arquivos.');
+      return;
+    }
+
+    const newItems = await Promise.all(
+      files.map(async (file, index) => {
+        const item = await createAudioItem(
+          file,
+          'upload',
+          file.name || `Arquivo ${index + 1}`
+        );
+        return item;
+      })
+    );
+
+    const nextItems = [...audioItemsRef.current, ...newItems];
+    updateAudioItems(nextItems);
+    if (status !== 'processing') setStatus('idle');
+    await persistDraft(nextItems);
   };
 
   const handleClearAudio = async () => {
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
-    setAudioBlob(null);
-    setAudioUrl(null);
-    setRecordingTime(0);
-    recordingTimeRef.current = 0;
-    setAudioDuration(0);
+    await clearAllAudioItems();
     if (status !== 'processing') setStatus('idle');
-
-    if (draftIdRef.current) {
-      await removePendingEvolution(draftIdRef.current);
-      draftIdRef.current = null;
-    }
   };
 
   const formatTime = (seconds: number) => {
@@ -438,7 +498,13 @@ export default function NewEvolution() {
   };
 
   const handleSubmit = async () => {
-    if (!audioBlob || !patient || !user) return;
+    const items = audioItemsRef.current;
+    if (items.length === 0 || !patient || !user) return;
+
+    if (isRecording) {
+      alert('Finalize a gravação atual antes de enviar a evolução.');
+      return;
+    }
     
     if (!patient.google_doc_id) {
       alert("Este paciente não possui um prontuário vinculado. Por favor, edite o paciente e vincule um documento do Google Docs primeiro.");
@@ -452,12 +518,12 @@ export default function NewEvolution() {
 
     setStatus('processing');
     setErrorMessage('');
+    setProcessingMessage('');
 
     const evolutionId = draftIdRef.current || uuidv4();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
-    
-    // 1. Prepare data
+    const totalAudioDuration = getTotalAudioDuration(items);
+    const audioBlobs = items.map(item => item.blob);
+
     const evolutionData = {
       id: evolutionId,
       professional_id: user.id,
@@ -465,90 +531,39 @@ export default function NewEvolution() {
       session_date: sessionDate,
       transcription_status: 'processing',
       google_doc_append_status: 'pending',
-      audio_duration_seconds: audioDuration || 0,
+      audio_duration_seconds: totalAudioDuration,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
 
-    const formData = new FormData();
-    formData.append('audio', audioBlob);
-    formData.append('googleAccessToken', googleAccessToken);
-    formData.append('googleDocId', patient.google_doc_id);
-    formData.append('patientName', patient.full_name);
-    formData.append('sessionDate', sessionDate);
+    const transcribeAllAudios = async () => {
+      const transcriptionParts: string[] = [];
 
-    // Vercel Hobby tier limit is 4.5MB for request body
-    if (audioBlob.size > 4.4 * 1024 * 1024) {
-      const msg = "O arquivo de áudio é muito grande para o plano gratuito da Vercel (limite de 4.5MB). Tente gravar um áudio mais curto ou reduzir a qualidade.";
-      setErrorMessage(msg);
-      setStatus('error');
-      return;
-    }
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+        setProcessingMessage(
+          items.length > 1
+            ? `Transcrevendo áudio ${index + 1} de ${items.length}...`
+            : 'Transcrevendo áudio...'
+        );
 
-    const maxRetries = 3;
-    let retryCount = 0;
-
-    const attemptProcess = async () => {
-      try {
-        setStatus('processing');
-        
         const transcription = await transcribeAudio({
-          audioBlob,
-          mimeType: audioBlob.type || 'audio/webm',
-          audioDuration: audioDuration || 0,
+          audioBlob: item.blob,
+          mimeType: item.blob.type || 'audio/webm',
+          audioDuration: item.duration || 0,
           onRetry: (attempt, delay, isFallback) => {
             console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
           }
         });
 
-        console.log("Transcrição concluída. Inserindo no Google Docs...");
-
-        // 2. Insert transcription to Google Docs directly from frontend
-        await appendToGoogleDoc(
-          googleAccessToken,
-          patient.google_doc_id,
-          sessionDate,
-          transcription
-        );
-
-        // 3. Update Supabase with success
-        const { error: updateError } = await supabase
-          .from('evolutions')
-          .update({
-            transcription_status: 'completed',
-            transcription_text: transcription,
-            google_doc_append_status: 'completed',
-            google_doc_append_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', evolutionId);
-        if (updateError) throw updateError;
-
-        setStatus('success');
-        clearTimeout(timeoutId);
-
-        // Remove o rascunho do IndexedDB pós sucesso
-        if (draftIdRef.current) {
-          await removePendingEvolution(draftIdRef.current);
-          draftIdRef.current = null;
+        if (!transcription) {
+          throw new Error(`A IA não retornou transcrição para o áudio ${index + 1}.`);
         }
 
-        // Dispara notificação in-app/push/email de sucesso
-        void sendNotification({
-          title: "Evolução Criada com Sucesso 🎉",
-          content: `A evolução clínica do paciente ${patient.full_name} foi processada e adicionada ao prontuário no Google Docs.`,
-          type: "success",
-          link: `/painel/patients/${patient.id}`
-        });
-      } catch (error: any) {
-        if (error.name === 'AbortError' || error.message?.includes('aborted')) {
-          const abortError = new Error("O processamento demorou muito tempo ou foi cancelado pelo navegador.");
-          abortError.name = 'AbortError';
-          throw abortError;
-        }
-
-        throw error;
+        transcriptionParts.push(transcription.trim());
       }
+
+      return transcriptionParts.join('\n\n');
     };
 
     try {
@@ -556,21 +571,55 @@ export default function NewEvolution() {
         throw new Error("offline");
       }
       
-      // 1. Prepare/Save initial state to Supabase
       const { error: insertError } = await supabase
         .from('evolutions')
         .insert(evolutionData);
       if (insertError) throw insertError;
 
-      // 2. Send to Backend
-      await attemptProcess();
+      const transcription = await transcribeAllAudios();
+
+      console.log("Transcrição concluída. Inserindo no Google Docs...");
+
+      await appendToGoogleDoc(
+        googleAccessToken,
+        patient.google_doc_id,
+        sessionDate,
+        transcription
+      );
+
+      const { error: updateError } = await supabase
+        .from('evolutions')
+        .update({
+          transcription_status: 'completed',
+          transcription_text: transcription,
+          google_doc_append_status: 'completed',
+          google_doc_append_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evolutionId);
+      if (updateError) throw updateError;
+
+      setStatus('success');
+      setProcessingMessage('');
+
+      if (draftIdRef.current) {
+        await removePendingEvolution(draftIdRef.current);
+        draftIdRef.current = null;
+      }
+
+      await clearAllAudioItems();
+
+      void sendNotification({
+        title: "Evolução Criada com Sucesso 🎉",
+        content: `A evolução clínica do paciente ${patient.full_name} foi processada e adicionada ao prontuário no Google Docs.`,
+        type: "success",
+        link: `/painel/patients/${patient.id}`
+      });
     } catch (error: any) {
-      clearTimeout(timeoutId);
       console.error("Processing error:", error);
       
       let msg = error.message || "Erro desconhecido";
       
-      // Checagem de modo Offline
       if (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) {
         try {
           await addPendingEvolution({
@@ -579,26 +628,27 @@ export default function NewEvolution() {
             patientName: patient.full_name,
             googleDocId: patient.google_doc_id,
             sessionDate,
-            audioBlob,
-            mimeType: audioBlob.type || 'audio/webm',
+            audioBlob: audioBlobs[0],
+            audioBlobs,
+            mimeType: audioBlobs[0].type || 'audio/webm',
             source: 'new',
             createdAt: new Date().toISOString(),
-            status: 'pending', // Converte rascunho para pendente para sincronização automática
+            status: 'pending',
             evolutionData
           });
           
-          setStatus('success'); // Vamos fingir sucesso para limpar a tela
+          setStatus('success');
+          setProcessingMessage('');
           setErrorMessage(''); 
           alert("Você está sem internet! A evolução foi salva com segurança na sua Fila Offline. O aplicativo irá mantê-la no seu celular até você sincronizar.");
           
           draftIdRef.current = null;
-          return; // Para não rodar o código de error embaixo
+          await clearAllAudioItems();
+          return;
         } catch (queueErr) {
           console.error("Erro ao salvar na fila offline:", queueErr);
           msg = "Você está sem internet e houve uma falha ao salvar no armazenamento local do navegador. Não feche o aplicativo e espere a conexão voltar.";
         }
-      } else if (error.name === 'AbortError') {
-        msg = "O processamento demorou muito tempo (mais de 5 minutos) e foi cancelado. Tente com um áudio mais curto ou verifique sua conexão.";
       } else if (msg.includes('429') || msg.includes('exhausted')) {
         msg = "O limite de processamento gratuito da Google (Gemini) foi atingido. Aguarde cerca de 60 segundos e clique em 'Tentar Novamente'.";
       } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
@@ -608,8 +658,8 @@ export default function NewEvolution() {
       
       setErrorMessage(msg);
       setStatus('error');
+      setProcessingMessage('');
       
-      // Dispara notificação de erro
       void sendNotification({
         title: "Erro ao Criar Evolução ⚠️",
         content: `O processamento da evolução do paciente ${patient.full_name} falhou: ${msg}`,
@@ -617,7 +667,6 @@ export default function NewEvolution() {
         link: `/painel/patients/${patient.id}`
       });
       
-      // Update Supabase with error
       try {
         await supabase
           .from('evolutions')
@@ -633,6 +682,9 @@ export default function NewEvolution() {
       }
     }
   };
+
+  const recoveredAudioCount = recoveredDraft ? getPendingEvolutionAudioBlobs(recoveredDraft).length : 0;
+  const recoveredDuration = recoveredDraft?.recordingTime || 0;
 
   if (!patient) return <div>Carregando...</div>;
 
@@ -661,9 +713,9 @@ export default function NewEvolution() {
             <span>Gravação Não Finalizada Encontrada</span>
           </div>
           <p className="text-sm text-amber-700 leading-relaxed">
-            Identificamos uma gravação que foi interrompida para este paciente em{" "}
+            Identificamos {recoveredAudioCount > 1 ? `${recoveredAudioCount} áudios interrompidos` : 'uma gravação interrompida'} para este paciente em{" "}
             <strong>{new Date(recoveredDraft.createdAt).toLocaleDateString('pt-BR')} às {new Date(recoveredDraft.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong> com{" "}
-            <strong>{formatTime(recoveredDraft.recordingTime || 0)}</strong> de áudio. Deseja recuperá-la para subir na evolução, recuperá-la para continuar gravando ou descartá-la para iniciar uma nova?
+            <strong>{formatTime(recoveredDuration)}</strong> de duração total. Deseja recuperar o conteúdo para subir na evolução, continuar gravando ou descartar para iniciar uma nova?
           </p>
           <div className="flex flex-wrap gap-3">
             <button
@@ -760,6 +812,7 @@ export default function NewEvolution() {
                   <p className="text-sm text-brand-text-muted px-4">Grave o áudio da sessão com segurança (Backup automático ativo)</p>
                   <button
                     onClick={() => startRecording()}
+                    disabled={status === 'processing'}
                     className="btn-primary w-full py-3"
                   >
                     Iniciar Gravação
@@ -773,32 +826,77 @@ export default function NewEvolution() {
               <div className="w-16 h-16 bg-brand-bg rounded-full flex items-center justify-center border border-brand-border">
                 <Upload className="text-brand-text-muted w-8 h-8" />
               </div>
-              <p className="text-sm text-brand-text-muted">Ou envie um arquivo de áudio do seu dispositivo</p>
+              <p className="text-sm text-brand-text-muted">Ou envie um ou mais arquivos de áudio do seu dispositivo</p>
               <label className="btn-outline cursor-pointer">
-                <span>Escolher Arquivo</span>
+                <span>Escolher Arquivos</span>
                 <input
                   type="file"
                   accept="audio/*"
+                  multiple
                   className="hidden"
                   onChange={handleFileUpload}
+                  disabled={isRecording || status === 'processing'}
                 />
               </label>
             </div>
           </div>
 
-          {audioUrl && !isRecording && (
-            <div className="mt-6 p-4 bg-brand-primary/5 rounded-xl border border-brand-primary/20 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-brand-primary">Áudio selecionado:</p>
-                <button
-                  onClick={handleClearAudio}
-                  className="flex items-center space-x-1 text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
-                >
-                  <Trash2 size={14} />
-                  <span>Excluir Áudio</span>
-                </button>
+          {audioItems.length > 0 && (
+            <div className="mt-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-brand-primary">Áudios adicionados</p>
+                  <p className="text-xs text-brand-text-muted">
+                    {audioItems.length} arquivo(s) • {formatTime(getTotalAudioDuration(audioItems))}
+                  </p>
+                </div>
+                {!isRecording && status !== 'processing' && (
+                  <button
+                    onClick={handleClearAudio}
+                    className="flex items-center space-x-1 text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
+                  >
+                    <Trash2 size={14} />
+                    <span>Limpar tudo</span>
+                  </button>
+                )}
               </div>
-              <audio src={audioUrl} controls className="w-full" />
+
+              <div className="space-y-3">
+                {audioItems.map((item, index) => (
+                  <div key={item.id} className="p-4 bg-brand-primary/5 rounded-xl border border-brand-primary/20 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-brand-primary">
+                          Áudio {index + 1}
+                        </p>
+                        <p className="text-xs text-brand-text-muted">
+                          {item.source === 'upload' ? 'Arquivo enviado' : item.source === 'recording' ? 'Gravação' : 'Recuperado'} • {formatTime(Math.max(0, Math.round(item.duration || 0)))}
+                        </p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const nextItems = audioItemsRef.current.filter(audioItem => audioItem.id !== item.id);
+                          URL.revokeObjectURL(item.url);
+                          updateAudioItems(nextItems);
+                          if (nextItems.length === 0) {
+                            await clearAllAudioItems();
+                            setStatus('idle');
+                            setErrorMessage('');
+                            return;
+                          }
+                          await persistDraft(nextItems);
+                        }}
+                        disabled={isRecording || status === 'processing'}
+                        className="flex items-center space-x-1 text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
+                      >
+                        <Trash2 size={14} />
+                        <span>Excluir</span>
+                      </button>
+                    </div>
+                    <audio src={item.url} controls className="w-full" />
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -827,7 +925,7 @@ export default function NewEvolution() {
           ) : status === 'idle' && (
             <button
               onClick={handleSubmit}
-              disabled={!audioBlob}
+              disabled={audioItems.length === 0}
               className="w-full btn-primary py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Enviar para Processamento
@@ -839,7 +937,7 @@ export default function NewEvolution() {
               <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
               <p className="text-brand-primary font-medium">Processando evolução...</p>
               <p className="text-sm text-brand-text-muted text-center">
-                A IA está transcrevendo o áudio e inserindo no prontuário do paciente. Isso pode levar alguns segundos.
+                {processingMessage || 'A IA está transcrevendo os áudios e inserindo no prontuário do paciente. Isso pode levar alguns segundos.'}
               </p>
             </div>
           )}
@@ -880,13 +978,19 @@ export default function NewEvolution() {
                 </button>
                 <button
                   onClick={() => {
-                    setAudioBlob(null);
-                    setAudioUrl(null);
+                    audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
+                    audioItemsRef.current = [];
+                    setAudioItems([]);
+                    draftIdRef.current = null;
+                    recordingTimeRef.current = 0;
+                    setRecordingTime(0);
                     setStatus('idle');
+                    setProcessingMessage('');
+                    setErrorMessage('');
                   }}
                   className="btn-primary px-4 py-2 text-sm"
                 >
-                  Nova Gravação
+                  Nova Evolução
                 </button>
               </div>
             </div>

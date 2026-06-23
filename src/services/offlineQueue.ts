@@ -5,6 +5,7 @@ export interface PendingEvolution {
   googleDocId: string;
   sessionDate: string;
   audioBlob: Blob;
+  audioBlobs?: Blob[];
   mimeType: string;
   source: 'new' | 'share';
   createdAt: string;

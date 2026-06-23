@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getPendingEvolutions, removePendingEvolution, PendingEvolution } from '../../services/offlineQueue';
 import { transcribeAudio } from '../../services/aiTranscription';
 import { appendToGoogleDoc } from '../../services/googleDocs';
+import { getPendingEvolutionAudioBlobs } from '../../services/evolutionAudio';
 import { supabase } from '../../supabaseClient';
 import { useAuthStore } from '../../store/authStore';
 import { CloudOff, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
@@ -71,22 +72,45 @@ export function OfflineQueueMonitor() {
 
     for (const item of queue) {
       try {
-        setSyncStatus(`Processando ${item.patientName}... (IA)`);
+        const audioBlobs = getPendingEvolutionAudioBlobs(item);
+        if (audioBlobs.length === 0) {
+          throw new Error('Nenhum áudio encontrado para sincronizar.');
+        }
+
+        setSyncStatus(
+          audioBlobs.length > 1
+            ? `Processando ${item.patientName}... (IA ${audioBlobs.length} áudios)`
+            : `Processando ${item.patientName}... (IA)`
+        );
         
-        // WhatsApp PWA costuma vir genérico, previne IA de errar
-        let mime = item.mimeType;
-        if (!mime || mime === 'application/octet-stream') mime = 'audio/ogg';
+        const transcriptions: string[] = [];
 
-        const transcription = await transcribeAudio({
-          audioBlob: item.audioBlob,
-          mimeType: mime,
-          onRetry: (attempt) => setSyncStatus(`Processando ${item.patientName}... (IA Tentativa ${attempt})`)
-        });
+        for (let index = 0; index < audioBlobs.length; index += 1) {
+          const blob = audioBlobs[index];
+          // WhatsApp PWA costuma vir genérico, previne IA de errar
+          let mime = blob.type || item.mimeType;
+          if (!mime || mime === 'application/octet-stream') mime = 'audio/ogg';
 
-        if (!transcription) throw new Error("A IA retornou um texto vazio.");
+          setSyncStatus(
+            audioBlobs.length > 1
+              ? `Processando ${item.patientName}... (IA ${index + 1}/${audioBlobs.length})`
+              : `Processando ${item.patientName}... (IA)`
+          );
+
+          const transcription = await transcribeAudio({
+            audioBlob: blob,
+            mimeType: mime,
+            onRetry: (attempt) => setSyncStatus(`Processando ${item.patientName}... (IA Tentativa ${attempt})`)
+          });
+
+          if (!transcription) throw new Error("A IA retornou um texto vazio.");
+          transcriptions.push(transcription.trim());
+        }
+
+        const mergedTranscription = transcriptions.join('\n\n');
 
         setSyncStatus(`Inserindo ${item.patientName} no Google Docs...`);
-        await appendToGoogleDoc(googleAccessToken, item.googleDocId, item.sessionDate, transcription);
+        await appendToGoogleDoc(googleAccessToken, item.googleDocId, item.sessionDate, mergedTranscription);
 
         setSyncStatus(`Salvando ${item.patientName}...`);
         const { error: upsertError } = await supabase
@@ -94,7 +118,7 @@ export function OfflineQueueMonitor() {
           .upsert({
             ...item.evolutionData,
             transcription_status: 'completed',
-            transcription_text: transcription,
+            transcription_text: mergedTranscription,
             google_doc_append_status: 'completed',
             google_doc_append_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
