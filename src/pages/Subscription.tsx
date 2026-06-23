@@ -17,6 +17,7 @@ const DEFAULT_PLANS = [
       'Evoluções clínicas com IA ilimitadas',
       'Integração com Google Docs em tempo real',
       'Gravação e transcrição de áudio nativa',
+      'Geração de Relatórios & PDI por IA',
       'Lembrete e envio de WhatsApp para aniversariantes',
       'Compartilhamento de relatórios via WhatsApp',
       'Impressão de prontuários do Google Docs'
