@@ -268,6 +268,13 @@ export default function AdminPanel() {
 
       await reloadSiteConfig();
 
+      // Notificar outras abas do site para recarregarem e reprocessarem a nova identidade visual
+      if (typeof window !== 'undefined') {
+        const syncChannel = new BroadcastChannel('brand_settings_channel');
+        syncChannel.postMessage('reload');
+        syncChannel.close();
+      }
+
       setTimeout(() => setBrandSaveSuccess(false), 5000);
     } catch (error: any) {
       console.error("Erro ao salvar configurações de marca:", error);

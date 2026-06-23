@@ -311,6 +311,28 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
   }
 });
 
+// Rota dinâmica para o favicon do site/PWA
+app.get(["/favicon.png", "/favicon.ico", "/api/favicon"], async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('settings')
+      .select('api_key')
+      .eq('id', 'brand_settings')
+      .single();
+
+    if (!error && data && data.api_key) {
+      const parsed = JSON.parse(data.api_key);
+      if (parsed.favicon_url) {
+        return res.redirect(parsed.favicon_url);
+      }
+    }
+  } catch (err) {
+    console.error("Erro ao obter favicon dinâmico:", err);
+  }
+  // Fallback para o favicon local
+  return res.sendFile(path.join(process.cwd(), "public", "favicon.png"));
+});
+
 // --- API NOTIFICATIONS ---
 
 // 1. Obter VAPID Public Key

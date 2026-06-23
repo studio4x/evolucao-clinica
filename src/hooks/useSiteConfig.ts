@@ -93,3 +93,15 @@ export const reloadSiteConfig = async () => {
   cachedConfig = null;
   await fetchConfig();
 };
+
+// Configura o BroadcastChannel para atualizar/reprocessar outras abas do site em tempo real
+if (typeof window !== 'undefined') {
+  const channel = new BroadcastChannel('brand_settings_channel');
+  channel.onmessage = (event) => {
+    if (event.data === 'reload') {
+      console.log('[Brand Settings] Identidade visual alterada. Recarregando página...');
+      window.location.reload();
+    }
+  };
+}
+
