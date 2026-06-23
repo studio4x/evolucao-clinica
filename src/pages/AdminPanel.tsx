@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -48,6 +48,18 @@ interface UserUsageSummary {
   totalTokens: number;
   totalCostUsd: number;
   totalDurationSeconds: number;
+}
+
+interface AdminInboxNotification {
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  read_at: string | null;
+  link: string | null;
+  image_url: string | null;
+  created_at: string;
 }
 
 export default function AdminPanel() {
@@ -426,6 +438,10 @@ export default function AdminPanel() {
   const [adminNotifications, setAdminNotifications] = useState<any[]>([]);
   const [loadingAdminNotifications, setLoadingAdminNotifications] = useState(false);
   const [deletingNotifId, setDeletingNotifId] = useState<string | null>(null);
+  const [adminInboxNotifications, setAdminInboxNotifications] = useState<AdminInboxNotification[]>([]);
+  const [adminInboxLoading, setAdminInboxLoading] = useState(false);
+  const [adminInboxOpen, setAdminInboxOpen] = useState(false);
+  const [adminInboxActionId, setAdminInboxActionId] = useState<string | null>(null);
 
   // Test email states
   const [testEmailTarget, setTestEmailTarget] = useState('');
@@ -484,6 +500,45 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
+  useEffect(() => {
+    if (!user || profileRole !== 'admin') return;
+
+    const fetchAdminInboxNotifications = async () => {
+      setAdminInboxLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        setAdminInboxNotifications((data || []) as AdminInboxNotification[]);
+      } catch (err) {
+        console.error('Erro ao carregar notificacoes do admin:', err);
+      } finally {
+        setAdminInboxLoading(false);
+      }
+    };
+
+    fetchAdminInboxNotifications();
+
+    const channel = supabase
+      .channel(`admin-inbox-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+        () => {
+          fetchAdminInboxNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [user, profileRole]);
+
   // Salvar configurações SMTP
   const handleSaveAdminSmtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -540,6 +595,64 @@ export default function AdminPanel() {
       alert('Erro ao deletar: ' + err.message);
     } finally {
       setDeletingNotifId(null);
+    }
+  };
+
+  const handleOpenAdminNotification = async (notification: AdminInboxNotification) => {
+    if (!notification.read_at) {
+      await markAdminNotificationAsRead(notification.id);
+    }
+
+    if (notification.link) {
+      setAdminInboxOpen(false);
+      navigate(notification.link);
+    }
+  };
+
+  const markAdminNotificationAsRead = async (id: string) => {
+    try {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read_at: now })
+        .eq('id', id);
+
+      if (error) throw error;
+      setAdminInboxNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: now } : n)));
+    } catch (err) {
+      console.error('Erro ao marcar notificacao do admin como lida:', err);
+    }
+  };
+
+  const markAllAdminNotificationsAsRead = async () => {
+    try {
+      const now = new Date().toISOString();
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read_at: now })
+        .eq('user_id', user?.id)
+        .is('read_at', null);
+
+      if (error) throw error;
+      setAdminInboxNotifications((prev) => prev.map((n) => (n.read_at ? n : { ...n, read_at: now })));
+    } catch (err) {
+      console.error('Erro ao marcar todas as notificacoes do admin como lidas:', err);
+    }
+  };
+
+  const clearAdminInboxNotifications = async () => {
+    if (!window.confirm('Deseja realmente excluir todas as notificações do painel?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+      setAdminInboxNotifications([]);
+    } catch (err) {
+      console.error('Erro ao limpar notificacoes do admin:', err);
     }
   };
 
@@ -1762,6 +1875,19 @@ export default function AdminPanel() {
     }
   };
 
+  const formatInboxDate = (isoString: string) => {
+    try {
+      return new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short'
+      }).format(new Date(isoString));
+    } catch {
+      return '-';
+    }
+  };
+
+  const adminInboxUnreadCount = adminInboxNotifications.filter((notification) => !notification.read_at).length;
+
   const formatCost = (usd: number) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -1800,6 +1926,18 @@ export default function AdminPanel() {
             </p>
           </div>
           <div className="flex gap-3 self-start md:self-auto">
+            <button
+              onClick={() => setAdminInboxOpen((prev) => !prev)}
+              className="inline-flex items-center space-x-2 px-4 py-2 border border-brand-border text-brand-text bg-white rounded-xl hover:bg-brand-bg transition-colors text-sm font-semibold shadow-sm cursor-pointer relative"
+            >
+              <Bell className="w-4 h-4" />
+              <span>Notificações</span>
+              {adminInboxUnreadCount > 0 && (
+                <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-white shadow">
+                  {adminInboxUnreadCount}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => navigate('/painel/dashboard')}
               className="inline-flex items-center space-x-2 px-4 py-2 border border-brand-border text-brand-text bg-white rounded-xl hover:bg-brand-bg transition-colors text-sm font-semibold shadow-sm cursor-pointer"
@@ -4527,6 +4665,161 @@ export default function AdminPanel() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Notificacoes do Admin */}
+        {adminInboxOpen && (
+          <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl border border-brand-primary/10 w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="px-5 md:px-6 py-4 border-b border-brand-border/60 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 rounded-2xl bg-brand-primary/10 text-brand-primary">
+                    <Bell className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-display font-bold text-brand-primary">Notificações do Painel</h3>
+                    <p className="text-xs text-brand-text-muted">
+                      {adminInboxUnreadCount > 0
+                        ? `${adminInboxUnreadCount} notificaç${adminInboxUnreadCount > 1 ? 'ões' : 'ão'} pendente${adminInboxUnreadCount > 1 ? 's' : ''}`
+                        : 'Nenhuma notificação pendente'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdminInboxOpen(false)}
+                  className="p-2 rounded-xl border border-brand-border text-brand-text-muted hover:text-brand-text hover:bg-brand-bg transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="px-5 md:px-6 py-4 border-b border-brand-border/50 flex flex-wrap gap-3 justify-between items-center bg-brand-bg/20">
+                <div className="flex items-center gap-2 text-xs text-brand-text-muted">
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-brand-border/60 font-semibold text-brand-text">
+                    {adminInboxNotifications.length} total
+                  </span>
+                  {adminInboxUnreadCount > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/15 font-semibold text-brand-primary">
+                      {adminInboxUnreadCount} não lida{adminInboxUnreadCount > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={markAllAdminNotificationsAsRead}
+                    disabled={adminInboxUnreadCount === 0}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-brand-border bg-white text-xs font-semibold text-brand-text hover:bg-brand-bg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <CheckCheck className="w-4 h-4" />
+                    <span>Ler todas</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearAdminInboxNotifications}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-200 bg-red-50 text-xs font-semibold text-red-700 hover:bg-red-100 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    <span>Limpar</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gradient-to-b from-white to-brand-bg/30">
+                {adminInboxLoading ? (
+                  <div className="py-16 flex flex-col items-center justify-center text-brand-text-muted">
+                    <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                    <span className="text-sm">Carregando notificações...</span>
+                  </div>
+                ) : adminInboxNotifications.length === 0 ? (
+                  <div className="py-16 text-center text-brand-text-muted">
+                    <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-primary/10 text-brand-primary">
+                      <BellOff className="w-6 h-6" />
+                    </div>
+                    <h4 className="font-bold text-brand-text">Nenhuma notificação no momento</h4>
+                    <p className="text-xs mt-2">As notificações do painel aparecerão aqui em tempo real.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {adminInboxNotifications.map((notification) => {
+                      const Icon = notification.type === 'success'
+                        ? CheckCircle2
+                        : notification.type === 'error'
+                          ? XCircle
+                          : notification.type === 'warning'
+                            ? AlertTriangle
+                            : Info;
+
+                      const palette = notification.type === 'success'
+                        ? 'text-emerald-600 bg-emerald-50 border-emerald-100'
+                        : notification.type === 'error'
+                          ? 'text-red-600 bg-red-50 border-red-100'
+                          : notification.type === 'warning'
+                            ? 'text-amber-600 bg-amber-50 border-amber-100'
+                            : 'text-brand-primary bg-brand-bg border-brand-border';
+
+                      return (
+                        <button
+                          key={notification.id}
+                          type="button"
+                          onClick={() => handleOpenAdminNotification(notification)}
+                          className={`w-full text-left rounded-2xl border p-4 md:p-4 transition-all hover:shadow-sm hover:-translate-y-px ${notification.read_at ? 'bg-white border-brand-border/60' : 'bg-brand-primary/5 border-brand-primary/20 ring-1 ring-brand-primary/5'}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className={`p-2 rounded-xl border flex-shrink-0 ${palette}`}>
+                              <Icon className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className={`font-semibold text-sm truncate ${notification.read_at ? 'text-brand-text' : 'text-brand-primary'}`}>
+                                      {notification.title}
+                                    </p>
+                                    {!notification.read_at && (
+                                      <span className="inline-flex items-center rounded-full bg-brand-primary text-white text-[9px] font-bold px-2 py-0.5 uppercase tracking-wider">
+                                        nova
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="mt-1 text-xs text-brand-text-muted whitespace-pre-wrap leading-relaxed line-clamp-3">
+                                    {notification.message}
+                                  </p>
+                                </div>
+                                <span className="text-[10px] text-brand-text-muted flex-shrink-0">
+                                  {formatInboxDate(notification.created_at)}
+                                </span>
+                              </div>
+
+                              {notification.image_url && (
+                                <div className="mt-3 overflow-hidden rounded-xl border border-brand-border/50 max-w-md">
+                                  <img
+                                    src={notification.image_url}
+                                    alt={notification.title}
+                                    className="max-h-40 w-full object-cover"
+                                  />
+                                </div>
+                              )}
+
+                              {notification.link && (
+                                <div className="mt-3">
+                                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-primary">
+                                    <Send className="w-3.5 h-3.5" />
+                                    Abrir destino
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
