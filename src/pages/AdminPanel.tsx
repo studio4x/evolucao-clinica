@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import EmailHistory from './EmailHistory';
+import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
@@ -74,12 +75,14 @@ export default function AdminPanel() {
     if (path.endsWith('/email-notifications')) return 'email_notifications';
     if (path.endsWith('/email-history')) return 'email_history';
     if (path.endsWith('/vapid-keys')) return 'vapid_keys';
+    if (path.includes('/support/')) return 'support';
     if (path.endsWith('/support')) return 'support';
     if (path.endsWith('/profile')) return 'profile';
     return 'professionals'; // default
   };
 
   const activeTab = getActiveTab();
+  const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
 
   const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support') => {
     if (tab === 'professionals') navigate('/admin/professionals');
@@ -1667,6 +1670,16 @@ export default function AdminPanel() {
               Voltar para login de profissionais
             </button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isAdminSupportDetail) {
+    return (
+      <div className="min-h-screen bg-brand-bg">
+        <div className="mx-auto max-w-[1360px] px-4 py-4 md:px-8 md:py-8">
+          <SupportTicketDetail />
         </div>
       </div>
     );
@@ -4159,7 +4172,7 @@ export default function AdminPanel() {
                                   </td>
                                   <td className="py-3 px-4 text-right space-x-2">
                                     <Link
-                                      to={`/painel/support/${ticket.id}`}
+                                      to={`/admin/support/${ticket.id}`}
                                       className="inline-flex items-center px-3 py-1.5 bg-brand-primary text-white hover:bg-brand-primary-hover rounded-xl transition-colors font-semibold text-[10px] shadow-sm hover:shadow"
                                     >
                                       Acessar Conversa
