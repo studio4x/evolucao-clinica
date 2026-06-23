@@ -3549,8 +3549,9 @@ export default function AdminPanel() {
                     <div className="p-12 text-center text-rose-500 text-sm">{adminTicketsError}</div>
                   ) : (() => {
                     const filtered = adminTickets.filter((ticket) => {
+                      if (!ticket) return false;
                       const matchesQuery = 
-                        ticket.subject.toLowerCase().includes(supportSearchQuery.toLowerCase()) ||
+                        (ticket.subject || '').toLowerCase().includes(supportSearchQuery.toLowerCase()) ||
                         (ticket.userFullName || '').toLowerCase().includes(supportSearchQuery.toLowerCase()) ||
                         (ticket.userEmail || '').toLowerCase().includes(supportSearchQuery.toLowerCase());
 
@@ -3566,6 +3567,7 @@ export default function AdminPanel() {
 
                       return matchesQuery && matchesStatus && matchesCategory && matchesPlan;
                     });
+
 
                     if (filtered.length === 0) {
                       return (
@@ -3652,7 +3654,7 @@ export default function AdminPanel() {
                                       </span>
                                     ) : (
                                       <span className={ticket.slaStatus === 'overdue' ? 'text-red-600 font-bold' : ''}>
-                                        {ticket.firstResponseDueAt ? new Date(ticket.firstResponseDueAt).toLocaleString('pt-BR', {
+                                        {ticket.firstResponseDueAt && !isNaN(new Date(ticket.firstResponseDueAt).getTime()) ? new Date(ticket.firstResponseDueAt).toLocaleString('pt-BR', {
                                           day: '2-digit',
                                           month: '2-digit',
                                           hour: '2-digit',
