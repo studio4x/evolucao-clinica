@@ -238,7 +238,7 @@ export default function Dashboard() {
       try {
         const { data, error } = await supabase
           .from('patients')
-          .select('id, full_name, nickname, birth_date')
+          .select('id, full_name, birth_date')
           .eq('professional_id', user.id)
           .eq('status', 'active')
           .not('birth_date', 'is', null);
