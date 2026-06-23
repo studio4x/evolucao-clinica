@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import EmailHistory from './EmailHistory';
-import { fetchAdminSupportTickets, updateSupportTicketStatus } from '../services/support';
+import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 
@@ -1099,8 +1099,8 @@ export default function AdminPanel() {
   const [supportPlanFilter, setSupportPlanFilter] = useState('all');
   const [supportSearchQuery, setSupportSearchQuery] = useState('');
 
-  const fetchAdminTickets = async () => {
-    setLoadingAdminTickets(true);
+  const fetchAdminTickets = async (showLoading = true) => {
+    if (showLoading) setLoadingAdminTickets(true);
     setAdminTicketsError('');
     try {
       const data = await fetchAdminSupportTickets();
@@ -1109,13 +1109,19 @@ export default function AdminPanel() {
       console.error('Erro ao buscar chamados no admin:', err);
       setAdminTicketsError('Não foi possível carregar os chamados.');
     } finally {
-      setLoadingAdminTickets(false);
+      if (showLoading) setLoadingAdminTickets(false);
     }
   };
 
   useEffect(() => {
     if (user && profileRole === 'admin' && activeTab === 'support') {
-      fetchAdminTickets();
+      fetchAdminTickets(true);
+
+      const unsubscribe = subscribeToAllSupportTickets(() => {
+        fetchAdminTickets(false);
+      });
+
+      return unsubscribe;
     }
   }, [user, profileRole, activeTab]);
 

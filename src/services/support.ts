@@ -42,6 +42,8 @@ export interface SupportTicketDetail {
   messages: SupportMessage[];
 }
 
+type SupportRealtimeCleanup = () => void;
+
 // Map database row to SupportTicket interface
 function mapSupportTicket(row: any): SupportTicket {
   return {
@@ -96,6 +98,21 @@ export async function fetchMySupportTickets(): Promise<SupportTicket[]> {
   return (data || []).map(mapSupportTicket);
 }
 
+export function subscribeToMySupportTickets(userId: string, onChange: () => void): SupportRealtimeCleanup {
+  const channel = supabase
+    .channel(`support-tickets-user-${userId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'support_tickets', filter: `user_id=eq.${userId}` },
+      () => onChange()
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
 // Fetch all support tickets (Admin only)
 export async function fetchAdminSupportTickets(): Promise<SupportTicket[]> {
   const { data: tickets, error: ticketsError } = await supabase
@@ -129,6 +146,21 @@ export async function fetchAdminSupportTickets(): Promise<SupportTicket[]> {
       userPlan: prof?.subscription_plan || 'trial',
     };
   });
+}
+
+export function subscribeToAllSupportTickets(onChange: () => void): SupportRealtimeCleanup {
+  const channel = supabase
+    .channel('support-tickets-admin')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'support_tickets' },
+      () => onChange()
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }
 
 // Fetch ticket details with message history
@@ -173,6 +205,31 @@ export async function fetchSupportTicketDetail(ticketId: string): Promise<Suppor
       userPlan: owner?.subscription_plan || 'trial',
     },
     messages: messages.map((m) => mapSupportMessage(m, professionalsMap)),
+  };
+}
+
+export function subscribeToSupportTicketDetail(ticketId: string, onChange: () => void): SupportRealtimeCleanup {
+  const ticketChannel = supabase
+    .channel(`support-ticket-${ticketId}-ticket`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'support_tickets', filter: `id=eq.${ticketId}` },
+      () => onChange()
+    )
+    .subscribe();
+
+  const messagesChannel = supabase
+    .channel(`support-ticket-${ticketId}-messages`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'support_messages', filter: `ticket_id=eq.${ticketId}` },
+      () => onChange()
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(ticketChannel);
+    void supabase.removeChannel(messagesChannel);
   };
 }
 
@@ -378,4 +435,3 @@ export async function updateSupportTicketStatus(ticketId: string, status: Suppor
 
   return mapSupportTicket(data);
 }
-

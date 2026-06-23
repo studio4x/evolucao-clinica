@@ -2,21 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { LifeBuoy, PlusCircle, MessageSquare, ArrowRight, Clock, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { fetchMySupportTickets, SupportTicket } from '../services/support';
+import { fetchMySupportTickets, SupportTicket, subscribeToMySupportTickets } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import SupportTicketModal from '../components/support/SupportTicketModal';
 
 export default function SupportTickets() {
-  const { subscriptionPlan } = useAuthStore();
+  const { user, subscriptionPlan } = useAuthStore();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const loadTickets = async () => {
+  const loadTickets = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError('');
       const data = await fetchMySupportTickets();
       setTickets(data);
@@ -24,13 +24,20 @@ export default function SupportTickets() {
       console.error('Error loading tickets:', err);
       setError('Não foi possível carregar o histórico de chamados.');
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadTickets();
-  }, []);
+    if (!user) return;
+
+    loadTickets(true);
+    const unsubscribe = subscribeToMySupportTickets(user.id, () => {
+      loadTickets(false);
+    });
+
+    return unsubscribe;
+  }, [user]);
 
   const formatDateTime = (dateStr: string | null) => {
     if (!dateStr) return 'Não definido';

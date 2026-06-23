@@ -6,6 +6,7 @@ import {
   fetchSupportTicketDetail,
   sendSupportMessage,
   updateSupportTicketStatus,
+  subscribeToSupportTicketDetail,
   SupportTicket,
   SupportMessage
 } from '../services/support';
@@ -46,14 +47,14 @@ export default function SupportTicketDetail() {
   };
 
   useEffect(() => {
+    if (!ticketId) return;
+
     loadTicketDetail();
-
-    // Set polling interval for real-time lookalike messages updates
-    const interval = setInterval(() => {
+    const unsubscribe = subscribeToSupportTicketDetail(ticketId, () => {
       loadTicketDetail(true);
-    }, 6000);
+    });
 
-    return () => clearInterval(interval);
+    return unsubscribe;
   }, [ticketId]);
 
   useEffect(() => {
