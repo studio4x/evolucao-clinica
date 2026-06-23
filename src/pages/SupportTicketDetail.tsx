@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Send, Paperclip, X, LifeBuoy, Download, AlertCircle, FileText, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import {
@@ -15,9 +15,13 @@ import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 
 export default function SupportTicketDetail() {
-  const { ticketId } = useParams<{ ticketId: string }>();
+  const { ticketId: routeTicketId } = useParams<{ ticketId: string }>();
+  const location = useLocation();
   const { user, profileRole } = useAuthStore();
   const navigate = useNavigate();
+
+  const pathnameTicketId = location.pathname.match(/^\/(?:admin|painel)\/support\/([^/]+)$/)?.[1] ?? null;
+  const ticketId = routeTicketId ?? pathnameTicketId;
 
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([]);

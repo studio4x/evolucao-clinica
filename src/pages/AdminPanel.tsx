@@ -5,7 +5,6 @@ import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import EmailHistory from './EmailHistory';
-import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, isSupportTicketUnread } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
@@ -82,7 +81,6 @@ export default function AdminPanel() {
   };
 
   const activeTab = getActiveTab();
-  const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
 
   const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support') => {
     if (tab === 'professionals') navigate('/admin/professionals');
@@ -1670,16 +1668,6 @@ export default function AdminPanel() {
               Voltar para login de profissionais
             </button>
           </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (isAdminSupportDetail) {
-    return (
-      <div className="min-h-screen bg-brand-bg">
-        <div className="mx-auto max-w-[1360px] px-4 py-4 md:px-8 md:py-8">
-          <SupportTicketDetail />
         </div>
       </div>
     );
