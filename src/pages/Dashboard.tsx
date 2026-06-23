@@ -625,7 +625,7 @@ export default function Dashboard() {
                       </h4>
                       <div className="flex items-center space-x-2 mt-1">
                         <span className="text-xs text-brand-text-muted">
-                          Paciente: <strong className="text-brand-primary">{event.patient?.nickname || event.patient?.full_name || 'Não identificado'}</strong>
+                          Paciente: <strong className="text-brand-primary">{event.patient?.full_name || 'Não identificado'}</strong>
                         </span>
                         <span className="text-xs text-stone-300">•</span>
                         <span className="text-xs text-brand-text-muted">
