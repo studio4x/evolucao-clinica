@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { useAuthStore } from './store/authStore';
@@ -105,6 +105,15 @@ function RootRoute() {
 
 export default function App() {
   const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken } = useAuthStore();
+  const professionalChannelRef = useRef<any>(null);
+  const pendingOnboardingNoticeRef = useRef<string | null>(null);
+
+  const clearProfessionalChannel = () => {
+    if (professionalChannelRef.current) {
+      void supabase.removeChannel(professionalChannelRef.current);
+      professionalChannelRef.current = null;
+    }
+  };
 
   useEffect(() => {
     const handleAuthSession = async (session: any) => {
@@ -122,6 +131,8 @@ export default function App() {
           setAuthReady(true);
           return;
         }
+
+        clearProfessionalChannel();
 
         setUser(session.user);
         if (session.provider_token) {
@@ -142,10 +153,23 @@ export default function App() {
             console.error("Erro ao buscar profissional no Supabase:", error);
             // Se for PGRST116 (registro não encontrado/novo cadastro), aguarda liberação
             if (error.code === 'PGRST116') {
+              if (pendingOnboardingNoticeRef.current !== session.user.id) {
+                pendingOnboardingNoticeRef.current = session.user.id;
+                void fetch('/api/onboarding/pending', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                  }
+                }).catch((pendingError) => {
+                  console.error('Erro ao disparar onboarding pendente:', pendingError);
+                });
+              }
               setProfileInfo('pending', 'therapist', 'trial', 'trialing', null, null);
             } else {
               // Outros erros (ex: offline). Assume 'active' por tolerância de rede
               setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+              pendingOnboardingNoticeRef.current = null;
             }
           } else if (data) {
             setProfileInfo(
@@ -156,13 +180,72 @@ export default function App() {
               data.subscription_ends_at,
               data.trial_ends_at
             );
+
+            if (data.status === 'pending') {
+              if (pendingOnboardingNoticeRef.current !== session.user.id) {
+                pendingOnboardingNoticeRef.current = session.user.id;
+                void fetch('/api/onboarding/pending', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                  }
+                }).catch((pendingError) => {
+                  console.error('Erro ao disparar onboarding pendente:', pendingError);
+                });
+              }
+            } else {
+              pendingOnboardingNoticeRef.current = null;
+            }
           }
+
+          professionalChannelRef.current = supabase
+            .channel(`professional-status-${session.user.id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'professionals',
+                filter: `id=eq.${session.user.id}`
+              },
+              async () => {
+                try {
+                  const { data: updatedProf } = await supabase
+                    .from('professionals')
+                    .select('*')
+                    .eq('id', session.user.id)
+                    .single();
+
+                  if (updatedProf) {
+                    setProfileInfo(
+                      updatedProf.status,
+                      updatedProf.role || 'therapist',
+                      updatedProf.subscription_plan,
+                      updatedProf.subscription_status,
+                      updatedProf.subscription_ends_at,
+                      updatedProf.trial_ends_at
+                    );
+
+                    if (updatedProf.status !== 'pending') {
+                      pendingOnboardingNoticeRef.current = null;
+                    }
+                  }
+                } catch (profileError) {
+                  console.error('Erro ao sincronizar status do profissional:', profileError);
+                }
+              }
+            )
+            .subscribe();
         } catch (error) {
           console.error("Erro ao processar perfil do profissional:", error);
           // Em caso de exceção (ex: offline), assume 'active' por tolerância de rede
           setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+          pendingOnboardingNoticeRef.current = null;
         }
       } else {
+        clearProfessionalChannel();
+        pendingOnboardingNoticeRef.current = null;
         if (currentState.user !== null || currentState.profileStatus !== null) {
           setUser(null);
           setGoogleAccessToken(null);
@@ -183,6 +266,7 @@ export default function App() {
     });
 
     return () => {
+      clearProfessionalChannel();
       subscription.unsubscribe();
     };
   }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken]);

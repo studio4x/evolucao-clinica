@@ -1121,9 +1121,9 @@ export default function AdminPanel() {
     }
   };
 
-  const handleUpdateStatus = async (profId: string, newStatus: 'active' | 'inactive') => {
+  const handleUpdateStatus = async (prof: Professional, newStatus: 'active' | 'inactive') => {
     if (updatingId) return;
-    setUpdatingId(profId);
+    setUpdatingId(prof.id);
     try {
       const { error } = await supabase
         .from('professionals')
@@ -1131,18 +1131,27 @@ export default function AdminPanel() {
           status: newStatus,
           updated_at: new Date().toISOString()
         })
-        .eq('id', profId);
+        .eq('id', prof.id);
       if (error) throw error;
 
       setProfessionals(prev =>
-        prev.map(prof =>
-          prof.id === profId
-            ? { ...prof, status: newStatus }
-            : prof
+        prev.map(item =>
+          item.id === prof.id
+            ? { ...item, status: newStatus }
+            : item
         )
       );
 
       void refreshProfessionals(false);
+
+      if (newStatus === 'active' && prof.status !== 'active') {
+        try {
+          await notifyProfessionalApproval(prof.id);
+        } catch (notifyError: any) {
+          console.error('Erro ao notificar aprovação do profissional:', notifyError);
+          alert(`Acesso liberado, mas houve falha ao enviar a notificação de aprovação: ${notifyError.message || notifyError}`);
+        }
+      }
     } catch (error: any) {
       console.error("Erro ao atualizar status:", error);
       alert(`Falha ao atualizar status: ${error.message}`);
@@ -1238,20 +1247,29 @@ export default function AdminPanel() {
       if (error) throw error;
 
       setProfessionals(prev =>
-        prev.map(prof =>
-          prof.id === editingProf.id
+        prev.map(item =>
+          item.id === editingProf.id
             ? {
-                ...prof,
+                ...item,
                 subscription_plan: editPlan,
                 subscription_status: editStatus,
                 subscription_ends_at: editEndsAt ? new Date(editEndsAt).toISOString() : null,
                 status: editUserStatus
               }
-            : prof
+            : item
         )
       );
 
       void refreshProfessionals(false);
+
+      if (editingProf.status !== 'active' && editUserStatus === 'active') {
+        try {
+          await notifyProfessionalApproval(editingProf.id);
+        } catch (notifyError: any) {
+          console.error('Erro ao notificar aprovação do profissional:', notifyError);
+          alert(`Assinatura salva, mas houve falha ao enviar a notificação de aprovação: ${notifyError.message || notifyError}`);
+        }
+      }
       setEditingProf(null);
       alert("Assinatura do profissional atualizada com sucesso!");
     } catch (error: any) {
@@ -1354,6 +1372,30 @@ export default function AdminPanel() {
         setLoading(false);
       }
     }
+  };
+
+  const notifyProfessionalApproval = async (targetUserId: string) => {
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) {
+      throw new Error('Não autenticado.');
+    }
+
+    const res = await fetch('/api/onboarding/approved', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({ targetUserId })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || 'Falha ao enviar notificação de aprovação.');
+    }
+
+    return data;
   };
 
   const handleLogout = async () => {
@@ -1954,7 +1996,7 @@ export default function AdminPanel() {
 
                                       {prof.status !== 'active' && (
                                         <button
-                                          onClick={() => handleUpdateStatus(prof.id, 'active')}
+                                          onClick={() => handleUpdateStatus(prof, 'active')}
                                           disabled={updatingId !== null}
                                           className="inline-flex items-center justify-center p-2 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-100 transition-colors disabled:opacity-50 cursor-pointer"
                                           title="Ativar Acesso"
@@ -1965,7 +2007,7 @@ export default function AdminPanel() {
                                       
                                       {prof.status !== 'inactive' && (
                                         <button
-                                          onClick={() => handleUpdateStatus(prof.id, 'inactive')}
+                                          onClick={() => handleUpdateStatus(prof, 'inactive')}
                                           disabled={updatingId !== null}
                                           className="inline-flex items-center justify-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-colors disabled:opacity-50 cursor-pointer"
                                           title="Suspender Acesso"

@@ -315,6 +315,174 @@ app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async 
   }
 });
 
+async function getAdminRecipients() {
+  const { data: admins, error } = await supabaseAdmin
+    .from("professionals")
+    .select("id, full_name, google_email")
+    .eq("role", "admin");
+
+  if (error) throw error;
+  return admins || [];
+}
+
+async function getOnboardingLog(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from("onboarding_notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+async function upsertOnboardingLog(userId: string, patch: Record<string, any>) {
+  const { error } = await supabaseAdmin
+    .from("onboarding_notifications")
+    .upsert({
+      user_id: userId,
+      updated_at: new Date().toISOString(),
+      ...patch
+    });
+
+  if (error) throw error;
+}
+
+async function ensurePendingProfessionalProfile(user: any) {
+  const fullName = user?.user_metadata?.full_name
+    || user?.user_metadata?.name
+    || user?.user_metadata?.given_name
+    || user?.email
+    || "Profissional";
+
+  const { error } = await supabaseAdmin
+    .from("professionals")
+    .upsert({
+      id: user.id,
+      full_name: fullName,
+      google_email: user.email,
+      photo_url: user?.user_metadata?.avatar_url || null,
+      role: "therapist",
+      status: "pending",
+      subscription_plan: "trial",
+      subscription_status: "trialing",
+      subscription_ends_at: null,
+      trial_ends_at: null
+    });
+
+  if (error) throw error;
+}
+
+async function sendOnboardingPendingNotice(user: any) {
+  const log = await getOnboardingLog(user.id);
+  if (log?.pending_notified_at) {
+    return { skipped: true };
+  }
+
+  const userLabel = user?.user_metadata?.full_name || user?.email || "Profissional";
+  const adminRecipients = await getAdminRecipients();
+  const adminCount = adminRecipients.length;
+
+  await sendNotificationInternal(
+    user.id,
+    "Cadastro recebido e em análise",
+    "Seu cadastro foi criado com sucesso e agora está aguardando a liberação de um administrador.",
+    "warning",
+    "/pending"
+  );
+
+  for (const admin of adminRecipients) {
+    try {
+      await sendNotificationInternal(
+        admin.id,
+        "Novo cadastro aguardando aprovação",
+        `O profissional ${userLabel} realizou o cadastro e está aguardando aprovação no painel administrativo.`,
+        "info",
+        "/admin/professionals"
+      );
+    } catch (err) {
+      console.error("[Onboarding] Erro ao notificar admin sobre cadastro pendente:", err);
+    }
+  }
+
+  await upsertOnboardingLog(user.id, {
+    pending_notified_at: new Date().toISOString()
+  });
+
+  return { skipped: false, adminCount };
+}
+
+async function sendOnboardingApprovalNotice(targetUserId: string) {
+  const log = await getOnboardingLog(targetUserId);
+  if (log?.approved_notified_at) {
+    return { skipped: true };
+  }
+
+  const { data: prof, error } = await supabaseAdmin
+    .from("professionals")
+    .select("id, full_name, google_email")
+    .eq("id", targetUserId)
+    .single();
+
+  if (error || !prof) {
+    throw new Error("Profissional não encontrado para notificação de aprovação.");
+  }
+
+  const fullName = prof.full_name || prof.google_email || "Profissional";
+
+  await sendNotificationInternal(
+    targetUserId,
+    "Acesso liberado",
+    "Seu cadastro foi aprovado. Você já pode acessar a plataforma normalmente.",
+    "success",
+    "/painel/dashboard"
+  );
+
+  await upsertOnboardingLog(targetUserId, {
+    approved_notified_at: new Date().toISOString()
+  });
+
+  return { skipped: false, fullName };
+}
+
+app.post("/api/onboarding/pending", requireAuth, async (req: any, res) => {
+  try {
+    const { data: prof, error: profError } = await supabaseAdmin
+      .from("professionals")
+      .select("status")
+      .eq("id", req.user.id)
+      .maybeSingle();
+
+    if (profError) throw profError;
+
+    if (!prof || prof.status === "pending") {
+      await ensurePendingProfessionalProfile(req.user);
+      const result = await sendOnboardingPendingNotice(req.user);
+      return res.json({ success: true, ...result });
+    }
+
+    return res.json({ success: true, skipped: true, reason: "profile_not_pending" });
+  } catch (err: any) {
+    console.error("[Onboarding] Erro ao processar notificação de cadastro pendente:", err);
+    return res.status(500).json({ error: err.message || "Falha ao notificar cadastro pendente." });
+  }
+});
+
+app.post("/api/onboarding/approved", requireAuth, requireAdmin, async (req: any, res) => {
+  const { targetUserId } = req.body;
+  if (!targetUserId) {
+    return res.status(400).json({ error: "targetUserId ausente" });
+  }
+
+  try {
+    const result = await sendOnboardingApprovalNotice(targetUserId);
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error("[Onboarding] Erro ao processar notificação de aprovação:", err);
+    return res.status(500).json({ error: err.message || "Falha ao notificar aprovação." });
+  }
+});
+
 // Helper para enviar notificação (In-App, Push e E-mail)
 async function sendNotificationInternal(
   targetUserId: string,
