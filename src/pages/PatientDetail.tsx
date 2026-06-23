@@ -102,15 +102,27 @@ export default function PatientDetail() {
   const [printContent, setPrintContent] = useState('');
   const [printPeriodLabel, setPrintPeriodLabel] = useState('');
   const [printDocType, setPrintDocType] = useState('');
+  const [printMode, setPrintMode] = useState<'report' | 'prontuario'>('report');
+  const [professional, setProfessional] = useState<any>(null);
 
   // Estados de toggle Visualizar/Editar relatório
   const [reportEditMode, setReportEditMode] = useState(false);
   const [historyEditMode, setHistoryEditMode] = useState(false);
 
   const handlePrintReport = (content: string, periodLabel: string, type: 'evolution_report' | 'pdi_draft') => {
+    setPrintMode('report');
     setPrintContent(content);
     setPrintPeriodLabel(periodLabel);
     setPrintDocType(type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)');
+    setTimeout(() => {
+      window.print();
+    }, 200);
+  };
+
+  const handlePrintProntuario = () => {
+    setPrintMode('prontuario');
+    setPrintDocType('Prontuário de Evoluções Clínicas');
+    setPrintPeriodLabel('');
     setTimeout(() => {
       window.print();
     }, 200);
@@ -250,6 +262,16 @@ export default function PatientDetail() {
         .order('created_at', { ascending: false });
       if (!reportsError) {
         setReports(reportsData || []);
+      }
+
+      // Buscar dados do profissional logado da tabela professionals
+      const { data: profData, error: profError } = await supabase
+        .from('professionals')
+        .select('full_name, professional_title, professional_register')
+        .eq('id', user.id)
+        .single();
+      if (!profError && profData) {
+        setProfessional(profData);
       }
     } catch (error) {
       console.error("Error fetching patient details:", error);
@@ -1059,13 +1081,23 @@ export default function PatientDetail() {
             <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
               <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
               {evolutions.length > 0 && (
-                <button 
-                  onClick={() => setShowClearConfirm(true)}
-                  className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
-                >
-                  <Trash2 size={16} />
-                  <span>Limpar Tudo</span>
-                </button>
+                <div className="flex items-center space-x-3">
+                  <button 
+                    type="button"
+                    onClick={handlePrintProntuario}
+                    className="text-brand-primary hover:text-brand-primary/80 flex items-center space-x-1 text-sm font-medium transition-colors"
+                  >
+                    <Printer size={16} />
+                    <span>Imprimir Prontuário</span>
+                  </button>
+                  <button 
+                    onClick={() => setShowClearConfirm(true)}
+                    className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
+                  >
+                    <Trash2 size={16} />
+                    <span>Limpar Tudo</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -1928,32 +1960,62 @@ export default function PatientDetail() {
           </div>
         </div>
 
-        {/* Identificacao do Relatório */}
+        {/* Identificacao do Relatório / Prontuário */}
         <div className="mb-6 bg-stone-50 p-4 rounded-xl border border-stone-200">
           <h2 className="text-xs font-bold text-brand-primary uppercase tracking-wider border-b border-stone-200 pb-1.5 mb-2.5">
             {printDocType || 'Documento Clínico'}
           </h2>
           <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-stone-800 font-sans">
             <div><strong className="text-stone-600 font-semibold">Paciente:</strong> {patient?.full_name}</div>
-            <div><strong className="text-stone-600 font-semibold">Profissional:</strong> {user?.user_metadata?.full_name || 'Profissional'}</div>
+            <div><strong className="text-stone-600 font-semibold">Profissional:</strong> {professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</div>
+            {professional?.professional_title && (
+              <div><strong className="text-stone-600 font-semibold">Título Profissional:</strong> {professional.professional_title}</div>
+            )}
+            {professional?.professional_register && (
+              <div><strong className="text-stone-600 font-semibold">Registro Profissional:</strong> {professional.professional_register}</div>
+            )}
             {printPeriodLabel && (
               <div className="col-span-2"><strong className="text-stone-600 font-semibold">Período de Análise:</strong> {printPeriodLabel}</div>
             )}
           </div>
         </div>
 
-        {/* Conteudo do Relatório */}
-        <div
-          className="report-content print-report-content text-sm text-stone-800"
-          dangerouslySetInnerHTML={{ __html: parseMarkdown(printContent) }}
-        />
+        {/* Conteudo Dinâmico conforme printMode */}
+        {printMode === 'report' ? (
+          <div
+            className="report-content print-report-content text-sm text-stone-800"
+            dangerouslySetInnerHTML={{ __html: parseMarkdown(printContent) }}
+          />
+        ) : (
+          <div className="space-y-6">
+            {[...evolutions].reverse().map((evo) => (
+              <div key={evo.id} className="border-b border-stone-200 pb-4 last:border-0" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                <div className="flex justify-between items-center text-xs text-stone-500 mb-2 font-medium">
+                  <span>Sessão realizada em: {formatDateTime(evo.created_at)}</span>
+                  {evo.transcription_status === 'completed' && (
+                    <span className="text-[10px] bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">Processada com IA</span>
+                  )}
+                </div>
+                <div className="text-stone-800 text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                  {evo.transcription_text || <span className="italic text-stone-400">Nenhum registro de texto nesta sessão.</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Assinatura / Rodapé */}
-        <div className="mt-16 pt-6 border-t border-stone-200 text-center space-y-4">
+        <div className="mt-16 pt-6 border-t border-stone-200 text-center space-y-2" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
           <div className="inline-block border-t border-stone-400 w-64 pt-1.5 text-xs text-stone-600">
             Assinatura do Profissional
           </div>
-          <p className="text-[9px] text-stone-400">
+          <p className="text-xs font-bold text-stone-800">{professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</p>
+          {professional?.professional_register && (
+            <p className="text-[10px] text-stone-500">
+              {professional.professional_title || 'Terapeuta'} | {professional.professional_register}
+            </p>
+          )}
+          <p className="text-[9px] text-stone-400 mt-2">
             Documento gerado e emitido via plataforma digital Evolução Clínica em {new Date().toLocaleDateString('pt-BR')}.
           </p>
         </div>

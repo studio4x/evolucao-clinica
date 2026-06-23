@@ -35,6 +35,7 @@ export default function PatientForm() {
   const [formData, setFormData] = useState({
     full_name: '',
     birth_date: '',
+    phone: '',
     notes: '',
     status: 'active',
     google_doc_id: '',
@@ -62,6 +63,7 @@ export default function PatientForm() {
             setFormData({
               full_name: data.full_name || '',
               birth_date: data.birth_date || '',
+              phone: data.phone || '',
               notes: data.notes || '',
               status: data.status || 'active',
               google_doc_id: data.google_doc_id || '',
@@ -328,6 +330,7 @@ export default function PatientForm() {
         professional_id: user.id,
         full_name: formData.full_name,
         birth_date: formData.birth_date || null,
+        phone: formData.phone || null,
         notes: formData.notes,
         status: formData.status,
         updated_at: new Date().toISOString(),
@@ -408,6 +411,22 @@ export default function PatientForm() {
           />
           <p className="text-xs text-brand-text-muted mt-1">
             Usada para lembrar aniversários no painel principal.
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-brand-text mb-1">
+            Telefone / WhatsApp <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
+          </label>
+          <input
+            type="text"
+            placeholder="Ex: 5511999999999"
+            value={formData.phone}
+            onChange={e => setFormData({...formData, phone: e.target.value})}
+            className="input-field p-2"
+          />
+          <p className="text-xs text-brand-text-muted mt-1">
+            Usado para enviar mensagens rápidas de aniversário via WhatsApp. Inclua o DDI e DDD (ex: 5511999999999).
           </p>
         </div>
 

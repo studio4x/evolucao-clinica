@@ -81,6 +81,32 @@ export default function Dashboard() {
     thisWeek: []
   });
 
+  const handleWhatsAppClick = (e: React.MouseEvent, fullName: string, phone: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Limpa caracteres não numéricos do telefone
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      alert("Número de telefone inválido.");
+      return;
+    }
+
+    // Extrai primeiro nome para a mensagem ser personalizada
+    const firstName = fullName.split(' ')[0];
+    const message = `🎂 Feliz Aniversário, ${firstName}! Que este novo ciclo seja repleto de saúde, conquistas e muita alegria! 🎉`;
+    const encodedMsg = encodeURIComponent(message);
+
+    // Detecta se é dispositivo móvel para usar link wa.me ou whatsapp://
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    const url = isMobile
+      ? `https://wa.me/${cleanPhone}?text=${encodedMsg}`
+      : `https://web.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMsg}`;
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const handleConnectGoogleCalendar = async () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -104,10 +130,10 @@ export default function Dashboard() {
       setCalendarLoading(true);
       setCalendarError(null);
 
-      // 1. Busca pacientes ativos (com birth_date para calcular aniversários)
+      // 1. Busca pacientes ativos (com birth_date e phone para calcular aniversários e WhatsApp)
       const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
-        .select('id, full_name, birth_date')
+        .select('id, full_name, birth_date, phone')
         .eq('professional_id', user.id)
         .eq('status', 'active');
 
@@ -238,7 +264,7 @@ export default function Dashboard() {
       try {
         const { data, error } = await supabase
           .from('patients')
-          .select('id, full_name, birth_date')
+          .select('id, full_name, birth_date, phone')
           .eq('professional_id', user.id)
           .eq('status', 'active')
           .not('birth_date', 'is', null);
@@ -452,47 +478,79 @@ export default function Dashboard() {
           <div className="space-y-3">
             {/* Aniversariantes de hoje */}
             {birthdays.today.map((p: any) => (
-              <Link
+              <div
                 key={p.id}
-                to={`/painel/patients/${p.id}`}
-                className="flex items-center justify-between p-3 bg-pink-50 border border-pink-200 rounded-xl hover:bg-pink-100 transition-colors group"
+                className="flex items-center justify-between p-3 bg-pink-50 border border-pink-200 rounded-xl hover:bg-pink-100/70 transition-colors"
               >
-                <div className="flex items-center space-x-3">
+                <Link
+                  to={`/painel/patients/${p.id}`}
+                  className="flex items-center space-x-3 flex-1 min-w-0"
+                >
                   <div className="w-9 h-9 rounded-full bg-pink-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow">
                     {(p.full_name || p.name || '?').charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <p className="font-semibold text-pink-800 text-sm">{p.full_name || p.name}</p>
+                  <div className="truncate">
+                    <p className="font-semibold text-pink-800 text-sm truncate">{p.full_name || p.name}</p>
                     <p className="text-xs text-pink-500 font-medium">🎂 Hoje!</p>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
+                </Link>
+                <div className="flex items-center space-x-2 flex-shrink-0">
                   <span className="text-[10px] font-bold bg-pink-500 text-white px-2 py-0.5 rounded-full">HOJE</span>
-                  <ArrowRight size={14} className="text-pink-400 group-hover:translate-x-1 transition-transform" />
+                  {p.phone && (
+                    <button
+                      onClick={(e) => handleWhatsAppClick(e, p.full_name, p.phone)}
+                      className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center cursor-pointer shadow-sm ml-1"
+                      title="Enviar mensagem de aniversário"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.704 1.459h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                      </svg>
+                    </button>
+                  )}
+                  <Link to={`/painel/patients/${p.id}`} className="p-1 hover:text-pink-600 transition-colors ml-1">
+                    <ArrowRight size={14} className="text-pink-400" />
+                  </Link>
                 </div>
-              </Link>
+              </div>
             ))}
 
             {/* Aniversariantes da semana */}
             {birthdays.thisWeek.map((p: any) => (
-              <Link
+              <div
                 key={p.id}
-                to={`/painel/patients/${p.id}`}
-                className="flex items-center justify-between p-3 bg-brand-bg/50 border border-brand-border rounded-xl hover:bg-pink-50 hover:border-pink-200 transition-colors group"
+                className="flex items-center justify-between p-3 bg-brand-bg/50 border border-brand-border rounded-xl hover:bg-pink-50/70 hover:border-pink-200 transition-colors"
               >
-                <div className="flex items-center space-x-3">
+                <Link
+                  to={`/painel/patients/${p.id}`}
+                  className="flex items-center space-x-3 flex-1 min-w-0"
+                >
                   <div className="w-9 h-9 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-bold text-sm flex-shrink-0">
                     {(p.full_name || p.name || '?').charAt(0).toUpperCase()}
                   </div>
-                  <div>
-                    <p className="font-semibold text-brand-text text-sm">{p.full_name || p.name}</p>
+                  <div className="truncate">
+                    <p className="font-semibold text-brand-text text-sm truncate">{p.full_name || p.name}</p>
                     <p className="text-xs text-brand-text-muted">
                       Em {p._daysUntil} {p._daysUntil === 1 ? 'dia' : 'dias'}
                     </p>
                   </div>
+                </Link>
+                <div className="flex items-center space-x-2 flex-shrink-0">
+                  {p.phone && (
+                    <button
+                      onClick={(e) => handleWhatsAppClick(e, p.full_name, p.phone)}
+                      className="p-2 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-colors flex items-center justify-center cursor-pointer shadow-sm ml-1"
+                      title="Enviar mensagem de aniversário"
+                    >
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.458 5.704 1.459h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                      </svg>
+                    </button>
+                  )}
+                  <Link to={`/painel/patients/${p.id}`} className="p-1 hover:text-pink-600 transition-colors ml-1">
+                    <ArrowRight size={14} className="text-brand-text-muted" />
+                  </Link>
                 </div>
-                <ArrowRight size={14} className="text-brand-text-muted group-hover:text-pink-400 group-hover:translate-x-1 transition-all" />
-              </Link>
+              </div>
             ))}
           </div>
         </div>
