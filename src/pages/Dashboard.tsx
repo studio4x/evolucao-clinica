@@ -18,19 +18,7 @@ const matchPatientWithEvent = (patient: any, summary: string, description: strin
   const normDesc = normalizeText(description);
   
   const normFullName = normalizeText(patient.full_name || '');
-  const normNickname = patient.nickname ? normalizeText(patient.nickname) : '';
-  
-  // 1. Correspondência do apelido (se tiver pelo menos 2 caracteres)
-  if (normNickname && normNickname.length >= 2) {
-    const nicknameRegex = new RegExp(`\\b${normNickname}\\b`, 'i');
-    if (nicknameRegex.test(normSummary) || nicknameRegex.test(normDesc)) {
-      return true;
-    }
-    // Tolerância: se o apelido for longo (>= 4 caracteres), permite match como substring direta
-    if (normNickname.length >= 4 && (normSummary.includes(normNickname) || normDesc.includes(normNickname))) {
-      return true;
-    }
-  }
+
 
   // 2. Correspondência do nome completo
   if (normFullName && (normSummary.includes(normFullName) || normDesc.includes(normFullName))) {
@@ -119,42 +107,15 @@ export default function Dashboard() {
       // 1. Busca pacientes ativos (com birth_date para calcular aniversários)
       const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
-        .select('id, full_name, nickname, birth_date')
+        .select('id, full_name, birth_date')
         .eq('professional_id', user.id)
         .eq('status', 'active');
 
       if (patientsError) throw patientsError;
       setPatients(patientsData || []);
 
-      // Calcula aniversariantes: hoje e nos próximos 7 dias
-      const now = new Date();
-      const todayMM = now.getMonth() + 1;
-      const todayDD = now.getDate();
-
-      const birthdaysToday: any[] = [];
-      const birthdaysThisWeek: any[] = [];
-
-      ;(patientsData || []).forEach((p: any) => {
-        if (!p.birth_date) return;
-        const [, mm, dd] = p.birth_date.split('-').map(Number);
-        // Verifica se é hoje
-        if (mm === todayMM && dd === todayDD) {
-          birthdaysToday.push(p);
-          return;
-        }
-        // Verifica se é nos próximos 6 dias (sem contar hoje)
-        for (let offset = 1; offset <= 6; offset++) {
-          const future = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-          if (mm === future.getMonth() + 1 && dd === future.getDate()) {
-            birthdaysThisWeek.push({ ...p, _daysUntil: offset });
-            break;
-          }
-        }
-      });
-
-      setBirthdays({ today: birthdaysToday, thisWeek: birthdaysThisWeek });
-
       // 2. Busca evoluções realizadas nesta semana (de segunda-feira até hoje, no fuso local do terapeuta)
+      const now = new Date();
       const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
       const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1; // Dias desde a segunda-feira
       
@@ -263,6 +224,52 @@ export default function Dashboard() {
 
     return () => clearInterval(intervalId);
   }, [user, googleAccessToken, fetchCalendarAndPatients]);
+
+  // ─── Aniversariantes: roda INDEPENDENTEMENTE do Google Calendar ───────────
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchBirthdays = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('patients')
+          .select('id, full_name, nickname, birth_date')
+          .eq('professional_id', user.id)
+          .eq('status', 'active')
+          .not('birth_date', 'is', null);
+
+        if (error) throw error;
+
+        const now = new Date();
+        const todayMM = now.getMonth() + 1;
+        const todayDD = now.getDate();
+
+        const birthdaysToday: any[] = [];
+        const birthdaysThisWeek: any[] = [];
+
+        ;(data || []).forEach((p: any) => {
+          const [, mm, dd] = p.birth_date.split('-').map(Number);
+          if (mm === todayMM && dd === todayDD) {
+            birthdaysToday.push(p);
+            return;
+          }
+          for (let offset = 1; offset <= 6; offset++) {
+            const future = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+            if (mm === future.getMonth() + 1 && dd === future.getDate()) {
+              birthdaysThisWeek.push({ ...p, _daysUntil: offset });
+              break;
+            }
+          }
+        });
+
+        setBirthdays({ today: birthdaysToday, thisWeek: birthdaysThisWeek });
+      } catch (err) {
+        console.error('Erro ao buscar aniversariantes:', err);
+      }
+    };
+
+    fetchBirthdays();
+  }, [user]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
