@@ -26,7 +26,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isAuthReady, profileStatus, profileRole, subscriptionEndsAt } = useAuthStore();
+  const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const location = useLocation();
   
   if (!isAuthReady) {
@@ -50,13 +50,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Se não for admin, verifica se a assinatura expirou
+  // Se não for admin, verifica se o usuário possui plano ativo e não expirado
   if (profileRole !== 'admin') {
     const now = new Date();
     const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
     const isExpired = endsAt ? endsAt < now : false;
+    const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
 
-    if (isExpired) {
+    if (!isActive || isExpired) {
       return <Navigate to="/painel/subscription" replace />;
     }
   }

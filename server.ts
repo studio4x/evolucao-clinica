@@ -96,6 +96,38 @@ async function requireAuth(req: any, res: any, next: any) {
   }
 }
 
+// Middleware para garantir que o profissional tem um plano ativo
+async function requireActiveSubscription(req: any, res: any, next: any) {
+  try {
+    const { data: prof, error } = await supabaseAdmin
+      .from("professionals")
+      .select("role, subscription_status, subscription_ends_at")
+      .eq("id", req.user.id)
+      .single();
+
+    if (error || !prof) {
+      return res.status(403).json({ error: "Profissional nao encontrado ou inativo" });
+    }
+
+    if (prof.role === "admin") {
+      return next();
+    }
+
+    const now = new Date();
+    const endsAt = prof.subscription_ends_at ? new Date(prof.subscription_ends_at) : null;
+    const isExpired = endsAt ? endsAt < now : false;
+    const isActive = prof.subscription_status === "active" || prof.subscription_status === "trialing";
+
+    if (!isActive || isExpired) {
+      return res.status(403).json({ error: "Assinatura expirada ou inativa. Regularize seu plano." });
+    }
+
+    next();
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao verificar assinatura" });
+  }
+}
+
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -437,10 +469,10 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
 
     console.log(`[Cron] Iniciando verificação de lembretes. Horário Brasil: ${currentDateStr} ${currentTimeStr}, Dia da Semana: ${currentDayOfWeek}`);
 
-    // 2. Buscar todos os pacientes ativos com lembretes habilitados
+    // 2. Buscar todos os pacientes ativos com lembretes habilitados, incluindo a relação com o profissional
     const { data: patients, error: patientsError } = await supabaseAdmin
       .from("patients")
-      .select("*")
+      .select("*, professionals:professional_id!inner(role, status, subscription_status, subscription_ends_at)")
       .eq("status", "active")
       .eq("evolution_reminder_active", true);
 
@@ -453,6 +485,24 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
     let notificationsSentCount = 0;
 
     for (const patient of patients) {
+      // Verifica se o profissional tem assinatura ativa
+      const prof = (patient as any).professionals;
+      if (!prof) continue;
+
+      if (prof.status !== "active") {
+        continue; // Profissional inativo
+      }
+
+      if (prof.role !== "admin") {
+        const endsAt = prof.subscription_ends_at ? new Date(prof.subscription_ends_at) : null;
+        const isExpired = endsAt ? endsAt < now : false;
+        const isActive = prof.subscription_status === "active" || prof.subscription_status === "trialing";
+
+        if (!isActive || isExpired) {
+          continue; // Sem plano ativo
+        }
+      }
+
       // Verifica se o dia da semana atual está nos dias cadastrados
       const days = patient.session_days || [];
       if (!days.includes(currentDayOfWeek)) {
@@ -605,7 +655,7 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
 // --- API RELATÓRIOS E PDI POR IA ---
 
 // 1. Gerar Relatório ou PDI com Gemini IA
-app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
+app.post("/api/patients/:id/ai-report", requireAuth, requireActiveSubscription, async (req: any, res) => {
   try {
     const patientId = req.params.id;
     const { period, startDate, endDate, type, googleAccessToken } = req.body;
@@ -920,7 +970,7 @@ Escreva em português brasileiro de forma prática, detalhada e empática.`;
 });
 
 // 2. Enviar Relatório por E-mail
-app.post("/api/patients/:id/send-report-email", requireAuth, async (req: any, res) => {
+app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscription, async (req: any, res) => {
   try {
     const patientId = req.params.id;
     const { toEmail, subject, textContent } = req.body;
