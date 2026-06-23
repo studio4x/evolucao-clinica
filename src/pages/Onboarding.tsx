@@ -554,10 +554,10 @@ export default function Onboarding() {
                   {/* SLIDE 0: Bem-vindo */}
                   {activeSlide === 0 && (
                     <>
-                      <h1 className="text-xl sm:text-2xl font-display font-extrabold text-brand-primary">
+                      <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-brand-primary">
                         Sua evolução clínica com IA
                       </h1>
-                      <p className="text-xs sm:text-sm text-brand-text-muted leading-relaxed">
+                      <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                         Grave ou envie áudios das suas consultas. Nossa Inteligência Artificial transcreve e estrutura a evolução clínica no prontuário oficial em segundos.
                       </p>
                     </>
@@ -566,10 +566,10 @@ export default function Onboarding() {
                   {/* SLIDE 1: Pacientes */}
                   {activeSlide === 1 && (
                     <>
-                      <h1 className="text-xl sm:text-2xl font-display font-extrabold text-brand-primary">
+                      <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-brand-primary">
                         Prontuários no Google Docs
                       </h1>
-                      <p className="text-xs sm:text-sm text-brand-text-muted leading-relaxed">
+                      <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                         Esqueça papéis e planilhas. Integramos o prontuário diretamente com o Google Docs para que os documentos dos seus pacientes fiquem seguros e fáceis de editar.
                       </p>
                     </>
@@ -578,10 +578,10 @@ export default function Onboarding() {
                   {/* SLIDE 2: Evoluções por Voz */}
                   {activeSlide === 2 && (
                     <>
-                      <h1 className="text-xl sm:text-2xl font-display font-extrabold text-brand-primary">
+                      <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-brand-primary">
                         Gravador Inteligente Integrado
                       </h1>
-                      <p className="text-xs sm:text-sm text-brand-text-muted leading-relaxed">
+                      <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                         Use o microfone direto do celular ou desktop. Grave a sua voz ou envie arquivos de áudio existentes para gerar evoluções sob medida.
                       </p>
                     </>
@@ -590,10 +590,10 @@ export default function Onboarding() {
                   {/* SLIDE 3: O Caminho Prático */}
                   {activeSlide === 3 && (
                     <>
-                      <h1 className="text-xl sm:text-2xl font-display font-extrabold text-brand-primary">
+                      <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-brand-primary">
                         Vamos dar os primeiros passos?
                       </h1>
-                      <p className="text-xs sm:text-sm text-brand-text-muted leading-relaxed">
+                      <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                         Para começar a usar a plataforma, vamos criar seu primeiro paciente e registrar a primeira evolução de teste. Faremos tudo em um fluxo interativo.
                       </p>
                     </>
@@ -626,10 +626,10 @@ export default function Onboarding() {
                 </div>
 
                 <div className="space-y-2 px-2">
-                  <h1 className="text-xl sm:text-2xl font-display font-extrabold text-brand-primary">
+                  <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-brand-primary">
                     Integração com Google Agenda
                   </h1>
-                  <p className="text-xs sm:text-sm text-brand-text-muted leading-relaxed">
+                  <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                     Sincronize a agenda para importar seus compromissos que coincidem com os pacientes ativos diretamente no painel.
                   </p>
                 </div>
@@ -756,10 +756,10 @@ export default function Onboarding() {
                 </div>
 
                 <div className="space-y-2 px-2 relative z-10">
-                  <h1 className="text-xl sm:text-2xl font-display font-extrabold text-brand-primary">
+                  <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-brand-primary">
                     Tudo Pronto!
                   </h1>
-                  <p className="text-xs sm:text-sm text-brand-text-muted leading-relaxed">
+                  <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                     Você configurou o seu ambiente e já sabe como funciona. A partir de agora, a sua clínica está pronta para registrar evoluções com Inteligência Artificial.
                   </p>
                 </div>
