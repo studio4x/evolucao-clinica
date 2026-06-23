@@ -876,26 +876,12 @@ export default function AdminPanel() {
       return;
     }
 
-    const fetchProfessionals = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('professionals')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) {
-        console.error("Erro ao carregar profissionais:", error);
-      } else {
-        setProfessionals(data || []);
-      }
-      setLoading(false);
-    };
-
-    fetchProfessionals();
+    void refreshProfessionals();
 
     const channel = supabase
       .channel('professionals-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'professionals' }, () => {
-        fetchProfessionals();
+        void refreshProfessionals(false);
       })
       .subscribe();
 
@@ -1147,6 +1133,16 @@ export default function AdminPanel() {
         })
         .eq('id', profId);
       if (error) throw error;
+
+      setProfessionals(prev =>
+        prev.map(prof =>
+          prof.id === profId
+            ? { ...prof, status: newStatus }
+            : prof
+        )
+      );
+
+      void refreshProfessionals(false);
     } catch (error: any) {
       console.error("Erro ao atualizar status:", error);
       alert(`Falha ao atualizar status: ${error.message}`);
@@ -1240,6 +1236,22 @@ export default function AdminPanel() {
         .update(updateData)
         .eq('id', editingProf.id);
       if (error) throw error;
+
+      setProfessionals(prev =>
+        prev.map(prof =>
+          prof.id === editingProf.id
+            ? {
+                ...prof,
+                subscription_plan: editPlan,
+                subscription_status: editStatus,
+                subscription_ends_at: editEndsAt ? new Date(editEndsAt).toISOString() : null,
+                status: editUserStatus
+              }
+            : prof
+        )
+      );
+
+      void refreshProfessionals(false);
       setEditingProf(null);
       alert("Assinatura do profissional atualizada com sucesso!");
     } catch (error: any) {
@@ -1315,6 +1327,32 @@ export default function AdminPanel() {
       alert(`Erro ao salvar configurações de pagamento: ${error.message}`);
     } finally {
       setPaymentSaveLoading(false);
+    }
+  };
+
+  const refreshProfessionals = async (showLoading = true) => {
+    if (!user || profileRole !== 'admin') return;
+
+    if (showLoading) {
+      setLoading(true);
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('professionals')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error("Erro ao carregar profissionais:", error);
+        return;
+      }
+
+      setProfessionals(data || []);
+    } finally {
+      if (showLoading) {
+        setLoading(false);
+      }
     }
   };
 
