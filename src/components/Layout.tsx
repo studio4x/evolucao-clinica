@@ -179,16 +179,21 @@ export default function Layout() {
               <span className="font-medium">Instalar App</span>
             </button>
           )}
-          <button
-            onClick={() => {
-              const text = "Olá! Estou usando o aplicativo Evolução Clínica para gerenciar meus prontuários com IA e achei fantástico. Facilita muito o dia a dia! Dá uma olhada: " + window.location.origin;
-              window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-            }}
-            className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary hover:bg-brand-bg transition-colors"
-          >
-            <Share2 size={20} />
-            <span className="font-medium">Compartilhar App</span>
-          </button>
+          <div className="w-full">
+            <button
+              onClick={() => {
+                const text = "Olá! Estou usando o aplicativo Evolução Clínica para gerenciar meus prontuários com IA e achei fantástico. Facilita muito o dia a dia! Dá uma olhada: " + window.location.origin;
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+              }}
+              className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary-hover transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            >
+              <Share2 size={20} />
+              <span className="font-medium">Compartilhar App</span>
+            </button>
+            <span className="text-[10px] text-brand-text-muted pl-12 block -mt-1 mb-2">
+              Compartilhamento via WhatsApp
+            </span>
+          </div>
           <button
             onClick={handleLogout}
             className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors"
