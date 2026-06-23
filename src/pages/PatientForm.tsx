@@ -34,6 +34,7 @@ export default function PatientForm() {
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [formData, setFormData] = useState({
     full_name: '',
+    birth_date: '',
     notes: '',
     status: 'active',
     google_doc_id: '',
@@ -60,6 +61,7 @@ export default function PatientForm() {
           if (data) {
             setFormData({
               full_name: data.full_name || '',
+              birth_date: data.birth_date || '',
               notes: data.notes || '',
               status: data.status || 'active',
               google_doc_id: data.google_doc_id || '',
@@ -325,6 +327,7 @@ export default function PatientForm() {
         id: patientId,
         professional_id: user.id,
         full_name: formData.full_name,
+        birth_date: formData.birth_date || null,
         notes: formData.notes,
         status: formData.status,
         updated_at: new Date().toISOString(),
@@ -390,6 +393,22 @@ export default function PatientForm() {
             onChange={e => setFormData({...formData, full_name: e.target.value})}
             className="input-field p-2"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-brand-text mb-1">
+            Data de Nascimento <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
+          </label>
+          <input
+            type="date"
+            value={formData.birth_date}
+            onChange={e => setFormData({...formData, birth_date: e.target.value})}
+            className="input-field p-2"
+            max={new Date().toISOString().split('T')[0]}
+          />
+          <p className="text-xs text-brand-text-muted mt-1">
+            Usada para lembrar aniversários no painel principal.
+          </p>
         </div>
 
         <div>

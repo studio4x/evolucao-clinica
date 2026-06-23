@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2 } from 'lucide-react';
+import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2, Cake } from 'lucide-react';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 const normalizeText = (text: string): string => {
   if (!text) return '';
@@ -26,6 +26,10 @@ const matchPatientWithEvent = (patient: any, summary: string, description: strin
     if (nicknameRegex.test(normSummary) || nicknameRegex.test(normDesc)) {
       return true;
     }
+    // Tolerância: se o apelido for longo (>= 4 caracteres), permite match como substring direta
+    if (normNickname.length >= 4 && (normSummary.includes(normNickname) || normDesc.includes(normNickname))) {
+      return true;
+    }
   }
 
   // 2. Correspondência do nome completo
@@ -45,11 +49,21 @@ const matchPatientWithEvent = (patient: any, summary: string, description: strin
       return true;
     }
     
+    // Tolerância: se o primeiro nome for longo (>= 4 caracteres), permite match como substring direta
+    if (firstName.length >= 4 && (normSummary.includes(firstName) || normDesc.includes(firstName))) {
+      return true;
+    }
+    
     // Se o evento contiver qualquer outro nome significativo do paciente
     for (let i = 1; i < nameParts.length; i++) {
       const part = nameParts[i];
       const partRegex = new RegExp(`\\b${part}\\b`, 'i');
       if (partRegex.test(normSummary) || partRegex.test(normDesc)) {
+        return true;
+      }
+      
+      // Tolerância para outras partes significativas do nome
+      if (part.length >= 4 && (normSummary.includes(part) || normDesc.includes(part))) {
         return true;
       }
     }
@@ -74,6 +88,10 @@ export default function Dashboard() {
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [birthdays, setBirthdays] = useState<{ today: any[]; thisWeek: any[] }>({
+    today: [],
+    thisWeek: []
+  });
 
   const handleConnectGoogleCalendar = async () => {
     try {
@@ -98,23 +116,53 @@ export default function Dashboard() {
       setCalendarLoading(true);
       setCalendarError(null);
 
-      // 1. Busca pacientes ativos
+      // 1. Busca pacientes ativos (com birth_date para calcular aniversários)
       const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
-        .select('id, name, nickname')
+        .select('id, full_name, name, nickname, birth_date')
         .eq('professional_id', user.id)
         .eq('status', 'active');
 
       if (patientsError) throw patientsError;
       setPatients(patientsData || []);
 
-      // 2. Busca evoluções realizadas nesta semana (de segunda-feira até hoje, no fuso local do terapeuta)
+      // Calcula aniversariantes: hoje e nos próximos 7 dias
       const now = new Date();
+      const todayMM = now.getMonth() + 1;
+      const todayDD = now.getDate();
+
+      const birthdaysToday: any[] = [];
+      const birthdaysThisWeek: any[] = [];
+
+      ;(patientsData || []).forEach((p: any) => {
+        if (!p.birth_date) return;
+        const [, mm, dd] = p.birth_date.split('-').map(Number);
+        // Verifica se é hoje
+        if (mm === todayMM && dd === todayDD) {
+          birthdaysToday.push(p);
+          return;
+        }
+        // Verifica se é nos próximos 6 dias (sem contar hoje)
+        for (let offset = 1; offset <= 6; offset++) {
+          const future = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
+          if (mm === future.getMonth() + 1 && dd === future.getDate()) {
+            birthdaysThisWeek.push({ ...p, _daysUntil: offset });
+            break;
+          }
+        }
+      });
+
+      setBirthdays({ today: birthdaysToday, thisWeek: birthdaysThisWeek });
+
+      // 2. Busca evoluções realizadas nesta semana (de segunda-feira até hoje, no fuso local do terapeuta)
       const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
       const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1; // Dias desde a segunda-feira
       
       const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday, 0, 0, 0);
-      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      
+      const tomorrow = new Date();
+      tomorrow.setDate(now.getDate() + 1);
+      const endOfTomorrow = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59, 999);
       
       const formatDateStr = (d: Date) => {
         const y = d.getFullYear();
@@ -125,13 +173,14 @@ export default function Dashboard() {
 
       const startOfWeekStr = formatDateStr(startOfWeek);
       const localTodayStr = formatDateStr(now);
+      const localTomorrowStr = formatDateStr(tomorrow);
 
       const { data: evolutionsThisWeek, error: evolutionsError } = await supabase
         .from('evolutions')
         .select('id, patient_id, session_date')
         .eq('professional_id', user.id)
         .gte('session_date', startOfWeekStr)
-        .lte('session_date', localTodayStr);
+        .lte('session_date', localTomorrowStr);
 
       if (evolutionsError) throw evolutionsError;
 
@@ -145,7 +194,7 @@ export default function Dashboard() {
           const events = await listGoogleCalendarEvents(
             googleAccessToken,
             startOfWeek.toISOString(),
-            endOfDay.toISOString()
+            endOfTomorrow.toISOString()
           );
 
           // Filtra os eventos comparando inteligentemente com os pacientes ativos
@@ -372,6 +421,71 @@ export default function Dashboard() {
         </Link>
       </div>
 
+      {/* Widget: Aniversariantes */}
+      {(birthdays.today.length > 0 || birthdays.thisWeek.length > 0) && (
+        <div className="card p-6 bg-white border border-pink-100 shadow-md relative overflow-hidden">
+          {/* Decoração de fundo */}
+          <div className="absolute -top-10 -right-10 w-40 h-40 bg-pink-100/40 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex items-center space-x-3 border-b border-pink-100 pb-4 mb-4">
+            <div className="bg-pink-100 text-pink-500 p-2 rounded-xl">
+              <Cake size={22} />
+            </div>
+            <div>
+              <h2 className="text-xl font-display font-bold text-pink-600">Aniversariantes</h2>
+              <p className="text-sm text-brand-text-muted">Pacientes fazendo aniversário esta semana</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {/* Aniversariantes de hoje */}
+            {birthdays.today.map((p: any) => (
+              <Link
+                key={p.id}
+                to={`/painel/patients/${p.id}`}
+                className="flex items-center justify-between p-3 bg-pink-50 border border-pink-200 rounded-xl hover:bg-pink-100 transition-colors group"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-9 h-9 rounded-full bg-pink-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow">
+                    {(p.full_name || p.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-pink-800 text-sm">{p.full_name || p.name}</p>
+                    <p className="text-xs text-pink-500 font-medium">🎂 Hoje!</p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-[10px] font-bold bg-pink-500 text-white px-2 py-0.5 rounded-full">HOJE</span>
+                  <ArrowRight size={14} className="text-pink-400 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </Link>
+            ))}
+
+            {/* Aniversariantes da semana */}
+            {birthdays.thisWeek.map((p: any) => (
+              <Link
+                key={p.id}
+                to={`/painel/patients/${p.id}`}
+                className="flex items-center justify-between p-3 bg-brand-bg/50 border border-brand-border rounded-xl hover:bg-pink-50 hover:border-pink-200 transition-colors group"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className="w-9 h-9 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-bold text-sm flex-shrink-0">
+                    {(p.full_name || p.name || '?').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-semibold text-brand-text text-sm">{p.full_name || p.name}</p>
+                    <p className="text-xs text-brand-text-muted">
+                      Em {p._daysUntil} {p._daysUntil === 1 ? 'dia' : 'dias'}
+                    </p>
+                  </div>
+                </div>
+                <ArrowRight size={14} className="text-brand-text-muted group-hover:text-pink-400 group-hover:translate-x-1 transition-all" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Seção Google Agenda: Atendimentos de Hoje */}
       <div className="card p-6 bg-white border border-brand-border shadow-md">
         <div className="flex items-center justify-between border-b border-brand-border pb-4 mb-4">
@@ -380,8 +494,10 @@ export default function Dashboard() {
               <Calendar size={22} />
             </div>
             <div>
-              <h2 className="text-xl font-display font-bold text-brand-primary">Atendimentos de Hoje</h2>
-              <p className="text-sm text-brand-text-muted">Sincronizado com o seu Google Agenda</p>
+              <h2 className="text-xl font-display font-bold text-brand-primary">Atendimentos da Semana</h2>
+              <p className="text-xs text-brand-text-muted mt-0.5">
+                Conectado ao Google Agenda: <span className="font-semibold text-brand-primary">{user?.email}</span>
+              </p>
             </div>
           </div>
           {googleAccessToken && (
