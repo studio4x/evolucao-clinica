@@ -68,9 +68,6 @@ export default function Login() {
             <img src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} alt="Evolução Clínica" className="h-24 w-auto object-contain" />
           </div>
         </div>
-        <h2 className="mt-4 text-center text-3xl font-display font-bold text-brand-primary tracking-tight">
-          Evolução Clínica
-        </h2>
         <p className="mt-3 text-center text-base text-brand-text-muted max-w-[280px] mx-auto leading-relaxed">
           Sua prática clínica automatizada com <span className="text-brand-primary font-semibold">Inteligência Artificial</span>
         </p>
@@ -124,11 +121,6 @@ export default function Login() {
               </>
             )}
           </button>
-          
-          <div className="mt-8 flex items-center justify-center space-x-2 text-brand-primary/60">
-            <Sparkles className="w-4 h-4" />
-            <p className="text-xs font-medium uppercase tracking-widest italic">Conexão Seres</p>
-          </div>
         </div>
       </div>
       
