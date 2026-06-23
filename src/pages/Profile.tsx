@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { User as UserIcon, Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase } from 'lucide-react';
+import { User as UserIcon, Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw } from 'lucide-react';
+import { clearOnboardingState } from '../utils/onboarding';
 
 export default function Profile() {
+  const navigate = useNavigate();
   const { user, setUser } = useAuthStore();
   
   const [firstName, setFirstName] = useState('');
@@ -13,6 +16,7 @@ export default function Profile() {
   const [professionalRegister, setProfessionalRegister] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resettingOnboarding, setResettingOnboarding] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -113,6 +117,24 @@ export default function Profile() {
       setErrorMessage(err.message || 'Ocorreu um erro ao atualizar o perfil.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRestartOnboarding = () => {
+    if (!user) return;
+
+    const confirmed = window.confirm(
+      'Deseja reiniciar o onboarding? O fluxo será recomeçado do início e você poderá refazer a apresentação, criar um novo paciente e seguir todas as etapas novamente.'
+    );
+
+    if (!confirmed) return;
+
+    setResettingOnboarding(true);
+    try {
+      clearOnboardingState(user.id);
+      navigate('/onboarding', { replace: true });
+    } finally {
+      setResettingOnboarding(false);
     }
   };
 
@@ -296,10 +318,10 @@ export default function Profile() {
                 Configurações de Acesso
               </h2>
               
-              <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 flex items-start space-x-3">
-                <div className="p-2 bg-white rounded-xl border border-brand-border text-brand-primary flex-shrink-0">
-                  <Key size={18} />
-                </div>
+            <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-4 flex items-start space-x-3">
+              <div className="p-2 bg-white rounded-xl border border-brand-border text-brand-primary flex-shrink-0">
+                <Key size={18} />
+              </div>
                 <div className="space-y-1">
                   <h4 className="text-sm font-semibold text-brand-primary">Senha não necessária</h4>
                   <p className="text-xs text-brand-text-muted leading-relaxed">
@@ -308,6 +330,40 @@ export default function Profile() {
                   </p>
                 </div>
               </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-brand-primary/5 to-brand-accent/10 border border-brand-primary/15 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start space-x-3">
+                <div className="p-2 bg-white rounded-xl border border-brand-primary/10 text-brand-primary flex-shrink-0 shadow-sm">
+                  <Sparkles size={18} />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-brand-primary">Reiniciar onboarding</h4>
+                  <p className="text-xs text-brand-text-muted leading-relaxed max-w-xl">
+                    Use esta opção se quiser rever o fluxo inicial da plataforma, refazer a criação do primeiro paciente,
+                    gerar uma evolução e repetir a etapa de sincronização da agenda.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleRestartOnboarding}
+                disabled={resettingOnboarding}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-primary/20 bg-white px-4 py-2.5 text-sm font-semibold text-brand-primary hover:bg-brand-primary/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {resettingOnboarding ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Reiniciando...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCcw className="h-4 w-4" />
+                    Reiniciar onboarding
+                  </>
+                )}
+              </button>
             </div>
 
             {/* Ações */}
