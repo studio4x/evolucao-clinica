@@ -88,6 +88,10 @@ export default function LandingPage() {
       a: "Respeitamos integralmente o Código de Defesa do Consumidor (CDC). Se você assinar qualquer plano e decidir que a ferramenta não é adequada à sua prática nas primeiras 24 horas ou nos primeiros 7 dias, basta acessar a aba de Assinaturas e solicitar o cancelamento e estorno imediato com apenas um clique."
     },
     {
+      q: "Quais são as formas de pagamento aceitas? É seguro?",
+      a: "Os pagamentos são processados de forma 100% segura por meio da integração nativa com o Google Pay. Você pode pagar em poucos cliques utilizando seus cartões de crédito já salvos com segurança em sua Conta do Google. Todos os dados financeiros são trafegados de forma totalmente criptografada e em conformidade com as regras rígidas do PCI-DSS, garantindo sigilo absoluto."
+    },
+    {
       q: "Posso cancelar ou alterar meu plano a qualquer momento?",
       a: "Sim! Não há cláusulas de fidelidade ou burocracia. Você pode cancelar sua assinatura recorrente ou migrar de plano diretamente pelo painel administrativo do aplicativo com apenas um clique."
     }
