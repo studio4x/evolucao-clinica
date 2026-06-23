@@ -40,6 +40,7 @@ export default function SupportTicketDetail() {
     if (!ticketId) return;
     try {
       if (!silent) setLoading(true);
+      setError('');
       const data = await fetchSupportTicketDetail(ticketId);
       setTicket(data.ticket);
       setMessages(data.messages);
@@ -61,11 +62,25 @@ export default function SupportTicketDetail() {
     if (!ticketId) return;
 
     loadTicketDetail();
-    const unsubscribe = subscribeToSupportTicketDetail(ticketId, () => {
+    const refreshTicketDetail = () => {
       loadTicketDetail(true);
-    });
+    };
+    const unsubscribe = subscribeToSupportTicketDetail(ticketId, refreshTicketDetail);
+    const pollInterval = window.setInterval(refreshTicketDetail, 5000);
 
-    return unsubscribe;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshTicketDetail();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      window.clearInterval(pollInterval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [ticketId]);
 
   useEffect(() => {
