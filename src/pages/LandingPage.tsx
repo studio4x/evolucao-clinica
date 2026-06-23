@@ -723,7 +723,7 @@ export default function LandingPage() {
             Junte-se a dezenas de profissionais que economizam de 5 a 10 horas semanais simplificando registros burocráticos.
           </p>
           <div className="flex justify-center pt-2">
-            <Link to="/login" className="inline-flex items-center gap-2 px-8 py-4 bg-brand-accent hover:bg-brand-accent-hover text-brand-primary font-extrabold text-base tracking-wide rounded-xl shadow-xl transition-all duration-200 active:scale-95">
+            <Link to="/login" className="inline-flex items-center gap-2 px-8 py-4 bg-[#076c9a] hover:bg-[#055b82] text-white font-extrabold text-base tracking-wide rounded-xl shadow-xl transition-all duration-200 active:scale-95">
               Começar Meu Teste Grátis <ArrowRight size={18} />
             </Link>
           </div>
