@@ -12,7 +12,15 @@ const DEFAULT_PLANS = [
     description: 'Flexibilidade e controle mês a mês',
     price: 49.90,
     equivalent_monthly_price: null,
-    features: ['Pacientes ilimitados', 'Evoluções clínicas com IA ilimitadas', 'Integração com Google Docs em tempo real', 'Gravação e transcrição de áudio nativa'],
+    features: [
+      'Pacientes ilimitados',
+      'Evoluções clínicas com IA ilimitadas',
+      'Integração com Google Docs em tempo real',
+      'Gravação e transcrição de áudio nativa',
+      'Lembrete e envio de WhatsApp para aniversariantes',
+      'Compartilhamento de relatórios via WhatsApp',
+      'Impressão de prontuários do Google Docs'
+    ],
     button_text_simulate: 'Assinar Mensal (Simulado)',
     tag_text: 'Recorrente',
     discount_text: null
