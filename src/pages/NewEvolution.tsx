@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft } from 'lucide-react';
+import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 
 import { transcribeAudio } from '../services/aiTranscription';
@@ -151,6 +151,19 @@ export default function NewEvolution() {
   const updateAudioItems = (nextItems: AudioEvolutionItem[]) => {
     audioItemsRef.current = nextItems;
     setAudioItems(nextItems);
+  };
+
+  const reorderAudioItem = async (index: number, direction: -1 | 1) => {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= audioItemsRef.current.length) return;
+
+    const nextItems = [...audioItemsRef.current];
+    const [movedItem] = nextItems.splice(index, 1);
+    if (!movedItem) return;
+    nextItems.splice(nextIndex, 0, movedItem);
+
+    updateAudioItems(nextItems);
+    await persistDraft(nextItems);
   };
 
   const clearAllAudioItems = async () => {
@@ -495,6 +508,12 @@ export default function NewEvolution() {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
+  };
+
+  const getAudioSourceLabel = (source: AudioEvolutionItem['source']) => {
+    if (source === 'upload') return 'Arquivo enviado';
+    if (source === 'recording') return 'Gravação';
+    return 'Recuperado';
   };
 
   const handleSubmit = async () => {
@@ -847,7 +866,7 @@ export default function NewEvolution() {
                 <div>
                   <p className="text-sm font-semibold text-brand-primary">Áudios adicionados</p>
                   <p className="text-xs text-brand-text-muted">
-                    {audioItems.length} arquivo(s) • {formatTime(getTotalAudioDuration(audioItems))}
+                    {audioItems.length} arquivo(s) • {formatTime(getTotalAudioDuration(audioItems))} total
                   </p>
                 </div>
                 {!isRecording && status !== 'processing' && (
@@ -861,37 +880,65 @@ export default function NewEvolution() {
                 )}
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {audioItems.map((item, index) => (
-                  <div key={item.id} className="p-4 bg-brand-primary/5 rounded-xl border border-brand-primary/20 space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-medium text-brand-primary">
-                          Áudio {index + 1}
-                        </p>
-                        <p className="text-xs text-brand-text-muted">
-                          {item.source === 'upload' ? 'Arquivo enviado' : item.source === 'recording' ? 'Gravação' : 'Recuperado'} • {formatTime(Math.max(0, Math.round(item.duration || 0)))}
-                        </p>
+                  <div key={item.id} className="p-3 bg-brand-primary/5 rounded-xl border border-brand-primary/20 space-y-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 text-brand-text-muted">
+                          <GripVertical size={16} />
+                        </div>
+                        <div className="space-y-0.5">
+                          <p className="text-sm font-medium text-brand-primary leading-none">
+                            Áudio {index + 1}
+                          </p>
+                          <p className="text-xs text-brand-text-muted">
+                            {getAudioSourceLabel(item.source)} • {formatTime(Math.max(0, Math.round(item.duration || 0)))}
+                          </p>
+                        </div>
                       </div>
-                      <button
-                        onClick={async () => {
-                          const nextItems = audioItemsRef.current.filter(audioItem => audioItem.id !== item.id);
-                          URL.revokeObjectURL(item.url);
-                          updateAudioItems(nextItems);
-                          if (nextItems.length === 0) {
-                            await clearAllAudioItems();
-                            setStatus('idle');
-                            setErrorMessage('');
-                            return;
-                          }
-                          await persistDraft(nextItems);
-                        }}
-                        disabled={isRecording || status === 'processing'}
-                        className="flex items-center space-x-1 text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
-                      >
-                        <Trash2 size={14} />
-                        <span>Excluir</span>
-                      </button>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          onClick={async () => {
+                            await reorderAudioItem(index, -1);
+                          }}
+                          disabled={isRecording || status === 'processing' || index === 0}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-brand-border bg-white text-xs font-medium text-brand-text-muted hover:text-brand-primary hover:border-brand-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronUp size={14} />
+                          <span>Subir</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            await reorderAudioItem(index, 1);
+                          }}
+                          disabled={isRecording || status === 'processing' || index === audioItems.length - 1}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-brand-border bg-white text-xs font-medium text-brand-text-muted hover:text-brand-primary hover:border-brand-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <ChevronDown size={14} />
+                          <span>Descer</span>
+                        </button>
+                        <button
+                          onClick={async () => {
+                            const nextItems = audioItemsRef.current.filter(audioItem => audioItem.id !== item.id);
+                            URL.revokeObjectURL(item.url);
+                            updateAudioItems(nextItems);
+                            if (nextItems.length === 0) {
+                              await clearAllAudioItems();
+                              setStatus('idle');
+                              setErrorMessage('');
+                              return;
+                            }
+                            await persistDraft(nextItems);
+                          }}
+                          disabled={isRecording || status === 'processing'}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 bg-red-50 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 size={14} />
+                          <span>Excluir</span>
+                        </button>
+                      </div>
                     </div>
                     <audio src={item.url} controls className="w-full" />
                   </div>
