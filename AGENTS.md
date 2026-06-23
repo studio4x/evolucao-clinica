@@ -7,6 +7,7 @@
 - Use o padrão `v1.10.X` para mudanças pequenas.
 - Toda tarefa concluída deve terminar com `git commit` e `git push`.
 - Quando a entrega for do app principal, faça os commits finais diretamente em `main`.
+- Repositório oficial: [studio4x/evolucao-clinica](https://github.com/studio4x/evolucao-clinica).
 
 ## Execução
 

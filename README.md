@@ -6,6 +6,10 @@
 
 Plataforma web para gravação, transcrição e organização de evoluções clínicas com IA, Google Docs, pacientes, histórico e recursos offline.
 
+## Repositório
+
+- [studio4x/evolucao-clinica](https://github.com/studio4x/evolucao-clinica)
+
 ## Visão geral
 
 O projeto combina frontend React, backend em Node/Express e integrações com:
