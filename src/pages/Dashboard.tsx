@@ -108,33 +108,43 @@ export default function Dashboard() {
       if (patientsError) throw patientsError;
       setPatients(patientsData || []);
 
-      // 2. Busca evoluções realizadas hoje (no fuso local do terapeuta)
+      // 2. Busca evoluções realizadas nesta semana (de segunda-feira até hoje, no fuso local do terapeuta)
       const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const localTodayStr = `${year}-${month}-${day}`;
+      const currentDay = now.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+      const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1; // Dias desde a segunda-feira
+      
+      const startOfWeek = new Date(now.getFullYear(), now.getMonth(), now.getDate() - distanceToMonday, 0, 0, 0);
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      
+      const formatDateStr = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dayOfMonth = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${dayOfMonth}`;
+      };
 
-      const { data: evolutionsToday, error: evolutionsError } = await supabase
+      const startOfWeekStr = formatDateStr(startOfWeek);
+      const localTodayStr = formatDateStr(now);
+
+      const { data: evolutionsThisWeek, error: evolutionsError } = await supabase
         .from('evolutions')
-        .select('id, patient_id')
+        .select('id, patient_id, session_date')
         .eq('professional_id', user.id)
-        .eq('session_date', localTodayStr);
+        .gte('session_date', startOfWeekStr)
+        .lte('session_date', localTodayStr);
 
       if (evolutionsError) throw evolutionsError;
 
-      const evolvedSet = new Set<string>(evolutionsToday?.map(e => e.patient_id) || []);
+      // Mantemos o set apenas para compatibilidade, se necessário em algum lugar
+      const evolvedSet = new Set<string>(evolutionsThisWeek?.map(e => e.patient_id) || []);
       setEvolvedPatientIds(evolvedSet);
 
       // 3. Busca eventos do Google Calendar se estiver conectado
       if (googleAccessToken) {
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-        
         try {
           const events = await listGoogleCalendarEvents(
             googleAccessToken,
-            startOfDay.toISOString(),
+            startOfWeek.toISOString(),
             endOfDay.toISOString()
           );
 
@@ -151,10 +161,25 @@ export default function Dashboard() {
               matchPatientWithEvent(patient, event.summary || '', event.description || '')
             );
 
+            // Determina a data do evento no formato YYYY-MM-DD local
+            let eventDateStr = '';
+            if (event.start?.dateTime) {
+              const d = new Date(event.start.dateTime);
+              eventDateStr = formatDateStr(d);
+            } else if (event.start?.date) {
+              eventDateStr = event.start.date; // Já é YYYY-MM-DD
+            }
+
+            // Verifica se este atendimento já foi evoluído na data específica
+            const alreadyEvolved = matchedPatient 
+              ? (evolutionsThisWeek || []).some(e => e.patient_id === matchedPatient.id && e.session_date === eventDateStr)
+              : false;
+
             return {
               ...event,
               patient: matchedPatient,
-              evolved: matchedPatient ? evolvedSet.has(matchedPatient.id) : false
+              evolved: alreadyEvolved,
+              eventDateStr
             };
           });
 
@@ -441,6 +466,29 @@ export default function Dashboard() {
 
               const timeRange = startStr === "Dia inteiro" ? "Dia inteiro" : `${startStr} - ${endStr}`;
 
+              // Identificar o dia do evento para exibir no label
+              let dateLabel = "Hoje";
+              if (event.eventDateStr) {
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                
+                const yesterday = new Date();
+                yesterday.setDate(now.getDate() - 1);
+                const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+
+                if (event.eventDateStr === todayStr) {
+                  dateLabel = "Hoje";
+                } else if (event.eventDateStr === yesterdayStr) {
+                  dateLabel = "Ontem";
+                } else {
+                  const parts = event.eventDateStr.split('-');
+                  const eventDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+                  const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                  const weekday = weekdays[eventDate.getDay()];
+                  dateLabel = `${weekday}, ${parts[2]}/${parts[1]}`;
+                }
+              }
+
               return (
                 <div key={event.id} className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 first:pt-0 last:pb-0">
                   <div className="flex items-start space-x-3">
@@ -458,7 +506,7 @@ export default function Dashboard() {
                         </span>
                         <span className="text-xs text-stone-300">•</span>
                         <span className="text-xs text-brand-text-muted">
-                          {timeRange}
+                          <span className="font-semibold text-brand-primary mr-1">{dateLabel}</span> {timeRange}
                         </span>
                       </div>
                     </div>
@@ -472,7 +520,7 @@ export default function Dashboard() {
                       </span>
                     ) : event.patient ? (
                       <Link
-                        to={`/painel/patients/${event.patient.id}/evolutions/new`}
+                        to={`/painel/patients/${event.patient.id}/evolutions/new?date=${event.eventDateStr}`}
                         className="btn-primary py-1.5 px-3 text-xs flex items-center space-x-1.5 shadow-sm"
                       >
                         <Mic size={14} />
