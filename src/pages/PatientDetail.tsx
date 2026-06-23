@@ -961,6 +961,19 @@ export default function PatientDetail() {
                   <ExternalLink size={16} />
                   <span>Abrir no Google Docs</span>
                 </a>
+                <button
+                  type="button"
+                  onClick={handlePrintProntuario}
+                  disabled={printingProntuario}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 border border-brand-primary text-brand-primary bg-white hover:bg-brand-primary/5 rounded-xl transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
+                >
+                  {printingProntuario ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Printer size={16} />
+                  )}
+                  <span>{printingProntuario ? 'Lendo Google Doc...' : 'Imprimir Prontuário'}</span>
+                </button>
               </div>
             ) : (
               <div className="text-sm text-brand-text-muted text-center py-4">
@@ -1131,32 +1144,15 @@ export default function PatientDetail() {
           <div className="card">
             <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
               <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
-              <div className="flex items-center space-x-3">
-                {patient.google_doc_id && (
-                  <button 
-                    type="button"
-                    onClick={handlePrintProntuario}
-                    disabled={printingProntuario}
-                    className="text-brand-primary hover:text-brand-primary/80 disabled:opacity-50 flex items-center space-x-1 text-sm font-medium transition-colors cursor-pointer"
-                  >
-                    {printingProntuario ? (
-                      <Loader2 size={16} className="animate-spin" />
-                    ) : (
-                      <Printer size={16} />
-                    )}
-                    <span>{printingProntuario ? 'Lendo Google Doc...' : 'Imprimir Prontuário'}</span>
-                  </button>
-                )}
-                {evolutions.length > 0 && (
-                  <button 
-                    onClick={() => setShowClearConfirm(true)}
-                    className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
-                  >
-                    <Trash2 size={16} />
-                    <span>Limpar Tudo</span>
-                  </button>
-                )}
-              </div>
+              {evolutions.length > 0 && (
+                <button 
+                  onClick={() => setShowClearConfirm(true)}
+                  className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
+                >
+                  <Trash2 size={16} />
+                  <span>Limpar Tudo</span>
+                </button>
+              )}
             </div>
 
             {showClearConfirm && (
