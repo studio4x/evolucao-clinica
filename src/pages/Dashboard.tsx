@@ -17,7 +17,7 @@ const matchPatientWithEvent = (patient: any, summary: string, description: strin
   const normSummary = normalizeText(summary);
   const normDesc = normalizeText(description);
   
-  const normFullName = normalizeText(patient.name || '');
+  const normFullName = normalizeText(patient.full_name || '');
   const normNickname = patient.nickname ? normalizeText(patient.nickname) : '';
   
   // 1. Correspondência do apelido (se tiver pelo menos 2 caracteres)
@@ -119,7 +119,7 @@ export default function Dashboard() {
       // 1. Busca pacientes ativos (com birth_date para calcular aniversários)
       const { data: patientsData, error: patientsError } = await supabase
         .from('patients')
-        .select('id, full_name, name, nickname, birth_date')
+        .select('id, full_name, nickname, birth_date')
         .eq('professional_id', user.id)
         .eq('status', 'active');
 
@@ -618,7 +618,7 @@ export default function Dashboard() {
                       </h4>
                       <div className="flex items-center space-x-2 mt-1">
                         <span className="text-xs text-brand-text-muted">
-                          Paciente: <strong className="text-brand-primary">{event.patient?.nickname || event.patient?.name || 'Não identificado'}</strong>
+                          Paciente: <strong className="text-brand-primary">{event.patient?.nickname || event.patient?.full_name || 'Não identificado'}</strong>
                         </span>
                         <span className="text-xs text-stone-300">•</span>
                         <span className="text-xs text-brand-text-muted">
