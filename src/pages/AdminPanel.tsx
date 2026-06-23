@@ -4,7 +4,7 @@ import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAl
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
-import { reloadSiteConfig } from '../hooks/useSiteConfig';
+import { reloadSiteConfig, defaultColors, BrandColors } from '../hooks/useSiteConfig';
 import EmailHistory from './EmailHistory';
 import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
@@ -62,6 +62,20 @@ interface AdminInboxNotification {
   image_url: string | null;
   created_at: string;
 }
+
+const BRAND_COLOR_FIELDS: { key: keyof BrandColors; label: string; desc: string }[] = [
+  { key: 'primary', label: 'Cor Primária', desc: 'Botões principais, cabeçalhos, destaques e links.' },
+  { key: 'primary_hover', label: 'Cor Primária (Hover)', desc: 'Cor do botão primário ao passar o mouse.' },
+  { key: 'secondary', label: 'Cor Secundária', desc: 'Botões secundários, detalhes e destaques menores.' },
+  { key: 'secondary_hover', label: 'Cor Secundária (Hover)', desc: 'Cor do botão secundário ao passar o mouse.' },
+  { key: 'accent', label: 'Cor de Destaque (Accent)', desc: 'Badges, status e marcações de ênfase.' },
+  { key: 'accent_hover', label: 'Cor de Destaque (Hover)', desc: 'Estado ativo de elementos de destaque.' },
+  { key: 'bg', label: 'Cor de Fundo (Background)', desc: 'Fundo geral das páginas do aplicativo.' },
+  { key: 'surface', label: 'Superfície (Surface)', desc: 'Fundo de cards, modais, painéis e inputs.' },
+  { key: 'text', label: 'Texto Principal', desc: 'Cor principal para parágrafos, labels e títulos escuros.' },
+  { key: 'text_muted', label: 'Texto Secundário (Muted)', desc: 'Textos de apoio, legendas e informações.' },
+  { key: 'border', label: 'Bordas e Divisores', desc: 'Divisões de tabelas, contornos de cards e inputs.' }
+];
 
 export default function AdminPanel() {
   const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
@@ -145,11 +159,12 @@ export default function AdminPanel() {
   const [showAdminPassInput, setShowAdminPassInput] = useState(false);
   const [showAdminConfirmPassInput, setShowAdminConfirmPassInput] = useState(false);
 
-  // Estados para as Configurações de Logotipo e Favicon (Marca/PWA)
+  // Estados para as Configurações de Logotipo, Favicon e Cores (Marca/PWA)
   const [brandLogoLight, setBrandLogoLight] = useState('');
   const [brandLogoDark, setBrandLogoDark] = useState('');
   const [brandFavicon, setBrandFavicon] = useState('');
   const [brandVersion, setBrandVersion] = useState('1.0');
+  const [brandColors, setBrandColors] = useState<BrandColors>(defaultColors);
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
   const [brandSaveSuccess, setBrandSaveSuccess] = useState(false);
@@ -176,6 +191,23 @@ export default function AdminPanel() {
             setBrandLogoDark(parsed.logo_dark_url || '');
             setBrandFavicon(parsed.favicon_url || '');
             setBrandVersion(parsed.version || '1.0');
+            if (parsed.colors) {
+              setBrandColors({
+                primary: parsed.colors.primary || defaultColors.primary,
+                primary_hover: parsed.colors.primary_hover || defaultColors.primary_hover,
+                secondary: parsed.colors.secondary || defaultColors.secondary,
+                secondary_hover: parsed.colors.secondary_hover || defaultColors.secondary_hover,
+                accent: parsed.colors.accent || defaultColors.accent,
+                accent_hover: parsed.colors.accent_hover || defaultColors.accent_hover,
+                bg: parsed.colors.bg || defaultColors.bg,
+                surface: parsed.colors.surface || defaultColors.surface,
+                text: parsed.colors.text || defaultColors.text,
+                text_muted: parsed.colors.text_muted || defaultColors.text_muted,
+                border: parsed.colors.border || defaultColors.border
+              });
+            } else {
+              setBrandColors(defaultColors);
+            }
           }
         } catch (err) {
           console.error("Erro ao buscar configurações de marca:", err);
@@ -240,7 +272,8 @@ export default function AdminPanel() {
         logo_light_url: brandLogoLight,
         logo_dark_url: brandLogoDark,
         favicon_url: brandFavicon,
-        version: newVersion
+        version: newVersion,
+        colors: brandColors
       };
 
       const { error } = await supabase
@@ -4690,6 +4723,48 @@ export default function AdminPanel() {
                               </label>
                               <p className="text-[10px] text-brand-text-muted">Recomendado: formato quadrado PNG ou SVG.</p>
                             </div>
+                          </div>
+                        </div>
+
+                        {/* Cores Personalizadas do Tema */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Cores Personalizadas do Tema</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">Configure a paleta de cores do sistema. Cada cor possui um seletor visual e um campo de digitação HEX.</p>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
+                            {BRAND_COLOR_FIELDS.map((field) => (
+                              <div key={field.key} className="space-y-2">
+                                <label className="text-xs font-semibold text-brand-text block">
+                                  {field.label}
+                                </label>
+                                <div className="flex items-center space-x-2">
+                                  <input 
+                                    type="color" 
+                                    value={brandColors[field.key]} 
+                                    onChange={(e) => setBrandColors(prev => ({
+                                      ...prev,
+                                      [field.key]: e.target.value
+                                    }))}
+                                    className="w-10 h-10 rounded-lg border border-brand-border cursor-pointer flex-shrink-0"
+                                  />
+                                  <input 
+                                    type="text" 
+                                    value={brandColors[field.key]}
+                                    onChange={(e) => setBrandColors(prev => ({
+                                      ...prev,
+                                      [field.key]: e.target.value
+                                    }))}
+                                    placeholder="#000000"
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-sm font-mono focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none"
+                                  />
+                                </div>
+                                <p className="text-[10px] text-brand-text-muted leading-tight">
+                                  {field.desc}
+                                </p>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>

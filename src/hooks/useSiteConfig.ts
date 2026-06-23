@@ -1,6 +1,20 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
+export interface BrandColors {
+  primary: string;
+  primary_hover: string;
+  secondary: string;
+  secondary_hover: string;
+  accent: string;
+  accent_hover: string;
+  bg: string;
+  surface: string;
+  text: string;
+  text_muted: string;
+  border: string;
+}
+
 export interface SiteConfig {
   pwa_app_name: string;
   pwa_short_name: string;
@@ -16,7 +30,22 @@ export interface SiteConfig {
   logo_dark_url: string;
   favicon_url: string;
   version: string;
+  colors: BrandColors;
 }
+
+export const defaultColors: BrandColors = {
+  primary: "#005C13",
+  primary_hover: "#00470e",
+  secondary: "#5C4716",
+  secondary_hover: "#4a3912",
+  accent: "#8CC63F",
+  accent_hover: "#7ab332",
+  bg: "#fdfbf7",
+  surface: "#ffffff",
+  text: "#1c1917",
+  text_muted: "#57534e",
+  border: "#e7e5e4"
+};
 
 const defaultConfig: SiteConfig = {
   pwa_app_name: "Evolução Clínica",
@@ -32,7 +61,24 @@ const defaultConfig: SiteConfig = {
   logo_light_url: "/logotipo-transparente-1024.png",
   logo_dark_url: "/logotipo-transparente-1024.png",
   favicon_url: "/favicon.png",
-  version: "1.0"
+  version: "1.0",
+  colors: defaultColors
+};
+
+export const applyThemeColors = (colors: BrandColors) => {
+  if (typeof window === 'undefined') return;
+  const root = document.documentElement;
+  root.style.setProperty('--color-brand-primary', colors.primary);
+  root.style.setProperty('--color-brand-primary-hover', colors.primary_hover);
+  root.style.setProperty('--color-brand-secondary', colors.secondary);
+  root.style.setProperty('--color-brand-secondary-hover', colors.secondary_hover);
+  root.style.setProperty('--color-brand-accent', colors.accent);
+  root.style.setProperty('--color-brand-accent-hover', colors.accent_hover);
+  root.style.setProperty('--color-brand-bg', colors.bg);
+  root.style.setProperty('--color-brand-surface', colors.surface);
+  root.style.setProperty('--color-brand-text', colors.text);
+  root.style.setProperty('--color-brand-text-muted', colors.text_muted);
+  root.style.setProperty('--color-brand-border', colors.border);
 };
 
 // Global cache variable to avoid multiple queries
@@ -60,6 +106,13 @@ export const useSiteConfig = () => {
     };
   }, []);
 
+  // Aplica as cores na inicialização/mudança das configurações
+  useEffect(() => {
+    if (config.colors) {
+      applyThemeColors(config.colors);
+    }
+  }, [config.colors]);
+
   return config;
 };
 
@@ -79,8 +132,13 @@ const fetchConfig = async () => {
         logo_dark_url: parsed.logo_dark_url || defaultConfig.logo_dark_url,
         favicon_url: parsed.favicon_url || defaultConfig.favicon_url,
         version: parsed.version || defaultConfig.version,
+        colors: parsed.colors ? {
+          ...defaultColors,
+          ...parsed.colors
+        } : defaultColors
       };
       cachedConfig = merged;
+      applyThemeColors(merged.colors);
       listeners.forEach(l => l(merged));
     }
   } catch (err) {

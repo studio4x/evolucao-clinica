@@ -121,6 +121,10 @@ export default function Login() {
               </>
             )}
           </button>
+          
+          <p className="mt-5 text-center text-[11px] text-brand-text-muted leading-relaxed">
+            Tanto para criar uma nova conta quanto para entrar em uma conta existente, o acesso é feito de forma segura e <strong>exclusiva através da sua conta Google</strong>.
+          </p>
         </div>
       </div>
       
