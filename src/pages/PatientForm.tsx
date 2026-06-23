@@ -130,6 +130,8 @@ export default function PatientForm() {
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
         alert("Sua sessão do Google expirou. Por favor, clique em 'Renovar Autenticação' abaixo para continuar.");
         setGoogleAccessToken(null);
+      } else if (msg.includes('userRateLimitExceeded') || msg.includes('rateLimitExceeded') || msg.includes('quotaExceeded') || msg.includes('403')) {
+        alert("O Google está limitando temporariamente a criação do documento. Tente novamente em alguns segundos.");
       } else {
         alert("Erro ao criar prontuário no Google Docs. Verifique sua conexão.");
       }

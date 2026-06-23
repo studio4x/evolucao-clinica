@@ -1,3 +1,40 @@
+const GOOGLE_API_MAX_ATTEMPTS = 3;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function isRetryableGoogleError(status: number, errorText: string) {
+  if (status === 429) return true;
+  if (status !== 403) return false;
+
+  return /userRateLimitExceeded|rateLimitExceeded|quotaExceeded|usageLimits|rate limit|quota/i.test(errorText);
+}
+
+async function googleApiFetch(url: string, options: RequestInit, context: string) {
+  for (let attempt = 1; attempt <= GOOGLE_API_MAX_ATTEMPTS; attempt++) {
+    const response = await fetch(url, options);
+
+    if (response.ok) {
+      return response;
+    }
+
+    const errorText = await response.text();
+    if (response.status === 401) {
+      throw new Error(`UNAUTHENTICATED: ${errorText}`);
+    }
+
+    const shouldRetry = attempt < GOOGLE_API_MAX_ATTEMPTS && isRetryableGoogleError(response.status, errorText);
+    if (!shouldRetry) {
+      throw new Error(`Google Drive API error (${context}): ${response.status} - ${errorText}`);
+    }
+
+    const delay = 1000 * attempt * attempt;
+    console.warn(`[GoogleDocs] ${context} rate limited (${response.status}). Retrying in ${delay}ms (attempt ${attempt}/${GOOGLE_API_MAX_ATTEMPTS}).`);
+    await sleep(delay);
+  }
+
+  throw new Error(`Google Drive API error (${context}): retry limit exceeded.`);
+}
+
 export async function appendToGoogleDoc(
   googleAccessToken: string,
   googleDocId: string,
@@ -17,7 +54,7 @@ export async function appendToGoogleDoc(
 
   const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
   
-  const response = await fetch(googleDocsUrl, {
+  const response = await googleApiFetch(googleDocsUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
@@ -33,15 +70,7 @@ export async function appendToGoogleDoc(
         },
       ],
     })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Docs API error: ${response.status} - ${errorText}`);
-  }
+  }, 'Doc append');
 
   return await response.json();
 }
@@ -53,7 +82,7 @@ export async function appendTextToGoogleDoc(
 ) {
   const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
   
-  const response = await fetch(googleDocsUrl, {
+  const response = await googleApiFetch(googleDocsUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
@@ -69,15 +98,7 @@ export async function appendTextToGoogleDoc(
         },
       ],
     })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Docs API error: ${response.status} - ${errorText}`);
-  }
+  }, 'Doc append');
 
   return await response.json();
 }
@@ -94,22 +115,14 @@ export async function createGoogleDoc(googleAccessToken: string, title: string, 
     body.parents = [folderId];
   }
   
-  const response = await fetch(url, {
+  const response = await googleApiFetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Drive API error (Doc): ${response.status} - ${errorText}`);
-  }
+  }, 'Doc create');
 
   const data = await response.json();
   return {
@@ -133,20 +146,12 @@ export async function listGoogleFiles(googleAccessToken: string, parentId: strin
 
   const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,mimeType)&pageSize=50`;
 
-  const response = await fetch(url, {
+  const response = await googleApiFetch(url, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
     }
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Drive API error (List): ${response.status} - ${errorText}`);
-  }
+  }, 'List');
 
   const data = await response.json();
   return data.files || [];
@@ -164,22 +169,14 @@ export async function createGoogleFolder(googleAccessToken: string, folderName: 
     body.parents = [parentFolderId];
   }
   
-  const response = await fetch(url, {
+  const response = await googleApiFetch(url, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify(body)
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Drive API error (Folder): ${response.status} - ${errorText}`);
-  }
+  }, 'Folder create');
 
   return await response.json();
 }
@@ -187,20 +184,12 @@ export async function createGoogleFolder(googleAccessToken: string, folderName: 
 export async function deleteGoogleFile(googleAccessToken: string, fileId: string) {
   const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
   
-  const response = await fetch(url, {
+  const response = await googleApiFetch(url, {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`
     }
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Drive API error (Delete): ${response.status} - ${errorText}`);
-  }
+  }, 'Delete');
 
   return true;
 }
@@ -208,20 +197,12 @@ export async function deleteGoogleFile(googleAccessToken: string, fileId: string
 export async function getGoogleDocContent(googleAccessToken: string, googleDocId: string): Promise<string> {
   const url = `https://docs.googleapis.com/v1/documents/${googleDocId}`;
   
-  const response = await fetch(url, {
+  const response = await googleApiFetch(url, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
     }
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    if (response.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Docs API error (Get): ${response.status} - ${errorText}`);
-  }
+  }, 'Doc get');
 
   const doc = await response.json();
   
@@ -263,20 +244,12 @@ export async function updateGoogleDocContent(
 ) {
   // 1. Obter o documento para saber a posição final (endIndex) do corpo
   const getUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}`;
-  const getResponse = await fetch(getUrl, {
+  const getResponse = await googleApiFetch(getUrl, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
     }
-  });
-
-  if (!getResponse.ok) {
-    const errorText = await getResponse.text();
-    if (getResponse.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Docs API error (Get for Update): ${getResponse.status} - ${errorText}`);
-  }
+  }, 'Doc get for update');
 
   const doc = await getResponse.json();
   const content = doc.body.content;
@@ -306,22 +279,14 @@ export async function updateGoogleDocContent(
   });
 
   const updateUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
-  const updateResponse = await fetch(updateUrl, {
+  const updateResponse = await googleApiFetch(updateUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${googleAccessToken}`,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ requests })
-  });
-
-  if (!updateResponse.ok) {
-    const errorText = await updateResponse.text();
-    if (updateResponse.status === 401) {
-      throw new Error("UNAUTHENTICATED: " + errorText);
-    }
-    throw new Error(`Google Docs API error (Update): ${updateResponse.status} - ${errorText}`);
-  }
+  }, 'Doc update');
 
   return await updateResponse.json();
 }
@@ -337,16 +302,12 @@ export async function getFolderHierarchy(
 
   while (currentId && depth < maxDepth) {
     const url = `https://www.googleapis.com/drive/v3/files/${currentId}?fields=id,name,parents`;
-    const response = await fetch(url, {
+    const response = await googleApiFetch(url, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${googleAccessToken}`,
       }
-    });
-
-    if (!response.ok) {
-      break;
-    }
+    }, 'Folder hierarchy');
 
     const data = await response.json();
     if (!data.id) break;

@@ -509,6 +509,8 @@ export default function PatientDetail() {
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
         alert("Sua sessão do Google expirou. Por favor, reautentique no painel.");
         setGoogleAccessToken(null);
+      } else if (msg.includes('userRateLimitExceeded') || msg.includes('rateLimitExceeded') || msg.includes('quotaExceeded') || msg.includes('403')) {
+        alert("O Google está limitando temporariamente essa ação. Tente novamente em alguns segundos.");
       } else {
         alert("Erro ao exportar para o Google Docs: " + msg);
       }
