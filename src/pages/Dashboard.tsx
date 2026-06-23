@@ -626,24 +626,24 @@ export default function Dashboard() {
 
       {/* Seção Google Agenda: Atendimentos de Hoje */}
       <div className="card p-6 bg-white border border-brand-border shadow-md">
-        <div className="flex items-center justify-between border-b border-brand-border pb-4 mb-4">
-          <div className="flex items-center space-x-3">
+        <div className="flex flex-col gap-4 border-b border-brand-border pb-4 mb-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center space-x-3 min-w-0">
             <div className="bg-brand-primary/10 text-brand-primary p-2 rounded-xl">
               <Calendar size={22} />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-xl font-display font-bold text-brand-primary">Atendimentos da Semana</h2>
-              <p className="text-xs text-brand-text-muted mt-0.5">
+              <p className="text-xs text-brand-text-muted mt-0.5 break-words">
                 Conectado ao Google Agenda: <span className="font-semibold text-brand-primary">{user?.email}</span>
               </p>
             </div>
           </div>
           {googleAccessToken && (
-            <div className="flex items-center gap-3">
+            <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap md:w-auto md:justify-end">
               <button 
                 onClick={fetchCalendarAndPatients}
                 disabled={calendarLoading}
-                className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5 disabled:opacity-50 cursor-pointer"
+                className="btn-outline w-full justify-center py-1.5 px-3 text-xs flex items-center space-x-1.5 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5 disabled:opacity-50 cursor-pointer sm:w-auto"
               >
                 {calendarLoading ? (
                   <>
@@ -659,7 +659,7 @@ export default function Dashboard() {
               </button>
               <button 
                 onClick={handleConnectGoogleCalendar}
-                className="text-xs text-brand-text-muted hover:text-brand-primary hover:underline font-medium cursor-pointer"
+                className="inline-flex w-full items-center justify-center text-xs text-brand-text-muted hover:text-brand-primary hover:underline font-medium cursor-pointer sm:w-auto sm:justify-start"
                 title="Conectar com outra conta ou renovar permissões do Google"
               >
                 Reconectar Conta
