@@ -237,6 +237,7 @@ export default function AdminPanel() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive'>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   // Estados da Chave Gemini
   const [currentGeminiKey, setCurrentGeminiKey] = useState('');
@@ -1154,6 +1155,64 @@ export default function AdminPanel() {
     }
   };
 
+  const handleDeleteProfessional = async (prof: Professional) => {
+    if (!user) return;
+
+    if (prof.id === user.id) {
+      alert('Não é possível excluir a própria conta administrativa.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir permanentemente ${prof.full_name} (${prof.google_email})?\n\n` +
+      'Esta ação remove o acesso, o perfil e os dados vinculados. Não poderá ser desfeita.'
+    );
+
+    if (!confirmed) return;
+
+    setDeletingUserId(prof.id);
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const res = await fetch(`/api/admin/professionals/${prof.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao excluir usuário.');
+      }
+
+      setProfessionals(prev => prev.filter(item => item.id !== prof.id));
+      setAdminTransactions(prev => prev.filter(tx => tx.professional_id !== prof.id));
+      setAdminNotifications(prev => prev.filter(notification => notification.user_id !== prof.id));
+      setUsageLogs(prev => prev.filter(log => log.professional_id !== prof.id));
+      setAdminTickets(prev => prev.filter(ticket => ticket.userId !== prof.id));
+
+      if (editingProf?.id === prof.id) {
+        setEditingProf(null);
+      }
+
+      if (selectedProfessionalId === prof.id) {
+        setSelectedProfessionalId('');
+      }
+
+      alert(data.message || 'Usuário excluído permanentemente.');
+    } catch (error: any) {
+      console.error('Erro ao excluir usuário:', error);
+      alert(`Falha ao excluir usuário: ${error.message || error}`);
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   const handleOpenEditSubscription = (prof: Professional) => {
     setEditingProf(prof);
     setEditPlan(prof.subscription_plan || 'trial');
@@ -1762,7 +1821,7 @@ export default function AdminPanel() {
                         </thead>
                         <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
                           {filteredProfessionals.map((prof) => {
-                            const isAdminSelf = prof.google_email === 'contato@studio4x.com.br';
+                            const isAdminSelf = prof.id === user?.id;
                             return (
                               <tr key={prof.id} className="hover:bg-brand-bg/30 transition-colors">
                                 <td className="p-4 pl-6">
@@ -1876,6 +1935,19 @@ export default function AdminPanel() {
                                           <Ban className="w-3.5 h-3.5" />
                                         </button>
                                       )}
+
+                                      <button
+                                        onClick={() => handleDeleteProfessional(prof)}
+                                        disabled={deletingUserId !== null || updatingId !== null}
+                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                        title="Excluir definitivamente"
+                                      >
+                                        {deletingUserId === prof.id ? (
+                                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        )}
+                                      </button>
                                     </div>
                                   )}
                                 </td>

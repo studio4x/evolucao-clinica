@@ -96,6 +96,24 @@ async function requireAuth(req: any, res: any, next: any) {
   }
 }
 
+async function requireAdmin(req: any, res: any, next: any) {
+  try {
+    const { data: prof, error } = await supabaseAdmin
+      .from("professionals")
+      .select("role")
+      .eq("id", req.user.id)
+      .single();
+
+    if (error || !prof || prof.role !== "admin") {
+      return res.status(403).json({ error: "Apenas administradores podem executar esta ação." });
+    }
+
+    next();
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Erro ao validar permissões de administrador" });
+  }
+}
+
 // Middleware para garantir que o profissional tem um plano ativo
 async function requireActiveSubscription(req: any, res: any, next: any) {
   try {
@@ -205,6 +223,95 @@ app.post("/api/notifications/unsubscribe", requireAuth, async (req: any, res) =>
   } catch (err: any) {
     console.error("Erro ao desinscrever push:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async (req: any, res) => {
+  const targetUserId = req.params.userId;
+
+  if (!targetUserId) {
+    return res.status(400).json({ error: "ID do usuário ausente" });
+  }
+
+  if (targetUserId === req.user.id) {
+    return res.status(400).json({ error: "Não é possível excluir a própria conta administrativa." });
+  }
+
+  try {
+    const { data: targetProf, error: targetProfError } = await supabaseAdmin
+      .from("professionals")
+      .select("id, full_name, google_email, role")
+      .eq("id", targetUserId)
+      .single();
+
+    if (targetProfError || !targetProf) {
+      return res.status(404).json({ error: "Usuário não encontrado." });
+    }
+
+    const cleanupTargets: Array<{ table: string; column: string }> = [
+      { table: "usage_logs", column: "professional_id" },
+      { table: "evolutions", column: "professional_id" },
+      { table: "patient_reports", column: "professional_id" },
+      { table: "patients", column: "professional_id" },
+      { table: "transactions", column: "professional_id" },
+      { table: "support_tickets", column: "user_id" },
+      { table: "notifications", column: "user_id" },
+      { table: "push_subscriptions", column: "user_id" }
+    ];
+
+    for (const target of cleanupTargets) {
+      const { error } = await supabaseAdmin
+        .from(target.table)
+        .delete()
+        .eq(target.column, targetUserId);
+
+      if (error) {
+        throw new Error(`Falha ao remover dados de ${target.table}: ${error.message}`);
+      }
+    }
+
+    const { data: supportFiles, error: supportFilesError } = await supabaseAdmin
+      .storage
+      .from("support_attachments")
+      .list(`support/${targetUserId}`, { limit: 1000 });
+
+    if (supportFilesError) {
+      throw new Error(`Falha ao listar anexos de suporte do usuário: ${supportFilesError.message}`);
+    }
+
+    if (supportFiles && supportFiles.length > 0) {
+      const supportPaths = supportFiles.map((file) => `support/${targetUserId}/${file.name}`);
+      const { error: supportRemoveError } = await supabaseAdmin
+        .storage
+        .from("support_attachments")
+        .remove(supportPaths);
+
+      if (supportRemoveError) {
+        throw new Error(`Falha ao remover anexos de suporte do usuário: ${supportRemoveError.message}`);
+      }
+    }
+
+    const { error: profDeleteError } = await supabaseAdmin
+      .from("professionals")
+      .delete()
+      .eq("id", targetUserId);
+
+    if (profDeleteError) {
+      throw new Error(`Falha ao remover o perfil do usuário: ${profDeleteError.message}`);
+    }
+
+    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+    if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
+      throw new Error(`Falha ao remover a conta de autenticação: ${authDeleteError.message}`);
+    }
+
+    return res.json({
+      success: true,
+      message: `Usuário ${targetProf.full_name || targetProf.google_email || targetUserId} excluído permanentemente.`
+    });
+  } catch (err: any) {
+    console.error("Erro ao excluir usuário do admin:", err);
+    return res.status(500).json({ error: err.message || "Erro ao excluir usuário." });
   }
 });
 
