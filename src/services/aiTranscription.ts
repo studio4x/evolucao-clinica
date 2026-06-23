@@ -6,6 +6,7 @@ export interface TranscriptionOptions {
   mimeType: string;
   onRetry?: (attempt: number, delay: number, isFallback: boolean) => void;
   audioDuration?: number; // em segundos
+  customPrompt?: string;
 }
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
@@ -21,11 +22,11 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 };
 
 export const transcribeAudio = async (options: TranscriptionOptions): Promise<string> => {
-  const { audioBlob, mimeType, onRetry, audioDuration } = options;
+  const { audioBlob, mimeType, onRetry, audioDuration, customPrompt } = options;
   const maxRetries = 3;
   let retryCount = 0;
 
-  const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+  const prompt = customPrompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
   const base64Audio = await blobToBase64(audioBlob);
 
   const attemptTranscription = async (): Promise<string> => {

@@ -41,6 +41,8 @@ export default function NewEvolution() {
   const [errorMessage, setErrorMessage] = useState('');
   const [processingMessage, setProcessingMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
   // Estados para visualização/edição do prontuário no modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -191,22 +193,31 @@ export default function NewEvolution() {
   };
 
   useEffect(() => {
-    const fetchPatient = async () => {
+    const fetchTemplatesAndPatient = async () => {
       if (!id) return;
       try {
-        const { data, error } = await supabase
+        const { data: templatesData, error: templatesError } = await supabase
+          .from('evolution_templates')
+          .select('*')
+          .order('name');
+        if (!templatesError && templatesData) {
+          setTemplates(templatesData);
+        }
+
+        const { data: patientData, error: patientError } = await supabase
           .from('patients')
           .select('*')
           .eq('id', id)
           .single();
-        if (!error && data) {
-          setPatient(data);
+        if (!patientError && patientData) {
+          setPatient(patientData);
+          setSelectedTemplateId(patientData.default_template_id || '');
         }
       } catch (err) {
-        console.error("Erro ao buscar paciente:", err);
+        console.error("Erro ao carregar dados iniciais:", err);
       }
     };
-    fetchPatient();
+    fetchTemplatesAndPatient();
   }, [id]);
 
   // Efeito para verificar rascunhos não finalizados
@@ -595,6 +606,9 @@ export default function NewEvolution() {
     const totalAudioDuration = getTotalAudioDuration(items);
     const audioBlobs = items.map(item => item.blob);
 
+    const activeTemplate = templates.find(t => t.id === selectedTemplateId);
+    const customPrompt = activeTemplate?.system_prompt_instruction;
+
     const evolutionData = {
       id: evolutionId,
       professional_id: user.id,
@@ -604,7 +618,8 @@ export default function NewEvolution() {
       google_doc_append_status: 'pending',
       audio_duration_seconds: totalAudioDuration,
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      template_id: selectedTemplateId || null
     };
 
     const transcribeAllAudios = async () => {
@@ -622,6 +637,7 @@ export default function NewEvolution() {
           audioBlob: item.blob,
           mimeType: item.blob.type || 'audio/webm',
           audioDuration: item.duration || 0,
+          customPrompt: customPrompt || undefined,
           onRetry: (attempt, delay, isFallback) => {
             console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
           }
@@ -832,15 +848,33 @@ export default function NewEvolution() {
       )}
 
       <div className="card p-6 space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-brand-text mb-1">Data da Sessão</label>
-          <input
-            type="date"
-            required
-            value={sessionDate}
-            onChange={e => setSessionDate(e.target.value)}
-            className="input-field p-2"
-          />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">Data da Sessão</label>
+            <input
+              type="date"
+              required
+              value={sessionDate}
+              onChange={e => setSessionDate(e.target.value)}
+              className="input-field p-2"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">Template de Evolução</label>
+            <select
+              value={selectedTemplateId}
+              onChange={e => setSelectedTemplateId(e.target.value)}
+              className="input-field p-2"
+            >
+              <option value="">Sem template padrão (Formatação Geral)</option>
+              {templates.map(t => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="border-t border-brand-border pt-6">
