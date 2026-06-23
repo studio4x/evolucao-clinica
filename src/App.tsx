@@ -121,11 +121,13 @@ export default function App() {
   const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
+  const authSessionHandlingRef = useRef(false);
 
-  const clearProfessionalChannel = () => {
+  const clearProfessionalChannel = async () => {
     if (professionalChannelRef.current) {
-      void supabase.removeChannel(professionalChannelRef.current);
+      const channel = professionalChannelRef.current;
       professionalChannelRef.current = null;
+      await supabase.removeChannel(channel);
     }
   };
 
@@ -148,167 +150,151 @@ export default function App() {
     };
 
     const handleAuthSession = async (session: any) => {
+      if (authSessionHandlingRef.current) {
+        return;
+      }
+
+      authSessionHandlingRef.current = true;
+
       const currentState = useAuthStore.getState();
 
-      if (session) {
-        const isSameUser = currentState.user?.id === session.user.id;
-        const hasProfile = currentState.profileStatus !== null;
+      try {
+        if (session) {
+          const isSameUser = currentState.user?.id === session.user.id;
+          const hasProfile = currentState.profileStatus !== null;
 
-        if (isSameUser && hasProfile) {
-          // Se o provider_token do Google mudou ou foi fornecido, atualiza
-          if (session.provider_token && currentState.googleAccessToken !== session.provider_token) {
-            setGoogleAccessToken(session.provider_token);
+          if (isSameUser && hasProfile) {
+            // Se o provider_token do Google mudou ou foi fornecido, atualiza
+            if (session.provider_token && currentState.googleAccessToken !== session.provider_token) {
+              setGoogleAccessToken(session.provider_token);
+            }
+            setAuthReady(true);
+            return;
           }
-          setAuthReady(true);
-          return;
-        }
 
-        clearProfessionalChannel();
+          await clearProfessionalChannel();
 
-        setUser(session.user);
-        if (session.provider_token) {
-          setGoogleAccessToken(session.provider_token);
-        } else {
-          // Opcional: em alguns fluxos do Supabase o token do provedor pode ser guardado no localStorage
-          // se o redirecionamento limpar o provider_token após a primeira captura.
-        }
+          setUser(session.user);
+          if (session.provider_token) {
+            setGoogleAccessToken(session.provider_token);
+          } else {
+            // Opcional: em alguns fluxos do Supabase o token do provedor pode ser guardado no localStorage
+            // se o redirecionamento limpar o provider_token após a primeira captura.
+          }
 
-        try {
-          const { data, error } = await supabase
-            .from('professionals')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
+          let profileData: any = null;
 
-          if (error) {
-            console.error("Erro ao buscar profissional no Supabase:", error);
-            // Se for PGRST116 (registro não encontrado/novo cadastro), aguarda liberação
-            if (error.code === 'PGRST116') {
-              try {
+          try {
+            const { data, error } = await supabase
+              .from('professionals')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+
+            if (error) {
+              console.error("Erro ao buscar profissional no Supabase:", error);
+              // Se for PGRST116 (registro não encontrado/novo cadastro), aguarda liberação
+              if (error.code === 'PGRST116') {
                 const bootstrapData = await bootstrapProfessionalAccess(session);
-                const bootstrapProfile = bootstrapData.profile || {};
-                const nextStatus = bootstrapProfile.status || bootstrapData.status || 'pending';
+                profileData = bootstrapData.profile || null;
 
-                setProfileInfo(
-                  nextStatus,
-                  bootstrapProfile.role || 'therapist',
-                  bootstrapProfile.subscription_plan || 'trial',
-                  bootstrapProfile.subscription_status || 'trialing',
-                  bootstrapProfile.subscription_ends_at || null,
-                  bootstrapProfile.trial_ends_at || null
-                );
-
-                pendingOnboardingNoticeRef.current = nextStatus === 'pending' ? session.user.id : null;
-              } catch (bootstrapError) {
-                console.error('Erro ao sincronizar onboarding do profissional:', bootstrapError);
-                setProfileInfo('pending', 'therapist', 'trial', 'trialing', null, null);
-                pendingOnboardingNoticeRef.current = session.user.id;
+                if (!profileData) {
+                  throw new Error('Não foi possível carregar o perfil do profissional.');
+                }
+              } else {
+                throw error;
               }
             } else {
-              // Outros erros (ex: offline). Evita inferir role/status errados e mantém o app em estado neutro.
-              setProfileInfo(null, null, null, null, null, null);
-              pendingOnboardingNoticeRef.current = null;
+              profileData = data;
             }
-          } else if (data) {
-            if (data.status === 'pending') {
+
+            if (!profileData) {
+              throw new Error('Perfil do profissional indisponível.');
+            }
+
+            if (profileData.status === 'pending') {
               try {
                 const bootstrapData = await bootstrapProfessionalAccess(session);
-                const bootstrapProfile = bootstrapData.profile || {};
-                const nextStatus = bootstrapProfile.status || bootstrapData.status || 'pending';
-
-                setProfileInfo(
-                  nextStatus,
-                  bootstrapProfile.role || data.role || 'therapist',
-                  bootstrapProfile.subscription_plan || data.subscription_plan,
-                  bootstrapProfile.subscription_status || data.subscription_status,
-                  bootstrapProfile.subscription_ends_at || data.subscription_ends_at,
-                  bootstrapProfile.trial_ends_at || data.trial_ends_at
-                );
-
-                if (nextStatus === 'pending') {
-                  pendingOnboardingNoticeRef.current = session.user.id;
-                } else {
-                  pendingOnboardingNoticeRef.current = null;
-                }
+                profileData = bootstrapData.profile || profileData;
               } catch (bootstrapError) {
                 console.error('Erro ao sincronizar onboarding pendente:', bootstrapError);
-                setProfileInfo(
-                  data.status,
-                  data.role || 'therapist',
-                  data.subscription_plan,
-                  data.subscription_status,
-                  data.subscription_ends_at,
-                  data.trial_ends_at
-                );
-                pendingOnboardingNoticeRef.current = session.user.id;
               }
-            } else {
-              setProfileInfo(
-                data.status,
-                data.role || 'therapist',
-                data.subscription_plan,
-                data.subscription_status,
-                data.subscription_ends_at,
-                data.trial_ends_at
-              );
-              pendingOnboardingNoticeRef.current = null;
+            }
+
+            setProfileInfo(
+              profileData.status,
+              profileData.role || 'therapist',
+              profileData.subscription_plan,
+              profileData.subscription_status,
+              profileData.subscription_ends_at,
+              profileData.trial_ends_at
+            );
+
+            pendingOnboardingNoticeRef.current = profileData.status === 'pending' ? session.user.id : null;
+          } catch (profileError) {
+            console.error('Erro ao processar perfil do profissional:', profileError);
+            if (currentState.profileStatus === null && currentState.profileRole === null) {
+              setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
             }
           }
 
-          professionalChannelRef.current = supabase
-            .channel(`professional-status-${session.user.id}`)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public',
-                table: 'professionals',
-                filter: `id=eq.${session.user.id}`
-              },
-              async () => {
-                try {
-                  const { data: updatedProf } = await supabase
-                    .from('professionals')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
+          try {
+            const channel = supabase
+              .channel(`professional-status-${session.user.id}`)
+              .on(
+                'postgres_changes',
+                {
+                  event: '*',
+                  schema: 'public',
+                  table: 'professionals',
+                  filter: `id=eq.${session.user.id}`
+                },
+                async () => {
+                  try {
+                    const { data: updatedProf } = await supabase
+                      .from('professionals')
+                      .select('*')
+                      .eq('id', session.user.id)
+                      .single();
 
-                  if (updatedProf) {
-                    setProfileInfo(
-                      updatedProf.status,
-                      updatedProf.role || 'therapist',
-                      updatedProf.subscription_plan,
-                      updatedProf.subscription_status,
-                      updatedProf.subscription_ends_at,
-                      updatedProf.trial_ends_at
-                    );
+                    if (updatedProf) {
+                      setProfileInfo(
+                        updatedProf.status,
+                        updatedProf.role || 'therapist',
+                        updatedProf.subscription_plan,
+                        updatedProf.subscription_status,
+                        updatedProf.subscription_ends_at,
+                        updatedProf.trial_ends_at
+                      );
 
-                    if (updatedProf.status !== 'pending') {
-                      pendingOnboardingNoticeRef.current = null;
+                      if (updatedProf.status !== 'pending') {
+                        pendingOnboardingNoticeRef.current = null;
+                      }
                     }
+                  } catch (profileError) {
+                    console.error('Erro ao sincronizar status do profissional:', profileError);
                   }
-                } catch (profileError) {
-                  console.error('Erro ao sincronizar status do profissional:', profileError);
                 }
-              }
-            )
-            .subscribe();
-        } catch (error) {
-          console.error("Erro ao processar perfil do profissional:", error);
-          // Em caso de exceção, não rebaixa o usuário para o fluxo comum por engano.
-          setProfileInfo(null, null, null, null, null, null);
+              )
+              .subscribe();
+
+            professionalChannelRef.current = channel;
+          } catch (channelError) {
+            console.error('Erro ao configurar canal realtime do profissional:', channelError);
+          }
+        } else {
+          await clearProfessionalChannel();
           pendingOnboardingNoticeRef.current = null;
+          if (currentState.user !== null || currentState.profileStatus !== null) {
+            setUser(null);
+            setGoogleAccessToken(null);
+            setProfileInfo(null, null, null, null, null, null);
+          }
         }
-      } else {
-        clearProfessionalChannel();
-        pendingOnboardingNoticeRef.current = null;
-        if (currentState.user !== null || currentState.profileStatus !== null) {
-          setUser(null);
-          setGoogleAccessToken(null);
-          setProfileInfo(null, null, null, null, null, null);
-        }
+      } finally {
+        authSessionHandlingRef.current = false;
+        setAuthReady(true);
       }
-      setAuthReady(true);
     };
 
     // Pega a sessão inicial
