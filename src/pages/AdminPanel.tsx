@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import EmailHistory from './EmailHistory';
-import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, isSupportTicketUnread } from '../services/support';
+import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 
@@ -1114,15 +1114,25 @@ export default function AdminPanel() {
     }
   };
 
+  const unreadSupportMessagesCount = adminTickets.filter(
+    (ticket) => ticket.latestMessageSenderRole === 'user' && isSupportTicketUnread(ticket, 'admin')
+  ).length;
+
   useEffect(() => {
     if (user && profileRole === 'admin' && activeTab === 'support') {
       fetchAdminTickets(true);
 
-      const unsubscribe = subscribeToAllSupportTickets(() => {
+      const unsubscribeTickets = subscribeToAllSupportTickets(() => {
+        fetchAdminTickets(false);
+      });
+      const unsubscribeMessages = subscribeToAllSupportMessages(() => {
         fetchAdminTickets(false);
       });
 
-      return unsubscribe;
+      return () => {
+        unsubscribeTickets();
+        unsubscribeMessages();
+      };
     }
   }, [user, profileRole, activeTab]);
 
@@ -3977,6 +3987,17 @@ export default function AdminPanel() {
                           Monitore e responda às solicitações. Priorize os clientes VIP (Anual) com SLA de 2 horas úteis.
                         </p>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-2 self-start md:self-center">
+                      {unreadSupportMessagesCount > 0 && (
+                        <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full text-[10px] font-bold border border-amber-200">
+                          <MessageSquare size={12} />
+                          {unreadSupportMessagesCount} nova{unreadSupportMessagesCount > 1 ? 's' : ''} mensagem{unreadSupportMessagesCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                      <span className="bg-gray-50 text-gray-500 px-3 py-1.5 rounded-full text-xs font-semibold border border-gray-100">
+                        {adminTickets.length} {adminTickets.length === 1 ? 'chamado' : 'chamados'}
+                      </span>
                     </div>
                   </div>
 

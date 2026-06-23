@@ -191,6 +191,21 @@ export function subscribeToMySupportTickets(userId: string, onChange: () => void
   };
 }
 
+export function subscribeToMySupportMessages(onChange: () => void): SupportRealtimeCleanup {
+  const channel = supabase
+    .channel('support-messages-user-overview')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'support_messages' },
+      () => onChange()
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
 // Fetch all support tickets (Admin only)
 export async function fetchAdminSupportTickets(): Promise<SupportTicket[]> {
   const { data: tickets, error: ticketsError } = await supabase
@@ -234,6 +249,21 @@ export function subscribeToAllSupportTickets(onChange: () => void): SupportRealt
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'support_tickets' },
+      () => onChange()
+    )
+    .subscribe();
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
+}
+
+export function subscribeToAllSupportMessages(onChange: () => void): SupportRealtimeCleanup {
+  const channel = supabase
+    .channel('support-messages-admin-overview')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'support_messages' },
       () => onChange()
     )
     .subscribe();

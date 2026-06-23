@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { LifeBuoy, PlusCircle, MessageSquare, ArrowRight, Clock, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { fetchMySupportTickets, SupportTicket, isSupportTicketUnread, setSupportTicketLastSeen, subscribeToMySupportTickets } from '../services/support';
+import { fetchMySupportTickets, SupportTicket, isSupportTicketUnread, setSupportTicketLastSeen, subscribeToMySupportTickets, subscribeToMySupportMessages } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import SupportTicketModal from '../components/support/SupportTicketModal';
@@ -32,11 +32,17 @@ export default function SupportTickets() {
     if (!user) return;
 
     loadTickets(true);
-    const unsubscribe = subscribeToMySupportTickets(user.id, () => {
+    const unsubscribeTickets = subscribeToMySupportTickets(user.id, () => {
+      loadTickets(false);
+    });
+    const unsubscribeMessages = subscribeToMySupportMessages(() => {
       loadTickets(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribeTickets();
+      unsubscribeMessages();
+    };
   }, [user]);
 
   useEffect(() => {
@@ -63,6 +69,10 @@ export default function SupportTickets() {
       default: return 'Dúvida Geral';
     }
   };
+
+  const unreadRepliesCount = tickets.filter(
+    (ticket) => ticket.latestMessageSenderRole === 'admin' && isSupportTicketUnread(ticket, 'user')
+  ).length;
 
   // Dynamic SLA Box depending on the user's plan
   let slaInfoCard = (
@@ -168,7 +178,15 @@ export default function SupportTickets() {
       {/* Tickets List */}
       <div className="card shadow-md overflow-hidden bg-white border border-brand-border rounded-3xl">
         <div className="px-6 py-5 border-b border-brand-border flex items-center justify-between">
-          <h3 className="font-bold text-brand-text">Histórico de Chamados</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-brand-text">Histórico de Chamados</h3>
+            {unreadRepliesCount > 0 && (
+              <span className="inline-flex items-center gap-1 bg-brand-primary/10 text-brand-primary px-3 py-1 rounded-full text-[10px] font-bold border border-brand-primary/15">
+                <MessageSquare size={12} />
+                {unreadRepliesCount} nova{unreadRepliesCount > 1 ? 's' : ''} resposta{unreadRepliesCount > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
           <span className="bg-gray-50 text-gray-500 px-3 py-1 rounded-full text-xs font-semibold border border-gray-100">
             {tickets.length} {tickets.length === 1 ? 'chamado' : 'chamados'}
           </span>
