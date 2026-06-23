@@ -83,7 +83,7 @@ export default function SupportTickets() {
           <div>
             <h4 className="text-sm font-bold text-amber-900 flex items-center">
               <span>Garantia de Suporte VIP Ativa</span>
-              <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold border border-amber-200">Yearly</span>
+              <span className="ml-2 text-xs bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-semibold border border-amber-200">Anual</span>
             </h4>
             <p className="text-xs text-amber-800/80 mt-1 leading-relaxed">
               Sua assinatura anual lhe concede prioridade máxima na fila de atendimento!
@@ -108,7 +108,7 @@ export default function SupportTickets() {
           <div>
             <h4 className="text-sm font-bold text-brand-text flex items-center">
               <span>Garantia de Suporte Ativa</span>
-              <span className="ml-2 text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-semibold">Monthly</span>
+              <span className="ml-2 text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-semibold">Mensal</span>
             </h4>
             <p className="text-xs text-brand-text-muted mt-1 leading-relaxed">
               Sua assinatura mensal garante respostas humanas ágeis da nossa equipe.
