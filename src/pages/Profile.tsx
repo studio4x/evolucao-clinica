@@ -10,6 +10,7 @@ export default function Profile() {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [professionalTitle, setProfessionalTitle] = useState('');
+  const [professionalRegister, setProfessionalRegister] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -26,7 +27,7 @@ export default function Profile() {
         // Busca os dados da tabela professionals
         const { data, error } = await supabase
           .from('professionals')
-          .select('full_name, professional_title')
+          .select('full_name, professional_title, professional_register')
           .eq('id', user.id)
           .single();
 
@@ -39,6 +40,7 @@ export default function Profile() {
             setLastName(nameParts.slice(1).join(' ') || '');
           }
           setProfessionalTitle(data.professional_title || 'Terapeuta');
+          setProfessionalRegister(data.professional_register || '');
         } else {
           // Fallback para metadados do auth
           const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
@@ -80,6 +82,7 @@ export default function Profile() {
         .update({
           full_name: fullName,
           professional_title: professionalTitle.trim(),
+          professional_register: professionalRegister.trim() || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -240,12 +243,32 @@ export default function Profile() {
                   value={professionalTitle}
                   onChange={(e) => setProfessionalTitle(e.target.value)}
                   className="input-field pl-10 pr-4 py-3"
-                  placeholder="Ex: Terapeuta, Fisioterapeuta, Psicólogo"
+                  placeholder="Ex: Terapeuta Ocupacional, Fonoaudióloga, Psicóloga"
                   disabled={saving}
                 />
               </div>
               <p className="text-[10px] text-brand-text-muted">
-                Este rótulo será exibido abaixo do seu nome no perfil e em outros locais da plataforma.
+                Este rótulo será exibido no seu perfil, nos relatórios e define a especialidade usada pela IA.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                Nº de Registro de Classe
+              </label>
+              <div className="relative">
+                <ShieldAlert className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                <input
+                  type="text"
+                  value={professionalRegister}
+                  onChange={(e) => setProfessionalRegister(e.target.value)}
+                  className="input-field pl-10 pr-4 py-3"
+                  placeholder="Ex: CREFITO-3 123456-F, CRP 06/12345"
+                  disabled={saving}
+                />
+              </div>
+              <p className="text-[10px] text-brand-text-muted">
+                Número do seu conselho de classe. Será exibido nos relatórios gerados pela IA.
               </p>
             </div>
 

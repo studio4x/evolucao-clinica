@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,10 +14,12 @@ import { sendNotification } from '../services/notificationHelper';
 export default function NewEvolution() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
   
   const [patient, setPatient] = useState<any>(null);
-  const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+  const dateParam = searchParams.get('date');
+  const [sessionDate, setSessionDate] = useState(dateParam || new Date().toISOString().split('T')[0]);
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);

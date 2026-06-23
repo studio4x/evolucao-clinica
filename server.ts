@@ -637,12 +637,17 @@ app.post("/api/patients/:id/ai-report", requireAuth, async (req: any, res) => {
     // B. Obter informações do profissional logado
     const { data: professional, error: profError } = await supabaseAdmin
       .from("professionals")
-      .select("full_name, professional_title")
+      .select("full_name, professional_title, professional_register")
       .eq("id", req.user.id)
       .single();
 
     const profName = professional?.full_name || req.user.user_metadata?.full_name || "Profissional";
     const profTitle = professional?.professional_title || "Terapeuta";
+    const profRegister = professional?.professional_register || null;
+    // Linha de rodapé: inclui o número de registro caso exista
+    const profSignature = profRegister
+      ? `${profName} — ${profTitle} | Registro: ${profRegister}`
+      : `${profName} — ${profTitle}`;
 
     // C. Determinar o intervalo de datas (para repassar ao prompt da IA)
     let start: string | null = null;
@@ -780,6 +785,7 @@ Você DEVE retornar o relatório inteiramente em formato Markdown, seguindo EXAT
 **Período Analisado:** [Período]  
 **Profissional:** [Nome do Profissional]  
 **Especialidade:** [Cargo/Especialidade]  
+${profRegister ? `**Registro Profissional:** ${profRegister}  ` : ''}
 **Data de Emissão:** [Data de hoje em DD/MM/AAAA]
 
 ---
@@ -801,7 +807,7 @@ Você DEVE retornar o relatório inteiramente em formato Markdown, seguindo EXAT
 [Parágrafos com sugestões práticas para família/escola e considerações finais]
 
 ---
-*Documento gerado por ${profName} — ${profTitle}*
+*Documento gerado por ${profSignature}*
 
 Regras de formatação:
 - Use **negrito** para destacar termos clínicos importantes, nomes de habilidades ou conquistas relevantes.
@@ -816,7 +822,9 @@ Dados do Paciente:
 
 Dados do Profissional:
 - Nome: ${profName}
-- Especialidade/Cargo: ${profTitle}
+- Especialidade/Cargo: ${profTitle}${profRegister ? ` | Registro: ${profRegister}` : ''}
+
+IMPORTANTE: A especialidade é "${profTitle}". Use esse contexto para calibrar os objetivos terapêuticos, terminologia e ênfases do relatório. Por exemplo, um Terapeuta Ocupacional foca em AVDs e integração sensorial; um Fonoaudiólogo em comunicação e deglutição; um Psicólogo em comportamento e saúde mental; e assim por diante.
 
 Conteúdo do Prontuário Lido do Google Docs:
 ----------------------------------------
@@ -842,7 +850,8 @@ Você DEVE retornar o PDI inteiramente em formato Markdown, seguindo EXATAMENTE 
 **Paciente:** [Nome do Paciente]  
 **Data do Plano:** [Data de hoje em DD/MM/AAAA]  
 **Profissional:** [Nome do Profissional]  
-**Especialidade:** [Cargo/Especialidade]
+**Especialidade:** [Cargo/Especialidade]  
+${profRegister ? `**Registro Profissional:** ${profRegister}  ` : ''}
 
 ---
 
@@ -863,7 +872,7 @@ Você DEVE retornar o PDI inteiramente em formato Markdown, seguindo EXATAMENTE 
 - [Meta 2]
 
 ---
-*Documento elaborado por ${profName} — ${profTitle}*
+*Documento elaborado por ${profSignature}*
 
 Regras de formatação:
 - Use **negrito** para destacar termos clínicos importantes, objetivos prioritários ou estratégias-chave.
@@ -878,7 +887,9 @@ Dados do Paciente:
 
 Dados do Profissional:
 - Nome: ${profName}
-- Especialidade/Cargo: ${profTitle}
+- Especialidade/Cargo: ${profTitle}${profRegister ? ` | Registro: ${profRegister}` : ''}
+
+IMPORTANTE: A especialidade é "${profTitle}". Use esse contexto para calibrar os objetivos e estratégias do PDI com termos e enfoques específicos dessa área. Por exemplo, um Terapeuta Ocupacional foca em AVDs, independência funcional e integração sensorial; um Fonoaudiólogo em comunicação, linguagem e deglutição; um Psicólogo em comportamento, vínculo e regulação emocional; e assim por diante.
 
 Conteúdo do Prontuário Lido do Google Docs:
 ----------------------------------------
