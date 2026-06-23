@@ -1,9 +1,62 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar } from 'lucide-react';
+import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2 } from 'lucide-react';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
+const normalizeText = (text: string): string => {
+  if (!text) return '';
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
+    .toLowerCase()
+    .trim();
+};
+
+const matchPatientWithEvent = (patient: any, summary: string, description: string): boolean => {
+  const normSummary = normalizeText(summary);
+  const normDesc = normalizeText(description);
+  
+  const normFullName = normalizeText(patient.name || '');
+  const normNickname = patient.nickname ? normalizeText(patient.nickname) : '';
+  
+  // 1. Correspondência do apelido (se tiver pelo menos 2 caracteres)
+  if (normNickname && normNickname.length >= 2) {
+    const nicknameRegex = new RegExp(`\\b${normNickname}\\b`, 'i');
+    if (nicknameRegex.test(normSummary) || nicknameRegex.test(normDesc)) {
+      return true;
+    }
+  }
+
+  // 2. Correspondência do nome completo
+  if (normFullName && (normSummary.includes(normFullName) || normDesc.includes(normFullName))) {
+    return true;
+  }
+  
+  // 3. Correspondência de partes do nome (primeiro nome ou outras partes significativas)
+  const ignoreWords = ['de', 'da', 'do', 'das', 'dos', 'com', 'para', 'em'];
+  const nameParts = normFullName.split(/\s+/).filter(p => p.length >= 2 && !ignoreWords.includes(p));
+  
+  if (nameParts.length > 0) {
+    // Tenta encontrar o primeiro nome como palavra inteira
+    const firstName = nameParts[0];
+    const firstRegex = new RegExp(`\\b${firstName}\\b`, 'i');
+    if (firstRegex.test(normSummary) || firstRegex.test(normDesc)) {
+      return true;
+    }
+    
+    // Se o evento contiver qualquer outro nome significativo do paciente
+    for (let i = 1; i < nameParts.length; i++) {
+      const part = nameParts[i];
+      const partRegex = new RegExp(`\\b${part}\\b`, 'i');
+      if (partRegex.test(normSummary) || partRegex.test(normDesc)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
 
 export default function Dashboard() {
   const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
@@ -38,128 +91,104 @@ export default function Dashboard() {
     }
   };
 
-  useEffect(() => {
-    const fetchCalendarAndPatients = async () => {
-      if (!user) return;
-      
-      try {
-        setCalendarLoading(true);
-        setCalendarError(null);
+  const fetchCalendarAndPatients = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      setCalendarLoading(true);
+      setCalendarError(null);
 
-        // 1. Busca pacientes ativos
-        const { data: patientsData, error: patientsError } = await supabase
-          .from('patients')
-          .select('id, name, nickname')
-          .eq('professional_id', user.id)
-          .eq('status', 'active');
+      // 1. Busca pacientes ativos
+      const { data: patientsData, error: patientsError } = await supabase
+        .from('patients')
+        .select('id, name, nickname')
+        .eq('professional_id', user.id)
+        .eq('status', 'active');
 
-        if (patientsError) throw patientsError;
-        setPatients(patientsData || []);
+      if (patientsError) throw patientsError;
+      setPatients(patientsData || []);
 
-        // 2. Busca evoluções realizadas hoje (no fuso local do terapeuta)
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const localTodayStr = `${year}-${month}-${day}`;
+      // 2. Busca evoluções realizadas hoje (no fuso local do terapeuta)
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const localTodayStr = `${year}-${month}-${day}`;
 
-        const { data: evolutionsToday, error: evolutionsError } = await supabase
-          .from('evolutions')
-          .select('id, patient_id')
-          .eq('professional_id', user.id)
-          .eq('session_date', localTodayStr);
+      const { data: evolutionsToday, error: evolutionsError } = await supabase
+        .from('evolutions')
+        .select('id, patient_id')
+        .eq('professional_id', user.id)
+        .eq('session_date', localTodayStr);
 
-        if (evolutionsError) throw evolutionsError;
+      if (evolutionsError) throw evolutionsError;
 
-        const evolvedSet = new Set<string>(evolutionsToday?.map(e => e.patient_id) || []);
-        setEvolvedPatientIds(evolvedSet);
+      const evolvedSet = new Set<string>(evolutionsToday?.map(e => e.patient_id) || []);
+      setEvolvedPatientIds(evolvedSet);
 
-        // 3. Busca eventos do Google Calendar se estiver conectado
-        if (googleAccessToken) {
-          const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-          const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-          
-          try {
-            const events = await listGoogleCalendarEvents(
-              googleAccessToken,
-              startOfDay.toISOString(),
-              endOfDay.toISOString()
+      // 3. Busca eventos do Google Calendar se estiver conectado
+      if (googleAccessToken) {
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        
+        try {
+          const events = await listGoogleCalendarEvents(
+            googleAccessToken,
+            startOfDay.toISOString(),
+            endOfDay.toISOString()
+          );
+
+          // Filtra os eventos comparando inteligentemente com os pacientes ativos
+          const matchedEvents = events.filter(event => {
+            return (patientsData || []).some(patient => 
+              matchPatientWithEvent(patient, event.summary || '', event.description || '')
+            );
+          });
+
+          // Mapeia eventos adicionando o objeto de paciente e status
+          const mappedEvents = matchedEvents.map(event => {
+            const matchedPatient = (patientsData || []).find(patient => 
+              matchPatientWithEvent(patient, event.summary || '', event.description || '')
             );
 
-            // Filtra os eventos comparando inteligentemente com os pacientes ativos
-            const matchedEvents = events.filter(event => {
-              return (patientsData || []).some(patient => {
-                const summary = (event.summary || '').toLowerCase();
-                const description = (event.description || '').toLowerCase();
-                const name = patient.name.toLowerCase();
-                const nickname = (patient.nickname || '').toLowerCase();
+            return {
+              ...event,
+              patient: matchedPatient,
+              evolved: matchedPatient ? evolvedSet.has(matchedPatient.id) : false
+            };
+          });
 
-                // Correspondência exata do nome completo ou apelido
-                if (summary.includes(name) || description.includes(name)) return true;
-                if (nickname && nickname.length > 2 && (summary.includes(nickname) || description.includes(nickname))) return true;
-
-                // Correspondência do primeiro nome com limite de palavra
-                const nameParts = name.split(/\s+/).filter(p => p.length > 2);
-                if (nameParts.length > 0) {
-                  const firstName = nameParts[0];
-                  const regex = new RegExp(`\\b${firstName}\\b`, 'i');
-                  if (regex.test(summary) || regex.test(description)) {
-                    return true;
-                  }
-                }
-
-                return false;
-              });
-            });
-
-            // Mapeia eventos adicionando o objeto de paciente e status
-            const mappedEvents = matchedEvents.map(event => {
-              const matchedPatient = (patientsData || []).find(patient => {
-                const summary = (event.summary || '').toLowerCase();
-                const description = (event.description || '').toLowerCase();
-                const name = patient.name.toLowerCase();
-                const nickname = (patient.nickname || '').toLowerCase();
-
-                if (summary.includes(name) || description.includes(name)) return true;
-                if (nickname && nickname.length > 2 && (summary.includes(nickname) || description.includes(nickname))) return true;
-
-                const nameParts = name.split(/\s+/).filter(p => p.length > 2);
-                if (nameParts.length > 0) {
-                  const firstName = nameParts[0];
-                  const regex = new RegExp(`\\b${firstName}\\b`, 'i');
-                  if (regex.test(summary) || regex.test(description)) {
-                    return true;
-                  }
-                }
-                return false;
-              });
-
-              return {
-                ...event,
-                patient: matchedPatient,
-                evolved: matchedPatient ? evolvedSet.has(matchedPatient.id) : false
-              };
-            });
-
-            setCalendarEvents(mappedEvents);
-          } catch (calError: any) {
-            console.error("Error fetching Google Calendar events:", calError);
-            if (calError.message && calError.message.includes("UNAUTHENTICATED")) {
-              setGoogleAccessToken(null);
-            } else {
-              setCalendarError("Não foi possível carregar os compromissos do Google Agenda.");
-            }
+          setCalendarEvents(mappedEvents);
+        } catch (calError: any) {
+          console.error("Error fetching Google Calendar events:", calError);
+          if (calError.message && calError.message.includes("UNAUTHENTICATED")) {
+            setGoogleAccessToken(null);
+          } else {
+            setCalendarError("Não foi possível carregar os compromissos do Google Agenda.");
           }
         }
-      } catch (err) {
-        console.error("Error in fetchCalendarAndPatients:", err);
-      } finally {
-        setCalendarLoading(false);
       }
-    };
-
-    fetchCalendarAndPatients();
+    } catch (err) {
+      console.error("Error in fetchCalendarAndPatients:", err);
+    } finally {
+      setCalendarLoading(false);
+    }
   }, [user, googleAccessToken, setGoogleAccessToken]);
+
+  useEffect(() => {
+    fetchCalendarAndPatients();
+  }, [fetchCalendarAndPatients]);
+
+  useEffect(() => {
+    if (!user || !googleAccessToken) return;
+
+    // Configura o intervalo de 5 minutos (300.000 ms) para atualização automática
+    const intervalId = setInterval(() => {
+      fetchCalendarAndPatients();
+    }, 5 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [user, googleAccessToken, fetchCalendarAndPatients]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -331,12 +360,32 @@ export default function Dashboard() {
             </div>
           </div>
           {googleAccessToken && (
-            <button 
-              onClick={handleConnectGoogleCalendar}
-              className="text-xs text-brand-primary hover:underline font-medium cursor-pointer"
-            >
-              Reconectar/Sincronizar Agenda
-            </button>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={fetchCalendarAndPatients}
+                disabled={calendarLoading}
+                className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5 disabled:opacity-50 cursor-pointer"
+              >
+                {calendarLoading ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin text-brand-primary" />
+                    <span>Processando calendário...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw size={12} className="text-brand-primary" />
+                    <span>Sincronizar Agenda</span>
+                  </>
+                )}
+              </button>
+              <button 
+                onClick={handleConnectGoogleCalendar}
+                className="text-xs text-brand-text-muted hover:text-brand-primary hover:underline font-medium cursor-pointer"
+                title="Conectar com outra conta ou renovar permissões do Google"
+              >
+                Reconectar Conta
+              </button>
+            </div>
           )}
         </div>
 
@@ -358,9 +407,10 @@ export default function Dashboard() {
             </button>
           </div>
         ) : calendarLoading ? (
-          <div className="py-8 flex flex-col items-center justify-center space-y-2">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-primary"></div>
-            <span className="text-sm text-brand-text-muted">Sincronizando atendimentos de hoje...</span>
+          <div className="py-12 flex flex-col items-center justify-center space-y-3 bg-brand-bg/20 rounded-xl border border-brand-border/50 border-dashed">
+            <Loader2 size={36} className="animate-spin text-brand-primary" />
+            <span className="text-sm text-brand-primary font-semibold animate-pulse">Processando calendário...</span>
+            <span className="text-xs text-brand-text-muted">Aguarde enquanto sincronizamos seus atendimentos</span>
           </div>
         ) : calendarError ? (
           <div className="p-4 bg-red-50 text-red-700 rounded-xl text-sm flex items-center space-x-2">
