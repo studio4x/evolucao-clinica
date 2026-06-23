@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'r
 import { supabase } from './supabaseClient';
 import { useAuthStore } from './store/authStore';
 import { usePWAStore } from './store/pwaStore';
+import { useSiteConfig } from './hooks/useSiteConfig';
 import { Download, X } from 'lucide-react';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -91,26 +92,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RootRoute() {
-  const { user, isAuthReady, profileStatus, profileRole } = useAuthStore();
+  const { isAuthReady } = useAuthStore();
 
   if (!isAuthReady) {
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
-  }
-
-  if (user) {
-    if (profileStatus === null || profileRole === null) {
-      return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
-    }
-    if (profileStatus === 'pending') {
-      return <Navigate to="/pending" replace />;
-    }
-    if (profileStatus === 'inactive') {
-      return <Navigate to="/pending?status=inactive" replace />;
-    }
-    if (profileRole === 'admin') {
-      return <Navigate to="/admin/professionals" replace />;
-    }
-    return <Navigate to="/painel/dashboard" replace />;
   }
 
   return <LandingPage />;
@@ -120,6 +105,19 @@ function RootRoute() {
 export default function App() {
   const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
+  const siteConfig = useSiteConfig();
+
+  useEffect(() => {
+    if (siteConfig.favicon_url) {
+      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      link.href = `${siteConfig.favicon_url}?v=${siteConfig.version}`;
+    }
+  }, [siteConfig.favicon_url, siteConfig.version]);
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);
 

@@ -4,6 +4,7 @@ import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAl
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
+import { reloadSiteConfig } from '../hooks/useSiteConfig';
 import EmailHistory from './EmailHistory';
 import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
@@ -90,13 +91,14 @@ export default function AdminPanel() {
     if (path.includes('/support/')) return 'support';
     if (path.endsWith('/support')) return 'support';
     if (path.endsWith('/profile')) return 'profile';
+    if (path.endsWith('/brand')) return 'brand';
     return 'professionals'; // default
   };
 
   const activeTab = getActiveTab();
   const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -109,6 +111,7 @@ export default function AdminPanel() {
     else if (tab === 'email_history') navigate('/admin/email-history');
     else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
     else if (tab === 'support') navigate('/admin/support');
+    else if (tab === 'brand') navigate('/admin/brand');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -141,6 +144,138 @@ export default function AdminPanel() {
   const [adminErrorMsg, setAdminErrorMsg] = useState('');
   const [showAdminPassInput, setShowAdminPassInput] = useState(false);
   const [showAdminConfirmPassInput, setShowAdminConfirmPassInput] = useState(false);
+
+  // Estados para as Configurações de Logotipo e Favicon (Marca/PWA)
+  const [brandLogoLight, setBrandLogoLight] = useState('');
+  const [brandLogoDark, setBrandLogoDark] = useState('');
+  const [brandFavicon, setBrandFavicon] = useState('');
+  const [brandVersion, setBrandVersion] = useState('1.0');
+  const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
+  const [savingBrand, setSavingBrand] = useState(false);
+  const [brandSaveSuccess, setBrandSaveSuccess] = useState(false);
+
+  const [uploadingLight, setUploadingLight] = useState(false);
+  const [uploadingDark, setUploadingDark] = useState(false);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
+
+  // Efeito para carregar as configurações da marca
+  useEffect(() => {
+    if (user && profileRole === 'admin' && activeTab === 'brand') {
+      const fetchBrandSettings = async () => {
+        setBrandSettingsLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from('settings')
+            .select('api_key')
+            .eq('id', 'brand_settings')
+            .single();
+          
+          if (!error && data && data.api_key) {
+            const parsed = JSON.parse(data.api_key);
+            setBrandLogoLight(parsed.logo_light_url || '');
+            setBrandLogoDark(parsed.logo_dark_url || '');
+            setBrandFavicon(parsed.favicon_url || '');
+            setBrandVersion(parsed.version || '1.0');
+          }
+        } catch (err) {
+          console.error("Erro ao buscar configurações de marca:", err);
+        } finally {
+          setBrandSettingsLoading(false);
+        }
+      };
+      fetchBrandSettings();
+    }
+  }, [user, profileRole, activeTab]);
+
+  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (type === 'light') setUploadingLight(true);
+    else if (type === 'dark') setUploadingDark(true);
+    else setUploadingFavicon(true);
+
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${type}_logo_${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error } = await supabase.storage
+        .from('brand')
+        .upload(filePath, file, {
+          cacheControl: '31536000',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('brand')
+        .getPublicUrl(filePath);
+
+      if (publicUrlData?.publicUrl) {
+        if (type === 'light') setBrandLogoLight(publicUrlData.publicUrl);
+        else if (type === 'dark') setBrandLogoDark(publicUrlData.publicUrl);
+        else setBrandFavicon(publicUrlData.publicUrl);
+      }
+    } catch (err: any) {
+      console.error(`Erro ao fazer upload do ${type}:`, err);
+      alert(`Erro ao fazer upload: ${err.message || 'Erro desconhecido'}`);
+    } finally {
+      if (type === 'light') setUploadingLight(false);
+      else if (type === 'dark') setUploadingDark(false);
+      else setUploadingFavicon(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveBrandSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingBrand(true);
+    setBrandSaveSuccess(false);
+
+    try {
+      const newVersion = Date.now().toString();
+      const payload = {
+        logo_light_url: brandLogoLight,
+        logo_dark_url: brandLogoDark,
+        favicon_url: brandFavicon,
+        version: newVersion
+      };
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'brand_settings',
+          api_key: JSON.stringify(payload),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
+        });
+
+      if (error) throw error;
+      setBrandVersion(newVersion);
+      setBrandSaveSuccess(true);
+      
+      // Limpar cache de runtime
+      if (window.caches) {
+        const cacheKeys = await caches.keys();
+        for (const name of cacheKeys) {
+          if (name.includes('runtime')) {
+            await caches.delete(name);
+          }
+        }
+      }
+
+      await reloadSiteConfig();
+
+      setTimeout(() => setBrandSaveSuccess(false), 5000);
+    } catch (error: any) {
+      console.error("Erro ao salvar configurações de marca:", error);
+      alert("Erro ao salvar: " + (error.message || 'Erro desconhecido'));
+    } finally {
+      setSavingBrand(false);
+    }
+  };
 
   // Efeito para carregar dados do Perfil do Admin
   useEffect(() => {

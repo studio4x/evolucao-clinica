@@ -2,12 +2,29 @@ import { supabase } from '../supabaseClient';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ShieldCheck, Zap, Sparkles, Files } from 'lucide-react';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 
 export default function Login() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const { user, isAuthReady, profileStatus, profileRole } = useAuthStore();
+  const siteConfig = useSiteConfig();
+
+  useEffect(() => {
+    if (isAuthReady && user) {
+      if (profileStatus === 'pending') {
+        navigate('/pending', { replace: true });
+      } else if (profileStatus === 'inactive') {
+        navigate('/pending?status=inactive', { replace: true });
+      } else if (profileRole === 'admin') {
+        navigate('/admin/professionals', { replace: true });
+      } else {
+        navigate('/painel/dashboard', { replace: true });
+      }
+    }
+  }, [user, isAuthReady, profileStatus, profileRole, navigate]);
 
   const handleLogin = async () => {
     setLoading(true);
@@ -16,7 +33,7 @@ export default function Login() {
         provider: 'google',
         options: {
           scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin
+          redirectTo: window.location.origin + '/painel'
         }
       });
       if (error) throw error;
@@ -37,7 +54,7 @@ export default function Login() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-6">
           <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
-            <img src="/logotipo-transparente-1024.png" alt="Evolução Clínica" className="h-24 w-auto object-contain" />
+            <img src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} alt="Evolução Clínica" className="h-24 w-auto object-contain" />
           </div>
         </div>
         <h2 className="mt-4 text-center text-3xl font-display font-bold text-brand-primary tracking-tight">
