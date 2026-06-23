@@ -79,6 +79,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/" replace />;
   }
   
+  return <>{children}</>;
 }
 
 function RootRoute() {
