@@ -62,7 +62,12 @@ self.addEventListener("fetch", (event) => {
 
   // Ignorar requisições para Supabase/API (Network Only)
   if (url.hostname.includes("supabase.co") || url.hostname.includes("googleapis.com")) {
-    return;
+    // Exceção: permitir cache para os assets da marca (bucket brand)
+    if (url.pathname.includes("/storage/v1/object/public/brand")) {
+      // Deixa prosseguir para a estratégia de cache
+    } else {
+      return;
+    }
   }
 
   // Estratégia para Documentos (Navegação)
@@ -88,7 +93,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Estratégia para Assets (Stale-While-Revalidate)
-  if (isAssetPath(url.pathname)) {
+  if (isAssetPath(url.pathname) || url.pathname.includes("/storage/v1/object/public/brand")) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         const fetchPromise = fetch(event.request).then((networkResponse) => {

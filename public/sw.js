@@ -112,7 +112,12 @@ self.addEventListener("fetch", (event) => {
     url.hostname.includes("securetoken.googleapis.com") ||
     url.hostname.includes("firebaseinstallations.googleapis.com")
   ) {
-    return;
+    // Exceção: permitir cache para os assets da marca (bucket brand)
+    if (url.pathname.includes("/storage/v1/object/public/brand")) {
+      // Deixa prosseguir para a estratégia de cache
+    } else {
+      return;
+    }
   }
 
   // Navegacao
@@ -138,7 +143,9 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
         .then((response) => {
-          if (response.ok && event.request.url.startsWith(self.location.origin)) {
+          const isSameOrigin = event.request.url.startsWith(self.location.origin);
+          const isBrandAsset = event.request.url.includes("/storage/v1/object/public/brand");
+          if (response.ok && (isSameOrigin || isBrandAsset)) {
             const copy = response.clone();
             caches.open(RUNTIME_CACHE).then((cache) => cache.put(event.request, copy));
           }

@@ -196,6 +196,121 @@ app.get("/api/debug-env", (req, res) => {
   res.json(envs);
 });
 
+// Rota dinâmica para o manifest.webmanifest do PWA
+app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('settings')
+      .select('api_key')
+      .eq('id', 'brand_settings')
+      .single();
+
+    let logoLightUrl = "";
+    let version = "1.0";
+
+    if (!error && data && data.api_key) {
+      const parsed = JSON.parse(data.api_key);
+      logoLightUrl = parsed.logo_light_url || "";
+      version = parsed.version || "1.0";
+    }
+
+    const pwaIcon = logoLightUrl || "/logotipo-transparente-1024.png";
+    const pwaIconWithVersion = pwaIcon.startsWith('http') ? `${pwaIcon}?v=${version}` : pwaIcon;
+
+    const manifest = {
+      "id": "/",
+      "name": "Evolução Clínica",
+      "short_name": "Evolução Clínica",
+      "description": "Prontuário eletrônico e evolução clínica profissional com IA para fisioterapeutas e profissionais da saúde.",
+      "lang": "pt-BR",
+      "start_url": "/?utm_source=pwa",
+      "scope": "/",
+      "display": "standalone",
+      "orientation": "portrait",
+      "theme_color": "#005C13",
+      "background_color": "#ffffff",
+      "categories": ["medical", "productivity", "health"],
+      "prefer_related_applications": false,
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "/icon-512x512.png",
+          "sizes": "512x512",
+          "type": "image/png",
+          "purpose": "any"
+        },
+        {
+          "src": "/icon-512x512-maskable.png",
+          "sizes": "512x512",
+          "type": "image/png",
+          "purpose": "maskable"
+        },
+        {
+          "src": pwaIconWithVersion,
+          "sizes": "1024x1024",
+          "type": "image/png",
+          "purpose": "any maskable"
+        }
+      ],
+      "screenshots": [
+        {
+          "src": "/screenshot-1.png",
+          "sizes": "1024x1024",
+          "type": "image/png",
+          "label": "Tela de Login",
+          "form_factor": "wide"
+        },
+        {
+          "src": "/screenshot-2.png",
+          "sizes": "1024x1024",
+          "type": "image/png",
+          "label": "Painel de Controle",
+          "form_factor": "wide"
+        }
+      ],
+      "share_target": {
+        "action": "/api/share-target",
+        "method": "POST",
+        "enctype": "multipart/form-data",
+        "params": {
+          "title": "title",
+          "text": "text",
+          "url": "url",
+          "files": [
+            {
+              "name": "audio",
+              "accept": [
+                "audio/*",
+                "video/*",
+                "application/ogg",
+                ".opus",
+                ".ogg",
+                ".mp3",
+                ".wav",
+                ".m4a",
+                ".weba",
+                "*/*"
+              ]
+            }
+          ]
+        }
+      }
+    };
+
+    res.setHeader("Content-Type", "application/manifest+json");
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.json(manifest);
+  } catch (err: any) {
+    console.error("Error generating manifest:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
 // --- API NOTIFICATIONS ---
 
 // 1. Obter VAPID Public Key

@@ -7,7 +7,7 @@
   },
   "rewrites": [
     { "source": "/sw.js", "destination": "/sw.js" },
-    { "source": "/manifest.webmanifest", "destination": "/manifest.webmanifest" },
+    { "source": "/manifest.webmanifest", "destination": "/api/manifest" },
     { "source": "/icon-192x192.png", "destination": "/icon-192x192.png" },
     { "source": "/icon-512x512.png", "destination": "/icon-512x512.png" },
     { "source": "/icon-512x512-maskable.png", "destination": "/icon-512x512-maskable.png" },

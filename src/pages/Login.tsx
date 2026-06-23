@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Zap, Sparkles, Files } from 'lucide-react';
+import { ShieldCheck, Zap, Sparkles, Files, ArrowLeft } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 
 export default function Login() {
@@ -46,6 +46,17 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col justify-center py-12 px-6 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Botão Voltar para a Home */}
+      <div className="absolute top-6 left-6 z-20">
+        <Link 
+          to="/" 
+          className="flex items-center gap-2 px-4 py-2 bg-white/80 hover:bg-white text-brand-text-muted hover:text-brand-primary rounded-xl border border-brand-primary/10 shadow-sm transition-all text-xs font-semibold"
+        >
+          <ArrowLeft size={14} />
+          Voltar para o site
+        </Link>
+      </div>
+
       {/* Elementos decorativos de fundo */}
       <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-brand-primary/10 to-transparent pointer-events-none" />
       <div className="absolute -top-24 -right-24 w-96 h-96 bg-brand-accent/5 rounded-full blur-3xl pointer-events-none" />

@@ -2227,6 +2227,17 @@ export default function AdminPanel() {
                 <span>Chaves Web Push</span>
               </button>
               <button
+                onClick={() => setActiveTab('brand')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'brand'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Globe size={18} />
+                <span>Logotipo e PWA</span>
+              </button>
+              <button
                 onClick={() => setActiveTab('profile')}
                 className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
                   activeTab === 'profile'
@@ -4545,6 +4556,173 @@ export default function AdminPanel() {
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+            ) : activeTab === 'brand' ? (
+              /* Aba de Configuração de Identidade Visual e PWA [NEW] */
+              <div className="space-y-6 max-w-4xl">
+                <div className="card bg-white p-6 md:p-8 border-brand-border">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Globe className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Identidade Visual e PWA
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Gerencie os logotipos da plataforma e o favicon do navegador. Essas alterações são propagadas ao PWA em tempo real.
+                      </p>
+                    </div>
+                  </div>
+
+                  {brandSettingsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+                      <p className="text-sm text-brand-text-muted">Carregando configurações...</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveBrandSettings} className="space-y-8">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Logotipo Light */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Logotipo Light (Fundo Claro)</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">Exibido na barra lateral principal, login e áreas com fundo claro.</p>
+                          </div>
+                          
+                          <div className="flex items-center justify-center p-6 bg-white border border-dashed border-brand-border rounded-xl h-40">
+                            {brandLogoLight ? (
+                              <img src={brandLogoLight} alt="Logo Light Preview" className="max-h-full max-w-full object-contain" />
+                            ) : (
+                              <span className="text-xs text-brand-text-muted">Nenhum logotipo enviado</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center space-x-3">
+                            <label className="btn-outline flex-1 text-center py-2.5 text-xs font-semibold cursor-pointer">
+                              {uploadingLight ? (
+                                <span className="flex items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                              ) : (
+                                <span className="flex items-center justify-center"><Upload className="w-3.5 h-3.5 mr-2" /> Escolher Imagem</span>
+                              )}
+                              <input 
+                                type="file" 
+                                accept="image/png,image/jpeg,image/svg+xml,image/gif" 
+                                className="hidden" 
+                                disabled={uploadingLight}
+                                onChange={(e) => handleBrandUpload(e, 'light')} 
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Logotipo Dark */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Logotipo Dark (Fundo Escuro)</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">Versão reservada para visualizações ou temas com fundo escuro.</p>
+                          </div>
+                          
+                          <div className="flex items-center justify-center p-6 bg-stone-900 border border-dashed border-stone-700 rounded-xl h-40">
+                            {brandLogoDark ? (
+                              <img src={brandLogoDark} alt="Logo Dark Preview" className="max-h-full max-w-full object-contain" />
+                            ) : (
+                              <span className="text-xs text-stone-400">Nenhum logotipo enviado</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center space-x-3">
+                            <label className="btn-outline flex-1 text-center py-2.5 text-xs font-semibold cursor-pointer">
+                              {uploadingDark ? (
+                                <span className="flex items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                              ) : (
+                                <span className="flex items-center justify-center"><Upload className="w-3.5 h-3.5 mr-2" /> Escolher Imagem</span>
+                              )}
+                              <input 
+                                type="file" 
+                                accept="image/png,image/jpeg,image/svg+xml,image/gif" 
+                                className="hidden" 
+                                disabled={uploadingDark}
+                                onChange={(e) => handleBrandUpload(e, 'dark')} 
+                              />
+                            </label>
+                          </div>
+                        </div>
+
+                        {/* Favicon */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Favicon (Ícone do Navegador e PWA)</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">Exibido na aba do navegador e no ícone do PWA.</p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-6">
+                            <div className="flex items-center justify-center p-4 bg-white border border-brand-border rounded-xl w-20 h-20 shadow-inner">
+                              {brandFavicon ? (
+                                <img src={brandFavicon} alt="Favicon Preview" className="w-12 h-12 object-contain" />
+                              ) : (
+                                <span className="text-[10px] text-brand-text-muted text-center">Favicon</span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2">
+                              <label className="btn-outline inline-flex text-center py-2.5 px-4 text-xs font-semibold cursor-pointer">
+                                {uploadingFavicon ? (
+                                  <span className="flex items-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload do Favicon</span>
+                                )}
+                                <input 
+                                  type="file" 
+                                  accept="image/png,image/x-icon,image/svg+xml" 
+                                  className="hidden" 
+                                  disabled={uploadingFavicon}
+                                  onChange={(e) => handleBrandUpload(e, 'favicon')} 
+                                />
+                              </label>
+                              <p className="text-[10px] text-brand-text-muted">Recomendado: formato quadrado PNG ou SVG.</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Botão de Ação */}
+                      <div className="flex flex-col sm:flex-row items-center justify-between pt-4 border-t border-brand-border gap-4">
+                        <div className="text-xs text-brand-text-muted leading-relaxed">
+                          <span className="font-semibold text-brand-primary block">Versão Atual das Imagens: v{brandVersion}</span>
+                          Ao salvar, o cache do PWA e do navegador será atualizado.
+                        </div>
+
+                        <div className="flex space-x-3 w-full sm:w-auto">
+                          <button
+                            type="submit"
+                            disabled={savingBrand || uploadingLight || uploadingDark || uploadingFavicon}
+                            className="btn-primary w-full sm:w-auto px-6 py-3 flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                          >
+                            {savingBrand ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                <span>Salvando Alterações...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Save className="w-4 h-4" />
+                                <span>Salvar Identidade Visual</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {brandSaveSuccess && (
+                        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center space-x-3 text-sm animate-pulse">
+                          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          <span>Configurações visuais salvas com sucesso! O cache do PWA e do navegador foi atualizado.</span>
+                        </div>
+                      )}
+                    </form>
+                  )}
                 </div>
               </div>
             ) : (
