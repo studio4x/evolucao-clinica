@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
@@ -82,6 +82,11 @@ export default function PatientDetail() {
   const [reports, setReports] = useState<any[]>([]);
   const [showViewReportModal, setShowViewReportModal] = useState(false);
   const [viewingReport, setViewingReport] = useState<any>(null);
+
+  // Estados para confirmação de envio por WhatsApp
+  const [showWhatsAppConfirmModal, setShowWhatsAppConfirmModal] = useState(false);
+  const [whatsAppConfirmContent, setWhatsAppConfirmContent] = useState('');
+  const [whatsAppConfirmType, setWhatsAppConfirmType] = useState('');
   
   // Estados para fluxo de salvamento customizado no GDocs
   const [lastGeneratedReportId, setLastGeneratedReportId] = useState<string | null>(null);
@@ -1979,11 +1984,15 @@ export default function PatientDetail() {
 
                   <button
                     type="button"
-                    onClick={() => handleShareWhatsApp(viewingReportContent, viewingReport.type)}
+                    onClick={() => {
+                      setWhatsAppConfirmContent(viewingReportContent);
+                      setWhatsAppConfirmType(viewingReport.type);
+                      setShowWhatsAppConfirmModal(true);
+                    }}
                     className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
                   >
                     <MessageCircle size={14} className="text-emerald-600" />
-                    <span>Enviar por WhatsApp</span>
+                    <span>Enviar ao paciente por WhatsApp</span>
                   </button>
 
                   <button
@@ -2011,6 +2020,82 @@ export default function PatientDetail() {
                   Fechar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Compartilhamento por WhatsApp (com LGPD) */}
+      {showWhatsAppConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col border border-brand-border">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50 rounded-t-2xl">
+              <div className="flex items-center space-x-2 text-emerald-600">
+                <MessageCircle size={20} />
+                <h3 className="text-lg font-display font-semibold text-emerald-700 mb-0">
+                  Confirmar Envio por WhatsApp
+                </h3>
+              </div>
+              <button 
+                onClick={() => setShowWhatsAppConfirmModal(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4">
+              <div>
+                <p className="text-xs text-brand-text-muted uppercase font-bold tracking-wider mb-1">Destinatário</p>
+                <p className="text-sm font-semibold text-brand-text">{patient?.full_name}</p>
+              </div>
+
+              <div>
+                <p className="text-xs text-brand-text-muted uppercase font-bold tracking-wider mb-1">WhatsApp do Paciente</p>
+                <p className="text-sm font-mono font-medium text-brand-text bg-brand-bg/50 px-3 py-2 rounded-xl border border-brand-border">
+                  {patient?.phone ? patient.phone : 'Não cadastrado'}
+                </p>
+                {!patient?.phone && (
+                  <p className="text-[10px] text-amber-600 mt-1 flex items-center">
+                    <AlertTriangle size={10} className="mr-1" />
+                    O envio abrirá a conversa do WhatsApp sem um número pré-definido.
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 space-y-2">
+                <div className="flex items-center space-x-2 text-emerald-800 text-xs font-bold uppercase tracking-wide">
+                  <Shield size={14} className="text-emerald-600" />
+                  <span>Aviso de Privacidade & LGPD</span>
+                </div>
+                <p className="text-[11px] text-emerald-800 leading-relaxed font-normal">
+                  Em conformidade com a LGPD (Lei nº 13.709/18), dados de saúde são considerados <strong>dados pessoais sensíveis</strong>. Certifique-se de que o compartilhamento deste relatório foi explicitamente autorizado pelo paciente ou seu responsável legal, e de que o canal de transmissão é seguro.
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-brand-border flex items-center justify-end space-x-3 bg-brand-bg/10 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setShowWhatsAppConfirmModal(false)}
+                className="btn-outline px-4 py-2 text-xs rounded-xl cursor-pointer"
+              >
+                Desistir do Envio
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleShareWhatsApp(whatsAppConfirmContent, whatsAppConfirmType);
+                  setShowWhatsAppConfirmModal(false);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm"
+              >
+                <MessageCircle size={14} />
+                <span>Confirmar e Enviar</span>
+              </button>
             </div>
           </div>
         </div>
