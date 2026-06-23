@@ -25,11 +25,13 @@ import SupportTicketDetail from './pages/SupportTicketDetail';
 import { CookieConsent } from './components/CookieConsent';
 
 import PendingApproval from './pages/PendingApproval';
+import Onboarding from './pages/Onboarding';
 import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import LandingPage from './pages/LandingPage';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
+import { getOnboardingDestination, isOnboardingComplete } from './utils/onboarding';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -53,6 +55,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (profileStatus === 'inactive') {
     return <Navigate to="/pending?status=inactive" replace />;
+  }
+
+  if (profileRole !== 'admin' && user && !isOnboardingComplete(user.id)) {
+    return <Navigate to={getOnboardingDestination(user.id)} replace />;
   }
 
   // Pula a validação de expiração se o usuário já estiver na página de assinatura
@@ -94,13 +100,17 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RootRoute() {
-  const { isAuthReady, user } = useAuthStore();
+  const { isAuthReady, user, profileRole } = useAuthStore();
 
   if (!isAuthReady) {
     return <SplashScreen message="Iniciando Evolução Clínica..." />;
   }
 
   if (user) {
+    if (profileRole !== 'admin' && !isOnboardingComplete(user.id)) {
+      return <Navigate to={getOnboardingDestination(user.id)} replace />;
+    }
+
     return <Navigate to="/painel/dashboard" replace />;
   }
 
@@ -348,6 +358,7 @@ export default function App() {
       
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/pending" element={<PendingApproval />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />

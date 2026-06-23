@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { ShieldCheck, Zap, Sparkles, Files, ArrowLeft } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
+import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,6 +23,8 @@ export default function Login() {
         navigate('/pending?status=inactive', { replace: true });
       } else if (profileRole === 'admin') {
         navigate('/admin/professionals', { replace: true });
+      } else if (!isOnboardingComplete(user.id)) {
+        navigate(getOnboardingDestination(user.id), { replace: true });
       } else {
         navigate('/painel/dashboard', { replace: true });
       }

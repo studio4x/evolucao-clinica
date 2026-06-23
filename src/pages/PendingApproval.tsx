@@ -6,9 +6,10 @@ import { Clock, ShieldAlert, LogOut, Sparkles } from 'lucide-react';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
+import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 
 export default function PendingApproval() {
-  const { user, profileStatus, setUser, setProfileInfo } = useAuthStore();
+  const { user, profileStatus, profileRole, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const siteConfig = useSiteConfig();
@@ -20,10 +21,14 @@ export default function PendingApproval() {
     if (!user) {
       navigate('/login', { replace: true });
     } else if (profileStatus === 'active') {
-      // Se já estiver ativo, pode ir direto para a raiz
-      navigate('/painel/dashboard', { replace: true });
+      if (profileRole !== 'admin' && !isOnboardingComplete(user.id)) {
+        navigate(getOnboardingDestination(user.id), { replace: true });
+      } else {
+        // Se já estiver ativo, pode ir direto para a raiz
+        navigate('/painel/dashboard', { replace: true });
+      }
     }
-  }, [user, profileStatus, navigate]);
+  }, [user, profileStatus, profileRole, navigate]);
 
   useEffect(() => {
     if (!user || profileStatus === 'active') {

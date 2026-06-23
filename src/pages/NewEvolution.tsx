@@ -10,6 +10,7 @@ import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
+import { setOnboardingState } from '../utils/onboarding';
 
 type AudioEvolutionItem = {
   id: string;
@@ -27,6 +28,7 @@ export default function NewEvolution() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, googleAccessToken, setGoogleAccessToken, isAuthReady } = useAuthStore();
+  const isOnboardingMode = searchParams.get('onboarding') === '1';
   
   const [patient, setPatient] = useState<any>(null);
   const dateParam = searchParams.get('date');
@@ -678,6 +680,14 @@ export default function NewEvolution() {
 
       await clearAllAudioItems();
 
+      if (isOnboardingMode && user?.id && patient?.id) {
+        setOnboardingState(user.id, {
+          step: 'agenda',
+          patientId: patient.id,
+          patientName: patient.full_name
+        });
+      }
+
       void sendNotification({
         title: "Evolução Criada com Sucesso 🎉",
         content: `A evolução clínica do paciente ${patient.full_name} foi processada e adicionada ao prontuário no Google Docs.`,
@@ -751,6 +761,18 @@ export default function NewEvolution() {
       }
     }
   };
+
+  useEffect(() => {
+    if (!isOnboardingMode || status !== 'success' || !patient?.id) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      navigate('/onboarding?step=agenda', { replace: true });
+    }, 1200);
+
+    return () => window.clearTimeout(timer);
+  }, [isOnboardingMode, navigate, patient?.id, status]);
 
   const recoveredAudioCount = recoveredDraft ? getPendingEvolutionAudioBlobs(recoveredDraft).length : 0;
   const recoveredDuration = recoveredDraft?.recordingTime || 0;
@@ -1042,9 +1064,13 @@ export default function NewEvolution() {
           {status === 'success' && (
             <div className="flex flex-col items-center justify-center p-6 bg-brand-accent/10 rounded-xl border border-brand-accent/20 space-y-3">
               <CheckCircle className="w-10 h-10 text-brand-primary" />
-              <p className="text-brand-primary font-medium text-lg text-center">Evolução registrada com sucesso!</p>
+              <p className="text-brand-primary font-medium text-lg text-center">
+                {isOnboardingMode ? 'Evolução concluída. Encaminhando para a sincronização da agenda...' : 'Evolução registrada com sucesso!'}
+              </p>
               <p className="text-sm text-brand-text-muted text-center">
-                A transcrição foi adicionada ao final do documento Google Docs do paciente.
+                {isOnboardingMode
+                  ? 'O próximo passo do onboarding é sincronizar os atendimentos da agenda.'
+                  : 'A transcrição foi adicionada ao final do documento Google Docs do paciente.'}
               </p>
               
               <div className="flex flex-col sm:flex-row gap-3 w-full justify-center mt-4">
@@ -1068,10 +1094,10 @@ export default function NewEvolution() {
 
               <div className="flex space-x-3 mt-2 border-t border-brand-primary/10 pt-4 w-full justify-center">
                 <button
-                  onClick={() => navigate(`/painel/patients/${id}`)}
+                  onClick={() => navigate(isOnboardingMode ? '/onboarding?step=agenda' : `/painel/patients/${id}`)}
                   className="btn-outline px-4 py-2 text-sm"
                 >
-                  Voltar ao Paciente
+                  {isOnboardingMode ? 'Ir agora para a agenda' : 'Voltar ao Paciente'}
                 </button>
                 <button
                   onClick={() => {
@@ -1085,9 +1111,10 @@ export default function NewEvolution() {
                     setProcessingMessage('');
                     setErrorMessage('');
                   }}
-                  className="btn-primary px-4 py-2 text-sm"
+                  disabled={isOnboardingMode}
+                  className="btn-primary px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Nova Evolução
+                  {isOnboardingMode ? 'Fluxo guiado em andamento' : 'Nova Evolução'}
                 </button>
               </div>
             </div>

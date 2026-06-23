@@ -32,6 +32,7 @@ export default function PatientForm() {
   
   const [loading, setLoading] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     full_name: '',
     birth_date: '',
@@ -45,8 +46,26 @@ export default function PatientForm() {
     target_folder_name: localStorage.getItem('last_google_folder_name') || '',
     evolution_reminder_active: false,
     session_days: [] as number[],
-    session_time: ''
+    session_time: '',
+    default_template_id: ''
   });
+
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('evolution_templates')
+          .select('*')
+          .order('name');
+        if (!error && data) {
+          setTemplates(data);
+        }
+      } catch (err) {
+        console.error("Erro ao buscar templates:", err);
+      }
+    };
+    fetchTemplates();
+  }, []);
 
   useEffect(() => {
     if (id) {
@@ -73,7 +92,8 @@ export default function PatientForm() {
               target_folder_name: data.target_folder_name || '',
               evolution_reminder_active: data.evolution_reminder_active ?? false,
               session_days: data.session_days || [],
-              session_time: data.session_time ? data.session_time.substring(0, 5) : ''
+              session_time: data.session_time ? data.session_time.substring(0, 5) : '',
+              default_template_id: data.default_template_id || ''
             });
           }
         } catch (error) {
@@ -338,7 +358,8 @@ export default function PatientForm() {
         updated_at: new Date().toISOString(),
         evolution_reminder_active: formData.evolution_reminder_active,
         session_days: formData.evolution_reminder_active ? formData.session_days : [],
-        session_time: (formData.evolution_reminder_active && formData.session_time) ? formData.session_time : null
+        session_time: (formData.evolution_reminder_active && formData.session_time) ? formData.session_time : null,
+        default_template_id: formData.default_template_id || null
       };
 
       // Só inclui campos do Google Drive se eles tiverem valor (ou envia null de forma explícita)
@@ -440,6 +461,25 @@ export default function PatientForm() {
             onChange={e => setFormData({...formData, notes: e.target.value})}
             className="input-field p-2"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-brand-text mb-1">Template de Evolução Padrão</label>
+          <select
+            value={formData.default_template_id}
+            onChange={e => setFormData({...formData, default_template_id: e.target.value})}
+            className="input-field p-2"
+          >
+            <option value="">Sem template padrão (Formatação Geral)</option>
+            {templates.map(t => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-brand-text-muted mt-1">
+            Define o formato metodológico clínico padrão para as evoluções deste paciente (ex: SOAP, ABA, TCC).
+          </p>
         </div>
 
         <div>
