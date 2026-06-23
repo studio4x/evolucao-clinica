@@ -6,6 +6,7 @@ import {
   fetchSupportTicketDetail,
   sendSupportMessage,
   updateSupportTicketStatus,
+  setSupportTicketLastSeen,
   subscribeToSupportTicketDetail,
   SupportTicket,
   SupportMessage
@@ -38,6 +39,12 @@ export default function SupportTicketDetail() {
       const data = await fetchSupportTicketDetail(ticketId);
       setTicket(data.ticket);
       setMessages(data.messages);
+      const latestMessage = data.messages[data.messages.length - 1];
+      if (latestMessage) {
+        setSupportTicketLastSeen(ticketId, latestMessage.createdAt);
+      } else if (data.ticket.updatedAt) {
+        setSupportTicketLastSeen(ticketId, data.ticket.updatedAt);
+      }
     } catch (err: any) {
       console.error('Error loading ticket detail:', err);
       setError('Não foi possível carregar os detalhes do chamado.');
@@ -75,6 +82,7 @@ export default function SupportTicketDetail() {
       setNewMessage('');
       setFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      setSupportTicketLastSeen(ticketId, sentMsg.createdAt);
 
       // Reload ticket status changes in background (if trigger changed ticket status to in_progress)
       loadTicketDetail(true);

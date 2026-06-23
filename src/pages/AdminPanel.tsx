@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import EmailHistory from './EmailHistory';
 import SupportTicketDetail from './SupportTicketDetail';
-import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets } from '../services/support';
+import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, isSupportTicketUnread } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 
@@ -4141,7 +4141,15 @@ export default function AdminPanel() {
                                     </div>
                                   </td>
                                   <td className="py-3 px-4 font-medium text-brand-text">
-                                    {ticket.subject}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span>{ticket.subject}</span>
+                                      {isSupportTicketUnread(ticket, 'admin') && ticket.latestMessageSenderRole === 'user' && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
+                                          <MessageSquare size={12} />
+                                          Nova mensagem
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="py-3 px-4 text-brand-text-muted">
                                     <span className="bg-gray-50 border border-gray-200 text-gray-700 px-2 py-0.5 rounded text-[10px] font-medium">

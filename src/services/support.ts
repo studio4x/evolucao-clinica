@@ -23,6 +23,9 @@ export interface SupportTicket {
   updatedAt: string;
   userFullName?: string | null;
   userPlan?: string | null;
+  latestMessageAt?: string | null;
+  latestMessageSenderRole?: 'admin' | 'user' | null;
+  latestMessageSenderId?: string | null;
 }
 
 export interface SupportMessage {
@@ -43,6 +46,27 @@ export interface SupportTicketDetail {
 }
 
 type SupportRealtimeCleanup = () => void;
+const LAST_SEEN_PREFIX = 'support_ticket_last_seen:';
+
+export function getSupportTicketLastSeen(ticketId: string): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(`${LAST_SEEN_PREFIX}${ticketId}`);
+}
+
+export function setSupportTicketLastSeen(ticketId: string, timestamp: string) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(`${LAST_SEEN_PREFIX}${ticketId}`, timestamp);
+}
+
+export function isSupportTicketUnread(ticket: SupportTicket, viewerRole: 'admin' | 'user'): boolean {
+  if (!ticket.latestMessageAt || !ticket.latestMessageSenderRole) return false;
+  if (ticket.latestMessageSenderRole === viewerRole) return false;
+
+  const lastSeen = getSupportTicketLastSeen(ticket.id);
+  if (!lastSeen) return true;
+
+  return new Date(ticket.latestMessageAt).getTime() > new Date(lastSeen).getTime();
+}
 
 // Map database row to SupportTicket interface
 function mapSupportTicket(row: any): SupportTicket {
@@ -63,6 +87,60 @@ function mapSupportTicket(row: any): SupportTicket {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+async function attachLatestMessageInfo(tickets: SupportTicket[]): Promise<SupportTicket[]> {
+  const ticketIds = Array.from(new Set(tickets.map((ticket) => ticket.id)));
+  if (ticketIds.length === 0) {
+    return tickets;
+  }
+
+  const { data: messages, error: messagesError } = await supabase
+    .from('support_messages')
+    .select('ticket_id, sender_id, created_at')
+    .in('ticket_id', ticketIds)
+    .order('created_at', { ascending: false });
+
+  if (messagesError) throw messagesError;
+
+  const latestMessageByTicket = new Map<string, { senderId: string; createdAt: string }>();
+  const senderIds = new Set<string>();
+
+  for (const message of messages || []) {
+    if (latestMessageByTicket.has(message.ticket_id)) continue;
+    latestMessageByTicket.set(message.ticket_id, {
+      senderId: message.sender_id,
+      createdAt: message.created_at,
+    });
+    senderIds.add(message.sender_id);
+  }
+
+  if (senderIds.size === 0) {
+    return tickets;
+  }
+
+  const { data: professionals, error: professionalsError } = await supabase
+    .from('professionals')
+    .select('id, role')
+    .in('id', Array.from(senderIds));
+
+  if (professionalsError) throw professionalsError;
+
+  const senderRoleMap = new Map<string, 'admin' | 'user'>(
+    (professionals || []).map((prof) => [prof.id, prof.role === 'admin' ? 'admin' : 'user'] as const)
+  );
+
+  return tickets.map((ticket) => {
+    const latest = latestMessageByTicket.get(ticket.id);
+    if (!latest) return ticket;
+
+    return {
+      ...ticket,
+      latestMessageAt: latest.createdAt,
+      latestMessageSenderId: latest.senderId,
+      latestMessageSenderRole: senderRoleMap.get(latest.senderId) || 'user',
+    };
+  }) as SupportTicket[];
 }
 
 // Map database row to SupportMessage interface
@@ -95,7 +173,7 @@ export async function fetchMySupportTickets(): Promise<SupportTicket[]> {
     .order('created_at', { ascending: false });
 
   if (error) throw error;
-  return (data || []).map(mapSupportTicket);
+  return attachLatestMessageInfo((data || []).map(mapSupportTicket));
 }
 
 export function subscribeToMySupportTickets(userId: string, onChange: () => void): SupportRealtimeCleanup {
@@ -137,7 +215,7 @@ export async function fetchAdminSupportTickets(): Promise<SupportTicket[]> {
 
   const profMap = new Map((professionals || []).map((p) => [p.id, p]));
 
-  return rows.map((row) => {
+  const enrichedTickets = rows.map((row) => {
     const ticket = mapSupportTicket(row);
     const prof = profMap.get(ticket.userId);
     return {
@@ -146,6 +224,8 @@ export async function fetchAdminSupportTickets(): Promise<SupportTicket[]> {
       userPlan: prof?.subscription_plan || 'trial',
     };
   });
+
+  return attachLatestMessageInfo(enrichedTickets);
 }
 
 export function subscribeToAllSupportTickets(onChange: () => void): SupportRealtimeCleanup {
@@ -203,6 +283,7 @@ export async function fetchSupportTicketDetail(ticketId: string): Promise<Suppor
       ...ticket,
       userFullName: owner?.full_name || 'Desconhecido',
       userPlan: owner?.subscription_plan || 'trial',
+      latestMessageAt: ticket.updatedAt,
     },
     messages: messages.map((m) => mapSupportMessage(m, professionalsMap)),
   };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { LifeBuoy, PlusCircle, MessageSquare, ArrowRight, Clock, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { fetchMySupportTickets, SupportTicket, subscribeToMySupportTickets } from '../services/support';
+import { fetchMySupportTickets, SupportTicket, isSupportTicketUnread, setSupportTicketLastSeen, subscribeToMySupportTickets } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import SupportTicketModal from '../components/support/SupportTicketModal';
@@ -38,6 +38,14 @@ export default function SupportTickets() {
 
     return unsubscribe;
   }, [user]);
+
+  useEffect(() => {
+    tickets.forEach((ticket) => {
+      if (ticket.latestMessageSenderRole === 'admin' && ticket.latestMessageAt && !isSupportTicketUnread(ticket, 'user')) {
+        setSupportTicketLastSeen(ticket.id, ticket.latestMessageAt);
+      }
+    });
+  }, [tickets]);
 
   const formatDateTime = (dateStr: string | null) => {
     if (!dateStr) return 'Não definido';
@@ -205,7 +213,15 @@ export default function SupportTickets() {
                     }`}
                   >
                     <td className="px-6 py-5">
-                      <div className="font-bold text-brand-text">{ticket.subject}</div>
+                      <div className="font-bold text-brand-text flex flex-wrap items-center gap-2">
+                        <span>{ticket.subject}</span>
+                        {isSupportTicketUnread(ticket, 'user') && ticket.latestMessageSenderRole === 'admin' && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/15 text-[10px] font-bold">
+                            <MessageSquare size={12} />
+                            Nova resposta
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-brand-text-muted mt-1">
                         Aberto em {formatDateTime(ticket.createdAt)}
                       </div>
