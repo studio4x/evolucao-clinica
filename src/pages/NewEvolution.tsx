@@ -41,6 +41,7 @@ export default function NewEvolution() {
   const [recoveredDraft, setRecoveredDraft] = useState<PendingEvolution | null>(null);
   const draftIdRef = useRef<string | null>(null);
   const recordingTimeRef = useRef<number>(0);
+  const previousAudioBlobRef = useRef<Blob | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -51,7 +52,10 @@ export default function NewEvolution() {
   const saveDraft = async (blobs: Blob[]) => {
     if (!patient || !user) return;
     try {
-      const mergedBlob = new Blob(blobs, { type: 'audio/webm' });
+      const newBlob = new Blob(blobs, { type: 'audio/webm' });
+      const mergedBlob = previousAudioBlobRef.current
+        ? new Blob([previousAudioBlobRef.current, newBlob], { type: 'audio/webm' })
+        : newBlob;
       const draftId = draftIdRef.current || uuidv4();
       draftIdRef.current = draftId;
 
@@ -137,7 +141,7 @@ export default function NewEvolution() {
     };
   }, [audioUrl]);
 
-  const handleApplyRecoveredDraft = () => {
+  const handleApplyRecoveredDraftForSubmit = () => {
     if (!recoveredDraft) return;
     
     setAudioBlob(recoveredDraft.audioBlob);
@@ -148,8 +152,18 @@ export default function NewEvolution() {
     setSessionDate(recoveredDraft.sessionDate);
     draftIdRef.current = recoveredDraft.id;
     recordingTimeRef.current = recoveredDraft.recordingTime || 0;
+    previousAudioBlobRef.current = null;
     
     setRecoveredDraft(null);
+  };
+
+  const handleApplyRecoveredDraftForContinue = () => {
+    if (!recoveredDraft) return;
+    
+    const draft = recoveredDraft;
+    setRecoveredDraft(null);
+    
+    void startRecording(draft);
   };
 
   const handleDiscardRecoveredDraft = async () => {
@@ -221,7 +235,7 @@ export default function NewEvolution() {
     }
   };
 
-  const startRecording = async () => {
+  const startRecording = async (recoveredDraftItem?: PendingEvolution) => {
     try {
       isDiscardingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -230,9 +244,19 @@ export default function NewEvolution() {
       chunksRef.current = [];
 
       // Inicializa identificadores do rascunho
-      const newDraftId = uuidv4();
-      draftIdRef.current = newDraftId;
-      recordingTimeRef.current = 0;
+      if (recoveredDraftItem) {
+        draftIdRef.current = recoveredDraftItem.id;
+        recordingTimeRef.current = recoveredDraftItem.recordingTime || 0;
+        setRecordingTime(recoveredDraftItem.recordingTime || 0);
+        previousAudioBlobRef.current = recoveredDraftItem.audioBlob;
+        setSessionDate(recoveredDraftItem.sessionDate);
+      } else {
+        const newDraftId = uuidv4();
+        draftIdRef.current = newDraftId;
+        recordingTimeRef.current = 0;
+        setRecordingTime(0);
+        previousAudioBlobRef.current = null;
+      }
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -245,14 +269,23 @@ export default function NewEvolution() {
       };
 
       mediaRecorder.onstop = () => {
-        if (chunksRef.current.length > 0 && !isDiscardingRef.current) {
-          const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
-          setAudioBlob(blob);
-          const url = URL.createObjectURL(blob);
-          setAudioUrl(url);
+        if (!isDiscardingRef.current) {
+          let mergedBlob = previousAudioBlobRef.current;
+          if (chunksRef.current.length > 0) {
+            const newBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            mergedBlob = previousAudioBlobRef.current
+              ? new Blob([previousAudioBlobRef.current, newBlob], { type: 'audio/webm' })
+              : newBlob;
 
-          // Salva o rascunho uma última vez com o áudio finalizado
-          saveDraft(chunksRef.current);
+            // Salva o rascunho uma última vez com o áudio finalizado
+            saveDraft(chunksRef.current);
+          }
+
+          if (mergedBlob) {
+            setAudioBlob(mergedBlob);
+            const url = URL.createObjectURL(mergedBlob);
+            setAudioUrl(url);
+          }
         }
         stream.getTracks().forEach(track => track.stop());
       };
@@ -261,7 +294,6 @@ export default function NewEvolution() {
       mediaRecorder.start(3000);
       setIsRecording(true);
       setIsPaused(false);
-      setRecordingTime(0);
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => {
           const next = prev + 1;
@@ -631,14 +663,20 @@ export default function NewEvolution() {
           <p className="text-sm text-amber-700 leading-relaxed">
             Identificamos uma gravação que foi interrompida para este paciente em{" "}
             <strong>{new Date(recoveredDraft.createdAt).toLocaleDateString('pt-BR')} às {new Date(recoveredDraft.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong> com{" "}
-            <strong>{formatTime(recoveredDraft.recordingTime || 0)}</strong> de áudio. Deseja recuperá-la para enviar ou descartá-la para iniciar uma nova?
+            <strong>{formatTime(recoveredDraft.recordingTime || 0)}</strong> de áudio. Deseja recuperá-la para subir na evolução, recuperá-la para continuar gravando ou descartá-la para iniciar uma nova?
           </p>
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={handleApplyRecoveredDraft}
+              onClick={handleApplyRecoveredDraftForSubmit}
               className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm"
             >
-              Recuperar Gravação
+              Recuperar para a Evolução
+            </button>
+            <button
+              onClick={handleApplyRecoveredDraftForContinue}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-colors shadow-sm"
+            >
+              Recuperar e Continuar Gravação
             </button>
             <button
               onClick={handleDiscardRecoveredDraft}
@@ -721,7 +759,7 @@ export default function NewEvolution() {
                   </div>
                   <p className="text-sm text-brand-text-muted px-4">Grave o áudio da sessão com segurança (Backup automático ativo)</p>
                   <button
-                    onClick={startRecording}
+                    onClick={() => startRecording()}
                     className="btn-primary w-full py-3"
                   >
                     Iniciar Gravação
