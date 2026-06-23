@@ -79,8 +79,28 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to="/" replace />;
   }
   
-  return <>{children}</>;
 }
+
+function RootRoute() {
+  const { user, isAuthReady, profileStatus } = useAuthStore();
+
+  if (!isAuthReady) {
+    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+  }
+
+  if (user) {
+    if (profileStatus === 'pending') {
+      return <Navigate to="/pending" replace />;
+    }
+    if (profileStatus === 'inactive') {
+      return <Navigate to="/pending?status=inactive" replace />;
+    }
+    return <Navigate to="/painel/dashboard" replace />;
+  }
+
+  return <LandingPage />;
+}
+
 
 export default function App() {
   const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken } = useAuthStore();
@@ -199,7 +219,7 @@ export default function App() {
         </Route>
 
         {/* Redirects */}
-        <Route path="/" element={<LandingPage />} />
+        <Route path="/" element={<RootRoute />} />
         <Route path="/patients" element={<Navigate to="/painel/patients" replace />} />
         <Route path="/share-target" element={<Navigate to="/painel/share-target" replace />} />
         <Route path="/api/share-target" element={<Navigate to="/painel/share-target" replace />} />
