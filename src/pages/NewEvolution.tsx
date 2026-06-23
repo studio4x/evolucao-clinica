@@ -20,11 +20,13 @@ type AudioEvolutionItem = {
   name: string;
 };
 
+const AUTH_REAUTH_RECOVERY_KEY = 'new-evolution:resume-after-auth';
+
 export default function NewEvolution() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, setGoogleAccessToken, isAuthReady } = useAuthStore();
   
   const [patient, setPatient] = useState<any>(null);
   const dateParam = searchParams.get('date');
@@ -50,6 +52,7 @@ export default function NewEvolution() {
   const draftIdRef = useRef<string | null>(null);
   const recordingTimeRef = useRef<number>(0);
   const audioItemsRef = useRef<AudioEvolutionItem[]>([]);
+  const autoRestoreAfterAuthRef = useRef(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -153,6 +156,11 @@ export default function NewEvolution() {
     setAudioItems(nextItems);
   };
 
+  const clearAuthRecoveryFlag = () => {
+    sessionStorage.removeItem(AUTH_REAUTH_RECOVERY_KEY);
+    autoRestoreAfterAuthRef.current = false;
+  };
+
   const reorderAudioItem = async (index: number, direction: -1 | 1) => {
     const nextIndex = index + direction;
     if (nextIndex < 0 || nextIndex >= audioItemsRef.current.length) return;
@@ -172,6 +180,7 @@ export default function NewEvolution() {
     setAudioItems([]);
     setRecordingTime(0);
     recordingTimeRef.current = 0;
+    clearAuthRecoveryFlag();
 
     if (draftIdRef.current) {
       await removePendingEvolution(draftIdRef.current);
@@ -240,6 +249,7 @@ export default function NewEvolution() {
   const handleApplyRecoveredDraftForSubmit = async () => {
     if (!recoveredDraft) return;
     try {
+      clearAuthRecoveryFlag();
       const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
       const items = await hydrateAudioItems(blobs, 'draft');
       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
@@ -262,6 +272,7 @@ export default function NewEvolution() {
   const handleApplyRecoveredDraftForContinue = async () => {
     if (!recoveredDraft) return;
     try {
+      clearAuthRecoveryFlag();
       const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
       const items = await hydrateAudioItems(blobs, 'draft');
       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
@@ -285,6 +296,7 @@ export default function NewEvolution() {
   const handleDiscardRecoveredDraft = async () => {
     if (!recoveredDraft) return;
     if (window.confirm("Certeza que deseja excluir permanentemente esta gravação incompleta?")) {
+      clearAuthRecoveryFlag();
       await removePendingEvolution(recoveredDraft.id);
       setRecoveredDraft(null);
     }
@@ -293,6 +305,14 @@ export default function NewEvolution() {
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
+      sessionStorage.setItem(
+        AUTH_REAUTH_RECOVERY_KEY,
+        JSON.stringify({
+          patientId: id,
+          draftId: draftIdRef.current,
+          sessionDate
+        })
+      );
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -303,11 +323,41 @@ export default function NewEvolution() {
       if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
+      clearAuthRecoveryFlag();
       alert("Erro ao renovar autenticação. Tente novamente.");
     } finally {
       setIsReauthenticating(false);
     }
   };
+
+  useEffect(() => {
+    if (!isAuthReady || !recoveredDraft || audioItemsRef.current.length > 0) return;
+
+    const pendingRecovery = sessionStorage.getItem(AUTH_REAUTH_RECOVERY_KEY);
+    if (!pendingRecovery) return;
+
+    let parsedRecovery: { patientId?: string; draftId?: string; sessionDate?: string } | null = null;
+    try {
+      parsedRecovery = JSON.parse(pendingRecovery);
+    } catch (err) {
+      clearAuthRecoveryFlag();
+      return;
+    }
+
+    if (parsedRecovery?.patientId && parsedRecovery.patientId !== id) {
+      clearAuthRecoveryFlag();
+      return;
+    }
+
+    if (autoRestoreAfterAuthRef.current) {
+      return;
+    }
+
+    autoRestoreAfterAuthRef.current = true;
+    void handleApplyRecoveredDraftForSubmit().finally(() => {
+      clearAuthRecoveryFlag();
+    });
+  }, [isAuthReady, recoveredDraft, id]);
 
   const handleOpenModal = async () => {
     if (!patient || !patient.google_doc_id || !googleAccessToken) return;
