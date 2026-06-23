@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3 } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { marked } from 'marked';
-import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy } from '../services/googleDocs';
+import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 
 // Converte Markdown para HTML seguro para renderização
@@ -104,6 +104,8 @@ export default function PatientDetail() {
   const [printDocType, setPrintDocType] = useState('');
   const [printMode, setPrintMode] = useState<'report' | 'prontuario'>('report');
   const [professional, setProfessional] = useState<any>(null);
+  const [printingProntuario, setPrintingProntuario] = useState(false);
+  const [prontuarioDocContent, setProntuarioDocContent] = useState('');
 
   // Estados de toggle Visualizar/Editar relatório
   const [reportEditMode, setReportEditMode] = useState(false);
@@ -119,13 +121,62 @@ export default function PatientDetail() {
     }, 200);
   };
 
-  const handlePrintProntuario = () => {
-    setPrintMode('prontuario');
-    setPrintDocType('Prontuário de Evoluções Clínicas');
-    setPrintPeriodLabel('');
-    setTimeout(() => {
-      window.print();
-    }, 200);
+  const handlePrintProntuario = async () => {
+    if (!patient?.google_doc_id) {
+      alert("Nenhum prontuário do Google Docs vinculado a este paciente.");
+      return;
+    }
+
+    if (!googleAccessToken) {
+      alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
+          redirectTo: window.location.origin + window.location.pathname
+        }
+      });
+      return;
+    }
+
+    setPrintingProntuario(true);
+    try {
+      const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
+      setProntuarioDocContent(content);
+      setPrintMode('prontuario');
+      setPrintDocType('Prontuário de Evoluções Clínicas (Google Docs)');
+      setPrintPeriodLabel('');
+      setTimeout(() => {
+        window.print();
+        setPrintingProntuario(false);
+      }, 300);
+    } catch (err: any) {
+      console.error("Erro ao carregar prontuário do Google Docs:", err);
+      alert("Erro ao ler prontuário do Google Docs: " + (err.message || err));
+      setPrintingProntuario(false);
+    }
+  };
+
+  const handleShareWhatsApp = (content: string, type: string) => {
+    const cleanText = stripMarkdown(content);
+    const docLabel = type === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
+    const header = `*${docLabel} - ${patient?.full_name}*\n\n`;
+    const fullMessage = header + cleanText;
+    const encodedMsg = encodeURIComponent(fullMessage);
+    const phone = patient?.phone ? patient.phone.replace(/\D/g, '') : '';
+    
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    let url = '';
+    if (phone) {
+      url = isMobile
+        ? `https://wa.me/${phone}?text=${encodedMsg}`
+        : `https://web.whatsapp.com/send?phone=${phone}&text=${encodedMsg}`;
+    } else {
+      url = isMobile
+        ? `https://wa.me/?text=${encodedMsg}`
+        : `https://web.whatsapp.com/send?text=${encodedMsg}`;
+    }
+    window.open(url, '_blank');
   };
 
   useEffect(() => {
@@ -1080,16 +1131,23 @@ export default function PatientDetail() {
           <div className="card">
             <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
               <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
-              {evolutions.length > 0 && (
-                <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-3">
+                {patient.google_doc_id && (
                   <button 
                     type="button"
                     onClick={handlePrintProntuario}
-                    className="text-brand-primary hover:text-brand-primary/80 flex items-center space-x-1 text-sm font-medium transition-colors"
+                    disabled={printingProntuario}
+                    className="text-brand-primary hover:text-brand-primary/80 disabled:opacity-50 flex items-center space-x-1 text-sm font-medium transition-colors cursor-pointer"
                   >
-                    <Printer size={16} />
-                    <span>Imprimir Prontuário</span>
+                    {printingProntuario ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Printer size={16} />
+                    )}
+                    <span>{printingProntuario ? 'Lendo Google Doc...' : 'Imprimir Prontuário'}</span>
                   </button>
+                )}
+                {evolutions.length > 0 && (
                   <button 
                     onClick={() => setShowClearConfirm(true)}
                     className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
@@ -1097,8 +1155,8 @@ export default function PatientDetail() {
                     <Trash2 size={16} />
                     <span>Limpar Tudo</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {showClearConfirm && (
@@ -1675,6 +1733,15 @@ export default function PatientDetail() {
 
                       <button
                         type="button"
+                        onClick={() => handleShareWhatsApp(generatedReport, aiReportType)}
+                        className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
+                      >
+                        <MessageCircle size={14} className="text-emerald-600" />
+                        <span>Enviar por WhatsApp</span>
+                      </button>
+
+                      <button
+                        type="button"
                         onClick={() => {
                           const periodLabel = aiPeriod === '3_months' ? 'Últimos 3 meses' : aiPeriod === '6_months' ? 'Últimos 6 meses' : 'Período Personalizado';
                           handlePrintReport(generatedReport, periodLabel, aiReportType);
@@ -1919,8 +1986,17 @@ export default function PatientDetail() {
 
                   <button
                     type="button"
+                    onClick={() => handleShareWhatsApp(viewingReportContent, viewingReport.type)}
+                    className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
+                  >
+                    <MessageCircle size={14} className="text-emerald-600" />
+                    <span>Enviar por WhatsApp</span>
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => {
-                      handlePrintReport(viewingReport.content, viewingReport.period_label, viewingReport.type);
+                      handlePrintReport(viewingReportContent, viewingReport.period_label, viewingReport.type);
                     }}
                     className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
                   >
@@ -1987,20 +2063,8 @@ export default function PatientDetail() {
             dangerouslySetInnerHTML={{ __html: parseMarkdown(printContent) }}
           />
         ) : (
-          <div className="space-y-6">
-            {[...evolutions].reverse().map((evo) => (
-              <div key={evo.id} className="border-b border-stone-200 pb-4 last:border-0" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-                <div className="flex justify-between items-center text-xs text-stone-500 mb-2 font-medium">
-                  <span>Sessão realizada em: {formatDateTime(evo.created_at)}</span>
-                  {evo.transcription_status === 'completed' && (
-                    <span className="text-[10px] bg-stone-100 text-stone-600 px-1.5 py-0.5 rounded">Processada com IA</span>
-                  )}
-                </div>
-                <div className="text-stone-800 text-sm leading-relaxed whitespace-pre-wrap font-sans">
-                  {evo.transcription_text || <span className="italic text-stone-400">Nenhum registro de texto nesta sessão.</span>}
-                </div>
-              </div>
-            ))}
+          <div className="whitespace-pre-wrap font-sans text-sm text-stone-800 leading-relaxed">
+            {prontuarioDocContent || <span className="italic text-stone-400">Nenhum registro encontrado no documento do Google Docs.</span>}
           </div>
         )}
 
