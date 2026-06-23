@@ -94,10 +94,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RootRoute() {
-  const { isAuthReady } = useAuthStore();
+  const { isAuthReady, user } = useAuthStore();
 
   if (!isAuthReady) {
     return <SplashScreen message="Iniciando Evolução Clínica..." />;
+  }
+
+  if (user) {
+    return <Navigate to="/painel/dashboard" replace />;
   }
 
   return <LandingPage />;
