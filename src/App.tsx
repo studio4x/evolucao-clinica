@@ -205,8 +205,8 @@ export default function App() {
                 pendingOnboardingNoticeRef.current = session.user.id;
               }
             } else {
-              // Outros erros (ex: offline). Assume 'active' por tolerância de rede
-              setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+              // Outros erros (ex: offline). Evita inferir role/status errados e mantém o app em estado neutro.
+              setProfileInfo(null, null, null, null, null, null);
               pendingOnboardingNoticeRef.current = null;
             }
           } else if (data) {
@@ -295,8 +295,8 @@ export default function App() {
             .subscribe();
         } catch (error) {
           console.error("Erro ao processar perfil do profissional:", error);
-          // Em caso de exceção (ex: offline), assume 'active' por tolerância de rede
-          setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+          // Em caso de exceção, não rebaixa o usuário para o fluxo comum por engano.
+          setProfileInfo(null, null, null, null, null, null);
           pendingOnboardingNoticeRef.current = null;
         }
       } else {

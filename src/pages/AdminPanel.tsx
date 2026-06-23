@@ -1166,6 +1166,7 @@ export default function AdminPanel() {
           profData.trial_ends_at
         );
         setUser(loggedUser);
+        navigate('/admin/professionals', { replace: true });
       } else {
         await supabase.auth.signOut();
         setUser(null);
