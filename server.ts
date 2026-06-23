@@ -315,6 +315,96 @@ app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async 
   }
 });
 
+app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any, res) => {
+  const { firstName, lastName, email, password } = req.body || {};
+
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedFirstName = String(firstName || '').trim();
+  const normalizedLastName = String(lastName || '').trim();
+  const cleanPassword = String(password || '');
+  const fullName = `${normalizedFirstName} ${normalizedLastName}`.trim();
+
+  if (!normalizedFirstName || !normalizedLastName || !normalizedEmail || !cleanPassword) {
+    return res.status(400).json({ error: "Nome, sobrenome, e-mail e senha são obrigatórios." });
+  }
+
+  if (cleanPassword.length < 6) {
+    return res.status(400).json({ error: "A senha deve ter pelo menos 6 caracteres." });
+  }
+
+  try {
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+      email: normalizedEmail,
+      password: cleanPassword,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        name: normalizedFirstName,
+        family_name: normalizedLastName
+      }
+    });
+
+    if (authError || !authData?.user) {
+      const errorMessage = authError?.message || "Não foi possível criar o usuário no Auth.";
+      if (/already|exists|duplicate/i.test(errorMessage)) {
+        return res.status(409).json({ error: "Já existe um usuário com esse e-mail." });
+      }
+      return res.status(500).json({ error: errorMessage });
+    }
+
+    const createdUser = authData.user;
+    const now = new Date().toISOString();
+
+    const { error: profileError } = await supabaseAdmin
+      .from("professionals")
+      .insert({
+        id: createdUser.id,
+        full_name: fullName,
+        google_email: normalizedEmail,
+        photo_url: createdUser.user_metadata?.avatar_url || null,
+        role: "therapist",
+        status: "active",
+        subscription_plan: "trial",
+        subscription_status: "trialing",
+        subscription_ends_at: null,
+        trial_ends_at: null,
+        created_at: now,
+        updated_at: now
+      });
+
+    if (profileError) {
+      await supabaseAdmin.auth.admin.deleteUser(createdUser.id).catch(() => {});
+      throw profileError;
+    }
+
+    let notificationResult: any = null;
+    try {
+      notificationResult = await sendNotificationInternal(
+        createdUser.id,
+        "Sua conta foi criada",
+        "Seu acesso à plataforma foi criado e liberado pela administração. Use seu e-mail e a senha recebida para entrar.",
+        "success",
+        "/login"
+      );
+    } catch (notificationError) {
+      console.error("[AdminCreateProfessional] Erro ao notificar novo profissional:", notificationError);
+    }
+
+    return res.status(201).json({
+      success: true,
+      user: {
+        id: createdUser.id,
+        email: normalizedEmail,
+        full_name: fullName
+      },
+      notification: notificationResult
+    });
+  } catch (err: any) {
+    console.error("Erro ao criar profissional manualmente:", err);
+    return res.status(500).json({ error: err.message || "Erro ao criar profissional." });
+  }
+});
+
 async function getAdminRecipients() {
   const { data: admins, error } = await supabaseAdmin
     .from("professionals")

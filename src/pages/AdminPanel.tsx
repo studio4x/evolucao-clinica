@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -238,6 +238,14 @@ export default function AdminPanel() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive'>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [creatingProfessional, setCreatingProfessional] = useState(false);
+  const [newProfessionalFirstName, setNewProfessionalFirstName] = useState('');
+  const [newProfessionalLastName, setNewProfessionalLastName] = useState('');
+  const [newProfessionalEmail, setNewProfessionalEmail] = useState('');
+  const [newProfessionalPassword, setNewProfessionalPassword] = useState('');
+  const [showNewProfessionalPassword, setShowNewProfessionalPassword] = useState(false);
+  const [createProfessionalSuccess, setCreateProfessionalSuccess] = useState('');
+  const [createProfessionalError, setCreateProfessionalError] = useState('');
 
   // Estados da Chave Gemini
   const [currentGeminiKey, setCurrentGeminiKey] = useState('');
@@ -1398,6 +1406,69 @@ export default function AdminPanel() {
     return data;
   };
 
+  const handleCreateProfessional = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!newProfessionalFirstName.trim() || !newProfessionalLastName.trim() || !newProfessionalEmail.trim() || !newProfessionalPassword) {
+      setCreateProfessionalError('Preencha nome, sobrenome, e-mail e senha.');
+      return;
+    }
+
+    if (newProfessionalPassword.length < 6) {
+      setCreateProfessionalError('A senha deve ter pelo menos 6 caracteres.');
+      return;
+    }
+
+    setCreatingProfessional(true);
+    setCreateProfessionalError('');
+    setCreateProfessionalSuccess('');
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const res = await fetch('/api/admin/professionals', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          firstName: newProfessionalFirstName.trim(),
+          lastName: newProfessionalLastName.trim(),
+          email: newProfessionalEmail.trim(),
+          password: newProfessionalPassword
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Falha ao criar profissional.');
+      }
+
+      await refreshProfessionals(false);
+
+      setNewProfessionalFirstName('');
+      setNewProfessionalLastName('');
+      setNewProfessionalEmail('');
+      setNewProfessionalPassword('');
+      setShowNewProfessionalPassword(false);
+
+      setCreateProfessionalSuccess(
+        `${data.user?.full_name || 'Profissional'} criado com sucesso${data.notification?.emailSent ? ' e notificado por e-mail/push.' : '.'}`
+      );
+
+      setTimeout(() => setCreateProfessionalSuccess(''), 5000);
+    } catch (error: any) {
+      console.error('Erro ao criar profissional manualmente:', error);
+      setCreateProfessionalError(error.message || 'Erro ao criar profissional.');
+    } finally {
+      setCreatingProfessional(false);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setUser(null);
@@ -1781,6 +1852,110 @@ export default function AdminPanel() {
           <div className="flex-1 min-w-0">
             {activeTab === 'professionals' ? (
               <div className="space-y-6">
+                <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                  <div className="flex items-center space-x-3 mb-5">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <UserPlus className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Adicionar Profissional
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Crie uma conta manualmente com acesso liberado. A senha não será exibida novamente.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleCreateProfessional} className="space-y-4">
+                    {createProfessionalSuccess && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
+                        <Check className="flex-shrink-0 text-emerald-600" size={16} />
+                        <span>{createProfessionalSuccess}</span>
+                      </div>
+                    )}
+
+                    {createProfessionalError && (
+                      <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs flex gap-2">
+                        <ShieldAlert className="flex-shrink-0 text-red-600" size={16} />
+                        <span>{createProfessionalError}</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Nome</label>
+                        <input
+                          type="text"
+                          value={newProfessionalFirstName}
+                          onChange={(e) => setNewProfessionalFirstName(e.target.value)}
+                          placeholder="Ex: Ana"
+                          required
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Sobrenome</label>
+                        <input
+                          type="text"
+                          value={newProfessionalLastName}
+                          onChange={(e) => setNewProfessionalLastName(e.target.value)}
+                          placeholder="Ex: Souza"
+                          required
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">E-mail</label>
+                        <input
+                          type="email"
+                          value={newProfessionalEmail}
+                          onChange={(e) => setNewProfessionalEmail(e.target.value)}
+                          placeholder="profissional@exemplo.com"
+                          required
+                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Senha</label>
+                        <div className="relative">
+                          <input
+                            type={showNewProfessionalPassword ? 'text' : 'password'}
+                            value={newProfessionalPassword}
+                            onChange={(e) => setNewProfessionalPassword(e.target.value)}
+                            placeholder="Mínimo 6 caracteres"
+                            required
+                            className="w-full px-3.5 pr-10 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewProfessionalPassword(prev => !prev)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                          >
+                            {showNewProfessionalPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={creatingProfessional}
+                        className="inline-flex items-center space-x-2 px-4 py-2.5 bg-brand-primary text-white font-semibold rounded-xl hover:bg-brand-primary-hover transition-colors disabled:opacity-50 cursor-pointer shadow-sm"
+                      >
+                        {creatingProfessional ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                        <span>{creatingProfessional ? 'Criando...' : 'Criar Profissional'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
                 {/* Cards de Metricas SaaS */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   <div className="card p-5 bg-white flex items-center space-x-4 shadow-sm border border-brand-border/60">
