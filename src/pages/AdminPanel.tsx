@@ -246,6 +246,11 @@ export default function AdminPanel() {
   const [showNewProfessionalPassword, setShowNewProfessionalPassword] = useState(false);
   const [createProfessionalSuccess, setCreateProfessionalSuccess] = useState('');
   const [createProfessionalError, setCreateProfessionalError] = useState('');
+  const [accessControlRequireApproval, setAccessControlRequireApproval] = useState(true);
+  const [accessControlLoading, setAccessControlLoading] = useState(false);
+  const [accessControlSaving, setAccessControlSaving] = useState(false);
+  const [accessControlSuccess, setAccessControlSuccess] = useState('');
+  const [accessControlError, setAccessControlError] = useState('');
 
   // Estados da Chave Gemini
   const [currentGeminiKey, setCurrentGeminiKey] = useState('');
@@ -898,6 +903,46 @@ export default function AdminPanel() {
     };
   }, [user, profileRole]);
 
+  useEffect(() => {
+    const fetchAccessControlSettings = async () => {
+      if (!user || profileRole !== 'admin' || activeTab !== 'professionals') {
+        return;
+      }
+
+      setAccessControlLoading(true);
+      setAccessControlError('');
+
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'access_control_settings')
+          .maybeSingle();
+
+        if (error) throw error;
+
+        if (data?.api_key) {
+          try {
+            const parsed = JSON.parse(data.api_key);
+            setAccessControlRequireApproval(parsed.require_approval !== false);
+          } catch (parseError) {
+            console.error('Erro ao interpretar configuracao de acesso:', parseError);
+            setAccessControlRequireApproval(true);
+          }
+        } else {
+          setAccessControlRequireApproval(true);
+        }
+      } catch (err: any) {
+        console.error('Erro ao carregar configuracao de acesso:', err);
+        setAccessControlError(err.message || 'Erro ao carregar configuracao de acesso.');
+      } finally {
+        setAccessControlLoading(false);
+      }
+    };
+
+    fetchAccessControlSettings();
+  }, [user, profileRole, activeTab]);
+
   // Efeito para carregar chave Gemini
   useEffect(() => {
     const fetchGeminiKey = async () => {
@@ -1406,6 +1451,46 @@ export default function AdminPanel() {
     return data;
   };
 
+  const handleToggleAccessControl = async () => {
+    if (!user || accessControlSaving) return;
+
+    const nextRequireApproval = !accessControlRequireApproval;
+    setAccessControlSaving(true);
+    setAccessControlError('');
+    setAccessControlSuccess('');
+    setAccessControlRequireApproval(nextRequireApproval);
+
+    try {
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'access_control_settings',
+          api_key: JSON.stringify({
+            require_approval: nextRequireApproval
+          }),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
+        });
+
+      if (error) throw error;
+
+      setAccessControlSuccess(
+        nextRequireApproval
+          ? 'Bloqueio de novos cadastros ativado. Novos profissionais ficarão pendentes.'
+          : 'Bloqueio de novos cadastros desativado. Novos profissionais serão ativados automaticamente.'
+      );
+      setTimeout(() => setAccessControlSuccess(''), 5000);
+
+      void refreshProfessionals(false);
+    } catch (err: any) {
+      console.error('Erro ao salvar configuracao de acesso:', err);
+      setAccessControlRequireApproval(!nextRequireApproval);
+      setAccessControlError(err.message || 'Erro ao salvar configuracao de acesso.');
+    } finally {
+      setAccessControlSaving(false);
+    }
+  };
+
   const handleCreateProfessional = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -1456,9 +1541,12 @@ export default function AdminPanel() {
       setNewProfessionalPassword('');
       setShowNewProfessionalPassword(false);
 
-      setCreateProfessionalSuccess(
-        `${data.user?.full_name || 'Profissional'} criado com sucesso${data.notification?.emailSent ? ' e notificado por e-mail/push.' : '.'}`
-      );
+      const createdLabel = data.user?.full_name || 'Profissional';
+      if (data.status === 'pending') {
+        setCreateProfessionalSuccess(`${createdLabel} criado com sucesso e ficou pendente de aprovação.`);
+      } else {
+        setCreateProfessionalSuccess(`${createdLabel} criado com sucesso e foi liberado automaticamente.`);
+      }
 
       setTimeout(() => setCreateProfessionalSuccess(''), 5000);
     } catch (error: any) {
@@ -1853,6 +1941,78 @@ export default function AdminPanel() {
             {activeTab === 'professionals' ? (
               <div className="space-y-6">
                 <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex items-start space-x-3">
+                      <div className={`p-3 rounded-xl ${accessControlRequireApproval ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                        <Shield className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                          Bloqueio de novos cadastros
+                        </h2>
+                        <p className="text-xs text-brand-text-muted mt-0.5 max-w-2xl">
+                          Quando ativado, toda conta criada na plataforma entra como pendente e precisa de liberação. Quando desativado, o acesso é liberado automaticamente após o cadastro.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={accessControlRequireApproval}
+                      onClick={handleToggleAccessControl}
+                      disabled={accessControlSaving || accessControlLoading}
+                      className={`relative inline-flex h-12 w-24 items-center rounded-full border transition-all duration-200 cursor-pointer shadow-sm disabled:opacity-50 ${
+                        accessControlRequireApproval
+                          ? 'bg-amber-100 border-amber-200'
+                          : 'bg-emerald-100 border-emerald-200'
+                      }`}
+                    >
+                      <span
+                        className={`inline-flex h-10 w-10 transform items-center justify-center rounded-full bg-white shadow-md transition-transform duration-200 ${
+                          accessControlRequireApproval ? 'translate-x-1' : 'translate-x-[2.75rem]'
+                        }`}
+                      >
+                        {accessControlSaving || accessControlLoading ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-brand-primary" />
+                        ) : accessControlRequireApproval ? (
+                          <ShieldAlert className="w-4 h-4 text-amber-600" />
+                        ) : (
+                          <Check className="w-4 h-4 text-emerald-600" />
+                        )}
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                      accessControlRequireApproval
+                        ? 'bg-amber-50 text-amber-700 border-amber-100'
+                        : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                    }`}>
+                      {accessControlRequireApproval ? 'Aprovação obrigatória' : 'Cadastro liberado automaticamente'}
+                    </span>
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border bg-brand-bg text-brand-text-muted border-brand-border">
+                      {accessControlLoading ? 'Carregando regra...' : accessControlSaving ? 'Salvando alteração...' : 'Atualizado via settings'}
+                    </span>
+                  </div>
+
+                  {accessControlError && (
+                    <div className="mt-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs flex gap-2">
+                      <ShieldAlert className="flex-shrink-0 text-red-600" size={16} />
+                      <span>{accessControlError}</span>
+                    </div>
+                  )}
+
+                  {accessControlSuccess && (
+                    <div className="mt-4 p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
+                      <Check className="flex-shrink-0 text-emerald-600" size={16} />
+                      <span>{accessControlSuccess}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
                   <div className="flex items-center space-x-3 mb-5">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
                       <UserPlus className="w-6 h-6" />
@@ -1862,7 +2022,7 @@ export default function AdminPanel() {
                         Adicionar Profissional
                       </h2>
                       <p className="text-xs text-brand-text-muted mt-0.5">
-                        Crie uma conta manualmente com acesso liberado. A senha não será exibida novamente.
+                        Crie uma conta manualmente. A regra de aprovação definida acima será aplicada automaticamente.
                       </p>
                     </div>
                   </div>

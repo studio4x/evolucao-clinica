@@ -116,6 +116,23 @@ export default function App() {
   };
 
   useEffect(() => {
+    const bootstrapProfessionalAccess = async (session: any) => {
+      const response = await fetch('/api/onboarding/bootstrap', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        }
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Falha ao sincronizar acesso do profissional.');
+      }
+
+      return data;
+    };
+
     const handleAuthSession = async (session: any) => {
       const currentState = useAuthStore.getState();
 
@@ -153,48 +170,73 @@ export default function App() {
             console.error("Erro ao buscar profissional no Supabase:", error);
             // Se for PGRST116 (registro não encontrado/novo cadastro), aguarda liberação
             if (error.code === 'PGRST116') {
-              if (pendingOnboardingNoticeRef.current !== session.user.id) {
+              try {
+                const bootstrapData = await bootstrapProfessionalAccess(session);
+                const bootstrapProfile = bootstrapData.profile || {};
+                const nextStatus = bootstrapProfile.status || bootstrapData.status || 'pending';
+
+                setProfileInfo(
+                  nextStatus,
+                  bootstrapProfile.role || 'therapist',
+                  bootstrapProfile.subscription_plan || 'trial',
+                  bootstrapProfile.subscription_status || 'trialing',
+                  bootstrapProfile.subscription_ends_at || null,
+                  bootstrapProfile.trial_ends_at || null
+                );
+
+                pendingOnboardingNoticeRef.current = nextStatus === 'pending' ? session.user.id : null;
+              } catch (bootstrapError) {
+                console.error('Erro ao sincronizar onboarding do profissional:', bootstrapError);
+                setProfileInfo('pending', 'therapist', 'trial', 'trialing', null, null);
                 pendingOnboardingNoticeRef.current = session.user.id;
-                void fetch('/api/onboarding/pending', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                  }
-                }).catch((pendingError) => {
-                  console.error('Erro ao disparar onboarding pendente:', pendingError);
-                });
               }
-              setProfileInfo('pending', 'therapist', 'trial', 'trialing', null, null);
             } else {
               // Outros erros (ex: offline). Assume 'active' por tolerância de rede
               setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
               pendingOnboardingNoticeRef.current = null;
             }
           } else if (data) {
-            setProfileInfo(
-              data.status,
-              data.role || 'therapist',
-              data.subscription_plan,
-              data.subscription_status,
-              data.subscription_ends_at,
-              data.trial_ends_at
-            );
-
             if (data.status === 'pending') {
-              if (pendingOnboardingNoticeRef.current !== session.user.id) {
+              try {
+                const bootstrapData = await bootstrapProfessionalAccess(session);
+                const bootstrapProfile = bootstrapData.profile || {};
+                const nextStatus = bootstrapProfile.status || bootstrapData.status || 'pending';
+
+                setProfileInfo(
+                  nextStatus,
+                  bootstrapProfile.role || data.role || 'therapist',
+                  bootstrapProfile.subscription_plan || data.subscription_plan,
+                  bootstrapProfile.subscription_status || data.subscription_status,
+                  bootstrapProfile.subscription_ends_at || data.subscription_ends_at,
+                  bootstrapProfile.trial_ends_at || data.trial_ends_at
+                );
+
+                if (nextStatus === 'pending') {
+                  pendingOnboardingNoticeRef.current = session.user.id;
+                } else {
+                  pendingOnboardingNoticeRef.current = null;
+                }
+              } catch (bootstrapError) {
+                console.error('Erro ao sincronizar onboarding pendente:', bootstrapError);
+                setProfileInfo(
+                  data.status,
+                  data.role || 'therapist',
+                  data.subscription_plan,
+                  data.subscription_status,
+                  data.subscription_ends_at,
+                  data.trial_ends_at
+                );
                 pendingOnboardingNoticeRef.current = session.user.id;
-                void fetch('/api/onboarding/pending', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                  }
-                }).catch((pendingError) => {
-                  console.error('Erro ao disparar onboarding pendente:', pendingError);
-                });
               }
             } else {
+              setProfileInfo(
+                data.status,
+                data.role || 'therapist',
+                data.subscription_plan,
+                data.subscription_status,
+                data.subscription_ends_at,
+                data.trial_ends_at
+              );
               pendingOnboardingNoticeRef.current = null;
             }
           }

@@ -75,6 +75,36 @@ async function getNotificationSettings() {
   }
 }
 
+async function getAccessControlSettings() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "access_control_settings")
+      .maybeSingle();
+
+    if (error) throw error;
+
+    let settings: any = {};
+    if (data?.api_key) {
+      try {
+        settings = JSON.parse(data.api_key);
+      } catch (parseError) {
+        console.error("Erro ao ler JSON das configuracoes de acesso:", parseError);
+      }
+    }
+
+    return {
+      require_approval: settings.require_approval !== false
+    };
+  } catch (err) {
+    console.error("Erro ao carregar configuracoes de acesso, usando padrao com aprovacao obrigatoria:", err);
+    return {
+      require_approval: true
+    };
+  }
+}
+
 // Middleware de Autenticação Supabase
 async function requireAuth(req: any, res: any, next: any) {
   try {
@@ -333,6 +363,9 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
   }
 
   try {
+    const accessControlSettings = await getAccessControlSettings();
+    const requireApproval = accessControlSettings.require_approval !== false;
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: normalizedEmail,
       password: cleanPassword,
@@ -354,6 +387,7 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
 
     const createdUser = authData.user;
     const now = new Date().toISOString();
+    const targetStatus = requireApproval ? "pending" : "active";
 
     const { error: profileError } = await supabaseAdmin
       .from("professionals")
@@ -363,7 +397,7 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
         google_email: normalizedEmail,
         photo_url: createdUser.user_metadata?.avatar_url || null,
         role: "therapist",
-        status: "active",
+        status: targetStatus,
         subscription_plan: "trial",
         subscription_status: "trialing",
         subscription_ends_at: null,
@@ -379,19 +413,30 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
 
     let notificationResult: any = null;
     try {
-      notificationResult = await sendNotificationInternal(
-        createdUser.id,
-        "Sua conta foi criada",
-        "Seu acesso à plataforma foi criado e liberado pela administração. Use seu e-mail e a senha recebida para entrar.",
-        "success",
-        "/login"
-      );
+      if (requireApproval) {
+        notificationResult = await sendOnboardingPendingNotice({
+          id: createdUser.id,
+          email: normalizedEmail,
+          user_metadata: {
+            full_name: fullName
+          }
+        });
+      } else {
+        notificationResult = await sendOnboardingAccessGrantedNotice(createdUser.id, {
+          title: "Sua conta foi criada",
+          content: "Seu acesso à plataforma foi criado e liberado pela administração. Use seu e-mail e a senha recebida para entrar.",
+          type: "success",
+          link: "/login"
+        });
+      }
     } catch (notificationError) {
       console.error("[AdminCreateProfessional] Erro ao notificar novo profissional:", notificationError);
     }
 
     return res.status(201).json({
       success: true,
+      status: targetStatus,
+      requireApproval,
       user: {
         id: createdUser.id,
         email: normalizedEmail,
@@ -438,7 +483,7 @@ async function upsertOnboardingLog(userId: string, patch: Record<string, any>) {
   if (error) throw error;
 }
 
-async function ensurePendingProfessionalProfile(user: any) {
+async function ensureProfessionalProfile(user: any, status: "pending" | "active") {
   const fullName = user?.user_metadata?.full_name
     || user?.user_metadata?.name
     || user?.user_metadata?.given_name
@@ -447,13 +492,13 @@ async function ensurePendingProfessionalProfile(user: any) {
 
   const { error } = await supabaseAdmin
     .from("professionals")
-    .upsert({
+      .upsert({
       id: user.id,
       full_name: fullName,
       google_email: user.email,
       photo_url: user?.user_metadata?.avatar_url || null,
       role: "therapist",
-      status: "pending",
+      status,
       subscription_plan: "trial",
       subscription_status: "trialing",
       subscription_ends_at: null,
@@ -461,6 +506,14 @@ async function ensurePendingProfessionalProfile(user: any) {
     });
 
   if (error) throw error;
+}
+
+async function ensurePendingProfessionalProfile(user: any) {
+  return ensureProfessionalProfile(user, "pending");
+}
+
+async function ensureActiveProfessionalProfile(user: any) {
+  return ensureProfessionalProfile(user, "active");
 }
 
 async function sendOnboardingPendingNotice(user: any) {
@@ -502,7 +555,15 @@ async function sendOnboardingPendingNotice(user: any) {
   return { skipped: false, adminCount };
 }
 
-async function sendOnboardingApprovalNotice(targetUserId: string) {
+async function sendOnboardingAccessGrantedNotice(
+  targetUserId: string,
+  options: {
+    title?: string;
+    content?: string;
+    type?: string;
+    link?: string;
+  } = {}
+) {
   const log = await getOnboardingLog(targetUserId);
   if (log?.approved_notified_at) {
     return { skipped: true };
@@ -520,38 +581,135 @@ async function sendOnboardingApprovalNotice(targetUserId: string) {
 
   const fullName = prof.full_name || prof.google_email || "Profissional";
 
-  await sendNotificationInternal(
+  const notificationResult = await sendNotificationInternal(
     targetUserId,
-    "Acesso liberado",
-    "Seu cadastro foi aprovado. Você já pode acessar a plataforma normalmente.",
-    "success",
-    "/painel/dashboard"
+    options.title || "Acesso liberado",
+    options.content || "Seu cadastro foi liberado. Você já pode acessar a plataforma normalmente.",
+    options.type || "success",
+    options.link || "/painel/dashboard"
   );
 
   await upsertOnboardingLog(targetUserId, {
     approved_notified_at: new Date().toISOString()
   });
 
-  return { skipped: false, fullName };
+  return { skipped: false, fullName, ...notificationResult };
 }
+
+async function sendOnboardingApprovalNotice(targetUserId: string) {
+  return sendOnboardingAccessGrantedNotice(targetUserId, {
+    title: "Acesso liberado",
+    content: "Seu cadastro foi aprovado. Você já pode acessar a plataforma normalmente.",
+    type: "success",
+    link: "/painel/dashboard"
+  });
+}
+
+async function bootstrapOnboardingAccess(user: any) {
+  const accessControlSettings = await getAccessControlSettings();
+  const requireApproval = accessControlSettings.require_approval !== false;
+
+  const { data: prof, error: profError } = await supabaseAdmin
+    .from("professionals")
+    .select("id, full_name, google_email, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (profError) throw profError;
+
+  if (!prof) {
+    if (requireApproval) {
+      await ensurePendingProfessionalProfile(user);
+      await sendOnboardingPendingNotice(user);
+      const { data: createdProfile, error: fetchError } = await supabaseAdmin
+        .from("professionals")
+        .select("id, full_name, google_email, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (fetchError) throw fetchError;
+      return {
+        success: true,
+        requireApproval,
+        profile: createdProfile
+      };
+    }
+
+    await ensureActiveProfessionalProfile(user);
+    await sendOnboardingAccessGrantedNotice(user.id, {
+      title: "Acesso liberado",
+      content: "Sua conta foi criada e liberada automaticamente. Você já pode acessar a plataforma normalmente.",
+      type: "success",
+      link: "/painel/dashboard"
+    });
+
+    const { data: createdProfile, error: fetchError } = await supabaseAdmin
+      .from("professionals")
+      .select("id, full_name, google_email, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (fetchError) throw fetchError;
+    return {
+      success: true,
+      requireApproval,
+      profile: createdProfile,
+      autoActivated: true
+    };
+  }
+
+  if (prof.status === "pending" && !requireApproval) {
+    const { error: updateError } = await supabaseAdmin
+      .from("professionals")
+      .update({
+        status: "active",
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", user.id);
+
+    if (updateError) throw updateError;
+
+    await sendOnboardingAccessGrantedNotice(user.id, {
+      title: "Acesso liberado",
+      content: "Seu cadastro foi liberado automaticamente. Você já pode acessar a plataforma normalmente.",
+      type: "success",
+      link: "/painel/dashboard"
+    });
+  } else if (prof.status === "pending") {
+    await ensurePendingProfessionalProfile(user);
+    await sendOnboardingPendingNotice(user);
+  }
+
+  const { data: refreshedProfile, error: refreshError } = await supabaseAdmin
+    .from("professionals")
+    .select("id, full_name, google_email, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (refreshError) throw refreshError;
+
+  return {
+    success: true,
+    requireApproval,
+    profile: refreshedProfile,
+    autoActivated: prof.status === "pending" && !requireApproval
+  };
+}
+
+app.post("/api/onboarding/bootstrap", requireAuth, async (req: any, res) => {
+  try {
+    const result = await bootstrapOnboardingAccess(req.user);
+    return res.json(result);
+  } catch (err: any) {
+    console.error("[Onboarding] Erro ao processar bootstrap de acesso:", err);
+    return res.status(500).json({ error: err.message || "Falha ao processar acesso do profissional." });
+  }
+});
 
 app.post("/api/onboarding/pending", requireAuth, async (req: any, res) => {
   try {
-    const { data: prof, error: profError } = await supabaseAdmin
-      .from("professionals")
-      .select("status")
-      .eq("id", req.user.id)
-      .maybeSingle();
-
-    if (profError) throw profError;
-
-    if (!prof || prof.status === "pending") {
-      await ensurePendingProfessionalProfile(req.user);
-      const result = await sendOnboardingPendingNotice(req.user);
-      return res.json({ success: true, ...result });
-    }
-
-    return res.json({ success: true, skipped: true, reason: "profile_not_pending" });
+    const result = await bootstrapOnboardingAccess(req.user);
+    return res.json(result);
   } catch (err: any) {
     console.error("[Onboarding] Erro ao processar notificação de cadastro pendente:", err);
     return res.status(500).json({ error: err.message || "Falha ao notificar cadastro pendente." });

@@ -21,6 +21,65 @@ export default function PendingApproval() {
     }
   }, [user, profileStatus, navigate]);
 
+  useEffect(() => {
+    if (!user || profileStatus === 'active') {
+      return;
+    }
+
+    let cancelled = false;
+
+    const syncAccess = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const session = sessionData.session;
+
+        if (!session || cancelled) {
+          return;
+        }
+
+        const response = await fetch('/api/onboarding/bootstrap', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const profile = data.profile || {};
+        const nextStatus = profile.status || data.status || 'pending';
+
+        setProfileInfo(
+          nextStatus,
+          profile.role || 'therapist',
+          profile.subscription_plan || 'trial',
+          profile.subscription_status || 'trialing',
+          profile.subscription_ends_at || null,
+          profile.trial_ends_at || null
+        );
+
+        if (nextStatus === 'active') {
+          navigate('/painel/dashboard', { replace: true });
+        }
+      } catch (error) {
+        console.error('Erro ao sincronizar acesso pendente:', error);
+      }
+    };
+
+    void syncAccess();
+    const interval = window.setInterval(syncAccess, 15000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [user, profileStatus, navigate, setProfileInfo]);
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
