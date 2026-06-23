@@ -83,7 +83,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RootRoute() {
-  const { user, isAuthReady, profileStatus } = useAuthStore();
+  const { user, isAuthReady, profileStatus, profileRole } = useAuthStore();
 
   if (!isAuthReady) {
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
@@ -95,6 +95,9 @@ function RootRoute() {
     }
     if (profileStatus === 'inactive') {
       return <Navigate to="/pending?status=inactive" replace />;
+    }
+    if (profileRole === 'admin') {
+      return <Navigate to="/admin/professionals" replace />;
     }
     return <Navigate to="/painel/dashboard" replace />;
   }
