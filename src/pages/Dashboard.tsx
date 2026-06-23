@@ -196,8 +196,13 @@ export default function Dashboard() {
           setCalendarEvents(mappedEvents);
         } catch (calError: any) {
           console.error("Error fetching Google Calendar events:", calError);
-          if (calError.message && calError.message.includes("UNAUTHENTICATED")) {
+          const errMsg = calError.message || "";
+          if (errMsg.includes("UNAUTHENTICATED")) {
             setGoogleAccessToken(null);
+          } else if (errMsg.includes("has not been used in project") || errMsg.includes("disabled") || errMsg.includes("403")) {
+            setCalendarError(
+              "A API do Google Agenda (Google Calendar API) precisa ser ativada no seu console do Google Cloud (projeto 985599226364) para listar os atendimentos da semana."
+            );
           } else {
             setCalendarError("Não foi possível carregar os compromissos do Google Agenda.");
           }
