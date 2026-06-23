@@ -5,12 +5,14 @@ import { useAuthStore } from '../store/authStore';
 import { Clock, ShieldAlert, LogOut, Sparkles } from 'lucide-react';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 
 export default function PendingApproval() {
   const { user, profileStatus, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const siteConfig = useSiteConfig();
+  const assetSignature = getBrandAssetSignature(siteConfig);
   const isInactive = searchParams.get('status') === 'inactive' || profileStatus === 'inactive';
 
   useEffect(() => {
@@ -103,7 +105,11 @@ export default function PendingApproval() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
         <div className="flex justify-center mb-6">
           <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
-            <img src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} alt="Evolução Clínica" className="h-20 w-auto object-contain" />
+            <img
+              src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
+              alt="Evolução Clínica"
+              className="h-20 w-auto object-contain"
+            />
           </div>
         </div>
         <h2 className="mt-4 text-center text-2xl font-display font-bold text-brand-primary tracking-tight">

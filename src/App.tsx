@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient';
 import { useAuthStore } from './store/authStore';
 import { usePWAStore } from './store/pwaStore';
 import { useSiteConfig } from './hooks/useSiteConfig';
+import { SplashScreen } from './components/layout/SplashScreen';
 import { Download, X } from 'lucide-react';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -28,13 +29,14 @@ import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import LandingPage from './pages/LandingPage';
+import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const location = useLocation();
   
   if (!isAuthReady) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    return <SplashScreen message="Preparando seu ambiente clínico..." />;
   }
   
   if (!user) {
@@ -42,7 +44,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (profileStatus === null || profileRole === null) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    return <SplashScreen message="Carregando seus dados..." />;
   }
   
   if (profileStatus === 'pending') {
@@ -77,11 +79,11 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileRole } = useAuthStore();
   
   if (!isAuthReady) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    return <SplashScreen message="Carregando área administrativa..." />;
   }
 
   if (user && profileRole === null) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    return <SplashScreen message="Carregando permissões administrativas..." />;
   }
   
   if (user && profileRole !== 'admin') {
@@ -95,7 +97,7 @@ function RootRoute() {
   const { isAuthReady } = useAuthStore();
 
   if (!isAuthReady) {
-    return <div className="flex items-center justify-center min-h-screen">Carregando...</div>;
+    return <SplashScreen message="Iniciando Evolução Clínica..." />;
   }
 
   return <LandingPage />;
@@ -106,18 +108,43 @@ export default function App() {
   const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
   const siteConfig = useSiteConfig();
+  const assetSignature = getBrandAssetSignature(siteConfig);
 
   useEffect(() => {
-    if (siteConfig.favicon_url) {
-      let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+    const updateLink = (selector: string, rel: string, href: string, type?: string, sizes?: string) => {
+      let link = document.querySelector<HTMLLinkElement>(selector);
       if (!link) {
         link = document.createElement('link');
-        link.rel = 'icon';
-        document.getElementsByTagName('head')[0].appendChild(link);
+        link.setAttribute('rel', rel);
+        document.head.appendChild(link);
       }
-      link.href = `${siteConfig.favicon_url}?v=${siteConfig.version}`;
-    }
-  }, [siteConfig.favicon_url, siteConfig.version]);
+      link.rel = rel;
+      if (type) link.type = type;
+      if (sizes) link.setAttribute('sizes', sizes);
+      link.href = href;
+    };
+
+    const updateMeta = (selector: string, attr: 'name' | 'property', value: string, content: string) => {
+      let meta = document.querySelector<HTMLMetaElement>(selector);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute(attr, value);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute(attr, value);
+      meta.content = content;
+    };
+
+    const iconUrl = appendBrandAssetVersion(getBrandIconUrl(siteConfig), assetSignature);
+    const splashIconUrl = appendBrandAssetVersion(siteConfig.logo_dark_url || getBrandIconUrl(siteConfig), assetSignature);
+
+    updateLink("link[rel='icon']", 'icon', iconUrl, 'image/png', '32x32');
+    updateLink("link[rel='shortcut icon']", 'shortcut icon', iconUrl, 'image/png');
+    updateLink("link[rel='apple-touch-icon']", 'apple-touch-icon', iconUrl, 'image/png');
+    updateMeta("meta[name='theme-color']", 'name', 'theme-color', siteConfig.pwa_theme_color);
+    updateMeta("meta[property='og:image']", 'property', 'og:image', appendBrandAssetVersion(siteConfig.pwa_icon_512_url || splashIconUrl, assetSignature));
+    updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', appendBrandAssetVersion(siteConfig.pwa_icon_512_url || splashIconUrl, assetSignature));
+  }, [siteConfig, assetSignature]);
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);
 

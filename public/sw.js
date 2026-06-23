@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.38";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.39";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -6,11 +6,23 @@ const PRECACHE_URLS = [
   "/",
   "/offline.html",
   "/manifest.webmanifest",
-  "/favicon.png",
-  "/logo.svg",
   "/icon-192x192.png",
   "/icon-512x512.png"
 ];
+
+const isBrandAssetPath = (pathname) => {
+  return [
+    "/favicon.png",
+    "/favicon.ico",
+    "/api/favicon",
+    "/apple-touch-icon.png",
+    "/logo.svg",
+    "/logotipo-transparente-1024.png",
+    "/icon-192x192.png",
+    "/icon-512x512.png",
+    "/icon-512x512-maskable.png"
+  ].some((assetPath) => pathname.startsWith(assetPath));
+};
 
 // Install: precache app shell
 self.addEventListener("install", (event) => {
@@ -139,6 +151,21 @@ self.addEventListener("fetch", (event) => {
   }
 
   // Outros assets
+  if (isBrandAssetPath(url.pathname) || url.pathname.includes("/storage/v1/object/public/brand")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)

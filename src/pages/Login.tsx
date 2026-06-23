@@ -5,12 +5,14 @@ import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
 import { ShieldCheck, Zap, Sparkles, Files, ArrowLeft } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 
 export default function Login() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const { user, isAuthReady, profileStatus, profileRole } = useAuthStore();
   const siteConfig = useSiteConfig();
+  const assetSignature = getBrandAssetSignature(siteConfig);
 
   useEffect(() => {
     if (isAuthReady && user) {
@@ -65,7 +67,11 @@ export default function Login() {
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-6">
           <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
-            <img src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} alt="Evolução Clínica" className="h-24 w-auto object-contain" />
+            <img
+              src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
+              alt="Evolução Clínica"
+              className="h-24 w-auto object-contain"
+            />
           </div>
         </div>
         <p className="mt-3 text-center text-base text-brand-text-muted max-w-[280px] mx-auto leading-relaxed">

@@ -22,11 +22,13 @@ import {
 } from 'lucide-react';
 import { APP_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const siteConfig = useSiteConfig();
+  const assetSignature = getBrandAssetSignature(siteConfig);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   
@@ -109,7 +111,7 @@ export default function LandingPage() {
             <div className="flex-shrink-0">
               <Link to="/">
                 <img 
-                  src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} 
+                  src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
                   alt="Conexão Seres Logo" 
                   className="h-16 w-auto object-contain cursor-pointer transition-transform hover:scale-102"
                 />
@@ -735,7 +737,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
           <div className="flex justify-center">
             <img 
-              src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} 
+              src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
               alt="Conexão Seres Logo" 
               className="h-16 w-auto object-contain opacity-80"
             />

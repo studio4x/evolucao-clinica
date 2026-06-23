@@ -27,6 +27,23 @@ function buildFromField(smtpFrom: string, smtpUser: string): string {
   return `"${smtpFrom}" <${smtpUser}>`;
 }
 
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(i);
+    hash |= 0;
+  }
+
+  return Math.abs(hash).toString(36);
+}
+
+function appendBrandVersion(url: string, signature: string) {
+  if (!url) return "";
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}v=${encodeURIComponent(signature)}`;
+}
+
 // Helper para obter/gerar configurações de notificações
 async function getNotificationSettings() {
   try {
@@ -206,16 +223,27 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       .single();
 
     let logoLightUrl = "";
+    let logoDarkUrl = "";
+    let faviconUrl = "";
     let version = "1.0";
 
     if (!error && data && data.api_key) {
       const parsed = JSON.parse(data.api_key);
       logoLightUrl = parsed.logo_light_url || "";
+      logoDarkUrl = parsed.logo_dark_url || "";
+      faviconUrl = parsed.favicon_url || "";
       version = parsed.version || "1.0";
     }
 
-    const pwaIcon = logoLightUrl || "/logotipo-transparente-1024.png";
-    const pwaIconWithVersion = pwaIcon.startsWith('http') ? `${pwaIcon}?v=${version}` : pwaIcon;
+    const assetSignature = hashString([
+      logoLightUrl,
+      logoDarkUrl,
+      faviconUrl,
+      version
+    ].join("|"));
+    const brandIcon = faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
+    const brandIconWithVersion = appendBrandVersion(brandIcon, assetSignature);
+    const splashLogoWithVersion = appendBrandVersion(logoDarkUrl || logoLightUrl || "/logotipo-transparente-1024.png", assetSignature);
 
     const manifest = {
       "id": "/",
@@ -233,25 +261,25 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       "prefer_related_applications": false,
       "icons": [
         {
-          "src": "/icon-192x192.png",
+          "src": brandIconWithVersion,
           "sizes": "192x192",
           "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": "/icon-512x512.png",
+          "src": brandIconWithVersion,
           "sizes": "512x512",
           "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": "/icon-512x512-maskable.png",
+          "src": brandIconWithVersion,
           "sizes": "512x512",
           "type": "image/png",
           "purpose": "maskable"
         },
         {
-          "src": pwaIconWithVersion,
+          "src": splashLogoWithVersion,
           "sizes": "1024x1024",
           "type": "image/png",
           "purpose": "any maskable"
@@ -323,6 +351,7 @@ app.get(["/favicon.png", "/favicon.ico", "/api/favicon"], async (req, res) => {
     if (!error && data && data.api_key) {
       const parsed = JSON.parse(data.api_key);
       if (parsed.favicon_url) {
+        res.setHeader("Cache-Control", "no-store, max-age=0");
         return res.redirect(parsed.favicon_url);
       }
     }
@@ -330,6 +359,7 @@ app.get(["/favicon.png", "/favicon.ico", "/api/favicon"], async (req, res) => {
     console.error("Erro ao obter favicon dinâmico:", err);
   }
   // Fallback para o favicon local
+  res.setHeader("Cache-Control", "no-store, max-age=0");
   return res.sendFile(path.join(process.cwd(), "public", "favicon.png"));
 });
 

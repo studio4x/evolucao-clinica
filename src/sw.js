@@ -4,7 +4,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 // @ts-ignore
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-const CACHE_VERSION = "hcm-pwa-v2";
+const CACHE_VERSION = "hcm-pwa-v2.1";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -12,8 +12,6 @@ const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const PRECACHE_URLS = [
   "/",
   "/offline.html",
-  "/favicon.png",
-  "/logo.svg",
   "/icon-192x192.png"
 ];
 
@@ -21,6 +19,20 @@ const PRECACHE_URLS = [
 const isAssetPath = (url) => {
   const assets = [".js", ".css", ".png", ".jpg", ".jpeg", ".svg", ".woff2", ".ico"];
   return assets.some(ext => url.toLowerCase().endsWith(ext));
+};
+
+const isBrandAssetPath = (pathname) => {
+  return [
+    "/favicon.png",
+    "/favicon.ico",
+    "/api/favicon",
+    "/apple-touch-icon.png",
+    "/logo.svg",
+    "/logotipo-transparente-1024.png",
+    "/icon-192x192.png",
+    "/icon-512x512.png",
+    "/icon-512x512-maskable.png"
+  ].some((assetPath) => pathname.startsWith(assetPath));
 };
 
 // Evento de Instalação: Salva o App Shell
@@ -92,8 +104,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Estratégia para Assets (Stale-While-Revalidate)
-  if (isAssetPath(url.pathname) || url.pathname.includes("/storage/v1/object/public/brand")) {
+  // Estratégia para Assets da marca: network-first para refletir alterações visuais imediatamente
+  if (isBrandAssetPath(url.pathname) || url.pathname.includes("/storage/v1/object/public/brand")) {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.ok) {
+            caches.open(RUNTIME_CACHE).then((cache) => cache.put(event.request, networkResponse.clone()));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Estratégia para Assets genéricos (Stale-While-Revalidate)
+  if (isAssetPath(url.pathname)) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
         const fetchPromise = fetch(event.request).then((networkResponse) => {

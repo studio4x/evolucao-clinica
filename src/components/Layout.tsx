@@ -6,6 +6,7 @@ import { usePWAStore } from '../store/pwaStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
+import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
 
@@ -15,6 +16,7 @@ export default function Layout() {
   const siteConfig = useSiteConfig();
   const navigate = useNavigate();
   const location = useLocation();
+  const assetSignature = getBrandAssetSignature(siteConfig);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -95,7 +97,11 @@ export default function Layout() {
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <Link to="/">
-          <img src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} alt="Conexão Ser" className="h-14 w-auto max-w-[150px] object-contain" />
+          <img
+            src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
+            alt="Conexão Ser"
+            className="h-14 w-auto max-w-[150px] object-contain"
+          />
         </Link>
         <div className="flex items-center space-x-2">
           <Link to="/painel/notifications" className="p-2 text-brand-primary relative">
@@ -121,7 +127,11 @@ export default function Layout() {
         <div className="flex-1 overflow-y-auto">
           <div className="p-4 hidden md:block border-b border-brand-border/50">
             <Link to="/" className="flex justify-center">
-              <img src={`${siteConfig.logo_light_url}?v=${siteConfig.version}`} alt="Conexão Ser" className="h-28 w-auto max-w-full object-contain" />
+              <img
+                src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
+                alt="Conexão Ser"
+                className="h-28 w-auto max-w-full object-contain"
+              />
             </Link>
           </div>
 
