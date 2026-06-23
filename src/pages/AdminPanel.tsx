@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import EmailHistory from './EmailHistory';
+import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
@@ -81,6 +82,7 @@ export default function AdminPanel() {
   };
 
   const activeTab = getActiveTab();
+  const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
 
   const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support') => {
     if (tab === 'professionals') navigate('/admin/professionals');
@@ -4001,6 +4003,12 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
+                  {isAdminSupportDetail ? (
+                    <div className="pt-2">
+                      <SupportTicketDetail />
+                    </div>
+                  ) : (
+                    <>
                   {/* Filtros */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6 bg-brand-bg/20 p-4 rounded-2xl border border-brand-border/30">
                     <div className="space-y-1">
@@ -4210,9 +4218,11 @@ export default function AdminPanel() {
                          </table>
                        </div>
                      );
-                   })()}
-                 </div>
-               </div>
+                    })()}
+                    </>
+                  )}
+                </div>
+              </div>
             ) : activeTab === 'vapid_keys' ? (
               <div className="space-y-6 max-w-4xl">
                 {/* VAPID Details */}

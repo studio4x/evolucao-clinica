@@ -324,7 +324,6 @@ export default function App() {
         <Route path="/terms" element={<TermsOfService />} />
         
         {/* Admin Panel Routes */}
-        <Route path="/admin/support/:ticketId" element={<AdminRoute><SupportTicketDetail /></AdminRoute>} />
         <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
         
         {/* Client/Therapist Panel Routes */}
