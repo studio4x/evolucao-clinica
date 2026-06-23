@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { usePWAStore } from '../store/pwaStore';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
@@ -79,6 +79,7 @@ export default function Layout() {
     { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
     { name: 'Como Usar', path: '/painel/tutorial', icon: BookOpen },
     { name: 'Notificações', path: '/painel/notifications', icon: Bell },
+    { name: 'Suporte', path: '/painel/support', icon: LifeBuoy },
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
   ];

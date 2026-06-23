@@ -445,6 +445,189 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   }
 });
 
+// 4.0. Notificação de Tickets de Suporte (In-App, Push e E-mail)
+app.post("/api/support/notify", requireAuth, async (req: any, res) => {
+  const { ticketId, action, message, previousStatus, newStatus } = req.body;
+
+  if (!ticketId || !action) {
+    return res.status(400).json({ error: "ticketId e action sao obrigatorios" });
+  }
+
+  try {
+    // 1. Obter o ticket
+    const { data: ticket, error: ticketError } = await supabaseAdmin
+      .from("support_tickets")
+      .select("*")
+      .eq("id", ticketId)
+      .single();
+
+    if (ticketError || !ticket) {
+      return res.status(404).json({ error: "Chamado nao encontrado" });
+    }
+
+    // 2. Obter perfis do criador do chamado e do remetente atual
+    const { data: creator, error: creatorError } = await supabaseAdmin
+      .from("professionals")
+      .select("full_name, subscription_plan, role")
+      .eq("id", ticket.user_id)
+      .single();
+
+    const { data: sender, error: senderError } = await supabaseAdmin
+      .from("professionals")
+      .select("full_name, role")
+      .eq("id", req.user.id)
+      .single();
+
+    // 3. Validar autorização (apenas o próprio dono do ticket ou admins)
+    const isSenderAdmin = sender?.role === "admin";
+    const isOwner = ticket.user_id === req.user.id;
+
+    if (!isSenderAdmin && !isOwner) {
+      return res.status(403).json({ error: "Nao autorizado a disparar notificacoes para este chamado" });
+    }
+
+    const isVip = creator?.subscription_plan === "yearly";
+    const vipPrefix = isVip ? "👑 [VIP] " : "";
+    const link = `/painel/support/${ticketId}`;
+
+    let notificationsSent = 0;
+
+    // Helper para notificar todos os administradores cadastrados (menos o próprio remetente)
+    const notifyAdmins = async (title: string, content: string, type: string = "info") => {
+      const { data: admins } = await supabaseAdmin
+        .from("professionals")
+        .select("id")
+        .eq("role", "admin");
+
+      if (admins && admins.length > 0) {
+        for (const admin of admins) {
+          if (admin.id !== req.user.id) {
+            await sendNotificationInternal(admin.id, title, content, type, link);
+            notificationsSent++;
+          }
+        }
+      }
+    };
+
+    if (action === "create") {
+      // A. Notificar o próprio usuário que criou
+      const userPlanLabel = creator?.subscription_plan === "yearly"
+        ? "Anual/VIP"
+        : creator?.subscription_plan === "monthly"
+        ? "Mensal"
+        : "Gratuito/Avaliação";
+      const slaLabel = creator?.subscription_plan === "yearly"
+        ? "2 horas úteis"
+        : creator?.subscription_plan === "monthly"
+        ? "24 horas úteis (12h úteis para faturamento)"
+        : "48 horas úteis";
+
+      await sendNotificationInternal(
+        ticket.user_id,
+        "Chamado Criado com Sucesso",
+        `Recebemos o seu chamado sobre '${ticket.subject}'. O prazo de resposta para o seu plano (${userPlanLabel}) é de até ${slaLabel}. Obrigado!`,
+        "success",
+        link
+      );
+      notificationsSent++;
+
+      // B. Notificar os administradores
+      await notifyAdmins(
+        `${vipPrefix}Novo Chamado: ${ticket.subject}`,
+        `O profissional ${creator?.full_name || "Desconhecido"} abriu o chamado de suporte.`,
+        "info"
+      );
+    }
+    else if (action === "message") {
+      const messageSnippet = message
+        ? (message.length > 100 ? message.substring(0, 100) + "..." : message)
+        : "Anexo enviado.";
+
+      if (isSenderAdmin) {
+        // Suporte respondeu -> Notificar usuário
+        let title = "Nova Resposta no Chamado";
+        let content = `O suporte respondeu ao seu chamado '${ticket.subject}': "${messageSnippet}"`;
+
+        // Se a primeira resposta foi dada agora (dentro de 10 segundos)
+        const isFirstResponseNow = ticket.first_response_at &&
+          (Math.abs(new Date(ticket.first_response_at).getTime() - Date.now()) < 10000);
+
+        if (isFirstResponseNow) {
+          title = "Chamado em Atendimento";
+          content = `Seu chamado '${ticket.subject}' agora está em atendimento. O suporte respondeu: "${messageSnippet}"`;
+        }
+
+        await sendNotificationInternal(
+          ticket.user_id,
+          title,
+          content,
+          "info",
+          link
+        );
+        notificationsSent++;
+      } else {
+        // Usuário respondeu -> Notificar admins
+        await notifyAdmins(
+          `${vipPrefix}Nova Resposta: ${ticket.subject}`,
+          `O profissional ${sender?.full_name || "Desconhecido"} respondeu: "${messageSnippet}"`,
+          "info"
+        );
+      }
+    }
+    else if (action === "status_change") {
+      if (newStatus === "closed") {
+        if (isSenderAdmin) {
+          // Encerrado pelo admin -> Notificar usuário
+          await sendNotificationInternal(
+            ticket.user_id,
+            "Chamado Encerrado",
+            `Seu chamado sobre '${ticket.subject}' foi finalizado e encerrado pelo suporte.`,
+            "success",
+            link
+          );
+          notificationsSent++;
+        } else {
+          // Encerrado pelo usuário -> Notificar admins
+          await notifyAdmins(
+            `${vipPrefix}Chamado Encerrado`,
+            `O profissional ${sender?.full_name || "Desconhecido"} finalizou e encerrou o chamado '${ticket.subject}'.`,
+            "info"
+          );
+        }
+      }
+      else if (newStatus === "in_progress") {
+        // Em atendimento (somente se feito por admin)
+        if (isSenderAdmin) {
+          await sendNotificationInternal(
+            ticket.user_id,
+            "Chamado em Atendimento",
+            `Seu chamado sobre '${ticket.subject}' agora está em andamento/atendimento pela nossa equipe.`,
+            "info",
+            link
+          );
+          notificationsSent++;
+        }
+      }
+      else if (newStatus === "open" && previousStatus === "closed") {
+        // Reaberto pelo usuário -> Notificar admins
+        if (!isSenderAdmin) {
+          await notifyAdmins(
+            `${vipPrefix}Chamado Reaberto`,
+            `O profissional ${sender?.full_name || "Desconhecido"} reabriu o chamado '${ticket.subject}'.`,
+            "info"
+          );
+        }
+      }
+    }
+
+    res.json({ success: true, notificationsSent });
+  } catch (err: any) {
+    console.error("Erro ao disparar notificacao de suporte:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // 4.1. Cron para Enviar Lembretes de Evoluções Clínicas Pendentes
 app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
   const authHeader = req.headers.authorization;

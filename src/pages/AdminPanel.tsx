@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import EmailHistory from './EmailHistory';
+import { fetchAdminSupportTickets, updateSupportTicketStatus } from '../services/support';
+import TicketStatusBadge from '../components/support/TicketStatusBadge';
+import TicketSlaBadge from '../components/support/TicketSlaBadge';
 
 interface Professional {
   id: string;
@@ -71,13 +74,14 @@ export default function AdminPanel() {
     if (path.endsWith('/email-notifications')) return 'email_notifications';
     if (path.endsWith('/email-history')) return 'email_history';
     if (path.endsWith('/vapid-keys')) return 'vapid_keys';
+    if (path.endsWith('/support')) return 'support';
     if (path.endsWith('/profile')) return 'profile';
     return 'professionals'; // default
   };
 
   const activeTab = getActiveTab();
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -89,6 +93,7 @@ export default function AdminPanel() {
     else if (tab === 'email_notifications') navigate('/admin/email-notifications');
     else if (tab === 'email_history') navigate('/admin/email-history');
     else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
+    else if (tab === 'support') navigate('/admin/support');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -1045,6 +1050,35 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
+  // Estados para Suporte de Tickets (Admin)
+  const [adminTickets, setAdminTickets] = useState<any[]>([]);
+  const [loadingAdminTickets, setLoadingAdminTickets] = useState(false);
+  const [adminTicketsError, setAdminTicketsError] = useState('');
+  const [supportStatusFilter, setSupportStatusFilter] = useState('open_in_progress');
+  const [supportCategoryFilter, setSupportCategoryFilter] = useState('all');
+  const [supportPlanFilter, setSupportPlanFilter] = useState('all');
+  const [supportSearchQuery, setSupportSearchQuery] = useState('');
+
+  const fetchAdminTickets = async () => {
+    setLoadingAdminTickets(true);
+    setAdminTicketsError('');
+    try {
+      const data = await fetchAdminSupportTickets();
+      setAdminTickets(data);
+    } catch (err: any) {
+      console.error('Erro ao buscar chamados no admin:', err);
+      setAdminTicketsError('Não foi possível carregar os chamados.');
+    } finally {
+      setLoadingAdminTickets(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user && profileRole === 'admin' && activeTab === 'support') {
+      fetchAdminTickets();
+    }
+  }, [user, profileRole, activeTab]);
+
   // Manipulador de login do admin
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1534,6 +1568,17 @@ export default function AdminPanel() {
               >
                 <Clock size={18} />
                 <span>Transações</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('support')}
+                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
+                  activeTab === 'support'
+                    ? 'bg-brand-primary text-white shadow-sm'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <LifeBuoy size={18} />
+                <span>Suporte / Tickets</span>
               </button>
               <button
                 onClick={() => setActiveTab('push_notifications')}
@@ -3421,6 +3466,227 @@ export default function AdminPanel() {
               </div>
             ) : activeTab === 'email_history' ? (
               <EmailHistory />
+            ) : activeTab === 'support' ? (
+              <div className="space-y-6">
+                <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                        <LifeBuoy className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                          Atendimento ao Cliente (Tickets)
+                        </h2>
+                        <p className="text-xs text-brand-text-muted mt-0.5">
+                          Monitore e responda às solicitações. Priorize os clientes VIP (Anual) com SLA de 2 horas úteis.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Filtros */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6 bg-brand-bg/20 p-4 rounded-2xl border border-brand-border/30">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Pesquisa</label>
+                      <input
+                        type="text"
+                        value={supportSearchQuery}
+                        onChange={(e) => setSupportSearchQuery(e.target.value)}
+                        placeholder="Buscar por assunto ou nome..."
+                        className="w-full px-3 py-2 rounded-xl border border-brand-border/80 text-xs outline-none focus:border-brand-primary bg-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Status</label>
+                      <select
+                        value={supportStatusFilter}
+                        onChange={(e) => setSupportStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-brand-border/80 text-xs outline-none focus:border-brand-primary bg-white"
+                      >
+                         <option value="open_in_progress">Aberto / Em Atendimento</option>
+                         <option value="all">Todos os Status</option>
+                         <option value="open">Aberto</option>
+                         <option value="in_progress">Em Atendimento</option>
+                         <option value="closed">Fechados</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Categoria</label>
+                      <select
+                        value={supportCategoryFilter}
+                        onChange={(e) => setSupportCategoryFilter(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-brand-border/80 text-xs outline-none focus:border-brand-primary bg-white"
+                      >
+                         <option value="all">Todas as Categorias</option>
+                         <option value="payment">Pagamento & Cobrança</option>
+                         <option value="technical">Problema Técnico</option>
+                         <option value="account">Conta & Acesso</option>
+                         <option value="general">Dúvida Geral</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Plano</label>
+                      <select
+                        value={supportPlanFilter}
+                        onChange={(e) => setSupportPlanFilter(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-brand-border/80 text-xs outline-none focus:border-brand-primary bg-white"
+                      >
+                         <option value="all">Todos os Planos</option>
+                         <option value="yearly">Anual (VIP)</option>
+                         <option value="monthly">Mensal</option>
+                         <option value="trial">Trial / Gratuito</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {loadingAdminTickets ? (
+                    <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                      <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                      <span className="text-sm">Carregando chamados...</span>
+                    </div>
+                  ) : adminTicketsError ? (
+                    <div className="p-12 text-center text-rose-500 text-sm">{adminTicketsError}</div>
+                  ) : (() => {
+                    const filtered = adminTickets.filter((ticket) => {
+                      const matchesQuery = 
+                        ticket.subject.toLowerCase().includes(supportSearchQuery.toLowerCase()) ||
+                        (ticket.userFullName || '').toLowerCase().includes(supportSearchQuery.toLowerCase()) ||
+                        (ticket.userEmail || '').toLowerCase().includes(supportSearchQuery.toLowerCase());
+
+                      let matchesStatus = true;
+                      if (supportStatusFilter === 'open_in_progress') {
+                        matchesStatus = ticket.status === 'open' || ticket.status === 'in_progress';
+                      } else if (supportStatusFilter !== 'all') {
+                        matchesStatus = ticket.status === supportStatusFilter;
+                      }
+
+                      const matchesCategory = supportCategoryFilter === 'all' || ticket.category === supportCategoryFilter;
+                      const matchesPlan = supportPlanFilter === 'all' || ticket.userPlan === supportPlanFilter;
+
+                      return matchesQuery && matchesStatus && matchesCategory && matchesPlan;
+                    });
+
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="p-12 text-center text-brand-text-muted text-sm leading-relaxed">
+                          Nenhum chamado de suporte atende a estes critérios de filtro.
+                        </div>
+                      );
+                    }
+
+                    const getCategoryLabel = (category: string) => {
+                      switch (category) {
+                        case 'payment': return 'Pagamento';
+                        case 'technical': return 'Técnico';
+                        case 'account': return 'Acesso';
+                        default: return 'Geral';
+                      }
+                    };
+
+                    const handleAdminCloseTicket = async (ticketId: string) => {
+                      if (!window.confirm('Marcar este chamado como resolvido/fechado?')) return;
+                      try {
+                        await updateSupportTicketStatus(ticketId, 'closed');
+                        fetchAdminTickets();
+                      } catch (err: any) {
+                        alert('Erro ao fechar chamado: ' + err.message);
+                      }
+                    };
+
+                    return (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm border-collapse">
+                          <thead>
+                            <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider bg-brand-bg/10">
+                              <th className="py-3 px-4">Profissional</th>
+                              <th className="py-3 px-4">Assunto</th>
+                              <th className="py-3 px-4">Categoria</th>
+                              <th className="py-3 px-4">Status</th>
+                              <th className="py-3 px-4">SLA</th>
+                              <th className="py-3 px-4">Limite Resposta</th>
+                              <th className="py-3 px-4 text-right">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-brand-border/30 text-xs">
+                            {filtered.map((ticket) => {
+                              const isVIP = ticket.userPlan === 'yearly';
+                              return (
+                                <tr 
+                                  key={ticket.id} 
+                                  className={`hover:bg-brand-bg/15 transition-colors ${
+                                    isVIP ? 'bg-amber-500/[0.015] border-l-2 border-l-amber-500' : ''
+                                  }`}
+                                >
+                                  <td className="py-3 px-4">
+                                    <div className="flex items-center space-x-2">
+                                      {isVIP && <span className="text-amber-500 font-bold" title="Cliente VIP Anual">👑</span>}
+                                      <div>
+                                        <p className="font-semibold text-brand-text">
+                                          {ticket.userFullName || 'Profissional'}
+                                        </p>
+                                        <p className="text-[10px] text-brand-text-muted">
+                                          {ticket.userPlan === 'yearly' ? 'Plano Anual' : ticket.userPlan === 'monthly' ? 'Plano Mensal' : 'Período Trial'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-4 font-medium text-brand-text">
+                                    {ticket.subject}
+                                  </td>
+                                  <td className="py-3 px-4 text-brand-text-muted">
+                                    <span className="bg-gray-50 border border-gray-200 text-gray-700 px-2 py-0.5 rounded text-[10px] font-medium">
+                                      {getCategoryLabel(ticket.category)}
+                                    </span>
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <TicketStatusBadge status={ticket.status} />
+                                  </td>
+                                  <td className="py-3 px-4">
+                                    <TicketSlaBadge status={ticket.slaStatus} />
+                                  </td>
+                                  <td className="py-3 px-4 text-brand-text-muted">
+                                    {ticket.firstResponseAt ? (
+                                      <span className="text-emerald-600 font-medium">
+                                        Respondido
+                                      </span>
+                                    ) : (
+                                      <span className={ticket.slaStatus === 'overdue' ? 'text-red-600 font-bold' : ''}>
+                                        {ticket.firstResponseDueAt ? new Date(ticket.firstResponseDueAt).toLocaleString('pt-BR', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        }) : 'N/A'}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-3 px-4 text-right space-x-2">
+                                    <Link
+                                      to={`/painel/support/${ticket.id}`}
+                                      className="inline-flex items-center px-3 py-1.5 bg-brand-primary text-white hover:bg-brand-primary-hover rounded-xl transition-colors font-semibold text-[10px] shadow-sm hover:shadow"
+                                    >
+                                      Acessar Conversa
+                                    </Link>
+                                    {ticket.status !== 'closed' && (
+                                      <button
+                                        onClick={() => handleAdminCloseTicket(ticket.id)}
+                                        className="inline-flex items-center px-3 py-1.5 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl transition-colors font-semibold text-[10px] cursor-pointer"
+                                      >
+                                        Fechar
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                         </table>
+                       </div>
+                     );
+                   })()}
+                 </div>
+               </div>
             ) : activeTab === 'vapid_keys' ? (
               <div className="space-y-6 max-w-4xl">
                 {/* VAPID Details */}

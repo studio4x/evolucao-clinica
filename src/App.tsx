@@ -17,6 +17,8 @@ import Tutorial from './pages/Tutorial';
 import Subscription from './pages/Subscription';
 import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
+import SupportTickets from './pages/SupportTickets';
+import SupportTicketDetail from './pages/SupportTicketDetail';
 
 import { CookieConsent } from './components/CookieConsent';
 
@@ -24,6 +26,7 @@ import PendingApproval from './pages/PendingApproval';
 import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import LandingPage from './pages/LandingPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -191,10 +194,12 @@ export default function App() {
           <Route path="subscription" element={<Subscription />} />
           <Route path="profile" element={<Profile />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="support" element={<SupportTickets />} />
+          <Route path="support/:ticketId" element={<SupportTicketDetail />} />
         </Route>
 
         {/* Redirects */}
-        <Route path="/" element={<Navigate to="/painel/dashboard" replace />} />
+        <Route path="/" element={<LandingPage />} />
         <Route path="/patients" element={<Navigate to="/painel/patients" replace />} />
         <Route path="/share-target" element={<Navigate to="/painel/share-target" replace />} />
         <Route path="/api/share-target" element={<Navigate to="/painel/share-target" replace />} />
