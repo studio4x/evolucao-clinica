@@ -560,8 +560,8 @@ export default function Dashboard() {
           </div>
         ) : calendarEvents.length === 0 ? (
           <div className="py-8 text-center text-brand-text-muted max-w-md mx-auto">
-            <p className="text-sm font-medium">Nenhum atendimento clínico agendado para hoje.</p>
-            <p className="text-xs mt-1">Apenas eventos com o nome ou apelido de seus pacientes ativos aparecem aqui.</p>
+            <p className="text-sm font-medium">Nenhum atendimento clínico agendado para esta semana.</p>
+            <p className="text-xs mt-1">Apenas compromissos contendo o nome ou apelido de seus pacientes ativos aparecem aqui.</p>
           </div>
         ) : (
           <div className="divide-y divide-brand-border">
