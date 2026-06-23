@@ -36,6 +36,7 @@ import { getOnboardingDestination, isOnboardingComplete } from './utils/onboardi
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const location = useLocation();
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
   
   if (!isAuthReady) {
     return <SplashScreen message="Preparando seu ambiente clínico..." />;
@@ -55,6 +56,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   
   if (profileStatus === 'inactive') {
     return <Navigate to="/pending?status=inactive" replace />;
+  }
+
+  if (isOnboardingRoute) {
+    return <>{children}</>;
   }
 
   if (profileRole !== 'admin' && user && !isOnboardingComplete(user.id)) {
