@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
@@ -301,6 +301,7 @@ export default function PatientDetail() {
         .select('*')
         .eq('patient_id', id)
         .eq('professional_id', user.id)
+        .eq('transcription_status', 'completed')
         .order('created_at', { ascending: false });
       if (evosError) throw evosError;
       setEvolutions(evosData || []);
@@ -1189,44 +1190,38 @@ export default function PatientDetail() {
               ) : (
                 evolutions.map((evo) => (
                   <div key={evo.id} className="p-6 hover:bg-brand-bg transition-colors">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center space-x-2">
-                        <Clock size={16} className="text-brand-text-muted" />
-                        <span className="font-medium text-brand-text">{formatDateTime(evo.created_at)}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center space-x-2 mb-1">
+                          <Clock size={16} className="text-brand-text-muted" />
+                          <span className="font-medium text-brand-text text-sm">{formatDateTime(evo.created_at)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {evo.transcription_status === 'failed' && evo.audio_url && (
-                          <button 
-                            onClick={() => handleReprocess(evo)}
-                            disabled={processingId === evo.id}
-                            className="flex items-center space-x-1 text-xs btn-primary px-2 py-1 mr-2"
+                      
+                      <div className="flex items-center gap-2">
+                        {patient?.google_doc_id && (
+                          <a
+                            href={`https://docs.google.com/document/d/${patient.google_doc_id}/edit`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-brand-primary/20 text-brand-primary hover:bg-brand-primary/5 cursor-pointer"
                           >
-                            {processingId === evo.id ? (
-                              <Loader2 size={12} className="animate-spin" />
-                            ) : (
-                              <RefreshCw size={12} />
-                            )}
-                            <span>Reprocessar</span>
-                          </button>
+                            <FileText size={14} />
+                            <span>Acessar Documento</span>
+                          </a>
                         )}
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          evo.transcription_status === 'completed' ? 'bg-brand-primary/10 text-brand-primary' : 
-                          evo.transcription_status === 'failed' ? 'bg-red-100 text-red-700' : 
-                          'bg-brand-secondary/10 text-brand-secondary'
-                        }`}>
-                          {evo.transcription_status === 'completed' ? 'Concluído' : 
-                           evo.transcription_status === 'failed' ? 'Falha' : 'Processando'}
-                        </span>
+                        <Link
+                          to={`/painel/patients/${patient.id}`}
+                          className="btn-primary py-1.5 px-3 text-xs flex items-center space-x-1.5 cursor-pointer"
+                        >
+                          <User size={14} />
+                          <span>Acessar Paciente</span>
+                        </Link>
                       </div>
                     </div>
                     {evo.transcription_text && (
                       <div className="mt-4 text-sm text-brand-text-muted bg-brand-bg p-4 rounded-xl border border-brand-border">
                         <p className="line-clamp-3">{evo.transcription_text}</p>
-                      </div>
-                    )}
-                    {evo.error_message && (
-                      <div className="mt-2 text-sm text-red-600">
-                        Erro: {evo.error_message}
                       </div>
                     )}
                   </div>

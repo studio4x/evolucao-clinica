@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
 
@@ -34,6 +34,7 @@ export default function History() {
         .from('evolutions')
         .select('*')
         .eq('professional_id', user.id)
+        .eq('transcription_status', 'completed')
         .order('created_at', { ascending: false });
       
       if (evosError) throw evosError;
@@ -346,65 +347,38 @@ export default function History() {
               const patient = patientsMap[evo.patient_id];
               return (
                 <div key={evo.id} className="p-6 hover:bg-brand-bg transition-colors">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center space-x-2 mb-1">
                         <Clock size={16} className="text-brand-text-muted" />
-                        <span className="font-medium text-brand-text">{formatDateTime(evo.created_at)}</span>
+                        <span className="font-medium text-brand-text text-sm">{formatDateTime(evo.created_at)}</span>
                       </div>
-                      <Link to={`/painel/patients/${evo.patient_id}`} className="text-brand-primary hover:text-brand-primary-hover hover:underline font-medium">
+                      <Link to={`/painel/patients/${evo.patient_id}`} className="text-brand-primary hover:text-brand-primary-hover hover:underline font-semibold text-lg">
                         {patient?.full_name || 'Paciente Desconhecido'}
                       </Link>
                     </div>
                     
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-2">
-                        {evo.transcription_status === 'completed' ? (
-                          <span className="flex items-center text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full text-sm font-medium">
-                            <CheckCircle size={16} className="mr-1" /> Sucesso
-                          </span>
-                        ) : evo.transcription_status === 'failed' ? (
-                          <span className="flex items-center text-red-700 bg-red-100 px-3 py-1 rounded-full text-sm font-medium">
-                            <AlertCircle size={16} className="mr-1" /> Falha
-                          </span>
-                        ) : (
-                          <span className="flex items-center text-brand-secondary bg-brand-secondary/10 px-3 py-1 rounded-full text-sm font-medium">
-                            <RefreshCw size={16} className="mr-1 animate-spin" /> Processando
-                          </span>
-                        )}
-                      </div>
-                      
-                      {evo.transcription_status === 'failed' && evo.audio_url && (
-                        <button 
-                          onClick={() => handleReprocess(evo)}
-                          disabled={processingId === evo.id}
-                          className="btn-primary px-3 py-1.5 text-xs"
+                    <div className="flex items-center gap-2">
+                      {patient?.google_doc_id && (
+                        <a
+                          href={`https://docs.google.com/document/d/${patient.google_doc_id}/edit`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-brand-primary/20 text-brand-primary hover:bg-brand-primary/5 cursor-pointer"
                         >
-                          {processingId === evo.id ? (
-                            <Loader2 size={14} className="animate-spin mr-1" />
-                          ) : (
-                            <RefreshCw size={14} className="mr-1" />
-                          )}
-                          <span>Reprocessar</span>
-                        </button>
+                          <FileText size={14} />
+                          <span>Acessar Documento</span>
+                        </a>
                       )}
-                      
-                      {evo.transcription_status === 'failed' && !evo.audio_url && (
-                        <Link 
-                          to={`/painel/patients/${evo.patient_id}/evolutions/new`}
-                          className="btn-outline px-3 py-1.5 text-xs"
-                        >
-                          Tentar Novamente
-                        </Link>
-                      )}
+                      <Link
+                        to={`/painel/patients/${evo.patient_id}`}
+                        className="btn-primary py-1.5 px-3 text-xs flex items-center space-x-1.5 cursor-pointer"
+                      >
+                        <User size={14} />
+                        <span>Acessar Paciente</span>
+                      </Link>
                     </div>
                   </div>
-                  
-                  {evo.error_message && (
-                    <div className="mt-4 text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-100">
-                      <strong>Erro:</strong> {evo.error_message}
-                    </div>
-                  )}
                   
                   {evo.transcription_text && (
                     <div className="mt-4 text-sm text-brand-text-muted bg-brand-bg p-4 rounded-xl border border-brand-border">
