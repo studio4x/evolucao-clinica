@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ShieldCheck, Lock, FileText, Calendar, AlertTriangle, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 type GoogleSecurityModalMode = 'login' | 'clinical' | 'calendar';
@@ -153,6 +153,11 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   mode = 'login',
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchCurrentX = useRef(0);
 
   const modalConfig = useMemo(() => slidesByMode[mode], [mode]);
   const { slides } = modalConfig;
@@ -160,12 +165,55 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setCurrentSlide(0);
+      setDragOffset(0);
+      setIsDragging(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    setDragOffset(0);
+    setIsDragging(false);
+  }, [currentSlide]);
 
   if (!isOpen) return null;
 
   const isLastSlide = currentSlide === slides.length - 1;
+  const swipeThreshold = 60;
+
+  const handleTouchStart = (event: React.TouchEvent) => {
+    touchStartX.current = event.touches[0].clientX;
+    touchCurrentX.current = event.touches[0].clientX;
+    touchStartY.current = event.touches[0].clientY;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (event: React.TouchEvent) => {
+    if (!isDragging) return;
+
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - touchStartX.current;
+    const deltaY = touch.clientY - touchStartY.current;
+
+    if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      return;
+    }
+
+    touchCurrentX.current = touch.clientX;
+    setDragOffset(deltaX);
+  };
+
+  const handleTouchEnd = () => {
+    const deltaX = touchCurrentX.current - touchStartX.current;
+
+    if (deltaX <= -swipeThreshold && currentSlide < slides.length - 1) {
+      setCurrentSlide((prev) => Math.min(slides.length - 1, prev + 1));
+    } else if (deltaX >= swipeThreshold && currentSlide > 0) {
+      setCurrentSlide((prev) => Math.max(0, prev - 1));
+    } else {
+      setDragOffset(0);
+      setIsDragging(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -194,10 +242,20 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
             </p>
           </div>
 
-          <div className="overflow-hidden">
+          <div
+            className="overflow-hidden select-none"
+            style={{ touchAction: 'pan-y' }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+          >
             <div
-              className="flex transition-transform duration-300 ease-out"
-              style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+              className="flex"
+              style={{
+                transform: `translateX(calc(-${currentSlide * 100}% + ${dragOffset}px))`,
+                transition: isDragging ? 'none' : 'transform 300ms ease-out',
+              }}
             >
               {slides.map((slide) => {
                 const SlideIcon = slide.icon;
