@@ -89,6 +89,8 @@ const CONFIG_STORAGE_KEY = 'evolucao-clinica:site-config';
 
 // Global cache variable to avoid multiple queries
 let cachedConfig: SiteConfig | null = null;
+let fetchInFlight: Promise<void> | null = null;
+let hasBootstrappedRemoteConfig = false;
 const listeners = new Set<(config: SiteConfig) => void>();
 
 const getInitialConfig = (): SiteConfig => {
@@ -131,7 +133,12 @@ export const useSiteConfig = () => {
 
     if (cachedConfig) {
       setConfig(cachedConfig);
-    } else {
+    }
+
+    if (!hasBootstrappedRemoteConfig) {
+      hasBootstrappedRemoteConfig = true;
+      void fetchConfig();
+    } else if (!cachedConfig) {
       void fetchConfig();
     }
 
@@ -151,43 +158,53 @@ export const useSiteConfig = () => {
 };
 
 const fetchConfig = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('settings')
-      .select('api_key')
-      .eq('id', 'brand_settings')
-      .single();
-
-    if (!error && data && data.api_key) {
-      const parsed = JSON.parse(data.api_key);
-      const merged: SiteConfig = {
-        ...defaultConfig,
-        logo_light_url: parsed.logo_light_url || "",
-        logo_dark_url: parsed.logo_dark_url || "",
-        favicon_url: parsed.favicon_url || defaultConfig.favicon_url,
-        pwa_icon_192_url: parsed.pwa_icon_192_url || defaultConfig.pwa_icon_192_url,
-        pwa_icon_512_url: parsed.pwa_icon_512_url || defaultConfig.pwa_icon_512_url,
-        pwa_maskable_icon_url: parsed.pwa_maskable_icon_url || defaultConfig.pwa_maskable_icon_url,
-        pwa_install_logo_url: parsed.pwa_install_logo_url || "",
-        pwa_loading_logo_url: parsed.pwa_loading_logo_url || "",
-        version: parsed.version || defaultConfig.version,
-        colors: parsed.colors ? {
-          ...defaultColors,
-          ...parsed.colors
-        } : defaultColors
-      };
-      
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(merged));
-      }
-      
-      cachedConfig = merged;
-      applyThemeColors(merged.colors);
-      listeners.forEach(l => l(merged));
-    }
-  } catch (err) {
-    console.error('Error fetching site config:', err);
+  if (fetchInFlight) {
+    return fetchInFlight;
   }
+
+  fetchInFlight = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'brand_settings')
+        .single();
+
+      if (!error && data && data.api_key) {
+        const parsed = JSON.parse(data.api_key);
+        const merged: SiteConfig = {
+          ...defaultConfig,
+          logo_light_url: parsed.logo_light_url || "",
+          logo_dark_url: parsed.logo_dark_url || "",
+          favicon_url: parsed.favicon_url || defaultConfig.favicon_url,
+          pwa_icon_192_url: parsed.pwa_icon_192_url || defaultConfig.pwa_icon_192_url,
+          pwa_icon_512_url: parsed.pwa_icon_512_url || defaultConfig.pwa_icon_512_url,
+          pwa_maskable_icon_url: parsed.pwa_maskable_icon_url || defaultConfig.pwa_maskable_icon_url,
+          pwa_install_logo_url: parsed.pwa_install_logo_url || "",
+          pwa_loading_logo_url: parsed.pwa_loading_logo_url || "",
+          version: parsed.version || defaultConfig.version,
+          colors: parsed.colors ? {
+            ...defaultColors,
+            ...parsed.colors
+          } : defaultColors
+        };
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(merged));
+        }
+
+        cachedConfig = merged;
+        applyThemeColors(merged.colors);
+        listeners.forEach((listener) => listener(merged));
+      }
+    } catch (err) {
+      console.error('Error fetching site config:', err);
+    } finally {
+      fetchInFlight = null;
+    }
+  })();
+
+  return fetchInFlight;
 };
 
 // Helper function to force reload configuration
@@ -196,6 +213,7 @@ export const reloadSiteConfig = async () => {
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem(CONFIG_STORAGE_KEY);
   }
+  hasBootstrappedRemoteConfig = true;
   await fetchConfig();
 };
 

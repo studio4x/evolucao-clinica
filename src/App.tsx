@@ -168,6 +168,7 @@ export default function App() {
     updateLink("link[rel='icon']", 'icon', iconUrl, 'image/png', '32x32');
     updateLink("link[rel='shortcut icon']", 'shortcut icon', iconUrl, 'image/png');
     updateLink("link[rel='apple-touch-icon']", 'apple-touch-icon', iconUrl, 'image/png');
+    updateLink("link[rel='manifest']", 'manifest', appendBrandAssetVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
     updateMeta("meta[name='theme-color']", 'name', 'theme-color', siteConfig.pwa_theme_color);
     updateMeta("meta[property='og:image']", 'property', 'og:image', appendBrandAssetVersion(siteConfig.pwa_icon_512_url || splashIconUrl, assetSignature));
     updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', appendBrandAssetVersion(siteConfig.pwa_icon_512_url || splashIconUrl, assetSignature));
