@@ -9,14 +9,15 @@ type SplashScreenProps = {
 export function SplashScreen({ message = 'Carregando...' }: SplashScreenProps) {
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
+  const splashLogoUrl = appendBrandAssetVersion(getBrandSplashLogoUrl(siteConfig), assetSignature);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white px-6">
       <div className="w-full max-w-sm rounded-[2rem] border border-brand-border bg-white shadow-2xl shadow-brand-primary/10 px-8 py-10 text-center space-y-6">
-            {siteConfig.logo_dark_url ? (
+            {splashLogoUrl ? (
               <div className="rounded-[1.75rem] border border-brand-primary/10 bg-white px-5 py-4 shadow-lg shadow-brand-primary/5">
                 <img
-                  src={appendBrandAssetVersion(siteConfig.logo_dark_url, assetSignature)}
+                  src={splashLogoUrl}
                   alt={siteConfig.pwa_short_name || "Evolução Clínica"}
                   className="h-20 w-auto object-contain p-2"
                 />

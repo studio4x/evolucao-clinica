@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, X, Share2, PlusSquare, ArrowUp, Info, HelpCircle } from 'lucide-react';
 import { useSiteConfig } from '../../hooks/useSiteConfig';
-import { appendBrandAssetVersion, getBrandAssetSignature } from '../../utils/brandAssets';
+import { appendBrandAssetVersion, getBrandAssetSignature, getBrandInstallLogoUrl } from '../../utils/brandAssets';
 
 export const InstallPrompt = () => {
   const siteConfig = useSiteConfig();
@@ -97,6 +97,7 @@ export const InstallPrompt = () => {
   const appName = siteConfig.pwa_app_name || "Evolução Clínica";
   const installTitle = siteConfig.pwa_install_title || `Instalar ${appName}`;
   const installDesc = siteConfig.pwa_install_description || "Acesse seus prontuários rapidamente e offline direto da tela inicial.";
+  const installLogoUrl = appendBrandAssetVersion(getBrandInstallLogoUrl(siteConfig), assetSignature);
 
   return (
     <>
@@ -107,9 +108,9 @@ export const InstallPrompt = () => {
           {/* Lado Esquerdo: Ícone da Marca e Textos */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-white border border-brand-primary/10 flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden p-2">
-              {(siteConfig.logo_dark_url || siteConfig.logo_light_url) ? (
+              {installLogoUrl ? (
                 <img
-                  src={appendBrandAssetVersion(siteConfig.logo_dark_url || siteConfig.logo_light_url, assetSignature)}
+                  src={installLogoUrl}
                   alt="App Icon"
                   className="max-w-full max-h-full object-contain"
                 />

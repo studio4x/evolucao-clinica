@@ -166,6 +166,8 @@ export default function AdminPanel() {
   const [brandPwa192, setBrandPwa192] = useState('');
   const [brandPwa512, setBrandPwa512] = useState('');
   const [brandPwaMaskable, setBrandPwaMaskable] = useState('');
+  const [brandInstallLogo, setBrandInstallLogo] = useState('');
+  const [brandLoadingLogo, setBrandLoadingLogo] = useState('');
   const [brandVersion, setBrandVersion] = useState('1.0');
   const [brandColors, setBrandColors] = useState<BrandColors>(defaultColors);
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
@@ -178,6 +180,8 @@ export default function AdminPanel() {
   const [uploadingPwa192, setUploadingPwa192] = useState(false);
   const [uploadingPwa512, setUploadingPwa512] = useState(false);
   const [uploadingPwaMaskable, setUploadingPwaMaskable] = useState(false);
+  const [uploadingInstallLogo, setUploadingInstallLogo] = useState(false);
+  const [uploadingLoadingLogo, setUploadingLoadingLogo] = useState(false);
 
   // Efeito para carregar as configurações da marca
   useEffect(() => {
@@ -199,6 +203,8 @@ export default function AdminPanel() {
             setBrandPwa192(parsed.pwa_icon_192_url || '');
             setBrandPwa512(parsed.pwa_icon_512_url || '');
             setBrandPwaMaskable(parsed.pwa_maskable_icon_url || '');
+            setBrandInstallLogo(parsed.pwa_install_logo_url || '');
+            setBrandLoadingLogo(parsed.pwa_loading_logo_url || '');
             setBrandVersion(parsed.version || '1.0');
             if (parsed.colors) {
               setBrandColors({
@@ -228,7 +234,7 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
-  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon' | 'pwa192' | 'pwa512' | 'pwamaskable') => {
+  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon' | 'pwa192' | 'pwa512' | 'pwamaskable' | 'install' | 'loading') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -238,6 +244,8 @@ export default function AdminPanel() {
     else if (type === 'pwa192') setUploadingPwa192(true);
     else if (type === 'pwa512') setUploadingPwa512(true);
     else if (type === 'pwamaskable') setUploadingPwaMaskable(true);
+    else if (type === 'install') setUploadingInstallLogo(true);
+    else if (type === 'loading') setUploadingLoadingLogo(true);
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -264,6 +272,8 @@ export default function AdminPanel() {
         else if (type === 'pwa192') setBrandPwa192(publicUrlData.publicUrl);
         else if (type === 'pwa512') setBrandPwa512(publicUrlData.publicUrl);
         else if (type === 'pwamaskable') setBrandPwaMaskable(publicUrlData.publicUrl);
+        else if (type === 'install') setBrandInstallLogo(publicUrlData.publicUrl);
+        else if (type === 'loading') setBrandLoadingLogo(publicUrlData.publicUrl);
       }
     } catch (err: any) {
       console.error(`Erro ao fazer upload do ${type}:`, err);
@@ -275,6 +285,8 @@ export default function AdminPanel() {
       else if (type === 'pwa192') setUploadingPwa192(false);
       else if (type === 'pwa512') setUploadingPwa512(false);
       else if (type === 'pwamaskable') setUploadingPwaMaskable(false);
+      else if (type === 'install') setUploadingInstallLogo(false);
+      else if (type === 'loading') setUploadingLoadingLogo(false);
       e.target.value = '';
     }
   };
@@ -293,6 +305,8 @@ export default function AdminPanel() {
         pwa_icon_192_url: brandPwa192,
         pwa_icon_512_url: brandPwa512,
         pwa_maskable_icon_url: brandPwaMaskable,
+        pwa_install_logo_url: brandInstallLogo,
+        pwa_loading_logo_url: brandLoadingLogo,
         version: newVersion,
         colors: brandColors
       };
@@ -4897,7 +4911,83 @@ export default function AdminPanel() {
                                   onChange={(e) => handleBrandUpload(e, 'pwamaskable')} 
                                 />
                               </label>
-                              <p className="text-[10px] text-brand-text-muted">Recomendado: 512x512px PNG com margem segura de 10% a 15% ao redor do elemento central.</p>
+                            <p className="text-[10px] text-brand-text-muted">Recomendado: 512x512px PNG com margem segura de 10% a 15% ao redor do elemento central.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Imagens Específicas de Exibição */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-5 md:col-span-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Imagens Específicas de Exibição</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">
+                              Defina imagens exclusivas para a mensagem de instalação do app e para a tela de carregamento inicial.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                            <div className="rounded-2xl border border-brand-border/60 bg-white p-4 space-y-4">
+                              <div>
+                                <h4 className="text-xs font-semibold text-brand-text uppercase tracking-wider">Mensagem de instalação</h4>
+                                <p className="text-[10px] text-brand-text-muted mt-1">
+                                  Exibida na caixa "Instale o app Evolução Clínica".
+                                </p>
+                              </div>
+
+                              <div className="flex items-center justify-center p-5 bg-brand-bg/30 border border-dashed border-brand-border rounded-xl h-36">
+                                {brandInstallLogo ? (
+                                  <img src={brandInstallLogo} alt="Preview do ícone de instalação" className="max-h-full max-w-full object-contain" />
+                                ) : (
+                                  <span className="text-[10px] text-brand-text-muted text-center">Nenhuma imagem enviada</span>
+                                )}
+                              </div>
+
+                              <label className="btn-outline w-full text-center py-2.5 text-xs font-semibold cursor-pointer">
+                                {uploadingInstallLogo ? (
+                                  <span className="flex items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center justify-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload da imagem</span>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/svg+xml,image/gif"
+                                  className="hidden"
+                                  disabled={uploadingInstallLogo}
+                                  onChange={(e) => handleBrandUpload(e, 'install')}
+                                />
+                              </label>
+                            </div>
+
+                            <div className="rounded-2xl border border-brand-border/60 bg-white p-4 space-y-4">
+                              <div>
+                                <h4 className="text-xs font-semibold text-brand-text uppercase tracking-wider">Tela de carregamento</h4>
+                                <p className="text-[10px] text-brand-text-muted mt-1">
+                                  Exibida no carregamento com a mensagem "Preparando seu ambiente clínico...".
+                                </p>
+                              </div>
+
+                              <div className="flex items-center justify-center p-5 bg-brand-bg/30 border border-dashed border-brand-border rounded-xl h-36">
+                                {brandLoadingLogo ? (
+                                  <img src={brandLoadingLogo} alt="Preview do logo de carregamento" className="max-h-full max-w-full object-contain" />
+                                ) : (
+                                  <span className="text-[10px] text-brand-text-muted text-center">Nenhuma imagem enviada</span>
+                                )}
+                              </div>
+
+                              <label className="btn-outline w-full text-center py-2.5 text-xs font-semibold cursor-pointer">
+                                {uploadingLoadingLogo ? (
+                                  <span className="flex items-center justify-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center justify-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload da imagem</span>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/svg+xml,image/gif"
+                                  className="hidden"
+                                  disabled={uploadingLoadingLogo}
+                                  onChange={(e) => handleBrandUpload(e, 'loading')}
+                                />
+                              </label>
                             </div>
                           </div>
                         </div>
@@ -4955,7 +5045,7 @@ export default function AdminPanel() {
                         <div className="flex space-x-3 w-full sm:w-auto">
                           <button
                             type="submit"
-                            disabled={savingBrand || uploadingLight || uploadingDark || uploadingFavicon}
+                            disabled={savingBrand || uploadingLight || uploadingDark || uploadingFavicon || uploadingPwa192 || uploadingPwa512 || uploadingPwaMaskable || uploadingInstallLogo || uploadingLoadingLogo}
                             className="btn-primary w-full sm:w-auto px-6 py-3 flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
                           >
                             {savingBrand ? (

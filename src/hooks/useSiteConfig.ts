@@ -26,6 +26,8 @@ export interface SiteConfig {
   pwa_maskable_icon_url: string;
   pwa_install_title: string;
   pwa_install_description: string;
+  pwa_install_logo_url: string;
+  pwa_loading_logo_url: string;
   logo_light_url: string;
   logo_dark_url: string;
   favicon_url: string;
@@ -58,6 +60,8 @@ const defaultConfig: SiteConfig = {
   pwa_maskable_icon_url: "/icon-512x512-maskable.png",
   pwa_install_title: "Instale o app Evolução Clínica",
   pwa_install_description: "Acesse seus prontuários rapidamente pela tela inicial com o app oficial.",
+  pwa_install_logo_url: "",
+  pwa_loading_logo_url: "",
   logo_light_url: "",
   logo_dark_url: "",
   favicon_url: "/favicon.png",
@@ -164,6 +168,8 @@ const fetchConfig = async () => {
         pwa_icon_192_url: parsed.pwa_icon_192_url || defaultConfig.pwa_icon_192_url,
         pwa_icon_512_url: parsed.pwa_icon_512_url || defaultConfig.pwa_icon_512_url,
         pwa_maskable_icon_url: parsed.pwa_maskable_icon_url || defaultConfig.pwa_maskable_icon_url,
+        pwa_install_logo_url: parsed.pwa_install_logo_url || "",
+        pwa_loading_logo_url: parsed.pwa_loading_logo_url || "",
         version: parsed.version || defaultConfig.version,
         colors: parsed.colors ? {
           ...defaultColors,
@@ -210,4 +216,3 @@ if (typeof window !== 'undefined') {
     }
   });
 }
-
