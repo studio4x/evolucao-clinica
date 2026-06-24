@@ -58,8 +58,8 @@ const defaultConfig: SiteConfig = {
   pwa_maskable_icon_url: "/icon-512x512-maskable.png",
   pwa_install_title: "Instale o app Evolução Clínica",
   pwa_install_description: "Acesse seus prontuários rapidamente pela tela inicial com o app oficial.",
-  logo_light_url: "/logotipo-transparente-1024.png",
-  logo_dark_url: "/logotipo-transparente-1024.png",
+  logo_light_url: "",
+  logo_dark_url: "",
   favicon_url: "/favicon.png",
   version: "1.0",
   colors: defaultColors
@@ -128,8 +128,8 @@ const fetchConfig = async () => {
       const parsed = JSON.parse(data.api_key);
       const merged: SiteConfig = {
         ...defaultConfig,
-        logo_light_url: parsed.logo_light_url || defaultConfig.logo_light_url,
-        logo_dark_url: parsed.logo_dark_url || defaultConfig.logo_dark_url,
+        logo_light_url: parsed.logo_light_url || "",
+        logo_dark_url: parsed.logo_dark_url || "",
         favicon_url: parsed.favicon_url || defaultConfig.favicon_url,
         version: parsed.version || defaultConfig.version,
         colors: parsed.colors ? {

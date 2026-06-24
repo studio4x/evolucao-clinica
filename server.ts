@@ -243,7 +243,7 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
     ].join("|"));
     const brandIcon = faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
     const brandIconWithVersion = appendBrandVersion(brandIcon, assetSignature);
-    const splashLogoWithVersion = appendBrandVersion(logoDarkUrl || logoLightUrl || "/logotipo-transparente-1024.png", assetSignature);
+    const splashLogoWithVersion = appendBrandVersion(logoDarkUrl || logoLightUrl || "", assetSignature);
 
     const manifest = {
       "id": "/",

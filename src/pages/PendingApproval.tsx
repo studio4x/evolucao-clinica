@@ -109,17 +109,25 @@ export default function PendingApproval() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10 text-center">
         <div className="flex justify-center mb-6">
-          <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
-            <img
-              src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-              alt="Evolução Clínica"
-              className="h-20 w-auto object-contain"
-            />
-          </div>
+          {siteConfig.logo_light_url ? (
+            <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
+              <img
+                src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                alt="Evolução Clínica"
+                className="h-20 w-auto object-contain"
+              />
+            </div>
+          ) : (
+            <h2 className="mt-4 text-center text-2xl font-display font-bold text-brand-primary tracking-tight">
+              {siteConfig.pwa_app_name || "Evolução Clínica"}
+            </h2>
+          )}
         </div>
-        <h2 className="mt-4 text-center text-2xl font-display font-bold text-brand-primary tracking-tight">
-          Evolução Clínica
-        </h2>
+        {siteConfig.logo_light_url && (
+          <h2 className="mt-4 text-center text-2xl font-display font-bold text-brand-primary tracking-tight">
+            {siteConfig.pwa_app_name || "Evolução Clínica"}
+          </h2>
+        )}
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">

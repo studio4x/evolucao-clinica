@@ -39,5 +39,5 @@ export const getBrandIconUrl = (config: BrandAssetSource) => {
 };
 
 export const getBrandSplashLogoUrl = (config: BrandAssetSource) => {
-  return config.logo_dark_url || config.logo_light_url || '/logotipo-transparente-1024.png';
+  return config.logo_dark_url || config.logo_light_url || '';
 };

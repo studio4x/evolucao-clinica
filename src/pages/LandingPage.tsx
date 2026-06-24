@@ -109,12 +109,18 @@ export default function LandingPage() {
           <div className="flex justify-between items-center h-20">
             {/* Logo */}
             <div className="flex-shrink-0">
-              <Link to="/">
-                <img 
-                  src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-                  alt="Conexão Seres Logo" 
-                  className="h-16 w-auto object-contain cursor-pointer transition-transform hover:scale-102"
-                />
+              <Link to="/" className="flex items-center">
+                {siteConfig.logo_light_url ? (
+                  <img 
+                    src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                    alt={siteConfig.pwa_app_name || "Conexão Seres"} 
+                    className="h-16 w-auto object-contain cursor-pointer transition-transform hover:scale-102"
+                  />
+                ) : (
+                  <span className="text-xl font-display font-bold text-brand-primary">
+                    {siteConfig.pwa_app_name || "Conexão Seres"}
+                  </span>
+                )}
               </Link>
             </div>
 
@@ -735,13 +741,15 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="bg-brand-bg border-t border-brand-border py-12 text-center text-xs text-brand-text-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          <div className="flex justify-center">
-            <img 
-              src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-              alt="Conexão Seres Logo" 
-              className="h-16 w-auto object-contain opacity-80"
-            />
-          </div>
+          {siteConfig.logo_light_url && (
+            <div className="flex justify-center">
+              <img 
+                src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                alt={siteConfig.pwa_app_name || "Conexão Seres"} 
+                className="h-16 w-auto object-contain opacity-80"
+              />
+            </div>
+          )}
           <p>© {new Date().getFullYear()} Conexão Seres. Todos os direitos reservados. CNPJ sob demanda.</p>
           
           <div className="flex justify-center gap-6 text-xs font-semibold">

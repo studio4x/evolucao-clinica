@@ -97,11 +97,17 @@ export default function Layout() {
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <Link to="/">
-          <img
-            src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-            alt="Conexão Ser"
-            className="h-14 w-auto max-w-[150px] object-contain"
-          />
+          {siteConfig.logo_light_url ? (
+            <img
+              src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+              alt={siteConfig.pwa_app_name || "Evolução Clínica"}
+              className="h-14 w-auto max-w-[150px] object-contain"
+            />
+          ) : (
+            <span className="text-lg font-display font-bold text-brand-primary">
+              {siteConfig.pwa_app_name || "Evolução Clínica"}
+            </span>
+          )}
         </Link>
         <div className="flex items-center space-x-2">
           <Link to="/painel/notifications" className="p-2 text-brand-primary relative">
@@ -127,11 +133,17 @@ export default function Layout() {
         <div className="flex-1 overflow-y-auto">
           <div className="p-4 hidden md:block border-b border-brand-border/50">
             <Link to="/" className="flex justify-center">
-              <img
-                src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-                alt="Conexão Ser"
-                className="h-28 w-auto max-w-full object-contain"
-              />
+              {siteConfig.logo_light_url ? (
+                <img
+                  src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                  alt={siteConfig.pwa_app_name || "Evolução Clínica"}
+                  className="h-28 w-auto max-w-full object-contain"
+                />
+              ) : (
+                <span className="text-xl font-display font-bold text-brand-primary py-4 block text-center">
+                  {siteConfig.pwa_app_name || "Evolução Clínica"}
+                </span>
+              )}
             </Link>
           </div>
 

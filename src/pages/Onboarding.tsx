@@ -356,13 +356,15 @@ export default function Onboarding() {
 
           {/* Topo: Logo & Título */}
           <div className="relative z-10 space-y-6">
-            <div className="inline-flex items-center gap-3 p-2 bg-white/10 rounded-2xl border border-white/10 backdrop-blur-md">
-              <img
-                src={appendBrandAssetVersion(siteConfig.logo_dark_url || siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-                alt="Evolução Clínica"
-                className="h-8 w-auto object-contain brightness-0 invert"
-              />
-            </div>
+            {(siteConfig.logo_dark_url || siteConfig.logo_light_url) && (
+              <div className="inline-flex items-center gap-3 p-2 bg-white/10 rounded-2xl border border-white/10 backdrop-blur-md">
+                <img
+                  src={appendBrandAssetVersion(siteConfig.logo_dark_url || siteConfig.logo_light_url, assetSignature)}
+                  alt="Evolução Clínica"
+                  className="h-8 w-auto object-contain brightness-0 invert"
+                />
+              </div>
+            )}
             <div>
               <h2 className="text-xl font-display font-bold text-white leading-tight">Sua jornada de configuração</h2>
               <p className="text-xs text-white/70 mt-1">Siga os passos simples para automatizar sua clínica.</p>
@@ -441,11 +443,13 @@ export default function Onboarding() {
           {/* Cabeçalho Mobile: Progresso horizontal e botão Pular */}
           <div className="p-5 flex items-center justify-between border-b border-brand-border/40 md:border-b-0 relative z-10">
             <div className="flex items-center gap-2">
-              <img
-                src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-                alt="Logo"
-                className="h-8 w-auto object-contain md:hidden"
-              />
+              {siteConfig.logo_light_url && (
+                <img
+                  src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                  alt="Logo"
+                  className="h-8 w-auto object-contain md:hidden"
+                />
+              )}
               <span className="text-[10px] uppercase font-bold tracking-wider text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full hidden md:inline-block">
                 Onboarding Clínico
               </span>

@@ -69,13 +69,19 @@ export default function Login() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-6">
-          <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
-            <img
-              src={appendBrandAssetVersion(siteConfig.logo_light_url || '/logotipo-transparente-1024.png', assetSignature)}
-              alt="Evolução Clínica"
-              className="h-24 w-auto object-contain"
-            />
-          </div>
+          {siteConfig.logo_light_url ? (
+            <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
+              <img
+                src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                alt="Evolução Clínica"
+                className="h-24 w-auto object-contain"
+              />
+            </div>
+          ) : (
+            <h2 className="text-3xl font-display font-extrabold text-brand-primary text-center">
+              {siteConfig.pwa_app_name || "Evolução Clínica"}
+            </h2>
+          )}
         </div>
         <p className="mt-3 text-center text-base text-brand-text-muted max-w-[280px] mx-auto leading-relaxed">
           Sua prática clínica automatizada com <span className="text-brand-primary font-semibold">Inteligência Artificial</span>
