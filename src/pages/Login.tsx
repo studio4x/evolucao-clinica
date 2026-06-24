@@ -69,10 +69,10 @@ export default function Login() {
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-6">
-          {siteConfig.logo_light_url ? (
+          {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
             <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
               <img
-                src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
                 alt="Evolução Clínica"
                 className="h-24 w-auto object-contain"
               />

@@ -110,9 +110,9 @@ export default function LandingPage() {
             {/* Logo */}
             <div className="flex-shrink-0">
               <Link to="/" className="flex items-center">
-                {siteConfig.logo_light_url ? (
+                {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
                   <img 
-                    src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                    src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
                     alt={siteConfig.pwa_app_name || "Conexão Seres"} 
                     className="h-16 w-auto object-contain cursor-pointer transition-transform hover:scale-102"
                   />
@@ -741,10 +741,10 @@ export default function LandingPage() {
       {/* FOOTER */}
       <footer className="bg-brand-bg border-t border-brand-border py-12 text-center text-xs text-brand-text-muted">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-          {siteConfig.logo_light_url && (
+          {(siteConfig.logo_light_url || siteConfig.logo_dark_url) && (
             <div className="flex justify-center">
               <img 
-                src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
                 alt={siteConfig.pwa_app_name || "Conexão Seres"} 
                 className="h-16 w-auto object-contain opacity-80"
               />

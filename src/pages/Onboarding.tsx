@@ -443,9 +443,9 @@ export default function Onboarding() {
           {/* Cabeçalho Mobile: Progresso horizontal e botão Pular */}
           <div className="p-5 flex items-center justify-between border-b border-brand-border/40 md:border-b-0 relative z-10">
             <div className="flex items-center gap-2">
-              {siteConfig.logo_light_url && (
+              {(siteConfig.logo_light_url || siteConfig.logo_dark_url) && (
                 <img
-                  src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
+                  src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
                   alt="Logo"
                   className="h-8 w-auto object-contain md:hidden"
                 />
