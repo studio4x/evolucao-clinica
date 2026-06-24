@@ -81,12 +81,42 @@ export const applyThemeColors = (colors: BrandColors) => {
   root.style.setProperty('--color-brand-border', colors.border);
 };
 
+const CONFIG_STORAGE_KEY = 'evolucao-clinica:site-config';
+
 // Global cache variable to avoid multiple queries
 let cachedConfig: SiteConfig | null = null;
 const listeners = new Set<(config: SiteConfig) => void>();
 
+const getInitialConfig = (): SiteConfig => {
+  if (cachedConfig) return cachedConfig;
+  
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.localStorage.getItem(CONFIG_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        const merged: SiteConfig = {
+          ...defaultConfig,
+          ...parsed,
+          colors: parsed.colors ? {
+            ...defaultColors,
+            ...parsed.colors
+          } : defaultColors
+        };
+        cachedConfig = merged;
+        applyThemeColors(merged.colors);
+        return merged;
+      }
+    } catch (e) {
+      console.error('Error reading site config from localStorage:', e);
+    }
+  }
+  applyThemeColors(defaultConfig.colors);
+  return defaultConfig;
+};
+
 export const useSiteConfig = () => {
-  const [config, setConfig] = useState<SiteConfig>(cachedConfig || defaultConfig);
+  const [config, setConfig] = useState<SiteConfig>(getInitialConfig);
 
   useEffect(() => {
     const handleUpdate = (newConfig: SiteConfig) => {
@@ -137,6 +167,11 @@ const fetchConfig = async () => {
           ...parsed.colors
         } : defaultColors
       };
+      
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(merged));
+      }
+      
       cachedConfig = merged;
       applyThemeColors(merged.colors);
       listeners.forEach(l => l(merged));
@@ -149,6 +184,9 @@ const fetchConfig = async () => {
 // Helper function to force reload configuration
 export const reloadSiteConfig = async () => {
   cachedConfig = null;
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem(CONFIG_STORAGE_KEY);
+  }
   await fetchConfig();
 };
 
