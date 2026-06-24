@@ -56,6 +56,7 @@ export default function PatientForm() {
   const [searchParams] = useSearchParams();
   const isOnboardingMode = searchParams.get('onboarding') === '1';
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const [ddi, setDdi] = useState('+55');
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
@@ -703,8 +704,14 @@ export default function PatientForm() {
                     <Plus size={24} />
                   )}
                   <div className="text-left">
-                    <p className="font-bold">Sessão Google Expirada</p>
-                    <p className="text-xs">Clique aqui para renovar o acesso e liberar o Drive.</p>
+                    <p className="font-bold">
+                      {hasGoogleSession ? 'Autorizar acesso ao Drive' : 'Conectar com o Google'}
+                    </p>
+                    <p className="text-xs">
+                      {hasGoogleSession
+                        ? 'Sua conta Google já está conectada. Clique para liberar o acesso ao Drive e criar o prontuário.'
+                        : 'Clique aqui para conectar sua conta Google e liberar o acesso ao Drive.'}
+                    </p>
                   </div>
                 </button>
               ) : (
@@ -776,7 +783,11 @@ export default function PatientForm() {
             {!formData.full_name && !formData.google_doc_id ? (
               <span className="text-red-500">Preencha o nome do paciente para liberar a criação do prontuário.</span>
             ) : !hasClinicalAccess ? (
-              <span className="text-yellow-600">Sua sessão do Google expirou. Renove a autenticação para acessar o Drive.</span>
+              <span className="text-yellow-600">
+                {hasGoogleSession
+                  ? 'Sua conta Google já está conectada, mas ainda falta autorizar o acesso ao Drive para criar o prontuário.'
+                  : 'Conecte sua conta Google para acessar o Drive e criar o prontuário.'}
+              </span>
             ) : (
               formData.target_folder_id 
                 ? `O novo prontuário será criado dentro da pasta "${formData.target_folder_name}".`
