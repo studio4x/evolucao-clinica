@@ -4932,6 +4932,9 @@ export default function AdminPanel() {
                                 <p className="text-[10px] text-brand-text-muted mt-1">
                                   Exibida na caixa "Instale o app Evolução Clínica".
                                 </p>
+                                <p className="text-[10px] text-brand-text-muted mt-1">
+                                  Recomendado: imagem quadrada 1:1, com logo centralizado, fundo transparente e resolução mínima de 512x512px.
+                                </p>
                               </div>
 
                               <div className="flex items-center justify-center p-5 bg-brand-bg/30 border border-dashed border-brand-border rounded-xl h-36">
@@ -4963,6 +4966,9 @@ export default function AdminPanel() {
                                 <h4 className="text-xs font-semibold text-brand-text uppercase tracking-wider">Tela de carregamento</h4>
                                 <p className="text-[10px] text-brand-text-muted mt-1">
                                   Exibida no carregamento com a mensagem "Preparando seu ambiente clínico...".
+                                </p>
+                                <p className="text-[10px] text-brand-text-muted mt-1">
+                                  Recomendado: imagem horizontal ou quadrada com logo bem centralizado, fundo transparente e boa leitura em tamanhos médios.
                                 </p>
                               </div>
 
