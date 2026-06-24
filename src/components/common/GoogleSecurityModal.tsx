@@ -27,7 +27,7 @@ const slidesByMode: Record<GoogleSecurityModalMode, {
   slides: ModalSlide[];
 }> = {
   login: {
-    headerTitle: 'Antes de entrar no app',
+    headerTitle: 'Segurança antes de conectar',
     headerSubtitle: 'Nesta primeira etapa, pedimos apenas o acesso mínimo para você autenticar sua conta com segurança.',
     confirmationLabel: 'Continuar para o Google',
     slides: [
