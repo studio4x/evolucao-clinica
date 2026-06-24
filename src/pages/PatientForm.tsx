@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
+import { setOnboardingState } from '../utils/onboarding';
 
 declare global {
   interface Window {
@@ -17,6 +18,8 @@ declare global {
 export default function PatientForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isOnboardingMode = searchParams.get('onboarding') === '1';
   const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -394,7 +397,17 @@ export default function PatientForm() {
           link: `/painel/patients`
         });
       }
-      navigate('/painel/patients');
+
+      if (isOnboardingMode) {
+        setOnboardingState(user.id, {
+          step: 'evolution',
+          patientId: patientId,
+          patientName: formData.full_name
+        });
+        navigate(`/painel/patients/${patientId}/evolutions/new?onboarding=1`);
+      } else {
+        navigate('/painel/patients');
+      }
     } catch (error) {
       console.error("Error saving patient:", error);
       alert("Erro ao salvar paciente.");
