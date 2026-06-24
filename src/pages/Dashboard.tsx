@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2, Cake, Trash2 } from 'lucide-react';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { getDraftEvolutions, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
+import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 const normalizeText = (text: string): string => {
   if (!text) return '';
@@ -102,6 +103,7 @@ export default function Dashboard() {
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [birthdays, setBirthdays] = useState<{ today: any[]; thisWeek: any[] }>({
     today: [],
     thisWeek: []
@@ -133,7 +135,11 @@ export default function Dashboard() {
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const handleConnectGoogleCalendar = async () => {
+  const handleConnectGoogleCalendar = () => {
+    setIsSecurityModalOpen(true);
+  };
+
+  const executeGoogleCalendarConnection = async () => {
     try {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'calendarReadOnly',
@@ -835,6 +841,14 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      <GoogleSecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        onConfirm={executeGoogleCalendarConnection}
+        confirmLabel="Autorizar acesso"
+        mode="calendar"
+      />
     </div>
   );
 }
