@@ -251,7 +251,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
             onTouchCancel={handleTouchEnd}
           >
             <div
-              className="flex"
+              className="flex items-stretch"
               style={{
                 transform: `translateX(calc(-${currentSlide * 100}% + ${dragOffset}px))`,
                 transition: isDragging ? 'none' : 'transform 300ms ease-out',
@@ -260,8 +260,8 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
               {slides.map((slide) => {
                 const SlideIcon = slide.icon;
                 return (
-                  <div key={slide.title} className="w-full flex-shrink-0 px-1">
-                    <div className={`rounded-3xl border p-5 sm:p-6 ${slide.accentClasses}`}>
+                  <div key={slide.title} className="w-full flex-shrink-0 px-1 h-full">
+                    <div className={`h-full min-h-[280px] sm:min-h-[300px] rounded-3xl border p-5 sm:p-6 flex flex-col justify-between gap-4 ${slide.accentClasses}`}>
                       <div className="flex items-start gap-4">
                         <div className={`p-3 rounded-2xl shadow-sm ${slide.iconClasses}`}>
                           <SlideIcon size={22} />
