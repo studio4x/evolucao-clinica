@@ -9,6 +9,19 @@ export const InstallPrompt = () => {
   const [showIOSModal, setShowIOSModal] = useState(false);
   const [showGenericModal, setShowGenericModal] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.sessionStorage.getItem('pwa-install-dismissed') === 'true';
+    }
+    return false;
+  });
+
+  const handleDismiss = () => {
+    setIsDismissed(true);
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem('pwa-install-dismissed', 'true');
+    }
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -50,7 +63,7 @@ export const InstallPrompt = () => {
     };
   }, []);
 
-  if (!mounted || isInstalled) {
+  if (!mounted || isInstalled || isDismissed) {
     return null;
   }
 
@@ -85,8 +98,8 @@ export const InstallPrompt = () => {
 
   return (
     <>
-      {/* ── BANNER PERSISTENTE (Mobile: Superior | Desktop: Flutuante no canto inferior) ── */}
-      <div className="fixed top-0 left-0 right-0 md:top-auto md:left-auto md:bottom-6 md:right-6 z-[9999] p-4 md:p-0 pointer-events-none">
+      {/* ── BANNER PERSISTENTE (Mobile e Desktop: Flutuante na parte inferior) ── */}
+      <div className="fixed bottom-0 left-0 right-0 md:left-auto md:bottom-6 md:right-6 z-[9999] p-4 md:p-0 pointer-events-none">
         <div className="w-full md:max-w-md bg-white/95 backdrop-blur-md rounded-2xl md:rounded-3xl border border-brand-border/60 shadow-2xl p-4 flex items-center justify-between gap-4 pointer-events-auto transition-all duration-300 transform translate-y-0 scale-100 hover:shadow-brand-primary/10">
           
           {/* Lado Esquerdo: Ícone da Marca e Textos */}
@@ -104,14 +117,24 @@ export const InstallPrompt = () => {
             </div>
           </div>
 
-          {/* Lado Direito: Botão de Instalar */}
-          <button
-            onClick={handleInstallClick}
-            className="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap shadow-sm shadow-brand-primary/15 flex items-center gap-1.5 flex-shrink-0 active:scale-95"
-          >
-            Instalar
-            <Download size={12} className="stroke-[2.5]" />
-          </button>
+          {/* Lado Direito: Botões de Ação */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleInstallClick}
+              className="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap shadow-sm shadow-brand-primary/15 flex items-center gap-1.5 active:scale-95"
+            >
+              Instalar
+              <Download size={12} className="stroke-[2.5]" />
+            </button>
+            <button
+              onClick={handleDismiss}
+              className="p-2 text-brand-text-muted hover:text-brand-primary hover:bg-brand-bg rounded-xl border border-transparent hover:border-brand-border/60 transition-all active:scale-95 flex items-center justify-center"
+              title="Fechar"
+              aria-label="Fechar mensagem de instalação"
+            >
+              <X size={16} className="stroke-[2.5]" />
+            </button>
+          </div>
         </div>
       </div>
 
