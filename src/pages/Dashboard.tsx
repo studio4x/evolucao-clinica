@@ -152,7 +152,8 @@ export default function Dashboard() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'calendarReadOnly',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: window.location.origin + window.location.pathname,
+        loginHint: user?.email || undefined
       });
       if (error) throw error;
     } catch (error) {

@@ -284,7 +284,8 @@ export default function PatientForm() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: window.location.origin + window.location.pathname,
+        loginHint: user?.email || undefined
       });
       if (error) throw error;
     } catch (error) {
@@ -409,7 +410,8 @@ export default function PatientForm() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: window.location.origin + window.location.pathname,
+        loginHint: user?.email || undefined
       });
       if (error) throw error;
     } catch (error) {

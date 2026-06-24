@@ -87,6 +87,7 @@ type RequestGoogleOAuthParams = {
   currentGrantedScopes?: string[];
   redirectTo: string;
   prompt?: string;
+  loginHint?: string;
 };
 
 export const requestGoogleOAuth = async ({
@@ -94,18 +95,22 @@ export const requestGoogleOAuth = async ({
   currentGrantedScopes = [],
   redirectTo,
   prompt,
+  loginHint,
 }: RequestGoogleOAuthParams) => {
   const scopes = buildGoogleScopes(requiredScopes, currentGrantedScopes);
   storePendingGoogleScopes(scopes);
 
-  const queryParams = prompt ? { prompt } : undefined;
+  const queryParams = {
+    ...(prompt ? { prompt } : {}),
+    ...(loginHint ? { login_hint: loginHint } : {}),
+  };
 
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       scopes: scopes.join(' '),
       redirectTo,
-      ...(queryParams ? { queryParams } : {}),
+      ...(Object.keys(queryParams).length > 0 ? { queryParams } : {}),
     },
   });
 };
