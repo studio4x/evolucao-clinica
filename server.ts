@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import { readFile } from "fs/promises";
 import dotenv from "dotenv";
 import webpush from "web-push";
 import nodemailer from "nodemailer";
@@ -42,6 +43,59 @@ function appendBrandVersion(url: string, signature: string) {
   if (!url) return "";
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}v=${encodeURIComponent(signature)}`;
+}
+
+function getMimeTypeFromPath(filePath: string) {
+  const cleanPath = filePath.split("?")[0].toLowerCase();
+  if (cleanPath.endsWith(".png")) return "image/png";
+  if (cleanPath.endsWith(".jpg") || cleanPath.endsWith(".jpeg")) return "image/jpeg";
+  if (cleanPath.endsWith(".webp")) return "image/webp";
+  if (cleanPath.endsWith(".gif")) return "image/gif";
+  if (cleanPath.endsWith(".svg")) return "image/svg+xml";
+  return "application/octet-stream";
+}
+
+async function imageUrlToDataUri(imageUrl: string) {
+  if (!imageUrl) return "";
+
+  try {
+    const isAbsoluteUrl = /^https?:\/\//i.test(imageUrl);
+    const cleanUrl = imageUrl.split("?")[0];
+    let buffer: Buffer;
+    let mimeType = getMimeTypeFromPath(cleanUrl);
+
+    if (isAbsoluteUrl) {
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        throw new Error(`Falha ao carregar imagem ${imageUrl}: ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      mimeType = response.headers.get("content-type") || mimeType;
+    } else {
+      const publicPath = path.join(process.cwd(), "public", cleanUrl.replace(/^\//, ""));
+      buffer = await readFile(publicPath);
+    }
+
+    return `data:${mimeType};base64,${buffer.toString("base64")}`;
+  } catch (error) {
+    console.error("[Brand] Falha ao converter imagem para data URI:", error);
+    return "";
+  }
+}
+
+function buildWhiteBackgroundIconSvg(imageDataUri: string, size: number) {
+  const padding = Math.max(16, Math.round(size * 0.18));
+  const innerSize = size - padding * 2;
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`,
+    `<rect width="100%" height="100%" fill="#ffffff"/>`,
+    imageDataUri
+      ? `<image href="${imageDataUri}" x="${padding}" y="${padding}" width="${innerSize}" height="${innerSize}" preserveAspectRatio="xMidYMid meet" />`
+      : "",
+    `</svg>`
+  ].join("");
 }
 
 // Helper para obter/gerar configurações de notificações
@@ -251,8 +305,9 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       version
     ].join("|"));
     const brandIcon = faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
-    const brandIconWithVersion = appendBrandVersion(brandIcon, assetSignature);
     const splashLogoWithVersion = appendBrandVersion(logoDarkUrl || logoLightUrl || "", assetSignature);
+    const installIcon192 = appendBrandVersion("/api/pwa-install-icon?size=192", assetSignature);
+    const installIcon512 = appendBrandVersion("/api/pwa-install-icon?size=512", assetSignature);
 
     const manifest = {
       "id": "/",
@@ -270,21 +325,21 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       "prefer_related_applications": false,
       "icons": [
         {
-          "src": appendBrandVersion(pwaIcon192 || brandIcon, assetSignature),
+          "src": installIcon192,
           "sizes": "192x192",
-          "type": "image/png",
+          "type": "image/svg+xml",
           "purpose": "any"
         },
         {
-          "src": appendBrandVersion(pwaIcon512 || brandIcon, assetSignature),
+          "src": installIcon512,
           "sizes": "512x512",
-          "type": "image/png",
+          "type": "image/svg+xml",
           "purpose": "any"
         },
         {
-          "src": appendBrandVersion(pwaMaskableIcon || pwaIcon512 || brandIcon, assetSignature),
+          "src": installIcon512,
           "sizes": "512x512",
-          "type": "image/png",
+          "type": "image/svg+xml",
           "purpose": "maskable"
         },
         {
@@ -345,6 +400,50 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
   } catch (err: any) {
     console.error("Error generating manifest:", err);
     return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Rota dinâmica para ícone branco usado no prompt nativo de instalação
+app.get(["/api/pwa-install-icon", "/api/pwa-install-icon.svg"], async (req, res) => {
+  try {
+    const sizeParam = Number(req.query.size);
+    const size = Number.isFinite(sizeParam) && sizeParam > 0 ? Math.min(Math.max(sizeParam, 128), 1024) : 512;
+
+    const { data, error } = await supabaseAdmin
+      .from('settings')
+      .select('api_key')
+      .eq('id', 'brand_settings')
+      .single();
+
+    let logoLightUrl = "";
+    let logoDarkUrl = "";
+    let faviconUrl = "";
+    let pwaIcon192 = "";
+    let pwaIcon512 = "";
+    let pwaInstallLogo = "";
+
+    if (!error && data && data.api_key) {
+      const parsed = JSON.parse(data.api_key);
+      logoLightUrl = parsed.logo_light_url || "";
+      logoDarkUrl = parsed.logo_dark_url || "";
+      faviconUrl = parsed.favicon_url || "";
+      pwaIcon192 = parsed.pwa_icon_192_url || "";
+      pwaIcon512 = parsed.pwa_icon_512_url || "";
+      pwaInstallLogo = parsed.pwa_install_logo_url || "";
+    }
+
+    const source = pwaInstallLogo || pwaIcon512 || pwaIcon192 || faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
+    const dataUri = await imageUrlToDataUri(source);
+    const svg = buildWhiteBackgroundIconSvg(dataUri, size);
+
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    return res.send(svg);
+  } catch (err: any) {
+    console.error("Erro ao gerar ícone branco do PWA:", err);
+    res.setHeader("Content-Type", "image/svg+xml");
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    return res.status(500).send(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="100%" height="100%" fill="#ffffff"/></svg>`);
   }
 });
 
