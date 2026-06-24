@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2, Cake, Trash2 } from 'lucide-react';
+import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2, Cake, Trash2, CreditCard } from 'lucide-react';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { getDraftEvolutions, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
@@ -64,7 +64,7 @@ const matchPatientWithEvent = (patient: any, summary: string, description: strin
 };
 
 export default function Dashboard() {
-  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan, subscriptionStatus, subscriptionEndsAt, profileRole } = useAuthStore();
   const hasCalendarAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.calendarReadOnly);
   const [stats, setStats] = useState({
     totalPatients: 0,
@@ -108,6 +108,14 @@ export default function Dashboard() {
     today: [],
     thisWeek: []
   });
+  const hasPaidSubscription = subscriptionPlan === 'monthly' || subscriptionPlan === 'yearly';
+  const hasActiveSubscription = Boolean(
+    profileRole === 'admin'
+      || (hasPaidSubscription && (subscriptionStatus === 'active' || subscriptionStatus === 'trialing'))
+  );
+  const endsAtDate = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+  const isSubscriptionExpired = endsAtDate ? endsAtDate < new Date() : false;
+  const showSubscriptionCta = profileRole !== 'admin' && (!hasPaidSubscription || !hasActiveSubscription || isSubscriptionExpired);
 
   const handleWhatsAppClick = (e: React.MouseEvent, fullName: string, phone: string) => {
     e.preventDefault();
@@ -426,6 +434,37 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {showSubscriptionCta && (
+        <div className="relative overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100/50 p-6 md:p-7 shadow-md shadow-amber-100/40">
+          <div className="absolute -top-10 right-0 h-32 w-32 rounded-full bg-amber-200/30 blur-3xl pointer-events-none" />
+          <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-2 max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
+                <CreditCard size={12} />
+                <span>Plano recomendado</span>
+              </div>
+              <h2 className="text-xl md:text-2xl font-display font-bold text-amber-900">
+                {subscriptionStatus === 'trialing'
+                  ? 'Seu período de teste está ativo. Conheça os planos disponíveis para continuar.'
+                  : 'Seu acesso precisa de um plano ativo para seguir sem interrupções.'}
+              </h2>
+              <p className="text-sm md:text-base text-amber-800 leading-relaxed">
+                {subscriptionStatus === 'trialing'
+                  ? 'Escolha o plano ideal e evite perder o acesso quando o teste terminar.'
+                  : 'Abra a página de assinatura para ativar seu plano e liberar o uso completo da plataforma.'}
+              </p>
+            </div>
+            <Link
+              to="/painel/subscription"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-brand-primary px-5 py-3 text-sm font-bold text-white shadow-lg shadow-brand-primary/20 hover:bg-brand-primary-hover transition-all active:scale-95 whitespace-nowrap"
+            >
+              <span>Ver planos</span>
+              <ArrowRight size={16} />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {drafts.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 space-y-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">

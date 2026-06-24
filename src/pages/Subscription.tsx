@@ -372,7 +372,7 @@ export default function Subscription() {
       <div className="text-center space-y-3">
         <div className="inline-flex items-center space-x-2 bg-brand-primary/10 text-brand-primary px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>SaaS Recorrência</span>
+          <span>Assinatura e Renovação</span>
         </div>
         <h1 className="text-3xl font-display font-bold text-brand-primary tracking-tight md:text-4xl">
           Planos e Assinatura
