@@ -251,10 +251,10 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
             onTouchCancel={handleTouchEnd}
           >
             <div
-              className="flex items-stretch"
+              className="flex items-stretch will-change-transform"
               style={{
                 transform: `translateX(calc(-${currentSlide * 100}% + ${dragOffset}px))`,
-                transition: isDragging ? 'none' : 'transform 300ms ease-out',
+                transition: isDragging ? 'none' : 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
               {slides.map((slide) => {
