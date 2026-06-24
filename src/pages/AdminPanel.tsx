@@ -4968,7 +4968,7 @@ export default function AdminPanel() {
                                   Exibida no carregamento com a mensagem "Preparando seu ambiente clínico...".
                                 </p>
                                 <p className="text-[10px] text-brand-text-muted mt-1">
-                                  Recomendado: imagem horizontal ou quadrada com logo bem centralizado, fundo transparente e boa leitura em tamanhos médios.
+                                  Recomendado: versão escura ou colorida do logo, com fundo transparente, alto contraste e leitura fácil sobre fundo claro.
                                 </p>
                               </div>
 
