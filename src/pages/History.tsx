@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -25,7 +26,8 @@ export default function History() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const fetchHistory = async () => {
     if (!user) return;
@@ -74,14 +76,12 @@ export default function History() {
     let currentToken = googleAccessToken;
 
     // 1. Check for Google Token
-    if (!currentToken) {
+    if (!currentToken || !hasClinicalAccess) {
       try {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-            redirectTo: window.location.origin + window.location.pathname
-          }
+        const { error } = await requestGoogleOAuth({
+          requiredScopes: 'clinicalDocs',
+          currentGrantedScopes: googleGrantedScopes,
+          redirectTo: window.location.origin + window.location.pathname
         });
         if (error) throw error;
         return;

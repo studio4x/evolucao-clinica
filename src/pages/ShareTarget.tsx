@@ -7,6 +7,7 @@ import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink } from 'lucide-react';
 
 // Simple IndexedDB wrapper for the shared file
@@ -52,7 +53,8 @@ const clearSharedFileLocal = (): Promise<void> => {
 
 export default function ShareTarget() {
   const navigate = useNavigate();
-  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
@@ -114,12 +116,10 @@ export default function ShareTarget() {
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       if (error) throw error;
     } catch (error) {
@@ -132,7 +132,7 @@ export default function ShareTarget() {
 
   const handleOpenModal = async () => {
     const patient = patients.find(p => p.id === selectedPatientId);
-    if (!patient || !patient.google_doc_id || !googleAccessToken) return;
+    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
     setIsModalOpen(true);
     setModalLoading(true);
     setModalError('');
@@ -154,7 +154,7 @@ export default function ShareTarget() {
 
   const handleSaveModalText = async () => {
     const patient = patients.find(p => p.id === selectedPatientId);
-    if (!patient || !patient.google_doc_id || !googleAccessToken) return;
+    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
     setModalSaving(true);
     setModalError('');
     try {
@@ -184,7 +184,7 @@ export default function ShareTarget() {
       return;
     }
 
-    if (!googleAccessToken) {
+    if (!hasClinicalAccess) {
       setErrorMessage('Autenticação do Google ausente ou expirada.');
       setStatus('error');
       return;
@@ -542,7 +542,7 @@ export default function ShareTarget() {
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-center space-y-3">
                   <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
                   <p className="text-sm text-red-700 font-medium">{modalError}</p>
-                  {!googleAccessToken && (
+                  {!hasClinicalAccess && (
                     <button
                       onClick={handleReauthenticate}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
@@ -550,7 +550,7 @@ export default function ShareTarget() {
                       Renovar Autenticação
                     </button>
                   )}
-                  {googleAccessToken && (
+                  {hasClinicalAccess && (
                     <button
                       onClick={handleOpenModal}
                       className="px-4 py-2 bg-stone-800 text-white rounded-xl hover:bg-stone-700 text-sm font-medium transition-colors"

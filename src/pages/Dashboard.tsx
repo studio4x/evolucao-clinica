@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCircle2, ArrowRight, History as HistoryIcon, Clock, Calendar, RefreshCw, Loader2, Cake, Trash2 } from 'lucide-react';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { getDraftEvolutions, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -62,7 +63,8 @@ const matchPatientWithEvent = (patient: any, summary: string, description: strin
 };
 
 export default function Dashboard() {
-  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const hasCalendarAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.calendarReadOnly);
   const [stats, setStats] = useState({
     totalPatients: 0,
     recentEvolutions: 0,
@@ -133,12 +135,10 @@ export default function Dashboard() {
 
   const handleConnectGoogleCalendar = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'calendarReadOnly',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       if (error) throw error;
     } catch (error) {
@@ -200,7 +200,7 @@ export default function Dashboard() {
       setEvolvedPatientIds(evolvedSet);
 
       // 3. Busca eventos do Google Calendar se estiver conectado
-      if (googleAccessToken) {
+      if (hasCalendarAccess) {
         try {
           const events = await listGoogleCalendarEvents(
             googleAccessToken,
@@ -263,14 +263,14 @@ export default function Dashboard() {
     } finally {
       setCalendarLoading(false);
     }
-  }, [user, googleAccessToken, setGoogleAccessToken]);
+  }, [user, googleAccessToken, hasCalendarAccess, setGoogleAccessToken]);
 
   useEffect(() => {
     fetchCalendarAndPatients();
   }, [fetchCalendarAndPatients]);
 
   useEffect(() => {
-    if (!user || !googleAccessToken) return;
+    if (!user || !hasCalendarAccess) return;
 
     // Configura o intervalo de 5 minutos (300.000 ms) para atualização automática
     const intervalId = setInterval(() => {
@@ -638,7 +638,7 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          {googleAccessToken && (
+          {hasCalendarAccess && (
             <div className="flex w-full flex-col gap-2 sm:flex-row sm:flex-wrap md:w-auto md:justify-end">
               <button 
                 onClick={fetchCalendarAndPatients}
@@ -668,7 +668,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {!googleAccessToken ? (
+        {!hasCalendarAccess ? (
           <div className="py-6 text-center max-w-lg mx-auto flex flex-col items-center">
             <div className="bg-brand-bg text-brand-text-muted p-4 rounded-full mb-4">
               <Calendar size={36} className="text-brand-text-muted/60" />

@@ -1,55 +1,161 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { X, ShieldCheck, Lock, FileText, Calendar, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ShieldCheck, Lock, FileText, Calendar, AlertTriangle, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+
+type GoogleSecurityModalMode = 'login' | 'clinical' | 'calendar';
 
 interface GoogleSecurityModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   confirmLabel?: string;
+  mode?: GoogleSecurityModalMode;
 }
+
+type ModalSlide = {
+  eyebrow: string;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  accentClasses: string;
+  iconClasses: string;
+};
+
+const slidesByMode: Record<GoogleSecurityModalMode, {
+  headerTitle: string;
+  headerSubtitle: string;
+  confirmationLabel: string;
+  slides: ModalSlide[];
+}> = {
+  login: {
+    headerTitle: 'Antes de entrar no app',
+    headerSubtitle: 'Nesta primeira etapa, pedimos apenas o acesso mínimo para você autenticar sua conta com segurança.',
+    confirmationLabel: 'Continuar para o Google',
+    slides: [
+      {
+        eyebrow: 'Escopo mínimo',
+        title: 'O primeiro acesso usa somente o Drive essencial',
+        description: 'Nesta etapa, o app pede apenas o escopo necessário para criar e acessar arquivos vinculados à própria plataforma. Seus arquivos pessoais continuam fora do alcance.',
+        icon: Lock,
+        accentClasses: 'bg-brand-primary/10 text-brand-primary border-brand-primary/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Autorização em camadas',
+        title: 'Permissões adicionais aparecem só quando forem necessárias',
+        description: 'O acesso ao prontuário, à organização de pastas e à agenda é solicitado em etapas separadas, para que você veja exatamente o motivo de cada pedido.',
+        icon: Sparkles,
+        accentClasses: 'bg-brand-accent/10 text-brand-primary border-brand-accent/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Proteção',
+        title: 'A plataforma não acessa seus arquivos pessoais',
+        description: 'O app não navega pela sua conta inteira. A leitura e a escrita ficam limitadas ao fluxo clínico que você criar dentro da própria plataforma.',
+        icon: FileText,
+        accentClasses: 'bg-blue-50 text-blue-700 border-blue-100',
+        iconClasses: 'bg-white text-blue-600',
+      },
+      {
+        eyebrow: 'Controle',
+        title: 'Você pode revogar tudo a qualquer momento',
+        description: 'Se quiser, basta remover o acesso nas configurações da sua conta Google. O controle continua sendo seu o tempo todo.',
+        icon: AlertTriangle,
+        accentClasses: 'bg-amber-50 text-amber-700 border-amber-100',
+        iconClasses: 'bg-white text-amber-600',
+      },
+    ],
+  },
+  clinical: {
+    headerTitle: 'Conectar prontuário e arquivos clínicos',
+    headerSubtitle: 'Nesta etapa, o app pede acesso ao Drive necessário para organizar pastas e editar os prontuários que fazem parte do fluxo clínico.',
+    confirmationLabel: 'Conectar para prontuários',
+    slides: [
+      {
+        eyebrow: 'Drive do fluxo clínico',
+        title: 'Acesso apenas aos arquivos usados pela plataforma',
+        description: 'Usamos o escopo do Drive para trabalhar com os arquivos vinculados ao app. Isso permite criar documentos, abrir prontuários e organizar a estrutura da clínica.',
+        icon: Lock,
+        accentClasses: 'bg-brand-primary/10 text-brand-primary border-brand-primary/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Prontuários',
+        title: 'Os documentos do paciente ficam dentro do seu controle',
+        description: 'O app cria e atualiza o prontuário do paciente dentro do arquivo que pertence ao fluxo da plataforma. Nada é feito em arquivos aleatórios da sua conta.',
+        icon: FileText,
+        accentClasses: 'bg-brand-accent/10 text-brand-primary border-brand-accent/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Organização',
+        title: 'Listagem e busca servem para navegar nas pastas do app',
+        description: 'Quando exibimos pastas e documentos, é somente para você localizar o material clínico que já está no fluxo. Não há varredura da sua conta inteira.',
+        icon: Sparkles,
+        accentClasses: 'bg-blue-50 text-blue-700 border-blue-100',
+        iconClasses: 'bg-white text-blue-600',
+      },
+      {
+        eyebrow: 'Segurança',
+        title: 'O acesso pode ser revogado a qualquer momento',
+        description: 'Se você desconectar o Google depois, o app para de operar sobre esses arquivos até uma nova autorização sua.',
+        icon: AlertTriangle,
+        accentClasses: 'bg-amber-50 text-amber-700 border-amber-100',
+        iconClasses: 'bg-white text-amber-600',
+      },
+    ],
+  },
+  calendar: {
+    headerTitle: 'Conectar Google Agenda',
+    headerSubtitle: 'Aqui o acesso é somente de leitura para sincronizar compromissos e relacioná-los ao acompanhamento clínico.',
+    confirmationLabel: 'Conectar com agenda',
+    slides: [
+      {
+        eyebrow: 'Leitura apenas',
+        title: 'O app lê eventos, mas não altera sua agenda',
+        description: 'A permissão é usada para consultar os compromissos e cruzá-los com pacientes e evoluções. Não criamos, editamos nem excluímos eventos.',
+        icon: Calendar,
+        accentClasses: 'bg-brand-primary/10 text-brand-primary border-brand-primary/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Sincronização',
+        title: 'A agenda ajuda a localizar atendimentos rapidamente',
+        description: 'Ao ler os eventos, a plataforma identifica atendimentos relacionados aos pacientes ativos e acelera a rotina de conferência.',
+        icon: Sparkles,
+        accentClasses: 'bg-brand-accent/10 text-brand-primary border-brand-accent/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Sem escrita',
+        title: 'Nenhuma alteração é enviada para o Google Calendar',
+        description: 'Essa conexão serve só para leitura. Seu calendário continua exatamente como está no Google.',
+        icon: Lock,
+        accentClasses: 'bg-blue-50 text-blue-700 border-blue-100',
+        iconClasses: 'bg-white text-blue-600',
+      },
+      {
+        eyebrow: 'Controle',
+        title: 'Você continua podendo revogar o acesso quando quiser',
+        description: 'Caso não queira mais sincronizar a agenda, remova a permissão da conta Google e o app para de consultar os eventos.',
+        icon: AlertTriangle,
+        accentClasses: 'bg-amber-50 text-amber-700 border-amber-100',
+        iconClasses: 'bg-white text-amber-600',
+      },
+    ],
+  },
+};
 
 export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   isOpen,
   onClose,
   onConfirm,
-  confirmLabel = 'Autenticar com Google',
+  confirmLabel,
+  mode = 'login',
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  const slides = useMemo(() => ([
-    {
-      eyebrow: 'Escopo mínimo',
-      title: 'O app não enxerga seus arquivos pessoais',
-      description: 'Usamos a permissão restrita do Google Drive para acessar apenas arquivos que a própria plataforma cria. Fotos, PDFs, planilhas e documentos antigos continuam fora do alcance do app.',
-      icon: Lock,
-      accentClasses: 'bg-brand-primary/10 text-brand-primary border-brand-primary/15',
-      iconClasses: 'bg-white text-brand-primary'
-    },
-    {
-      eyebrow: 'Prontuários',
-      title: 'Somente os documentos do paciente são alterados',
-      description: 'Quando você cria ou atualiza um prontuário, a plataforma escreve apenas no documento daquele paciente. A IA não navega pela sua conta e não mexe em arquivos que não pertencem ao fluxo clínico.',
-      icon: FileText,
-      accentClasses: 'bg-brand-accent/10 text-brand-primary border-brand-accent/15',
-      iconClasses: 'bg-white text-brand-primary'
-    },
-    {
-      eyebrow: 'Agenda',
-      title: 'A sincronização é apenas leitura',
-      description: 'A leitura do Google Agenda serve só para associar compromissos aos pacientes e acelerar o trabalho. Não criamos, editamos nem excluímos eventos da sua agenda.',
-      icon: Calendar,
-      accentClasses: 'bg-blue-50 text-blue-700 border-blue-100',
-      iconClasses: 'bg-white text-blue-600'
-    },
-    {
-      eyebrow: 'Proteção total',
-      title: 'Nenhum arquivo será apagado pela plataforma',
-      description: 'A automação foi desenhada para registrar e organizar, nunca para destruir. Você mantém o controle e pode revogar o acesso ao Google a qualquer momento.',
-      icon: AlertTriangle,
-      accentClasses: 'bg-amber-50 text-amber-700 border-amber-100',
-      iconClasses: 'bg-white text-amber-600'
-    }
-  ]), []);
+  const modalConfig = useMemo(() => slidesByMode[mode], [mode]);
+  const { slides } = modalConfig;
 
   useEffect(() => {
     if (isOpen) {
@@ -64,30 +170,27 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-brand-border animate-in zoom-in-95 duration-200">
-        
-        {/* Header */}
         <div className="p-6 border-b border-brand-border flex items-center justify-between bg-stone-50/50">
           <div className="flex items-center space-x-2 text-brand-primary font-display font-bold text-lg">
             <ShieldCheck className="text-brand-primary stroke-[2]" size={24} />
-            <span>Segurança & Privacidade</span>
+            <span>{modalConfig.headerTitle}</span>
           </div>
-          <button 
-            type="button" 
-            onClick={onClose} 
+          <button
+            type="button"
+            onClick={onClose}
             className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Content */}
         <div className="p-6 space-y-5 overflow-hidden">
           <div className="text-center space-y-2">
             <h3 className="font-display font-extrabold text-brand-primary text-xl">
-              Antes de conectar sua conta Google
+              {modalConfig.headerTitle}
             </h3>
             <p className="text-sm text-brand-text-muted leading-relaxed max-w-xl mx-auto">
-              Veja por que o app pede acesso e o que ele realmente faz com seus dados. Você só avança quando estiver confortável.
+              {modalConfig.headerSubtitle}
             </p>
           </div>
 
@@ -139,11 +242,10 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-6 bg-stone-50 border-t border-brand-border flex flex-col gap-3">
           <div className="flex items-center justify-between text-xs text-brand-text-muted">
             <span>Slide {currentSlide + 1} de {slides.length}</span>
-            <span>{isLastSlide ? 'Você pode seguir para o Google' : 'Leia com calma antes de avançar'}</span>
+            <span>{isLastSlide ? 'Você pode prosseguir' : 'Leia com calma antes de avançar'}</span>
           </div>
           <div className="flex items-center justify-between gap-3">
             <button
@@ -179,12 +281,11 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
                 }}
                 className="btn-primary flex items-center justify-center gap-2 flex-1 py-2.5 text-sm"
               >
-                {confirmLabel}
+                {confirmLabel || modalConfig.confirmationLabel}
               </button>
             )}
           </div>
         </div>
-
       </div>
     </div>
   );

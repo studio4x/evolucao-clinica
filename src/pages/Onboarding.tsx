@@ -8,6 +8,7 @@ import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandA
 import { completeOnboarding, ensureOnboardingState, getOnboardingDestination, getOnboardingState, setOnboardingState } from '../utils/onboarding';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 
 const normalizeText = (text: string): string => {
   if (!text) return '';
@@ -67,7 +68,7 @@ type AgendaSyncSummary = {
 export default function Onboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, googleAccessToken, setGoogleAccessToken, isAuthReady } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, isAuthReady } = useAuthStore();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [syncingAgenda, setSyncingAgenda] = useState(false);
@@ -87,6 +88,7 @@ export default function Onboarding() {
   const isAgendaStep = activeStep === 'agenda';
   const agendaAlreadySynced = Boolean(onboardingState?.agendaSyncedAt);
   const isCompleteStep = activeStep === 'complete';
+  const hasCalendarAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.calendarReadOnly);
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -136,12 +138,10 @@ export default function Onboarding() {
 
   const executeGoogleConnection = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + '/onboarding?step=agenda'
-        }
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'calendarReadOnly',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + '/onboarding?step=agenda'
       });
       if (error) throw error;
     } catch (error) {
@@ -152,7 +152,7 @@ export default function Onboarding() {
 
   const handleSyncAgenda = async () => {
     if (!user?.id) return;
-    if (!googleAccessToken) {
+    if (!hasCalendarAccess) {
       alert('Sua sessão do Google precisa ser renovada antes de sincronizar a agenda.');
       return;
     }
@@ -646,10 +646,10 @@ export default function Onboarding() {
 
                 {/* Bloco de Ação de Agenda */}
                 <div className="w-full max-w-md px-2">
-                  {!googleAccessToken ? (
+                  {!hasCalendarAccess ? (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 space-y-3">
                       <p className="text-xs text-amber-800 leading-normal">
-                        Conecte a sua conta Google para podermos buscar os compromissos da agenda e as pastas do drive.
+                        Conecte a sua conta Google para buscarmos os compromissos da agenda nesta etapa do onboarding.
                       </p>
                       <button
                         type="button"
@@ -666,7 +666,7 @@ export default function Onboarding() {
                         Sessão conectada como: <span className="font-semibold text-brand-primary">{user?.email}</span>
                       </p>
                       
-                      {!syncSummary && !agendaAlreadySynced && (
+                      {!syncSummary && !agendaAlreadySynced && hasCalendarAccess && (
                         <button
                           type="button"
                           onClick={handleSyncAgenda}
@@ -890,6 +890,7 @@ export default function Onboarding() {
         onClose={() => setIsSecurityModalOpen(false)}
         onConfirm={executeGoogleConnection}
         confirmLabel="Conectar com Google"
+        mode="calendar"
       />
     </div>
   );

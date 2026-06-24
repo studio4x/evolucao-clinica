@@ -7,6 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 
 // Converte Markdown para HTML seguro para renderização
 const parseMarkdown = (md: string): string => {
@@ -52,7 +53,8 @@ export default function PatientDetail() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   // Estados para as configurações de lembretes
   const [reminderActive, setReminderActive] = useState(false);
@@ -132,14 +134,12 @@ export default function PatientDetail() {
       return;
     }
 
-    if (!googleAccessToken) {
+    if (!hasClinicalAccess) {
       alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       return;
     }
@@ -217,7 +217,7 @@ export default function PatientDetail() {
 
   useEffect(() => {
     async function loadHierarchy() {
-      if (exportDestination === 'new_doc' && patient?.target_folder_id && googleAccessToken) {
+      if (exportDestination === 'new_doc' && patient?.target_folder_id && hasClinicalAccess) {
         setLoadingFolderHierarchy(true);
         try {
           const hierarchy = await getFolderHierarchy(googleAccessToken, patient.target_folder_id);
@@ -233,7 +233,7 @@ export default function PatientDetail() {
       }
     }
     loadHierarchy();
-  }, [exportDestination, patient?.target_folder_id, googleAccessToken]);
+  }, [exportDestination, patient?.target_folder_id, googleAccessToken, hasClinicalAccess]);
 
   const handleSaveReminders = async () => {
     setSavingReminders(true);
@@ -342,14 +342,12 @@ export default function PatientDetail() {
   }, [id, user]);
 
   const handleGenerateAiReport = async () => {
-    if (!googleAccessToken) {
+    if (!hasClinicalAccess) {
       alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       return;
     }
@@ -445,13 +443,11 @@ export default function PatientDetail() {
     try {
       let currentToken = googleAccessToken;
       
-      if (!currentToken) {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-            redirectTo: window.location.origin + window.location.pathname
-          }
+      if (!currentToken || !hasClinicalAccess) {
+        const { error } = await requestGoogleOAuth({
+          requiredScopes: 'clinicalDocs',
+          currentGrantedScopes: googleGrantedScopes,
+          redirectTo: window.location.origin + window.location.pathname
         });
         if (error) throw error;
         return;
@@ -534,14 +530,12 @@ export default function PatientDetail() {
     if (!reportText || !reportId) return;
 
     let currentToken = googleAccessToken;
-    if (!currentToken) {
+    if (!currentToken || !hasClinicalAccess) {
       alert("Para salvar no Google Docs, precisamos renovar seu acesso ao Google. Você será redirecionado.");
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       return;
     }
@@ -650,14 +644,12 @@ export default function PatientDetail() {
     let currentToken = googleAccessToken;
 
     // 1. Check for Google Token
-    if (!currentToken) {
+    if (!currentToken || !hasClinicalAccess) {
       try {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-            redirectTo: window.location.origin + window.location.pathname
-          }
+        const { error } = await requestGoogleOAuth({
+          requiredScopes: 'clinicalDocs',
+          currentGrantedScopes: googleGrantedScopes,
+          redirectTo: window.location.origin + window.location.pathname
         });
         if (error) throw error;
         return;
@@ -1604,7 +1596,7 @@ export default function PatientDetail() {
                                   <Loader2 size={12} className="animate-spin text-brand-primary" />
                                   <span>Carregando estrutura de pastas...</span>
                                 </div>
-                              ) : !googleAccessToken ? (
+                              ) : !hasClinicalAccess ? (
                                 <div className="text-[10px] text-yellow-600 bg-yellow-50 p-2 rounded-xl border border-yellow-100">
                                   Conecte sua conta Google para visualizar o caminho.
                                 </div>

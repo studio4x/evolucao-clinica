@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
@@ -27,7 +28,8 @@ export default function NewEvolution() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, googleAccessToken, setGoogleAccessToken, isAuthReady } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, isAuthReady } = useAuthStore();
+  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const isOnboardingMode = searchParams.get('onboarding') === '1';
   
   const [patient, setPatient] = useState<any>(null);
@@ -326,12 +328,10 @@ export default function NewEvolution() {
           sessionDate
         })
       );
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       if (error) throw error;
     } catch (error) {
@@ -373,7 +373,7 @@ export default function NewEvolution() {
   }, [isAuthReady, recoveredDraft, id]);
 
   const handleOpenModal = async () => {
-    if (!patient || !patient.google_doc_id || !googleAccessToken) return;
+    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
     setIsModalOpen(true);
     setModalLoading(true);
     setModalError('');
@@ -394,7 +394,7 @@ export default function NewEvolution() {
   };
 
   const handleSaveModalText = async () => {
-    if (!patient || !patient.google_doc_id || !googleAccessToken) return;
+    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
     setModalSaving(true);
     setModalError('');
     try {
@@ -593,7 +593,7 @@ export default function NewEvolution() {
       return;
     }
 
-    if (!googleAccessToken) {
+    if (!hasClinicalAccess) {
       alert("Token do Google expirado ou não encontrado. Por favor, faça login novamente.");
       return;
     }
@@ -1056,7 +1056,7 @@ export default function NewEvolution() {
 
         {/* Status and Submit */}
         <div className="border-t border-brand-border pt-6">
-          {!googleAccessToken ? (
+          {!hasClinicalAccess ? (
             <div className="flex flex-col items-center justify-center p-6 bg-yellow-50 rounded-xl border border-yellow-100 space-y-3">
               <AlertCircle className="w-8 h-8 text-yellow-600" />
               <p className="text-yellow-900 font-medium text-center">
@@ -1221,7 +1221,7 @@ export default function NewEvolution() {
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-center space-y-3">
                   <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
                   <p className="text-sm text-red-700 font-medium">{modalError}</p>
-                  {!googleAccessToken && (
+                  {!hasClinicalAccess && (
                     <button
                       onClick={handleReauthenticate}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
@@ -1229,7 +1229,7 @@ export default function NewEvolution() {
                       Renovar Autenticação
                     </button>
                   )}
-                  {googleAccessToken && (
+                  {hasClinicalAccess && (
                     <button
                       onClick={handleOpenModal}
                       className="px-4 py-2 bg-stone-800 text-white rounded-xl hover:bg-stone-700 text-sm font-medium transition-colors"

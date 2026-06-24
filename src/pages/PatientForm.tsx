@@ -8,6 +8,7 @@ import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile 
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 
 declare global {
   interface Window {
@@ -54,7 +55,8 @@ export default function PatientForm() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isOnboardingMode = searchParams.get('onboarding') === '1';
-  const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const [ddi, setDdi] = useState('+55');
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isReauthenticating, setIsReauthenticating] = useState(false);
@@ -174,12 +176,10 @@ export default function PatientForm() {
   const executeGoogleReauthentication = async () => {
     setIsReauthenticating(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       if (error) throw error;
     } catch (error) {
@@ -191,7 +191,7 @@ export default function PatientForm() {
   };
 
   const handleCreateDoc = async () => {
-    if (!googleAccessToken) {
+    if (!hasClinicalAccess) {
       alert('Token do Google não encontrado. Por favor, renove sua autenticação.');
       return;
     }
@@ -293,12 +293,10 @@ export default function PatientForm() {
   const handleExplorerReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + window.location.pathname
-        }
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: window.location.origin + window.location.pathname
       });
       if (error) throw error;
     } catch (error) {
@@ -310,7 +308,7 @@ export default function PatientForm() {
   };
 
   const handleCreateNewFolder = async () => {
-    if (!googleAccessToken) return;
+    if (!hasClinicalAccess) return;
     
     // Pegar o local atual do explorador
     const currentFolder = explorerPath[explorerPath.length - 1];
@@ -692,7 +690,7 @@ export default function PatientForm() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {!googleAccessToken ? (
+              {!hasClinicalAccess ? (
                 <button
                   type="button"
                   onClick={handleReauthenticate}
@@ -777,7 +775,7 @@ export default function PatientForm() {
           <p className="text-xs text-brand-text-muted mt-2">
             {!formData.full_name && !formData.google_doc_id ? (
               <span className="text-red-500">Preencha o nome do paciente para liberar a criação do prontuário.</span>
-            ) : !googleAccessToken ? (
+            ) : !hasClinicalAccess ? (
               <span className="text-yellow-600">Sua sessão do Google expirou. Renove a autenticação para acessar o Drive.</span>
             ) : (
               formData.target_folder_id 
@@ -1018,6 +1016,7 @@ export default function PatientForm() {
         onClose={() => setIsSecurityModalOpen(false)}
         onConfirm={executeGoogleReauthentication}
         confirmLabel="Renovar acesso"
+        mode="clinical"
       />
     </div>
   );

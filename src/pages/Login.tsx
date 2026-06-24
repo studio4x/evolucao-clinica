@@ -1,4 +1,3 @@
-import { supabase } from '../supabaseClient';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -8,6 +7,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { requestGoogleOAuth } from '../services/googleAuth';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -37,19 +37,15 @@ export default function Login() {
     setLoading(true);
     try {
       const forcePrompt = localStorage.getItem('force_google_prompt') === 'true';
-      const queryParams: Record<string, string> = {};
       if (forcePrompt) {
-        queryParams.prompt = 'consent select_account';
         localStorage.removeItem('force_google_prompt');
       }
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + '/painel',
-          queryParams
-        }
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'login',
+        currentGrantedScopes: [],
+        redirectTo: window.location.origin + '/painel',
+        prompt: forcePrompt ? 'consent select_account' : undefined,
       });
       if (error) throw error;
     } catch (error: any) {
@@ -138,7 +134,7 @@ export default function Login() {
           </button>
           
           <p className="mt-5 text-center text-[11px] text-brand-text-muted leading-relaxed">
-            Tanto para criar uma nova conta quanto para entrar em uma conta existente, o acesso é feito de forma segura e <strong>exclusiva através da sua conta Google</strong>.
+            No primeiro acesso pedimos só o básico para entrar. As permissões do Drive, prontuário e agenda são solicitadas depois, apenas quando você chegar em cada etapa.
           </p>
         </div>
 
@@ -169,6 +165,7 @@ export default function Login() {
         isOpen={isSecurityModalOpen}
         onClose={() => setIsSecurityModalOpen(false)}
         onConfirm={executeGoogleLogin}
+        mode="login"
       />
     </div>
   );

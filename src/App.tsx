@@ -33,6 +33,7 @@ import LandingPage from './pages/LandingPage';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
+import { clearPendingGoogleScopes, readPendingGoogleScopes } from './services/googleAuth';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -131,7 +132,7 @@ function RootRoute() {
 
 
 export default function App() {
-  const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken } = useAuthStore();
+  const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleGrantedScopes } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
@@ -218,6 +219,11 @@ export default function App() {
             // Se o provider_token do Google mudou ou foi fornecido, atualiza
             if (session.provider_token && currentState.googleAccessToken !== session.provider_token) {
               setGoogleAccessToken(session.provider_token);
+              const pendingScopes = readPendingGoogleScopes();
+              if (pendingScopes.length > 0) {
+                setGoogleGrantedScopes(pendingScopes);
+                clearPendingGoogleScopes();
+              }
             }
             setAuthReady(true);
             return;
@@ -228,6 +234,11 @@ export default function App() {
           setUser(session.user);
           if (session.provider_token) {
             setGoogleAccessToken(session.provider_token);
+            const pendingScopes = readPendingGoogleScopes();
+            if (pendingScopes.length > 0) {
+              setGoogleGrantedScopes(pendingScopes);
+              clearPendingGoogleScopes();
+            }
           } else {
             // Opcional: em alguns fluxos do Supabase o token do provedor pode ser guardado no localStorage
             // se o redirecionamento limpar o provider_token após a primeira captura.
@@ -347,11 +358,13 @@ export default function App() {
         } else {
           await clearProfessionalChannel();
           pendingOnboardingNoticeRef.current = null;
+          setGoogleAccessToken(null);
+          setGoogleGrantedScopes([]);
           if (currentState.user !== null || currentState.profileStatus !== null) {
             setUser(null);
-            setGoogleAccessToken(null);
             setProfileInfo(null, null, null, null, null, null);
           }
+          clearPendingGoogleScopes();
         }
       } finally {
         authSessionHandlingRef.current = false;
