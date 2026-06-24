@@ -408,9 +408,9 @@ export default function PatientForm() {
       } else {
         navigate('/painel/patients');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving patient:", error);
-      alert("Erro ao salvar paciente.");
+      alert("Erro ao salvar paciente: " + (error?.message || error));
     } finally {
       setLoading(false);
     }
