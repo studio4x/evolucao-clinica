@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
-import { setOnboardingState } from '../utils/onboarding';
+import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
 
 declare global {
   interface Window {
@@ -965,21 +965,39 @@ export default function PatientForm() {
           </div>
         )}
 
-        <div className="flex justify-end space-x-3 pt-6 border-t border-brand-border">
-          <button
-            type="button"
-            onClick={() => navigate('/painel/patients')}
-            className="btn-outline"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary"
-          >
-            {loading ? 'Salvando...' : 'Salvar Paciente'}
-          </button>
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-brand-border">
+          {isOnboardingMode ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.")) {
+                  if (user?.id) completeOnboarding(user.id);
+                  navigate('/painel/dashboard');
+                }
+              }}
+              className="text-xs font-semibold text-brand-text-muted hover:text-red-500 transition-colors py-2 px-3 hover:bg-red-50 rounded-xl"
+            >
+              Sair do onboarding e configurar depois
+            </button>
+          ) : (
+            <div />
+          )}
+          <div className="flex space-x-3 w-full sm:w-auto justify-end">
+            <button
+              type="button"
+              onClick={() => navigate(isOnboardingMode ? '/onboarding' : '/painel/patients')}
+              className="btn-outline"
+            >
+              {isOnboardingMode ? 'Voltar' : 'Cancelar'}
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-primary"
+            >
+              {loading ? 'Salvando...' : 'Salvar Paciente'}
+            </button>
+          </div>
         </div>
       </form>
     </div>
