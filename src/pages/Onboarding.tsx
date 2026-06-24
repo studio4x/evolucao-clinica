@@ -7,6 +7,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { completeOnboarding, ensureOnboardingState, getOnboardingDestination, getOnboardingState, setOnboardingState } from '../utils/onboarding';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
+import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 
 const normalizeText = (text: string): string => {
   if (!text) return '';
@@ -72,6 +73,7 @@ export default function Onboarding() {
   const [syncingAgenda, setSyncingAgenda] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [syncSummary, setSyncSummary] = useState<AgendaSyncSummary | null>(null);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
 
   // Controle local do Slider de Apresentação (passo 'intro')
   const [activeSlide, setActiveSlide] = useState(0);
@@ -129,6 +131,10 @@ export default function Onboarding() {
   };
 
   const handleConnectGoogleCalendar = async () => {
+    setIsSecurityModalOpen(true);
+  };
+
+  const executeGoogleConnection = async () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -878,6 +884,12 @@ export default function Onboarding() {
         </div>
 
       </div>
+      
+      <GoogleSecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        onConfirm={executeGoogleConnection}
+      />
     </div>
   );
 }

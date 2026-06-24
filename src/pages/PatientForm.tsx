@@ -7,6 +7,7 @@ import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, C
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
+import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 
 declare global {
   interface Window {
@@ -55,6 +56,7 @@ export default function PatientForm() {
   const isOnboardingMode = searchParams.get('onboarding') === '1';
   const { user, googleAccessToken, setGoogleAccessToken } = useAuthStore();
   const [ddi, setDdi] = useState('+55');
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   
@@ -166,6 +168,10 @@ export default function PatientForm() {
   }, [isOnboardingMode, user?.id]);
 
   const handleReauthenticate = async () => {
+    setIsSecurityModalOpen(true);
+  };
+
+  const executeGoogleReauthentication = async () => {
     setIsReauthenticating(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
@@ -1006,6 +1012,12 @@ export default function PatientForm() {
           </div>
         </div>
       </form>
+
+      <GoogleSecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        onConfirm={executeGoogleReauthentication}
+      />
     </div>
   );
 }
