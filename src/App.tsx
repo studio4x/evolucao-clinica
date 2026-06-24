@@ -32,6 +32,7 @@ import TermsOfService from './pages/TermsOfService';
 import LandingPage from './pages/LandingPage';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from './utils/onboarding';
+import { InstallPrompt } from './components/common/InstallPrompt';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -364,6 +365,7 @@ export default function App() {
   return (
     <Router>
       <CookieConsent />
+      <InstallPrompt />
       
       <Routes>
         <Route path="/login" element={<Login />} />
