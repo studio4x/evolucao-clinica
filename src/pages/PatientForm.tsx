@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
@@ -50,6 +50,71 @@ const formatPhoneNumber = (value: string) => {
   return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
 };
 
+type PatientFormValues = {
+  full_name: string;
+  birth_date: string;
+  phone: string;
+  notes: string;
+  status: 'active' | 'inactive';
+  google_doc_id: string;
+  google_doc_name: string;
+  google_doc_url: string;
+  target_folder_id: string;
+  target_folder_name: string;
+  evolution_reminder_active: boolean;
+  session_days: number[];
+  session_time: string;
+  default_template_id: string;
+};
+
+type PatientFormDraft = {
+  formData: PatientFormValues;
+  ddi: string;
+  savedAt: string;
+};
+
+const PATIENT_FORM_DRAFT_PREFIX = 'evolucao-clinica:patient-form-draft';
+
+const emptyPatientFormValues = (): PatientFormValues => ({
+  full_name: '',
+  birth_date: '',
+  phone: '',
+  notes: '',
+  status: 'active',
+  google_doc_id: '',
+  google_doc_name: '',
+  google_doc_url: '',
+  target_folder_id: localStorage.getItem('last_google_folder_id') || '',
+  target_folder_name: localStorage.getItem('last_google_folder_name') || '',
+  evolution_reminder_active: false,
+  session_days: [],
+  session_time: '',
+  default_template_id: '',
+});
+
+const getPatientFormDraftKey = (userId: string) => `${PATIENT_FORM_DRAFT_PREFIX}:${userId}:${window.location.pathname}`;
+
+const readPatientFormDraft = (key: string): PatientFormDraft | null => {
+  const raw = sessionStorage.getItem(key);
+  if (!raw) return null;
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return parsed as PatientFormDraft;
+  } catch {
+    return null;
+  }
+};
+
+const writePatientFormDraft = (key: string, draft: PatientFormDraft) => {
+  sessionStorage.setItem(key, JSON.stringify(draft));
+};
+
+const clearPatientFormDraft = (key: string) => {
+  sessionStorage.removeItem(key);
+};
+
 export default function PatientForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -58,6 +123,7 @@ export default function PatientForm() {
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
   const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const restoredDraftUserRef = useRef<string | null>(null);
   const [ddi, setDdi] = useState('+55');
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isReauthenticating, setIsReauthenticating] = useState(false);
@@ -75,22 +141,7 @@ export default function PatientForm() {
   const [loading, setLoading] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
-    full_name: '',
-    birth_date: '',
-    phone: '',
-    notes: '',
-    status: 'active',
-    google_doc_id: '',
-    google_doc_name: '',
-    google_doc_url: '',
-    target_folder_id: localStorage.getItem('last_google_folder_id') || '',
-    target_folder_name: localStorage.getItem('last_google_folder_name') || '',
-    evolution_reminder_active: false,
-    session_days: [] as number[],
-    session_time: '',
-    default_template_id: ''
-  });
+  const [formData, setFormData] = useState<PatientFormValues>(emptyPatientFormValues);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -108,6 +159,51 @@ export default function PatientForm() {
     };
     fetchTemplates();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || id) return;
+    if (restoredDraftUserRef.current === user.id) return;
+
+    const draft = readPatientFormDraft(getPatientFormDraftKey(user.id));
+    restoredDraftUserRef.current = user.id;
+
+    if (!draft) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      ...draft.formData,
+    }));
+    setDdi(draft.ddi || '+55');
+
+    if (draft.formData.target_folder_id) {
+      localStorage.setItem('last_google_folder_id', draft.formData.target_folder_id);
+      localStorage.setItem('last_google_folder_name', draft.formData.target_folder_name || '');
+    }
+  }, [id, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || id) return;
+
+    const timer = window.setTimeout(() => {
+      writePatientFormDraft(getPatientFormDraftKey(user.id), {
+        formData,
+        ddi,
+        savedAt: new Date().toISOString(),
+      });
+    }, 200);
+
+    return () => window.clearTimeout(timer);
+  }, [ddi, formData, id, user?.id]);
+
+  useEffect(() => {
+    if (formData.target_folder_id) {
+      localStorage.setItem('last_google_folder_id', formData.target_folder_id);
+      localStorage.setItem('last_google_folder_name', formData.target_folder_name || '');
+    } else {
+      localStorage.removeItem('last_google_folder_id');
+      localStorage.removeItem('last_google_folder_name');
+    }
+  }, [formData.target_folder_id, formData.target_folder_name]);
 
   useEffect(() => {
     if (id) {
@@ -143,7 +239,7 @@ export default function PatientForm() {
               birth_date: data.birth_date || '',
               phone: formattedPhone,
               notes: data.notes || '',
-              status: data.status || 'active',
+              status: (data.status === 'inactive' ? 'inactive' : 'active'),
               google_doc_id: data.google_doc_id || '',
               google_doc_name: data.google_doc_name || '',
               google_doc_url: data.google_doc_url || '',
@@ -177,6 +273,14 @@ export default function PatientForm() {
   const executeGoogleReauthentication = async () => {
     setIsReauthenticating(true);
     try {
+      if (user?.id && !id) {
+        writePatientFormDraft(getPatientFormDraftKey(user.id), {
+          formData,
+          ddi,
+          savedAt: new Date().toISOString(),
+        });
+      }
+
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
@@ -294,6 +398,14 @@ export default function PatientForm() {
   const handleExplorerReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
+      if (user?.id && !id) {
+        writePatientFormDraft(getPatientFormDraftKey(user.id), {
+          formData,
+          ddi,
+          savedAt: new Date().toISOString(),
+        });
+      }
+
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
@@ -467,8 +579,14 @@ export default function PatientForm() {
           patientId: patientId,
           patientName: formData.full_name
         });
+        if (!id) {
+          clearPatientFormDraft(getPatientFormDraftKey(user.id));
+        }
         navigate(`/painel/patients/${patientId}/evolutions/new?onboarding=1`);
       } else {
+        if (!id) {
+          clearPatientFormDraft(getPatientFormDraftKey(user.id));
+        }
         navigate('/painel/patients');
       }
     } catch (error: any) {
@@ -576,7 +694,7 @@ export default function PatientForm() {
           <label className="block text-sm font-medium text-brand-text mb-1">Status</label>
           <select
             value={formData.status}
-            onChange={e => setFormData({...formData, status: e.target.value})}
+            onChange={e => setFormData({...formData, status: e.target.value as 'active' | 'inactive'})}
             className="input-field p-2"
           >
             <option value="active">Ativo</option>
@@ -993,6 +1111,9 @@ export default function PatientForm() {
               onClick={() => {
                 if (confirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.")) {
                   if (user?.id) completeOnboarding(user.id);
+                  if (user?.id && !id) {
+                    clearPatientFormDraft(getPatientFormDraftKey(user.id));
+                  }
                   navigate('/painel/dashboard');
                 }
               }}
