@@ -161,6 +161,9 @@ const fetchConfig = async () => {
         logo_light_url: parsed.logo_light_url || "",
         logo_dark_url: parsed.logo_dark_url || "",
         favicon_url: parsed.favicon_url || defaultConfig.favicon_url,
+        pwa_icon_192_url: parsed.pwa_icon_192_url || defaultConfig.pwa_icon_192_url,
+        pwa_icon_512_url: parsed.pwa_icon_512_url || defaultConfig.pwa_icon_512_url,
+        pwa_maskable_icon_url: parsed.pwa_maskable_icon_url || defaultConfig.pwa_maskable_icon_url,
         version: parsed.version || defaultConfig.version,
         colors: parsed.colors ? {
           ...defaultColors,

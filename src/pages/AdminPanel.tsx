@@ -163,6 +163,9 @@ export default function AdminPanel() {
   const [brandLogoLight, setBrandLogoLight] = useState('');
   const [brandLogoDark, setBrandLogoDark] = useState('');
   const [brandFavicon, setBrandFavicon] = useState('');
+  const [brandPwa192, setBrandPwa192] = useState('');
+  const [brandPwa512, setBrandPwa512] = useState('');
+  const [brandPwaMaskable, setBrandPwaMaskable] = useState('');
   const [brandVersion, setBrandVersion] = useState('1.0');
   const [brandColors, setBrandColors] = useState<BrandColors>(defaultColors);
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
@@ -172,6 +175,9 @@ export default function AdminPanel() {
   const [uploadingLight, setUploadingLight] = useState(false);
   const [uploadingDark, setUploadingDark] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const [uploadingPwa192, setUploadingPwa192] = useState(false);
+  const [uploadingPwa512, setUploadingPwa512] = useState(false);
+  const [uploadingPwaMaskable, setUploadingPwaMaskable] = useState(false);
 
   // Efeito para carregar as configurações da marca
   useEffect(() => {
@@ -190,6 +196,9 @@ export default function AdminPanel() {
             setBrandLogoLight(parsed.logo_light_url || '');
             setBrandLogoDark(parsed.logo_dark_url || '');
             setBrandFavicon(parsed.favicon_url || '');
+            setBrandPwa192(parsed.pwa_icon_192_url || '');
+            setBrandPwa512(parsed.pwa_icon_512_url || '');
+            setBrandPwaMaskable(parsed.pwa_maskable_icon_url || '');
             setBrandVersion(parsed.version || '1.0');
             if (parsed.colors) {
               setBrandColors({
@@ -219,13 +228,16 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
-  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon') => {
+  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon' | 'pwa192' | 'pwa512' | 'pwamaskable') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (type === 'light') setUploadingLight(true);
     else if (type === 'dark') setUploadingDark(true);
-    else setUploadingFavicon(true);
+    else if (type === 'favicon') setUploadingFavicon(true);
+    else if (type === 'pwa192') setUploadingPwa192(true);
+    else if (type === 'pwa512') setUploadingPwa512(true);
+    else if (type === 'pwamaskable') setUploadingPwaMaskable(true);
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -248,7 +260,10 @@ export default function AdminPanel() {
       if (publicUrlData?.publicUrl) {
         if (type === 'light') setBrandLogoLight(publicUrlData.publicUrl);
         else if (type === 'dark') setBrandLogoDark(publicUrlData.publicUrl);
-        else setBrandFavicon(publicUrlData.publicUrl);
+        else if (type === 'favicon') setBrandFavicon(publicUrlData.publicUrl);
+        else if (type === 'pwa192') setBrandPwa192(publicUrlData.publicUrl);
+        else if (type === 'pwa512') setBrandPwa512(publicUrlData.publicUrl);
+        else if (type === 'pwamaskable') setBrandPwaMaskable(publicUrlData.publicUrl);
       }
     } catch (err: any) {
       console.error(`Erro ao fazer upload do ${type}:`, err);
@@ -256,7 +271,10 @@ export default function AdminPanel() {
     } finally {
       if (type === 'light') setUploadingLight(false);
       else if (type === 'dark') setUploadingDark(false);
-      else setUploadingFavicon(false);
+      else if (type === 'favicon') setUploadingFavicon(false);
+      else if (type === 'pwa192') setUploadingPwa192(false);
+      else if (type === 'pwa512') setUploadingPwa512(false);
+      else if (type === 'pwamaskable') setUploadingPwaMaskable(false);
       e.target.value = '';
     }
   };
@@ -272,6 +290,9 @@ export default function AdminPanel() {
         logo_light_url: brandLogoLight,
         logo_dark_url: brandLogoDark,
         favicon_url: brandFavicon,
+        pwa_icon_192_url: brandPwa192,
+        pwa_icon_512_url: brandPwa512,
+        pwa_maskable_icon_url: brandPwaMaskable,
         version: newVersion,
         colors: brandColors
       };
@@ -4722,6 +4743,114 @@ export default function AdminPanel() {
                                 />
                               </label>
                               <p className="text-[10px] text-brand-text-muted">Recomendado: formato quadrado PNG ou SVG.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ícone PWA 192 */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Ícone do App PWA (192x192)</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">Exibido na tela inicial de celulares e tablets instalados.</p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-6">
+                            <div className="flex items-center justify-center p-4 bg-white border border-brand-border rounded-xl w-20 h-20 shadow-inner flex-shrink-0">
+                              {brandPwa192 ? (
+                                <img src={brandPwa192} alt="PWA 192 Preview" className="w-12 h-12 object-contain" />
+                              ) : (
+                                <span className="text-[10px] text-brand-text-muted text-center">192x192</span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2">
+                              <label className="btn-outline inline-flex text-center py-2.5 px-4 text-xs font-semibold cursor-pointer">
+                                {uploadingPwa192 ? (
+                                  <span className="flex items-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload Ícone 192</span>
+                                )}
+                                <input 
+                                  type="file" 
+                                  accept="image/png" 
+                                  className="hidden" 
+                                  disabled={uploadingPwa192}
+                                  onChange={(e) => handleBrandUpload(e, 'pwa192')} 
+                                />
+                              </label>
+                              <p className="text-[10px] text-brand-text-muted">Recomendado: 192x192px PNG quadrado.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ícone PWA 512 */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Ícone do App PWA (512x512)</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">Exibido na Splash Screen de inicialização do app no celular.</p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-6">
+                            <div className="flex items-center justify-center p-4 bg-white border border-brand-border rounded-xl w-20 h-20 shadow-inner flex-shrink-0">
+                              {brandPwa512 ? (
+                                <img src={brandPwa512} alt="PWA 512 Preview" className="w-12 h-12 object-contain" />
+                              ) : (
+                                <span className="text-[10px] text-brand-text-muted text-center">512x512</span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2">
+                              <label className="btn-outline inline-flex text-center py-2.5 px-4 text-xs font-semibold cursor-pointer">
+                                {uploadingPwa512 ? (
+                                  <span className="flex items-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload Ícone 512</span>
+                                )}
+                                <input 
+                                  type="file" 
+                                  accept="image/png" 
+                                  className="hidden" 
+                                  disabled={uploadingPwa512}
+                                  onChange={(e) => handleBrandUpload(e, 'pwa512')} 
+                                />
+                              </label>
+                              <p className="text-[10px] text-brand-text-muted">Recomendado: 512x512px PNG quadrado.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ícone PWA Mascarável */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Ícone Mascarável PWA (Maskable Icon)</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">Garante que o ícone do aplicativo se adapte a formatos redondos, quadrados ou de gota no Android, sem cortes indesejados.</p>
+                          </div>
+                          
+                          <div className="flex items-center space-x-6">
+                            <div className="flex items-center justify-center p-4 bg-white border border-brand-border rounded-xl w-20 h-20 shadow-inner flex-shrink-0">
+                              {brandPwaMaskable ? (
+                                <img src={brandPwaMaskable} alt="PWA Maskable Preview" className="w-12 h-12 object-contain" />
+                              ) : (
+                                <span className="text-[10px] text-brand-text-muted text-center">Mascarável</span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2">
+                              <label className="btn-outline inline-flex text-center py-2.5 px-4 text-xs font-semibold cursor-pointer">
+                                {uploadingPwaMaskable ? (
+                                  <span className="flex items-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload Mascarável</span>
+                                )}
+                                <input 
+                                  type="file" 
+                                  accept="image/png" 
+                                  className="hidden" 
+                                  disabled={uploadingPwaMaskable}
+                                  onChange={(e) => handleBrandUpload(e, 'pwamaskable')} 
+                                />
+                              </label>
+                              <p className="text-[10px] text-brand-text-muted">Recomendado: 512x512px PNG com margem segura de 10% a 15% ao redor do elemento central.</p>
                             </div>
                           </div>
                         </div>

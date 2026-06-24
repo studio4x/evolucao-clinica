@@ -225,6 +225,9 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
     let logoLightUrl = "";
     let logoDarkUrl = "";
     let faviconUrl = "";
+    let pwaIcon192 = "";
+    let pwaIcon512 = "";
+    let pwaMaskableIcon = "";
     let version = "1.0";
 
     if (!error && data && data.api_key) {
@@ -232,6 +235,9 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       logoLightUrl = parsed.logo_light_url || "";
       logoDarkUrl = parsed.logo_dark_url || "";
       faviconUrl = parsed.favicon_url || "";
+      pwaIcon192 = parsed.pwa_icon_192_url || "";
+      pwaIcon512 = parsed.pwa_icon_512_url || "";
+      pwaMaskableIcon = parsed.pwa_maskable_icon_url || "";
       version = parsed.version || "1.0";
     }
 
@@ -239,6 +245,9 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       logoLightUrl,
       logoDarkUrl,
       faviconUrl,
+      pwaIcon192,
+      pwaIcon512,
+      pwaMaskableIcon,
       version
     ].join("|"));
     const brandIcon = faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
@@ -261,19 +270,19 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       "prefer_related_applications": false,
       "icons": [
         {
-          "src": brandIconWithVersion,
+          "src": appendBrandVersion(pwaIcon192 || brandIcon, assetSignature),
           "sizes": "192x192",
           "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": brandIconWithVersion,
+          "src": appendBrandVersion(pwaIcon512 || brandIcon, assetSignature),
           "sizes": "512x512",
           "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": brandIconWithVersion,
+          "src": appendBrandVersion(pwaMaskableIcon || pwaIcon512 || brandIcon, assetSignature),
           "sizes": "512x512",
           "type": "image/png",
           "purpose": "maskable"
