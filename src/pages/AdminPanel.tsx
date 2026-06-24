@@ -111,6 +111,21 @@ export default function AdminPanel() {
 
   const activeTab = getActiveTab();
   const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
+  const adminNavItems = [
+    { key: 'professionals', label: 'Profissionais', icon: Users },
+    { key: 'gemini_config', label: 'Chave Gemini', icon: Key },
+    { key: 'token_usage', label: 'Consumo API', icon: BarChart3 },
+    { key: 'plans', label: 'Planos SaaS', icon: Coins },
+    { key: 'google_pay_config', label: 'Google Pay & Stripe', icon: CreditCard },
+    { key: 'transactions', label: 'Transações', icon: Clock },
+    { key: 'support', label: 'Suporte / Tickets', icon: LifeBuoy },
+    { key: 'push_notifications', label: 'Notificações Push', icon: Bell },
+    { key: 'email_notifications', label: 'E-mails do Sistema', icon: Mail },
+    { key: 'email_history', label: 'Histórico de E-mails', icon: Clock },
+    { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
+    { key: 'brand', label: 'Logotipo e PWA', icon: Globe },
+    { key: 'profile', label: 'Meu Perfil', icon: User }
+  ] as const;
 
   const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand') => {
     if (tab === 'professionals') navigate('/admin/professionals');
@@ -2207,150 +2222,26 @@ export default function AdminPanel() {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Menu Lateral do Admin */}
           <div className="w-full lg:w-64 flex-shrink-0">
-            <nav className="flex lg:flex-col gap-2 p-2 bg-white rounded-2xl border border-brand-border shadow-sm">
-              <button
-                onClick={() => setActiveTab('professionals')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'professionals'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Users size={18} />
-                <span>Profissionais</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('gemini_config')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'gemini_config'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Key size={18} />
-                <span>Chave Gemini</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('token_usage')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'token_usage'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <BarChart3 size={18} />
-                <span>Consumo API</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('plans')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'plans'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Coins size={18} />
-                <span>Planos SaaS</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('google_pay_config')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'google_pay_config'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <CreditCard size={18} />
-                <span>Google Pay & Stripe</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('transactions')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'transactions'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Clock size={18} />
-                <span>Transações</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('support')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'support'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <LifeBuoy size={18} />
-                <span>Suporte / Tickets</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('push_notifications')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'push_notifications'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Bell size={18} />
-                <span>Notificações Push</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('email_notifications')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'email_notifications'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Mail size={18} />
-                <span>E-mails do Sistema</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('email_history')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'email_history'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Clock size={18} />
-                <span>Histórico de E-mails</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('vapid_keys')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'vapid_keys'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Key size={18} />
-                <span>Chaves Web Push</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('brand')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'brand'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Globe size={18} />
-                <span>Logotipo e PWA</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('profile')}
-                className={`flex-1 lg:flex-none flex items-center justify-center lg:justify-start space-x-3 px-4 py-3 rounded-xl transition-all duration-200 cursor-pointer font-medium text-sm ${
-                  activeTab === 'profile'
-                    ? 'bg-brand-primary text-white shadow-sm'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <User size={18} />
-                <span>Meu Perfil</span>
-              </button>
+            <nav className="grid grid-cols-1 gap-2 p-2 bg-white rounded-2xl border border-brand-border shadow-sm sm:grid-cols-2 lg:flex lg:flex-col">
+              {adminNavItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.key;
+
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setActiveTab(item.key)}
+                    className={`flex w-full min-w-0 items-center justify-start gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-200 cursor-pointer ${
+                      isActive
+                        ? 'bg-brand-primary text-white shadow-sm'
+                        : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                    }`}
+                  >
+                    <Icon size={18} className="shrink-0" />
+                    <span className="min-w-0 leading-tight">{item.label}</span>
+                  </button>
+                );
+              })}
             </nav>
           </div>
 
