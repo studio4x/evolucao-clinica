@@ -63,7 +63,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (profileRole !== 'admin' && user && !isOnboardingComplete(user.id)) {
-    return <Navigate to={getOnboardingDestination(user.id)} replace />;
+    const destination = getOnboardingDestination(user.id);
+    const cleanDestPath = destination.split('?')[0];
+    if (location.pathname !== cleanDestPath) {
+      return <Navigate to={destination} replace />;
+    }
   }
 
   // Pula a validação de expiração se o usuário já estiver na página de assinatura
