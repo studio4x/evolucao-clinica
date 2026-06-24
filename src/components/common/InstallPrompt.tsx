@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Download, X, Share2, PlusSquare, ArrowUp, Info, HelpCircle } from 'lucide-react';
 import { useSiteConfig } from '../../hooks/useSiteConfig';
+import { appendBrandAssetVersion, getBrandAssetSignature } from '../../utils/brandAssets';
 
 export const InstallPrompt = () => {
   const siteConfig = useSiteConfig();
+  const assetSignature = getBrandAssetSignature(siteConfig);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showIOSModal, setShowIOSModal] = useState(false);
@@ -104,8 +106,18 @@ export const InstallPrompt = () => {
           
           {/* Lado Esquerdo: Ícone da Marca e Textos */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-brand-primary/10 text-brand-primary flex items-center justify-center flex-shrink-0 animate-pulse">
-              <Download size={20} className="stroke-[2]" />
+            <div className="w-10 h-10 rounded-2xl bg-white border border-brand-primary/10 flex items-center justify-center flex-shrink-0 shadow-sm overflow-hidden p-2">
+              {(siteConfig.logo_dark_url || siteConfig.logo_light_url) ? (
+                <img
+                  src={appendBrandAssetVersion(siteConfig.logo_dark_url || siteConfig.logo_light_url, assetSignature)}
+                  alt="App Icon"
+                  className="max-w-full max-h-full object-contain"
+                />
+              ) : (
+                <div className="w-full h-full rounded-lg bg-brand-primary/10 text-brand-primary flex items-center justify-center">
+                  <Download size={18} className="stroke-[2]" />
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <h4 className="text-xs font-bold text-brand-text truncate">

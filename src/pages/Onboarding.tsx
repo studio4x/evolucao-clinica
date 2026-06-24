@@ -361,7 +361,7 @@ export default function Onboarding() {
                 <img
                   src={appendBrandAssetVersion(siteConfig.logo_dark_url || siteConfig.logo_light_url, assetSignature)}
                   alt="Evolução Clínica"
-                  className="h-8 w-auto object-contain brightness-0 invert"
+                  className="h-8 w-auto object-contain brightness-0 invert p-0.5"
                 />
               </div>
             )}
@@ -447,7 +447,7 @@ export default function Onboarding() {
                 <img
                   src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
                   alt="Logo"
-                  className="h-8 w-auto object-contain md:hidden"
+                  className="h-8 w-auto object-contain md:hidden p-0.5"
                 />
               )}
               <span className="text-[10px] uppercase font-bold tracking-wider text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full hidden md:inline-block">

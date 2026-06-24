@@ -114,7 +114,7 @@ export default function PendingApproval() {
               <img
                 src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
                 alt="Evolução Clínica"
-                className="h-20 w-auto object-contain"
+                className="h-20 w-auto object-contain p-2"
               />
             </div>
           ) : (

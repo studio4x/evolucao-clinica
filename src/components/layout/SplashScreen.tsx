@@ -18,7 +18,7 @@ export function SplashScreen({ message = 'Carregando...' }: SplashScreenProps) {
                 <img
                   src={appendBrandAssetVersion(siteConfig.logo_dark_url, assetSignature)}
                   alt={siteConfig.pwa_short_name || "Evolução Clínica"}
-                  className="h-20 w-auto object-contain"
+                  className="h-20 w-auto object-contain p-2"
                 />
               </div>
             ) : (

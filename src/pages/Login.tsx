@@ -74,7 +74,7 @@ export default function Login() {
               <img
                 src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
                 alt="Evolução Clínica"
-                className="h-24 w-auto object-contain"
+                className="h-24 w-auto object-contain p-2"
               />
             </div>
           ) : (
