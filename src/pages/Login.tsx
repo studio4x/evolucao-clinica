@@ -7,10 +7,12 @@ import { ShieldCheck, Zap, Sparkles, Files, ArrowLeft } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
+import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 
 export default function Login() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const { user, isAuthReady, profileStatus, profileRole } = useAuthStore();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
@@ -31,7 +33,7 @@ export default function Login() {
     }
   }, [user, isAuthReady, profileStatus, profileRole, navigate]);
 
-  const handleLogin = async () => {
+  const executeGoogleLogin = async () => {
     setLoading(true);
     try {
       const forcePrompt = localStorage.getItem('force_google_prompt') === 'true';
@@ -110,7 +112,7 @@ export default function Login() {
           </div>
 
           <button
-            onClick={handleLogin}
+            onClick={() => setIsSecurityModalOpen(true)}
             disabled={loading}
             className="btn-primary w-full py-4 text-lg font-semibold tracking-wide shadow-lg shadow-brand-primary/20 hover:shadow-xl hover:shadow-brand-primary/30 transform transition-all hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center space-x-3"
           >
@@ -162,6 +164,12 @@ export default function Login() {
           <Link to="/terms" className="hover:text-brand-primary transition-colors">Termos de Serviço</Link>
         </div>
       </div>
+
+      <GoogleSecurityModal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        onConfirm={executeGoogleLogin}
+      />
     </div>
   );
 }

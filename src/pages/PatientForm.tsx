@@ -1017,6 +1017,7 @@ export default function PatientForm() {
         isOpen={isSecurityModalOpen}
         onClose={() => setIsSecurityModalOpen(false)}
         onConfirm={executeGoogleReauthentication}
+        confirmLabel="Renovar acesso"
       />
     </div>
   );

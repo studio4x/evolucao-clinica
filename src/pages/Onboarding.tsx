@@ -889,6 +889,7 @@ export default function Onboarding() {
         isOpen={isSecurityModalOpen}
         onClose={() => setIsSecurityModalOpen(false)}
         onConfirm={executeGoogleConnection}
+        confirmLabel="Conectar com Google"
       />
     </div>
   );
