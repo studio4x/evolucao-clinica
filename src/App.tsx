@@ -176,6 +176,17 @@ export default function App() {
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);
 
+  const clearInvalidProfessionalSession = async () => {
+    await clearProfessionalChannel();
+    pendingOnboardingNoticeRef.current = null;
+    setGoogleAccessToken(null);
+    setGoogleGrantedScopes([]);
+    setUser(null);
+    setProfileInfo(null, null, null, null, null, null);
+    clearPendingGoogleScopes();
+    await supabase.auth.signOut();
+  };
+
   const clearProfessionalChannel = async () => {
     if (professionalChannelRef.current) {
       const channel = professionalChannelRef.current;
@@ -296,8 +307,14 @@ export default function App() {
             pendingOnboardingNoticeRef.current = profileData.status === 'pending' ? session.user.id : null;
           } catch (profileError) {
             console.error('Erro ao processar perfil do profissional:', profileError);
-            if (currentState.profileStatus === null && currentState.profileRole === null) {
-              setProfileInfo('active', 'therapist', 'trial', 'trialing', null, null);
+            const isMissingProfile = profileError instanceof Error && (
+              profileError.message.includes('Perfil do profissional indisponível.') ||
+              profileError.message.includes('Não foi possível carregar o perfil do profissional.')
+            );
+
+            if (isMissingProfile || currentState.profileStatus === null || currentState.profileRole === null) {
+              await clearInvalidProfessionalSession();
+              return;
             }
           }
 
@@ -344,9 +361,12 @@ export default function App() {
                       if (updatedProf.status !== 'pending') {
                         pendingOnboardingNoticeRef.current = null;
                       }
+                    } else {
+                      await clearInvalidProfessionalSession();
                     }
                   } catch (profileError) {
                     console.error('Erro ao sincronizar status do profissional:', profileError);
+                    await clearInvalidProfessionalSession();
                   }
                 }
               )
