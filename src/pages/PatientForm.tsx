@@ -159,6 +159,12 @@ export default function PatientForm() {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (isOnboardingMode && user?.id) {
+      setOnboardingState(user.id, { step: 'patient' });
+    }
+  }, [isOnboardingMode, user?.id]);
+
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {

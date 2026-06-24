@@ -800,7 +800,7 @@ export default function NewEvolution() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
-            to={`/painel/patients/${id}`}
+            to={isOnboardingMode ? `/painel/patients/${id}/edit?onboarding=1` : `/painel/patients/${id}`}
             className="p-2 rounded-2xl hover:bg-white text-brand-text-muted hover:text-brand-text border border-transparent hover:border-brand-border bg-white/40 backdrop-blur-sm transition-all shadow-sm flex items-center justify-center"
             title="Voltar para o paciente"
           >
