@@ -34,11 +34,19 @@ export default function Login() {
   const handleLogin = async () => {
     setLoading(true);
     try {
+      const forcePrompt = localStorage.getItem('force_google_prompt') === 'true';
+      const queryParams: Record<string, string> = {};
+      if (forcePrompt) {
+        queryParams.prompt = 'consent select_account';
+        localStorage.removeItem('force_google_prompt');
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           scopes: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.metadata.readonly https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.events.readonly',
-          redirectTo: window.location.origin + '/painel'
+          redirectTo: window.location.origin + '/painel',
+          queryParams
         }
       });
       if (error) throw error;

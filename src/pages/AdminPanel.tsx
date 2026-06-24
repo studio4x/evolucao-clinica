@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -1553,6 +1553,34 @@ export default function AdminPanel() {
     }
   };
 
+  const handleForceGoogleDisconnect = async (prof: Professional) => {
+    if (updatingId) return;
+    const confirmed = window.confirm(
+      `Deseja forçar a desconexão do Google para ${prof.full_name} (${prof.google_email})?\n\n` +
+      'O usuário será desconectado e obrigado a selecionar a conta e conceder permissões novamente no próximo login.'
+    );
+    if (!confirmed) return;
+
+    setUpdatingId(prof.id);
+    try {
+      const { error } = await supabase
+        .from('professionals')
+        .update({
+          force_google_disconnect: true,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', prof.id);
+      if (error) throw error;
+
+      alert(`Desconexão do Google solicitada com sucesso para ${prof.full_name}.`);
+    } catch (error: any) {
+      console.error("Erro ao solicitar desconexão do Google:", error);
+      alert(`Falha ao solicitar desconexão: ${error.message}`);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
   const handleDeleteProfessional = async (prof: Professional) => {
     if (!user) return;
 
@@ -2694,7 +2722,17 @@ export default function AdminPanel() {
 
                                 <td className="p-4 pr-6 text-right whitespace-nowrap">
                                   {isAdminSelf ? (
-                                    <span className="text-xs text-brand-text-muted italic">Administrador Geral</span>
+                                    <div className="inline-flex gap-1.5 items-center">
+                                      <span className="text-xs text-brand-text-muted italic mr-2">Administrador Geral</span>
+                                      <button
+                                        onClick={() => handleForceGoogleDisconnect(prof)}
+                                        disabled={updatingId !== null}
+                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                        title="Forçar Desconexão do Google (Testes)"
+                                      >
+                                        <Link2Off className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   ) : (
                                     <div className="inline-flex gap-1.5">
                                       <button
@@ -2726,6 +2764,15 @@ export default function AdminPanel() {
                                           <Ban className="w-3.5 h-3.5" />
                                         </button>
                                       )}
+
+                                      <button
+                                        onClick={() => handleForceGoogleDisconnect(prof)}
+                                        disabled={updatingId !== null}
+                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                        title="Forçar Desconexão do Google (Testes)"
+                                      >
+                                        <Link2Off className="w-3.5 h-3.5" />
+                                      </button>
 
                                       <button
                                         onClick={() => handleDeleteProfessional(prof)}

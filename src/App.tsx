@@ -309,6 +309,17 @@ export default function App() {
                       .single();
 
                     if (updatedProf) {
+                      if (updatedProf.force_google_disconnect) {
+                        setGoogleAccessToken(null);
+                        localStorage.setItem('force_google_prompt', 'true');
+                        await supabase
+                          .from('professionals')
+                          .update({ force_google_disconnect: false })
+                          .eq('id', session.user.id);
+                        await supabase.auth.signOut();
+                        return;
+                      }
+
                       setProfileInfo(
                         updatedProf.status,
                         updatedProf.role || 'therapist',
