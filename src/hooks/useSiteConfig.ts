@@ -199,5 +199,12 @@ if (typeof window !== 'undefined') {
       window.location.reload();
     }
   };
+
+  // Escuta alterações de autenticação para recarregar as configurações de marca com o token correto
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+      void fetchConfig();
+    }
+  });
 }
 
