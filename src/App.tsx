@@ -132,7 +132,7 @@ function RootRoute() {
 
 
 export default function App() {
-  const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleGrantedScopes } = useAuthStore();
+  const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleGrantedScopes } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
@@ -180,6 +180,7 @@ export default function App() {
     await clearProfessionalChannel();
     pendingOnboardingNoticeRef.current = null;
     setGoogleAccessToken(null);
+    setGoogleAccessUserId(null);
     setGoogleGrantedScopes([]);
     setUser(null);
     setProfileInfo(null, null, null, null, null, null);
@@ -224,6 +225,12 @@ export default function App() {
 
       try {
         if (session) {
+          if (currentState.googleAccessUserId && currentState.googleAccessUserId !== session.user.id) {
+            setGoogleAccessToken(null);
+            setGoogleAccessUserId(null);
+            setGoogleGrantedScopes([]);
+          }
+
           const isSameUser = currentState.user?.id === session.user.id;
           const hasProfile = currentState.profileStatus !== null;
 
@@ -231,6 +238,7 @@ export default function App() {
             // Se o provider_token do Google mudou ou foi fornecido, atualiza
             if (session.provider_token && currentState.googleAccessToken !== session.provider_token) {
               setGoogleAccessToken(session.provider_token);
+              setGoogleAccessUserId(session.user.id);
               const pendingScopes = readPendingGoogleScopes();
               if (pendingScopes.length > 0) {
                 setGoogleGrantedScopes(pendingScopes);
@@ -246,6 +254,7 @@ export default function App() {
           setUser(session.user);
           if (session.provider_token) {
             setGoogleAccessToken(session.provider_token);
+            setGoogleAccessUserId(session.user.id);
             const pendingScopes = readPendingGoogleScopes();
             if (pendingScopes.length > 0) {
               setGoogleGrantedScopes(pendingScopes);
@@ -379,13 +388,10 @@ export default function App() {
         } else {
           await clearProfessionalChannel();
           pendingOnboardingNoticeRef.current = null;
-          setGoogleAccessToken(null);
-          setGoogleGrantedScopes([]);
           if (currentState.user !== null || currentState.profileStatus !== null) {
             setUser(null);
             setProfileInfo(null, null, null, null, null, null);
           }
-          clearPendingGoogleScopes();
         }
       } finally {
         authSessionHandlingRef.current = false;
@@ -407,7 +413,7 @@ export default function App() {
       clearProfessionalChannel();
       subscription.unsubscribe();
     };
-  }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken]);
+  }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleGrantedScopes]);
 
   return (
     <Router>

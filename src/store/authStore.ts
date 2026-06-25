@@ -5,6 +5,7 @@ import { User } from '@supabase/supabase-js';
 interface AuthState {
   user: User | null;
   googleAccessToken: string | null;
+  googleAccessUserId: string | null;
   googleGrantedScopes: string[];
   isAuthReady: boolean;
   profileStatus: 'active' | 'pending' | 'inactive' | null;
@@ -15,6 +16,7 @@ interface AuthState {
   trialEndsAt: string | null;
   setUser: (user: User | null) => void;
   setGoogleAccessToken: (token: string | null) => void;
+  setGoogleAccessUserId: (userId: string | null) => void;
   setGoogleGrantedScopes: (scopes: string[]) => void;
   setAuthReady: (ready: boolean) => void;
   setProfileInfo: (
@@ -32,6 +34,7 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       googleAccessToken: null,
+      googleAccessUserId: null,
       googleGrantedScopes: [],
       isAuthReady: false,
       profileStatus: null,
@@ -42,6 +45,7 @@ export const useAuthStore = create<AuthState>()(
       trialEndsAt: null,
       setUser: (user) => set({ user }),
       setGoogleAccessToken: (token) => set({ googleAccessToken: token }),
+      setGoogleAccessUserId: (userId) => set({ googleAccessUserId: userId }),
       setGoogleGrantedScopes: (googleGrantedScopes) => set({ googleGrantedScopes }),
       setAuthReady: (ready) => set({ isAuthReady: ready }),
       setProfileInfo: (status, role, subscriptionPlan = null, subscriptionStatus = null, subscriptionEndsAt = null, trialEndsAt = null) =>
@@ -59,6 +63,7 @@ export const useAuthStore = create<AuthState>()(
       // Persist Google auth state so we can preserve the latest access token and granted scopes.
       partialize: (state) => ({
         googleAccessToken: state.googleAccessToken,
+        googleAccessUserId: state.googleAccessUserId,
         googleGrantedScopes: state.googleGrantedScopes,
       }),
     }
