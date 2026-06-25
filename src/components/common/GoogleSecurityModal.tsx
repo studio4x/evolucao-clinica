@@ -23,12 +23,14 @@ type ModalSlide = {
 
 const slidesByMode: Record<GoogleSecurityModalMode, {
   headerTitle: string;
+  contentTitle: string;
   headerSubtitle: string;
   confirmationLabel: string;
   slides: ModalSlide[];
 }> = {
   login: {
     headerTitle: 'Segurança antes de conectar',
+    contentTitle: 'Entenda o acesso antes de continuar',
     headerSubtitle: 'Nesta primeira etapa, pedimos apenas o acesso mínimo para você autenticar sua conta com segurança.',
     confirmationLabel: 'Continuar para o Google',
     slides: [
@@ -67,7 +69,8 @@ const slidesByMode: Record<GoogleSecurityModalMode, {
     ],
   },
   clinical: {
-    headerTitle: 'Conectar prontuário e arquivos clínicos',
+    headerTitle: 'Acesso clínico ao Google',
+    contentTitle: 'Veja o que será liberado para o prontuário',
     headerSubtitle: 'Nesta etapa, o app pede acesso ao Drive necessário para organizar pastas e editar os prontuários que fazem parte do fluxo clínico.',
     confirmationLabel: 'Conectar para prontuários',
     slides: [
@@ -106,7 +109,8 @@ const slidesByMode: Record<GoogleSecurityModalMode, {
     ],
   },
   calendar: {
-    headerTitle: 'Conectar Google Agenda',
+    headerTitle: 'Sincronização com a agenda',
+    contentTitle: 'Revise a permissão antes de integrar a agenda',
     headerSubtitle: 'Aqui o acesso é somente de leitura para sincronizar compromissos e relacioná-los ao acompanhamento clínico.',
     confirmationLabel: 'Conectar com agenda',
     slides: [
@@ -145,7 +149,8 @@ const slidesByMode: Record<GoogleSecurityModalMode, {
     ],
   },
   onboarding: {
-    headerTitle: 'Antes de continuar o onboarding',
+    headerTitle: 'Etapa de autenticação',
+    contentTitle: 'Prepare a conta Google para seguir no fluxo',
     headerSubtitle: 'Para avançar para a evolução, a conta Google precisa estar vinculada e o prontuário do paciente precisa existir no fluxo clínico.',
     confirmationLabel: 'Autorizar acesso ao Google',
     slides: [
@@ -278,7 +283,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
         <div className="p-6 space-y-5 overflow-hidden">
           <div className="text-center space-y-2">
             <h3 className="font-display font-extrabold text-brand-primary text-xl">
-              {modalConfig.headerTitle}
+              {modalConfig.contentTitle}
             </h3>
             <p className="text-sm text-brand-text-muted leading-relaxed max-w-xl mx-auto">
               {modalConfig.headerSubtitle}
