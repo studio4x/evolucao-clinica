@@ -262,6 +262,109 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
   }
 }
 
+async function revokeGoogleGrant(googleAccessToken?: string | null) {
+  const token = String(googleAccessToken || "").trim();
+  if (!token) {
+    return { revoked: false, skipped: true };
+  }
+
+  try {
+    const response = await fetch("https://oauth2.googleapis.com/revoke", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: new URLSearchParams({ token })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.warn("[Account] Não foi possível revogar o acesso do Google:", response.status, errorText);
+      return { revoked: false, skipped: false };
+    }
+
+    return { revoked: true, skipped: false };
+  } catch (err) {
+    console.warn("[Account] Falha ao tentar revogar o Google:", err);
+    return { revoked: false, skipped: false };
+  }
+}
+
+async function deleteProfessionalAccount(targetUserId: string) {
+  if (!targetUserId) {
+    throw new Error("ID do usuário ausente");
+  }
+
+  const { data: targetProf, error: targetProfError } = await supabaseAdmin
+    .from("professionals")
+    .select("id, full_name, google_email, role")
+    .eq("id", targetUserId)
+    .single();
+
+  if (targetProfError || !targetProf) {
+    throw new Error("Usuário não encontrado.");
+  }
+
+  const cleanupTargets: Array<{ table: string; column: string }> = [
+    { table: "usage_logs", column: "professional_id" },
+    { table: "evolutions", column: "professional_id" },
+    { table: "patient_reports", column: "professional_id" },
+    { table: "patients", column: "professional_id" },
+    { table: "transactions", column: "professional_id" },
+    { table: "support_tickets", column: "user_id" },
+    { table: "notifications", column: "user_id" },
+    { table: "push_subscriptions", column: "user_id" }
+  ];
+
+  for (const target of cleanupTargets) {
+    const { error } = await supabaseAdmin
+      .from(target.table)
+      .delete()
+      .eq(target.column, targetUserId);
+
+    if (error) {
+      throw new Error(`Falha ao remover dados de ${target.table}: ${error.message}`);
+    }
+  }
+
+  const { data: supportFiles, error: supportFilesError } = await supabaseAdmin
+    .storage
+    .from("support_attachments")
+    .list(`support/${targetUserId}`, { limit: 1000 });
+
+  if (supportFilesError) {
+    throw new Error(`Falha ao listar anexos de suporte do usuário: ${supportFilesError.message}`);
+  }
+
+  if (supportFiles && supportFiles.length > 0) {
+    const supportPaths = supportFiles.map((file) => `support/${targetUserId}/${file.name}`);
+    const { error: supportRemoveError } = await supabaseAdmin
+      .storage
+      .from("support_attachments")
+      .remove(supportPaths);
+
+    if (supportRemoveError) {
+      throw new Error(`Falha ao remover anexos de suporte do usuário: ${supportRemoveError.message}`);
+    }
+  }
+
+  const { error: profDeleteError } = await supabaseAdmin
+    .from("professionals")
+    .delete()
+    .eq("id", targetUserId);
+
+  if (profDeleteError) {
+    throw new Error(`Falha ao remover o perfil do usuário: ${profDeleteError.message}`);
+  }
+
+  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+  if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
+    throw new Error(`Falha ao remover a conta de autenticação: ${authDeleteError.message}`);
+  }
+
+  return targetProf;
+}
+
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -558,72 +661,7 @@ app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async 
   }
 
   try {
-    const { data: targetProf, error: targetProfError } = await supabaseAdmin
-      .from("professionals")
-      .select("id, full_name, google_email, role")
-      .eq("id", targetUserId)
-      .single();
-
-    if (targetProfError || !targetProf) {
-      return res.status(404).json({ error: "Usuário não encontrado." });
-    }
-
-    const cleanupTargets: Array<{ table: string; column: string }> = [
-      { table: "usage_logs", column: "professional_id" },
-      { table: "evolutions", column: "professional_id" },
-      { table: "patient_reports", column: "professional_id" },
-      { table: "patients", column: "professional_id" },
-      { table: "transactions", column: "professional_id" },
-      { table: "support_tickets", column: "user_id" },
-      { table: "notifications", column: "user_id" },
-      { table: "push_subscriptions", column: "user_id" }
-    ];
-
-    for (const target of cleanupTargets) {
-      const { error } = await supabaseAdmin
-        .from(target.table)
-        .delete()
-        .eq(target.column, targetUserId);
-
-      if (error) {
-        throw new Error(`Falha ao remover dados de ${target.table}: ${error.message}`);
-      }
-    }
-
-    const { data: supportFiles, error: supportFilesError } = await supabaseAdmin
-      .storage
-      .from("support_attachments")
-      .list(`support/${targetUserId}`, { limit: 1000 });
-
-    if (supportFilesError) {
-      throw new Error(`Falha ao listar anexos de suporte do usuário: ${supportFilesError.message}`);
-    }
-
-    if (supportFiles && supportFiles.length > 0) {
-      const supportPaths = supportFiles.map((file) => `support/${targetUserId}/${file.name}`);
-      const { error: supportRemoveError } = await supabaseAdmin
-        .storage
-        .from("support_attachments")
-        .remove(supportPaths);
-
-      if (supportRemoveError) {
-        throw new Error(`Falha ao remover anexos de suporte do usuário: ${supportRemoveError.message}`);
-      }
-    }
-
-    const { error: profDeleteError } = await supabaseAdmin
-      .from("professionals")
-      .delete()
-      .eq("id", targetUserId);
-
-    if (profDeleteError) {
-      throw new Error(`Falha ao remover o perfil do usuário: ${profDeleteError.message}`);
-    }
-
-    const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
-    if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
-      throw new Error(`Falha ao remover a conta de autenticação: ${authDeleteError.message}`);
-    }
+    const targetProf = await deleteProfessionalAccount(targetUserId);
 
     return res.json({
       success: true,
@@ -632,6 +670,25 @@ app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async 
   } catch (err: any) {
     console.error("Erro ao excluir usuário do admin:", err);
     return res.status(500).json({ error: err.message || "Erro ao excluir usuário." });
+  }
+});
+
+app.post("/api/account/delete", requireAuth, async (req: any, res) => {
+  try {
+    const { googleAccessToken } = req.body || {};
+
+    const googleRevokeResult = await revokeGoogleGrant(googleAccessToken);
+    const targetProf = await deleteProfessionalAccount(req.user.id);
+
+    return res.json({
+      success: true,
+      googleRevoked: googleRevokeResult.revoked,
+      googleRevokeSkipped: googleRevokeResult.skipped,
+      message: `A conta de ${targetProf.full_name || targetProf.google_email || req.user.id} foi excluída definitivamente.`
+    });
+  } catch (err: any) {
+    console.error("Erro ao excluir a própria conta:", err);
+    return res.status(500).json({ error: err.message || "Erro ao excluir a conta." });
   }
 });
 

@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { User as UserIcon, Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw } from 'lucide-react';
+import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle } from 'lucide-react';
 import { clearOnboardingState } from '../utils/onboarding';
+import { clearPendingGoogleScopes } from '../services/googleAuth';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, setUser } = useAuthStore();
+  const { user, googleAccessToken, setUser, setGoogleAccessToken, setGoogleGrantedScopes, setProfileInfo } = useAuthStore();
   
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -17,8 +18,12 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resettingOnboarding, setResettingOnboarding] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<1 | 2 | null>(null);
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState('');
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -135,6 +140,79 @@ export default function Profile() {
       navigate('/onboarding', { replace: true });
     } finally {
       setResettingOnboarding(false);
+    }
+  };
+
+  const openDeleteAccountModal = () => {
+    setDeleteStep(1);
+    setDeleteConfirmationText('');
+    setDeleteErrorMessage('');
+  };
+
+  const closeDeleteAccountModal = () => {
+    if (deletingAccount) return;
+    setDeleteStep(null);
+    setDeleteConfirmationText('');
+    setDeleteErrorMessage('');
+  };
+
+  const proceedToDeleteConfirmation = () => {
+    setDeleteStep(2);
+    setDeleteConfirmationText('');
+    setDeleteErrorMessage('');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!user) return;
+
+    if (deleteConfirmationText.trim().toUpperCase() !== 'EXCLUIR') {
+      setDeleteErrorMessage('Digite EXCLUIR para confirmar.');
+      return;
+    }
+
+    setDeletingAccount(true);
+    setDeleteErrorMessage('');
+
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+
+      const session = sessionData.session;
+      if (!session?.access_token) {
+        throw new Error('Sua sessão não está disponível. Faça login novamente e tente outra vez.');
+      }
+
+      const response = await fetch('/api/account/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          googleAccessToken
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || 'Não foi possível excluir a conta.');
+      }
+
+      if (user?.id) {
+        clearOnboardingState(user.id);
+      }
+      setGoogleAccessToken(null);
+      setGoogleGrantedScopes([]);
+      setProfileInfo(null, null, null, null, null, null);
+      clearPendingGoogleScopes();
+      setUser(null);
+      await supabase.auth.signOut().catch(() => {});
+      navigate('/', { replace: true });
+    } catch (err: any) {
+      console.error('Erro ao excluir conta:', err);
+      setDeleteErrorMessage(err.message || 'Ocorreu um erro ao excluir a conta.');
+    } finally {
+      setDeletingAccount(false);
     }
   };
 
@@ -366,6 +444,30 @@ export default function Profile() {
               </button>
             </div>
 
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start space-x-3">
+                <div className="p-2 bg-white rounded-xl border border-red-200 text-red-600 flex-shrink-0 shadow-sm">
+                  <Trash2 size={18} />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-semibold text-red-700">Excluir conta definitivamente</h4>
+                  <p className="text-xs text-red-700/90 leading-relaxed max-w-xl">
+                    Esta ação remove seu acesso ao aplicativo, revoga a vinculação com o Google quando possível e apaga
+                    permanentemente os dados associados ao seu cadastro.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={openDeleteAccountModal}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors"
+              >
+                <Trash2 className="h-4 w-4" />
+                Excluir minha conta
+              </button>
+            </div>
+
             {/* Ações */}
             <div className="flex justify-end pt-4 border-t border-brand-border/40">
               <button
@@ -388,6 +490,133 @@ export default function Profile() {
           </form>
         </div>
       </div>
+
+      {deleteStep && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-red-100 overflow-hidden">
+            <div className="bg-gradient-to-r from-red-600 to-red-500 px-6 py-5 text-white">
+              <div className="flex items-center gap-3">
+                <div className="rounded-2xl bg-white/15 p-2.5">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold">
+                    {deleteStep === 1 ? 'Excluir conta definitivamente' : 'Confirmação final'}
+                  </h3>
+                  <p className="text-sm text-white/85">
+                    {deleteStep === 1
+                      ? 'Leia com atenção antes de seguir.'
+                      : 'Digite a palavra de confirmação para concluir.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-5">
+              {deleteStep === 1 ? (
+                <>
+                  <p className="text-sm text-brand-text leading-relaxed">
+                    Ao continuar, você removerá permanentemente sua conta do app. Isso inclui o desligamento da sessão
+                    atual, a desvinculação do Google quando a revogação for aceita e a exclusão dos dados associados ao
+                    seu cadastro.
+                  </p>
+
+                  <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-800 space-y-2">
+                    <p className="font-semibold">O que será perdido:</p>
+                    <ul className="space-y-1.5 list-disc pl-5">
+                      <li>Acesso ao painel, pacientes e evoluções.</li>
+                      <li>Notificações, preferências e dados vinculados ao perfil.</li>
+                      <li>Integração com o Google vinculada à conta.</li>
+                    </ul>
+                  </div>
+
+                  {deleteErrorMessage && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {deleteErrorMessage}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-brand-text leading-relaxed">
+                    Para confirmar, digite <strong>EXCLUIR</strong> no campo abaixo. Esta é a última etapa antes da
+                    exclusão definitiva.
+                  </p>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                      Digite EXCLUIR
+                    </label>
+                    <input
+                      type="text"
+                      value={deleteConfirmationText}
+                      onChange={(e) => {
+                        setDeleteConfirmationText(e.target.value);
+                        if (deleteErrorMessage) setDeleteErrorMessage('');
+                      }}
+                      className="input-field p-3"
+                      placeholder="EXCLUIR"
+                      disabled={deletingAccount}
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    A ação não poderá ser desfeita depois da confirmação.
+                  </div>
+
+                  {deleteErrorMessage && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                      {deleteErrorMessage}
+                    </div>
+                  )}
+                </>
+              )}
+
+              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={closeDeleteAccountModal}
+                  disabled={deletingAccount}
+                  className="inline-flex items-center justify-center rounded-xl border border-brand-border bg-white px-4 py-2.5 text-sm font-semibold text-brand-text hover:bg-brand-bg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Cancelar
+                </button>
+
+                {deleteStep === 1 ? (
+                  <button
+                    type="button"
+                    onClick={proceedToDeleteConfirmation}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors"
+                  >
+                    <AlertTriangle className="h-4 w-4" />
+                    Entendi, continuar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleDeleteAccount}
+                    disabled={deletingAccount || deleteConfirmationText.trim().toUpperCase() !== 'EXCLUIR'}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {deletingAccount ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Excluindo...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4" />
+                        Excluir definitivamente
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
