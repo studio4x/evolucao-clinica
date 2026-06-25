@@ -351,20 +351,20 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
                       ref={(node) => {
                         slideRefs.current[index] = node;
                       }}
-                      className={`h-full min-h-[280px] sm:min-h-[300px] rounded-3xl border p-5 sm:p-6 flex flex-col justify-between gap-4 ${slide.accentClasses}`}
+                      className={`h-full min-h-[240px] sm:min-h-[260px] rounded-3xl border p-4 sm:p-5 flex flex-col justify-start gap-3 ${slide.accentClasses}`}
                     >
-                      <div className="flex items-start gap-4">
-                        <div className={`p-3 rounded-2xl shadow-sm ${slide.iconClasses}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`p-2.5 rounded-2xl shadow-sm ${slide.iconClasses}`}>
                           <SlideIcon size={22} />
                         </div>
-                        <div className="space-y-2">
-                          <span className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-75">
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
                             {slide.eyebrow}
                           </span>
-                          <h4 className="text-lg sm:text-xl font-display font-bold text-brand-primary">
+                          <h4 className="text-base sm:text-lg font-display font-bold text-brand-primary leading-tight">
                             {slide.title}
                           </h4>
-                          <p className="text-sm text-brand-text-muted leading-relaxed">
+                          <p className="text-sm text-brand-text-muted leading-relaxed max-w-prose">
                             {slide.description}
                           </p>
                         </div>
