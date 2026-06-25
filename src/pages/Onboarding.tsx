@@ -353,7 +353,7 @@ export default function Onboarding() {
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
-        className="w-full min-h-screen md:min-h-0 md:h-[620px] md:max-w-4xl bg-white md:rounded-[32px] md:shadow-[0_20px_60px_-15px_rgba(0,92,19,0.12)] border-0 md:border border-brand-border/40 overflow-hidden flex flex-col md:grid md:grid-cols-12 relative z-10 transition-all duration-350"
+        className="w-full min-h-screen md:min-h-[760px] md:h-[760px] md:max-w-4xl bg-white md:rounded-[32px] md:shadow-[0_20px_60px_-15px_rgba(0,92,19,0.12)] border-0 md:border border-brand-border/40 overflow-hidden flex flex-col md:grid md:grid-cols-12 relative z-10 transition-all duration-350"
       >
         
         {/* COLUNA ESQUERDA: Barra de Progresso Lateral (Apenas Desktop) */}
