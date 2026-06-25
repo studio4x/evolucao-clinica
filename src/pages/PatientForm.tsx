@@ -68,6 +68,7 @@ type PatientFormValues = {
 };
 
 type PatientFormDraft = {
+  patientId?: string;
   formData: PatientFormValues;
   ddi: string;
   savedAt: string;
@@ -126,6 +127,7 @@ export default function PatientForm() {
   const restoredDraftUserRef = useRef<string | null>(null);
   const [ddi, setDdi] = useState('+55');
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   
@@ -142,6 +144,9 @@ export default function PatientForm() {
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [formData, setFormData] = useState<PatientFormValues>(emptyPatientFormValues);
+  const pendingPatientIdRef = useRef<string | null>(null);
+
+  const getDraftPatientId = () => pendingPatientIdRef.current || id || undefined;
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -169,6 +174,8 @@ export default function PatientForm() {
 
     if (!draft) return;
 
+    pendingPatientIdRef.current = draft.patientId || null;
+
     setFormData((prev) => ({
       ...prev,
       ...draft.formData,
@@ -186,6 +193,7 @@ export default function PatientForm() {
 
     const timer = window.setTimeout(() => {
       writePatientFormDraft(getPatientFormDraftKey(user.id), {
+        patientId: getDraftPatientId(),
         formData,
         ddi,
         savedAt: new Date().toISOString(),
@@ -275,6 +283,7 @@ export default function PatientForm() {
     try {
       if (user?.id && !id) {
         writePatientFormDraft(getPatientFormDraftKey(user.id), {
+          patientId: getDraftPatientId(),
           formData,
           ddi,
           savedAt: new Date().toISOString(),
@@ -401,6 +410,7 @@ export default function PatientForm() {
     try {
       if (user?.id && !id) {
         writePatientFormDraft(getPatientFormDraftKey(user.id), {
+          patientId: getDraftPatientId(),
           formData,
           ddi,
           savedAt: new Date().toISOString(),
@@ -525,7 +535,8 @@ export default function PatientForm() {
     
     setLoading(true);
     try {
-      const patientId = id || uuidv4();
+      const patientId = id || pendingPatientIdRef.current || uuidv4();
+      const existingPatientId = id || pendingPatientIdRef.current;
       
       const patientData: any = {
         id: patientId,
@@ -549,17 +560,17 @@ export default function PatientForm() {
       patientData.target_folder_id = formData.target_folder_id || null;
       patientData.target_folder_name = formData.target_folder_name || null;
 
-      if (id) {
+      if (existingPatientId) {
         const { error } = await supabase
           .from('patients')
           .update(patientData)
-          .eq('id', id);
+          .eq('id', existingPatientId);
         if (error) throw error;
         void sendNotification({
           title: 'ℹ️ Dados do Paciente Atualizados',
           content: `As informações do paciente ${formData.full_name} foram atualizadas com sucesso.`,
           type: 'info',
-          link: `/painel/patients/${id}`
+          link: `/painel/patients/${existingPatientId}`
         });
       } else {
         patientData.created_at = new Date().toISOString();
@@ -576,19 +587,59 @@ export default function PatientForm() {
       }
 
       if (isOnboardingMode) {
+        pendingPatientIdRef.current = patientId;
+
+        if (!googleAccessToken) {
+          setOnboardingState(user.id, {
+            step: 'patient',
+            patientId,
+            patientName: formData.full_name
+          });
+          if (!id) {
+            writePatientFormDraft(getPatientFormDraftKey(user.id), {
+              patientId,
+              formData,
+              ddi,
+              savedAt: new Date().toISOString(),
+            });
+          }
+          setIsOnboardingGateModalOpen(true);
+          return;
+        }
+
+        if (!formData.google_doc_id) {
+          setOnboardingState(user.id, {
+            step: 'patient',
+            patientId,
+            patientName: formData.full_name
+          });
+          if (!id) {
+            writePatientFormDraft(getPatientFormDraftKey(user.id), {
+              patientId,
+              formData,
+              ddi,
+              savedAt: new Date().toISOString(),
+            });
+          }
+          alert('Antes de seguir para a evolução, crie ou vincule o prontuário do paciente no Google Docs.');
+          return;
+        }
+
         setOnboardingState(user.id, {
           step: 'evolution',
-          patientId: patientId,
+          patientId,
           patientName: formData.full_name
         });
         if (!id) {
           clearPatientFormDraft(getPatientFormDraftKey(user.id));
         }
+        pendingPatientIdRef.current = null;
         navigate(`/painel/patients/${patientId}/evolutions/new?onboarding=1`);
       } else {
         if (!id) {
           clearPatientFormDraft(getPatientFormDraftKey(user.id));
         }
+        pendingPatientIdRef.current = null;
         navigate('/painel/patients');
       }
     } catch (error: any) {
@@ -1151,6 +1202,15 @@ export default function PatientForm() {
         onConfirm={executeGoogleReauthentication}
         confirmLabel="Autorizar acesso"
         mode="clinical"
+      />
+
+      <GoogleSecurityModal
+        isOpen={isOnboardingGateModalOpen}
+        onClose={() => setIsOnboardingGateModalOpen(false)}
+        onConfirm={executeGoogleReauthentication}
+        confirmLabel="Autorizar acesso ao Google"
+        mode="onboarding"
+        showCloseButton={false}
       />
     </div>
   );

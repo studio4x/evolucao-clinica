@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
@@ -29,7 +30,8 @@ export default function NewEvolution() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, isAuthReady } = useAuthStore();
-  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const hasGoogleSession = Boolean(googleAccessToken);
+  const hasClinicalAccess = hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const isOnboardingMode = searchParams.get('onboarding') === '1';
   
   const [patient, setPatient] = useState<any>(null);
@@ -43,6 +45,7 @@ export default function NewEvolution() {
   const [errorMessage, setErrorMessage] = useState('');
   const [processingMessage, setProcessingMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
+  const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
 
@@ -59,6 +62,7 @@ export default function NewEvolution() {
   const recordingTimeRef = useRef<number>(0);
   const audioItemsRef = useRef<AudioEvolutionItem[]>([]);
   const autoRestoreAfterAuthRef = useRef(false);
+  const onboardingGateShownRef = useRef(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -221,6 +225,15 @@ export default function NewEvolution() {
     };
     fetchTemplatesAndPatient();
   }, [id]);
+
+  useEffect(() => {
+    if (!isOnboardingMode || !patient?.id || hasGoogleSession || onboardingGateShownRef.current) {
+      return;
+    }
+
+    onboardingGateShownRef.current = true;
+    setIsOnboardingGateModalOpen(true);
+  }, [hasGoogleSession, isOnboardingMode, patient?.id]);
 
   // Efeito para verificar rascunhos não finalizados
   useEffect(() => {
@@ -594,7 +607,9 @@ export default function NewEvolution() {
     }
 
     if (!hasClinicalAccess) {
-      alert("Token do Google expirado ou não encontrado. Por favor, faça login novamente.");
+      alert(hasGoogleSession
+        ? "Sua autorização do Google precisa ser renovada antes de continuar."
+        : "Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.");
       return;
     }
 
@@ -747,7 +762,9 @@ export default function NewEvolution() {
       } else if (msg.includes('429') || msg.includes('exhausted')) {
         msg = "O limite de processamento gratuito da Google (Gemini) foi atingido. Aguarde cerca de 60 segundos e clique em 'Tentar Novamente'.";
       } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
-        msg = "Sua sessão do Google expirou. Por favor, renove a autenticação clicando no botão abaixo.";
+        msg = hasGoogleSession
+          ? "Sua sessão do Google expirou. Por favor, renove a autenticação clicando no botão abaixo."
+          : "Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.";
         setGoogleAccessToken(null);
       }
       
@@ -1058,21 +1075,29 @@ export default function NewEvolution() {
         <div className="border-t border-brand-border pt-6">
           {!hasClinicalAccess ? (
             <div className="flex flex-col items-center justify-center p-6 bg-yellow-50 rounded-xl border border-yellow-100 space-y-3">
-              <AlertCircle className="w-8 h-8 text-yellow-600" />
-              <p className="text-yellow-900 font-medium text-center">
-                Seu token de acesso ao Google expirou ou não foi encontrado.
-              </p>
-              <button
-                onClick={handleReauthenticate}
-                disabled={isReauthenticating}
-                className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
-              >
+          <AlertCircle className="w-8 h-8 text-yellow-600" />
+          <p className="text-yellow-900 font-medium text-center">
+            {hasGoogleSession
+              ? 'Sua autorização do Google precisa ser renovada para continuar.'
+              : 'Você ainda não autenticou o Google neste fluxo.'}
+          </p>
+          <button
+            onClick={() => {
+              if (!hasGoogleSession && isOnboardingMode) {
+                navigate(`/painel/patients/${id}/edit?onboarding=1`, { replace: true });
+                return;
+              }
+              handleReauthenticate();
+            }}
+            disabled={isReauthenticating}
+            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+          >
                 {isReauthenticating ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
                   <RefreshCw className="w-4 h-4" />
                 )}
-                <span>Renovar Autenticação</span>
+                <span>{hasGoogleSession ? 'Renovar Autenticação' : (isOnboardingMode ? 'Voltar ao cadastro do paciente' : 'Conectar com Google')}</span>
               </button>
             </div>
           ) : status === 'idle' && (
@@ -1290,6 +1315,18 @@ export default function NewEvolution() {
           </div>
         </div>
       )}
+
+      <GoogleSecurityModal
+        isOpen={isOnboardingGateModalOpen}
+        onClose={() => setIsOnboardingGateModalOpen(false)}
+        onConfirm={() => {
+          setIsOnboardingGateModalOpen(false);
+          navigate(`/painel/patients/${id}/edit?onboarding=1`, { replace: true });
+        }}
+        confirmLabel="Voltar ao cadastro do paciente"
+        mode="onboarding"
+        showCloseButton={false}
+      />
     </div>
   );
 }

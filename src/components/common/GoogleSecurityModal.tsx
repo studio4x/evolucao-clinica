@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ShieldCheck, Lock, FileText, Calendar, AlertTriangle, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
-type GoogleSecurityModalMode = 'login' | 'clinical' | 'calendar';
+type GoogleSecurityModalMode = 'login' | 'clinical' | 'calendar' | 'onboarding';
 
 interface GoogleSecurityModalProps {
   isOpen: boolean;
@@ -9,6 +9,7 @@ interface GoogleSecurityModalProps {
   onConfirm: () => void;
   confirmLabel?: string;
   mode?: GoogleSecurityModalMode;
+  showCloseButton?: boolean;
 }
 
 type ModalSlide = {
@@ -143,6 +144,45 @@ const slidesByMode: Record<GoogleSecurityModalMode, {
       },
     ],
   },
+  onboarding: {
+    headerTitle: 'Antes de continuar o onboarding',
+    headerSubtitle: 'Para avançar para a evolução, a conta Google precisa estar vinculada e o prontuário do paciente precisa existir no fluxo clínico.',
+    confirmationLabel: 'Autorizar acesso ao Google',
+    slides: [
+      {
+        eyebrow: 'Fluxo bloqueado',
+        title: 'Sem Google autenticado, a evolução não pode seguir',
+        description: 'A etapa de evolução depende do prontuário na sua conta Google. Se a autenticação ainda não foi concluída, o próximo passo fica bloqueado para evitar retrabalho.',
+        icon: Lock,
+        accentClasses: 'bg-brand-primary/10 text-brand-primary border-brand-primary/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Prontuário obrigatório',
+        title: 'Primeiro crie o prontuário do paciente',
+        description: 'Depois de autorizar o Google, volte ao cadastro do paciente, crie ou selecione o prontuário e só então avance para a criação da evolução.',
+        icon: FileText,
+        accentClasses: 'bg-brand-accent/10 text-brand-primary border-brand-accent/15',
+        iconClasses: 'bg-white text-brand-primary',
+      },
+      {
+        eyebrow: 'Sem perda de dados',
+        title: 'Tudo que você já preencheu permanece salvo',
+        description: 'As informações já digitadas continuam preservadas enquanto você autentica a conta e conclui a etapa do prontuário.',
+        icon: Sparkles,
+        accentClasses: 'bg-blue-50 text-blue-700 border-blue-100',
+        iconClasses: 'bg-white text-blue-600',
+      },
+      {
+        eyebrow: 'Controle total',
+        title: 'Você decide quando liberar o acesso',
+        description: 'A autorização pode ser feita apenas quando você estiver pronto. Depois disso, o fluxo segue normalmente para a evolução clínica.',
+        icon: AlertTriangle,
+        accentClasses: 'bg-amber-50 text-amber-700 border-amber-100',
+        iconClasses: 'bg-white text-amber-600',
+      },
+    ],
+  },
 };
 
 export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
@@ -151,6 +191,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   onConfirm,
   confirmLabel,
   mode = 'login',
+  showCloseButton = true,
 }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
@@ -223,13 +264,15 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
             <ShieldCheck className="text-brand-primary stroke-[2]" size={24} />
             <span>{modalConfig.headerTitle}</span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"
-          >
-            <X size={20} />
-          </button>
+          {showCloseButton && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
 
         <div className="p-6 space-y-5 overflow-hidden">
@@ -305,27 +348,29 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
             <span>Slide {currentSlide + 1} de {slides.length}</span>
             <span>{isLastSlide ? 'Você pode prosseguir' : 'Leia com calma antes de avançar'}</span>
           </div>
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (currentSlide === 0) {
-                  onClose();
-                  return;
-                }
-                setCurrentSlide((prev) => Math.max(0, prev - 1));
-              }}
-              className="btn-outline flex items-center justify-center gap-2 flex-1 py-2.5 text-sm"
-            >
-              <ChevronLeft size={16} />
-              {currentSlide === 0 ? 'Fechar' : 'Voltar'}
-            </button>
+          <div className={`flex items-center gap-3 ${showCloseButton ? 'justify-between' : 'justify-center'}`}>
+            {showCloseButton ? (
+              <button
+                type="button"
+                onClick={() => {
+                  if (currentSlide === 0) {
+                    onClose();
+                    return;
+                  }
+                  setCurrentSlide((prev) => Math.max(0, prev - 1));
+                }}
+                className="btn-outline flex items-center justify-center gap-2 flex-1 py-2.5 text-sm"
+              >
+                <ChevronLeft size={16} />
+                {currentSlide === 0 ? 'Fechar' : 'Voltar'}
+              </button>
+            ) : null}
 
             {!isLastSlide ? (
               <button
                 type="button"
                 onClick={() => setCurrentSlide((prev) => Math.min(slides.length - 1, prev + 1))}
-                className="btn-primary flex items-center justify-center gap-2 flex-1 py-2.5 text-sm"
+                className={`btn-primary flex items-center justify-center gap-2 py-2.5 text-sm ${showCloseButton ? 'flex-1' : 'w-full'}`}
               >
                 Próximo
                 <ChevronRight size={16} />
@@ -337,7 +382,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
                   onConfirm();
                   onClose();
                 }}
-                className="btn-primary flex items-center justify-center gap-2 flex-1 py-2.5 text-sm"
+                className={`btn-primary flex items-center justify-center gap-2 py-2.5 text-sm ${showCloseButton ? 'flex-1' : 'w-full'}`}
               >
                 {confirmLabel || modalConfig.confirmationLabel}
               </button>
