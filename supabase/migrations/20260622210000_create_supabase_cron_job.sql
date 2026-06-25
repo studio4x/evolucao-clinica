@@ -22,7 +22,7 @@ SELECT cron.schedule(
   '0 * * * *',
   $$
   SELECT net.http_get(
-    url := 'https://evolucao.conexaoseres.com.br/api/cron/send-evolution-reminders'
+    url := 'https://evolucaoclinica.app.br/api/cron/send-evolution-reminders'
   );
   $$
 );

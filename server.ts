@@ -13,6 +13,8 @@ dotenv.config();
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
+const DEFAULT_PRODUCTION_ORIGIN = "https://evolucaoclinica.app.br";
+const PRODUCTION_ORIGIN = process.env.VERCEL_PRODUCTION_URL || DEFAULT_PRODUCTION_ORIGIN;
 const CRON_BOOTSTRAP_SQL = `
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
@@ -33,7 +35,7 @@ SELECT cron.schedule(
   '0 * * * *',
   $$
   SELECT net.http_get(
-    url := 'https://evolucao.conexaoseres.com.br/api/cron/send-evolution-reminders'
+    url := '${PRODUCTION_ORIGIN}/api/cron/send-evolution-reminders'
   );
   $$
 );
@@ -43,7 +45,7 @@ SELECT cron.schedule(
   '0 * * * *',
   $$
   SELECT net.http_get(
-    url := 'https://evolucao.conexaoseres.com.br/api/cron/send-trial-expiration-notices'
+    url := '${PRODUCTION_ORIGIN}/api/cron/send-trial-expiration-notices'
   );
   $$
 );
@@ -1251,8 +1253,7 @@ async function sendNotificationInternal(
           tls: { rejectUnauthorized: false }
         } as any);
 
-        const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
-        const viewUrl = `${origin}${link || "/painel/notifications"}`;
+        const viewUrl = `${PRODUCTION_ORIGIN}${link || "/painel/notifications"}`;
 
         // Paleta de cores e ícones por tipo de notificação
         const typeConfig: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
@@ -1347,8 +1348,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
       })
     : "há alguns dias";
 
-  const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
-  const subscriptionUrl = `${origin}/painel/subscription`;
+  const subscriptionUrl = `${PRODUCTION_ORIGIN}/painel/subscription`;
   const professionalName = prof.full_name || "Profissional";
 
   const transporter = nodemailer.createTransport({
