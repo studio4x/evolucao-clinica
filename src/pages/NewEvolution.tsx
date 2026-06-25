@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 
 import { transcribeAudio } from '../services/aiTranscription';
@@ -333,7 +333,6 @@ export default function NewEvolution() {
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
-      const currentReturnUrl = `${window.location.origin}${window.location.pathname}${window.location.search}`;
       sessionStorage.setItem(
         AUTH_REAUTH_RECOVERY_KEY,
         JSON.stringify({
@@ -345,7 +344,7 @@ export default function NewEvolution() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: currentReturnUrl
+        redirectTo: getCurrentGoogleOAuthRedirectUrl()
       });
       if (error) throw error;
     } catch (error) {

@@ -7,7 +7,7 @@ import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink } from 'lucide-react';
 
 // Simple IndexedDB wrapper for the shared file
@@ -119,7 +119,7 @@ export default function ShareTarget() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: getCurrentGoogleOAuthRedirectUrl()
       });
       if (error) throw error;
     } catch (error) {

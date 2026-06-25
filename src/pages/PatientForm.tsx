@@ -8,7 +8,7 @@ import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile 
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding, getOnboardingState } from '../utils/onboarding';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 
 declare global {
   interface Window {
@@ -153,8 +153,6 @@ export default function PatientForm() {
   const pendingPatientIdRef = useRef<string | null>(null);
 
   const getDraftPatientId = () => pendingPatientIdRef.current || id || undefined;
-
-  const getGoogleReturnUrl = () => `${window.location.origin}${window.location.pathname}${window.location.search}`;
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -301,7 +299,7 @@ export default function PatientForm() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: getGoogleReturnUrl(),
+        redirectTo: getCurrentGoogleOAuthRedirectUrl(),
         loginHint: user?.email || undefined
       });
       if (error) throw error;
@@ -428,7 +426,7 @@ export default function PatientForm() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: getGoogleReturnUrl(),
+        redirectTo: getCurrentGoogleOAuthRedirectUrl(),
         loginHint: user?.email || undefined
       });
       if (error) throw error;

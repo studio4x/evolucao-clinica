@@ -7,7 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 
 // Converte Markdown para HTML seguro para renderização
 const parseMarkdown = (md: string): string => {
@@ -139,7 +139,7 @@ export default function PatientDetail() {
       await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: getCurrentGoogleOAuthRedirectUrl()
       });
       return;
     }
@@ -347,7 +347,7 @@ export default function PatientDetail() {
       await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: getCurrentGoogleOAuthRedirectUrl()
       });
       return;
     }
@@ -447,7 +447,7 @@ export default function PatientDetail() {
         const { error } = await requestGoogleOAuth({
           requiredScopes: 'clinicalDocs',
           currentGrantedScopes: googleGrantedScopes,
-          redirectTo: window.location.origin + window.location.pathname
+          redirectTo: getCurrentGoogleOAuthRedirectUrl()
         });
         if (error) throw error;
         return;
@@ -535,7 +535,7 @@ export default function PatientDetail() {
       await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: getCurrentGoogleOAuthRedirectUrl()
       });
       return;
     }
@@ -649,7 +649,7 @@ export default function PatientDetail() {
         const { error } = await requestGoogleOAuth({
           requiredScopes: 'clinicalDocs',
           currentGrantedScopes: googleGrantedScopes,
-          redirectTo: window.location.origin + window.location.pathname
+          redirectTo: getCurrentGoogleOAuthRedirectUrl()
         });
         if (error) throw error;
         return;

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -81,7 +81,7 @@ export default function History() {
         const { error } = await requestGoogleOAuth({
           requiredScopes: 'clinicalDocs',
           currentGrantedScopes: googleGrantedScopes,
-          redirectTo: window.location.origin + window.location.pathname
+          redirectTo: getCurrentGoogleOAuthRedirectUrl()
         });
         if (error) throw error;
         return;

@@ -82,6 +82,11 @@ export const clearPendingGoogleScopes = () => {
   localStorage.removeItem(PENDING_GOOGLE_SCOPES_KEY);
 };
 
+export const getCurrentGoogleOAuthRedirectUrl = () => {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}${window.location.pathname}${window.location.search}`;
+};
+
 type RequestGoogleOAuthParams = {
   requiredScopes: string[] | GoogleScopeSetName;
   currentGrantedScopes?: string[];

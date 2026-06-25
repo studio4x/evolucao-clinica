@@ -6,7 +6,7 @@ import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCirc
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { getDraftEvolutions, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -152,7 +152,7 @@ export default function Dashboard() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'calendarReadOnly',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname,
+        redirectTo: getCurrentGoogleOAuthRedirectUrl(),
         loginHint: user?.email || undefined
       });
       if (error) throw error;
