@@ -197,6 +197,7 @@ export default function AdminPanel() {
   const [uploadingPwa192, setUploadingPwa192] = useState(false);
   const [uploadingPwa512, setUploadingPwa512] = useState(false);
   const [uploadingPwaMaskable, setUploadingPwaMaskable] = useState(false);
+  const [uploadingPushNotificationIcon, setUploadingPushNotificationIcon] = useState(false);
   const [uploadingInstallLogo, setUploadingInstallLogo] = useState(false);
   const [uploadingLoadingLogo, setUploadingLoadingLogo] = useState(false);
 
@@ -252,7 +253,7 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
-  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon' | 'pwa192' | 'pwa512' | 'pwamaskable' | 'install' | 'loading') => {
+  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon' | 'pwa192' | 'pwa512' | 'pwamaskable' | 'pushnotification' | 'install' | 'loading') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -262,6 +263,7 @@ export default function AdminPanel() {
     else if (type === 'pwa192') setUploadingPwa192(true);
     else if (type === 'pwa512') setUploadingPwa512(true);
     else if (type === 'pwamaskable') setUploadingPwaMaskable(true);
+    else if (type === 'pushnotification') setUploadingPushNotificationIcon(true);
     else if (type === 'install') setUploadingInstallLogo(true);
     else if (type === 'loading') setUploadingLoadingLogo(true);
 
@@ -290,6 +292,7 @@ export default function AdminPanel() {
         else if (type === 'pwa192') setBrandPwa192(publicUrlData.publicUrl);
         else if (type === 'pwa512') setBrandPwa512(publicUrlData.publicUrl);
         else if (type === 'pwamaskable') setBrandPwaMaskable(publicUrlData.publicUrl);
+        else if (type === 'pushnotification') setBrandPushNotificationIcon(publicUrlData.publicUrl);
         else if (type === 'install') setBrandInstallLogo(publicUrlData.publicUrl);
         else if (type === 'loading') setBrandLoadingLogo(publicUrlData.publicUrl);
       }
@@ -303,6 +306,7 @@ export default function AdminPanel() {
       else if (type === 'pwa192') setUploadingPwa192(false);
       else if (type === 'pwa512') setUploadingPwa512(false);
       else if (type === 'pwamaskable') setUploadingPwaMaskable(false);
+      else if (type === 'pushnotification') setUploadingPushNotificationIcon(false);
       else if (type === 'install') setUploadingInstallLogo(false);
       else if (type === 'loading') setUploadingLoadingLogo(false);
       e.target.value = '';
@@ -4935,7 +4939,7 @@ export default function AdminPanel() {
                           <div>
                             <h3 className="text-sm font-semibold text-brand-primary">Ícone padrão das notificações</h3>
                             <p className="text-xs text-brand-text-muted mt-1">
-                              Informe a URL da imagem usada como ícone nos alertas do navegador. Este campo tem prioridade sobre os demais ícones da marca.
+                              Envie a imagem que será usada nos alertas do navegador. O arquivo é publicado no bucket público da marca e recebe uma URL pública automaticamente.
                             </p>
                           </div>
 
@@ -4949,18 +4953,22 @@ export default function AdminPanel() {
                             </div>
 
                             <div className="space-y-2">
-                              <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">
-                                Ícone padrão das notificações
+                              <label className="btn-outline inline-flex text-center py-2.5 px-4 text-xs font-semibold cursor-pointer">
+                                {uploadingPushNotificationIcon ? (
+                                  <span className="flex items-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload do ícone</span>
+                                )}
+                                <input
+                                  type="file"
+                                  accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                                  className="hidden"
+                                  disabled={uploadingPushNotificationIcon}
+                                  onChange={(e) => handleBrandUpload(e, 'pushnotification')}
+                                />
                               </label>
-                              <input
-                                type="url"
-                                value={brandPushNotificationIcon}
-                                onChange={(e) => setBrandPushNotificationIcon(e.target.value)}
-                                placeholder="https://..."
-                                className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-white"
-                              />
                               <p className="text-[10px] text-brand-text-muted">
-                                Use uma URL pública em PNG, SVG ou WebP. Se estiver vazia, o sistema volta aos ícones já cadastrados.
+                                Recomendado: PNG quadrado, SVG ou WebP. O arquivo é enviado para o bucket público <span className="font-semibold">brand</span>.
                               </p>
                             </div>
                           </div>
@@ -5209,7 +5217,7 @@ export default function AdminPanel() {
                         <div className="flex space-x-3 w-full sm:w-auto">
                           <button
                             type="submit"
-                            disabled={savingBrand || uploadingLight || uploadingDark || uploadingFavicon || uploadingPwa192 || uploadingPwa512 || uploadingPwaMaskable || uploadingInstallLogo || uploadingLoadingLogo}
+                            disabled={savingBrand || uploadingLight || uploadingDark || uploadingFavicon || uploadingPwa192 || uploadingPwa512 || uploadingPwaMaskable || uploadingPushNotificationIcon || uploadingInstallLogo || uploadingLoadingLogo}
                             className="btn-primary w-full sm:w-auto px-6 py-3 flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
                           >
                             {savingBrand ? (
