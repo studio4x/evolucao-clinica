@@ -466,23 +466,23 @@ export default function LandingPage() {
       <section id="demonstracao" className="py-20 bg-white border-t border-brand-border">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-4 mb-12">
-            <h2 className="text-3xl font-display font-bold">Experimente a Mágica na Prática</h2>
+            <h2 className="text-3xl font-display font-bold">Veja o fluxo funcionando na prática</h2>
             <p className="text-brand-text-muted text-sm sm:text-base max-w-lg mx-auto">
-              Clique no botão abaixo para simular a transcrição de um áudio clínico gravado e a respectiva estruturação de dados pela Inteligência Artificial.
+              Clique no botão abaixo para ver um exemplo guiado do processo, com áudio fictício, transcrição e estruturação automática dos dados pela Inteligência Artificial.
             </p>
           </div>
 
           <div className="card p-6 md:p-8 bg-brand-bg/30 border-brand-primary/10 shadow-xl space-y-6">
             <div className="flex justify-between items-center flex-wrap gap-2">
               <span className="text-xs font-bold text-brand-primary uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles size={14} className="animate-spin" /> Simulador de Inteligência Clínica
+                <Sparkles size={14} className="animate-spin" /> Exemplo Guiado de Inteligência Clínica
               </span>
               {simStep !== 'idle' && (
                 <button 
                   onClick={resetSimulation} 
                   className="text-xs font-semibold text-brand-secondary hover:underline cursor-pointer"
                 >
-                  Reiniciar Simulação
+                  Reiniciar Exemplo
                 </button>
               )}
             </div>
@@ -498,10 +498,10 @@ export default function LandingPage() {
                     onClick={startSimulation}
                     className="btn-primary px-6 py-3 font-semibold text-sm shadow-md hover:shadow-lg flex items-center gap-2 cursor-pointer"
                   >
-                    <Play size={14} fill="currentColor" /> Simular Gravação de Consulta
+                    <Play size={14} fill="currentColor" /> Ver Exemplo do Fluxo
                   </button>
                   <p className="text-xs text-brand-text-muted text-center max-w-xs">
-                    Inicia a simulação com uma gravação de voz hipotética sobre o caso de um paciente.
+                    Abre um exemplo guiado com áudio fictício para mostrar como a plataforma organiza a transcrição e a evolução.
                   </p>
                 </div>
               )}
@@ -515,7 +515,7 @@ export default function LandingPage() {
                     </div>
                   </div>
                   <p className="text-sm font-bold text-red-500 animate-pulse uppercase tracking-widest text-center">
-                    Simulando Gravação do Áudio...
+                    Exemplo de áudio em andamento...
                   </p>
                   <p className="text-xs text-brand-text-muted text-center max-w-xs italic">
                     "Paciente relata crises de ansiedade recorrentes na última semana..."
@@ -559,7 +559,7 @@ export default function LandingPage() {
 
                   <div className="flex items-center justify-center gap-2 text-xs font-bold text-brand-primary/80 bg-brand-accent/10 py-2.5 px-3 rounded-lg border border-brand-accent/25">
                     <ShieldCheck size={16} />
-                    <span>Prontuário salvo com sucesso no diretório do Google Drive!</span>
+                    <span>Exemplo concluído: veja como o prontuário seria salvo no Google Drive.</span>
                   </div>
                 </div>
               )}
