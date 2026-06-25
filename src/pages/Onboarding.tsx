@@ -647,9 +647,9 @@ export default function Onboarding() {
                 </div>
 
                 {/* Bloco de Ação de Agenda */}
-                <div className="w-full max-w-md px-2">
+                <div className="w-full max-w-md px-2 pb-8">
                   {!hasCalendarAccess ? (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 space-y-3 mb-6">
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 space-y-3 mb-10">
                       <p className="text-xs text-amber-800 leading-normal">
                         Conecte a sua conta Google para buscarmos os atendimentos registrados na agenda. Assim, você identifica mais rápido quem foi atendido, evita retrabalho e já começa a evoluir cada paciente com base no que aconteceu na consulta.
                       </p>
