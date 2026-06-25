@@ -41,6 +41,23 @@
       (function () {
         const storageKey = 'evolucao-clinica:site-config';
 
+        const hashString = function (value) {
+          let hash = 0;
+
+          for (let i = 0; i < value.length; i += 1) {
+            hash = ((hash << 5) - hash) + value.charCodeAt(i);
+            hash |= 0;
+          }
+
+          return Math.abs(hash).toString(36);
+        };
+
+        const appendVersion = function (url, signature) {
+          if (!url) return '';
+          const separator = url.includes('?') ? '&' : '?';
+          return `${url}${separator}v=${encodeURIComponent(signature)}`;
+        };
+
         const applyColors = function (colors) {
           if (!colors) return;
           const rootStyle = document.documentElement.style;
@@ -57,6 +74,22 @@
           rootStyle.setProperty('--color-brand-border', colors.border);
         };
 
+        const setLink = function (selector, rel, href, type, sizes) {
+          if (!href) return;
+
+          let link = document.querySelector(selector);
+          if (!link) {
+            link = document.createElement('link');
+            link.setAttribute('rel', rel);
+            document.head.appendChild(link);
+          }
+
+          link.rel = rel;
+          if (type) link.type = type;
+          if (sizes) link.setAttribute('sizes', sizes);
+          link.href = href;
+        };
+
         const updateThemeMeta = function (themeColor) {
           if (!themeColor) return;
           let meta = document.querySelector("meta[name='theme-color']");
@@ -68,11 +101,47 @@
           meta.setAttribute('content', themeColor);
         };
 
+        const updateMeta = function (selector, attr, value, content) {
+          if (!content) return;
+          let meta = document.querySelector(selector);
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute(attr, value);
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute(attr, value);
+          meta.setAttribute('content', content);
+        };
+
+        const applyBrandAssets = function (config) {
+          const assetSignature = hashString([
+            config.logo_light_url || '',
+            config.logo_dark_url || '',
+            config.favicon_url || '',
+            config.pwa_icon_192_url || '',
+            config.pwa_icon_512_url || '',
+            config.pwa_maskable_icon_url || '',
+            config.pwa_install_logo_url || '',
+            config.pwa_loading_logo_url || '',
+            config.version || ''
+          ].join('|'));
+
+          const faviconUrl = config.favicon_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
+          const appleTouchIconUrl = config.pwa_icon_192_url || faviconUrl;
+
+          setLink("link[rel='icon']", 'icon', appendVersion(faviconUrl, assetSignature), 'image/png', '32x32');
+          setLink("link[rel='shortcut icon']", 'shortcut icon', appendVersion(faviconUrl, assetSignature), 'image/png');
+          setLink("link[rel='apple-touch-icon']", 'apple-touch-icon', appendVersion(appleTouchIconUrl, assetSignature), 'image/png');
+          setLink("link[rel='manifest']", 'manifest', appendVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
+          updateThemeMeta(config.pwa_theme_color);
+          updateMeta("meta[name='apple-mobile-web-app-title']", 'name', 'apple-mobile-web-app-title', config.pwa_app_name);
+        };
+
         const hydrate = function (config) {
           if (!config || !config.colors) return false;
           window.__INITIAL_SITE_CONFIG__ = config;
           applyColors(config.colors);
-          updateThemeMeta(config.pwa_theme_color);
+          applyBrandAssets(config);
           try {
             localStorage.setItem(storageKey, JSON.stringify(config));
           } catch (error) {
