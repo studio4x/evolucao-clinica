@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 import { defaultSiteConfig, normalizeSiteConfig, type BrandColors, type SiteConfig } from '../utils/brandConfig';
 
 export const applyThemeColors = (colors: BrandColors) => {
@@ -86,6 +87,26 @@ const fetchConfig = async () => {
 
   fetchInFlight = (async () => {
     try {
+      const { data, error } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'brand_settings')
+        .single();
+
+      if (!error && data?.api_key) {
+        const parsed = JSON.parse(data.api_key);
+        const merged = normalizeSiteConfig(parsed);
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(merged));
+        }
+
+        cachedConfig = merged;
+        applyThemeColors(merged.colors);
+        listeners.forEach((listener) => listener(merged));
+        return;
+      }
+
       const response = await fetch('/api/brand-bootstrap', {
         cache: 'no-store'
       });
