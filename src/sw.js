@@ -4,7 +4,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 // @ts-ignore
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-const CACHE_VERSION = "hcm-pwa-v2.3";
+const CACHE_VERSION = "hcm-pwa-v2.4";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -36,7 +36,7 @@ const isBrandAssetPath = (pathname) => {
 };
 
 const isApiNoCachePath = (pathname) => {
-  return pathname.startsWith("/api/notifications/");
+  return pathname.startsWith("/api/notifications/") || pathname.startsWith("/api/pwa-install-icon");
 };
 
 const offlineResponse = async () => {
@@ -180,7 +180,7 @@ self.addEventListener("push", (event) => {
 
   const options = {
     body: data.body,
-    icon: new URL("/icon-192x192.png", self.location.origin).href,
+    icon: new URL("/api/pwa-install-icon?size=192", self.location.origin).href,
     badge: new URL("/favicon.png", self.location.origin).href,
     image: data.image || undefined,
     data: data.link || "/",
