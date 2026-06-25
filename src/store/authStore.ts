@@ -6,6 +6,7 @@ interface AuthState {
   user: User | null;
   googleAccessToken: string | null;
   googleAccessUserId: string | null;
+  googleAccessTokenIssuedAt: number | null;
   googleGrantedScopes: string[];
   isAuthReady: boolean;
   profileStatus: 'active' | 'pending' | 'inactive' | null;
@@ -17,6 +18,7 @@ interface AuthState {
   setUser: (user: User | null) => void;
   setGoogleAccessToken: (token: string | null) => void;
   setGoogleAccessUserId: (userId: string | null) => void;
+  setGoogleAccessTokenIssuedAt: (issuedAt: number | null) => void;
   setGoogleGrantedScopes: (scopes: string[]) => void;
   setAuthReady: (ready: boolean) => void;
   setProfileInfo: (
@@ -35,6 +37,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       googleAccessToken: null,
       googleAccessUserId: null,
+      googleAccessTokenIssuedAt: null,
       googleGrantedScopes: [],
       isAuthReady: false,
       profileStatus: null,
@@ -44,8 +47,12 @@ export const useAuthStore = create<AuthState>()(
       subscriptionEndsAt: null,
       trialEndsAt: null,
       setUser: (user) => set({ user }),
-      setGoogleAccessToken: (token) => set({ googleAccessToken: token }),
+      setGoogleAccessToken: (token) => set({
+        googleAccessToken: token,
+        googleAccessTokenIssuedAt: token ? Date.now() : null,
+      }),
       setGoogleAccessUserId: (userId) => set({ googleAccessUserId: userId }),
+      setGoogleAccessTokenIssuedAt: (issuedAt) => set({ googleAccessTokenIssuedAt: issuedAt }),
       setGoogleGrantedScopes: (googleGrantedScopes) => set({ googleGrantedScopes }),
       setAuthReady: (ready) => set({ isAuthReady: ready }),
       setProfileInfo: (status, role, subscriptionPlan = null, subscriptionStatus = null, subscriptionEndsAt = null, trialEndsAt = null) =>
@@ -64,6 +71,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         googleAccessToken: state.googleAccessToken,
         googleAccessUserId: state.googleAccessUserId,
+        googleAccessTokenIssuedAt: state.googleAccessTokenIssuedAt,
         googleGrantedScopes: state.googleGrantedScopes,
       }),
     }

@@ -33,7 +33,10 @@ import LandingPage from './pages/LandingPage';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
-import { clearPendingGoogleScopes, readPendingGoogleScopes } from './services/googleAuth';
+import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
+
+const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
+const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -132,7 +135,15 @@ function RootRoute() {
 
 
 export default function App() {
-  const { setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleGrantedScopes } = useAuthStore();
+  const {
+    setUser,
+    setAuthReady,
+    setProfileInfo,
+    setGoogleAccessToken,
+    setGoogleAccessUserId,
+    setGoogleAccessTokenIssuedAt,
+    setGoogleGrantedScopes
+  } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
@@ -176,12 +187,32 @@ export default function App() {
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);
 
+  const clearSilentGoogleRefreshFlag = (userId?: string | null) => {
+    if (typeof window === 'undefined' || !userId) return;
+    const current = sessionStorage.getItem(GOOGLE_SILENT_REFRESH_KEY);
+    if (current === userId) {
+      sessionStorage.removeItem(GOOGLE_SILENT_REFRESH_KEY);
+    }
+  };
+
+  const markSilentGoogleRefreshFlag = (userId?: string | null) => {
+    if (typeof window === 'undefined' || !userId) return;
+    sessionStorage.setItem(GOOGLE_SILENT_REFRESH_KEY, userId);
+  };
+
+  const hasSilentGoogleRefreshFlag = (userId?: string | null) => {
+    if (typeof window === 'undefined' || !userId) return false;
+    return sessionStorage.getItem(GOOGLE_SILENT_REFRESH_KEY) === userId;
+  };
+
   const clearInvalidProfessionalSession = async () => {
     await clearProfessionalChannel();
     pendingOnboardingNoticeRef.current = null;
     setGoogleAccessToken(null);
     setGoogleAccessUserId(null);
+    setGoogleAccessTokenIssuedAt(null);
     setGoogleGrantedScopes([]);
+    clearSilentGoogleRefreshFlag(useAuthStore.getState().googleAccessUserId);
     setUser(null);
     setProfileInfo(null, null, null, null, null, null);
     clearPendingGoogleScopes();
@@ -225,10 +256,42 @@ export default function App() {
 
       try {
         if (session) {
+          const latestState = useAuthStore.getState();
+
           if (currentState.googleAccessUserId && currentState.googleAccessUserId !== session.user.id) {
             setGoogleAccessToken(null);
             setGoogleAccessUserId(null);
+            setGoogleAccessTokenIssuedAt(null);
             setGoogleGrantedScopes([]);
+            clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
+          }
+
+          const sameGoogleUser = latestState.googleAccessUserId === session.user.id;
+          const hasPersistedGoogleScopes = latestState.googleGrantedScopes.length > 0;
+          const tokenAge = latestState.googleAccessTokenIssuedAt ? Date.now() - latestState.googleAccessTokenIssuedAt : Number.POSITIVE_INFINITY;
+          const shouldSilentlyRefreshGoogle =
+            sameGoogleUser &&
+            hasPersistedGoogleScopes &&
+            !session.provider_token &&
+            (!latestState.googleAccessToken || tokenAge > GOOGLE_ACCESS_TOKEN_MAX_AGE_MS) &&
+            !hasSilentGoogleRefreshFlag(session.user.id);
+
+          if (shouldSilentlyRefreshGoogle) {
+            markSilentGoogleRefreshFlag(session.user.id);
+            const { error } = await requestGoogleOAuth({
+              requiredScopes: latestState.googleGrantedScopes,
+              currentGrantedScopes: latestState.googleGrantedScopes,
+              redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+              prompt: 'none',
+              loginHint: session.user.email || undefined
+            });
+
+            if (error) {
+              console.warn('Falha ao renovar silenciosamente o token do Google:', error);
+              clearSilentGoogleRefreshFlag(session.user.id);
+            } else {
+              return;
+            }
           }
 
           const isSameUser = currentState.user?.id === session.user.id;
@@ -236,9 +299,12 @@ export default function App() {
 
           if (isSameUser && hasProfile) {
             // Se o provider_token do Google mudou ou foi fornecido, atualiza
-            if (session.provider_token && currentState.googleAccessToken !== session.provider_token) {
-              setGoogleAccessToken(session.provider_token);
-              setGoogleAccessUserId(session.user.id);
+            if (session.provider_token) {
+              if (currentState.googleAccessToken !== session.provider_token) {
+                setGoogleAccessToken(session.provider_token);
+                setGoogleAccessUserId(session.user.id);
+              }
+              clearSilentGoogleRefreshFlag(session.user.id);
               const pendingScopes = readPendingGoogleScopes();
               if (pendingScopes.length > 0) {
                 setGoogleGrantedScopes(pendingScopes);
@@ -255,6 +321,7 @@ export default function App() {
           if (session.provider_token) {
             setGoogleAccessToken(session.provider_token);
             setGoogleAccessUserId(session.user.id);
+            clearSilentGoogleRefreshFlag(session.user.id);
             const pendingScopes = readPendingGoogleScopes();
             if (pendingScopes.length > 0) {
               setGoogleGrantedScopes(pendingScopes);
@@ -388,6 +455,7 @@ export default function App() {
         } else {
           await clearProfessionalChannel();
           pendingOnboardingNoticeRef.current = null;
+          clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
           if (currentState.user !== null || currentState.profileStatus !== null) {
             setUser(null);
             setProfileInfo(null, null, null, null, null, null);
@@ -413,7 +481,7 @@ export default function App() {
       clearProfessionalChannel();
       subscription.unsubscribe();
     };
-  }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleGrantedScopes]);
+  }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleAccessTokenIssuedAt, setGoogleGrantedScopes]);
 
   return (
     <Router>
