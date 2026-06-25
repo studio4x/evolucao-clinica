@@ -690,16 +690,36 @@ export default function AdminPanel() {
 
     setLoadingPushNotifications(true);
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*, professionals:user_id(full_name, google_email)')
-        .order('created_at', { ascending: false });
+      const [{ data: settingsData }, { data, error }] = await Promise.all([
+        supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'notification_settings')
+          .maybeSingle(),
+        supabase
+          .from('notifications')
+          .select('*, professionals:user_id(full_name, google_email)')
+          .order('created_at', { ascending: false })
+      ]);
 
       if (error) throw error;
 
+      let manualIds: string[] = [];
+      if (settingsData?.api_key) {
+        try {
+          const parsed = JSON.parse(settingsData.api_key);
+          manualIds = Array.isArray(parsed.manual_push_notification_ids)
+            ? parsed.manual_push_notification_ids.filter((id: unknown): id is string => typeof id === 'string' && id.trim().length > 0)
+            : [];
+        } catch (parseErr) {
+          console.error('Erro ao ler ids manuais de notificacoes:', parseErr);
+        }
+      }
+
+      const manualIdSet = new Set(manualIds);
       const records = data || [];
-      setManualPushNotifications(records.filter((notification: any) => notification.source === 'manual'));
-      setPlatformPushNotifications(records.filter((notification: any) => notification.source !== 'manual'));
+      setManualPushNotifications(records.filter((notification: any) => manualIdSet.has(notification.id)));
+      setPlatformPushNotifications(records.filter((notification: any) => !manualIdSet.has(notification.id)));
     } catch (err) {
       console.error('Erro ao buscar logs de notificacoes:', err);
     } finally {
@@ -809,11 +829,32 @@ export default function AdminPanel() {
         vapid_subject: `mailto:${adminSmtpUser || 'suporte@conexaoseres.com.br'}`
       };
 
+      const { data: currentSettings } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'notification_settings')
+        .maybeSingle();
+
+      let currentSettingsJson: Record<string, any> = {};
+      if (currentSettings?.api_key) {
+        try {
+          currentSettingsJson = JSON.parse(currentSettings.api_key);
+        } catch (parseErr) {
+          console.error('Erro ao ler configurações atuais de notificações:', parseErr);
+        }
+      }
+
       const { error } = await supabase
         .from('settings')
         .upsert({
           id: 'notification_settings',
-          api_key: JSON.stringify(settings),
+          api_key: JSON.stringify({
+            ...currentSettingsJson,
+            ...settings,
+            manual_push_notification_ids: Array.isArray(currentSettingsJson.manual_push_notification_ids)
+              ? currentSettingsJson.manual_push_notification_ids
+              : []
+          }),
           updated_at: new Date().toISOString(),
           updated_by: user?.email || 'admin'
         });

@@ -268,44 +268,7 @@ async function insertNotificationRecord(record: {
   type: string;
   link?: string | null;
   image_url?: string | null;
-  source: NotificationOrigin;
 }) {
-  const connectionString = getPostgresConnectionString();
-  if (connectionString) {
-    const client = new PostgresClient({
-      connectionString,
-      ssl: connectionString.includes("sslmode=disable")
-        ? false
-        : { rejectUnauthorized: false }
-    });
-
-    try {
-      await client.connect();
-      const result = await client.query(
-        `INSERT INTO public.notifications (user_id, title, message, type, link, image_url, source)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING *`,
-        [
-          record.user_id,
-          record.title,
-          record.message,
-          record.type,
-          record.link ?? null,
-          record.image_url ?? null,
-          record.source
-        ]
-      );
-
-      if (!result.rows[0]) {
-        throw new Error("Falha ao inserir notificação no banco.");
-      }
-
-      return result.rows[0];
-    } finally {
-      await client.end().catch(() => {});
-    }
-  }
-
   const { data, error } = await supabaseAdmin
     .from("notifications")
     .insert({
@@ -314,8 +277,7 @@ async function insertNotificationRecord(record: {
       message: record.message,
       type: record.type,
       link: record.link ?? null,
-      image_url: record.image_url ?? null,
-      source: record.source
+      image_url: record.image_url ?? null
     })
     .select("*")
     .single();
@@ -325,19 +287,6 @@ async function insertNotificationRecord(record: {
   }
 
   return data;
-}
-
-function isSourceColumnSchemaError(error: any) {
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    message.includes("source") &&
-    (
-      message.includes("schema cache") ||
-      message.includes("not found") ||
-      message.includes("does not exist") ||
-      message.includes("column")
-    )
-  );
 }
 
 async function bootstrapSupabaseCronJobs() {
@@ -490,7 +439,10 @@ async function getNotificationSettings() {
     return {
       ...settings,
       vapid_public_key: String(settings.vapid_public_key || "").trim(),
-      vapid_private_key: String(settings.vapid_private_key || "").trim()
+      vapid_private_key: String(settings.vapid_private_key || "").trim(),
+      manual_push_notification_ids: Array.isArray(settings.manual_push_notification_ids)
+        ? settings.manual_push_notification_ids.filter((id: unknown): id is string => typeof id === "string" && id.trim().length > 0)
+        : []
     };
   } catch (err) {
     console.error("Erro no getNotificationSettings, gerando chaves temporarias em memoria:", err);
@@ -498,9 +450,35 @@ async function getNotificationSettings() {
     return {
       vapid_public_key: keys.publicKey,
       vapid_private_key: keys.privateKey,
-      vapid_subject: "mailto:suporte@conexaoseres.com.br"
+      vapid_subject: "mailto:suporte@conexaoseres.com.br",
+      manual_push_notification_ids: []
     };
   }
+}
+
+async function appendManualPushNotificationId(notificationId: string) {
+  if (!notificationId) return;
+
+  const settings = await getNotificationSettings();
+  const manualIds = Array.isArray(settings.manual_push_notification_ids)
+    ? [...settings.manual_push_notification_ids]
+    : [];
+
+  if (manualIds.includes(notificationId)) {
+    return;
+  }
+
+  manualIds.push(notificationId);
+
+  await supabaseAdmin
+    .from("settings")
+    .upsert({
+      id: "notification_settings",
+      api_key: JSON.stringify({
+        ...settings,
+        manual_push_notification_ids: manualIds
+      })
+    }, { onConflict: "id" });
 }
 
 async function getAccessControlSettings() {
@@ -1852,20 +1830,17 @@ async function sendNotificationInternal(
     message: content, // Ajustado ao banco existente
     type,
     link,
-    image_url: imageUrl,
-    source
+    image_url: imageUrl
   };
 
   // A. Criar no banco (In-App)
-  let notification: any;
-  try {
-    notification = await insertNotificationRecord(notificationRecord);
-  } catch (error: any) {
-    if (isSourceColumnSchemaError(error)) {
-      await reloadPostgrestSchemaCache();
-      notification = await insertNotificationRecord(notificationRecord);
-    } else {
-      throw error;
+  const notification = await insertNotificationRecord(notificationRecord);
+
+  if (source === "manual") {
+    try {
+      await appendManualPushNotificationId(notification.id);
+    } catch (markError) {
+      console.warn("[Notifications] Não foi possível registrar origem manual:", markError);
     }
   }
 
