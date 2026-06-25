@@ -153,6 +153,7 @@ export default function Dashboard() {
         requiredScopes: 'calendarReadOnly',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+        prompt: 'consent',
         loginHint: user?.email || undefined
       });
       if (error) throw error;
@@ -264,6 +265,10 @@ export default function Dashboard() {
           const errMsg = calError.message || "";
           if (errMsg.includes("UNAUTHENTICATED")) {
             setGoogleAccessToken(null);
+          } else if (errMsg.includes("INSUFFICIENT_SCOPES")) {
+            setCalendarError(
+              "A conta Google foi conectada, mas este token ainda não tem permissão para ler a agenda. Clique em 'Reconectar Conta' e aprove o acesso ao Google Agenda."
+            );
           } else if (errMsg.includes("has not been used in project") || errMsg.includes("disabled") || errMsg.includes("403")) {
             setCalendarError(
               "A API do Google Agenda (Google Calendar API) precisa ser ativada no seu console do Google Cloud (projeto 985599226364) para listar os atendimentos da semana."

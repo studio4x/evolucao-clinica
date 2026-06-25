@@ -104,9 +104,14 @@ export const requestGoogleOAuth = async ({
 }: RequestGoogleOAuthParams) => {
   const scopes = buildGoogleScopes(requiredScopes, currentGrantedScopes);
   storePendingGoogleScopes(scopes);
+  const isLoginOnlyRequest = requiredScopes === 'login';
+  const isExpandingScopes = scopes.some((scope) => !currentGrantedScopes.includes(scope));
+  const resolvedPrompt = prompt ?? (!isLoginOnlyRequest && isExpandingScopes ? 'consent' : undefined);
 
   const queryParams = {
-    ...(prompt ? { prompt } : {}),
+    include_granted_scopes: 'true',
+    access_type: 'offline',
+    ...(resolvedPrompt ? { prompt: resolvedPrompt } : {}),
     ...(loginHint ? { login_hint: loginHint } : {}),
   };
 

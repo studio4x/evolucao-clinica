@@ -143,7 +143,9 @@ export default function Onboarding() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'calendarReadOnly',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + '/onboarding?step=agenda'
+        redirectTo: window.location.origin + '/onboarding?step=agenda',
+        prompt: 'consent',
+        loginHint: user?.email || undefined
       });
       if (error) throw error;
     } catch (error) {
@@ -227,10 +229,14 @@ export default function Onboarding() {
     } catch (error: any) {
       console.error('Erro ao sincronizar agenda no onboarding:', error);
       const message = error?.message || 'Não foi possível sincronizar a agenda.';
-      if (message.includes('401') || message.includes('UNAUTHENTICATED') || message.includes('Invalid Credentials')) {
+      if (message.includes('INSUFFICIENT_SCOPES')) {
+        setSyncError('A conta Google foi conectada, mas este token ainda não tem permissão para ler a agenda. Reconecte e aprove o acesso ao Google Agenda.');
+      } else if (message.includes('401') || message.includes('UNAUTHENTICATED') || message.includes('Invalid Credentials')) {
         setGoogleAccessToken(null);
+        setSyncError(message);
+      } else {
+        setSyncError(message);
       }
-      setSyncError(message);
     } finally {
       setSyncingAgenda(false);
     }

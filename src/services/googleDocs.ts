@@ -21,6 +21,12 @@ async function googleApiFetch(url: string, options: RequestInit, context: string
     if (response.status === 401) {
       throw new Error(`UNAUTHENTICATED: ${errorText}`);
     }
+    if (
+      response.status === 403 &&
+      /ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions|Insufficient Permission/i.test(errorText)
+    ) {
+      throw new Error(`INSUFFICIENT_SCOPES: ${errorText}`);
+    }
 
     const shouldRetry = attempt < GOOGLE_API_MAX_ATTEMPTS && isRetryableGoogleError(response.status, errorText);
     if (!shouldRetry) {

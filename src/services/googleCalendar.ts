@@ -33,6 +33,12 @@ export async function listGoogleCalendarEvents(
     if (response.status === 401) {
       throw new Error("UNAUTHENTICATED: " + errorText);
     }
+    if (
+      response.status === 403 &&
+      /ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions|Insufficient Permission/i.test(errorText)
+    ) {
+      throw new Error("INSUFFICIENT_SCOPES: " + errorText);
+    }
     throw new Error(`Google Calendar API error: ${response.status} - ${errorText}`);
   }
 

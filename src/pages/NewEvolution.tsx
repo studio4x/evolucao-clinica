@@ -344,7 +344,9 @@ export default function NewEvolution() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: getCurrentGoogleOAuthRedirectUrl()
+        redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+        prompt: 'consent',
+        loginHint: user?.email || undefined
       });
       if (error) throw error;
     } catch (error) {
@@ -396,7 +398,9 @@ export default function NewEvolution() {
     } catch (err: any) {
       console.error("Erro ao carregar prontuário:", err);
       let msg = err.message || "Erro desconhecido ao carregar prontuário.";
-      if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
+      if (msg.includes("INSUFFICIENT_SCOPES")) {
+        msg = "Sua conta Google está conectada, mas ainda não liberou as permissões clínicas completas. Renove a autenticação para aprovar o acesso ao Google Drive e Docs.";
+      } else if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
         msg = "Sua sessão do Google expirou. Feche o modal e renove a autenticação.";
         setGoogleAccessToken(null);
       }
@@ -417,7 +421,9 @@ export default function NewEvolution() {
     } catch (err: any) {
       console.error("Erro ao salvar prontuário:", err);
       let msg = err.message || "Erro desconhecido ao salvar prontuário.";
-      if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
+      if (msg.includes("INSUFFICIENT_SCOPES")) {
+        msg = "Sua conta Google está conectada, mas ainda não liberou as permissões clínicas completas. Renove a autenticação para aprovar o acesso ao Google Drive e Docs.";
+      } else if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
         msg = "Sua sessão do Google expirou. Por favor, renove sua autenticação.";
         setGoogleAccessToken(null);
       }
@@ -761,6 +767,8 @@ export default function NewEvolution() {
         }
       } else if (msg.includes('429') || msg.includes('exhausted')) {
         msg = "O limite de processamento gratuito da Google (Gemini) foi atingido. Aguarde cerca de 60 segundos e clique em 'Tentar Novamente'.";
+      } else if (msg.includes('INSUFFICIENT_SCOPES')) {
+        msg = "Sua conta Google foi conectada, mas este token ainda não tem os escopos clinicos completos. Clique em 'Renovar Autenticacao' para aprovar o acesso ao Google Drive e Docs.";
       } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
         msg = hasGoogleSession
           ? "Sua sessão do Google expirou. Por favor, renove a autenticação clicando no botão abaixo."
