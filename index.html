@@ -37,6 +37,73 @@
     <meta name="twitter:title" content="Evolução Clínica" />
     <meta name="twitter:description" content="Gerenciamento de Evoluções Clínicas com IA e Google Docs - Conexão Seres" />
     <meta name="twitter:image" content="/icon-512x512.png" />
+    <script>
+      (function () {
+        const storageKey = 'evolucao-clinica:site-config';
+
+        const applyColors = function (colors) {
+          if (!colors) return;
+          const rootStyle = document.documentElement.style;
+          rootStyle.setProperty('--color-brand-primary', colors.primary);
+          rootStyle.setProperty('--color-brand-primary-hover', colors.primary_hover);
+          rootStyle.setProperty('--color-brand-secondary', colors.secondary);
+          rootStyle.setProperty('--color-brand-secondary-hover', colors.secondary_hover);
+          rootStyle.setProperty('--color-brand-accent', colors.accent);
+          rootStyle.setProperty('--color-brand-accent-hover', colors.accent_hover);
+          rootStyle.setProperty('--color-brand-bg', colors.bg);
+          rootStyle.setProperty('--color-brand-surface', colors.surface);
+          rootStyle.setProperty('--color-brand-text', colors.text);
+          rootStyle.setProperty('--color-brand-text-muted', colors.text_muted);
+          rootStyle.setProperty('--color-brand-border', colors.border);
+        };
+
+        const updateThemeMeta = function (themeColor) {
+          if (!themeColor) return;
+          let meta = document.querySelector("meta[name='theme-color']");
+          if (!meta) {
+            meta = document.createElement('meta');
+            meta.setAttribute('name', 'theme-color');
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute('content', themeColor);
+        };
+
+        const hydrate = function (config) {
+          if (!config || !config.colors) return false;
+          window.__INITIAL_SITE_CONFIG__ = config;
+          applyColors(config.colors);
+          updateThemeMeta(config.pwa_theme_color);
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(config));
+          } catch (error) {
+            // Ignora falhas de storage e segue com a configuração já aplicada.
+          }
+          return true;
+        };
+
+        try {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', '/api/brand-bootstrap', false);
+          xhr.send(null);
+
+          if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+            hydrate(JSON.parse(xhr.responseText));
+            return;
+          }
+        } catch (error) {
+          // Falha silenciosa: abaixo tentamos reaproveitar a última configuração salva.
+        }
+
+        try {
+          const stored = localStorage.getItem(storageKey);
+          if (stored) {
+            hydrate(JSON.parse(stored));
+          }
+        } catch (error) {
+          // Sem bootstrap disponível, o app segue com o tema padrão compilado.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

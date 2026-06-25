@@ -7,6 +7,7 @@ import nodemailer from "nodemailer";
 import { Client as PostgresClient } from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
+import { defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig";
 
 dotenv.config();
 
@@ -96,6 +97,25 @@ function appendBrandVersion(url: string, signature: string) {
   if (!url) return "";
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}v=${encodeURIComponent(signature)}`;
+}
+
+async function getBrandConfigSnapshot() {
+  const { data, error } = await supabaseAdmin
+    .from("settings")
+    .select("api_key")
+    .eq("id", "brand_settings")
+    .single();
+
+  if (error || !data?.api_key) {
+    return defaultSiteConfig;
+  }
+
+  try {
+    return normalizeSiteConfig(JSON.parse(data.api_key));
+  } catch (parseError) {
+    console.error("[Brand] Falha ao ler configurações de marca:", parseError);
+    return defaultSiteConfig;
+  }
 }
 
 function getPostgresConnectionString() {
@@ -679,6 +699,18 @@ app.get("/api/debug-env", (req, res) => {
     PORT: PORT
   };
   res.json(envs);
+});
+
+app.get("/api/brand-bootstrap", async (_req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.json(config);
+  } catch (err: any) {
+    console.error("Error generating brand bootstrap payload:", err);
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.status(500).json(defaultSiteConfig);
+  }
 });
 
 // Rota dinâmica para o manifest.webmanifest do PWA

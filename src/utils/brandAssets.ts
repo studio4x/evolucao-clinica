@@ -1,4 +1,4 @@
-import type { SiteConfig } from '../hooks/useSiteConfig';
+import type { SiteConfig } from './brandConfig';
 
 export type BrandAssetSource = Pick<
   SiteConfig,

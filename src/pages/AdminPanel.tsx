@@ -4,7 +4,8 @@ import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAl
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
-import { reloadSiteConfig, defaultColors, BrandColors } from '../hooks/useSiteConfig';
+import { reloadSiteConfig } from '../hooks/useSiteConfig';
+import { defaultColors, type BrandColors } from '../utils/brandConfig';
 import EmailHistory from './EmailHistory';
 import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
@@ -4986,14 +4987,14 @@ export default function AdminPanel() {
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">
                             {BRAND_COLOR_FIELDS.map((field) => (
-                              <div key={field.key} className="space-y-2">
+                              <div key={String(field.key)} className="space-y-2">
                                 <label className="text-xs font-semibold text-brand-text block">
                                   {field.label}
                                 </label>
                                 <div className="flex items-center space-x-2">
                                   <input 
                                     type="color" 
-                                    value={brandColors[field.key]} 
+                                    value={brandColors[field.key as keyof BrandColors]} 
                                     onChange={(e) => setBrandColors(prev => ({
                                       ...prev,
                                       [field.key]: e.target.value
@@ -5002,7 +5003,7 @@ export default function AdminPanel() {
                                   />
                                   <input 
                                     type="text" 
-                                    value={brandColors[field.key]}
+                                    value={brandColors[field.key as keyof BrandColors]}
                                     onChange={(e) => setBrandColors(prev => ({
                                       ...prev,
                                       [field.key]: e.target.value
