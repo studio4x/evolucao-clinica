@@ -433,7 +433,7 @@ export default function LandingPage() {
               </div>
               <h3 className="text-lg font-bold text-brand-primary font-display pt-2">Grave o Áudio</h3>
               <p className="text-brand-text-muted text-sm max-w-xs leading-relaxed">
-                Ao término do atendimento, grave um áudio-resumo de 1 a 2 minutos detalhando os pontos importantes observados na sessão.
+                Ao término do atendimento, grave um áudio-resumo detalhando os pontos importantes observados na sessão.
               </p>
             </div>
 
