@@ -10,9 +10,106 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const defaultBrandColors = {
+  primary: "#005C13",
+  primary_hover: "#00470e",
+  secondary: "#5C4716",
+  secondary_hover: "#4a3912",
+  accent: "#8CC63F",
+  accent_hover: "#7ab332",
+  bg: "#fdfbf7",
+  surface: "#ffffff",
+  text: "#1c1917",
+  text_muted: "#57534e",
+  border: "#e7e5e4",
+};
+
 function normalizePaymentDescriptor(value: unknown) {
   const label = String(value || "").trim().replace(/\s+/g, " ");
   return label || "Google Pay";
+}
+
+function normalizeHexColor(value: unknown, fallback: string) {
+  const candidate = String(value || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(candidate) ? candidate : fallback;
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return `rgba(0, 0, 0, ${alpha})`;
+  }
+
+  const value = Number.parseInt(normalized, 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function buildEmailTheme(config: any = {}) {
+  const colors = config?.colors || defaultBrandColors;
+
+  return {
+    brandName: config?.pwa_app_name || "Evolução Clínica",
+    primary: normalizeHexColor(colors.primary, defaultBrandColors.primary),
+    primaryHover: normalizeHexColor(colors.primary_hover, defaultBrandColors.primary_hover),
+    secondary: normalizeHexColor(colors.secondary, defaultBrandColors.secondary),
+    secondaryHover: normalizeHexColor(colors.secondary_hover, defaultBrandColors.secondary_hover),
+    accent: normalizeHexColor(colors.accent, defaultBrandColors.accent),
+    accentHover: normalizeHexColor(colors.accent_hover, defaultBrandColors.accent_hover),
+    bg: normalizeHexColor(colors.bg, defaultBrandColors.bg),
+    surface: normalizeHexColor(colors.surface, defaultBrandColors.surface),
+    text: normalizeHexColor(colors.text, defaultBrandColors.text),
+    textMuted: normalizeHexColor(colors.text_muted, defaultBrandColors.text_muted),
+    border: normalizeHexColor(colors.border, defaultBrandColors.border),
+  };
+}
+
+function buildEmailButton(theme: ReturnType<typeof buildEmailTheme>, href: string, label: string, backgroundColor = theme.primary) {
+  return `<a href="${href}" style="display:inline-block;background:${backgroundColor};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:999px;font-size:15px;font-weight:700;letter-spacing:0.2px;">${label}</a>`;
+}
+
+function buildEmailCard(theme: ReturnType<typeof buildEmailTheme>, title: string, bodyHtml: string, options: { titleColor?: string; background?: string; border?: string } = {}) {
+  const background = options.background || hexToRgba(theme.primary, 0.06);
+  const border = options.border || theme.border;
+  const titleColor = options.titleColor || theme.primary;
+
+  return `
+    <div style="background:${background}; border:1px solid ${border}; border-radius:16px; padding:20px; margin:0 0 20px 0;">
+      <p style="margin:0 0 10px 0; font-size:14px; font-weight:700; color:${titleColor};">${title}</p>
+      ${bodyHtml}
+    </div>
+  `;
+}
+
+function buildEmailShell(theme: ReturnType<typeof buildEmailTheme>, options: {
+  title: string;
+  subtitle?: string;
+  eyebrow?: string;
+  bodyHtml: string;
+  footerHtml?: string;
+}) {
+  return `
+    <div style="font-family:'Segoe UI', Arial, sans-serif; max-width:680px; margin:0 auto; background:${theme.bg}; padding:24px;">
+      <div style="background:${theme.surface}; border:1px solid ${theme.border}; border-radius:18px; overflow:hidden; box-shadow:0 12px 32px rgba(15, 23, 42, 0.08);">
+        <div style="padding:28px; background:linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); color:#ffffff;">
+          <p style="margin:0 0 8px 0; font-size:12px; text-transform:uppercase; letter-spacing:1.4px; opacity:0.82;">${options.eyebrow || theme.brandName}</p>
+          <h1 style="margin:0; font-size:26px; line-height:1.2;">${options.title}</h1>
+          ${options.subtitle ? `<p style="margin:10px 0 0 0; font-size:15px; line-height:1.6; opacity:0.95;">${options.subtitle}</p>` : ""}
+        </div>
+        <div style="padding:28px; color:${theme.text}; line-height:1.7;">
+          ${options.bodyHtml}
+        </div>
+        ${options.footerHtml ? `
+          <div style="padding:16px 28px 24px; border-top:1px solid ${theme.border}; background:${hexToRgba(theme.bg, 0.92)}; color:${theme.textMuted}; font-size:12px; line-height:1.6;">
+            ${options.footerHtml}
+          </div>
+        ` : ""}
+      </div>
+    </div>
+  `;
 }
 
 function normalizePlanFeatures(features: unknown) {
@@ -157,6 +254,14 @@ serve(async (req) => {
     }
 
     const settings = JSON.parse(settingsData.api_key);
+    const { data: brandSettingsData } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "brand_settings")
+      .maybeSingle();
+    const brandTheme = brandSettingsData?.api_key
+      ? buildEmailTheme(JSON.parse(brandSettingsData.api_key))
+      : buildEmailTheme();
     const isProduction = settings.environment === "PRODUCTION";
     
     // Define a chave secreta da Stripe de acordo com o modo configurado
@@ -329,41 +434,36 @@ serve(async (req) => {
         ...selectedFeatures.map((feature: string) => `- ${feature}`),
       ].filter(Boolean).join("\n");
       const featureRowsHtml = selectedFeatures
-        .map((feature: string) => `<li style="margin: 0 0 8px 0;">${feature}</li>`)
+        .map((feature: string) => `<div style="margin:0 0 8px 0;">• ${feature}</div>`)
         .join("");
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden;">
-          <div style="background: linear-gradient(135deg, #005C13, #0b7c1c); color: #ffffff; padding: 28px;">
-            <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.78;">Evolução Clínica</p>
-            <h1 style="margin: 0; font-size: 24px; line-height: 1.25;">Assinatura confirmada com sucesso</h1>
-          </div>
-          <div style="padding: 28px; color: #111827; line-height: 1.7;">
-            <p style="margin: 0 0 14px 0; font-size: 16px;">Olá, <strong>${profData.full_name || "Profissional"}</strong>.</p>
-            <p style="margin: 0 0 18px 0; font-size: 15px;">
-              Seu pedido foi processado com sucesso usando <strong>${paymentLabel}</strong>.
-              O valor confirmado foi <strong>${amountLabel}</strong>.
-            </p>
-            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
-              <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 700; color: #005C13;">Boas-vindas ao ${planData.name}</p>
-              <p style="margin: 0 0 12px 0; font-size: 14px; color: #374151;">${planData.description || "Você agora tem acesso ao pacote de recursos selecionado."}</p>
-              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
-                ${featureRowsHtml}
-              </ul>
+      const htmlContent = buildEmailShell(brandTheme, {
+        title: "Assinatura confirmada com sucesso",
+        subtitle: `Processada com ${paymentLabel}`,
+        bodyHtml: `
+          <p style="margin:0 0 14px 0; font-size:16px;">Olá, <strong>${profData.full_name || "Profissional"}</strong>.</p>
+          <p style="margin:0 0 18px 0; font-size:15px; color:${brandTheme.textMuted};">
+            Seu pedido foi processado com sucesso usando <strong>${paymentLabel}</strong>.
+            O valor confirmado foi <strong>${amountLabel}</strong>.
+          </p>
+          ${buildEmailCard(brandTheme, `Boas-vindas ao ${planData.name}`, `
+            <p style="margin:0 0 12px 0; font-size:14px; color:${brandTheme.textMuted};">${planData.description || "Você agora tem acesso ao pacote de recursos selecionado."}</p>
+            <div style="margin:0; color:${brandTheme.text}; font-size:14px; line-height:1.8;">
+              ${featureRowsHtml}
             </div>
-            <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
-              <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #111827;">Resumo da transação</p>
-              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
-                <li style="margin: 0 0 8px 0;">Plano: ${planData.name}</li>
-                <li style="margin: 0 0 8px 0;">Valor: ${amountLabel}</li>
-                <li style="margin: 0 0 8px 0;">Forma de pagamento: ${paymentLabel}</li>
-                <li style="margin: 0 0 8px 0;">Assinatura Google Pay: ${subscription.id}</li>
-                ${latestInvoice?.id ? `<li style="margin: 0 0 8px 0;">Fatura Google Pay: ${latestInvoice.id}</li>` : ""}
-                <li style="margin: 0;">Próxima renovação: ${renewalLabel}</li>
-              </ul>
+          `, { titleColor: brandTheme.primary })}
+          ${buildEmailCard(brandTheme, "Resumo da transação", `
+            <div style="margin:0; color:${brandTheme.text}; font-size:14px; line-height:1.8;">
+              <div style="margin:0 0 8px 0;">• Plano: ${planData.name}</div>
+              <div style="margin:0 0 8px 0;">• Valor: ${amountLabel}</div>
+              <div style="margin:0 0 8px 0;">• Forma de pagamento: ${paymentLabel}</div>
+              <div style="margin:0 0 8px 0;">• Assinatura Google Pay: ${subscription.id}</div>
+              ${latestInvoice?.id ? `<div style="margin:0 0 8px 0;">• Fatura Google Pay: ${latestInvoice.id}</div>` : ""}
+              <div style="margin:0;">• Próxima renovação: ${renewalLabel}</div>
             </div>
-          </div>
-        </div>
-      `;
+          `, { titleColor: brandTheme.secondary, background: hexToRgba(brandTheme.secondary, 0.06) })}
+        `,
+        footerHtml: "Seu comprovante de assinatura foi enviado com os dados principais da transação."
+      });
       const providerMessageId = await sendBrevoEmail(notificationSettings, {
         recipientEmail: profData.google_email,
         recipientName: profData.full_name || "Profissional",

@@ -7,7 +7,7 @@ import nodemailer from "nodemailer";
 import { Client as PostgresClient } from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
-import { defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
+import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
 
 dotenv.config();
 
@@ -116,6 +116,113 @@ async function getBrandConfigSnapshot() {
     console.error("[Brand] Falha ao ler configurações de marca:", parseError);
     return defaultSiteConfig;
   }
+}
+
+type EmailTheme = {
+  brandName: string;
+  primary: string;
+  primaryHover: string;
+  secondary: string;
+  secondaryHover: string;
+  accent: string;
+  accentHover: string;
+  bg: string;
+  surface: string;
+  text: string;
+  textMuted: string;
+  border: string;
+};
+
+function normalizeHexColor(value: unknown, fallback: string) {
+  const candidate = String(value || "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(candidate) ? candidate : fallback;
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return `rgba(0, 0, 0, ${alpha})`;
+  }
+
+  const value = Number.parseInt(normalized, 16);
+  const red = (value >> 16) & 255;
+  const green = (value >> 8) & 255;
+  const blue = value & 255;
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+}
+
+function buildEmailTheme(config = defaultSiteConfig): EmailTheme {
+  const colors = config.colors || defaultColors;
+
+  return {
+    brandName: config.pwa_app_name || defaultSiteConfig.pwa_app_name,
+    primary: normalizeHexColor(colors.primary, defaultColors.primary),
+    primaryHover: normalizeHexColor(colors.primary_hover, defaultColors.primary_hover),
+    secondary: normalizeHexColor(colors.secondary, defaultColors.secondary),
+    secondaryHover: normalizeHexColor(colors.secondary_hover, defaultColors.secondary_hover),
+    accent: normalizeHexColor(colors.accent, defaultColors.accent),
+    accentHover: normalizeHexColor(colors.accent_hover, defaultColors.accent_hover),
+    bg: normalizeHexColor(colors.bg, defaultColors.bg),
+    surface: normalizeHexColor(colors.surface, defaultColors.surface),
+    text: normalizeHexColor(colors.text, defaultColors.text),
+    textMuted: normalizeHexColor(colors.text_muted, defaultColors.text_muted),
+    border: normalizeHexColor(colors.border, defaultColors.border)
+  };
+}
+
+async function getEmailTheme() {
+  const config = await getBrandConfigSnapshot();
+  return buildEmailTheme(config);
+}
+
+function buildEmailButton(theme: EmailTheme, href: string, label: string, backgroundColor = theme.primary) {
+  return `
+    <a href="${href}" style="display:inline-block;background:${backgroundColor};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:999px;font-size:15px;font-weight:700;letter-spacing:0.2px;">
+      ${label}
+    </a>
+  `;
+}
+
+function buildEmailCard(theme: EmailTheme, title: string, bodyHtml: string, options: { titleColor?: string; background?: string; border?: string } = {}) {
+  const background = options.background || hexToRgba(theme.primary, 0.06);
+  const border = options.border || theme.border;
+  const titleColor = options.titleColor || theme.primary;
+
+  return `
+    <div style="background:${background}; border:1px solid ${border}; border-radius:16px; padding:20px; margin:0 0 20px 0;">
+      <p style="margin:0 0 10px 0; font-size:14px; font-weight:700; color:${titleColor};">${title}</p>
+      ${bodyHtml}
+    </div>
+  `;
+}
+
+function buildEmailShell(theme: EmailTheme, options: {
+  title: string;
+  subtitle?: string;
+  eyebrow?: string;
+  bodyHtml: string;
+  footerHtml?: string;
+}) {
+  return `
+    <div style="font-family:'Segoe UI', Arial, sans-serif; max-width:680px; margin:0 auto; background:${theme.bg}; padding:24px;">
+      <div style="background:${theme.surface}; border:1px solid ${theme.border}; border-radius:18px; overflow:hidden; box-shadow:0 12px 32px rgba(15, 23, 42, 0.08);">
+        <div style="padding:28px; background:linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); color:#ffffff;">
+          <p style="margin:0 0 8px 0; font-size:12px; text-transform:uppercase; letter-spacing:1.4px; opacity:0.82;">${options.eyebrow || theme.brandName}</p>
+          <h1 style="margin:0; font-size:26px; line-height:1.2;">${options.title}</h1>
+          ${options.subtitle ? `<p style="margin:10px 0 0 0; font-size:15px; line-height:1.6; opacity:0.95;">${options.subtitle}</p>` : ""}
+        </div>
+        <div style="padding:28px; color:${theme.text}; line-height:1.7;">
+          ${options.bodyHtml}
+        </div>
+        ${options.footerHtml ? `
+          <div style="padding:16px 28px 24px; border-top:1px solid ${theme.border}; background:${hexToRgba(theme.bg, 0.92)}; color:${theme.textMuted}; font-size:12px; line-height:1.6;">
+            ${options.footerHtml}
+          </div>
+        ` : ""}
+      </div>
+    </div>
+  `;
 }
 
 function getPostgresConnectionString() {
@@ -1219,7 +1326,9 @@ function buildWelcomeEmailContent(options: {
   recipientName: string;
   status: "pending" | "active";
   loginUrl: string;
+  theme: EmailTheme;
 }) {
+  const { theme } = options;
   const isPending = options.status === "pending";
   const statusTitle = isPending ? "Seu cadastro está em análise" : "Sua conta já está liberada";
   const introText = isPending
@@ -1252,32 +1361,24 @@ function buildWelcomeEmailContent(options: {
     "Equipe Evolução Clínica"
   ].join("\n");
 
-  const htmlContent = `
-    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);">
-      <div style="padding: 28px; background: linear-gradient(135deg, #005C13 0%, #0f766e 100%); color: #fff;">
-        <p style="margin: 0 0 8px 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .85;">Evolução Clínica</p>
-        <h1 style="margin: 0; font-size: 26px; line-height: 1.2;">Bem-vindo(a) à plataforma</h1>
-        <p style="margin: 10px 0 0 0; font-size: 15px; line-height: 1.6; opacity: .95;">${statusTitle}</p>
-      </div>
-      <div style="padding: 28px; color: #1f2937;">
-        <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.7;">Olá, <strong>${options.recipientName}</strong>.</p>
-        <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.7; color: #4b5563;">${introText}</p>
-        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
-          <h2 style="margin: 0 0 12px 0; font-size: 18px; color: #0f172a;">O que você encontrará</h2>
-          <ul style="margin: 0; padding-left: 20px; color: #334155; line-height: 1.8;">
-            ${featureItems.map((item) => `<li>${item}</li>`).join("")}
-          </ul>
+  const htmlContent = buildEmailShell(theme, {
+    title: "Bem-vindo(a) à plataforma",
+    subtitle: statusTitle,
+    bodyHtml: `
+      <p style="margin:0 0 16px 0; font-size:16px; line-height:1.7;">Olá, <strong>${options.recipientName}</strong>.</p>
+      <p style="margin:0 0 20px 0; font-size:15px; line-height:1.7; color:${theme.textMuted};">${introText}</p>
+      ${buildEmailCard(theme, "O que você encontrará", `
+        <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
+          ${featureItems.map((item) => `<div style="margin:0 0 8px 0;">• ${item}</div>`).join("")}
         </div>
-        <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.7; color: #4b5563;">${nextStepText}</p>
-        <div style="text-align: center; margin: 28px 0 8px 0;">
-          <a href="${options.loginUrl}" style="display: inline-block; background: #005C13; color: #fff; text-decoration: none; padding: 14px 28px; border-radius: 999px; font-size: 15px; font-weight: 700;">Acessar a plataforma</a>
-        </div>
+      `)}
+      <p style="margin:0 0 20px 0; font-size:15px; line-height:1.7; color:${theme.textMuted};">${nextStepText}</p>
+      <div style="text-align:center; margin:28px 0 8px 0;">
+        ${buildEmailButton(theme, options.loginUrl, "Acessar a plataforma")}
       </div>
-      <div style="padding: 16px 28px 24px; border-top: 1px solid #eef2f7; color: #64748b; font-size: 12px; line-height: 1.6;">
-        Se tiver qualquer dúvida, responda este e-mail e nossa equipe poderá ajudar.
-      </div>
-    </div>
-  `;
+    `,
+    footerHtml: "Se tiver qualquer dúvida, responda este e-mail e nossa equipe poderá ajudar."
+  });
 
   return { textContent, htmlContent, subject: isPending ? "Bem-vindo(a) à Evolução Clínica" : "Sua conta foi criada com sucesso" };
 }
@@ -1318,10 +1419,12 @@ async function sendWelcomeEmail(userId: string, status: "pending" | "active") {
   const settings = await getNotificationSettings();
   const loginUrl = `${PRODUCTION_ORIGIN}/login`;
   const recipientName = prof.full_name || recipient.name || "Profissional";
+  const theme = await getEmailTheme();
   const content = buildWelcomeEmailContent({
     recipientName,
     status: status || (prof.status === "pending" ? "pending" : "active"),
-    loginUrl
+    loginUrl,
+    theme
   });
 
   await sendTransactionalEmail(settings, {
@@ -1673,6 +1776,7 @@ async function sendNotificationInternal(
 
       if (targetEmail) {
         const viewUrl = `${PRODUCTION_ORIGIN}${link || "/painel/notifications"}`;
+        const theme = await getEmailTheme();
 
         // Paleta de cores e ícones por tipo de notificação
         const typeConfig: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
@@ -1683,44 +1787,19 @@ async function sendNotificationInternal(
         };
         const tc = typeConfig[type] || typeConfig.info;
 
-        const htmlContent = `
-            <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
-              
-              <!-- Header -->
-              <div style="background-color: #005C13; padding: 24px 28px; text-align: left;">
-                <p style="margin: 0 0 4px 0; font-size: 12px; color: rgba(255,255,255,0.7); letter-spacing: 1px; text-transform: uppercase; font-weight: 600;">Evolução Clínica</p>
-                <h1 style="margin: 0; font-size: 20px; color: #ffffff; font-weight: 700;">Notificação do Sistema</h1>
-              </div>
-
-
-              <!-- Conteúdo -->
-              <div style="padding: 28px; color: #1f2937; line-height: 1.7;">
-                ${imageUrl ? `<div style="margin-bottom: 20px; border-radius: 8px; overflow: hidden;"><img src="${imageUrl}" alt="Imagem" style="max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 8px;" /></div>` : ""}
-                
-                <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #111827; line-height: 1.4;">${title}</h2>
-                <p style="margin: 0 0 24px 0; font-size: 15px; color: #374151;">${content}</p>
-
-                <!-- CTA -->
-                <div style="text-align: center; margin: 28px 0 8px 0;">
-                  <a href="${viewUrl}" 
-                     style="display: inline-block; background-color: #005C13; color: #ffffff; text-decoration: none; padding: 14px 32px; font-size: 15px; font-weight: 700; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,92,19,0.3); letter-spacing: 0.2px;">
-                    Ver no Aplicativo →
-                  </a>
-                </div>
-              </div>
-
-              <!-- Divisor -->
-              <div style="border-top: 1px solid #f3f4f6; margin: 0 28px;"></div>
-
-              <!-- Footer -->
-              <div style="padding: 18px 28px; background-color: #f9fafb;">
-                <p style="margin: 0; font-size: 12px; color: #6b7280; line-height: 1.6;">
-                  Esta mensagem foi enviada automaticamente pela plataforma <strong>Evolução Clínica</strong>.<br/>
-                  Por favor, não responda a este e-mail.
-                </p>
-              </div>
+        const htmlContent = buildEmailShell(theme, {
+          title: "Notificação do Sistema",
+          subtitle: `${tc.label} • ${title}`,
+          bodyHtml: `
+            ${imageUrl ? `<div style="margin:0 0 20px 0; border-radius:10px; overflow:hidden; border:1px solid ${theme.border};"><img src="${imageUrl}" alt="Imagem" style="display:block; max-width:100%; max-height:240px; object-fit:cover; width:100%;" /></div>` : ""}
+            <h2 style="margin:0 0 12px 0; font-size:18px; font-weight:700; color:${theme.text}; line-height:1.4;">${title}</h2>
+            <p style="margin:0 0 24px 0; font-size:15px; color:${theme.textMuted};">${content}</p>
+            <div style="text-align:center; margin:28px 0 8px 0;">
+              ${buildEmailButton(theme, viewUrl, "Ver no Aplicativo →")}
             </div>
-          `
+          `,
+          footerHtml: "Esta mensagem foi enviada automaticamente pela plataforma <strong>Evolução Clínica</strong>.<br/>Por favor, não responda a este e-mail."
+        });
         const emailResult = await sendTransactionalEmail(settings, {
           userId: targetUserId,
           recipientEmail: targetEmail,
@@ -1773,6 +1852,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
 
   const subscriptionUrl = `${PRODUCTION_ORIGIN}/painel/subscription`;
   const professionalName = prof.full_name || "Profissional";
+  const theme = await getEmailTheme();
 
   await sendTransactionalEmail(settings, {
     userId: prof.id,
@@ -1788,35 +1868,26 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
       "",
       "Se você já realizou a assinatura, basta acessar novamente o aplicativo para liberar o acesso."
     ].join("\n"),
-    htmlContent: `
-      <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden;">
-        <div style="background: linear-gradient(135deg, #005C13, #0f7a1f); color: #ffffff; padding: 28px;">
-          <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.8;">Evolução Clínica</p>
-          <h1 style="margin: 0; font-size: 24px; line-height: 1.25;">Seu teste gratuito terminou</h1>
-        </div>
-        <div style="padding: 28px; color: #111827; line-height: 1.7;">
-          <p style="margin: 0 0 16px 0; font-size: 16px;">Olá, <strong>${professionalName}</strong>.</p>
-          <p style="margin: 0 0 16px 0; font-size: 15px;">
-            Seu período de teste gratuito de <strong>${TRIAL_DURATION_DAYS} dias</strong> terminou em <strong>${trialEndsAtLabel}</strong>.
-            O acesso completo à plataforma foi encerrado até a contratação de um plano.
+    htmlContent: buildEmailShell(theme, {
+      title: "Seu teste gratuito terminou",
+      subtitle: `Expirou em ${trialEndsAtLabel}`,
+      bodyHtml: `
+        <p style="margin:0 0 16px 0; font-size:16px;">Olá, <strong>${professionalName}</strong>.</p>
+        <p style="margin:0 0 16px 0; font-size:15px; color:${theme.textMuted};">
+          Seu período de teste gratuito de <strong>${TRIAL_DURATION_DAYS} dias</strong> terminou em <strong>${trialEndsAtLabel}</strong>.
+          O acesso completo à plataforma foi encerrado até a contratação de um plano.
+        </p>
+        ${buildEmailCard(theme, "O que fazer agora", `
+          <p style="margin:0; font-size:14px; color:${theme.text};">
+            Para continuar utilizando prontuários, evoluções, Google Docs e a sincronização da agenda, escolha um dos planos disponíveis no botão abaixo.
           </p>
-          <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 20px 0 24px 0;">
-            <p style="margin: 0; font-size: 14px; color: #374151;">
-              Para continuar utilizando prontuários, evoluções, Google Docs e a sincronização da agenda, escolha um dos planos disponíveis no botão abaixo.
-            </p>
-          </div>
-          <div style="text-align: center; margin: 28px 0 8px 0;">
-            <a href="${subscriptionUrl}" style="display: inline-block; background: #005C13; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; font-size: 15px;">
-              Assinar um plano agora
-            </a>
-          </div>
+        `, { titleColor: theme.secondary })}
+        <div style="text-align:center; margin:28px 0 8px 0;">
+          ${buildEmailButton(theme, subscriptionUrl, "Assinar um plano agora")}
         </div>
-        <div style="border-top: 1px solid #f3f4f6; padding: 18px 28px; background: #f9fafb; color: #6b7280; font-size: 12px; line-height: 1.6;">
-          Se você já concluiu a assinatura, pode simplesmente voltar ao aplicativo para ter o acesso liberado novamente.
-          </div>
-        </div>
-      `
-    ,
+      `,
+      footerHtml: "Se você já concluiu a assinatura, pode simplesmente voltar ao aplicativo para ter o acesso liberado novamente."
+    }),
     source: "trial-expiration",
     allowFallback: true
   });
@@ -2302,25 +2373,22 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
       brevo_sender_email: brevoSenderEmail
     };
 
+    const theme = await getEmailTheme();
+
     const result = await sendTransactionalEmail(testSettings, {
       recipientEmail: toEmail,
       recipientName: null,
       subject: "[Evolução Clínica] Teste de Conexão de E-mail 🎉",
       textContent: "Se você recebeu este e-mail, significa que as configurações do provedor de envio estão corretas e prontas para uso no sistema.",
-      htmlContent: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-          <div style="background-color: #005C13; padding: 20px; text-align: center; color: white;">
-            <h2 style="margin: 0; font-size: 22px;">Teste de e-mail global</h2>
-          </div>
-          <div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6;">
-            <p style="font-size: 16px; font-weight: bold; color: #111111;">Conexão de e-mail funcionando! 🎉</p>
-            <p style="font-size: 15px; margin-bottom: 24px;">Este é um e-mail de teste disparado a partir das configurações preenchidas na plataforma. Seu provedor está configurado corretamente.</p>
-          </div>
-          <div style="background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee;">
-            <p style="margin: 0;">Evolução Clínica - Plataforma Inteligente</p>
-          </div>
-        </div>
-      `,
+      htmlContent: buildEmailShell(theme, {
+        title: "Teste de e-mail global",
+        subtitle: "Conexão de e-mail funcionando",
+        bodyHtml: `
+          <p style="font-size:16px; font-weight:700; color:${theme.text}; margin:0 0 12px 0;">Conexão de e-mail funcionando! 🎉</p>
+          <p style="font-size:15px; margin:0 0 24px 0; color:${theme.textMuted};">Este é um e-mail de teste disparado a partir das configurações preenchidas na plataforma. Seu provedor está configurado corretamente.</p>
+        `,
+        footerHtml: "Evolução Clínica - Plataforma Inteligente"
+      }),
       source: "test-email",
       allowFallback: false
     });
@@ -2401,6 +2469,7 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
         : ["Pacientes ilimitados", "Evoluções clínicas com IA ilimitadas", "Integração com Google Docs em tempo real", "Gravação e transcrição de áudio nativa"];
 
     const settings = await getNotificationSettings();
+    const theme = await getEmailTheme();
     const isSuccess = kind === "success";
     const subject = isSuccess
       ? `[Evolução Clínica] Assinatura confirmada - ${planName}`
@@ -2417,16 +2486,16 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
     ].filter(Boolean) as string[];
 
     const transactionRowsHtml = transactionLines
-      .map((line) => `<li style="margin: 0 0 8px 0;">${line}</li>`)
+      .map((line) => `<div style="margin:0 0 8px 0;">• ${line}</div>`)
       .join("");
 
     const featureRowsHtml = featureBullets
-      .map((feature) => `<li style="margin: 0 0 8px 0;">${feature}</li>`)
+      .map((feature) => `<div style="margin:0 0 8px 0;">• ${feature}</div>`)
       .join("");
 
     const invoiceButtonsHtml = [
-      invoiceUrl ? `<a href="${invoiceUrl}" style="display:inline-block;background:#005C13;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;margin-right:10px;">Ver fatura</a>` : "",
-      invoicePdfUrl ? `<a href="${invoicePdfUrl}" style="display:inline-block;background:#f3f4f6;color:#111827;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;">Baixar PDF</a>` : ""
+      invoiceUrl ? buildEmailButton(theme, invoiceUrl, "Ver fatura", theme.primary) : "",
+      invoicePdfUrl ? buildEmailButton(theme, invoicePdfUrl, "Baixar PDF", theme.secondary) : ""
     ].join("");
 
     const textContent = isSuccess
@@ -2462,70 +2531,54 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
         ].filter(Boolean).join("\n");
 
     const htmlContent = isSuccess
-      ? `
-        <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden;">
-          <div style="background: linear-gradient(135deg, #005C13, #0b7c1c); color: #ffffff; padding: 28px;">
-            <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.78;">Evolução Clínica</p>
-            <h1 style="margin: 0; font-size: 24px; line-height: 1.25;">Assinatura confirmada com sucesso</h1>
-          </div>
-          <div style="padding: 28px; color: #111827; line-height: 1.7;">
-            <p style="margin: 0 0 14px 0; font-size: 16px;">Olá, <strong>${professionalName}</strong>.</p>
-            <p style="margin: 0 0 18px 0; font-size: 15px;">
+      ? buildEmailShell(theme, {
+          title: "Assinatura confirmada com sucesso",
+          subtitle: `Processada com ${paymentDescriptor}`,
+          bodyHtml: `
+            <p style="margin:0 0 14px 0; font-size:16px;">Olá, <strong>${professionalName}</strong>.</p>
+            <p style="margin:0 0 18px 0; font-size:15px; color:${theme.textMuted};">
               Seu pedido foi processado com sucesso usando <strong>${paymentDescriptor}</strong>.
               ${amountLabel ? `O valor confirmado foi <strong>${amountLabel}</strong>.` : ""}
             </p>
-            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
-              <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 700; color: #005C13;">Boas-vindas ao ${planName}</p>
-              <p style="margin: 0 0 12px 0; font-size: 14px; color: #374151;">${planDescription || "Você agora tem acesso ao pacote de recursos selecionado."}</p>
-              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
+            ${buildEmailCard(theme, `Boas-vindas ao ${planName}`, `
+              <p style="margin:0 0 12px 0; font-size:14px; color:${theme.textMuted};">${planDescription || "Você agora tem acesso ao pacote de recursos selecionado."}</p>
+              <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
                 ${featureRowsHtml}
-              </ul>
-            </div>
-            <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
-              <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #111827;">Resumo da transação</p>
-              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
+              </div>
+            `, { titleColor: theme.primary })}
+            ${buildEmailCard(theme, "Resumo da transação", `
+              <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
                 ${transactionRowsHtml}
-              </ul>
-            </div>
-            ${invoiceButtonsHtml ? `<div style="margin-top: 16px;">${invoiceButtonsHtml}</div>` : ""}
-          </div>
-          <div style="border-top: 1px solid #f3f4f6; padding: 18px 28px; background: #f9fafb; color: #6b7280; font-size: 12px; line-height: 1.6;">
-            Este e-mail contém o comprovante de confirmação da sua assinatura e os dados principais da transação.
-          </div>
-        </div>
-      `
-      : `
-        <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #fee2e2; border-radius: 18px; overflow: hidden;">
-          <div style="background: linear-gradient(135deg, #dc2626, #ef4444); color: #ffffff; padding: 28px;">
-            <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.78;">Evolução Clínica</p>
-            <h1 style="margin: 0; font-size: 24px; line-height: 1.25;">Falha ao processar a assinatura</h1>
-          </div>
-          <div style="padding: 28px; color: #111827; line-height: 1.7;">
-            <p style="margin: 0 0 14px 0; font-size: 16px;">Olá, <strong>${professionalName}</strong>.</p>
-            <p style="margin: 0 0 18px 0; font-size: 15px;">
+              </div>
+            `, { titleColor: theme.secondary, background: hexToRgba(theme.secondary, 0.06) })}
+            ${invoiceButtonsHtml ? `<div style="margin-top:16px;">${invoiceButtonsHtml}</div>` : ""}
+          `,
+          footerHtml: "Este e-mail contém o comprovante de confirmação da sua assinatura e os dados principais da transação."
+        })
+      : buildEmailShell(theme, {
+          title: "Falha ao processar a assinatura",
+          subtitle: `Tentativa via ${paymentDescriptor}`,
+          bodyHtml: `
+            <p style="margin:0 0 14px 0; font-size:16px;">Olá, <strong>${professionalName}</strong>.</p>
+            <p style="margin:0 0 18px 0; font-size:15px; color:${theme.textMuted};">
               Não foi possível concluir a cobrança via <strong>${paymentDescriptor}</strong>.
               ${failureMessage ? `Motivo informado: <strong>${failureMessage}</strong>` : "A cobrança não foi aprovada ou a validação da transação falhou."}
             </p>
-            <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
-              <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #9a3412;">Detalhes da tentativa</p>
-              <ul style="margin: 0; padding-left: 18px; color: #7c2d12; font-size: 14px;">
+            ${buildEmailCard(theme, "Detalhes da tentativa", `
+              <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
                 ${transactionRowsHtml}
-              </ul>
-            </div>
-            <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
-              <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #111827;">O que fazer agora</p>
-              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
-                <li style="margin: 0 0 8px 0;">Revise os dados de pagamento no Google Pay e tente novamente.</li>
-                <li style="margin: 0 0 8px 0;">Se houver dúvida, fale com o suporte para revisar a cobrança.</li>
-                <li style="margin: 0 0 8px 0;">Nenhuma ativação de plano foi concluída nesta tentativa.</li>
-              </ul>
-            </div>
-          </div>
-          <div style="border-top: 1px solid #f3f4f6; padding: 18px 28px; background: #f9fafb; color: #6b7280; font-size: 12px; line-height: 1.6;">
-            Assim que a transação for aprovada, você receberá um novo e-mail de confirmação.
-          </div>
-        </div>
-      `;
+              </div>
+            `, { titleColor: theme.secondary, background: hexToRgba(theme.secondary, 0.06) })}
+            ${buildEmailCard(theme, "O que fazer agora", `
+              <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
+                <div style="margin:0 0 8px 0;">• Revise os dados de pagamento no Google Pay e tente novamente.</div>
+                <div style="margin:0 0 8px 0;">• Se houver dúvida, fale com o suporte para revisar a cobrança.</div>
+                <div style="margin:0;">• Nenhuma ativação de plano foi concluída nesta tentativa.</div>
+              </div>
+            `, { titleColor: theme.primary })}
+          `,
+          footerHtml: "Assim que a transação for aprovada, você receberá um novo e-mail de confirmação."
+        });
 
     let emailSent = false;
     let emailError: string | null = null;
@@ -2937,21 +2990,19 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
       return res.status(500).json({ error: "Nenhum provedor de e-mails está configurado na plataforma." });
     }
 
+    const theme = await getEmailTheme();
+
     // Formatar como HTML (quebrando linhas)
-    const formattedHtml = `
-      <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-        <div style="background-color: #005C13; padding: 24px; text-align: center; color: white;">
-          <h2 style="margin: 0; font-size: 20px; font-weight: 700;">Relatório de Desenvolvimento / Evolução</h2>
-          <p style="margin: 4px 0 0 0; font-size: 13px; opacity: 0.9;">Paciente: ${patient.full_name}</p>
-        </div>
-        <div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6; font-size: 15px; white-space: pre-wrap; font-family: inherit;">
+    const formattedHtml = buildEmailShell(theme, {
+      title: "Relatório de Desenvolvimento / Evolução",
+      subtitle: `Paciente: ${patient.full_name}`,
+      bodyHtml: `
+        <div style="padding:0; background:${theme.surface}; color:${theme.text}; line-height:1.7; font-size:15px; white-space:pre-wrap; font-family:inherit;">
           ${textContent.replace(/\n/g, "<br/>")}
         </div>
-        <div style="background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 11px; color: #888888; border-top: 1px solid #eeeeee;">
-          <p style="margin: 0;">Enviado com segurança via Evolução Clínica - Plataforma Inteligente</p>
-        </div>
-      </div>
-    `;
+      `,
+      footerHtml: "Enviado com segurança via Evolução Clínica - Plataforma Inteligente"
+    });
 
     const result = await sendTransactionalEmail(settings, {
       userId: req.user.id,
