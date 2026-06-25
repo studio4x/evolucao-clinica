@@ -402,7 +402,8 @@ export default function Notifications() {
           title: "Notificação de Teste 🚀",
           content: "Esta é uma notificação de demonstração enviada para testar o sistema In-App, Push de navegador e e-mail via SMTP.",
           type: "success",
-          link: "/painel/notifications"
+          link: "/painel/notifications",
+          source: "manual"
         })
       });
 

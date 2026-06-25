@@ -561,6 +561,7 @@ export default function AdminPanel() {
   const [notifLink, setNotifLink] = useState('');
   const [notifImageUrl, setNotifImageUrl] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [pushNotificationsTab, setPushNotificationsTab] = useState<'manual' | 'platform'>('manual');
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -638,17 +639,14 @@ export default function AdminPanel() {
           content: notification.message,
           type: notification.type,
           link: notification.link || undefined,
-          imageUrl: notification.image_url || undefined
+          imageUrl: notification.image_url || undefined,
+          source: 'manual'
         })
       });
  
       if (res.ok) {
         alert('Notificação reenviada com sucesso!');
-        const { data } = await supabase
-          .from('notifications')
-          .select('*, professionals:user_id(full_name, google_email)')
-          .order('created_at', { ascending: false });
-        if (data) setAdminNotifications(data);
+        await refreshPushNotificationLogs();
       } else {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || 'Erro ao reenviar notificação.');
@@ -665,8 +663,9 @@ export default function AdminPanel() {
   const [notifSendSuccess, setNotifSendSuccess] = useState(false);
   const [notifSendError, setNotifSendError] = useState('');
 
-  const [adminNotifications, setAdminNotifications] = useState<any[]>([]);
-  const [loadingAdminNotifications, setLoadingAdminNotifications] = useState(false);
+  const [manualPushNotifications, setManualPushNotifications] = useState<any[]>([]);
+  const [platformPushNotifications, setPlatformPushNotifications] = useState<any[]>([]);
+  const [loadingPushNotifications, setLoadingPushNotifications] = useState(false);
   const [deletingNotifId, setDeletingNotifId] = useState<string | null>(null);
   const [adminInboxNotifications, setAdminInboxNotifications] = useState<AdminInboxNotification[]>([]);
   const [adminInboxLoading, setAdminInboxLoading] = useState(false);
@@ -678,6 +677,28 @@ export default function AdminPanel() {
   const [testEmailSending, setTestEmailSending] = useState(false);
   const [testEmailStatus, setTestEmailStatus] = useState<'success' | 'error' | null>(null);
   const [testEmailMessage, setTestEmailMessage] = useState('');
+
+  const refreshPushNotificationLogs = async () => {
+    if (!user || profileRole !== 'admin') return;
+
+    setLoadingPushNotifications(true);
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*, professionals:user_id(full_name, google_email)')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const records = data || [];
+      setManualPushNotifications(records.filter((notification: any) => notification.source === 'manual'));
+      setPlatformPushNotifications(records.filter((notification: any) => notification.source !== 'manual'));
+    } catch (err) {
+      console.error('Erro ao buscar logs de notificacoes:', err);
+    } finally {
+      setLoadingPushNotifications(false);
+    }
+  };
 
   // Efeito para carregar as configurações SMTP e Logs de notificações
   useEffect(() => {
@@ -711,22 +732,7 @@ export default function AdminPanel() {
         console.error('Erro ao buscar configuracoes SMTP:', err);
       }
 
-      // 2. Carregar Logs de notificações
-      setLoadingAdminNotifications(true);
-      try {
-        const { data, error } = await supabase
-          .from('notifications')
-          .select('*, professionals:user_id(full_name, google_email)')
-          .order('created_at', { ascending: false });
-
-        if (!error) {
-          setAdminNotifications(data || []);
-        }
-      } catch (err) {
-        console.error("Erro ao buscar logs de notificacoes:", err);
-      } finally {
-        setLoadingAdminNotifications(false);
-      }
+      await refreshPushNotificationLogs();
     };
 
     if (user && profileRole === 'admin' && (activeTab === 'push_notifications' || activeTab === 'email_notifications' || activeTab === 'vapid_keys')) {
@@ -827,7 +833,7 @@ export default function AdminPanel() {
         .eq('id', id);
 
       if (error) throw error;
-      setAdminNotifications(prev => prev.filter(n => n.id !== id));
+      await refreshPushNotificationLogs();
     } catch (err: any) {
       console.error('Erro ao deletar notificação:', err);
       alert('Erro ao deletar: ' + err.message);
@@ -950,7 +956,8 @@ export default function AdminPanel() {
               content: notifContent,
               type: notifType,
               link: notifLink || undefined,
-              imageUrl: notifImageUrl || undefined
+              imageUrl: notifImageUrl || undefined,
+              source: 'manual'
             })
           });
 
@@ -971,12 +978,7 @@ export default function AdminPanel() {
         setNotifContent('');
         setNotifLink('');
         setNotifImageUrl('');
-        // Recarregar os logs
-        const { data } = await supabase
-          .from('notifications')
-          .select('*, professionals:user_id(full_name, google_email)')
-          .order('created_at', { ascending: false });
-        if (data) setAdminNotifications(data);
+        await refreshPushNotificationLogs();
       } else {
         setNotifSendError(errorMsg || 'Falha ao enviar notificações.');
       }
@@ -1091,7 +1093,8 @@ export default function AdminPanel() {
               userId: targetId,
               title: notifTitle,
               content: notifContent,
-              type: 'info'
+              type: 'info',
+              source: 'manual'
             })
           });
 
@@ -1131,12 +1134,7 @@ export default function AdminPanel() {
         setNotifSendSuccess(true);
         setNotifTitle('');
         setNotifContent('');
-        // Recarregar os logs
-        const { data } = await supabase
-          .from('notifications')
-          .select('*, professionals:user_id(full_name, google_email)')
-          .order('created_at', { ascending: false });
-        if (data) setAdminNotifications(data);
+        await refreshPushNotificationLogs();
       } else {
         setNotifSendError(errorMsg || 'Falha ao enviar e-mails.');
       }
@@ -1664,9 +1662,9 @@ export default function AdminPanel() {
 
       setProfessionals(prev => prev.filter(item => item.id !== prof.id));
       setAdminTransactions(prev => prev.filter(tx => tx.professional_id !== prof.id));
-      setAdminNotifications(prev => prev.filter(notification => notification.user_id !== prof.id));
       setUsageLogs(prev => prev.filter(log => log.professional_id !== prof.id));
       setAdminTickets(prev => prev.filter(ticket => ticket.userId !== prof.id));
+      await refreshPushNotificationLogs();
 
       if (editingProf?.id === prof.id) {
         setEditingProf(null);
@@ -3695,192 +3693,332 @@ export default function AdminPanel() {
               </div>
             ) : activeTab === 'push_notifications' ? (
               <div className="space-y-6">
-                  {/* Formulário de Envio */}
-                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
-                    <div className="flex items-center space-x-3 mb-6">
-                      <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
-                        <Bell className="w-6 h-6" />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPushNotificationsTab('manual')}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                      pushNotificationsTab === 'manual'
+                        ? 'bg-brand-primary text-white border-brand-primary'
+                        : 'bg-white text-brand-text border-brand-border hover:border-brand-primary/40'
+                    }`}
+                  >
+                    Enviadas Manualmente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPushNotificationsTab('platform')}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                      pushNotificationsTab === 'platform'
+                        ? 'bg-brand-primary text-white border-brand-primary'
+                        : 'bg-white text-brand-text border-brand-border hover:border-brand-primary/40'
+                    }`}
+                  >
+                    Automáticas da Plataforma
+                  </button>
+                </div>
+
+                {pushNotificationsTab === 'manual' ? (
+                  <div className="space-y-6">
+                    <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                      <div className="flex items-center space-x-3 mb-6">
+                        <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                          <Bell className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                            Disparar Nova Notificação Push
+                          </h2>
+                          <p className="text-xs text-brand-text-muted mt-0.5">
+                            Envie um alerta push/in-app para um profissional específico ou faça um broadcast para toda a plataforma.
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                          Disparar Nova Notificação Push
-                        </h2>
-                        <p className="text-xs text-brand-text-muted mt-0.5">
-                          Envie um alerta push/in-app para um profissional específico ou faça um broadcast para toda a plataforma.
-                        </p>
-                      </div>
-                    </div>
 
-                    <form onSubmit={handleSendNotification} className="space-y-4">
-                      {notifSendSuccess && (
-                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
-                          <Check className="flex-shrink-0 text-emerald-600" size={16} />
-                          <span>Notificação disparada com sucesso para o(s) destinatário(s)!</span>
-                        </div>
-                      )}
+                      <form onSubmit={handleSendNotification} className="space-y-4">
+                        {notifSendSuccess && (
+                          <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
+                            <Check className="flex-shrink-0 text-emerald-600" size={16} />
+                            <span>Notificação disparada com sucesso para o(s) destinatário(s)!</span>
+                          </div>
+                        )}
 
-                      {notifSendError && (
-                        <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs flex gap-2">
-                          <ShieldAlert className="flex-shrink-0 text-red-600" size={16} />
-                          <span>{notifSendError}</span>
-                        </div>
-                      )}
+                        {notifSendError && (
+                          <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs flex gap-2">
+                            <ShieldAlert className="flex-shrink-0 text-red-600" size={16} />
+                            <span>{notifSendError}</span>
+                          </div>
+                        )}
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Destinatário</label>
-                          <select
-                            value={broadcastTarget}
-                            onChange={(e) => setBroadcastTarget(e.target.value as any)}
-                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                          >
-                            <option value="all">Todos os Profissionais (Broadcast)</option>
-                            <option value="specific">Profissional Específico</option>
-                          </select>
-                        </div>
-
-                        {broadcastTarget === 'specific' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="space-y-1">
-                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Selecionar Profissional</label>
+                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Destinatário</label>
                             <select
-                              value={selectedProfessionalId}
-                              onChange={(e) => setSelectedProfessionalId(e.target.value)}
-                              required
+                              value={broadcastTarget}
+                              onChange={(e) => setBroadcastTarget(e.target.value as any)}
                               className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
                             >
-                              <option value="">-- Escolha o Profissional --</option>
-                              {professionals.map(p => (
-                                <option key={p.id} value={p.id}>
-                                  {p.full_name} ({p.google_email || 'Sem e-mail'})
-                                </option>
-                              ))}
+                              <option value="all">Todos os Profissionais (Broadcast)</option>
+                              <option value="specific">Profissional Específico</option>
                             </select>
                           </div>
-                        )}
-                      </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="md:col-span-2 space-y-1">
-                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Título do Alerta</label>
+                          {broadcastTarget === 'specific' && (
+                            <div className="space-y-1">
+                              <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Selecionar Profissional</label>
+                              <select
+                                value={selectedProfessionalId}
+                                onChange={(e) => setSelectedProfessionalId(e.target.value)}
+                                required
+                                className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                              >
+                                <option value="">-- Escolha o Profissional --</option>
+                                {professionals.map(p => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.full_name} ({p.google_email || 'Sem e-mail'})
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="md:col-span-2 space-y-1">
+                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Título do Alerta</label>
+                            <input
+                              type="text"
+                              value={notifTitle}
+                              onChange={(e) => setNotifTitle(e.target.value)}
+                              placeholder="ex: Atualização do Sistema"
+                              required
+                              className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Tipo de Alerta</label>
+                            <select
+                              value={notifType}
+                              onChange={(e) => setNotifType(e.target.value as any)}
+                              className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                            >
+                              <option value="info">Info (Azul)</option>
+                              <option value="success">Sucesso (Verde)</option>
+                              <option value="warning">Alerta (Amarelo)</option>
+                              <option value="error">Erro (Vermelho)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Conteúdo / Mensagem</label>
+                          <textarea
+                            value={notifContent}
+                            onChange={(e) => setNotifContent(e.target.value)}
+                            placeholder="Digite o texto detalhado da notificação..."
+                            required
+                            rows={3}
+                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium resize-none"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Link de Redirecionamento (Opcional)</label>
                           <input
                             type="text"
-                            value={notifTitle}
-                            onChange={(e) => setNotifTitle(e.target.value)}
-                            placeholder="ex: Atualização do Sistema"
-                            required
+                            value={notifLink}
+                            onChange={(e) => setNotifLink(e.target.value)}
+                            placeholder="ex: /painel/subscription"
                             className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
                           />
                         </div>
 
                         <div className="space-y-1">
-                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Tipo de Alerta</label>
-                          <select
-                            value={notifType}
-                            onChange={(e) => setNotifType(e.target.value as any)}
-                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                          >
-                            <option value="info">Info (Azul)</option>
-                            <option value="success">Sucesso (Verde)</option>
-                            <option value="warning">Alerta (Amarelo)</option>
-                            <option value="error">Erro (Vermelho)</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Conteúdo / Mensagem</label>
-                        <textarea
-                          value={notifContent}
-                          onChange={(e) => setNotifContent(e.target.value)}
-                          placeholder="Digite o texto detalhado da notificação..."
-                          required
-                          rows={3}
-                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium resize-none"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Link de Redirecionamento (Opcional)</label>
-                        <input
-                          type="text"
-                          value={notifLink}
-                          onChange={(e) => setNotifLink(e.target.value)}
-                          placeholder="ex: /painel/subscription"
-                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                        />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block font-semibold text-brand-text">Imagem de Capa (URL ou Upload)</label>
-                        <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={notifImageUrl}
-                            onChange={(e) => setNotifImageUrl(e.target.value)}
-                            placeholder="Insira a URL da imagem ou faça upload ao lado..."
-                            className="flex-1 px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                          />
-                          <div className="relative">
+                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block font-semibold text-brand-text">Imagem de Capa (URL ou Upload)</label>
+                          <div className="flex gap-2">
                             <input
-                              type="file"
-                              accept="image/*"
-                              id="notif-image-upload"
-                              className="hidden"
-                              onChange={handleImageUpload}
-                              disabled={uploadingImage}
+                              type="text"
+                              value={notifImageUrl}
+                              onChange={(e) => setNotifImageUrl(e.target.value)}
+                              placeholder="Insira a URL da imagem ou faça upload ao lado..."
+                              className="flex-1 px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
                             />
-                            <label
-                              htmlFor="notif-image-upload"
-                              className={`px-4 py-2.5 bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 font-semibold text-sm rounded-xl border border-brand-primary/20 flex items-center justify-center gap-1.5 cursor-pointer h-full transition-all ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                              {uploadingImage ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
-                              <span>{uploadingImage ? 'Enviando...' : 'Upload'}</span>
-                            </label>
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept="image/*"
+                                id="notif-image-upload"
+                                className="hidden"
+                                onChange={handleImageUpload}
+                                disabled={uploadingImage}
+                              />
+                              <label
+                                htmlFor="notif-image-upload"
+                                className={`px-4 py-2.5 bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/20 font-semibold text-sm rounded-xl border border-brand-primary/20 flex items-center justify-center gap-1.5 cursor-pointer h-full transition-all ${uploadingImage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              >
+                                {uploadingImage ? <Loader2 className="animate-spin" size={16} /> : <Upload size={16} />}
+                                <span>{uploadingImage ? 'Enviando...' : 'Upload'}</span>
+                              </label>
+                            </div>
                           </div>
+                          {notifImageUrl && (
+                            <div className="mt-2.5 relative inline-block rounded-xl overflow-hidden border border-brand-border max-w-xs shadow-sm bg-brand-bg/30">
+                              <img src={notifImageUrl} alt="Preview da capa" className="max-h-32 object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setNotifImageUrl('')}
+                                className="absolute top-1.5 right-1.5 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors shadow-md"
+                                title="Remover Imagem"
+                              >
+                                <XCircle size={14} />
+                              </button>
+                            </div>
+                          )}
                         </div>
-                        {notifImageUrl && (
-                          <div className="mt-2.5 relative inline-block rounded-xl overflow-hidden border border-brand-border max-w-xs shadow-sm bg-brand-bg/30">
-                            <img src={notifImageUrl} alt="Preview da capa" className="max-h-32 object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => setNotifImageUrl('')}
-                              className="absolute top-1.5 right-1.5 bg-red-600 text-white rounded-full p-1 hover:bg-red-700 transition-colors shadow-md"
-                              title="Remover Imagem"
-                            >
-                              <XCircle size={14} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
 
-                      <div className="pt-2">
-                        <button
-                          type="submit"
-                          disabled={notifSending}
-                          className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
-                        >
-                          {notifSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                          <span>Disparar Notificação Push</span>
-                        </button>
-                      </div>
-                    </form>
+                        <div className="pt-2">
+                          <button
+                            type="submit"
+                            disabled={notifSending}
+                            className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
+                          >
+                            {notifSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                            <span>Disparar Notificação Push</span>
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+
+                    <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                      <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
+                        <Clock size={18} className="text-brand-primary" />
+                        <span>Notificações push enviadas manualmente</span>
+                      </h3>
+
+                      {loadingPushNotifications ? (
+                        <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                          <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                          <span className="text-sm">Carregando logs...</span>
+                        </div>
+                      ) : manualPushNotifications.length === 0 ? (
+                        <div className="p-12 text-center text-brand-text-muted text-sm italic">
+                          Nenhuma notificação manual cadastrada no sistema.
+                        </div>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm border-collapse">
+                            <thead>
+                              <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider">
+                                <th className="py-2.5 px-3">Profissional</th>
+                                <th className="py-2.5 px-3">Título / Mensagem</th>
+                                <th className="py-2.5 px-3">Tipo</th>
+                                <th className="py-2.5 px-3">Lido em</th>
+                                <th className="py-2.5 px-3">Enviado em</th>
+                                <th className="py-2.5 px-3 text-right">Ação</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-brand-border/30 text-xs">
+                              {manualPushNotifications.map((n) => (
+                                <tr key={n.id} className="hover:bg-brand-bg/10 transition-colors">
+                                  <td className="py-2.5 px-3">
+                                    <p className="font-semibold text-brand-text">
+                                      {n.professionals?.full_name || 'Profissional'}
+                                    </p>
+                                    <p className="text-[10px] text-brand-text-muted">
+                                      {n.professionals?.google_email || ''}
+                                    </p>
+                                  </td>
+                                  <td className="py-2.5 px-3 max-w-xs">
+                                    <div className="flex items-center gap-2">
+                                      {n.image_url && (
+                                        <img
+                                          src={n.image_url}
+                                          alt="Capa"
+                                          className="w-8 h-8 rounded object-cover flex-shrink-0 border border-brand-border/40"
+                                        />
+                                      )}
+                                      <div className="overflow-hidden">
+                                        <p className="font-medium text-brand-text truncate">{n.title}</p>
+                                        <p className="text-brand-text-muted truncate text-[10px]">{n.message}</p>
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="py-2.5 px-3">
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
+                                      n.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-150' :
+                                      n.type === 'error' ? 'bg-red-50 text-red-700 border border-red-150' :
+                                      n.type === 'warning' ? 'bg-amber-50 text-amber-700 border border-amber-150' :
+                                      'bg-blue-50 text-blue-700 border border-blue-150'
+                                    }`}>
+                                      {n.type}
+                                    </span>
+                                  </td>
+                                  <td className="py-2.5 px-3 text-brand-text-muted">
+                                    {n.read_at ? new Date(n.read_at).toLocaleDateString('pt-BR', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : (
+                                      <span className="text-[10px] text-red-500 font-semibold uppercase">Não lido</span>
+                                    )}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-brand-text-muted">
+                                    {n.created_at ? new Date(n.created_at).toLocaleDateString('pt-BR', {
+                                      day: '2-digit',
+                                      month: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit'
+                                    }) : 'N/A'}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right">
+                                    <button
+                                      onClick={() => handleCopyNotification(n)}
+                                      className="p-1 text-brand-primary hover:bg-brand-bg rounded transition-colors mr-1 cursor-pointer"
+                                      title="Reaproveitar Conteúdo (Copiar)"
+                                    >
+                                      <Copy size={15} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleResendNotification(n)}
+                                      disabled={resendingNotifId === n.id}
+                                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors mr-1 disabled:opacity-50 cursor-pointer"
+                                      title="Reenviar Notificação Imediatamente"
+                                    >
+                                      {resendingNotifId === n.id ? <Loader2 className="animate-spin" size={15} /> : <RefreshCw size={15} />}
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteNotification(n.id)}
+                                      disabled={deletingNotifId === n.id}
+                                      className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
                   </div>
-
-                  {/* Histórico e Auditoria */}
+                ) : (
                   <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
                     <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
                       <Clock size={18} className="text-brand-primary" />
-                      <span>Auditoria de Alertas Push Enviados</span>
+                      <span>Notificações automáticas da plataforma</span>
                     </h3>
 
-                    {loadingAdminNotifications ? (
+                    {loadingPushNotifications ? (
                       <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
                         <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
                         <span className="text-sm">Carregando logs...</span>
                       </div>
-                    ) : adminNotifications.length === 0 ? (
+                    ) : platformPushNotifications.length === 0 ? (
                       <div className="p-12 text-center text-brand-text-muted text-sm italic">
-                        Nenhuma notificação cadastrada no sistema.
+                        Nenhuma notificação automática cadastrada no sistema.
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -3896,7 +4034,7 @@ export default function AdminPanel() {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-brand-border/30 text-xs">
-                            {adminNotifications.map((n) => (
+                            {platformPushNotifications.map((n) => (
                               <tr key={n.id} className="hover:bg-brand-bg/10 transition-colors">
                                 <td className="py-2.5 px-3">
                                   <p className="font-semibold text-brand-text">
@@ -3909,10 +4047,10 @@ export default function AdminPanel() {
                                 <td className="py-2.5 px-3 max-w-xs">
                                   <div className="flex items-center gap-2">
                                     {n.image_url && (
-                                      <img 
-                                        src={n.image_url} 
-                                        alt="Capa" 
-                                        className="w-8 h-8 rounded object-cover flex-shrink-0 border border-brand-border/40" 
+                                      <img
+                                        src={n.image_url}
+                                        alt="Capa"
+                                        className="w-8 h-8 rounded object-cover flex-shrink-0 border border-brand-border/40"
                                       />
                                     )}
                                     <div className="overflow-hidden">
@@ -3980,6 +4118,7 @@ export default function AdminPanel() {
                       </div>
                     )}
                   </div>
+                )}
               </div>
             ) : activeTab === 'email_notifications' ? (
               <div className="space-y-6">

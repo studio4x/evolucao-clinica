@@ -6,6 +6,7 @@ export interface NotificationPayload {
   content: string;
   type?: 'info' | 'success' | 'warning' | 'error';
   link?: string;
+  source?: 'manual' | 'platform';
 }
 
 /**
@@ -26,7 +27,10 @@ export async function sendNotification(payload: NotificationPayload) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        ...payload,
+        source: payload.source || 'manual'
+      })
     });
 
     if (!res.ok) {

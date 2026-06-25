@@ -502,6 +502,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 
 type EmailProvider = "smtp" | "brevo";
 type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome";
+type NotificationOrigin = "platform" | "manual";
 
 type EmailDeliveryInput = {
   userId?: string | null;
@@ -1718,7 +1719,8 @@ async function sendNotificationInternal(
   content: string,
   type: string = "info",
   link?: string,
-  imageUrl?: string
+  imageUrl?: string,
+  source: NotificationOrigin = "platform"
 ) {
   // A. Criar no banco (In-App)
   const { data: notification, error: insertError } = await supabaseAdmin
@@ -1729,7 +1731,8 @@ async function sendNotificationInternal(
       message: content, // Ajustado ao banco existente
       type,
       link,
-      image_url: imageUrl
+      image_url: imageUrl,
+      source
     })
     .select()
     .single();
@@ -1932,6 +1935,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
 // 4. Enviar Notificação (In-App, Push e E-mail)
 app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   const { userId, title, content, type = "info", link, imageUrl } = req.body;
+  const notificationSource: NotificationOrigin = req.body.source === "platform" ? "platform" : "manual";
   
   if (!title || !content) {
     return res.status(400).json({ error: "Titulo e mensagem sao obrigatorios" });
@@ -1958,7 +1962,7 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   }
 
   try {
-    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl);
+    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl, notificationSource);
     res.json({
       success: true,
       notification: result.notification,
