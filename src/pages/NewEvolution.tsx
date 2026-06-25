@@ -795,18 +795,6 @@ export default function NewEvolution() {
     }
   };
 
-  useEffect(() => {
-    if (!isOnboardingMode || status !== 'success' || !patient?.id) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      navigate('/onboarding?step=agenda', { replace: true });
-    }, 1200);
-
-    return () => window.clearTimeout(timer);
-  }, [isOnboardingMode, navigate, patient?.id, status]);
-
   const recoveredAudioCount = recoveredDraft ? getPendingEvolutionAudioBlobs(recoveredDraft).length : 0;
   const recoveredDuration = recoveredDraft?.recordingTime || 0;
 
@@ -1124,7 +1112,7 @@ export default function NewEvolution() {
             <div className="flex flex-col items-center justify-center p-6 bg-brand-accent/10 rounded-xl border border-brand-accent/20 space-y-3">
               <CheckCircle className="w-10 h-10 text-brand-primary" />
               <p className="text-brand-primary font-medium text-lg text-center">
-                {isOnboardingMode ? 'Evolução concluída. Encaminhando para a sincronização da agenda...' : 'Evolução registrada com sucesso!'}
+                {isOnboardingMode ? 'Evolução concluída. Continue para a sincronização da agenda.' : 'Evolução registrada com sucesso!'}
               </p>
               <p className="text-sm text-brand-text-muted text-center">
                 {isOnboardingMode
@@ -1156,7 +1144,7 @@ export default function NewEvolution() {
                   onClick={() => navigate(isOnboardingMode ? '/onboarding?step=agenda' : `/painel/patients/${id}`)}
                   className="btn-outline px-4 py-2 text-sm"
                 >
-                  {isOnboardingMode ? 'Ir agora para a agenda' : 'Voltar ao Paciente'}
+                  {isOnboardingMode ? 'Continuar para a agenda' : 'Voltar ao Paciente'}
                 </button>
                 <button
                   onClick={() => {

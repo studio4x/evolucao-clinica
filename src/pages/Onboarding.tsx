@@ -88,6 +88,8 @@ export default function Onboarding() {
   const isAgendaStep = activeStep === 'agenda';
   const agendaAlreadySynced = Boolean(onboardingState?.agendaSyncedAt);
   const isCompleteStep = activeStep === 'complete';
+  const showAgendaPendingStep = isAgendaStep && !agendaAlreadySynced && !syncSummary;
+  const showCompletionStep = isCompleteStep || (isAgendaStep && (agendaAlreadySynced || syncSummary));
   const hasCalendarAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.calendarReadOnly);
 
   useEffect(() => {
@@ -614,7 +616,7 @@ export default function Onboarding() {
             )}
 
             {/* 2. SLIDE DA AGENDA (step === 'agenda') */}
-            {isAgendaStep && !isCompleteStep && (
+            {showAgendaPendingStep && (
               <div className="w-full max-w-lg mx-auto flex flex-col items-center text-center space-y-6 md:space-y-7">
                 
                 {/* Visual Calendário com Animação */}
@@ -731,7 +733,7 @@ export default function Onboarding() {
             )}
 
             {/* 3. SLIDE DE CONCLUSÃO (step === 'complete') */}
-            {(isCompleteStep || (isAgendaStep && (agendaAlreadySynced || syncSummary))) && (
+            {showCompletionStep && (
               <div className="w-full max-w-lg mx-auto flex flex-col items-center text-center space-y-6 md:space-y-7 relative">
                 
                 {/* Confetes em CSS */}
@@ -767,10 +769,12 @@ export default function Onboarding() {
 
                 <div className="space-y-2 px-2 relative z-10">
                   <h1 className="text-2xl sm:text-3xl font-display font-extrabold text-brand-primary">
-                    Tudo Pronto!
+                    {isAgendaStep ? 'Integração concluída!' : 'Tudo Pronto!'}
                   </h1>
                   <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
-                    Você configurou o seu ambiente e já sabe como funciona. A partir de agora, a sua clínica está pronta para registrar evoluções com Inteligência Artificial.
+                    {isAgendaStep
+                      ? 'Sua agenda foi sincronizada com sucesso. Agora você já pode finalizar o onboarding.'
+                      : 'Você configurou o seu ambiente e já sabe como funciona. A partir de agora, a sua clínica está pronta para registrar evoluções com Inteligência Artificial.'}
                   </p>
                 </div>
 
@@ -846,7 +850,7 @@ export default function Onboarding() {
                   </button>
                 )}
               </>
-            ) : isAgendaStep && !syncSummary && !agendaAlreadySynced ? (
+            ) : showAgendaPendingStep ? (
               // Se for a etapa da agenda e ainda não foi sincronizada, pode permitir avançar como pulado ou botão secundário
               <>
                 <button
@@ -874,7 +878,7 @@ export default function Onboarding() {
                 onClick={handleFinish}
                 className="btn-primary w-full py-3 text-xs font-bold inline-flex items-center justify-center gap-2 shadow-lg shadow-brand-primary/10"
               >
-                Acessar o Painel de Controle
+                {isAgendaStep ? 'Finalizar onboarding e acessar o painel' : 'Acessar o Painel de Controle'}
                 <ArrowRight size={16} />
               </button>
             )}
