@@ -642,7 +642,7 @@ export default function Onboarding() {
                     Integração com Google Agenda
                   </h1>
                   <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
-                    Sincronize a agenda para importar seus compromissos que coincidem com os pacientes ativos diretamente no painel.
+                    Sincronize a agenda para cruzar os compromissos com os pacientes ativos, localizar os atendimentos já realizados e transformar essas informações em evoluções com muito mais rapidez.
                   </p>
                 </div>
 
@@ -651,7 +651,7 @@ export default function Onboarding() {
                   {!hasCalendarAccess ? (
                     <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-4 space-y-3">
                       <p className="text-xs text-amber-800 leading-normal">
-                        Conecte a sua conta Google para buscarmos os compromissos da agenda nesta etapa do onboarding.
+                        Conecte a sua conta Google para buscarmos os atendimentos registrados na agenda. Assim, você identifica mais rápido quem foi atendido, evita retrabalho e já começa a evoluir cada paciente com base no que aconteceu na consulta.
                       </p>
                       <button
                         type="button"
@@ -688,6 +688,10 @@ export default function Onboarding() {
                           )}
                         </button>
                       )}
+
+                      <p className="text-[10px] text-brand-text-muted leading-relaxed text-center px-1">
+                        A sincronização ajuda a localizar atendimentos passados, vincular os pacientes corretos e acelerar a escrita da evolução sem procurar manualmente em outra tela.
+                      </p>
                     </div>
                   )}
 
@@ -723,7 +727,7 @@ export default function Onboarding() {
                       )}
 
                       <p className="text-[10px] text-brand-text-muted text-center italic">
-                        Clique em avançar para finalizar a sua configuração.
+                        A agenda já está vinculada. Agora você pode usar esses atendimentos como base para criar evoluções com mais agilidade.
                       </p>
                     </div>
                   )}
@@ -773,7 +777,7 @@ export default function Onboarding() {
                   </h1>
                   <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                     {isAgendaStep
-                      ? 'Sua agenda foi sincronizada com sucesso. Agora você já pode finalizar o onboarding.'
+                      ? 'Sua agenda foi sincronizada com sucesso. A partir daqui, você consegue localizar atendimentos realizados e usar essas informações para criar a evolução do paciente com mais rapidez.'
                       : 'Você configurou o seu ambiente e já sabe como funciona. A partir de agora, a sua clínica está pronta para registrar evoluções com Inteligência Artificial.'}
                   </p>
                 </div>
