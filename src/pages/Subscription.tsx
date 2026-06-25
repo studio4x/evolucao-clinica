@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 import GooglePayButton from '@google-pay/button-react';
 import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
-import { sendSubscriptionPaymentEmail, type SubscriptionEmailResponse } from '../services/subscriptionEmail';
+import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 
 const DEFAULT_PLANS = [
   {
@@ -58,7 +58,6 @@ type SubscriptionPaymentModal = {
   paymentLabel: string;
   title: string;
   message: string;
-  emailNote: string;
   benefits: string[];
   summaryLines: string[];
   invoiceUrl?: string | null;
@@ -150,8 +149,8 @@ function buildPaymentSummaryLines(plan: SubscriptionPlanLike | undefined, data: 
     `Plano: ${getPlanDisplayName(plan, plan?.id || '')}`,
     data?.amountPaid ? `Valor: ${formatCurrencyValue(Number(data.amountPaid), String(data.currency || 'BRL'))}` : null,
     data?.paymentLabel ? `Forma de pagamento: ${data.paymentLabel}` : null,
-    data?.subscriptionId ? `Assinatura Stripe: ${data.subscriptionId}` : null,
-    data?.invoiceId ? `Fatura Stripe: ${data.invoiceId}` : null,
+    data?.subscriptionId ? `Assinatura Google Pay: ${data.subscriptionId}` : null,
+    data?.invoiceId ? `Fatura Google Pay: ${data.invoiceId}` : null,
     data?.endsAt ? `Próxima renovação: ${new Date(data.endsAt).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -402,16 +401,9 @@ export default function Subscription() {
     failureMessage?: string
   ) => {
     const plan = getPlanDetails(planId);
-    let emailResult: SubscriptionEmailResponse = {
-      success: false,
-      emailSent: false,
-      error: 'Falha ao enviar o e-mail de confirmação.',
-      emailError: 'Falha ao enviar o e-mail de confirmação.'
-    };
-
-    try {
-      emailResult = await sendSubscriptionPaymentEmail({
-        kind: kind === 'success' ? 'success' : 'failure',
+    if (kind === 'error') {
+      const payload = {
+        kind: 'failure' as const,
         planId,
         paymentMethodLabel: paymentLabel,
         subscriptionId: backendData?.subscriptionId || null,
@@ -422,15 +414,11 @@ export default function Subscription() {
         currency: backendData?.currency || 'brl',
         nextRenewalAt: backendData?.endsAt || null,
         failureMessage: failureMessage || null
-      });
-    } catch (emailError: any) {
-      console.error('[Subscription] Falha ao disparar e-mail de assinatura:', emailError);
-      emailResult = {
-        success: false,
-        emailSent: false,
-        error: emailError?.message || 'Falha ao enviar o e-mail de confirmação.',
-        emailError: emailError?.message || 'Falha ao enviar o e-mail de confirmação.'
       };
+
+      void sendSubscriptionPaymentEmail(payload).catch((emailError) => {
+        console.error('[Subscription] Falha ao disparar e-mail de falha da assinatura:', emailError);
+      });
     }
 
     const planDetails = getPlanBenefitsCopy(plan, planId);
@@ -439,13 +427,6 @@ export default function Subscription() {
       paymentLabel
     });
     const isSuccess = kind === 'success';
-    const emailNote = emailResult.emailSent
-      ? (isSuccess
-        ? 'Um e-mail foi enviado com os dados da sua assinatura.'
-        : 'Um e-mail foi enviado com os detalhes da falha e as orientações para tentar novamente.')
-      : (isSuccess
-        ? 'A assinatura foi concluída, mas não conseguimos enviar o e-mail automaticamente.'
-        : 'A tentativa de pagamento foi processada, mas não conseguimos enviar o e-mail automaticamente.');
 
     setPaymentModal({
       kind,
@@ -453,9 +434,8 @@ export default function Subscription() {
       paymentLabel,
       title: planDetails.title,
       message: isSuccess
-        ? `Seu pedido foi processado com sucesso usando ${paymentLabel}. ${emailNote}`
-        : `Não foi possível concluir o pagamento usando ${paymentLabel}. ${emailNote}`,
-      emailNote: `${emailNote}${emailResult.emailError ? ` ${emailResult.emailError}` : ''}`,
+        ? `Seu pedido foi processado com sucesso usando ${paymentLabel}. Um e-mail foi enviado com os dados da sua assinatura.`
+        : `Não foi possível concluir o pagamento usando ${paymentLabel}. Verifique os dados da cobrança e tente novamente.`,
       benefits: isSuccess
         ? planDetails.benefits
         : [
@@ -466,7 +446,7 @@ export default function Subscription() {
       summaryLines,
       invoiceUrl: backendData?.invoiceUrl || null,
       invoicePdfUrl: backendData?.invoicePdfUrl || null,
-      errorMessage: failureMessage || emailResult.emailError || null
+      errorMessage: failureMessage || null
     });
   };
 
@@ -490,7 +470,8 @@ export default function Subscription() {
         body: {
           userId: user.id,
           planId: plan,
-          paymentToken: token
+          paymentToken: token,
+          paymentDescriptor: paymentLabel
         }
       });
 
@@ -1060,7 +1041,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-bg text-brand-primary text-[11px] font-bold uppercase tracking-wider">
                   <Mail className="w-3.5 h-3.5" />
-                  <span>{paymentModal.kind === 'success' ? 'Confirmação enviada' : 'Falha registrada'}</span>
+                  <span>{paymentModal.kind === 'success' ? 'Assinatura confirmada' : 'Pagamento não concluído'}</span>
                 </div>
                 <h3 className="text-2xl font-display font-bold text-brand-text">{paymentModal.title}</h3>
                 <p className={`text-sm leading-relaxed ${paymentModal.kind === 'success' ? 'text-brand-text-muted' : 'text-red-700'}`}>
@@ -1069,17 +1050,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div className={`rounded-2xl border p-4 ${paymentModal.kind === 'success' ? 'bg-emerald-50/60 border-emerald-100' : 'bg-red-50/60 border-red-100'}`}>
-                <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${paymentModal.kind === 'success' ? 'text-emerald-800' : 'text-red-800'}`}>
-                  Forma de pagamento
-                </p>
-                <p className="text-sm font-semibold text-brand-text">{paymentModal.paymentLabel}</p>
-                <p className="text-xs text-brand-text-muted mt-1">
-                  Seguimos a orientação do Google Pay: exibimos apenas o texto descritivo mascarado retornado pela API.
-                </p>
-              </div>
-
+            <div className="grid grid-cols-1 gap-4">
               <div className="rounded-2xl border border-brand-border bg-brand-bg/40 p-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted mb-2">Resumo da transação</p>
                 <div className="space-y-2 text-sm text-brand-text">
@@ -1132,14 +1103,6 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
                     </div>
                   </div>
                 ))}
-              </div>
-
-              <div className={`rounded-xl border p-4 text-sm leading-relaxed ${
-                paymentModal.kind === 'success'
-                  ? 'bg-emerald-50/50 border-emerald-100 text-emerald-900'
-                  : 'bg-red-50/50 border-red-100 text-red-800'
-              }`}>
-                {paymentModal.emailNote}
               </div>
             </div>
 

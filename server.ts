@@ -2256,8 +2256,8 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
       `Plano: ${planName}`,
       amountLabel ? `Valor: ${amountLabel}` : null,
       paymentDescriptor ? `Forma de pagamento: ${paymentDescriptor}` : null,
-      subscriptionId ? `Assinatura Stripe: ${subscriptionId}` : null,
-      invoiceId ? `Fatura Stripe: ${invoiceId}` : null,
+      subscriptionId ? `Assinatura Google Pay: ${subscriptionId}` : null,
+      invoiceId ? `Fatura Google Pay: ${invoiceId}` : null,
       renewalLabel ? `Próxima renovação: ${renewalLabel}` : null,
       `Data do processamento: ${subscriptionDateLabel}`
     ].filter(Boolean) as string[];
@@ -2281,8 +2281,8 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
           "",
           `Seu pedido foi processado com sucesso usando ${paymentDescriptor}.`,
           amountLabel ? `Valor confirmado: ${amountLabel}.` : null,
-          subscriptionId ? `Assinatura Stripe: ${subscriptionId}.` : null,
-          invoiceId ? `Fatura Stripe: ${invoiceId}.` : null,
+          subscriptionId ? `Assinatura Google Pay: ${subscriptionId}.` : null,
+          invoiceId ? `Fatura Google Pay: ${invoiceId}.` : null,
           renewalLabel ? `Próxima renovação: ${renewalLabel}.` : null,
           "",
           `Boas-vindas ao ${planName}.`,
