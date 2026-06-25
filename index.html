@@ -128,6 +128,7 @@
 
           const faviconUrl = config.favicon_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
           const appleTouchIconUrl = config.pwa_icon_192_url || faviconUrl;
+          const socialImageUrl = appendVersion(config.pwa_icon_512_url || faviconUrl, assetSignature);
 
           setLink("link[rel='icon']", 'icon', appendVersion(faviconUrl, assetSignature), 'image/png', '32x32');
           setLink("link[rel='shortcut icon']", 'shortcut icon', appendVersion(faviconUrl, assetSignature), 'image/png');
@@ -135,6 +136,12 @@
           setLink("link[rel='manifest']", 'manifest', appendVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
           updateThemeMeta(config.pwa_theme_color);
           updateMeta("meta[name='apple-mobile-web-app-title']", 'name', 'apple-mobile-web-app-title', config.pwa_app_name);
+          updateMeta("meta[property='og:title']", 'property', 'og:title', config.pwa_app_name);
+          updateMeta("meta[property='og:description']", 'property', 'og:description', config.pwa_description);
+          updateMeta("meta[property='og:image']", 'property', 'og:image', socialImageUrl);
+          updateMeta("meta[name='twitter:title']", 'name', 'twitter:title', config.pwa_app_name);
+          updateMeta("meta[name='twitter:description']", 'name', 'twitter:description', config.pwa_description);
+          updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', socialImageUrl);
         };
 
         const hydrate = function (config) {
