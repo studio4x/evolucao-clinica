@@ -650,6 +650,11 @@ async function deleteProfessionalAccount(targetUserId: string) {
     throw new Error("Usuário não encontrado.");
   }
 
+  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+  if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
+    throw new Error(`Falha ao remover a conta de autenticação: ${authDeleteError.message}`);
+  }
+
   const cleanupTargets: Array<{ table: string; column: string }> = [
     { table: "usage_logs", column: "professional_id" },
     { table: "evolutions", column: "professional_id" },
@@ -668,29 +673,31 @@ async function deleteProfessionalAccount(targetUserId: string) {
       .eq(target.column, targetUserId);
 
     if (error) {
-      throw new Error(`Falha ao remover dados de ${target.table}: ${error.message}`);
+      console.warn(`[DeleteUser] Falha ao remover dados de ${target.table}: ${error.message}`);
     }
   }
 
-  const { data: supportFiles, error: supportFilesError } = await supabaseAdmin
-    .storage
-    .from("support_attachments")
-    .list(`support/${targetUserId}`, { limit: 1000 });
-
-  if (supportFilesError) {
-    throw new Error(`Falha ao listar anexos de suporte do usuário: ${supportFilesError.message}`);
-  }
-
-  if (supportFiles && supportFiles.length > 0) {
-    const supportPaths = supportFiles.map((file) => `support/${targetUserId}/${file.name}`);
-    const { error: supportRemoveError } = await supabaseAdmin
+  try {
+    const { data: supportFiles, error: supportFilesError } = await supabaseAdmin
       .storage
       .from("support_attachments")
-      .remove(supportPaths);
+      .list(`support/${targetUserId}`, { limit: 1000 });
 
-    if (supportRemoveError) {
-      throw new Error(`Falha ao remover anexos de suporte do usuário: ${supportRemoveError.message}`);
+    if (supportFilesError) {
+      console.warn(`[DeleteUser] Falha ao listar anexos de suporte do usuário: ${supportFilesError.message}`);
+    } else if (supportFiles && supportFiles.length > 0) {
+      const supportPaths = supportFiles.map((file) => `support/${targetUserId}/${file.name}`);
+      const { error: supportRemoveError } = await supabaseAdmin
+        .storage
+        .from("support_attachments")
+        .remove(supportPaths);
+
+      if (supportRemoveError) {
+        console.warn(`[DeleteUser] Falha ao remover anexos de suporte do usuário: ${supportRemoveError.message}`);
+      }
     }
+  } catch (storageError) {
+    console.warn("[DeleteUser] Falha inesperada ao limpar anexos de suporte:", storageError);
   }
 
   const { error: profDeleteError } = await supabaseAdmin
@@ -699,12 +706,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
     .eq("id", targetUserId);
 
   if (profDeleteError) {
-    throw new Error(`Falha ao remover o perfil do usuário: ${profDeleteError.message}`);
-  }
-
-  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
-  if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
-    throw new Error(`Falha ao remover a conta de autenticação: ${authDeleteError.message}`);
+    console.warn(`[DeleteUser] Falha ao remover o perfil do usuário: ${profDeleteError.message}`);
   }
 
   return targetProf;
