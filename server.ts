@@ -11,6 +11,7 @@ dotenv.config();
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+const TRIAL_DURATION_DAYS = 7;
 
 // Configuração do Supabase Admin
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
@@ -26,6 +27,20 @@ function buildFromField(smtpFrom: string, smtpUser: string): string {
   if (smtpFrom.includes('@')) return smtpFrom;
   // É só um nome — adiciona o e-mail
   return `"${smtpFrom}" <${smtpUser}>`;
+}
+
+function getTrialEndsAt(baseDate = new Date()) {
+  return new Date(baseDate.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function buildTrialSubscriptionWindow(baseDate = new Date()) {
+  const trialEndsAt = getTrialEndsAt(baseDate);
+  return {
+    subscription_plan: "trial",
+    subscription_status: "trialing",
+    subscription_ends_at: trialEndsAt,
+    trial_ends_at: trialEndsAt
+  };
 }
 
 function hashString(value: string) {
@@ -765,6 +780,8 @@ async function ensureProfessionalProfile(user: any, status: "pending" | "active"
     || user?.email
     || "Profissional";
 
+  const trialWindow = buildTrialSubscriptionWindow();
+
   const { error } = await supabaseAdmin
     .from("professionals")
       .upsert({
@@ -774,10 +791,7 @@ async function ensureProfessionalProfile(user: any, status: "pending" | "active"
       photo_url: user?.user_metadata?.avatar_url || null,
       role: "therapist",
       status,
-      subscription_plan: "trial",
-      subscription_status: "trialing",
-      subscription_ends_at: null,
-      trial_ends_at: null
+      ...trialWindow
     });
 
   if (error) throw error;
@@ -893,27 +907,10 @@ async function bootstrapOnboardingAccess(user: any) {
   if (profError) throw profError;
 
   if (!prof) {
-    if (requireApproval) {
-      await ensurePendingProfessionalProfile(user);
-      await sendOnboardingPendingNotice(user);
-      const { data: createdProfile, error: fetchError } = await supabaseAdmin
-        .from("professionals")
-        .select("id, full_name, google_email, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-      return {
-        success: true,
-        requireApproval,
-        profile: createdProfile
-      };
-    }
-
     await ensureActiveProfessionalProfile(user);
     await sendOnboardingAccessGrantedNotice(user.id, {
       title: "Acesso liberado",
-      content: "Sua conta foi criada e liberada automaticamente. Você já pode acessar a plataforma normalmente.",
+      content: `Sua conta foi criada com ${TRIAL_DURATION_DAYS} dias de teste gratuito. Durante esse período, você tem acesso completo como assinante. Ao final do prazo, será necessário escolher um plano para continuar.`,
       type: "success",
       link: "/painel/dashboard"
     });
@@ -938,6 +935,7 @@ async function bootstrapOnboardingAccess(user: any) {
       .from("professionals")
       .update({
         status: "active",
+        ...buildTrialSubscriptionWindow(),
         updated_at: new Date().toISOString()
       })
       .eq("id", user.id);
@@ -1196,6 +1194,89 @@ async function sendNotificationInternal(
   }
 
   return { notification, emailSent, emailTo, emailError };
+}
+
+async function sendTrialExpirationEmail(prof: { id: string; full_name: string | null; google_email: string | null; trial_ends_at: string | null }) {
+  const settings = await getNotificationSettings();
+  if (!settings.smtp_host || !settings.smtp_user || !settings.smtp_pass) {
+    throw new Error("Servidor SMTP de notificações não configurado na plataforma.");
+  }
+
+  const recipientEmail = prof.google_email || null;
+  if (!recipientEmail) {
+    throw new Error("E-mail do profissional não encontrado no cadastro.");
+  }
+
+  const trialEndsAtDate = prof.trial_ends_at ? new Date(prof.trial_ends_at) : null;
+  const trialEndsAtLabel = trialEndsAtDate
+    ? trialEndsAtDate.toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "há alguns dias";
+
+  const origin = process.env.VERCEL_PRODUCTION_URL || "https://evolucao.conexaoseres.com.br";
+  const subscriptionUrl = `${origin}/painel/subscription`;
+  const professionalName = prof.full_name || "Profissional";
+
+  const transporter = nodemailer.createTransport({
+    host: settings.smtp_host,
+    port: Number(settings.smtp_port) || 587,
+    secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
+    auth: {
+      user: settings.smtp_user,
+      pass: settings.smtp_pass
+    },
+    pool: false,
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    tls: { rejectUnauthorized: false }
+  } as any);
+
+  await transporter.sendMail({
+    from: buildFromField(settings.smtp_from, settings.smtp_user),
+    to: recipientEmail,
+    subject: "Seu teste gratuito de 7 dias terminou",
+    text: [
+      `Olá, ${professionalName}.`,
+      "",
+      `Seu período de teste gratuito de ${TRIAL_DURATION_DAYS} dias terminou em ${trialEndsAtLabel}.`,
+      "A partir de agora, o acesso completo à plataforma está bloqueado até a contratação de um plano.",
+      `Para continuar utilizando o app, escolha um plano em: ${subscriptionUrl}`,
+      "",
+      "Se você já realizou a assinatura, basta acessar novamente o aplicativo para liberar o acesso."
+    ].join("\n"),
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden;">
+        <div style="background: linear-gradient(135deg, #005C13, #0f7a1f); color: #ffffff; padding: 28px;">
+          <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.8;">Evolução Clínica</p>
+          <h1 style="margin: 0; font-size: 24px; line-height: 1.25;">Seu teste gratuito terminou</h1>
+        </div>
+        <div style="padding: 28px; color: #111827; line-height: 1.7;">
+          <p style="margin: 0 0 16px 0; font-size: 16px;">Olá, <strong>${professionalName}</strong>.</p>
+          <p style="margin: 0 0 16px 0; font-size: 15px;">
+            Seu período de teste gratuito de <strong>${TRIAL_DURATION_DAYS} dias</strong> terminou em <strong>${trialEndsAtLabel}</strong>.
+            O acesso completo à plataforma foi encerrado até a contratação de um plano.
+          </p>
+          <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 20px 0 24px 0;">
+            <p style="margin: 0; font-size: 14px; color: #374151;">
+              Para continuar utilizando prontuários, evoluções, Google Docs e a sincronização da agenda, escolha um dos planos disponíveis no botão abaixo.
+            </p>
+          </div>
+          <div style="text-align: center; margin: 28px 0 8px 0;">
+            <a href="${subscriptionUrl}" style="display: inline-block; background: #005C13; color: #ffffff; text-decoration: none; padding: 14px 28px; border-radius: 10px; font-weight: 700; font-size: 15px;">
+              Assinar um plano agora
+            </a>
+          </div>
+        </div>
+        <div style="border-top: 1px solid #f3f4f6; padding: 18px 28px; background: #f9fafb; color: #6b7280; font-size: 12px; line-height: 1.6;">
+          Se você já concluiu a assinatura, pode simplesmente voltar ao aplicativo para ter o acesso liberado novamente.
+        </div>
+      </div>
+    `
+  });
 }
 
 // 4. Enviar Notificação (In-App, Push e E-mail)
@@ -1565,6 +1646,71 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
   } catch (err: any) {
     console.error("[Cron] Erro no job de lembretes de evoluções:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 4.2. Cron para enviar e-mail quando o trial gratuito de 7 dias expirar
+app.get("/api/cron/send-trial-expiration-notices", async (req: any, res) => {
+  const authHeader = req.headers.authorization;
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+    return res.status(401).json({ error: "Nao autorizado" });
+  }
+
+  try {
+    const now = new Date();
+    const { data: expiredTrials, error } = await supabaseAdmin
+      .from("professionals")
+      .select("id, full_name, google_email, trial_ends_at, subscription_plan, subscription_status, trial_expiration_email_sent_at, status")
+      .eq("status", "active")
+      .eq("subscription_plan", "trial")
+      .eq("subscription_status", "trialing")
+      .lte("trial_ends_at", now.toISOString())
+      .is("trial_expiration_email_sent_at", null);
+
+    if (error) throw error;
+
+    if (!expiredTrials || expiredTrials.length === 0) {
+      return res.json({ success: true, message: "Nenhum trial expirado encontrado." });
+    }
+
+    let emailsSent = 0;
+    let updateFailures = 0;
+
+    for (const prof of expiredTrials) {
+      try {
+        await sendTrialExpirationEmail(prof);
+
+        const { error: updateError } = await supabaseAdmin
+          .from("professionals")
+          .update({
+            subscription_status: "canceled",
+            subscription_ends_at: prof.trial_ends_at || now.toISOString(),
+            trial_expiration_email_sent_at: now.toISOString(),
+            updated_at: now.toISOString()
+          })
+          .eq("id", prof.id);
+
+        if (updateError) {
+          updateFailures++;
+          console.error(`[Cron Trial] Erro ao atualizar profissional ${prof.id}:`, updateError.message);
+          continue;
+        }
+
+        emailsSent++;
+      } catch (sendErr: any) {
+        console.error(`[Cron Trial] Falha ao enviar e-mail de expiração para ${prof.id}:`, sendErr.message);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Processamento concluído. E-mails enviados: ${emailsSent}. Falhas na atualização: ${updateFailures}.`
+    });
+  } catch (err: any) {
+    console.error("[Cron Trial] Erro no job de expiração do trial:", err);
+    res.status(500).json({ error: err.message || "Erro ao processar expiração do trial." });
   }
 });
 

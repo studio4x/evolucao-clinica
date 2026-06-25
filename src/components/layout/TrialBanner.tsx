@@ -29,13 +29,13 @@ export default function TrialBanner() {
       <div className="flex items-center space-x-2 mx-auto md:mx-0">
         <Sparkles className="w-4 h-4 text-amber-300 animate-pulse flex-shrink-0" />
         <span>
-          Você está utilizando o <strong>Período de Teste Gratuito</strong>.{' '}
+          Você está utilizando o <strong>teste gratuito de 7 dias</strong>.{' '}
           {daysRemaining === 1 ? (
-            <span>Resta apenas <strong>1 dia</strong> de acesso gratuito.</span>
+            <span>Resta apenas <strong>1 dia</strong> antes do fim do trial.</span>
           ) : daysRemaining === 0 ? (
-            <span>Seu período de teste <strong>termina hoje</strong>!</span>
+            <span>Seu teste gratuito <strong>termina hoje</strong>!</span>
           ) : (
-            <span>Restam <strong>{daysRemaining} dias</strong> de acesso gratuito.</span>
+            <span>Restam <strong>{daysRemaining} dias</strong> de acesso completo.</span>
           )}
         </span>
       </div>

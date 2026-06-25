@@ -84,6 +84,10 @@ export default function LandingPage() {
       a: "Tudo é salvo de forma totalmente transparente na sua própria conta do Google. Na primeira vez que você entra, concede permissão ao app para criar documentos e pastas no seu Google Drive. Nós criamos uma pasta organizada chamada 'Evolução Clínica' e salvamos cada prontuário lá, em formato Google Docs. Os dados são inteiramente seus."
     },
     {
+      q: "Como funciona o teste gratuito de 7 dias?",
+      a: "Ao criar sua conta, você recebe acesso completo por 7 dias, como se já fosse assinante. Depois desse prazo, o acesso às funcionalidades principais é bloqueado até você escolher um plano."
+    },
+    {
       q: "O sistema atende aos requisitos da LGPD?",
       a: "Sim, com rigor máximo. Toda a comunicação de dados é criptografada e o armazenamento dos prontuários é feito diretamente no seu próprio Google Drive pessoal ou corporativo, garantindo que terceiros não tenham acesso aos dados confidenciais dos seus pacientes."
     },
@@ -145,7 +149,7 @@ export default function LandingPage() {
                     Entrar
                   </Link>
                   <Link to="/login" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg">
-                    Começar Teste Grátis
+                    Teste gratuito de 7 dias
                   </Link>
                 </>
               )}
@@ -183,7 +187,7 @@ export default function LandingPage() {
                     Entrar
                   </Link>
                   <Link to="/login" className="btn-primary w-full text-center py-3 font-semibold shadow-md">
-                    Começar Teste Grátis
+                    Teste gratuito de 7 dias
                   </Link>
                 </>
               )}
@@ -220,11 +224,14 @@ export default function LandingPage() {
               <p className="text-lg text-brand-text-muted max-w-2xl mx-auto lg:mx-0 leading-relaxed font-normal">
                 Grave suas consultas ou resumos falados por áudio. Nossa IA transcreve com precisão, estrutura a evolução clínica no padrão profissional e salva automaticamente no seu próprio Google Drive.
               </p>
+              <p className="text-sm font-semibold text-brand-primary max-w-2xl mx-auto lg:mx-0">
+                Ao criar sua conta, você recebe 7 dias de uso completo como assinante para testar a plataforma sem fricção.
+              </p>
 
               {/* CTAs */}
               <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
                 <Link to="/login" className="btn-primary w-full sm:w-auto px-8 py-4 text-base font-bold tracking-wide shadow-lg shadow-brand-primary/20 hover:shadow-xl hover:shadow-brand-primary/30 transform transition-all hover:-translate-y-0.5 flex items-center justify-center gap-3">
-                  Começar Teste Grátis <ArrowRight size={18} />
+                  Teste gratuito de 7 dias <ArrowRight size={18} />
                 </Link>
                 <button 
                   onClick={() => scrollToSection('planos')}
@@ -732,7 +739,7 @@ export default function LandingPage() {
           </p>
           <div className="flex justify-center pt-2">
             <Link to="/login" className="inline-flex items-center gap-2 px-8 py-4 bg-[#076c9a] hover:bg-[#055b82] text-white font-extrabold text-base tracking-wide rounded-xl shadow-xl transition-all duration-200 active:scale-95">
-              Começar Meu Teste Grátis <ArrowRight size={18} />
+              Começar meu teste gratuito de 7 dias <ArrowRight size={18} />
             </Link>
           </div>
         </div>

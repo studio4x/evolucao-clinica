@@ -443,17 +443,21 @@ export default function Dashboard() {
             <div className="space-y-2 max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
                 <CreditCard size={12} />
-                <span>Plano recomendado</span>
+                <span>{subscriptionPlan === 'trial' ? 'Teste gratuito de 7 dias' : 'Plano recomendado'}</span>
               </div>
               <h2 className="text-xl md:text-2xl font-display font-bold text-amber-900">
-                {subscriptionStatus === 'trialing'
-                  ? 'Seu período de teste está ativo. Conheça os planos disponíveis para continuar.'
+                {subscriptionPlan === 'trial' && isSubscriptionExpired
+                  ? 'Seu teste gratuito de 7 dias terminou. Escolha um plano para continuar.'
+                  : subscriptionStatus === 'trialing'
+                    ? 'Seu teste gratuito de 7 dias está ativo. Conheça os planos disponíveis para continuar.'
                   : 'Seu acesso precisa de um plano ativo para seguir sem interrupções.'}
               </h2>
               <p className="text-sm md:text-base text-amber-800 leading-relaxed">
-                {subscriptionStatus === 'trialing'
-                  ? 'Escolha o plano ideal e evite perder o acesso quando o teste terminar.'
-                  : 'Abra a página de assinatura para ativar seu plano e liberar o uso completo da plataforma.'}
+                {subscriptionPlan === 'trial' && isSubscriptionExpired
+                  ? 'O acesso completo foi encerrado ao final do teste gratuito. Abra a página de assinatura para reativar a plataforma.'
+                  : subscriptionStatus === 'trialing'
+                    ? 'Aproveite acesso completo por 7 dias e escolha o plano ideal antes do teste terminar.'
+                    : 'Abra a página de assinatura para ativar seu plano e liberar o uso completo da plataforma.'}
               </p>
             </div>
             <Link

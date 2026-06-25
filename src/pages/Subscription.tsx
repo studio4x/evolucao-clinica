@@ -406,7 +406,7 @@ export default function Subscription() {
             <span className="text-xs text-brand-text-muted uppercase tracking-wider font-semibold">Plano Ativo</span>
             <div className="text-xl font-bold text-brand-primary flex items-center space-x-1.5">
               <span>
-                {subscriptionPlan === 'trial' && 'Período de Testes (Trial)'}
+                {subscriptionPlan === 'trial' && 'Teste gratuito de 7 dias'}
                 {subscriptionPlan === 'monthly' && 'Plano Mensal'}
                 {subscriptionPlan === 'yearly' && 'Plano Anual'}
                 {subscriptionPlan === 'none' && 'Vitalício / Admin'}
@@ -425,7 +425,7 @@ export default function Subscription() {
                     ? 'bg-red-100 text-red-800 animate-pulse'
                     : 'bg-amber-100 text-amber-800'
               }`}>
-                {subscriptionStatus === 'trialing' && 'Trial Ativo'}
+                {subscriptionStatus === 'trialing' && 'Teste gratuito ativo'}
                 {subscriptionStatus === 'active' && 'Ativo (Pago)'}
                 {subscriptionStatus === 'canceled' && 'Cancelado'}
                 {subscriptionStatus === 'past_due' && 'Atrasado'}
