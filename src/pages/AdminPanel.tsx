@@ -78,6 +78,40 @@ const BRAND_COLOR_FIELDS: { key: keyof BrandColors; label: string; desc: string 
   { key: 'border', label: 'Bordas e Divisores', desc: 'Divisões de tabelas, contornos de cards e inputs.' }
 ];
 
+const MANUAL_PUSH_NOTIFICATION_IDS_KEY = 'admin_manual_push_notification_ids';
+
+const readStoredManualPushNotificationIds = () => {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const raw = window.localStorage.getItem(MANUAL_PUSH_NOTIFICATION_IDS_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((id: unknown): id is string => typeof id === 'string' && id.trim().length > 0);
+  } catch {
+    return [];
+  }
+};
+
+const storeManualPushNotificationIds = (ids: string[]) => {
+  if (typeof window === 'undefined') return;
+
+  const normalized = Array.from(new Set(ids.filter((id) => typeof id === 'string' && id.trim().length > 0)));
+  window.localStorage.setItem(MANUAL_PUSH_NOTIFICATION_IDS_KEY, JSON.stringify(normalized));
+};
+
+const addStoredManualPushNotificationId = (notificationId?: string | null) => {
+  if (!notificationId) return;
+
+  const currentIds = readStoredManualPushNotificationIds();
+  if (currentIds.includes(notificationId)) return;
+
+  storeManualPushNotificationIds([...currentIds, notificationId]);
+};
+
 export default function AdminPanel() {
   const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
@@ -650,8 +684,10 @@ export default function AdminPanel() {
           source: 'manual'
         })
       });
- 
+
       if (res.ok) {
+        const resData = await res.json().catch(() => ({}));
+        addStoredManualPushNotificationId(resData?.notification?.id);
         alert('Notificação reenviada com sucesso!');
         await refreshPushNotificationLogs();
       } else {
@@ -716,7 +752,7 @@ export default function AdminPanel() {
         }
       }
 
-      const manualIdSet = new Set(manualIds);
+      const manualIdSet = new Set([...manualIds, ...readStoredManualPushNotificationIds()]);
       const records = data || [];
       setManualPushNotifications(records.filter((notification: any) => manualIdSet.has(notification.id)));
       setPlatformPushNotifications(records.filter((notification: any) => !manualIdSet.has(notification.id)));
@@ -1006,10 +1042,12 @@ export default function AdminPanel() {
               link: notifLink || undefined,
               imageUrl: notifImageUrl || undefined,
               source: 'manual'
-            })
-          });
+          })
+        });
 
           if (res.ok) {
+            const resData = await res.json().catch(() => ({}));
+            addStoredManualPushNotificationId(resData?.notification?.id);
             successCount++;
           } else {
             const errData = await res.json().catch(() => ({}));
@@ -1149,6 +1187,7 @@ export default function AdminPanel() {
           const resData = await res.json().catch(() => ({}));
 
           if (res.ok) {
+            addStoredManualPushNotificationId(resData?.notification?.id);
             // Verifica se o e-mail foi realmente enviado
             const emailInfo = resData.email;
             if (emailInfo && !emailInfo.sent && emailInfo.error) {
