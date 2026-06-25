@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { X, ShieldCheck, Lock, FileText, Calendar, AlertTriangle, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
 
 type GoogleSecurityModalMode = 'login' | 'clinical' | 'calendar' | 'onboarding';
@@ -201,9 +201,11 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   const [currentSlide, setCurrentSlide] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [slideViewportHeight, setSlideViewportHeight] = useState<number | null>(null);
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const touchCurrentX = useRef(0);
+  const slideRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   const modalConfig = useMemo(() => slidesByMode[mode], [mode]);
   const { slides } = modalConfig;
@@ -220,6 +222,39 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
     setDragOffset(0);
     setIsDragging(false);
   }, [currentSlide]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    let animationFrame = window.requestAnimationFrame(() => {
+      const heights = slideRefs.current
+        .map((node) => node?.getBoundingClientRect().height || 0)
+        .filter((height) => height > 0);
+
+      if (heights.length > 0) {
+        setSlideViewportHeight(Math.ceil(Math.max(...heights)));
+      }
+    });
+
+    const handleResize = () => {
+      const heights = slideRefs.current
+        .map((node) => node?.getBoundingClientRect().height || 0)
+        .filter((height) => height > 0);
+
+      if (heights.length > 0) {
+        setSlideViewportHeight(Math.ceil(Math.max(...heights)));
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [isOpen, mode, slides.length]);
 
   if (!isOpen) return null;
 
@@ -292,7 +327,10 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
 
           <div
             className="overflow-hidden select-none"
-            style={{ touchAction: 'pan-y' }}
+            style={{
+              touchAction: 'pan-y',
+              height: slideViewportHeight ? `${slideViewportHeight}px` : 'auto',
+            }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -305,11 +343,16 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
                 transition: isDragging ? 'none' : 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
-              {slides.map((slide) => {
+              {slides.map((slide, index) => {
                 const SlideIcon = slide.icon;
                 return (
                   <div key={slide.title} className="w-full flex-shrink-0 px-1 h-full">
-                    <div className={`h-full min-h-[280px] sm:min-h-[300px] rounded-3xl border p-5 sm:p-6 flex flex-col justify-between gap-4 ${slide.accentClasses}`}>
+                    <div
+                      ref={(node) => {
+                        slideRefs.current[index] = node;
+                      }}
+                      className={`h-full min-h-[280px] sm:min-h-[300px] rounded-3xl border p-5 sm:p-6 flex flex-col justify-between gap-4 ${slide.accentClasses}`}
+                    >
                       <div className="flex items-start gap-4">
                         <div className={`p-3 rounded-2xl shadow-sm ${slide.iconClasses}`}>
                           <SlideIcon size={22} />
