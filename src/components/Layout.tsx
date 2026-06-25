@@ -233,7 +233,7 @@ export default function Layout() {
       {/* Main Content */}
       <div className="flex-1 overflow-x-hidden flex flex-col">
         <TrialBanner />
-        <main className="p-4 md:p-8 max-w-5xl mx-auto flex-1 w-full">
+        <main className="p-4 md:p-8 w-full md:w-[90%] max-w-none mx-auto flex-1">
           <Outlet />
         </main>
         <footer className="p-8 mt-auto flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-brand-border/30 text-brand-text-muted">
