@@ -208,7 +208,9 @@ export default function Notifications() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       
-      const keyRes = await fetch('/api/notifications/vapid-public-key');
+      const keyRes = await fetch('/api/notifications/vapid-public-key', {
+        cache: 'no-store'
+      });
       const { publicKey } = await keyRes.json();
       if (!publicKey) throw new Error('Falha ao obter chave publica VAPID do servidor.');
 

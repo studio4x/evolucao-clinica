@@ -1096,6 +1096,7 @@ app.get(["/favicon.png", "/favicon.ico", "/api/favicon"], async (req, res) => {
 app.get("/api/notifications/vapid-public-key", async (req, res) => {
   try {
     const settings = await getNotificationSettings();
+    res.setHeader("Cache-Control", "no-store, max-age=0");
     res.json({ publicKey: settings.vapid_public_key });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

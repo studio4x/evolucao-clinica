@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.40";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.41";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -22,6 +22,10 @@ const isBrandAssetPath = (pathname) => {
     "/icon-512x512.png",
     "/icon-512x512-maskable.png"
   ].some((assetPath) => pathname.startsWith(assetPath));
+};
+
+const isApiNoCachePath = (pathname) => {
+  return pathname.startsWith("/api/notifications/");
 };
 
 const offlineResponse = async () => {
@@ -138,6 +142,10 @@ self.addEventListener("fetch", (event) => {
     } else {
       return;
     }
+  }
+
+  if (isApiNoCachePath(url.pathname)) {
+    return;
   }
 
   // Navegacao

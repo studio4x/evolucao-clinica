@@ -4,7 +4,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 // @ts-ignore
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-const CACHE_VERSION = "hcm-pwa-v2.2";
+const CACHE_VERSION = "hcm-pwa-v2.3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -33,6 +33,10 @@ const isBrandAssetPath = (pathname) => {
     "/icon-512x512.png",
     "/icon-512x512-maskable.png"
   ].some((assetPath) => pathname.startsWith(assetPath));
+};
+
+const isApiNoCachePath = (pathname) => {
+  return pathname.startsWith("/api/notifications/");
 };
 
 const offlineResponse = async () => {
@@ -88,6 +92,10 @@ self.addEventListener("fetch", (event) => {
     } else {
       return;
     }
+  }
+
+  if (isApiNoCachePath(url.pathname)) {
+    return;
   }
 
   // Estratégia para Documentos (Navegação)
