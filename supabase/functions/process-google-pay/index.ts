@@ -89,7 +89,7 @@ serve(async (req) => {
     // 4. Buscar informações do plano no banco (ex: stripe_price_id)
     const { data: planData, error: planError } = await supabaseAdmin
       .from("plans")
-      .select("stripe_sandbox_price_id, stripe_prod_price_id, name")
+      .select("stripe_sandbox_price_id, stripe_prod_price_id, name, price")
       .eq("id", planId)
       .single();
 
@@ -145,6 +145,8 @@ serve(async (req) => {
     // 6. Tratar status do pagamento da primeira fatura
     const status = subscription.status; // 'active', 'trialing', 'incomplete', etc.
     const currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
+    const latestInvoice = subscription.latest_invoice as any;
+    const amountPaid = latestInvoice?.amount_paid ? latestInvoice.amount_paid / 100 : Number(planData.price || 0);
 
     if (status === "incomplete") {
       throw new Error("Ocorreu uma falha na cobrança do cartão. Verifique os dados de pagamento e tente novamente.");
@@ -166,22 +168,20 @@ serve(async (req) => {
     }
 
     // 8. Registrar a transação no banco de dados
-    const invoice = subscription.latest_invoice as any;
-    if (invoice) {
-      const amountPaid = invoice.amount_paid ? invoice.amount_paid / 100 : 0;
+    if (latestInvoice) {
       const { error: txInsertError } = await supabaseAdmin
         .from("transactions")
         .upsert(
           {
             professional_id: userId,
-            stripe_invoice_id: invoice.id,
+            stripe_invoice_id: latestInvoice.id,
             stripe_subscription_id: subscription.id,
             amount: amountPaid,
-            currency: invoice.currency || 'brl',
+            currency: latestInvoice.currency || 'brl',
             plan_id: planId,
             status: "paid",
-            stripe_invoice_url: invoice.hosted_invoice_url,
-            invoice_pdf_url: invoice.invoice_pdf,
+            stripe_invoice_url: latestInvoice.hosted_invoice_url,
+            invoice_pdf_url: latestInvoice.invoice_pdf,
             created_at: new Date().toISOString()
           },
           { onConflict: 'stripe_invoice_id' }
@@ -199,6 +199,12 @@ serve(async (req) => {
         subscriptionId: subscription.id,
         status: status,
         endsAt: currentPeriodEnd,
+        planName: planData.name,
+        amountPaid,
+        currency: latestInvoice?.currency || 'brl',
+        invoiceId: latestInvoice?.id || null,
+        invoiceUrl: latestInvoice?.hosted_invoice_url || null,
+        invoicePdfUrl: latestInvoice?.invoice_pdf || null
       }),
       {
         status: 200,

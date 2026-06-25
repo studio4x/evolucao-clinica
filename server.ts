@@ -359,7 +359,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 }
 
 type EmailProvider = "smtp" | "brevo";
-type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure";
 
 type EmailDeliveryInput = {
   userId?: string | null;
@@ -388,6 +388,35 @@ function hasSmtpEmailSettings(settings: any) {
 
 function hasBrevoEmailSettings(settings: any) {
   return Boolean(settings?.brevo_api_key && (settings?.brevo_sender_email || settings?.brevo_sender_name));
+}
+
+function formatCurrencyLabel(amount: number, currency = "BRL") {
+  const safeAmount = Number(amount || 0);
+
+  if (!Number.isFinite(safeAmount)) {
+    return currency.toUpperCase();
+  }
+
+  try {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: currency.toUpperCase()
+    }).format(safeAmount);
+  } catch {
+    return `${safeAmount.toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+function normalizePaymentDescriptor(value: unknown) {
+  const label = String(value || "").trim().replace(/\s+/g, " ");
+  return label || "Google Pay";
+}
+
+function normalizePlanFeatureList(features: unknown): string[] {
+  if (!Array.isArray(features)) return [];
+  return features
+    .map((feature) => String(feature || "").trim())
+    .filter(Boolean);
 }
 
 async function recordEmailDelivery(data: {
@@ -2146,6 +2175,233 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
   } catch (err: any) {
     console.error("Erro ao enviar e-mail de teste:", err);
     res.status(500).json({ error: err.message || "Erro desconhecido ao disparar e-mail de teste." });
+  }
+});
+
+// 5.1. E-mail de confirmação/falha de assinatura
+app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) => {
+  try {
+    const { kind, planId, paymentMethodLabel, subscriptionId, invoiceId, invoiceUrl, invoicePdfUrl, amount, currency, nextRenewalAt, failureMessage } = req.body || {};
+
+    if (!kind || !planId) {
+      return res.status(400).json({ error: "kind e planId sao obrigatorios." });
+    }
+
+    if (kind !== "success" && kind !== "failure") {
+      return res.status(400).json({ error: "kind deve ser success ou failure." });
+    }
+
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from("professionals")
+      .select("full_name, google_email")
+      .eq("id", req.user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return res.status(404).json({ error: "Profissional não encontrado para envio do e-mail." });
+    }
+
+    const recipientEmail = profile.google_email || req.user.email || "";
+    if (!recipientEmail) {
+      return res.status(400).json({ error: "E-mail do profissional não encontrado no cadastro." });
+    }
+
+    const { data: planData, error: planError } = await supabaseAdmin
+      .from("plans")
+      .select("name, description, features, price")
+      .eq("id", planId)
+      .maybeSingle();
+
+    if (planError) {
+      return res.status(500).json({ error: planError.message || "Erro ao buscar dados do plano." });
+    }
+
+    const planName = planData?.name
+      || (planId === "monthly" ? "Plano Mensal" : planId === "yearly" ? "Plano Anual" : "Plano de Assinatura");
+    const planDescription = planData?.description || "";
+    const planFeatures = normalizePlanFeatureList(planData?.features);
+    const fallbackAmount = Number(planData?.price || 0);
+    const priceToShow = Number.isFinite(Number(amount)) && Number(amount) > 0 ? Number(amount) : fallbackAmount;
+    const amountLabel = priceToShow > 0 ? formatCurrencyLabel(priceToShow, String(currency || "BRL")) : null;
+    const paymentDescriptor = normalizePaymentDescriptor(paymentMethodLabel);
+    const professionalName = profile.full_name || "Profissional";
+    const renewalLabel = nextRenewalAt ? new Date(nextRenewalAt).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }) : null;
+    const subscriptionDateLabel = new Date().toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    const highlightedFeatures = planFeatures.slice(0, 4);
+    const featureBullets = highlightedFeatures.length > 0
+      ? highlightedFeatures
+      : planId === "yearly"
+        ? ["Tudo do plano mensal", "Suporte prioritário via e-mail", "Melhor custo-benefício anualizado", "Novos recursos em primeira mão"]
+        : ["Pacientes ilimitados", "Evoluções clínicas com IA ilimitadas", "Integração com Google Docs em tempo real", "Gravação e transcrição de áudio nativa"];
+
+    const settings = await getNotificationSettings();
+    const isSuccess = kind === "success";
+    const subject = isSuccess
+      ? `[Evolução Clínica] Assinatura confirmada - ${planName}`
+      : `[Evolução Clínica] Falha ao processar sua assinatura - ${planName}`;
+
+    const transactionLines = [
+      `Plano: ${planName}`,
+      amountLabel ? `Valor: ${amountLabel}` : null,
+      paymentDescriptor ? `Forma de pagamento: ${paymentDescriptor}` : null,
+      subscriptionId ? `Assinatura Stripe: ${subscriptionId}` : null,
+      invoiceId ? `Fatura Stripe: ${invoiceId}` : null,
+      renewalLabel ? `Próxima renovação: ${renewalLabel}` : null,
+      `Data do processamento: ${subscriptionDateLabel}`
+    ].filter(Boolean) as string[];
+
+    const transactionRowsHtml = transactionLines
+      .map((line) => `<li style="margin: 0 0 8px 0;">${line}</li>`)
+      .join("");
+
+    const featureRowsHtml = featureBullets
+      .map((feature) => `<li style="margin: 0 0 8px 0;">${feature}</li>`)
+      .join("");
+
+    const invoiceButtonsHtml = [
+      invoiceUrl ? `<a href="${invoiceUrl}" style="display:inline-block;background:#005C13;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;margin-right:10px;">Ver fatura</a>` : "",
+      invoicePdfUrl ? `<a href="${invoicePdfUrl}" style="display:inline-block;background:#f3f4f6;color:#111827;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;font-size:14px;">Baixar PDF</a>` : ""
+    ].join("");
+
+    const textContent = isSuccess
+      ? [
+          `Olá, ${professionalName}.`,
+          "",
+          `Seu pedido foi processado com sucesso usando ${paymentDescriptor}.`,
+          amountLabel ? `Valor confirmado: ${amountLabel}.` : null,
+          subscriptionId ? `Assinatura Stripe: ${subscriptionId}.` : null,
+          invoiceId ? `Fatura Stripe: ${invoiceId}.` : null,
+          renewalLabel ? `Próxima renovação: ${renewalLabel}.` : null,
+          "",
+          `Boas-vindas ao ${planName}.`,
+          planDescription ? `Resumo do plano: ${planDescription}` : null,
+          "Você terá acesso aos benefícios abaixo:",
+          ...featureBullets.map((feature) => `- ${feature}`),
+          "",
+          "Se precisar de apoio, responda este e-mail ou acesse a área de suporte da plataforma."
+        ].filter(Boolean).join("\n")
+      : [
+          `Olá, ${professionalName}.`,
+          "",
+          `Não foi possível concluir a cobrança via ${paymentDescriptor}.`,
+          failureMessage ? `Motivo informado: ${failureMessage}` : "A cobrança não foi aprovada ou a validação da transação falhou.",
+          `Plano selecionado: ${planName}.`,
+          amountLabel ? `Valor da tentativa: ${amountLabel}.` : null,
+          "",
+          "Nenhum plano foi ativado nesta tentativa.",
+          "Você pode revisar os dados do cartão no Google Pay e tentar novamente.",
+          "Se preferir, basta refazer a assinatura diretamente na plataforma.",
+          "",
+          "Se precisar de ajuda, responda este e-mail ou fale com o suporte."
+        ].filter(Boolean).join("\n");
+
+    const htmlContent = isSuccess
+      ? `
+        <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #005C13, #0b7c1c); color: #ffffff; padding: 28px;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.78;">Evolução Clínica</p>
+            <h1 style="margin: 0; font-size: 24px; line-height: 1.25;">Assinatura confirmada com sucesso</h1>
+          </div>
+          <div style="padding: 28px; color: #111827; line-height: 1.7;">
+            <p style="margin: 0 0 14px 0; font-size: 16px;">Olá, <strong>${professionalName}</strong>.</p>
+            <p style="margin: 0 0 18px 0; font-size: 15px;">
+              Seu pedido foi processado com sucesso usando <strong>${paymentDescriptor}</strong>.
+              ${amountLabel ? `O valor confirmado foi <strong>${amountLabel}</strong>.` : ""}
+            </p>
+            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
+              <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 700; color: #005C13;">Boas-vindas ao ${planName}</p>
+              <p style="margin: 0 0 12px 0; font-size: 14px; color: #374151;">${planDescription || "Você agora tem acesso ao pacote de recursos selecionado."}</p>
+              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
+                ${featureRowsHtml}
+              </ul>
+            </div>
+            <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
+              <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #111827;">Resumo da transação</p>
+              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
+                ${transactionRowsHtml}
+              </ul>
+            </div>
+            ${invoiceButtonsHtml ? `<div style="margin-top: 16px;">${invoiceButtonsHtml}</div>` : ""}
+          </div>
+          <div style="border-top: 1px solid #f3f4f6; padding: 18px 28px; background: #f9fafb; color: #6b7280; font-size: 12px; line-height: 1.6;">
+            Este e-mail contém o comprovante de confirmação da sua assinatura e os dados principais da transação.
+          </div>
+        </div>
+      `
+      : `
+        <div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto; background: #ffffff; border: 1px solid #fee2e2; border-radius: 18px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #dc2626, #ef4444); color: #ffffff; padding: 28px;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.78;">Evolução Clínica</p>
+            <h1 style="margin: 0; font-size: 24px; line-height: 1.25;">Falha ao processar a assinatura</h1>
+          </div>
+          <div style="padding: 28px; color: #111827; line-height: 1.7;">
+            <p style="margin: 0 0 14px 0; font-size: 16px;">Olá, <strong>${professionalName}</strong>.</p>
+            <p style="margin: 0 0 18px 0; font-size: 15px;">
+              Não foi possível concluir a cobrança via <strong>${paymentDescriptor}</strong>.
+              ${failureMessage ? `Motivo informado: <strong>${failureMessage}</strong>` : "A cobrança não foi aprovada ou a validação da transação falhou."}
+            </p>
+            <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
+              <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #9a3412;">Detalhes da tentativa</p>
+              <ul style="margin: 0; padding-left: 18px; color: #7c2d12; font-size: 14px;">
+                ${transactionRowsHtml}
+              </ul>
+            </div>
+            <div style="border: 1px solid #e5e7eb; border-radius: 14px; padding: 18px 20px; margin: 18px 0 22px 0;">
+              <p style="margin: 0 0 12px 0; font-size: 14px; font-weight: 700; color: #111827;">O que fazer agora</p>
+              <ul style="margin: 0; padding-left: 18px; color: #374151; font-size: 14px;">
+                <li style="margin: 0 0 8px 0;">Revise os dados de pagamento no Google Pay e tente novamente.</li>
+                <li style="margin: 0 0 8px 0;">Se houver dúvida, fale com o suporte para revisar a cobrança.</li>
+                <li style="margin: 0 0 8px 0;">Nenhuma ativação de plano foi concluída nesta tentativa.</li>
+              </ul>
+            </div>
+          </div>
+          <div style="border-top: 1px solid #f3f4f6; padding: 18px 28px; background: #f9fafb; color: #6b7280; font-size: 12px; line-height: 1.6;">
+            Assim que a transação for aprovada, você receberá um novo e-mail de confirmação.
+          </div>
+        </div>
+      `;
+
+    let emailSent = false;
+    let emailError: string | null = null;
+
+    try {
+      await sendTransactionalEmail(settings, {
+        userId: req.user.id,
+        recipientEmail,
+        recipientName: professionalName,
+        subject,
+        textContent,
+        htmlContent,
+        source: isSuccess ? "subscription-success" : "subscription-failure",
+        allowFallback: true
+      });
+      emailSent = true;
+    } catch (sendError: any) {
+      emailError = sendError?.message || "Falha ao enviar o e-mail de assinatura.";
+      console.warn("[Subscriptions] Falha ao enviar e-mail de assinatura:", emailError);
+    }
+
+    return res.json({
+      success: true,
+      emailSent,
+      emailError,
+      recipientEmail
+    });
+  } catch (err: any) {
+    console.error("Erro ao enviar e-mail de assinatura:", err);
+    res.status(500).json({ error: err.message || "Erro ao enviar e-mail da assinatura." });
   }
 });
 

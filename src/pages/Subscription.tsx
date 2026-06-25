@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2 } from 'lucide-react';
+import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 import GooglePayButton from '@google-pay/button-react';
 import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
+import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 
 const DEFAULT_PLANS = [
   {
@@ -39,6 +40,130 @@ const DEFAULT_PLANS = [
   }
 ];
 
+type SubscriptionPlanLike = {
+  id: string;
+  name?: string;
+  description?: string;
+  price?: number;
+  features?: string[];
+  equivalent_monthly_price?: number | null;
+  tag_text?: string | null;
+  discount_text?: string | null;
+  button_text_simulate?: string | null;
+};
+
+type SubscriptionPaymentModal = {
+  kind: 'success' | 'error';
+  planId: string;
+  paymentLabel: string;
+  title: string;
+  message: string;
+  emailNote: string;
+  benefits: string[];
+  summaryLines: string[];
+  invoiceUrl?: string | null;
+  invoicePdfUrl?: string | null;
+  errorMessage?: string | null;
+};
+
+function formatCurrencyValue(amount: number, currency = 'BRL') {
+  try {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: currency.toUpperCase()
+    }).format(amount);
+  } catch {
+    return `${amount.toFixed(2)} ${currency.toUpperCase()}`;
+  }
+}
+
+function getPlanDisplayName(plan: SubscriptionPlanLike | undefined, fallbackId: string) {
+  if (plan?.name) return plan.name;
+  if (fallbackId === 'monthly') return 'Plano Mensal';
+  if (fallbackId === 'yearly') return 'Plano Anual';
+  return 'Plano de Assinatura';
+}
+
+function getPlanBenefitsCopy(plan: SubscriptionPlanLike | undefined, fallbackId: string) {
+  const defaultMonthlyBenefits = [
+    'Pacientes ilimitados',
+    'Evoluções clínicas com IA ilimitadas',
+    'Integração com Google Docs em tempo real',
+    'Gravação e transcrição de áudio nativa'
+  ];
+
+  const defaultYearlyBenefits = [
+    'Tudo do plano mensal',
+    'Desconto de ~17% sobre o valor mensal',
+    'Suporte prioritário via e-mail',
+    'Garantia de novos recursos em primeira mão'
+  ];
+
+  const benefits = Array.isArray(plan?.features) && plan.features.length > 0
+    ? plan.features.map((feature) => String(feature).trim()).filter(Boolean)
+    : fallbackId === 'yearly'
+      ? defaultYearlyBenefits
+      : defaultMonthlyBenefits;
+
+  if (fallbackId === 'yearly') {
+    return {
+      title: 'Bem-vindo ao Plano Anual',
+      intro: 'Você escolheu a melhor opção para manter a operação rodando com previsibilidade e foco no longo prazo.',
+      lead: 'Com essa assinatura, você terá acesso a:',
+      benefits
+    };
+  }
+
+  return {
+    title: 'Bem-vindo ao Plano Mensal',
+    intro: 'Você ativou uma assinatura flexível, pensada para quem quer controle mês a mês sem perder produtividade.',
+    lead: 'Seu plano libera imediatamente:',
+    benefits
+  };
+}
+
+function getGooglePayPaymentLabel(paymentData: any) {
+  const paymentMethodData = paymentData?.paymentMethodData || {};
+  const description = String(paymentMethodData.description || '').trim();
+  if (description) {
+    return `Google Pay (${description})`;
+  }
+
+  const network = String(paymentMethodData.info?.cardNetwork || '').trim();
+  const cardDetails = String(paymentMethodData.info?.cardDetails || '').trim();
+
+  if (network && cardDetails) {
+    const formattedNetwork = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
+    return `Google Pay (${formattedNetwork} **** ${cardDetails})`;
+  }
+
+  if (network) {
+    const formattedNetwork = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
+    return `Google Pay (${formattedNetwork})`;
+  }
+
+  return 'Google Pay';
+}
+
+function buildPaymentSummaryLines(plan: SubscriptionPlanLike | undefined, data: any) {
+  const lines = [
+    `Plano: ${getPlanDisplayName(plan, plan?.id || '')}`,
+    data?.amountPaid ? `Valor: ${formatCurrencyValue(Number(data.amountPaid), String(data.currency || 'BRL'))}` : null,
+    data?.paymentLabel ? `Forma de pagamento: ${data.paymentLabel}` : null,
+    data?.subscriptionId ? `Assinatura Stripe: ${data.subscriptionId}` : null,
+    data?.invoiceId ? `Fatura Stripe: ${data.invoiceId}` : null,
+    data?.endsAt ? `Próxima renovação: ${new Date(data.endsAt).toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })}` : null
+  ];
+
+  return lines.filter(Boolean) as string[];
+}
+
 export default function Subscription() {
   const { 
     user, 
@@ -53,6 +178,7 @@ export default function Subscription() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [showWebhookGuide, setShowWebhookGuide] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [paymentModal, setPaymentModal] = useState<SubscriptionPaymentModal | null>(null);
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
@@ -66,6 +192,14 @@ export default function Subscription() {
   const [refundReason, setRefundReason] = useState('');
   const [confirmPhrase, setConfirmPhrase] = useState('');
   const [loadingRefund, setLoadingRefund] = useState(false);
+
+  const getPlanDetails = (planId: string): SubscriptionPlanLike => {
+    return (plans.length > 0 ? plans : DEFAULT_PLANS).find((plan) => plan.id === planId) || DEFAULT_PLANS.find((plan) => plan.id === planId) || {
+      id: planId,
+      name: getPlanDisplayName(undefined, planId),
+      features: []
+    };
+  };
 
   const isRefundable = (createdAtStr: string) => {
     if (profileRole === 'admin') return true;
