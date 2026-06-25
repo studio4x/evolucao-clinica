@@ -23,6 +23,7 @@ export interface SiteConfig {
   pwa_maskable_icon_url: string;
   pwa_install_title: string;
   pwa_install_description: string;
+  pwa_push_notification_icon_url: string;
   pwa_install_logo_url: string;
   pwa_loading_logo_url: string;
   logo_light_url: string;
@@ -67,6 +68,7 @@ export const defaultSiteConfig: SiteConfig = {
   pwa_maskable_icon_url: "/icon-512x512-maskable.png",
   pwa_install_title: "Instale o app Evolução Clínica",
   pwa_install_description: "Acesse seus prontuários rapidamente pela tela inicial com o app oficial.",
+  pwa_push_notification_icon_url: "",
   pwa_install_logo_url: "",
   pwa_loading_logo_url: "",
   logo_light_url: "",

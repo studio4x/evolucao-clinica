@@ -2,7 +2,7 @@ import type { SiteConfig } from './brandConfig';
 
 export type BrandAssetSource = Pick<
   SiteConfig,
-  'logo_light_url' | 'logo_dark_url' | 'favicon_url' | 'pwa_icon_192_url' | 'pwa_icon_512_url' | 'pwa_maskable_icon_url' | 'pwa_install_logo_url' | 'pwa_loading_logo_url' | 'version'
+  'logo_light_url' | 'logo_dark_url' | 'favicon_url' | 'pwa_icon_192_url' | 'pwa_icon_512_url' | 'pwa_maskable_icon_url' | 'pwa_push_notification_icon_url' | 'pwa_install_logo_url' | 'pwa_loading_logo_url' | 'version'
 >;
 
 const hashString = (value: string) => {
@@ -24,6 +24,7 @@ export const getBrandAssetSignature = (config: BrandAssetSource) => {
     config.pwa_icon_192_url || '',
     config.pwa_icon_512_url || '',
     config.pwa_maskable_icon_url || '',
+    config.pwa_push_notification_icon_url || '',
     config.pwa_install_logo_url || '',
     config.pwa_loading_logo_url || '',
     config.version || ''

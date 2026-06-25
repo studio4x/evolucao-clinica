@@ -124,7 +124,7 @@ export default function AdminPanel() {
     { key: 'email_notifications', label: 'E-mails do Sistema', icon: Mail },
     { key: 'email_history', label: 'Histórico de E-mails', icon: Clock },
     { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
-    { key: 'brand', label: 'Logotipo e PWA', icon: Globe },
+    { key: 'brand', label: 'Identidade Visual', icon: Globe },
     { key: 'profile', label: 'Meu Perfil', icon: User }
   ] as const;
 
@@ -182,6 +182,7 @@ export default function AdminPanel() {
   const [brandPwa192, setBrandPwa192] = useState('');
   const [brandPwa512, setBrandPwa512] = useState('');
   const [brandPwaMaskable, setBrandPwaMaskable] = useState('');
+  const [brandPushNotificationIcon, setBrandPushNotificationIcon] = useState('');
   const [brandInstallLogo, setBrandInstallLogo] = useState('');
   const [brandLoadingLogo, setBrandLoadingLogo] = useState('');
   const [brandVersion, setBrandVersion] = useState('1.0');
@@ -219,6 +220,7 @@ export default function AdminPanel() {
             setBrandPwa192(parsed.pwa_icon_192_url || '');
             setBrandPwa512(parsed.pwa_icon_512_url || '');
             setBrandPwaMaskable(parsed.pwa_maskable_icon_url || '');
+            setBrandPushNotificationIcon(parsed.pwa_push_notification_icon_url || '');
             setBrandInstallLogo(parsed.pwa_install_logo_url || '');
             setBrandLoadingLogo(parsed.pwa_loading_logo_url || '');
             setBrandVersion(parsed.version || '1.0');
@@ -321,6 +323,7 @@ export default function AdminPanel() {
         pwa_icon_192_url: brandPwa192,
         pwa_icon_512_url: brandPwa512,
         pwa_maskable_icon_url: brandPwaMaskable,
+        pwa_push_notification_icon_url: brandPushNotificationIcon,
         pwa_install_logo_url: brandInstallLogo,
         pwa_loading_logo_url: brandLoadingLogo,
         version: newVersion,
@@ -4809,7 +4812,7 @@ export default function AdminPanel() {
                     </div>
                     <div>
                       <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                        Identidade Visual e PWA
+                        Identidade Visual
                       </h2>
                       <p className="text-xs text-brand-text-muted mt-0.5">
                         Gerencie os logotipos da plataforma e o favicon do navegador. Essas alterações são propagadas ao PWA em tempo real.
@@ -4923,6 +4926,42 @@ export default function AdminPanel() {
                                 />
                               </label>
                               <p className="text-[10px] text-brand-text-muted">Recomendado: formato quadrado PNG ou SVG.</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ícone das Notificações Push */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Ícone das Notificações Push</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">
+                              Informe a URL da imagem usada como ícone nos alertas do navegador. Este campo tem prioridade sobre os demais ícones da marca.
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 lg:grid-cols-[auto,1fr] gap-4 items-center">
+                            <div className="flex items-center justify-center p-4 bg-white border border-brand-border rounded-xl w-20 h-20 shadow-inner flex-shrink-0">
+                              {brandPushNotificationIcon ? (
+                                <img src={brandPushNotificationIcon} alt="Ícone de notificações push" className="w-12 h-12 object-contain" />
+                              ) : (
+                                <span className="text-[10px] text-brand-text-muted text-center leading-tight">Sem imagem</span>
+                              )}
+                            </div>
+
+                            <div className="space-y-2">
+                              <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">
+                                URL da imagem
+                              </label>
+                              <input
+                                type="url"
+                                value={brandPushNotificationIcon}
+                                onChange={(e) => setBrandPushNotificationIcon(e.target.value)}
+                                placeholder="https://..."
+                                className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-white"
+                              />
+                              <p className="text-[10px] text-brand-text-muted">
+                                Use uma URL pública em PNG, SVG ou WebP. Se estiver vazia, o sistema volta aos ícones já cadastrados.
+                              </p>
                             </div>
                           </div>
                         </div>

@@ -988,6 +988,7 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
     let pwaIcon192 = "";
     let pwaIcon512 = "";
     let pwaMaskableIcon = "";
+    let pwaPushNotificationIcon = "";
     let version = "1.0";
 
     if (!error && data && data.api_key) {
@@ -998,6 +999,7 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       pwaIcon192 = parsed.pwa_icon_192_url || "";
       pwaIcon512 = parsed.pwa_icon_512_url || "";
       pwaMaskableIcon = parsed.pwa_maskable_icon_url || "";
+      pwaPushNotificationIcon = parsed.pwa_push_notification_icon_url || "";
       version = parsed.version || "1.0";
     }
 
@@ -1008,6 +1010,7 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       pwaIcon192,
       pwaIcon512,
       pwaMaskableIcon,
+      pwaPushNotificationIcon,
       version
     ].join("|"));
     const brandIcon = faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
@@ -1127,6 +1130,7 @@ app.get(["/api/pwa-install-icon", "/api/pwa-install-icon.svg"], async (req, res)
     let pwaIcon192 = "";
     let pwaIcon512 = "";
     let pwaInstallLogo = "";
+    let pwaPushNotificationIcon = "";
 
     if (!error && data && data.api_key) {
       const parsed = JSON.parse(data.api_key);
@@ -1136,10 +1140,26 @@ app.get(["/api/pwa-install-icon", "/api/pwa-install-icon.svg"], async (req, res)
       pwaIcon192 = parsed.pwa_icon_192_url || "";
       pwaIcon512 = parsed.pwa_icon_512_url || "";
       pwaInstallLogo = parsed.pwa_install_logo_url || "";
+      pwaPushNotificationIcon = parsed.pwa_push_notification_icon_url || "";
     }
 
-    const source = pwaInstallLogo || pwaIcon512 || pwaIcon192 || faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
-    const dataUri = await imageUrlToDataUri(source);
+    const candidateSources = [
+      pwaPushNotificationIcon,
+      pwaInstallLogo,
+      pwaIcon512,
+      pwaIcon192,
+      faviconUrl,
+      logoDarkUrl,
+      logoLightUrl,
+      "/favicon.png"
+    ].filter(Boolean) as string[];
+
+    let dataUri = "";
+    for (const source of candidateSources) {
+      dataUri = await imageUrlToDataUri(source);
+      if (dataUri) break;
+    }
+
     const svg = buildWhiteBackgroundIconSvg(dataUri, size);
 
     res.setHeader("Content-Type", "image/svg+xml");
