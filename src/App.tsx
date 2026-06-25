@@ -256,7 +256,7 @@ export default function App() {
 
       try {
         if (session) {
-          const latestState = useAuthStore.getState();
+          const pendingScopes = readPendingGoogleScopes();
 
           if (currentState.googleAccessUserId && currentState.googleAccessUserId !== session.user.id) {
             setGoogleAccessToken(null);
@@ -265,6 +265,18 @@ export default function App() {
             setGoogleGrantedScopes([]);
             clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
           }
+
+          if (pendingScopes.length > 0) {
+            const mergedScopes = Array.from(new Set([
+              ...currentState.googleGrantedScopes,
+              ...pendingScopes
+            ]));
+            setGoogleGrantedScopes(mergedScopes);
+            setGoogleAccessUserId(session.user.id);
+            clearPendingGoogleScopes();
+          }
+
+          const latestState = useAuthStore.getState();
 
           const sameGoogleUser = latestState.googleAccessUserId === session.user.id;
           const hasPersistedGoogleScopes = latestState.googleGrantedScopes.length > 0;
@@ -305,11 +317,6 @@ export default function App() {
                 setGoogleAccessUserId(session.user.id);
               }
               clearSilentGoogleRefreshFlag(session.user.id);
-              const pendingScopes = readPendingGoogleScopes();
-              if (pendingScopes.length > 0) {
-                setGoogleGrantedScopes(pendingScopes);
-                clearPendingGoogleScopes();
-              }
             }
             setAuthReady(true);
             return;
@@ -322,11 +329,6 @@ export default function App() {
             setGoogleAccessToken(session.provider_token);
             setGoogleAccessUserId(session.user.id);
             clearSilentGoogleRefreshFlag(session.user.id);
-            const pendingScopes = readPendingGoogleScopes();
-            if (pendingScopes.length > 0) {
-              setGoogleGrantedScopes(pendingScopes);
-              clearPendingGoogleScopes();
-            }
           } else {
             // Opcional: em alguns fluxos do Supabase o token do provedor pode ser guardado no localStorage
             // se o redirecionamento limpar o provider_token após a primeira captura.
