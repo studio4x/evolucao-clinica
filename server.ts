@@ -359,7 +359,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 }
 
 type EmailProvider = "smtp" | "brevo";
-type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome";
 
 type EmailDeliveryInput = {
   userId?: string | null;
@@ -1119,6 +1119,9 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
 
     let notificationResult: any = null;
     try {
+      await sendWelcomeEmail(createdUser.id, targetStatus).catch((err) => {
+        console.warn("[AdminCreateProfessional] E-mail de boas-vindas não enviado:", err?.message || err);
+      });
       if (requireApproval) {
         notificationResult = await sendOnboardingPendingNotice({
           id: createdUser.id,
@@ -1187,6 +1190,144 @@ async function upsertOnboardingLog(userId: string, patch: Record<string, any>) {
     });
 
   if (error) throw error;
+}
+
+async function getProfessionalDeliveryEmail(userId: string) {
+  const { data: profData } = await supabaseAdmin
+    .from("professionals")
+    .select("google_email, full_name")
+    .eq("id", userId)
+    .single();
+
+  let targetEmail = profData?.google_email || null;
+  if (!targetEmail) {
+    try {
+      const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+      targetEmail = authUser?.user?.email || null;
+    } catch (_) {
+      // Mantém o fallback silencioso se o Auth não responder.
+    }
+  }
+
+  return {
+    email: targetEmail,
+    name: profData?.full_name || null
+  };
+}
+
+function buildWelcomeEmailContent(options: {
+  recipientName: string;
+  status: "pending" | "active";
+  loginUrl: string;
+}) {
+  const isPending = options.status === "pending";
+  const statusTitle = isPending ? "Seu cadastro está em análise" : "Sua conta já está liberada";
+  const introText = isPending
+    ? "Você já faz parte da plataforma. O próximo passo é a liberação do seu acesso por um administrador."
+    : "Sua conta foi criada com sucesso e você já pode entrar na plataforma para começar a usar os recursos.";
+  const nextStepText = isPending
+    ? "Assim que a aprovação acontecer, você receberá acesso completo ao painel."
+    : "Use seu e-mail para acessar o painel e explorar os recursos liberados no seu plano.";
+  const featureItems = [
+    "Prontuários e evoluções clínicas organizados no Google Docs",
+    "Transcrição e automação para acelerar a rotina clínica",
+    "Gestão de pacientes, acompanhamento e notificações",
+    "Fluxos pensados para segurança e organização do atendimento"
+  ];
+
+  const textContent = [
+    `Bem-vindo(a), ${options.recipientName}!`,
+    "",
+    "Sua conta na Evolução Clínica foi criada com sucesso.",
+    statusTitle,
+    introText,
+    "",
+    "O que você encontra na plataforma:",
+    ...featureItems.map((item) => `- ${item}`),
+    "",
+    nextStepText,
+    "",
+    `Acesse a plataforma: ${options.loginUrl}`,
+    "",
+    "Equipe Evolução Clínica"
+  ].join("\n");
+
+  const htmlContent = `
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);">
+      <div style="padding: 28px; background: linear-gradient(135deg, #005C13 0%, #0f766e 100%); color: #fff;">
+        <p style="margin: 0 0 8px 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .85;">Evolução Clínica</p>
+        <h1 style="margin: 0; font-size: 26px; line-height: 1.2;">Bem-vindo(a) à plataforma</h1>
+        <p style="margin: 10px 0 0 0; font-size: 15px; line-height: 1.6; opacity: .95;">${statusTitle}</p>
+      </div>
+      <div style="padding: 28px; color: #1f2937;">
+        <p style="margin: 0 0 16px 0; font-size: 16px; line-height: 1.7;">Olá, <strong>${options.recipientName}</strong>.</p>
+        <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.7; color: #4b5563;">${introText}</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px; margin-bottom: 20px;">
+          <h2 style="margin: 0 0 12px 0; font-size: 18px; color: #0f172a;">O que você encontrará</h2>
+          <ul style="margin: 0; padding-left: 20px; color: #334155; line-height: 1.8;">
+            ${featureItems.map((item) => `<li>${item}</li>`).join("")}
+          </ul>
+        </div>
+        <p style="margin: 0 0 20px 0; font-size: 15px; line-height: 1.7; color: #4b5563;">${nextStepText}</p>
+        <div style="text-align: center; margin: 28px 0 8px 0;">
+          <a href="${options.loginUrl}" style="display: inline-block; background: #005C13; color: #fff; text-decoration: none; padding: 14px 28px; border-radius: 999px; font-size: 15px; font-weight: 700;">Acessar a plataforma</a>
+        </div>
+      </div>
+      <div style="padding: 16px 28px 24px; border-top: 1px solid #eef2f7; color: #64748b; font-size: 12px; line-height: 1.6;">
+        Se tiver qualquer dúvida, responda este e-mail e nossa equipe poderá ajudar.
+      </div>
+    </div>
+  `;
+
+  return { textContent, htmlContent, subject: isPending ? "Bem-vindo(a) à Evolução Clínica" : "Sua conta foi criada com sucesso" };
+}
+
+async function sendWelcomeEmail(userId: string, status: "pending" | "active") {
+  const log = await getOnboardingLog(userId);
+  if (log?.welcome_notified_at) {
+    return { skipped: true };
+  }
+
+  const { data: prof, error } = await supabaseAdmin
+    .from("professionals")
+    .select("id, full_name, google_email, status")
+    .eq("id", userId)
+    .single();
+
+  if (error || !prof) {
+    throw new Error("Profissional não encontrado para e-mail de boas-vindas.");
+  }
+
+  const recipient = await getProfessionalDeliveryEmail(userId);
+  if (!recipient.email) {
+    throw new Error("E-mail do profissional não encontrado para boas-vindas.");
+  }
+
+  const settings = await getNotificationSettings();
+  const loginUrl = `${PRODUCTION_ORIGIN}/login`;
+  const recipientName = prof.full_name || recipient.name || "Profissional";
+  const content = buildWelcomeEmailContent({
+    recipientName,
+    status: status || (prof.status === "pending" ? "pending" : "active"),
+    loginUrl
+  });
+
+  await sendTransactionalEmail(settings, {
+    userId,
+    recipientEmail: recipient.email,
+    recipientName,
+    subject: content.subject,
+    textContent: content.textContent,
+    htmlContent: content.htmlContent,
+    source: "welcome",
+    allowFallback: true
+  });
+
+  await upsertOnboardingLog(userId, {
+    welcome_notified_at: new Date().toISOString()
+  });
+
+  return { skipped: false };
 }
 
 async function ensureProfessionalProfile(user: any, status: "pending" | "active") {
@@ -1324,6 +1465,9 @@ async function bootstrapOnboardingAccess(user: any) {
 
   if (!prof) {
     await ensureActiveProfessionalProfile(user);
+    await sendWelcomeEmail(user.id, "active").catch((err) => {
+      console.warn("[Onboarding] E-mail de boas-vindas não enviado:", err?.message || err);
+    });
     await sendOnboardingAccessGrantedNotice(user.id, {
       title: "Acesso liberado",
       content: `Sua conta foi criada com ${TRIAL_DURATION_DAYS} dias de teste gratuito. Durante esse período, você tem acesso completo como assinante. Ao final do prazo, será necessário escolher um plano para continuar.`,
