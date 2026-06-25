@@ -4,6 +4,7 @@ import { readFile } from "fs/promises";
 import dotenv from "dotenv";
 import webpush from "web-push";
 import nodemailer from "nodemailer";
+import { Client as PostgresClient } from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
 
@@ -12,6 +13,41 @@ dotenv.config();
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
+const CRON_BOOTSTRAP_SQL = `
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-evolution-reminders-job') THEN
+    PERFORM cron.unschedule('send-evolution-reminders-job');
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-trial-expiration-notices-job') THEN
+    PERFORM cron.unschedule('send-trial-expiration-notices-job');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'send-evolution-reminders-job',
+  '0 * * * *',
+  $$
+  SELECT net.http_get(
+    url := 'https://evolucao.conexaoseres.com.br/api/cron/send-evolution-reminders'
+  );
+  $$
+);
+
+SELECT cron.schedule(
+  'send-trial-expiration-notices-job',
+  '0 * * * *',
+  $$
+  SELECT net.http_get(
+    url := 'https://evolucao.conexaoseres.com.br/api/cron/send-trial-expiration-notices'
+  );
+  $$
+);
+`;
 
 // Configuração do Supabase Admin
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
@@ -58,6 +94,44 @@ function appendBrandVersion(url: string, signature: string) {
   if (!url) return "";
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}v=${encodeURIComponent(signature)}`;
+}
+
+function getPostgresConnectionString() {
+  return (
+    process.env.DATABASE_URL
+    || process.env.SUPABASE_DB_URL
+    || process.env.SUPABASE_DATABASE_URL
+    || process.env.POSTGRES_URL
+    || process.env.POSTGRES_PRISMA_URL
+    || ""
+  );
+}
+
+async function bootstrapSupabaseCronJobs() {
+  const connectionString = getPostgresConnectionString();
+  if (!connectionString) {
+    console.warn("[Cron Bootstrap] Nenhuma string de conexão Postgres disponível. Bootstrap dos cron jobs ignorado.");
+    return { skipped: true };
+  }
+
+  const client = new PostgresClient({
+    connectionString,
+    ssl: connectionString.includes("sslmode=disable")
+      ? false
+      : { rejectUnauthorized: false }
+  });
+
+  try {
+    await client.connect();
+    await client.query(CRON_BOOTSTRAP_SQL);
+    console.log("[Cron Bootstrap] Cron jobs do Supabase verificados e reprogramados com sucesso.");
+    return { skipped: false, success: true };
+  } catch (error) {
+    console.error("[Cron Bootstrap] Falha ao garantir os cron jobs:", error);
+    return { skipped: false, success: false };
+  } finally {
+    await client.end().catch(() => {});
+  }
 }
 
 function getMimeTypeFromPath(filePath: string) {
@@ -2312,6 +2386,8 @@ export async function startServer() {
         res.sendFile(path.join(distPath, "index.html"));
       });
     }
+
+    await bootstrapSupabaseCronJobs();
 
     if (!process.env.VERCEL) {
       const server = app.listen(PORT, "0.0.0.0", () => {
