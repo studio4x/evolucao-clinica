@@ -1029,24 +1029,6 @@ export default function PatientDetail() {
             />
           </div>
 
-          <div className="card p-6 border-brand-primary/20 bg-brand-primary/5 hover:border-brand-primary/40 transition-all duration-200">
-            <div className="flex items-center space-x-2 text-brand-primary mb-3">
-              <Sparkles size={20} className="animate-pulse" />
-              <h3 className="font-semibold text-brand-text mb-0">Relatórios & PDI por IA</h3>
-            </div>
-            <p className="text-xs text-brand-text-muted mb-4 leading-relaxed">
-              Analise o histórico do paciente nos últimos meses e gere relatórios estruturados ou rascunhos de PDI instantaneamente com Inteligência Artificial.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowAiModal(true)}
-              className="w-full btn-primary py-2.5 text-xs flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm shadow-brand-primary/10"
-            >
-              <Sparkles size={13} />
-              <span>Gerar Relatório / PDI</span>
-            </button>
-          </div>
-
           <div className="card p-6 space-y-4">
             <div className="flex items-center space-x-2 text-brand-primary">
               <Bell size={20} className="text-brand-primary" />
@@ -1255,16 +1237,38 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          {/* Seção de Relatórios Clínicos Emitidos */}
+          {/* Seção Unificada de Relatórios Clínicos */}
           <div className="card mt-6">
-            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
-              <div className="flex items-center space-x-2">
-                <FileText className="text-brand-primary" size={20} />
-                <h2 className="text-lg font-display font-semibold text-brand-primary">Relatórios & PDI Emitidos</h2>
+            <div className="px-6 py-4 border-b border-brand-border bg-brand-bg/50 flex flex-col gap-4 rounded-t-2xl">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center space-x-2">
+                  <FileText className="text-brand-primary" size={20} />
+                  <h2 className="text-lg font-display font-semibold text-brand-primary">Relatórios & PDI</h2>
+                </div>
+                <span className="text-xs font-semibold px-2 py-0.5 bg-brand-primary/10 text-brand-primary rounded-full">
+                  {reports.length} {reports.length === 1 ? 'emitido' : 'emitidos'}
+                </span>
               </div>
-              <span className="text-xs font-semibold px-2 py-0.5 bg-brand-primary/10 text-brand-primary rounded-full">
-                {reports.length} {reports.length === 1 ? 'emitido' : 'emitidos'}
-              </span>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-2xl border border-brand-primary/10 bg-brand-primary/5 p-4">
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2 text-brand-primary">
+                    <Sparkles size={16} className="animate-pulse" />
+                    <p className="text-sm font-semibold">Emitir novo relatório</p>
+                  </div>
+                  <p className="text-xs text-brand-text-muted leading-relaxed max-w-2xl">
+                    Analise o histórico do paciente nos últimos meses e gere relatórios estruturados ou rascunhos de PDI instantaneamente com Inteligência Artificial.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAiModal(true)}
+                  className="btn-primary py-2.5 px-4 text-xs flex items-center justify-center space-x-1.5 cursor-pointer shadow-sm shadow-brand-primary/10 shrink-0"
+                >
+                  <Sparkles size={13} />
+                  <span>Gerar Relatório / PDI</span>
+                </button>
+              </div>
             </div>
 
             <div className="divide-y divide-brand-border">
@@ -1272,7 +1276,7 @@ export default function PatientDetail() {
                 <div className="p-8 text-center text-brand-text-muted text-sm leading-relaxed">
                   Nenhum relatório ou PDI foi emitido por IA para este paciente ainda.
                   <br />
-                  Use o botão na barra lateral para gerar o primeiro!
+                  Use o botão acima para gerar o primeiro.
                 </div>
               ) : (
                 reports.map((rep) => {
