@@ -316,6 +316,33 @@ function buildWhiteBackgroundIconSvg(imageDataUri: string, size: number) {
   ].join("");
 }
 
+function decodeBase64UrlToBuffer(value: string) {
+  const normalized = String(value || "").trim().replace(/\s+/g, "");
+  const padded = normalized.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = "=".repeat((4 - (padded.length % 4)) % 4);
+  return Buffer.from(padded + padding, "base64");
+}
+
+function isValidVapidPublicKey(value: unknown) {
+  if (typeof value !== "string") return false;
+
+  try {
+    return decodeBase64UrlToBuffer(value).length === 65;
+  } catch {
+    return false;
+  }
+}
+
+function isValidVapidPrivateKey(value: unknown) {
+  if (typeof value !== "string") return false;
+
+  try {
+    return decodeBase64UrlToBuffer(value).length === 32;
+  } catch {
+    return false;
+  }
+}
+
 // Helper para obter/gerar configurações de notificações
 async function getNotificationSettings() {
   try {
@@ -323,7 +350,7 @@ async function getNotificationSettings() {
       .from("settings")
       .select("api_key")
       .eq("id", "notification_settings")
-      .single();
+      .maybeSingle();
 
     let settings: any = {};
     if (data && data.api_key) {
@@ -334,8 +361,12 @@ async function getNotificationSettings() {
       }
     }
 
-    // Gerar chaves VAPID padrão se não existirem
-    if (!settings.vapid_public_key || !settings.vapid_private_key) {
+    const hasValidVapidPair =
+      isValidVapidPublicKey(settings.vapid_public_key) &&
+      isValidVapidPrivateKey(settings.vapid_private_key);
+
+    // Gerar chaves VAPID padrão se não existirem ou se estiverem inválidas
+    if (!hasValidVapidPair) {
       console.log("[Notifications] Gerando novo par de chaves VAPID...");
       const keys = webpush.generateVAPIDKeys();
       settings.vapid_public_key = keys.publicKey;
@@ -349,10 +380,14 @@ async function getNotificationSettings() {
         .upsert({
           id: "notification_settings",
           api_key: JSON.stringify(settings)
-        });
+        }, { onConflict: "id" });
     }
 
-    return settings;
+    return {
+      ...settings,
+      vapid_public_key: String(settings.vapid_public_key || "").trim(),
+      vapid_private_key: String(settings.vapid_private_key || "").trim()
+    };
   } catch (err) {
     console.error("Erro no getNotificationSettings, gerando chaves temporarias em memoria:", err);
     const keys = webpush.generateVAPIDKeys();

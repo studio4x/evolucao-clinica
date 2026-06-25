@@ -213,12 +213,26 @@ export default function Notifications() {
       if (!publicKey) throw new Error('Falha ao obter chave publica VAPID do servidor.');
 
       const reg = await navigator.serviceWorker.ready;
+      let applicationServerKey: Uint8Array;
+      try {
+        applicationServerKey = urlBase64ToUint8Array(String(publicKey).trim());
+      } catch {
+        throw new Error('Chave VAPID inválida recebida do servidor. Regrave as chaves Web Push no painel administrativo.');
+      }
       
       // Inscrever no push manager
-      const subscription = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey)
-      });
+      let subscription;
+      try {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        });
+      } catch (subscribeErr: any) {
+        if (subscribeErr?.name === 'AbortError') {
+          throw new Error('Falha ao registrar no serviço push do navegador. Verifique as chaves Web Push/VAPID configuradas no painel administrativo.');
+        }
+        throw subscribeErr;
+      }
 
       // Salvar inscricao no backend Express
       const res = await fetch('/api/notifications/subscribe', {
