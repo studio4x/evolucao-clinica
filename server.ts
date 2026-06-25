@@ -236,6 +236,44 @@ function getPostgresConnectionString() {
   );
 }
 
+async function reloadPostgrestSchemaCache() {
+  const connectionString = getPostgresConnectionString();
+  if (!connectionString) {
+    return { skipped: true };
+  }
+
+  const client = new PostgresClient({
+    connectionString,
+    ssl: connectionString.includes("sslmode=disable")
+      ? false
+      : { rejectUnauthorized: false }
+  });
+
+  try {
+    await client.connect();
+    await client.query("NOTIFY pgrst, 'reload schema';");
+    return { skipped: false, success: true };
+  } catch (error) {
+    console.warn("[PostgREST] Falha ao recarregar schema cache:", error);
+    return { skipped: false, success: false };
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
+function isSourceColumnSchemaError(error: any) {
+  const message = String(error?.message || "").toLowerCase();
+  return (
+    message.includes("source") &&
+    (
+      message.includes("schema cache") ||
+      message.includes("not found") ||
+      message.includes("does not exist") ||
+      message.includes("column")
+    )
+  );
+}
+
 async function bootstrapSupabaseCronJobs() {
   const connectionString = getPostgresConnectionString();
   if (!connectionString) {
@@ -1722,20 +1760,69 @@ async function sendNotificationInternal(
   imageUrl?: string,
   source: NotificationOrigin = "platform"
 ) {
+  const notificationRecord = {
+    user_id: targetUserId,
+    title,
+    message: content, // Ajustado ao banco existente
+    type,
+    link,
+    image_url: imageUrl,
+    source
+  };
+
+  let notification: any = null;
+  let insertError: any = null;
+
   // A. Criar no banco (In-App)
-  const { data: notification, error: insertError } = await supabaseAdmin
-    .from("notifications")
-    .insert({
+  try {
+    const result = await supabaseAdmin
+      .from("notifications")
+      .insert(notificationRecord)
+      .select()
+      .single();
+
+    notification = result.data;
+    insertError = result.error;
+  } catch (error) {
+    insertError = error;
+  }
+
+  if (insertError && isSourceColumnSchemaError(insertError)) {
+    await reloadPostgrestSchemaCache();
+
+    try {
+      const retryResult = await supabaseAdmin
+        .from("notifications")
+        .insert(notificationRecord)
+        .select()
+        .single();
+
+      notification = retryResult.data;
+      insertError = retryResult.error;
+    } catch (retryError) {
+      insertError = retryError;
+    }
+  }
+
+  if (insertError && isSourceColumnSchemaError(insertError)) {
+    const fallbackRecord = {
       user_id: targetUserId,
       title,
-      message: content, // Ajustado ao banco existente
+      message: content,
       type,
       link,
-      image_url: imageUrl,
-      source
-    })
-    .select()
-    .single();
+      image_url: imageUrl
+    };
+
+    const fallbackResult = await supabaseAdmin
+      .from("notifications")
+      .insert(fallbackRecord)
+      .select()
+      .single();
+
+    notification = fallbackResult.data;
+    insertError = fallbackResult.error;
+  }
 
   if (insertError) throw insertError;
 

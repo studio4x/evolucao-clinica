@@ -18,3 +18,5 @@ CREATE INDEX IF NOT EXISTS idx_notifications_source_created_at
 
 COMMENT ON COLUMN public.notifications.source IS
   'Origem da notificacao: platform para alertas automaticos da plataforma e manual para envios feitos pelo painel/usuario.';
+
+NOTIFY pgrst, 'reload schema';
