@@ -1109,7 +1109,16 @@ export default function NewEvolution() {
           )}
 
           {status === 'success' && (
-            <div className="flex flex-col items-center justify-center p-6 bg-brand-accent/10 rounded-xl border border-brand-accent/20 space-y-3">
+            <div className={`flex flex-col items-center justify-center p-6 rounded-xl border space-y-3 ${
+              isOnboardingMode
+                ? 'bg-gradient-to-br from-emerald-50 via-white to-emerald-100/40 border-emerald-200 shadow-sm'
+                : 'bg-brand-accent/10 border-brand-accent/20'
+            }`}>
+              {isOnboardingMode && (
+                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-700 shadow-sm">
+                  Fluxo guiado
+                </div>
+              )}
               <CheckCircle className="w-10 h-10 text-brand-primary" />
               <p className="text-brand-primary font-medium text-lg text-center">
                 {isOnboardingMode ? 'Evolução concluída. Continue para a sincronização da agenda.' : 'Evolução registrada com sucesso!'}
@@ -1119,6 +1128,12 @@ export default function NewEvolution() {
                   ? 'O próximo passo do onboarding é sincronizar os atendimentos da agenda.'
                   : 'A transcrição foi adicionada ao final do documento Google Docs do paciente.'}
               </p>
+
+              {isOnboardingMode && (
+                <div className="w-full max-w-md rounded-2xl border border-emerald-200 bg-white/80 px-4 py-3 text-center text-sm text-emerald-900 shadow-sm">
+                  Você ainda está no assistente de configuração. Falta só a etapa da agenda para finalizar o onboarding.
+                </div>
+              )}
               
               <div className="flex flex-col sm:flex-row gap-3 w-full justify-center mt-4">
                 <a
@@ -1139,30 +1154,31 @@ export default function NewEvolution() {
                 </button>
               </div>
 
-              <div className="flex space-x-3 mt-2 border-t border-brand-primary/10 pt-4 w-full justify-center">
+              <div className="flex flex-col sm:flex-row gap-3 mt-2 border-t border-brand-primary/10 pt-4 w-full justify-center">
                 <button
                   onClick={() => navigate(isOnboardingMode ? '/onboarding?step=agenda' : `/painel/patients/${id}`)}
-                  className="btn-outline px-4 py-2 text-sm"
+                  className="btn-primary px-5 py-2.5 text-sm"
                 >
                   {isOnboardingMode ? 'Continuar para a agenda' : 'Voltar ao Paciente'}
                 </button>
-                <button
-                  onClick={() => {
-                    audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
-                    audioItemsRef.current = [];
-                    setAudioItems([]);
-                    draftIdRef.current = null;
-                    recordingTimeRef.current = 0;
-                    setRecordingTime(0);
-                    setStatus('idle');
-                    setProcessingMessage('');
-                    setErrorMessage('');
-                  }}
-                  disabled={isOnboardingMode}
-                  className="btn-primary px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isOnboardingMode ? 'Fluxo guiado em andamento' : 'Nova Evolução'}
-                </button>
+                {!isOnboardingMode && (
+                  <button
+                    onClick={() => {
+                      audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
+                      audioItemsRef.current = [];
+                      setAudioItems([]);
+                      draftIdRef.current = null;
+                      recordingTimeRef.current = 0;
+                      setRecordingTime(0);
+                      setStatus('idle');
+                      setProcessingMessage('');
+                      setErrorMessage('');
+                    }}
+                    className="btn-outline px-4 py-2 text-sm"
+                  >
+                    Nova Evolução
+                  </button>
+                )}
               </div>
             </div>
           )}
