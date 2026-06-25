@@ -162,6 +162,23 @@ export default function PatientDetail() {
     }
   };
 
+  const handlePrintEvolution = (evo: any) => {
+    const evolutionText = (evo.transcription_text || evo.content || '').trim();
+
+    if (!evolutionText) {
+      alert('Esta evolução não possui conteúdo para impressão.');
+      return;
+    }
+
+    setPrintMode('prontuario');
+    setPrintDocType('Evolução Clínica');
+    setPrintPeriodLabel('');
+    setProntuarioDocContent(`Data da evolução: ${formatDateTime(evo.created_at)}\n\n${evolutionText}`);
+    setTimeout(() => {
+      window.print();
+    }, 200);
+  };
+
   const handleShareWhatsApp = (content: string, type: string) => {
     const cleanText = stripMarkdown(content);
     const docLabel = type === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
@@ -1198,6 +1215,15 @@ export default function PatientDetail() {
                       </div>
                       
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePrintEvolution(evo)}
+                          className="btn-outline h-8 w-8 p-0 flex items-center justify-center border-brand-primary/20 text-brand-primary hover:bg-brand-primary/5 cursor-pointer"
+                          title="Imprimir evolução"
+                          aria-label="Imprimir evolução"
+                        >
+                          <Printer size={14} />
+                        </button>
                         {patient?.google_doc_id && (
                           <a
                             href={`https://docs.google.com/document/d/${patient.google_doc_id}/edit`}
