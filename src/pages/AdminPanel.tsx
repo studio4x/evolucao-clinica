@@ -926,6 +926,40 @@ export default function AdminPanel() {
     }
   };
 
+  const handleClearNotificationHistory = async (notifications: any[], label: string, scope: 'manual' | 'platform') => {
+    if (notifications.length === 0) return;
+    if (!window.confirm(`Deseja realmente excluir todas as notificações ${label}?`)) return;
+
+    setLoadingPushNotifications(true);
+    try {
+      const ids = notifications
+        .map((notification) => notification.id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
+      if (ids.length === 0) return;
+
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .in('id', ids);
+
+      if (error) throw error;
+
+      if (scope === 'manual') {
+        storeManualPushNotificationIds(
+          readStoredManualPushNotificationIds().filter((id) => !ids.includes(id))
+        );
+      }
+
+      await refreshPushNotificationLogs();
+    } catch (err: any) {
+      console.error('Erro ao limpar histórico de notificações:', err);
+      alert('Erro ao limpar histórico: ' + err.message);
+    } finally {
+      setLoadingPushNotifications(false);
+    }
+  };
+
   const handleOpenAdminNotification = async (notification: AdminInboxNotification) => {
     try {
       setAdminInboxActionId(notification.id);
@@ -3978,10 +4012,21 @@ export default function AdminPanel() {
                     </div>
 
                     <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
-                      <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
-                        <Clock size={18} className="text-brand-primary" />
-                        <span>Notificações push enviadas manualmente</span>
-                      </h3>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                          <Clock size={18} className="text-brand-primary" />
+                          <span>Notificações push enviadas manualmente</span>
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => handleClearNotificationHistory(manualPushNotifications, 'manuais', 'manual')}
+                          disabled={manualPushNotifications.length === 0 || loadingPushNotifications}
+                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <Trash2 size={14} />
+                          <span>Limpar histórico</span>
+                        </button>
+                      </div>
 
                       {loadingPushNotifications ? (
                         <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
@@ -4093,10 +4138,21 @@ export default function AdminPanel() {
                   </div>
                 ) : (
                   <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
-                    <h3 className="text-lg font-semibold text-brand-text mb-4 flex items-center space-x-2">
-                      <Clock size={18} className="text-brand-primary" />
-                      <span>Notificações automáticas da plataforma</span>
-                    </h3>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                        <Clock size={18} className="text-brand-primary" />
+                        <span>Notificações automáticas da plataforma</span>
+                      </h3>
+                      <button
+                        type="button"
+                        onClick={() => handleClearNotificationHistory(platformPushNotifications, 'automáticas da plataforma', 'platform')}
+                        disabled={platformPushNotifications.length === 0 || loadingPushNotifications}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Trash2 size={14} />
+                        <span>Limpar histórico</span>
+                      </button>
+                    </div>
 
                     {loadingPushNotifications ? (
                       <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
