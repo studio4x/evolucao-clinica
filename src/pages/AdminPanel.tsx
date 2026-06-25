@@ -4933,7 +4933,7 @@ export default function AdminPanel() {
                         {/* Ícone das Notificações Push */}
                         <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
                           <div>
-                            <h3 className="text-sm font-semibold text-brand-primary">Ícone das Notificações Push</h3>
+                            <h3 className="text-sm font-semibold text-brand-primary">Ícone padrão das notificações</h3>
                             <p className="text-xs text-brand-text-muted mt-1">
                               Informe a URL da imagem usada como ícone nos alertas do navegador. Este campo tem prioridade sobre os demais ícones da marca.
                             </p>
@@ -4950,7 +4950,7 @@ export default function AdminPanel() {
 
                             <div className="space-y-2">
                               <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">
-                                URL da imagem
+                                Ícone padrão das notificações
                               </label>
                               <input
                                 type="url"
