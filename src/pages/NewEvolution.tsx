@@ -333,6 +333,7 @@ export default function NewEvolution() {
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
     try {
+      const currentReturnUrl = `${window.location.origin}${window.location.pathname}${window.location.search}`;
       sessionStorage.setItem(
         AUTH_REAUTH_RECOVERY_KEY,
         JSON.stringify({
@@ -344,7 +345,7 @@ export default function NewEvolution() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname
+        redirectTo: currentReturnUrl
       });
       if (error) throw error;
     } catch (error) {

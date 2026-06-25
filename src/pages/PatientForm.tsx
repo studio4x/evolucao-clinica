@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
-import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
+import { setOnboardingState, completeOnboarding, getOnboardingState } from '../utils/onboarding';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 
@@ -120,8 +120,14 @@ export default function PatientForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isOnboardingMode = searchParams.get('onboarding') === '1';
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const onboardingState = getOnboardingState(user?.id);
+  const isOnboardingMode = !id && (
+    searchParams.get('onboarding') === '1'
+    || onboardingState?.step === 'patient'
+    || onboardingState?.step === 'evolution'
+    || onboardingState?.step === 'agenda'
+  );
   const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const restoredDraftUserRef = useRef<string | null>(null);
@@ -147,6 +153,8 @@ export default function PatientForm() {
   const pendingPatientIdRef = useRef<string | null>(null);
 
   const getDraftPatientId = () => pendingPatientIdRef.current || id || undefined;
+
+  const getGoogleReturnUrl = () => `${window.location.origin}${window.location.pathname}${window.location.search}`;
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -293,7 +301,7 @@ export default function PatientForm() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname,
+        redirectTo: getGoogleReturnUrl(),
         loginHint: user?.email || undefined
       });
       if (error) throw error;
@@ -420,7 +428,7 @@ export default function PatientForm() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: window.location.origin + window.location.pathname,
+        redirectTo: getGoogleReturnUrl(),
         loginHint: user?.email || undefined
       });
       if (error) throw error;
