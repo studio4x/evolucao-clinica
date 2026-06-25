@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.39";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.40";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -22,6 +22,14 @@ const isBrandAssetPath = (pathname) => {
     "/icon-512x512.png",
     "/icon-512x512-maskable.png"
   ].some((assetPath) => pathname.startsWith(assetPath));
+};
+
+const offlineResponse = async () => {
+  const cachedOffline = await caches.match("/offline.html");
+  return cachedOffline || new Response("Offline", {
+    status: 503,
+    statusText: "Offline"
+  });
 };
 
 // Install: precache app shell
@@ -143,9 +151,10 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() =>
-          caches.match(event.request).then((cached) => cached || caches.match("/offline.html"))
-        )
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || offlineResponse();
+        })
     );
     return;
   }
@@ -161,13 +170,20 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => caches.match(event.request))
+        .catch(async () => {
+          const cached = await caches.match(event.request);
+          return cached || offlineResponse();
+        })
     );
     return;
   }
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
+    caches.match(event.request).then(async (cached) => {
+      if (cached) {
+        return cached;
+      }
+
       const fetchPromise = fetch(event.request)
         .then((response) => {
           const isSameOrigin = event.request.url.startsWith(self.location.origin);
@@ -178,9 +194,9 @@ self.addEventListener("fetch", (event) => {
           }
           return response;
         })
-        .catch(() => null);
+        .catch(async () => offlineResponse());
 
-      return cached || fetchPromise;
+      return fetchPromise;
     })
   );
 });

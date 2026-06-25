@@ -4,7 +4,7 @@ import { precacheAndRoute } from 'workbox-precaching';
 // @ts-ignore
 precacheAndRoute(self.__WB_MANIFEST || []);
 
-const CACHE_VERSION = "hcm-pwa-v2.1";
+const CACHE_VERSION = "hcm-pwa-v2.2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -33,6 +33,14 @@ const isBrandAssetPath = (pathname) => {
     "/icon-512x512.png",
     "/icon-512x512-maskable.png"
   ].some((assetPath) => pathname.startsWith(assetPath));
+};
+
+const offlineResponse = async () => {
+  const cachedOffline = await caches.match("/offline.html");
+  return cachedOffline || new Response("Offline", {
+    status: 503,
+    statusText: "Offline"
+  });
 };
 
 // Evento de Instalação: Salva o App Shell
@@ -92,13 +100,11 @@ self.addEventListener("fetch", (event) => {
           caches.open(RUNTIME_CACHE).then((cache) => cache.put(event.request, copy));
           return response;
         })
-        .catch(() => {
-          // Se falhar a rede, tenta o cache
-          return caches.match(event.request).then((cachedResponse) => {
-            if (cachedResponse) return cachedResponse;
-            // Se não houver no cache, retorna a página offline
-            return caches.match("/offline.html");
-          });
+        .catch(async () => {
+          // Se falhar a rede, tenta o cache e depois um fallback explícito
+          const cachedResponse = await caches.match(event.request);
+          if (cachedResponse) return cachedResponse;
+          return offlineResponse();
         })
     );
     return;
@@ -114,7 +120,10 @@ self.addEventListener("fetch", (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match(event.request))
+        .catch(async () => {
+          const cachedResponse = await caches.match(event.request);
+          return cachedResponse || offlineResponse();
+        })
     );
     return;
   }
@@ -138,8 +147,14 @@ self.addEventListener("fetch", (event) => {
 
   // Padrão: Network First
   event.respondWith(
-    fetch(event.request)
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then(async (cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+      try {
+        return await fetch(event.request);
+      } catch {
+        return offlineResponse();
+      }
+    })
   );
 });
 
