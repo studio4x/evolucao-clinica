@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 import GooglePayButton from '@google-pay/button-react';
 import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
-import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
+import { sendSubscriptionPaymentEmail, type SubscriptionEmailResponse } from '../services/subscriptionEmail';
 
 const DEFAULT_PLANS = [
   {
@@ -394,13 +394,91 @@ export default function Subscription() {
     }
   };
 
+  const sendPaymentEmailAndShowModal = async (
+    kind: 'success' | 'error',
+    planId: string,
+    paymentLabel: string,
+    backendData: any,
+    failureMessage?: string
+  ) => {
+    const plan = getPlanDetails(planId);
+    let emailResult: SubscriptionEmailResponse = {
+      success: false,
+      emailSent: false,
+      error: 'Falha ao enviar o e-mail de confirmação.',
+      emailError: 'Falha ao enviar o e-mail de confirmação.'
+    };
+
+    try {
+      emailResult = await sendSubscriptionPaymentEmail({
+        kind: kind === 'success' ? 'success' : 'failure',
+        planId,
+        paymentMethodLabel: paymentLabel,
+        subscriptionId: backendData?.subscriptionId || null,
+        invoiceId: backendData?.invoiceId || null,
+        invoiceUrl: backendData?.invoiceUrl || null,
+        invoicePdfUrl: backendData?.invoicePdfUrl || null,
+        amount: backendData?.amountPaid ?? plan.price ?? null,
+        currency: backendData?.currency || 'brl',
+        nextRenewalAt: backendData?.endsAt || null,
+        failureMessage: failureMessage || null
+      });
+    } catch (emailError: any) {
+      console.error('[Subscription] Falha ao disparar e-mail de assinatura:', emailError);
+      emailResult = {
+        success: false,
+        emailSent: false,
+        error: emailError?.message || 'Falha ao enviar o e-mail de confirmação.',
+        emailError: emailError?.message || 'Falha ao enviar o e-mail de confirmação.'
+      };
+    }
+
+    const planDetails = getPlanBenefitsCopy(plan, planId);
+    const summaryLines = buildPaymentSummaryLines(plan, {
+      ...backendData,
+      paymentLabel
+    });
+    const isSuccess = kind === 'success';
+    const emailNote = emailResult.emailSent
+      ? (isSuccess
+        ? 'Um e-mail foi enviado com os dados da sua assinatura.'
+        : 'Um e-mail foi enviado com os detalhes da falha e as orientações para tentar novamente.')
+      : (isSuccess
+        ? 'A assinatura foi concluída, mas não conseguimos enviar o e-mail automaticamente.'
+        : 'A tentativa de pagamento foi processada, mas não conseguimos enviar o e-mail automaticamente.');
+
+    setPaymentModal({
+      kind,
+      planId,
+      paymentLabel,
+      title: planDetails.title,
+      message: isSuccess
+        ? `Seu pedido foi processado com sucesso usando ${paymentLabel}. ${emailNote}`
+        : `Não foi possível concluir o pagamento usando ${paymentLabel}. ${emailNote}`,
+      emailNote: `${emailNote}${emailResult.emailError ? ` ${emailResult.emailError}` : ''}`,
+      benefits: isSuccess
+        ? planDetails.benefits
+        : [
+            'Você pode revisar os dados de pagamento no Google Pay.',
+            'Tente novamente quando quiser refazer a assinatura.',
+            'Se houver dúvida, entre em contato com o suporte.'
+          ],
+      summaryLines,
+      invoiceUrl: backendData?.invoiceUrl || null,
+      invoicePdfUrl: backendData?.invoicePdfUrl || null,
+      errorMessage: failureMessage || emailResult.emailError || null
+    });
+  };
+
   const handleGooglePaySuccess = async (plan: 'monthly' | 'yearly', paymentData: any) => {
     if (!user) return;
     setLoadingPlan(plan);
     setSuccessMessage(null);
+    setPaymentModal(null);
 
     try {
       const token = paymentData.paymentMethodData?.tokenizationData?.token;
+      const paymentLabel = getGooglePayPaymentLabel(paymentData);
       console.log("Token do Google Pay recebido com sucesso:", token);
       
       if (!token) {
@@ -431,15 +509,27 @@ export default function Subscription() {
         trialEndsAt
       );
 
-      setSuccessMessage(`Plano ${plan === 'monthly' ? 'Mensal' : 'Anual'} ativado com sucesso via Google Pay!`);
+      await sendPaymentEmailAndShowModal('success', plan, paymentLabel, data);
       fetchTransactions();
-      setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error: any) {
       console.error("Erro ao processar assinatura via Google Pay:", error);
-      alert("Erro ao processar pagamento real: " + (error.message || error));
+      const paymentLabel = getGooglePayPaymentLabel(paymentData);
+      await sendPaymentEmailAndShowModal('error', plan, paymentLabel, { paymentLabel }, error.message || "Erro ao processar pagamento real.");
     } finally {
       setLoadingPlan(null);
     }
+  };
+
+  const handleGooglePayError = async (plan: 'monthly' | 'yearly', error: any) => {
+    if (!user) return;
+    console.error('Erro na API do Google Pay:', error);
+    setLoadingPlan(plan);
+    setSuccessMessage(null);
+    setPaymentModal(null);
+
+    const errorMessage = error?.message || 'Ocorreu uma falha ao processar o pagamento.';
+    await sendPaymentEmailAndShowModal('error', plan, 'Google Pay', {}, errorMessage);
+    setLoadingPlan(null);
   };
 
   const handleRequestRefund = async () => {
@@ -696,7 +786,7 @@ export default function Subscription() {
                           handleGooglePaySuccess(plan.id, paymentRequest);
                         }}
                         onError={(error) => {
-                          console.error('Erro na API do Google Pay:', error);
+                          void handleGooglePayError(plan.id, error);
                         }}
                         onCancel={(reason) => {
                           console.log('Pagamento cancelado pelo usuário:', reason);
@@ -942,6 +1032,149 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               <p className="text-xs text-brand-text-muted leading-relaxed">
                 Estamos validando sua transação com segurança no Google Pay. Por favor, não feche ou recarregue esta página.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação / falha do pagamento */}
+      {paymentModal && (
+        <div className="fixed inset-0 bg-black/55 z-[110] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-[28px] max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 md:p-8 space-y-6 shadow-2xl border border-brand-primary/10 relative animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setPaymentModal(null)}
+              className="absolute top-4 right-4 w-9 h-9 rounded-full bg-brand-bg text-brand-text-muted hover:text-brand-text hover:bg-brand-primary/10 flex items-center justify-center transition-colors cursor-pointer"
+              aria-label="Fechar modal"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="flex items-start gap-4 pr-10">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 ${
+                paymentModal.kind === 'success'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-red-100 text-red-700'
+              }`}>
+                {paymentModal.kind === 'success' ? <CheckCircle2 className="w-7 h-7" /> : <XCircle className="w-7 h-7" />}
+              </div>
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-bg text-brand-primary text-[11px] font-bold uppercase tracking-wider">
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>{paymentModal.kind === 'success' ? 'Confirmação enviada' : 'Falha registrada'}</span>
+                </div>
+                <h3 className="text-2xl font-display font-bold text-brand-text">{paymentModal.title}</h3>
+                <p className={`text-sm leading-relaxed ${paymentModal.kind === 'success' ? 'text-brand-text-muted' : 'text-red-700'}`}>
+                  {paymentModal.message}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className={`rounded-2xl border p-4 ${paymentModal.kind === 'success' ? 'bg-emerald-50/60 border-emerald-100' : 'bg-red-50/60 border-red-100'}`}>
+                <p className={`text-xs font-bold uppercase tracking-wider mb-2 ${paymentModal.kind === 'success' ? 'text-emerald-800' : 'text-red-800'}`}>
+                  Forma de pagamento
+                </p>
+                <p className="text-sm font-semibold text-brand-text">{paymentModal.paymentLabel}</p>
+                <p className="text-xs text-brand-text-muted mt-1">
+                  Seguimos a orientação do Google Pay: exibimos apenas o texto descritivo mascarado retornado pela API.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-brand-border bg-brand-bg/40 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted mb-2">Resumo da transação</p>
+                <div className="space-y-2 text-sm text-brand-text">
+                  {paymentModal.summaryLines.map((line) => (
+                    <p key={line} className="flex items-start gap-2">
+                      <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                      <span>{line}</span>
+                    </p>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {paymentModal.kind === 'error' && paymentModal.errorMessage && (
+              <div className="rounded-2xl border border-red-100 bg-red-50/70 p-4 text-sm text-red-800 leading-relaxed">
+                <p className="font-bold text-red-900 mb-1">Motivo da falha</p>
+                <p>{paymentModal.errorMessage}</p>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-brand-border bg-white p-5 space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted">Boas-vindas e benefícios</p>
+                  <p className="text-lg font-bold text-brand-primary mt-1">{paymentModal.kind === 'success' ? 'O que você desbloqueou' : 'O que fazer agora'}</p>
+                </div>
+                {paymentModal.kind === 'success' && (
+                  <span className="hidden sm:inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wider">
+                    Plano ativo
+                  </span>
+                )}
+              </div>
+
+              {paymentModal.kind === 'success' && (
+                <p className="text-sm text-brand-text-muted leading-relaxed">
+                  {getPlanBenefitsCopy(getPlanDetails(paymentModal.planId), paymentModal.planId).intro}
+                </p>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {paymentModal.benefits.map((benefit) => (
+                  <div key={benefit} className={`rounded-xl border p-3 text-sm leading-relaxed ${
+                    paymentModal.kind === 'success'
+                      ? 'bg-brand-bg/40 border-brand-border/60 text-brand-text'
+                      : 'bg-red-50/70 border-red-100 text-red-800'
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      <Check className={`w-4 h-4 mt-0.5 shrink-0 ${paymentModal.kind === 'success' ? 'text-brand-primary' : 'text-red-600'}`} />
+                      <span>{benefit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className={`rounded-xl border p-4 text-sm leading-relaxed ${
+                paymentModal.kind === 'success'
+                  ? 'bg-emerald-50/50 border-emerald-100 text-emerald-900'
+                  : 'bg-red-50/50 border-red-100 text-red-800'
+              }`}>
+                {paymentModal.emailNote}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-1">
+              {paymentModal.kind === 'success' && paymentModal.invoiceUrl && (
+                <a
+                  href={paymentModal.invoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-brand-primary/15 bg-brand-primary text-white font-bold hover:bg-brand-primary-hover transition-colors"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Ver fatura</span>
+                </a>
+              )}
+              {paymentModal.kind === 'success' && paymentModal.invoicePdfUrl && (
+                <a
+                  href={paymentModal.invoicePdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-brand-border bg-white text-brand-text font-bold hover:bg-brand-bg transition-colors"
+                >
+                  <span>Baixar PDF</span>
+                </a>
+              )}
+              <button
+                onClick={() => setPaymentModal(null)}
+                className={`inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-colors ${
+                  paymentModal.kind === 'success'
+                    ? 'bg-brand-bg text-brand-text hover:bg-brand-primary/10 border border-brand-border'
+                    : 'bg-red-600 text-white hover:bg-red-700 border border-red-600'
+                }`}
+              >
+                <span>{paymentModal.kind === 'success' ? 'Continuar' : 'Tentar novamente'}</span>
+              </button>
             </div>
           </div>
         </div>
