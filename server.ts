@@ -261,6 +261,54 @@ async function reloadPostgrestSchemaCache() {
   }
 }
 
+async function insertNotificationRecord(record: {
+  user_id: string;
+  title: string;
+  message: string;
+  type: string;
+  link?: string | null;
+  image_url?: string | null;
+  source: NotificationOrigin;
+}) {
+  const connectionString = getPostgresConnectionString();
+  if (!connectionString) {
+    throw new Error("String de conexão Postgres não disponível para registrar notificações.");
+  }
+
+  const client = new PostgresClient({
+    connectionString,
+    ssl: connectionString.includes("sslmode=disable")
+      ? false
+      : { rejectUnauthorized: false }
+  });
+
+  try {
+    await client.connect();
+    const result = await client.query(
+      `INSERT INTO public.notifications (user_id, title, message, type, link, image_url, source)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [
+        record.user_id,
+        record.title,
+        record.message,
+        record.type,
+        record.link ?? null,
+        record.image_url ?? null,
+        record.source
+      ]
+    );
+
+    if (!result.rows[0]) {
+      throw new Error("Falha ao inserir notificação no banco.");
+    }
+
+    return result.rows[0];
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 function isSourceColumnSchemaError(error: any) {
   const message = String(error?.message || "").toLowerCase();
   return (
@@ -1770,61 +1818,18 @@ async function sendNotificationInternal(
     source
   };
 
-  let notification: any = null;
-  let insertError: any = null;
-
   // A. Criar no banco (In-App)
+  let notification: any;
   try {
-    const result = await supabaseAdmin
-      .from("notifications")
-      .insert(notificationRecord)
-      .select()
-      .single();
-
-    notification = result.data;
-    insertError = result.error;
-  } catch (error) {
-    insertError = error;
-  }
-
-  if (insertError && isSourceColumnSchemaError(insertError)) {
-    await reloadPostgrestSchemaCache();
-
-    try {
-      const retryResult = await supabaseAdmin
-        .from("notifications")
-        .insert(notificationRecord)
-        .select()
-        .single();
-
-      notification = retryResult.data;
-      insertError = retryResult.error;
-    } catch (retryError) {
-      insertError = retryError;
+    notification = await insertNotificationRecord(notificationRecord);
+  } catch (error: any) {
+    if (isSourceColumnSchemaError(error)) {
+      await reloadPostgrestSchemaCache();
+      notification = await insertNotificationRecord(notificationRecord);
+    } else {
+      throw error;
     }
   }
-
-  if (insertError && isSourceColumnSchemaError(insertError)) {
-    const fallbackRecord = {
-      user_id: targetUserId,
-      title,
-      message: content,
-      type,
-      link,
-      image_url: imageUrl
-    };
-
-    const fallbackResult = await supabaseAdmin
-      .from("notifications")
-      .insert(fallbackRecord)
-      .select()
-      .single();
-
-    notification = fallbackResult.data;
-    insertError = fallbackResult.error;
-  }
-
-  if (insertError) throw insertError;
 
   const settings = await getNotificationSettings();
 
