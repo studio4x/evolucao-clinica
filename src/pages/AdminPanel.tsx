@@ -543,6 +543,10 @@ export default function AdminPanel() {
   const [adminSmtpUser, setAdminSmtpUser] = useState('');
   const [adminSmtpPass, setAdminSmtpPass] = useState('');
   const [adminSmtpFrom, setAdminSmtpFrom] = useState('');
+  const [adminEmailProvider, setAdminEmailProvider] = useState<'smtp' | 'brevo'>('smtp');
+  const [adminBrevoApiKey, setAdminBrevoApiKey] = useState('');
+  const [adminBrevoSenderName, setAdminBrevoSenderName] = useState('');
+  const [adminBrevoSenderEmail, setAdminBrevoSenderEmail] = useState('');
   const [adminVapidPublic, setAdminVapidPublic] = useState('');
   const [adminVapidPrivate, setAdminVapidPrivate] = useState('');
   const [adminSmtpSaving, setAdminSmtpSaving] = useState(false);
@@ -695,6 +699,10 @@ export default function AdminPanel() {
           setAdminSmtpUser(parsed.smtp_user || '');
           setAdminSmtpPass(parsed.smtp_pass || '');
           setAdminSmtpFrom(parsed.smtp_from || '');
+          setAdminEmailProvider(parsed.email_provider === 'brevo' ? 'brevo' : 'smtp');
+          setAdminBrevoApiKey(parsed.brevo_api_key || '');
+          setAdminBrevoSenderName(parsed.brevo_sender_name || '');
+          setAdminBrevoSenderEmail(parsed.brevo_sender_email || '');
           setAdminVapidPublic(parsed.vapid_public_key || '');
           setAdminVapidPrivate(parsed.vapid_private_key || '');
         }
@@ -772,12 +780,16 @@ export default function AdminPanel() {
 
     try {
       const settings = {
+        email_provider: adminEmailProvider,
         smtp_host: adminSmtpHost,
         smtp_port: adminSmtpPort,
         smtp_secure: adminSmtpSecure,
         smtp_user: adminSmtpUser,
         smtp_pass: adminSmtpPass,
         smtp_from: adminSmtpFrom,
+        brevo_api_key: adminBrevoApiKey,
+        brevo_sender_name: adminBrevoSenderName,
+        brevo_sender_email: adminBrevoSenderEmail,
         vapid_public_key: adminVapidPublic,
         vapid_private_key: adminVapidPrivate,
         vapid_subject: `mailto:${adminSmtpUser || 'suporte@conexaoseres.com.br'}`
@@ -993,12 +1005,16 @@ export default function AdminPanel() {
         },
         body: JSON.stringify({
           toEmail: testEmailTarget,
+          provider: adminEmailProvider,
           smtpHost: adminSmtpHost,
           smtpPort: adminSmtpPort,
           smtpSecure: adminSmtpSecure,
           smtpUser: adminSmtpUser,
           smtpPass: adminSmtpPass,
-          smtpFrom: adminSmtpFrom
+          smtpFrom: adminSmtpFrom,
+          brevoApiKey: adminBrevoApiKey,
+          brevoSenderName: adminBrevoSenderName,
+          brevoSenderEmail: adminBrevoSenderEmail
         })
       });
 
@@ -4156,7 +4172,7 @@ export default function AdminPanel() {
                       <span>Servidor SMTP Global</span>
                     </h3>
                     <p className="text-xs text-brand-text-muted leading-relaxed">
-                      Configure os dados SMTP globais da plataforma para que todas as notificações disparadas enviem e-mails reais de sistema aos terapeutas.
+                      Configure os dados SMTP globais da plataforma para que todas as notificações disparadas enviem e-mails reais de sistema aos terapeutas. O envio pode ser roteado pela Brevo ou pelo SMTP, conforme o provedor ativo.
                     </p>
 
                     <div className="space-y-3">
@@ -4239,19 +4255,19 @@ export default function AdminPanel() {
                       className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold transition-colors text-sm disabled:opacity-50 cursor-pointer"
                     >
                       {adminSmtpSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                      <span>Salvar Configuração SMTP</span>
+                      <span>Salvar Configuração de E-mail</span>
                     </button>
 
                     {adminSmtpSuccess && (
                       <div className="bg-emerald-50 border border-emerald-100 p-3 rounded-xl text-xs flex gap-2 text-emerald-800 animate-fade-in">
                         <Check className="text-emerald-600 flex-shrink-0" />
-                        <span>Configurações SMTP updated!</span>
+                        <span>Configurações de e-mail atualizadas com sucesso!</span>
                       </div>
                     )}
 
-                    {/* Seção de Teste de E-mail SMTP */}
+                    {/* Seção de Teste de E-mail */}
                     <div className="border-t border-brand-border/40 pt-4 mt-4 space-y-3">
-                      <label className="text-[10px] font-bold text-brand-text block uppercase tracking-wider animate-fade-in">Testar Configuração SMTP</label>
+                      <label className="text-[10px] font-bold text-brand-text block uppercase tracking-wider animate-fade-in">Testar Configuração de E-mail</label>
                       <div className="flex gap-2">
                         <input
                           type="email"
@@ -4276,6 +4292,78 @@ export default function AdminPanel() {
                           <span>{testEmailMessage}</span>
                         </div>
                       )}
+                    </div>
+                  </form>
+
+                  {/* Brevo API Config */}
+                  <form onSubmit={handleSaveAdminSmtp} className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
+                    <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                      <Mail className="text-brand-primary w-5 h-5" />
+                      <span>Integração Brevo API</span>
+                    </h3>
+                    <p className="text-xs text-brand-text-muted leading-relaxed">
+                      Use a API da Brevo para disparar os e-mails de sistema. Quando este provedor estiver ativo, a plataforma prioriza a Brevo e mantém o SMTP como fallback.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">PROVEDOR ATIVO</label>
+                        <select
+                          value={adminEmailProvider}
+                          onChange={e => setAdminEmailProvider(e.target.value as 'smtp' | 'brevo')}
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                        >
+                          <option value="brevo">Brevo API</option>
+                          <option value="smtp">SMTP</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">API KEY BREVO</label>
+                        <input
+                          type="password"
+                          value={adminBrevoApiKey}
+                          onChange={e => setAdminBrevoApiKey(e.target.value)}
+                          placeholder="chave da Brevo"
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <label className="text-[10px] font-bold text-brand-text block mb-1">NOME DO REMETENTE</label>
+                          <input
+                            type="text"
+                            value={adminBrevoSenderName}
+                            onChange={e => setAdminBrevoSenderName(e.target.value)}
+                            placeholder="Evolução Clínica"
+                            className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-brand-text block mb-1">E-MAIL DO REMETENTE</label>
+                          <input
+                            type="email"
+                            value={adminBrevoSenderEmail}
+                            onChange={e => setAdminBrevoSenderEmail(e.target.value)}
+                            placeholder="no-reply@seudominio.com"
+                            className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={adminSmtpSaving}
+                      className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white hover:bg-brand-primary-hover font-semibold transition-colors text-sm disabled:opacity-50 cursor-pointer"
+                    >
+                      {adminSmtpSaving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                      <span>Salvar Brevo API</span>
+                    </button>
+
+                    <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3 text-[11px] text-sky-800 leading-relaxed">
+                      O remetente precisa estar validado na Brevo para que a API envie as mensagens com sucesso.
                     </div>
                   </form>
               </div>

@@ -338,6 +338,226 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
   }
 }
 
+type EmailProvider = "smtp" | "brevo";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report";
+
+type EmailDeliveryInput = {
+  userId?: string | null;
+  recipientEmail: string;
+  recipientName?: string | null;
+  subject: string;
+  textContent: string;
+  htmlContent?: string;
+  source: EmailDeliverySource;
+  relatedNotificationId?: string | null;
+  allowFallback?: boolean;
+};
+
+type EmailDeliveryResult = {
+  provider: EmailProvider;
+  messageId: string | null;
+};
+
+function normalizeEmailProvider(value: any): EmailProvider {
+  return value === "brevo" ? "brevo" : "smtp";
+}
+
+function hasSmtpEmailSettings(settings: any) {
+  return Boolean(settings?.smtp_host && settings?.smtp_user && settings?.smtp_pass);
+}
+
+function hasBrevoEmailSettings(settings: any) {
+  return Boolean(settings?.brevo_api_key && (settings?.brevo_sender_email || settings?.brevo_sender_name));
+}
+
+async function recordEmailDelivery(data: {
+  userId?: string | null;
+  recipientEmail: string;
+  recipientName?: string | null;
+  subject: string;
+  message: string;
+  provider: EmailProvider;
+  source: EmailDeliverySource;
+  status: "sent" | "failed";
+  errorMessage?: string | null;
+  providerMessageId?: string | null;
+  relatedNotificationId?: string | null;
+}) {
+  try {
+    await supabaseAdmin.from("email_deliveries").insert({
+      user_id: data.userId || null,
+      recipient_email: data.recipientEmail,
+      recipient_name: data.recipientName || null,
+      subject: data.subject,
+      message: data.message,
+      provider: data.provider,
+      source: data.source,
+      status: data.status,
+      error_message: data.errorMessage || null,
+      provider_message_id: data.providerMessageId || null,
+      related_notification_id: data.relatedNotificationId || null
+    });
+  } catch (err) {
+    console.error("[EmailHistory] Falha ao registrar envio de e-mail:", err);
+  }
+}
+
+async function sendEmailViaSmtp(
+  settings: any,
+  input: Pick<EmailDeliveryInput, "recipientEmail" | "recipientName" | "subject" | "textContent" | "htmlContent">
+) {
+  if (!hasSmtpEmailSettings(settings)) {
+    throw new Error("Servidor SMTP não configurado na plataforma.");
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: settings.smtp_host,
+    port: Number(settings.smtp_port) || 587,
+    secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
+    auth: {
+      user: settings.smtp_user,
+      pass: settings.smtp_pass
+    },
+    pool: false,
+    connectionTimeout: 15000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
+    tls: { rejectUnauthorized: false }
+  } as any);
+
+  const fromField = buildFromField(settings.smtp_from, settings.smtp_user);
+  const mailOptions = {
+    from: fromField,
+    to: input.recipientEmail,
+    subject: input.subject,
+    text: input.textContent,
+    html: input.htmlContent || undefined,
+  };
+
+  const info = await transporter.sendMail(mailOptions);
+  return { messageId: info.messageId || null };
+}
+
+async function sendEmailViaBrevo(
+  settings: any,
+  input: Pick<EmailDeliveryInput, "recipientEmail" | "recipientName" | "subject" | "textContent" | "htmlContent">
+) {
+  if (!settings?.brevo_api_key) {
+    throw new Error("Brevo não configurado na plataforma.");
+  }
+
+  const senderEmail = settings.brevo_sender_email || settings.smtp_user || "";
+  if (!senderEmail) {
+    throw new Error("Sender da Brevo não configurado.");
+  }
+
+  const senderName = settings.brevo_sender_name || settings.smtp_from || "Evolução Clínica";
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+      "api-key": settings.brevo_api_key
+    },
+    body: JSON.stringify({
+      sender: {
+        name: senderName,
+        email: senderEmail
+      },
+      to: [
+        {
+          email: input.recipientEmail,
+          ...(input.recipientName ? { name: input.recipientName } : {})
+        }
+      ],
+      subject: input.subject,
+      ...(input.htmlContent ? { htmlContent: input.htmlContent } : {}),
+      ...(input.textContent ? { textContent: input.textContent } : {})
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const errorMessage = data?.message || data?.error || `Brevo retornou HTTP ${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return { messageId: data?.messageId || data?.messageID || null };
+}
+
+async function sendTransactionalEmail(
+  settings: any,
+  input: EmailDeliveryInput
+): Promise<EmailDeliveryResult> {
+  const preferredProvider = normalizeEmailProvider(settings?.email_provider);
+  const providers: EmailProvider[] = preferredProvider === "brevo" ? ["brevo", "smtp"] : ["smtp", "brevo"];
+  const allowFallback = input.allowFallback !== false;
+  const attempts = allowFallback ? providers : [preferredProvider];
+  let lastError: Error | null = null;
+
+  for (const provider of attempts) {
+    try {
+      if (provider === "brevo") {
+        if (!hasBrevoEmailSettings(settings)) {
+          throw new Error("Brevo não configurado na plataforma.");
+        }
+
+        const result = await sendEmailViaBrevo(settings, input);
+        await recordEmailDelivery({
+          userId: input.userId,
+          recipientEmail: input.recipientEmail,
+          recipientName: input.recipientName,
+          subject: input.subject,
+          message: input.textContent,
+          provider,
+          source: input.source,
+          status: "sent",
+          providerMessageId: result.messageId,
+          relatedNotificationId: input.relatedNotificationId
+        });
+        return { provider, messageId: result.messageId };
+      }
+
+      if (!hasSmtpEmailSettings(settings)) {
+        throw new Error("Servidor SMTP não configurado na plataforma.");
+      }
+
+      const result = await sendEmailViaSmtp(settings, input);
+      await recordEmailDelivery({
+        userId: input.userId,
+        recipientEmail: input.recipientEmail,
+        recipientName: input.recipientName,
+        subject: input.subject,
+        message: input.textContent,
+        provider,
+        source: input.source,
+        status: "sent",
+        providerMessageId: result.messageId,
+        relatedNotificationId: input.relatedNotificationId
+      });
+      return { provider, messageId: result.messageId };
+    } catch (err: any) {
+      lastError = err instanceof Error ? err : new Error(err?.message || "Erro desconhecido ao enviar e-mail.");
+      console.warn(`[Email] Falha ao enviar via ${provider}:`, lastError.message);
+    }
+  }
+
+  await recordEmailDelivery({
+    userId: input.userId,
+    recipientEmail: input.recipientEmail,
+    recipientName: input.recipientName,
+    subject: input.subject,
+    message: input.textContent,
+    provider: preferredProvider,
+    source: input.source,
+    status: "failed",
+    errorMessage: lastError?.message || "Falha ao enviar e-mail.",
+    relatedNotificationId: input.relatedNotificationId
+  });
+
+  throw lastError || new Error("Falha ao enviar e-mail.");
+}
+
 async function revokeGoogleGrant(googleAccessToken?: string | null) {
   const token = String(googleAccessToken || "").trim();
   if (!token) {
@@ -1214,12 +1434,12 @@ async function sendNotificationInternal(
   let emailError: string | null = null;
   let emailTo: string | null = null;
 
-  if (settings.smtp_host && settings.smtp_user && settings.smtp_pass) {
+  if (hasSmtpEmailSettings(settings) || hasBrevoEmailSettings(settings)) {
     try {
       // Busca o e-mail do profissional diretamente da tabela professionals (mais confiável que auth.admin)
       const { data: profData } = await supabaseAdmin
         .from("professionals")
-        .select("google_email")
+        .select("google_email, full_name")
         .eq("id", targetUserId)
         .single();
 
@@ -1237,22 +1457,6 @@ async function sendNotificationInternal(
       emailTo = targetEmail;
 
       if (targetEmail) {
-        const transporter = nodemailer.createTransport({
-          host: settings.smtp_host,
-          port: Number(settings.smtp_port) || 587,
-          secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
-          auth: {
-            user: settings.smtp_user,
-            pass: settings.smtp_pass
-          },
-          // Necessário para ambiente serverless (Vercel): sem pool de conexões persistentes
-          pool: false,
-          connectionTimeout: 15000,
-          greetingTimeout: 10000,
-          socketTimeout: 15000,
-          tls: { rejectUnauthorized: false }
-        } as any);
-
         const viewUrl = `${PRODUCTION_ORIGIN}${link || "/painel/notifications"}`;
 
         // Paleta de cores e ícones por tipo de notificação
@@ -1264,12 +1468,7 @@ async function sendNotificationInternal(
         };
         const tc = typeConfig[type] || typeConfig.info;
 
-        const mailOptions = {
-          from: buildFromField(settings.smtp_from, settings.smtp_user),
-          to: targetEmail,
-          subject: `${tc.icon} ${title}`,
-          text: `${title}\n\n${content}\n\nVer detalhes no app: ${viewUrl}`,
-          html: `
+        const htmlContent = `
             <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.08);">
               
               <!-- Header -->
@@ -1307,22 +1506,31 @@ async function sendNotificationInternal(
               </div>
             </div>
           `
-        };
+        const emailResult = await sendTransactionalEmail(settings, {
+          userId: targetUserId,
+          recipientEmail: targetEmail,
+          recipientName: profData?.full_name || null,
+          subject: `${tc.icon} ${title}`,
+          textContent: `${title}\n\n${content}\n\nVer detalhes no app: ${viewUrl}`,
+          htmlContent,
+          source: "notification",
+          relatedNotificationId: notification.id,
+          allowFallback: true
+        });
 
-        await transporter.sendMail(mailOptions);
         emailSent = true;
-        console.log(`[Email] Notificação de e-mail enviada com sucesso para ${targetEmail}`);
+        console.log(`[Email] Notificação de e-mail enviada com sucesso para ${targetEmail} via ${emailResult.provider}`);
       } else {
         emailError = "E-mail do destinatário não encontrado no cadastro do profissional.";
         console.warn(`[Email] E-mail não encontrado para userId: ${targetUserId}`);
       }
     } catch (emailErr: any) {
       emailError = emailErr.message || "Erro desconhecido no envio SMTP";
-      console.error("Erro ao enviar e-mail via SMTP:", emailErr.message);
+      console.error("Erro ao enviar e-mail via provedor configurado:", emailErr.message);
     }
   } else {
-    emailError = "Servidor SMTP não configurado no painel admin.";
-    console.log(`[Notifications] SMTP nao configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
+    emailError = "Nenhum provedor de e-mail configurado no painel admin.";
+    console.log(`[Notifications] Nenhum provedor configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
   }
 
   return { notification, emailSent, emailTo, emailError };
@@ -1330,8 +1538,8 @@ async function sendNotificationInternal(
 
 async function sendTrialExpirationEmail(prof: { id: string; full_name: string | null; google_email: string | null; trial_ends_at: string | null }) {
   const settings = await getNotificationSettings();
-  if (!settings.smtp_host || !settings.smtp_user || !settings.smtp_pass) {
-    throw new Error("Servidor SMTP de notificações não configurado na plataforma.");
+  if (!hasSmtpEmailSettings(settings) && !hasBrevoEmailSettings(settings)) {
+    throw new Error("Nenhum provedor de e-mails configurado na plataforma.");
   }
 
   const recipientEmail = prof.google_email || null;
@@ -1351,26 +1559,12 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
   const subscriptionUrl = `${PRODUCTION_ORIGIN}/painel/subscription`;
   const professionalName = prof.full_name || "Profissional";
 
-  const transporter = nodemailer.createTransport({
-    host: settings.smtp_host,
-    port: Number(settings.smtp_port) || 587,
-    secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
-    auth: {
-      user: settings.smtp_user,
-      pass: settings.smtp_pass
-    },
-    pool: false,
-    connectionTimeout: 15000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
-    tls: { rejectUnauthorized: false }
-  } as any);
-
-  await transporter.sendMail({
-    from: buildFromField(settings.smtp_from, settings.smtp_user),
-    to: recipientEmail,
+  await sendTransactionalEmail(settings, {
+    userId: prof.id,
+    recipientEmail,
+    recipientName: professionalName,
     subject: "Seu teste gratuito de 7 dias terminou",
-    text: [
+    textContent: [
       `Olá, ${professionalName}.`,
       "",
       `Seu período de teste gratuito de ${TRIAL_DURATION_DAYS} dias terminou em ${trialEndsAtLabel}.`,
@@ -1379,7 +1573,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
       "",
       "Se você já realizou a assinatura, basta acessar novamente o aplicativo para liberar o acesso."
     ].join("\n"),
-    html: `
+    htmlContent: `
       <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; background: #ffffff; border: 1px solid #e5e7eb; border-radius: 16px; overflow: hidden;">
         <div style="background: linear-gradient(135deg, #005C13, #0f7a1f); color: #ffffff; padding: 28px;">
           <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1.4px; opacity: 0.8;">Evolução Clínica</p>
@@ -1404,9 +1598,12 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
         </div>
         <div style="border-top: 1px solid #f3f4f6; padding: 18px 28px; background: #f9fafb; color: #6b7280; font-size: 12px; line-height: 1.6;">
           Se você já concluiu a assinatura, pode simplesmente voltar ao aplicativo para ter o acesso liberado novamente.
+          </div>
         </div>
-      </div>
-    `
+      `
+    ,
+    source: "trial-expiration",
+    allowFallback: true
   });
 }
 
@@ -1859,51 +2056,61 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
       return res.status(403).json({ error: "Nao autorizado. Apenas administradores podem testar o servidor SMTP." });
     }
 
-    const { toEmail, smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass, smtpFrom } = req.body;
+    const {
+      toEmail,
+      provider,
+      smtpHost,
+      smtpPort,
+      smtpSecure,
+      smtpUser,
+      smtpPass,
+      smtpFrom,
+      brevoApiKey,
+      brevoSenderName,
+      brevoSenderEmail
+    } = req.body;
     
-    if (!toEmail || !smtpHost || !smtpUser || !smtpPass) {
-      return res.status(400).json({ error: "E-mail de destino, Host, Usuario e Senha SMTP sao obrigatorios" });
+    if (!toEmail) {
+      return res.status(400).json({ error: "E-mail de destino é obrigatório." });
     }
 
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: Number(smtpPort) || 587,
-      secure: smtpSecure !== undefined ? smtpSecure : Number(smtpPort) === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass
-      },
-      // Necessário para ambiente serverless (Vercel)
-      pool: false,
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-      tls: { rejectUnauthorized: false }
-    } as any);
+    const testSettings = {
+      email_provider: provider || "smtp",
+      smtp_host: smtpHost,
+      smtp_port: smtpPort,
+      smtp_secure: smtpSecure,
+      smtp_user: smtpUser,
+      smtp_pass: smtpPass,
+      smtp_from: smtpFrom,
+      brevo_api_key: brevoApiKey,
+      brevo_sender_name: brevoSenderName,
+      brevo_sender_email: brevoSenderEmail
+    };
 
-    const mailOptions = {
-      from: buildFromField(smtpFrom, smtpUser),
-      to: toEmail,
-      subject: "[Evolução Clínica] Teste de Conexão SMTP 🎉",
-      text: "Se você recebeu este e-mail, significa que as configurações do seu servidor SMTP global estão corretas e prontas para uso no sistema de notificações!",
-      html: `
+    const result = await sendTransactionalEmail(testSettings, {
+      recipientEmail: toEmail,
+      recipientName: null,
+      subject: "[Evolução Clínica] Teste de Conexão de E-mail 🎉",
+      textContent: "Se você recebeu este e-mail, significa que as configurações do provedor de envio estão corretas e prontas para uso no sistema.",
+      htmlContent: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
           <div style="background-color: #005C13; padding: 20px; text-align: center; color: white;">
-            <h2 style="margin: 0; font-size: 22px;">Teste de SMTP Globals</h2>
+            <h2 style="margin: 0; font-size: 22px;">Teste de e-mail global</h2>
           </div>
           <div style="padding: 24px; background-color: #ffffff; color: #333333; line-height: 1.6;">
-            <p style="font-size: 16px; font-weight: bold; color: #111111;">Conexão SMTP Funcionando! 🎉</p>
-            <p style="font-size: 15px; margin-bottom: 24px;">Este é um e-mail de teste disparado a partir das configurações preenchidas na plataforma. Seu servidor está configurado corretamente.</p>
+            <p style="font-size: 16px; font-weight: bold; color: #111111;">Conexão de e-mail funcionando! 🎉</p>
+            <p style="font-size: 15px; margin-bottom: 24px;">Este é um e-mail de teste disparado a partir das configurações preenchidas na plataforma. Seu provedor está configurado corretamente.</p>
           </div>
           <div style="background-color: #f9f9f9; padding: 15px; text-align: center; font-size: 12px; color: #888888; border-top: 1px solid #eeeeee;">
             <p style="margin: 0;">Evolução Clínica - Plataforma Inteligente</p>
           </div>
         </div>
-      `
-    };
+      `,
+      source: "test-email",
+      allowFallback: false
+    });
 
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true });
+    res.json({ success: true, provider: result.provider });
   } catch (err: any) {
     console.error("Erro ao enviar e-mail de teste:", err);
     res.status(500).json({ error: err.message || "Erro desconhecido ao disparar e-mail de teste." });
@@ -2284,24 +2491,9 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
       }
     }
 
-    if (!settings.smtp_host || !settings.smtp_user || !settings.smtp_pass) {
-      return res.status(500).json({ error: "Servidor SMTP de notificações não configurado na plataforma." });
+    if (!hasSmtpEmailSettings(settings) && !hasBrevoEmailSettings(settings)) {
+      return res.status(500).json({ error: "Nenhum provedor de e-mails está configurado na plataforma." });
     }
-
-    const transporter = nodemailer.createTransport({
-      host: settings.smtp_host,
-      port: Number(settings.smtp_port) || 587,
-      secure: settings.smtp_secure !== undefined ? settings.smtp_secure : Number(settings.smtp_port) === 465,
-      auth: {
-        user: settings.smtp_user,
-        pass: settings.smtp_pass
-      },
-      pool: false,
-      connectionTimeout: 15000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-      tls: { rejectUnauthorized: false }
-    } as any);
 
     // Formatar como HTML (quebrando linhas)
     const formattedHtml = `
@@ -2319,16 +2511,18 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
       </div>
     `;
 
-    const mailOptions = {
-      from: buildFromField(settings.smtp_from, settings.smtp_user),
-      to: toEmail,
-      subject: subject,
-      text: textContent,
-      html: formattedHtml
-    };
+    const result = await sendTransactionalEmail(settings, {
+      userId: req.user.id,
+      recipientEmail: toEmail,
+      recipientName: patient.full_name,
+      subject,
+      textContent,
+      htmlContent: formattedHtml,
+      source: "report",
+      allowFallback: true
+    });
 
-    await transporter.sendMail(mailOptions);
-    res.json({ success: true });
+    res.json({ success: true, provider: result.provider });
 
   } catch (err: any) {
     console.error("Erro ao enviar e-mail com relatório:", err);

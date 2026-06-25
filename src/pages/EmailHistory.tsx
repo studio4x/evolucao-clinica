@@ -18,15 +18,16 @@ import { useNavigate } from 'react-router-dom';
 
 interface NotificationRecord {
   id: string;
-  title: string;
+  recipient_name: string | null;
+  recipient_email: string;
+  subject: string;
   message: string;
-  type: string;
+  provider: 'smtp' | 'brevo';
+  source: string;
+  status: 'sent' | 'failed';
+  error_message: string | null;
+  provider_message_id: string | null;
   created_at: string;
-  user_id: string;
-  professionals?: {
-    full_name: string;
-    google_email: string;
-  } | null;
 }
 
 export default function EmailHistory() {
@@ -46,8 +47,8 @@ export default function EmailHistory() {
     setError('');
     try {
       const { data, error: fetchError } = await supabase
-        .from('notifications')
-        .select('*, professionals:user_id(full_name, google_email)')
+        .from('email_deliveries')
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -67,7 +68,7 @@ export default function EmailHistory() {
     if (!confirm('Excluir este registro do histórico?')) return;
     setDeletingId(id);
     try {
-      const { error } = await supabase.from('notifications').delete().eq('id', id);
+      const { error } = await supabase.from('email_deliveries').delete().eq('id', id);
       if (error) throw error;
       setNotifications(prev => prev.filter(n => n.id !== id));
     } catch (err: any) {
@@ -86,7 +87,7 @@ export default function EmailHistory() {
     setConfirmClearAll(false);
     try {
       const { error } = await supabase
-        .from('notifications')
+        .from('email_deliveries')
         .delete()
         .neq('id', '00000000-0000-0000-0000-000000000000'); // deleta tudo
       if (error) throw error;
@@ -101,10 +102,13 @@ export default function EmailHistory() {
   const filtered = notifications.filter(n => {
     const q = search.toLowerCase();
     return (
-      n.title?.toLowerCase().includes(q) ||
+      n.subject?.toLowerCase().includes(q) ||
       n.message?.toLowerCase().includes(q) ||
-      n.professionals?.full_name?.toLowerCase().includes(q) ||
-      n.professionals?.google_email?.toLowerCase().includes(q)
+      n.recipient_name?.toLowerCase().includes(q) ||
+      n.recipient_email?.toLowerCase().includes(q) ||
+      n.provider?.toLowerCase().includes(q) ||
+      n.source?.toLowerCase().includes(q) ||
+      n.status?.toLowerCase().includes(q)
     );
   });
 
@@ -130,7 +134,7 @@ export default function EmailHistory() {
             <ChevronLeft size={20} />
           </button>
           <div>
-            <h2 className="text-xl font-bold text-brand-text flex items-center gap-2">
+          <h2 className="text-xl font-bold text-brand-text flex items-center gap-2">
               <Clock size={20} className="text-brand-primary" />
               Histórico de E-mails Enviados
             </h2>
@@ -190,7 +194,7 @@ export default function EmailHistory() {
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por profissional, assunto ou mensagem..."
+            placeholder="Buscar por destinatário, assunto, provedor ou mensagem..."
             className="w-full pl-10 pr-4 py-2.5 text-sm border border-brand-border/60 rounded-xl bg-white focus:outline-none focus:border-brand-primary transition-all"
           />
         </div>
@@ -234,7 +238,7 @@ export default function EmailHistory() {
                   <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
                     <div className="flex items-center gap-1.5">
                       <User size={11} />
-                      Profissional
+                      Destinatário
                     </div>
                   </th>
                   <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
@@ -246,8 +250,14 @@ export default function EmailHistory() {
                   <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
                     <div className="flex items-center gap-1.5">
                       <CalendarDays size={11} />
-                      Enviado em
+                      Provedor / Origem
                     </div>
+                  </th>
+                  <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
+                    Enviado em
                   </th>
                   <th className="py-3 px-4 text-[10px] font-bold text-brand-text-muted uppercase tracking-wider text-right">
                     Ação
@@ -268,10 +278,10 @@ export default function EmailHistory() {
                         </div>
                         <div>
                           <p className="font-semibold text-brand-text text-xs leading-tight">
-                            {n.professionals?.full_name || 'Profissional'}
+                            {n.recipient_name || 'Destinatário'}
                           </p>
                           <p className="text-[10px] text-brand-text-muted mt-0.5">
-                            {n.professionals?.google_email || '—'}
+                            {n.recipient_email || '—'}
                           </p>
                         </div>
                       </div>
@@ -279,8 +289,38 @@ export default function EmailHistory() {
 
                     {/* Assunto / Mensagem */}
                     <td className="py-3 px-4 max-w-sm">
-                      <p className="font-semibold text-brand-text text-xs truncate">{n.title}</p>
+                      <p className="font-semibold text-brand-text text-xs truncate">{n.subject}</p>
                       <p className="text-[10px] text-brand-text-muted truncate mt-0.5">{n.message}</p>
+                    </td>
+
+                    {/* Provedor / Origem */}
+                    <td className="py-3 px-4">
+                      <div className="flex flex-col gap-1.5">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                          n.provider === 'brevo'
+                            ? 'bg-sky-50 text-sky-700 border-sky-200'
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}>
+                          {n.provider === 'brevo' ? 'Brevo' : 'SMTP'}
+                        </span>
+                        <span className="text-[10px] text-brand-text-muted">
+                          {n.source === 'legacy-notification' ? 'Legado' : n.source}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Status */}
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                        n.status === 'sent'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-red-50 text-red-700 border-red-200'
+                      }`}>
+                        {n.status === 'sent' ? 'Enviado' : 'Falha'}
+                      </span>
+                      {n.error_message && (
+                        <p className="mt-1 text-[10px] text-red-500 max-w-[180px] truncate">{n.error_message}</p>
+                      )}
                     </td>
 
                     {/* Data */}
