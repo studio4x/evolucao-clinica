@@ -14,7 +14,7 @@ export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
 const DEFAULT_PRODUCTION_ORIGIN = "https://evolucaoclinica.app.br";
-const PRODUCTION_ORIGIN = process.env.VERCEL_PRODUCTION_URL || DEFAULT_PRODUCTION_ORIGIN;
+const PRODUCTION_ORIGIN = (process.env.VERCEL_PRODUCTION_URL || DEFAULT_PRODUCTION_ORIGIN).replace(/\/$/, "");
 const CRON_BOOTSTRAP_SQL = `
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
