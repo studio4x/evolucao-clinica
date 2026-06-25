@@ -271,42 +271,60 @@ async function insertNotificationRecord(record: {
   source: NotificationOrigin;
 }) {
   const connectionString = getPostgresConnectionString();
-  if (!connectionString) {
-    throw new Error("String de conexão Postgres não disponível para registrar notificações.");
-  }
+  if (connectionString) {
+    const client = new PostgresClient({
+      connectionString,
+      ssl: connectionString.includes("sslmode=disable")
+        ? false
+        : { rejectUnauthorized: false }
+    });
 
-  const client = new PostgresClient({
-    connectionString,
-    ssl: connectionString.includes("sslmode=disable")
-      ? false
-      : { rejectUnauthorized: false }
-  });
+    try {
+      await client.connect();
+      const result = await client.query(
+        `INSERT INTO public.notifications (user_id, title, message, type, link, image_url, source)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING *`,
+        [
+          record.user_id,
+          record.title,
+          record.message,
+          record.type,
+          record.link ?? null,
+          record.image_url ?? null,
+          record.source
+        ]
+      );
 
-  try {
-    await client.connect();
-    const result = await client.query(
-      `INSERT INTO public.notifications (user_id, title, message, type, link, image_url, source)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [
-        record.user_id,
-        record.title,
-        record.message,
-        record.type,
-        record.link ?? null,
-        record.image_url ?? null,
-        record.source
-      ]
-    );
+      if (!result.rows[0]) {
+        throw new Error("Falha ao inserir notificação no banco.");
+      }
 
-    if (!result.rows[0]) {
-      throw new Error("Falha ao inserir notificação no banco.");
+      return result.rows[0];
+    } finally {
+      await client.end().catch(() => {});
     }
-
-    return result.rows[0];
-  } finally {
-    await client.end().catch(() => {});
   }
+
+  const { data, error } = await supabaseAdmin
+    .from("notifications")
+    .insert({
+      user_id: record.user_id,
+      title: record.title,
+      message: record.message,
+      type: record.type,
+      link: record.link ?? null,
+      image_url: record.image_url ?? null,
+      source: record.source
+    })
+    .select("*")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message || "Falha ao inserir notificação no banco.");
+  }
+
+  return data;
 }
 
 function isSourceColumnSchemaError(error: any) {
