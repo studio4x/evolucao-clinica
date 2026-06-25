@@ -30,12 +30,22 @@ interface NotificationRecord {
   created_at: string;
 }
 
+function isMissingEmailDeliveriesTableError(error: any) {
+  const message = String(error?.message || error?.details || error?.hint || '');
+  return (
+    message.includes('Could not find the table') ||
+    message.includes('schema cache') ||
+    message.includes('email_deliveries')
+  );
+}
+
 export default function EmailHistory() {
   const navigate = useNavigate();
 
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [historyUnavailable, setHistoryUnavailable] = useState(false);
 
   const [search, setSearch] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -45,6 +55,7 @@ export default function EmailHistory() {
   const fetchHistory = useCallback(async () => {
     setLoading(true);
     setError('');
+    setHistoryUnavailable(false);
     try {
       const { data, error: fetchError } = await supabase
         .from('email_deliveries')
@@ -54,6 +65,13 @@ export default function EmailHistory() {
       if (fetchError) throw fetchError;
       setNotifications(data || []);
     } catch (err: any) {
+      if (isMissingEmailDeliveriesTableError(err)) {
+        console.warn('[EmailHistory] Tabela email_deliveries indisponível; exibindo histórico vazio.');
+        setNotifications([]);
+        setHistoryUnavailable(true);
+        return;
+      }
+
       setError('Erro ao carregar histórico: ' + (err.message || 'Erro desconhecido'));
     } finally {
       setLoading(false);
@@ -205,6 +223,16 @@ export default function EmailHistory() {
         <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-xl text-sm text-red-700">
           <AlertTriangle size={18} className="flex-shrink-0 text-red-500" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {historyUnavailable && !error && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-100 rounded-xl text-sm text-amber-800">
+          <ShieldAlert size={18} className="flex-shrink-0 text-amber-500" />
+          <span>
+            O histórico de e-mails ainda está sendo inicializado neste ambiente. A tela está aberta em modo degradado até a tabela
+            <strong> email_deliveries</strong> ficar disponível.
+          </span>
         </div>
       )}
 
