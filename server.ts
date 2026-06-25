@@ -1283,8 +1283,20 @@ function buildWelcomeEmailContent(options: {
 }
 
 async function sendWelcomeEmail(userId: string, status: "pending" | "active") {
-  const log = await getOnboardingLog(userId);
-  if (log?.welcome_notified_at) {
+  const { data: existingWelcome, error: welcomeDeliveryError } = await supabaseAdmin
+    .from("email_deliveries")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("source", "welcome")
+    .eq("status", "sent")
+    .limit(1)
+    .maybeSingle();
+
+  if (welcomeDeliveryError) {
+    console.warn("[WelcomeEmail] Não foi possível verificar envios anteriores:", welcomeDeliveryError.message);
+  }
+
+  if (existingWelcome) {
     return { skipped: true };
   }
 
@@ -1321,10 +1333,6 @@ async function sendWelcomeEmail(userId: string, status: "pending" | "active") {
     htmlContent: content.htmlContent,
     source: "welcome",
     allowFallback: true
-  });
-
-  await upsertOnboardingLog(userId, {
-    welcome_notified_at: new Date().toISOString()
   });
 
   return { skipped: false };
