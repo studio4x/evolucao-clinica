@@ -1011,9 +1011,6 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
     ].join("|"));
     const brandIcon = faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
     const splashLogoWithVersion = appendBrandVersion(logoDarkUrl || logoLightUrl || "", assetSignature);
-    const installIcon192 = appendBrandVersion("/api/pwa-install-icon?size=192", assetSignature);
-    const installIcon512 = appendBrandVersion("/api/pwa-install-icon?size=512", assetSignature);
-
     const manifest = {
       "id": "/",
       "name": "Evolução Clínica",
@@ -1030,21 +1027,21 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       "prefer_related_applications": false,
       "icons": [
         {
-          "src": installIcon192,
+          "src": appendBrandVersion("/icon-192x192.png", assetSignature),
           "sizes": "192x192",
-          "type": "image/svg+xml",
+          "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": installIcon512,
+          "src": appendBrandVersion("/icon-512x512.png", assetSignature),
           "sizes": "512x512",
-          "type": "image/svg+xml",
+          "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": installIcon512,
+          "src": appendBrandVersion("/icon-512x512-maskable.png", assetSignature),
           "sizes": "512x512",
-          "type": "image/svg+xml",
+          "type": "image/png",
           "purpose": "maskable"
         },
         {

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.43";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.8.44";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -7,7 +7,8 @@ const PRECACHE_URLS = [
   "/offline.html",
   "/manifest.webmanifest",
   "/icon-192x192.png",
-  "/icon-512x512.png"
+  "/icon-512x512.png",
+  "/icon-512x512-maskable.png"
 ];
 
 const isBrandAssetPath = (pathname) => {
