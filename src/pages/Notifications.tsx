@@ -532,14 +532,14 @@ export default function Notifications() {
                         <Icon size={18} />
                       </div>
                       
-                      <div className="flex-1 space-y-1 overflow-hidden">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className={`text-sm font-semibold truncate ${!item.read_at ? 'text-brand-primary font-bold' : 'text-brand-text'}`}>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`min-w-0 flex-1 text-sm font-semibold leading-snug break-words ${!item.read_at ? 'text-brand-primary font-bold' : 'text-brand-text'}`}>
                             {item.title}
                           </p>
-                          <span className="text-[10px] text-brand-text-muted flex-shrink-0">{formatDate(item.created_at)}</span>
+                          <span className="text-[10px] text-brand-text-muted flex-shrink-0 whitespace-nowrap pt-0.5">{formatDate(item.created_at)}</span>
                         </div>
-                        <p className="text-sm text-brand-text-muted line-clamp-2 leading-relaxed">
+                        <p className="text-sm text-brand-text-muted leading-relaxed break-words whitespace-pre-line md:line-clamp-2">
                           {item.message}
                         </p>
                         
