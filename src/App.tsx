@@ -108,7 +108,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <SplashScreen message="Carregando permissões administrativas..." />;
   }
   
-  if (user && profileRole !== 'admin') {
+  if (user && profileRole !== 'admin' && profileRole !== 'therapist') {
     return <Navigate to="/" replace />;
   }
   

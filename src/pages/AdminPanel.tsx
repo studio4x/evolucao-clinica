@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import { reloadSiteConfig } from '../hooks/useSiteConfig';
 import { defaultColors, type BrandColors } from '../utils/brandConfig';
@@ -11,6 +11,7 @@ import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
+import { completeOnboarding } from '../utils/onboarding';
 
 interface Professional {
   id: string;
@@ -1647,14 +1648,14 @@ export default function AdminPanel() {
         throw new Error("Erro ao carregar usuário.");
       }
 
-      // No Supabase, consultamos a tabela professionals para ver se o usuário é admin
+      // No Supabase, consultamos a tabela professionals para ver o perfil e redirecionar corretamente
       const { data: profData, error: profError } = await supabase
         .from('professionals')
         .select('*')
         .eq('id', loggedUser.id)
         .single();
 
-      if (!profError && profData && profData.role === 'admin') {
+      if (!profError && profData && (profData.role === 'admin' || profData.role === 'therapist')) {
         setProfileInfo(
           profData.status,
           profData.role,
@@ -1664,7 +1665,12 @@ export default function AdminPanel() {
           profData.trial_ends_at
         );
         setUser(loggedUser);
-        navigate('/admin/professionals', { replace: true });
+        if (profData.role === 'therapist') {
+          completeOnboarding(loggedUser.id);
+          navigate('/painel/dashboard', { replace: true });
+        } else {
+          navigate('/admin/professionals', { replace: true });
+        }
       } else {
         await supabase.auth.signOut();
         setUser(null);
@@ -2105,6 +2111,10 @@ export default function AdminPanel() {
   };
 
   // Se nao estiver logado ou nao for admin, renderiza o formulario de login
+  if (user && profileRole === 'therapist') {
+    return <Navigate to="/painel/dashboard" replace />;
+  }
+
   if (!user || profileRole !== 'admin') {
     return (
       <div className="min-h-screen bg-brand-bg flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 animate-fadeIn">
@@ -2117,7 +2127,7 @@ export default function AdminPanel() {
               Acesso ao Painel Admin
             </h2>
             <p className="mt-2 text-center text-sm text-brand-text-muted">
-              Insira as credenciais de administrador para acessar os controles de aprovacao.
+              Insira suas credenciais de acesso para entrar no fluxo administrativo ou no painel do terapeuta.
             </p>
           </div>
 
@@ -2134,14 +2144,14 @@ export default function AdminPanel() {
 
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">
-                  E-mail do Administrador
+                  E-mail de acesso
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
                   <input
                     type="email"
                     required
-                    placeholder="admin@exemplo.com"
+                    placeholder="seuemail@exemplo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors bg-brand-bg/10"
