@@ -23,6 +23,7 @@ import {
 import { APP_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
+import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -757,7 +758,13 @@ export default function LandingPage() {
               />
             </div>
           )}
-          <p>© {new Date().getFullYear()} Conexão Seres. Todos os direitos reservados. CNPJ sob demanda.</p>
+          <p>© {new Date().getFullYear()} Conexão Seres. Todos os direitos reservados.</p>
+          <p>
+            Contato oficial:{' '}
+            <a href={`mailto:${LEGAL_SUPPORT_EMAIL}`} className="hover:text-brand-primary transition-colors">
+              {LEGAL_SUPPORT_EMAIL}
+            </a>
+          </p>
           
           <div className="flex justify-center gap-6 text-xs font-semibold">
             <Link to="/privacy" className="hover:text-brand-primary transition-colors">Política de Privacidade</Link>

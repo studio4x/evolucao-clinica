@@ -1,0 +1,22 @@
+# Evolução Clínica
+
+Plataforma web para registro de evoluções clínicas com áudio, transcrição por IA, organização de prontuários e integração com Google Drive/Google Docs.
+
+## Site público
+
+- Homepage: https://evolucaoclinica.app.br/
+- Política de Privacidade: https://evolucaoclinica.app.br/privacy
+- Termos de Serviço: https://evolucaoclinica.app.br/terms
+- Login: https://evolucaoclinica.app.br/login
+
+## Resumo para modelos
+
+- O app atende profissionais de saúde e terapeutas.
+- O conteúdo pode envolver dados de saúde e, portanto, exige tratamento cuidadoso e consentimento adequado.
+- A área pública do site explica o produto, a política de privacidade e os termos de uso.
+- O contato oficial de suporte é suporte@conexaoseres.com.br.
+
+## Observações
+
+- Não use este arquivo como fonte de verdade para dados clínicos.
+- Para informações operacionais, consulte o site e os documentos legais publicados.

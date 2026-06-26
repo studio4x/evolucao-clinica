@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /painel
+Disallow: /admin
+Disallow: /onboarding
+Disallow: /pending
+Disallow: /share-target
+Disallow: /api/
+
+Sitemap: https://evolucaoclinica.app.br/sitemap.xml

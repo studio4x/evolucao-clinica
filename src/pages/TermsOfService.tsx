@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 
 export default function TermsOfService() {
   const navigate = useNavigate();
@@ -29,25 +30,24 @@ export default function TermsOfService() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 18 de junho de 2026
+          Última atualização: 26 de junho de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
           <section className="space-y-3">
             <h2 className="text-xl font-display font-semibold text-brand-primary">1. Aceitação dos Termos</h2>
             <p>
-              Ao acessar e utilizar a plataforma <strong>Evolução Clínica</strong>, disponibilizada pelo <strong>Conexão Seres</strong>, 
-              você concorda expressamente em cumprir e estar vinculado a estes Termos de Serviço. Caso não concorde com qualquer 
-              uma das condições estabelecidas, você não deve utilizar o nosso aplicativo.
+              Ao acessar ou utilizar o <strong>{LEGAL_APP_NAME}</strong>, disponibilizado por <strong>{LEGAL_COMPANY_NAME}</strong>, você
+              concorda com estes Termos de Serviço. Caso não concorde com qualquer condição aqui descrita, não utilize a plataforma.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-xl font-display font-semibold text-brand-primary">2. Descrição do Serviço</h2>
             <p>
-              O <strong>Evolução Clínica</strong> é um software como serviço (SaaS) projetado para profissionais de saúde e terapeutas. 
-              A plataforma oferece ferramentas integradas de gravação de áudio, transcrição por Inteligência Artificial, 
-              formatação e organização de prontuários clínicos, além de integração de armazenamento na conta do Google Drive do próprio usuário.
+              O <strong>{LEGAL_APP_NAME}</strong> é um software como serviço projetado para profissionais de saúde e terapeutas. A plataforma
+              oferece gravação de áudio, transcrição por inteligência artificial, organização de prontuários e integração com o Google Drive
+              do próprio usuário.
             </p>
           </section>
 
@@ -59,36 +59,63 @@ export default function TermsOfService() {
             <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
               <li>Possui registro profissional ativo no respectivo conselho de classe (CRP, CRM, CREFITO, etc.) aplicável à sua atuação.</li>
               <li>Obteve todos os consentimentos éticos e legais necessários de seus pacientes para realizar gravações e processar informações de saúde em conformidade com o código de ética profissional aplicável.</li>
-              <li>É o único responsável pelo conteúdo das transcrições, diagnósticos, tratamentos e relatórios gerados ou mantidos na plataforma.</li>
+              <li>É o único responsável pelo conteúdo inserido na plataforma, incluindo transcrições, evoluções, relatórios, diagnósticos e condutas clínicas.</li>
             </ul>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">4. Assinaturas, Pagamentos e Renovação</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">4. Uso permitido e restrições</h2>
             <p>
-              O acesso completo aos recursos da plataforma requer a contratação de um plano de assinatura recorrente (mensal, anual ou trial).
-            </p>
-            <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
-              <li>As assinaturas são cobradas e renovadas automaticamente de acordo com o ciclo de faturamento escolhido.</li>
-              <li>O cancelamento da renovação automática pode ser feito a qualquer momento através do painel de controle do usuário, com efeitos a partir do fim do ciclo de faturamento contratado.</li>
-            </ul>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Limitação de Responsabilidade</h2>
-            <p>
-              A nossa plataforma utiliza sistemas automatizados de inteligência artificial de última geração. Embora façamos todos os esforços 
-              para manter a máxima precisão, <strong>a Inteligência Artificial é uma ferramenta auxiliar e não substitui a revisão e aprovação final humana</strong>. 
-              Não nos responsabilizamos por diagnósticos imprecisos ou falhas no tratamento decorrentes de omissões ou erros nas transcrições geradas pela IA.
+              Você concorda em utilizar o serviço apenas para fins lícitos e profissionais. É proibido tentar acessar dados de terceiros sem autorização,
+              comprometer a segurança do sistema, distribuir conteúdo malicioso ou usar a plataforma para atividades ilegais, antiéticas ou fora
+              do objetivo declarado do produto.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Modificações dos Termos</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Assinaturas, cancelamento e reembolso</h2>
             <p>
-              Reservamo-nos o direito de modificar estes Termos de Serviço a qualquer momento. Em caso de atualizações materiais, 
-              notificaremos os usuários cadastrados através do aplicativo ou e-mail. A continuidade do uso da plataforma após 
-              as modificações implica aceitação integral dos novos termos.
+              O acesso integral ao serviço pode depender de plano de assinatura ativo. As condições comerciais, renovação, cobrança e cancelamento
+              são exibidas no aplicativo no momento da contratação e podem ser atualizadas conforme a oferta vigente.
+            </p>
+            <p>
+              Quando aplicável, cancelamentos e reembolsos seguem a legislação brasileira de proteção ao consumidor e as regras informadas no painel
+              do usuário ou no fluxo de pagamento.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Serviços de terceiros e inteligência artificial</h2>
+            <p>
+              A plataforma integra serviços de terceiros, inclusive provedores de autenticação, armazenamento, infraestrutura e IA.
+              O uso desses serviços é restrito à execução das funcionalidades solicitadas pelo usuário.
+            </p>
+            <p>
+              A inteligência artificial atua como ferramenta auxiliar. O profissional permanece responsável pela revisão, validação e uso final
+              de qualquer conteúdo gerado.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">7. Limitação de responsabilidade</h2>
+            <p>
+              Não garantimos que a plataforma estará livre de interrupções, falhas ocasionais ou indisponibilidades de terceiros. Na extensão
+              permitida pela lei, não nos responsabilizamos por decisões clínicas, administrativas ou financeiras tomadas exclusivamente com base
+              em conteúdo gerado automaticamente.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">8. Alterações e contato</h2>
+            <p>
+              Podemos atualizar estes Termos de Serviço periodicamente. Mudanças materiais poderão ser comunicadas no aplicativo ou por e-mail.
+              O uso contínuo após a publicação das alterações significa aceitação dos novos termos.
+            </p>
+            <p>
+              Dúvidas sobre estes Termos podem ser enviadas para{' '}
+              <a href={`mailto:${LEGAL_SUPPORT_EMAIL}`} className="text-brand-primary hover:underline">
+                {LEGAL_SUPPORT_EMAIL}
+              </a>.
             </p>
           </section>
         </div>

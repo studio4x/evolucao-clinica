@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
@@ -29,74 +30,86 @@ export default function PrivacyPolicy() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 18 de junho de 2026
+          Última atualização: 26 de junho de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">1. Informações Gerais</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">1. Controlador e escopo</h2>
             <p>
-              A sua privacidade é de extrema importância para nós. Esta Política de Privacidade descreve como a plataforma 
-              <strong> Evolução Clínica</strong> coleta, utiliza, processa e protege as suas informações e os dados de seus pacientes, 
-              em conformidade com a Lei Geral de Proteção de Dados (LGPD) e demais regulamentações vigentes.
+              Esta Política descreve como o <strong>{LEGAL_APP_NAME}</strong>, mantido por <strong>{LEGAL_COMPANY_NAME}</strong>, coleta,
+              usa, compartilha, armazena e protege informações tratadas na plataforma, em conformidade com a LGPD e demais normas aplicáveis.
+              Para fins desta política, atuamos como controlador dos dados relacionados à conta e ao funcionamento do serviço.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">2. Coleta de Dados e Finalidade</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">2. Dados que coletamos</h2>
             <p>
-              Coletamos informações necessárias para a prestação de nossos serviços de transcrição, organização e estruturação 
-              de prontuários clínicos e evoluções através de Inteligência Artificial:
+              Coletamos apenas os dados necessários para operar a conta, entregar as funcionalidades do aplicativo e manter a segurança:
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
-              <li><strong>Dados de Acesso:</strong> Nome e e-mail via autenticação do Google para criar e gerenciar a sua conta de profissional de saúde.</li>
-              <li><strong>Dados de Áudio e Texto:</strong> Gravações de áudio e transcrições fornecidas por você para a geração de resumos e relatórios de evolução clínica.</li>
-              <li><strong>Prontuários e Documentos:</strong> Informações de pacientes inseridas na plataforma e subsequentemente salvas ou sincronizadas no seu Google Drive / Google Docs.</li>
+              <li><strong>Dados de conta:</strong> nome, e-mail, foto de perfil e identificadores recebidos na autenticação com Google.</li>
+              <li><strong>Dados operacionais:</strong> preferências, registros de uso, logs técnicos, tokens de sessão e configurações do dispositivo.</li>
+              <li><strong>Dados clínicos inseridos por você:</strong> áudios, transcrições, evoluções, documentos e informações de pacientes cadastradas na plataforma.</li>
+              <li><strong>Dados de pagamento e assinatura:</strong> informações de plano, status financeiro e eventos de cobrança gerenciados pelos provedores contratados.</li>
             </ul>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">3. Compartilhamento e Processamento por Inteligência Artificial</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">3. Finalidades de uso</h2>
             <p>
-              Os dados de voz e texto de evoluções clínicas são processados por modelos de Inteligência Artificial para realizar a 
-              transcrição e a formatação estruturada do prontuário.
+              Utilizamos os dados para autenticar o usuário, gerar transcrições, organizar evoluções clínicas, armazenar arquivos no Google Drive
+              do próprio profissional, oferecer suporte, faturamento, prevenção a fraude e manutenção do serviço.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">4. Compartilhamento e operadores</h2>
+            <p>
+              Não vendemos dados pessoais nem usamos informações clínicas para publicidade. Compartilhamos dados somente com provedores
+              necessários para a operação do serviço, incluindo autenticação, infraestrutura, armazenamento, e processamento de IA.
+              Isso pode incluir Google, Supabase e outros prestadores técnicos contratados para executar funcionalidades específicas.
             </p>
             <p className="text-brand-text-muted bg-brand-bg p-4 rounded-xl border border-brand-border/50 text-sm">
-              <strong>Importante:</strong> Não compartilhamos dados pessoais com terceiros para fins publicitários ou comerciais. 
-              As APIs de Inteligência Artificial utilizadas cumprem com rígidos padrões de segurança e confidencialidade.
+              As permissões do Google Workspace são usadas somente para criar, ler, organizar e gravar documentos e arquivos na conta do próprio
+              usuário, conforme as ações solicitadas dentro do aplicativo.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">4. Integração com o Google Workspace</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Cookies, sessão e retenção</h2>
             <p>
-              A nossa plataforma solicita permissões para ler, gravar e organizar arquivos no seu Google Drive / Google Docs. 
-              Essas permissões são utilizadas estritamente para salvar as evoluções clínicas dos seus pacientes na estrutura de pastas 
-              que você escolher, mantendo o controle total dos documentos em sua própria conta do Google.
+              Usamos cookies e armazenamento local estritamente necessários para manter a sessão, lembrar preferências, registrar o estado de
+              autenticação e melhorar a experiência do app. Não utilizamos cookies para publicidade comportamental.
+            </p>
+            <p>
+              Os dados são mantidos enquanto a conta estiver ativa e pelo período necessário para cumprir obrigações legais, resolver disputas,
+              preservar a segurança e atender solicitações do próprio usuário.
             </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Segurança dos Dados</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Segurança e direitos do titular</h2>
             <p>
-              Adotamos medidas técnicas, administrativas e organizacionais para proteger os dados pessoais contra acessos não autorizados, 
-              perda, alteração ou destruição. Todas as comunicações são criptografadas via HTTPS (SSL/TLS).
+              Adotamos medidas técnicas e organizacionais para proteger os dados contra acesso não autorizado, alteração, perda ou divulgação
+              indevida. Você pode solicitar acesso, correção, portabilidade, anonimização, eliminação ou revogação de consentimento,
+              quando aplicável.
             </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Seus Direitos (LGPD)</h2>
             <p>
-              Você possui os direitos garantidos pela LGPD, incluindo a confirmação do processamento, acesso, correção de dados incompletos ou inexatos, 
-              e a eliminação de dados pessoais de nossa base de dados (salvo quando a retenção for obrigatória por lei ou regulação médica).
+              O profissional pode revogar permissões concedidas ao Google diretamente na conta Google e também solicitar suporte para remoção
+              ou exportação dos dados tratados pela plataforma, respeitados os limites legais e regulatórios aplicáveis.
             </p>
           </section>
 
           <section className="space-y-3">
             <h2 className="text-xl font-display font-semibold text-brand-primary">7. Contato</h2>
             <p>
-              Para esclarecer dúvidas sobre esta Política de Privacidade ou exercer seus direitos de privacidade, entre em contato 
-              conosco através do e-mail de suporte ou canais oficiais do <strong>Conexão Seres</strong>.
+              Para dúvidas sobre esta política, solicitações relacionadas à privacidade ou exercício de direitos, entre em contato com
+              <strong> {LEGAL_COMPANY_NAME}</strong> pelo e-mail{' '}
+              <a href={`mailto:${LEGAL_SUPPORT_EMAIL}`} className="text-brand-primary hover:underline">
+                {LEGAL_SUPPORT_EMAIL}
+              </a>.
             </p>
           </section>
         </div>
