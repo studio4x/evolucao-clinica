@@ -532,7 +532,17 @@ export default function Notifications() {
                         <Icon size={18} />
                       </div>
                       
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <div className="min-w-0 flex-1 space-y-3">
+                        {item.image_url && (
+                          <div className="w-full overflow-hidden rounded-xl border border-brand-border/40 shadow-sm bg-brand-bg/20">
+                            <img
+                              src={item.image_url}
+                              alt="Capa da notificação"
+                              className="block w-full h-auto max-h-64 object-cover md:max-h-72"
+                            />
+                          </div>
+                        )}
+
                         <div className="flex items-start justify-between gap-2">
                           <p className={`min-w-0 flex-1 text-sm font-semibold leading-snug break-words ${!item.read_at ? 'text-brand-primary font-bold' : 'text-brand-text'}`}>
                             {item.title}
@@ -542,17 +552,7 @@ export default function Notifications() {
                         <p className="text-sm text-brand-text-muted leading-relaxed break-words whitespace-pre-line md:line-clamp-2">
                           {item.message}
                         </p>
-                        
-                        {item.image_url && (
-                          <div className="mt-3 rounded-xl overflow-hidden border border-brand-border/40 max-w-lg shadow-sm">
-                            <img 
-                              src={item.image_url} 
-                              alt="Capa da notificação" 
-                              className="max-h-48 w-full object-cover"
-                            />
-                          </div>
-                        )}
-                        
+
                         {item.link && (
                           <a 
                             href={item.link} 
