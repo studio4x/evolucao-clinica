@@ -47,6 +47,8 @@ export interface SupportTicketDetail {
 
 type SupportRealtimeCleanup = () => void;
 const LAST_SEEN_PREFIX = 'support_ticket_last_seen:';
+const SUPPORT_ATTACHMENTS_BUCKET = 'support_attachments';
+const SUPPORT_ATTACHMENT_SIGN_TTL_SECONDS = 60 * 60;
 
 export function getSupportTicketLastSeen(ticketId: string): string | null {
   if (typeof window === 'undefined') return null;
@@ -159,6 +161,45 @@ function mapSupportMessage(row: any, professionalsMap: Map<string, any>): Suppor
     senderName: sender?.full_name || 'Profissional',
     senderRole,
   };
+}
+
+function extractSupportAttachmentPath(storedValue: string): string | null {
+  if (!storedValue) return null;
+  if (storedValue.startsWith('support/')) return storedValue;
+
+  try {
+    const url = new URL(storedValue);
+    const parts = url.pathname.split('/').filter(Boolean);
+    const bucketIndex = parts.indexOf(SUPPORT_ATTACHMENTS_BUCKET);
+
+    if (bucketIndex === -1 || bucketIndex >= parts.length - 1) {
+      return null;
+    }
+
+    return decodeURIComponent(parts.slice(bucketIndex + 1).join('/'));
+  } catch {
+    return null;
+  }
+}
+
+async function resolveSupportAttachmentUrl(storedValue: string | null): Promise<string | null> {
+  if (!storedValue) return null;
+
+  const attachmentPath = extractSupportAttachmentPath(storedValue);
+  if (!attachmentPath) {
+    return storedValue;
+  }
+
+  const { data, error } = await supabase.storage
+    .from(SUPPORT_ATTACHMENTS_BUCKET)
+    .createSignedUrl(attachmentPath, SUPPORT_ATTACHMENT_SIGN_TTL_SECONDS);
+
+  if (error || !data?.signedUrl) {
+    console.warn('[SupportService] Falha ao gerar URL assinada do anexo:', error);
+    return storedValue;
+  }
+
+  return data.signedUrl;
 }
 
 // Fetch tickets opened by the current professional
@@ -307,15 +348,26 @@ export async function fetchSupportTicketDetail(ticketId: string): Promise<Suppor
 
   const professionalsMap = new Map((professionals || []).map((p) => [p.id, p]));
   const owner = professionalsMap.get(ticket.userId);
+  const resolvedTicketAttachmentUrl = await resolveSupportAttachmentUrl(ticket.attachmentUrl);
+  const resolvedMessages = await Promise.all(
+    messages.map(async (m) => {
+      const mappedMessage = mapSupportMessage(m, professionalsMap);
+      return {
+        ...mappedMessage,
+        attachmentUrl: await resolveSupportAttachmentUrl(mappedMessage.attachmentUrl),
+      };
+    })
+  );
 
   return {
     ticket: {
       ...ticket,
+      attachmentUrl: resolvedTicketAttachmentUrl,
       userFullName: owner?.full_name || 'Desconhecido',
       userPlan: owner?.subscription_plan || 'trial',
       latestMessageAt: ticket.updatedAt,
     },
-    messages: messages.map((m) => mapSupportMessage(m, professionalsMap)),
+    messages: resolvedMessages,
   };
 }
 
@@ -358,11 +410,9 @@ export async function uploadSupportAttachment(userId: string, file: File): Promi
 
   if (error) throw error;
 
-  const { data } = supabase.storage.from('support_attachments').getPublicUrl(filePath);
-
   return {
     attachmentName: file.name,
-    attachmentUrl: data.publicUrl,
+    attachmentUrl: filePath,
   };
 }
 
@@ -400,6 +450,9 @@ export async function createSupportTicket(
 
   if (error || !data) throw error || new Error('Não foi possível criar o chamado.');
 
+  const mappedTicket = mapSupportTicket(data);
+  mappedTicket.attachmentUrl = await resolveSupportAttachmentUrl(mappedTicket.attachmentUrl);
+
   // Disparar notificação de criação em background
   try {
     const session = await supabase.auth.getSession();
@@ -421,7 +474,7 @@ export async function createSupportTicket(
     console.error('[SupportService] Falha no fluxo de notificação:', notifErr);
   }
 
-  return mapSupportTicket(data);
+  return mappedTicket;
 }
 
 // Send a support message
@@ -490,7 +543,11 @@ export async function sendSupportMessage(
     mockMap.set(prof.id, prof);
   }
 
-  return mapSupportMessage(data, mockMap);
+  const mappedMessage = mapSupportMessage(data, mockMap);
+  return {
+    ...mappedMessage,
+    attachmentUrl: await resolveSupportAttachmentUrl(mappedMessage.attachmentUrl),
+  };
 }
 
 // Update support ticket status (Admin/User action to close)
