@@ -759,6 +759,7 @@ export default function LandingPage() {
             </div>
           )}
           <p>© {new Date().getFullYear()} Evolução Clínica. Todos os direitos reservados.</p>
+          <p>CNPJ: 10.682.236/0001-09</p>
           <p>
             Contato oficial:{' '}
             <a href={`mailto:${LEGAL_SUPPORT_EMAIL}`} className="hover:text-brand-primary transition-colors">
