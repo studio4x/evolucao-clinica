@@ -990,6 +990,45 @@ app.get("/api/brand-bootstrap", async (_req, res) => {
   }
 });
 
+const DEFAULT_PUBLIC_PAYMENT_SETTINGS = {
+  environment: "TEST",
+  googleMerchantId: "BCR2DN7TTCHMTFAJ",
+  stripeProdPublishableKey: "pk_live_wDyGJo2Rl2ikV2HaBXzZey1o",
+  stripeSandboxPublishableKey: "pk_test_0b7fQSiyaxD7OjUH6lKL6Slh"
+};
+
+app.get("/api/payment-settings", async (_req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "payment_settings")
+      .maybeSingle();
+
+    let parsed: any = {};
+    if (!error && data?.api_key) {
+      try {
+        parsed = JSON.parse(data.api_key);
+      } catch (parseError) {
+        console.error("Erro ao interpretar payment_settings:", parseError);
+      }
+    }
+
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.json({
+      ...DEFAULT_PUBLIC_PAYMENT_SETTINGS,
+      environment: parsed.environment || DEFAULT_PUBLIC_PAYMENT_SETTINGS.environment,
+      googleMerchantId: parsed.googleMerchantId || DEFAULT_PUBLIC_PAYMENT_SETTINGS.googleMerchantId,
+      stripeProdPublishableKey: parsed.stripeProdPublishableKey || DEFAULT_PUBLIC_PAYMENT_SETTINGS.stripeProdPublishableKey,
+      stripeSandboxPublishableKey: parsed.stripeSandboxPublishableKey || DEFAULT_PUBLIC_PAYMENT_SETTINGS.stripeSandboxPublishableKey
+    });
+  } catch (err: any) {
+    console.error("Erro ao carregar payment_settings públicos:", err);
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.json(DEFAULT_PUBLIC_PAYMENT_SETTINGS);
+  }
+});
+
 // Rota dinâmica para o manifest.webmanifest do PWA
 app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
   try {

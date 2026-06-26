@@ -30,36 +30,15 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
   const base64Audio = await blobToBase64(audioBlob);
 
   const attemptTranscription = async (): Promise<string> => {
-    let keySource: 'firestore' | 'env' | 'none' = 'none';
+    let keySource: 'env' | 'none' = 'none';
     try {
-      let apiKey = '';
-      
-      try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('api_key')
-          .eq('id', 'gemini')
-          .single();
-        if (!error && data?.api_key) {
-          apiKey = data.api_key;
-          keySource = 'firestore';
-          console.log("[AI-Service] Usando chave do Gemini configurada no Supabase.");
-        }
-      } catch (dbError) {
-        console.warn("[AI-Service] Falha ao ler chave do Gemini do Supabase, usando fallback:", dbError);
-      }
+      const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
+      const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
+      const apiKey = backupKey ? backupKey : mainKey;
 
-      if (!apiKey) {
-        // Prioridade total para a chave de produção (REAL) conforme solicitado
-        const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
-        const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
-        
-        // Inverte a lógica: Tenta primeiro a REAL (backupKey), se falhar ou não existir, usa a GRATUITA (mainKey)
-        apiKey = backupKey ? backupKey : mainKey;
-        if (apiKey) {
-          keySource = 'env';
-          console.log(`[AI-Service] Usando chave estática ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'}`);
-        }
+      if (apiKey) {
+        keySource = 'env';
+        console.log(`[AI-Service] Usando chave estática ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'}`);
       }
 
       if (!apiKey) {
@@ -67,9 +46,9 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         throw new Error("Configuração de API ausente. Verifique as chaves.");
       }
 
-      const keyLabel = keySource === 'firestore' 
-        ? 'configurada no Painel Admin' 
-        : 'estática do servidor';
+      const keyLabel = keySource === 'env'
+        ? 'estática do servidor'
+        : 'não encontrada';
       console.log(`[AI-Service] Usando chave ${keyLabel} - Tentativa ${retryCount + 1}`);
 
       const ai = new GoogleGenAI({ apiKey });
@@ -155,9 +134,9 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         return attemptTranscription();
       }
       
-      const sourceMsg = keySource === 'firestore' 
-        ? 'Chave configurada no Painel Admin' 
-        : 'Chave estática de fallback do servidor';
+      const sourceMsg = keySource === 'env'
+        ? 'Chave estática de fallback do servidor'
+        : 'Chave não encontrada';
       
       const errorMessage = error.message || errorContent;
       throw new Error(`${errorMessage} (Origem da chave: ${sourceMsg})`);

@@ -111,27 +111,14 @@ export default function History() {
         // 1. Fetch audio and transcribe with Gemini (Frontend)
         console.log("Iniciando transcrição no frontend...");
         
-        let apiKey = '';
-        
-        try {
-          const { data, error } = await supabase
-            .from('settings')
-            .select('api_key')
-            .eq('id', 'gemini')
-            .single();
-          if (!error && data?.api_key) {
-            apiKey = data.api_key;
-          }
-        } catch (dbError) {
-          console.warn("[AI-Service] Falha ao ler chave do Gemini do Supabase:", dbError);
-        }
+        const apiKey = process.env.GEMINI_API_KEY_REAL
+          || process.env.GEMINI_API_KEY
+          || import.meta.env.VITE_GEMINI_API_KEY_REAL
+          || import.meta.env.VITE_GEMINI_API_KEY
+          || '';
 
         if (!apiKey) {
-          apiKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY || '';
-        }
-
-        if (!apiKey) {
-          throw new Error("Chave da API Gemini não encontrada no ambiente ou banco de dados.");
+          throw new Error("Chave da API Gemini não encontrada no ambiente.");
         }
 
         const audioResponse = await fetch(evo.audio_url);

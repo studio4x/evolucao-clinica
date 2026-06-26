@@ -213,14 +213,16 @@ export default function Subscription() {
   useEffect(() => {
     const fetchPaymentSettings = async () => {
       try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('api_key')
-          .eq('id', 'payment_settings')
-          .single();
-        
-        if (!error && data && data.api_key) {
-          const parsed = JSON.parse(data.api_key);
+        const response = await fetch('/api/payment-settings', {
+          cache: 'no-store'
+        });
+
+        if (!response.ok) {
+          throw new Error('Falha ao carregar configurações públicas de pagamento.');
+        }
+
+        const parsed = await response.json();
+        if (parsed) {
           setPaymentSettings({
             ...DEFAULT_PAYMENT_SETTINGS,
             ...parsed
