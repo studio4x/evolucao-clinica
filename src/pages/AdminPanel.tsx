@@ -3957,6 +3957,10 @@ export default function AdminPanel() {
 
                         <div className="space-y-1">
                           <label className="text-xs font-bold text-brand-text uppercase tracking-wider block font-semibold text-brand-text">Imagem de Capa (URL ou Upload)</label>
+                          <p className="text-[11px] leading-relaxed text-brand-text-muted">
+                            Use uma imagem horizontal em boa resolução, de preferência 1200x630 px ou proporção 16:9.
+                            Os formatos recomendados são JPG, PNG ou WebP, com tamanho leve para carregamento rápido.
+                          </p>
                           <div className="flex gap-2">
                             <input
                               type="text"
