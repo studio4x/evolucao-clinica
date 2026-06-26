@@ -16,41 +16,6 @@ const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
 const DEFAULT_PRODUCTION_ORIGIN = "https://evolucaoclinica.app.br";
 const PRODUCTION_ORIGIN = (process.env.VERCEL_PRODUCTION_URL || DEFAULT_PRODUCTION_ORIGIN).replace(/\/$/, "");
-const CRON_BOOTSTRAP_SQL = `
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-CREATE EXTENSION IF NOT EXISTS pg_net;
-
-DO $$
-BEGIN
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-evolution-reminders-job') THEN
-    PERFORM cron.unschedule('send-evolution-reminders-job');
-  END IF;
-
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-trial-expiration-notices-job') THEN
-    PERFORM cron.unschedule('send-trial-expiration-notices-job');
-  END IF;
-END $$;
-
-SELECT cron.schedule(
-  'send-evolution-reminders-job',
-  '0 * * * *',
-  $$
-  SELECT net.http_get(
-    url := '${PRODUCTION_ORIGIN}/api/cron/send-evolution-reminders'
-  );
-  $$
-);
-
-SELECT cron.schedule(
-  'send-trial-expiration-notices-job',
-  '0 * * * *',
-  $$
-  SELECT net.http_get(
-    url := '${PRODUCTION_ORIGIN}/api/cron/send-trial-expiration-notices'
-  );
-  $$
-);
-`;
 
 // Configuração do Supabase Admin
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
@@ -66,6 +31,15 @@ function buildFromField(smtpFrom: string, smtpUser: string): string {
   if (smtpFrom.includes('@')) return smtpFrom;
   // É só um nome — adiciona o e-mail
   return `"${smtpFrom}" <${smtpUser}>`;
+}
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function getTrialEndsAt(baseDate = new Date()) {
@@ -91,6 +65,53 @@ function hashString(value: string) {
   }
 
   return Math.abs(hash).toString(36);
+}
+
+const CRON_SECRET = process.env.CRON_SECRET || hashString(
+  [
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.VITE_SUPABASE_ANON_KEY,
+    PRODUCTION_ORIGIN
+  ].filter(Boolean).join(":")
+);
+
+function buildCronBootstrapSql(cronSecret: string) {
+  const cronSecretParam = encodeURIComponent(cronSecret);
+  return `
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-evolution-reminders-job') THEN
+    PERFORM cron.unschedule('send-evolution-reminders-job');
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-trial-expiration-notices-job') THEN
+    PERFORM cron.unschedule('send-trial-expiration-notices-job');
+  END IF;
+END $$;
+
+SELECT cron.schedule(
+  'send-evolution-reminders-job',
+  '0 * * * *',
+  $$
+  SELECT net.http_get(
+    url := '${PRODUCTION_ORIGIN}/api/cron/send-evolution-reminders?secret=${cronSecretParam}'
+  );
+  $$
+);
+
+SELECT cron.schedule(
+  'send-trial-expiration-notices-job',
+  '0 * * * *',
+  $$
+  SELECT net.http_get(
+    url := '${PRODUCTION_ORIGIN}/api/cron/send-trial-expiration-notices?secret=${cronSecretParam}'
+  );
+  $$
+);
+`;
 }
 
 function appendBrandVersion(url: string, signature: string) {
@@ -305,7 +326,7 @@ async function bootstrapSupabaseCronJobs() {
 
   try {
     await client.connect();
-    await client.query(CRON_BOOTSTRAP_SQL);
+    await client.query(buildCronBootstrapSql(CRON_SECRET));
     console.log("[Cron Bootstrap] Cron jobs do Supabase verificados e reprogramados com sucesso.");
     return { skipped: false, success: true };
   } catch (error) {
@@ -1501,7 +1522,7 @@ function buildWelcomeEmailContent(options: {
     title: "Bem-vindo(a) à plataforma",
     subtitle: statusTitle,
     bodyHtml: `
-      <p style="margin:0 0 16px 0; font-size:16px; line-height:1.7;">Olá, <strong>${options.recipientName}</strong>.</p>
+      <p style="margin:0 0 16px 0; font-size:16px; line-height:1.7;">Olá, <strong>${escapeHtml(options.recipientName)}</strong>.</p>
       <p style="margin:0 0 20px 0; font-size:15px; line-height:1.7; color:${theme.textMuted};">${introText}</p>
       ${buildEmailCard(theme, "O que você encontrará", `
         <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
@@ -1918,6 +1939,9 @@ async function sendNotificationInternal(
       if (targetEmail) {
         const viewUrl = `${PRODUCTION_ORIGIN}${link || "/painel/notifications"}`;
         const theme = await getEmailTheme();
+        const safeTitle = escapeHtml(title);
+        const safeContent = escapeHtml(content);
+        const safeImageUrl = imageUrl ? escapeHtml(imageUrl) : "";
 
         // Paleta de cores e ícones por tipo de notificação
         const typeConfig: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
@@ -1930,11 +1954,11 @@ async function sendNotificationInternal(
 
         const htmlContent = buildEmailShell(theme, {
           title: "Notificação do Sistema",
-          subtitle: `${tc.label} • ${title}`,
+          subtitle: `${tc.label} • ${escapeHtml(title)}`,
           bodyHtml: `
-            ${imageUrl ? `<div style="margin:0 0 20px 0; border-radius:10px; overflow:hidden; border:1px solid ${theme.border};"><img src="${imageUrl}" alt="Imagem" style="display:block; max-width:100%; max-height:240px; object-fit:cover; width:100%;" /></div>` : ""}
-            <h2 style="margin:0 0 12px 0; font-size:18px; font-weight:700; color:${theme.text}; line-height:1.4;">${title}</h2>
-            <p style="margin:0 0 24px 0; font-size:15px; color:${theme.textMuted};">${content}</p>
+            ${safeImageUrl ? `<div style="margin:0 0 20px 0; border-radius:10px; overflow:hidden; border:1px solid ${theme.border};"><img src="${safeImageUrl}" alt="Imagem" style="display:block; max-width:100%; max-height:240px; object-fit:cover; width:100%;" /></div>` : ""}
+            <h2 style="margin:0 0 12px 0; font-size:18px; font-weight:700; color:${theme.text}; line-height:1.4;">${safeTitle}</h2>
+            <p style="margin:0 0 24px 0; font-size:15px; color:${theme.textMuted};">${safeContent}</p>
             <div style="text-align:center; margin:28px 0 8px 0;">
               ${buildEmailButton(theme, viewUrl, "Ver no Aplicativo →")}
             </div>
@@ -2013,7 +2037,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
       title: "Seu teste gratuito terminou",
       subtitle: `Expirou em ${trialEndsAtLabel}`,
       bodyHtml: `
-        <p style="margin:0 0 16px 0; font-size:16px;">Olá, <strong>${professionalName}</strong>.</p>
+        <p style="margin:0 0 16px 0; font-size:16px;">Olá, <strong>${escapeHtml(professionalName)}</strong>.</p>
         <p style="margin:0 0 16px 0; font-size:15px; color:${theme.textMuted};">
           Seu período de teste gratuito de <strong>${TRIAL_DURATION_DAYS} dias</strong> terminou em <strong>${trialEndsAtLabel}</strong>.
           O acesso completo à plataforma foi encerrado até a contratação de um plano.
@@ -2266,10 +2290,9 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
 // 4.1. Cron para Enviar Lembretes de Evoluções Clínicas Pendentes
 app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
   const authHeader = req.headers.authorization;
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = CRON_SECRET;
   
-  // Proteção da rota com segredo se configurado
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
     return res.status(401).json({ error: "Nao autorizado" });
   }
 
@@ -2408,9 +2431,9 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
 // 4.2. Cron para enviar e-mail quando o trial gratuito de 7 dias expirar
 app.get("/api/cron/send-trial-expiration-notices", async (req: any, res) => {
   const authHeader = req.headers.authorization;
-  const cronSecret = process.env.CRON_SECRET;
+  const cronSecret = CRON_SECRET;
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
     return res.status(401).json({ error: "Nao autorizado" });
   }
 
@@ -2628,16 +2651,16 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
     ].filter(Boolean) as string[];
 
     const transactionRowsHtml = transactionLines
-      .map((line) => `<div style="margin:0 0 8px 0;">• ${line}</div>`)
+      .map((line) => `<div style="margin:0 0 8px 0;">• ${escapeHtml(line)}</div>`)
       .join("");
 
     const featureRowsHtml = featureBullets
-      .map((feature) => `<div style="margin:0 0 8px 0;">• ${feature}</div>`)
+      .map((feature) => `<div style="margin:0 0 8px 0;">• ${escapeHtml(feature)}</div>`)
       .join("");
 
     const invoiceButtonsHtml = [
-      invoiceUrl ? buildEmailButton(theme, invoiceUrl, "Ver fatura", theme.primary) : "",
-      invoicePdfUrl ? buildEmailButton(theme, invoicePdfUrl, "Baixar PDF", theme.secondary) : ""
+      invoiceUrl ? buildEmailButton(theme, escapeHtml(invoiceUrl), "Ver fatura", theme.primary) : "",
+      invoicePdfUrl ? buildEmailButton(theme, escapeHtml(invoicePdfUrl), "Baixar PDF", theme.secondary) : ""
     ].join("");
 
     const textContent = isSuccess
@@ -2675,15 +2698,15 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
     const htmlContent = isSuccess
       ? buildEmailShell(theme, {
           title: "Assinatura confirmada com sucesso",
-          subtitle: `Processada com ${paymentDescriptor}`,
+          subtitle: `Processada com ${escapeHtml(paymentDescriptor)}`,
           bodyHtml: `
-            <p style="margin:0 0 14px 0; font-size:16px;">Olá, <strong>${professionalName}</strong>.</p>
+            <p style="margin:0 0 14px 0; font-size:16px;">Olá, <strong>${escapeHtml(professionalName)}</strong>.</p>
             <p style="margin:0 0 18px 0; font-size:15px; color:${theme.textMuted};">
-              Seu pedido foi processado com sucesso usando <strong>${paymentDescriptor}</strong>.
-              ${amountLabel ? `O valor confirmado foi <strong>${amountLabel}</strong>.` : ""}
+              Seu pedido foi processado com sucesso usando <strong>${escapeHtml(paymentDescriptor)}</strong>.
+              ${amountLabel ? `O valor confirmado foi <strong>${escapeHtml(amountLabel)}</strong>.` : ""}
             </p>
-            ${buildEmailCard(theme, `Boas-vindas ao ${planName}`, `
-              <p style="margin:0 0 12px 0; font-size:14px; color:${theme.textMuted};">${planDescription || "Você agora tem acesso ao pacote de recursos selecionado."}</p>
+            ${buildEmailCard(theme, `Boas-vindas ao ${escapeHtml(planName)}`, `
+              <p style="margin:0 0 12px 0; font-size:14px; color:${theme.textMuted};">${escapeHtml(planDescription || "Você agora tem acesso ao pacote de recursos selecionado.")}</p>
               <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
                 ${featureRowsHtml}
               </div>
@@ -2699,12 +2722,12 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
         })
       : buildEmailShell(theme, {
           title: "Falha ao processar a assinatura",
-          subtitle: `Tentativa via ${paymentDescriptor}`,
+          subtitle: `Tentativa via ${escapeHtml(paymentDescriptor)}`,
           bodyHtml: `
-            <p style="margin:0 0 14px 0; font-size:16px;">Olá, <strong>${professionalName}</strong>.</p>
+            <p style="margin:0 0 14px 0; font-size:16px;">Olá, <strong>${escapeHtml(professionalName)}</strong>.</p>
             <p style="margin:0 0 18px 0; font-size:15px; color:${theme.textMuted};">
-              Não foi possível concluir a cobrança via <strong>${paymentDescriptor}</strong>.
-              ${failureMessage ? `Motivo informado: <strong>${failureMessage}</strong>` : "A cobrança não foi aprovada ou a validação da transação falhou."}
+              Não foi possível concluir a cobrança via <strong>${escapeHtml(paymentDescriptor)}</strong>.
+              ${failureMessage ? `Motivo informado: <strong>${escapeHtml(failureMessage)}</strong>` : "A cobrança não foi aprovada ou a validação da transação falhou."}
             </p>
             ${buildEmailCard(theme, "Detalhes da tentativa", `
               <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
@@ -3137,10 +3160,10 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
     // Formatar como HTML (quebrando linhas)
     const formattedHtml = buildEmailShell(theme, {
       title: "Relatório de Desenvolvimento / Evolução",
-      subtitle: `Paciente: ${patient.full_name}`,
+      subtitle: `Paciente: ${escapeHtml(patient.full_name)}`,
       bodyHtml: `
         <div style="padding:0; background:${theme.surface}; color:${theme.text}; line-height:1.7; font-size:15px; white-space:pre-wrap; font-family:inherit;">
-          ${textContent.replace(/\n/g, "<br/>")}
+          ${escapeHtml(textContent).replace(/\n/g, "<br/>")}
         </div>
       `,
       footerHtml: "Enviado com segurança via Evolução Clínica - Plataforma Inteligente"

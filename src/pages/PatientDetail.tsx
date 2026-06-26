@@ -8,13 +8,15 @@ import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import DOMPurify from 'dompurify';
 
-// Converte Markdown para HTML seguro para renderização
+// Converte Markdown para HTML e remove conteúdo potencialmente perigoso antes da renderização
 const parseMarkdown = (md: string): string => {
   try {
-    return marked.parse(md, { breaks: true }) as string;
+    const html = marked.parse(md, { breaks: true }) as string;
+    return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
   } catch {
-    return md;
+    return DOMPurify.sanitize(md, { USE_PROFILES: { html: true } });
   }
 };
 
