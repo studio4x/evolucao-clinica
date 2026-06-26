@@ -14,7 +14,7 @@ Plataforma web para registro de evoluções clínicas com áudio, transcrição 
 - O app atende profissionais de saúde e terapeutas.
 - O conteúdo pode envolver dados de saúde e, portanto, exige tratamento cuidadoso e consentimento adequado.
 - A área pública do site explica o produto, a política de privacidade e os termos de uso.
-- O contato oficial de suporte é suporte@conexaoseres.com.br.
+- O contato oficial de suporte é contato@evolucaoclinica.app.br.
 
 ## Observações
 

@@ -359,7 +359,7 @@ export default function Notifications() {
         smtp_from: smtpFrom,
         vapid_public_key: vapidPublic,
         vapid_private_key: vapidPrivate,
-        vapid_subject: `mailto:${smtpUser || 'suporte@conexaoseres.com.br'}`
+        vapid_subject: `mailto:${smtpUser || 'contato@evolucaoclinica.app.br'}`
       };
 
       const { error } = await supabase

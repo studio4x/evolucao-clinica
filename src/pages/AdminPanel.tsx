@@ -862,7 +862,7 @@ export default function AdminPanel() {
         brevo_sender_email: adminBrevoSenderEmail,
         vapid_public_key: adminVapidPublic,
         vapid_private_key: adminVapidPrivate,
-        vapid_subject: `mailto:${adminSmtpUser || 'suporte@conexaoseres.com.br'}`
+        vapid_subject: `mailto:${adminSmtpUser || 'contato@evolucaoclinica.app.br'}`
       };
 
       const { data: currentSettings } = await supabase
@@ -4478,7 +4478,7 @@ export default function AdminPanel() {
                             type="text"
                             value={adminSmtpUser}
                             onChange={e => setAdminSmtpUser(e.target.value)}
-                            placeholder="suporte@conexaoseres.com.br"
+                            placeholder="contato@evolucaoclinica.app.br"
                             required
                             className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
                           />
