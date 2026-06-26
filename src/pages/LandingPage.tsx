@@ -118,12 +118,12 @@ export default function LandingPage() {
                 {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
                   <img 
                     src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-                    alt={siteConfig.pwa_app_name || "Conexão Seres"} 
+                    alt={siteConfig.pwa_app_name || "Evolução Clínica"} 
                     className="h-16 w-auto object-contain cursor-pointer transition-transform hover:scale-102"
                   />
                 ) : (
                   <span className="text-xl font-display font-bold text-brand-primary">
-                    {siteConfig.pwa_app_name || "Conexão Seres"}
+                    {siteConfig.pwa_app_name || "Evolução Clínica"}
                   </span>
                 )}
               </Link>
@@ -753,12 +753,12 @@ export default function LandingPage() {
             <div className="flex justify-center">
               <img 
                 src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-                alt={siteConfig.pwa_app_name || "Conexão Seres"} 
+                alt={siteConfig.pwa_app_name || "Evolução Clínica"} 
                 className="h-16 w-auto object-contain opacity-80"
               />
             </div>
           )}
-          <p>© {new Date().getFullYear()} Conexão Seres. Todos os direitos reservados.</p>
+          <p>© {new Date().getFullYear()} Evolução Clínica. Todos os direitos reservados.</p>
           <p>
             Contato oficial:{' '}
             <a href={`mailto:${LEGAL_SUPPORT_EMAIL}`} className="hover:text-brand-primary transition-colors">

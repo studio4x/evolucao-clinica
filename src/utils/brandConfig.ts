@@ -60,7 +60,7 @@ export const defaultColors: BrandColors = {
 export const defaultSiteConfig: SiteConfig = {
   pwa_app_name: "Evolução Clínica",
   pwa_short_name: "Evolução Clínica",
-  pwa_description: "Gerenciamento de Evoluções Clínicas com IA e Google Docs - Conexão Seres",
+  pwa_description: "Gerenciamento de Evoluções Clínicas com IA e Google Docs",
   pwa_theme_color: "#005C13",
   pwa_background_color: "#ffffff",
   pwa_icon_192_url: "/icon-192x192.png",

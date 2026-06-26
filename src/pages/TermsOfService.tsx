@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, FileText } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
+import { LEGAL_APP_NAME, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 
 export default function TermsOfService() {
   const navigate = useNavigate();
@@ -37,7 +37,7 @@ export default function TermsOfService() {
           <section className="space-y-3">
             <h2 className="text-xl font-display font-semibold text-brand-primary">1. Aceitação dos Termos</h2>
             <p>
-              Ao acessar ou utilizar o <strong>{LEGAL_APP_NAME}</strong>, disponibilizado por <strong>{LEGAL_COMPANY_NAME}</strong>, você
+              Ao acessar ou utilizar o <strong>{LEGAL_APP_NAME}</strong>, você
               concorda com estes Termos de Serviço. Caso não concorde com qualquer condição aqui descrita, não utilize a plataforma.
             </p>
           </section>

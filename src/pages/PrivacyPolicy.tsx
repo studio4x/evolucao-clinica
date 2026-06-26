@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { LEGAL_APP_NAME, LEGAL_COMPANY_NAME, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
+import { LEGAL_APP_NAME, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
@@ -37,7 +37,7 @@ export default function PrivacyPolicy() {
           <section className="space-y-3">
             <h2 className="text-xl font-display font-semibold text-brand-primary">1. Controlador e escopo</h2>
             <p>
-              Esta Política descreve como o <strong>{LEGAL_APP_NAME}</strong>, mantido por <strong>{LEGAL_COMPANY_NAME}</strong>, coleta,
+              Esta Política descreve como o <strong>{LEGAL_APP_NAME}</strong> coleta,
               usa, compartilha, armazena e protege informações tratadas na plataforma, em conformidade com a LGPD e demais normas aplicáveis.
               Para fins desta política, atuamos como controlador dos dados relacionados à conta e ao funcionamento do serviço.
             </p>
@@ -106,7 +106,7 @@ export default function PrivacyPolicy() {
             <h2 className="text-xl font-display font-semibold text-brand-primary">7. Contato</h2>
             <p>
               Para dúvidas sobre esta política, solicitações relacionadas à privacidade ou exercício de direitos, entre em contato com
-              <strong> {LEGAL_COMPANY_NAME}</strong> pelo e-mail{' '}
+              a equipe do <strong>{LEGAL_APP_NAME}</strong> pelo e-mail{' '}
               <a href={`mailto:${LEGAL_SUPPORT_EMAIL}`} className="text-brand-primary hover:underline">
                 {LEGAL_SUPPORT_EMAIL}
               </a>.

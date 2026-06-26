@@ -177,7 +177,7 @@ export default function PendingApproval() {
 
           <div className="mt-8 flex items-center justify-center space-x-2 text-brand-primary/60">
             <Sparkles className="w-4 h-4" />
-            <p className="text-xs font-medium uppercase tracking-widest italic">Conexão Seres</p>
+            <p className="text-xs font-medium uppercase tracking-widest italic">Evolução Clínica</p>
           </div>
         </div>
       </div>
