@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, X, Share2, PlusSquare, ArrowUp, Info, HelpCircle } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { useSiteConfig } from '../../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandInstallLogoUrl } from '../../utils/brandAssets';
 
@@ -8,8 +8,6 @@ export const InstallPrompt = () => {
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [showIOSModal, setShowIOSModal] = useState(false);
-  const [showGenericModal, setShowGenericModal] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isDismissed, setIsDismissed] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -48,8 +46,6 @@ export const InstallPrompt = () => {
     const handleAppInstalled = () => {
       setDeferredPrompt(null);
       setIsInstalled(true);
-      setShowIOSModal(false);
-      setShowGenericModal(false);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -77,20 +73,15 @@ export const InstallPrompt = () => {
   };
 
   const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      // Disparar instalação nativa se disponível (Android/Chrome/Edge/Windows)
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === 'accepted') {
-        setDeferredPrompt(null);
-        setIsInstalled(true);
-      }
-    } else if (isIOS()) {
-      // Mostrar guia de instalação do iOS
-      setShowIOSModal(true);
-    } else {
-      // Mostrar instrução genérica para outros navegadores/desktops
-      setShowGenericModal(true);
+    if (!deferredPrompt) {
+      return;
+    }
+
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+      setIsInstalled(true);
     }
   };
 
@@ -98,6 +89,11 @@ export const InstallPrompt = () => {
   const installTitle = siteConfig.pwa_install_title || `Instalar ${appName}`;
   const installDesc = siteConfig.pwa_install_description || "Acesse seus prontuários rapidamente e offline direto da tela inicial.";
   const installLogoUrl = appendBrandAssetVersion(getBrandInstallLogoUrl(siteConfig), assetSignature);
+  const canInstallNatively = Boolean(deferredPrompt);
+
+  if (!canInstallNatively) {
+    return null;
+  }
 
   return (
     <>
@@ -150,104 +146,6 @@ export const InstallPrompt = () => {
           </div>
         </div>
       </div>
-
-      {/* ── MODAL GUIA DE INSTALAÇÃO DO IOS ── */}
-      {showIOSModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[10000] p-4 animate-fade-in">
-          <div className="bg-white rounded-[32px] max-w-sm w-full p-6 shadow-2xl border border-brand-border/30 relative flex flex-col items-center text-center space-y-6 animate-scale-up">
-            
-            <button
-              onClick={() => setShowIOSModal(false)}
-              className="absolute top-4 right-4 p-2 text-brand-text-muted hover:text-brand-primary hover:bg-brand-bg rounded-full transition-colors"
-            >
-              <X size={18} />
-            </button>
-
-            {/* Ícone de Cabeçalho */}
-            <div className="w-14 h-14 rounded-2xl bg-brand-primary/10 text-brand-primary flex items-center justify-center">
-              <Share2 size={26} className="stroke-[1.8]" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-lg font-display font-black text-brand-primary">Instalar no iPhone / iPad</h3>
-              <p className="text-xs text-brand-text-muted leading-relaxed">
-                Adicione o aplicativo oficial à sua tela de início usando o Safari:
-              </p>
-            </div>
-
-            {/* Passos ilustrados */}
-            <div className="w-full text-left space-y-4 bg-brand-bg/50 border border-brand-border/30 rounded-2xl p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">1</div>
-                <p className="text-xs text-brand-text-muted leading-normal">
-                  Toque no botão de <strong>Compartilhar</strong> <Share2 size={13} className="inline-block text-brand-primary mx-0.5" /> na barra inferior do Safari.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">2</div>
-                <p className="text-xs text-brand-text-muted leading-normal">
-                  Role a lista e toque em <strong>Adicionar à Tela de Início</strong> <PlusSquare size={13} className="inline-block text-brand-primary mx-0.5" />.
-                </p>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center text-[10px] font-bold mt-0.5 flex-shrink-0">3</div>
-                <p className="text-xs text-brand-text-muted leading-normal">
-                  Toque em <strong>Adicionar</strong> no canto superior direito para confirmar.
-                </p>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowIOSModal(false)}
-              className="btn-primary w-full py-3 rounded-xl text-xs font-bold shadow-md shadow-brand-primary/10"
-            >
-              Entendi
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── MODAL GUIA GENÉRICO DE INSTALAÇÃO ── */}
-      {showGenericModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[10000] p-4">
-          <div className="bg-white rounded-[32px] max-w-sm w-full p-6 shadow-2xl border border-brand-border/30 relative flex flex-col items-center text-center space-y-5">
-            
-            <button
-              onClick={() => setShowGenericModal(false)}
-              className="absolute top-4 right-4 p-2 text-brand-text-muted hover:text-brand-primary hover:bg-brand-bg rounded-full transition-colors"
-            >
-              <X size={18} />
-            </button>
-
-            <div className="w-14 h-14 rounded-2xl bg-brand-primary/10 text-brand-primary flex items-center justify-center">
-              <Info size={26} className="stroke-[1.8]" />
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-lg font-display font-black text-brand-primary">Como instalar o App</h3>
-              <p className="text-xs text-brand-text-muted leading-relaxed">
-                Você pode instalar o aplicativo {appName} direto pelo navegador:
-              </p>
-            </div>
-
-            <div className="w-full text-left bg-brand-bg/50 border border-brand-border/30 rounded-2xl p-4 space-y-3">
-              <p className="text-xs text-brand-text-muted leading-relaxed">
-                • <strong>No Desktop (Chrome/Edge):</strong> Clique no ícone de instalação <Download size={12} className="inline text-brand-primary" /> na barra de endereços (ao lado da estrela de favoritos) e confirme.
-              </p>
-              <p className="text-xs text-brand-text-muted leading-relaxed">
-                • <strong>No Android (Chrome):</strong> Toque nos três pontinhos no topo direito do navegador e selecione a opção <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à tela inicial"</strong>.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowGenericModal(false)}
-              className="btn-primary w-full py-3 rounded-xl text-xs font-bold"
-            >
-              Entendi
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 };
