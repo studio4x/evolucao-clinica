@@ -3189,7 +3189,7 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
 });
 
 // API 404 Catch-all
-app.all("/api/*", (req, res) => {
+app.all(/^\/api\/.*$/, (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
 });
 
@@ -3234,7 +3234,7 @@ export async function startServer() {
         res.sendFile(path.join(distPath, "index.html"));
       });
 
-      app.all("*", (req, res) => {
+      app.use((req, res) => {
         res.sendFile(path.join(distPath, "index.html"));
       });
     }
