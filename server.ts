@@ -617,6 +617,8 @@ type EmailDeliveryInput = {
   source: EmailDeliverySource;
   relatedNotificationId?: string | null;
   allowFallback?: boolean;
+  pdfBase64?: string;
+  filename?: string;
 };
 
 type EmailDeliveryResult = {
@@ -699,7 +701,7 @@ async function recordEmailDelivery(data: {
 
 async function sendEmailViaSmtp(
   settings: any,
-  input: Pick<EmailDeliveryInput, "recipientEmail" | "recipientName" | "subject" | "textContent" | "htmlContent">
+  input: EmailDeliveryInput
 ) {
   if (!hasSmtpEmailSettings(settings)) {
     throw new Error("Servidor SMTP não configurado na plataforma.");
@@ -721,13 +723,23 @@ async function sendEmailViaSmtp(
   } as any);
 
   const fromField = buildFromField(settings.smtp_from, settings.smtp_user);
-  const mailOptions = {
+  const mailOptions: any = {
     from: fromField,
     to: input.recipientEmail,
     subject: input.subject,
     text: input.textContent,
     html: input.htmlContent || undefined,
   };
+
+  if (input.pdfBase64 && input.filename) {
+    mailOptions.attachments = [
+      {
+        filename: input.filename,
+        content: Buffer.from(input.pdfBase64, 'base64'),
+        contentType: 'application/pdf'
+      }
+    ];
+  }
 
   const info = await transporter.sendMail(mailOptions);
   return { messageId: info.messageId || null };
@@ -3455,17 +3467,18 @@ Texto: ${evo.transcription_text.trim()}
       })
       .join("\n\n");
 
-    const systemPrompt = `Você é um assistente de IA especializado em RAG Clínico (Geração Aumentada por Recuperação) para terapeutas.
-Sua tarefa é responder a perguntas do terapeuta sobre o histórico do paciente baseando-se EXCLUSIVAMENTE nas evoluções clínicas fornecidas no contexto abaixo.
+    const systemPrompt = `Você é um assistente virtual integrado ao prontuário médico de um paciente, focado em ajudar terapeutas a resgatar informações do histórico de sessões.
+Sua tarefa é responder a perguntas sobre o histórico do paciente baseando-se nas anotações clínicas fornecidas no contexto abaixo.
 
-Informações importantes para a resposta:
-1. Responda de forma profissional, direta, acolhedora e precisa, com tom clínico.
-2. Cite explicitamente a data de cada sessão ao mencionar informações dela. Ex: "Na sessão de 15/05/2026, foi relatado que..." ou "...(sessão de 12/04/2026)."
-3. Se o contexto não contiver a resposta para a pergunta, diga honestamente que não encontrou referências exatas nas evoluções e resuma o que há de mais próximo ou relevante.
-4. Mantenha a resposta concisa e de leitura rápida para o terapeuta.
-5. Use formatação Markdown (negrito, listas, etc.) para estruturar a resposta de forma elegante.
+Informações importantes para a sua escrita:
+1. Responda de forma profissional, direta, acolhedora e precisa, com tom clínico/terapêutico.
+2. Cite explicitamente a data de cada sessão ao mencionar informações extraídas dela (ex: "Na sessão de 15/05/2026, foi relatado que..." ou "...(sessão de 12/04/2026).").
+3. Se o contexto fornecido não contiver a resposta para a pergunta, diga de forma simples e natural que não encontrou anotações sobre esse assunto nas sessões registradas.
+4. Mantenha a resposta curta, concisa e de leitura rápida.
+5. Use formatação Markdown simples (negrito, listas de itens) para deixar o texto agradável de ler.
+6. **MUITO IMPORTANTE**: Nunca utilize termos de computação, engenharia de software ou IA na sua resposta. Não use frases como "conforme o contexto fornecido", "baseado nos documentos recuperados", "segundo a base de dados", "a inteligência artificial identificou", etc. Escreva com naturalidade, como se você conhecesse o histórico do paciente.
 
-CONTEXTO DAS EVOLUÇÕES DO PACIENTE:
+REGISTROS DE EVOLUÇÕES DO PACIENTE:
 ${contextText}`;
 
     // Chamar o modelo Gemini para sintetizar a resposta

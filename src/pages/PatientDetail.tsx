@@ -1408,7 +1408,7 @@ export default function PatientDetail() {
         </div>
 
         <div className="md:col-span-2 space-y-6">
-          {/* Card de Busca Semântica (RAG Clínico) */}
+          {/* Card de Busca Semântica (Pesquisa Inteligente) */}
           <div className="card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
             
@@ -1416,8 +1416,8 @@ export default function PatientDetail() {
               <div className="flex items-center space-x-2 text-brand-primary">
                 <Sparkles size={22} className="text-brand-primary animate-pulse" />
                 <div>
-                  <h3 className="font-display font-semibold text-lg text-brand-text mb-0">Busca Semântica & RAG Clínico</h3>
-                  <p className="text-xs text-brand-text-muted">Consulte o prontuário e as evoluções clínicas usando linguagem natural</p>
+                  <h3 className="font-display font-semibold text-lg text-brand-text mb-0">Pesquisa Inteligente no Histórico</h3>
+                  <p className="text-xs text-brand-text-muted">Faça perguntas para encontrar informações rapidamente nas anotações do paciente</p>
                 </div>
               </div>
               
@@ -1432,8 +1432,8 @@ export default function PatientDetail() {
                         const indexedCount = evolutions.filter(e => e.transcription_status === 'completed' && e.embedding).length;
                         const pendingCount = totalCompleted - indexedCount;
                         return pendingCount === 0
-                          ? `Todas as ${indexedCount} evoluções prontas`
-                          : `${indexedCount} de ${totalCompleted} evoluções indexadas`;
+                          ? `Histórico totalmente pronto para busca`
+                          : `${indexedCount} de ${totalCompleted} anotações preparadas`;
                       })()}
                     </span>
                   </span>
@@ -1451,10 +1451,10 @@ export default function PatientDetail() {
                         {indexingPending ? (
                           <>
                             <Loader2 size={10} className="animate-spin" />
-                            <span>Indexando...</span>
+                            <span>Preparando...</span>
                           </>
                         ) : (
-                          <span>Indexar {pendingCount} pendentes agora</span>
+                          <span>Preparar {pendingCount} novas anotações agora</span>
                         )}
                       </button>
                     ) : null;
@@ -1464,7 +1464,7 @@ export default function PatientDetail() {
             </div>
 
             {evolutions.length === 0 ? (
-              <p className="text-xs text-brand-text-muted">Grave a primeira evolução para poder fazer buscas semânticas.</p>
+              <p className="text-xs text-brand-text-muted">Grave a primeira evolução para poder fazer perguntas ao assistente.</p>
             ) : (
               <form onSubmit={handleSemanticSearch} className="space-y-3">
                 <div className="relative">
@@ -1519,7 +1519,7 @@ export default function PatientDetail() {
               <div className="mt-4 p-5 bg-white/50 backdrop-blur-sm border border-brand-border rounded-xl space-y-3 animate-pulse">
                 <div className="flex items-center space-x-2 text-brand-text-muted text-xs font-medium">
                   <Loader2 size={14} className="animate-spin text-brand-primary" />
-                  <span>Consultando evoluções e analisando registros médicos...</span>
+                  <span>Analisando o histórico de anotações do paciente...</span>
                 </div>
                 <div className="space-y-2">
                   <div className="h-4 bg-brand-bg rounded w-3/4" />
@@ -1534,7 +1534,7 @@ export default function PatientDetail() {
                 <div className="border-b border-brand-border/60 pb-2.5 flex items-center justify-between">
                   <div className="flex items-center space-x-1.5 text-brand-primary">
                     <Sparkles size={14} />
-                    <span className="text-xs font-bold uppercase tracking-wider">Resposta da IA</span>
+                    <span className="text-xs font-bold uppercase tracking-wider">Resposta do Assistente</span>
                   </div>
                   <button
                     type="button"
@@ -1560,7 +1560,7 @@ export default function PatientDetail() {
                   <div className="pt-3 border-t border-brand-border/60">
                     <h4 className="text-[11px] font-bold text-brand-text-muted uppercase tracking-wider mb-2 flex items-center gap-1">
                       <Clock size={12} />
-                      <span>Trechos Relevantes das Evoluções</span>
+                      <span>Anotações consultadas como referência:</span>
                     </h4>
                     <div className="grid grid-cols-1 gap-2.5">
                       {semanticSources.map((source) => (
