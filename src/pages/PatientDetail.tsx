@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
+import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
@@ -311,12 +312,14 @@ export default function PatientDetail() {
     }
     setSigningReportId(reportId);
     try {
-      const { error } = await supabase
+      const { data: updatedReport, error } = await supabase
         .from('patient_reports')
         .update({
           status: 'signed'
         })
-        .eq('id', reportId);
+        .eq('id', reportId)
+        .select()
+        .single();
 
       if (error) throw error;
 
@@ -328,8 +331,10 @@ export default function PatientDetail() {
       });
 
       alert(`Relatório assinado com sucesso!`);
-      setShowViewReportModal(false);
-      setViewingReport(null);
+      setViewingReport(updatedReport);
+      setViewingReportContent(updatedReport.content);
+      setOriginalReportContent(updatedReport.content);
+      setHistoryEditMode(false);
       await fetchData();
     } catch (error: any) {
       console.error("Erro ao assinar relatório:", error);
@@ -446,11 +451,18 @@ export default function PatientDetail() {
     }, 200);
   };
 
-  const handleShareWhatsApp = (content: string, type: string) => {
+  const handleShareWhatsApp = (content: string, type: string, rep?: any) => {
     const cleanText = stripMarkdown(content);
     const docLabel = type === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
+    
+    let signatureStamp = '';
+    if (rep && rep.status === 'signed') {
+      const formattedDate = new Date(rep.signature_date).toLocaleString('pt-BR');
+      signatureStamp = `\n\n----------------------------------------\n🔒 *DOCUMENTO ASSINADO DIGITALMENTE*\nAssinado por: ${rep.signed_by_name} (${rep.signed_by_register})\nData/Hora: ${formattedDate}\nIP de Origem: ${rep.signature_ip}\nAlgoritmo: SHA-256\nHash de Integridade: ${rep.signature_hash}\n----------------------------------------`;
+    }
+
     const header = `*${docLabel} - ${patient?.full_name}*\n\n`;
-    const fullMessage = header + cleanText;
+    const fullMessage = header + cleanText + signatureStamp;
     const encodedMsg = encodeURIComponent(fullMessage);
     const phone = patient?.phone ? patient.phone.replace(/\D/g, '') : '';
     
@@ -881,9 +893,228 @@ export default function PatientDetail() {
     }
   };
 
+  const generateReportPDF = (rep: any, pat: any, prof: any) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - (2 * margin);
+
+    // Cabecalho Timbrado
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(0, 92, 19); // Brand primary color (#005C13)
+    doc.text("Evolução Clínica", margin, 20);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(87, 83, 78); // Brand text-muted
+    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", margin, 25);
+
+    doc.setDrawColor(0, 92, 19);
+    doc.setLineWidth(0.5);
+    doc.line(margin, 28, pageWidth - margin, 28);
+
+    // Identificação do Documento
+    doc.setFontSize(12);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(0, 92, 19);
+    const docTitle = rep.type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)';
+    doc.text(docTitle, margin, 38);
+
+    // Tabela de Dados
+    doc.setFontSize(9);
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(28, 25, 22); // text-color
+    
+    let y = 46;
+    doc.text(`Paciente: ${pat?.full_name || 'Não informado'}`, margin, y);
+    doc.text(`Profissional: ${prof?.full_name || 'Não informado'}`, pageWidth / 2 + 10, y);
+    
+    y += 6;
+    if (prof?.professional_register) {
+      doc.text(`Registro Profissional: ${prof.professional_register}`, margin, y);
+    }
+    doc.text(`Período de Análise: ${rep.period_label || 'Não informado'}`, pageWidth / 2 + 10, y);
+    
+    y += 8;
+    doc.setDrawColor(231, 229, 228);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageWidth - margin, y);
+
+    // Conteúdo do Relatório
+    y += 10;
+    
+    // Dividir o conteudo em linhas de markdown
+    const lines = (rep.content || '').split('\n');
+    
+    for (const line of lines) {
+      if (y > 270) {
+        doc.addPage();
+        y = 20; // reset y
+      }
+
+      const trimmed = line.trim();
+      if (!trimmed) {
+        y += 4; // espaco em branco
+        continue;
+      }
+
+      if (trimmed.startsWith('# ')) {
+        y += 4;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(14);
+        doc.setTextColor(0, 92, 19);
+        doc.text(trimmed.substring(2), margin, y);
+        y += 8;
+      } else if (trimmed.startsWith('## ')) {
+        y += 3;
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(0, 92, 19);
+        doc.text(trimmed.substring(3), margin, y);
+        y += 6;
+      } else if (trimmed.startsWith('---')) {
+        y += 2;
+        doc.setDrawColor(231, 229, 228);
+        doc.line(margin, y, pageWidth - margin, y);
+        y += 4;
+      } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(28, 25, 22);
+        
+        const text = trimmed.substring(2).replace(/\*\*([^*]+)\*\*/g, '$1');
+        const splitText = doc.splitTextToSize(text, contentWidth - 6);
+        
+        for (let i = 0; i < splitText.length; i++) {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          if (i === 0) {
+            doc.text("•", margin, y);
+            doc.text(splitText[i], margin + 5, y);
+          } else {
+            doc.text(splitText[i], margin + 5, y);
+          }
+          y += 5.5;
+        }
+        y += 1.5;
+      } else {
+        doc.setFont('Helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.setTextColor(28, 25, 22);
+        
+        const text = trimmed.replace(/\*\*([^*]+)\*\*/g, '$1');
+        const splitText = doc.splitTextToSize(text, contentWidth);
+        
+        for (let i = 0; i < splitText.length; i++) {
+          if (y > 270) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.text(splitText[i], margin, y);
+          y += 5.5;
+        }
+        y += 2;
+      }
+    }
+
+    // Carimbo de Assinatura se estiver assinado
+    if (rep.status === 'signed') {
+      y += 12;
+      if (y > 240) {
+        doc.addPage();
+        y = 30;
+      }
+      
+      // Caixa de Assinatura
+      doc.setFillColor(240, 253, 244); // bg-emerald-50
+      doc.setDrawColor(167, 243, 208); // border-emerald-200
+      doc.setLineWidth(0.3);
+      doc.rect(margin, y, contentWidth, 38, 'FD');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(4, 120, 87); // text-emerald-700
+      doc.text("DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO", margin + 5, y + 6);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(55, 65, 81);
+      doc.text(`Assinado por: ${rep.signed_by_name} (${rep.signed_by_register})`, margin + 5, y + 14);
+      
+      const formattedDate = new Date(rep.signature_date).toLocaleString('pt-BR');
+      doc.text(`Data/Hora: ${formattedDate}`, margin + 5, y + 20);
+      doc.text(`IP de Origem: ${rep.signature_ip}   |   Algoritmo: SHA-256`, margin + 5, y + 26);
+      
+      doc.setFont('Courier', 'normal');
+      doc.setFontSize(7);
+      doc.text(`Hash: ${rep.signature_hash}`, margin + 5, y + 32);
+    } else {
+      // Rodapé normal de assinatura manual
+      y += 20;
+      if (y > 260) {
+        doc.addPage();
+        y = 30;
+      }
+      doc.setDrawColor(87, 83, 78);
+      doc.setLineWidth(0.3);
+      doc.line(pageWidth / 2 - 30, y, pageWidth / 2 + 30, y);
+      
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(28, 25, 22);
+      doc.text(prof?.full_name || 'Profissional de Saúde', pageWidth / 2, y + 5, { align: 'center' });
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(prof?.professional_register || '', pageWidth / 2, y + 9, { align: 'center' });
+    }
+
+    return doc;
+  };
+
+  const handleDuplicateReport = async (rep: any) => {
+    if (!window.confirm("Deseja duplicar este relatório assinado? Isso criará uma nova cópia em rascunho (editável) a partir deste documento.")) {
+      return;
+    }
+    try {
+      const { data: duplicated, error } = await supabase
+        .from('patient_reports')
+        .insert({
+          patient_id: id,
+          professional_id: user.id,
+          type: rep.type,
+          period_label: `${rep.period_label} (Cópia)`,
+          content: rep.content,
+          status: 'draft'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      alert("Relatório duplicado com sucesso! Agora você está editando a nova cópia.");
+      setViewingReport(duplicated);
+      setViewingReportContent(duplicated.content);
+      setOriginalReportContent(duplicated.content);
+      setHistoryEditMode(true);
+      await fetchData();
+    } catch (err: any) {
+      console.error("Erro ao duplicar relatório:", err);
+      alert("Erro ao duplicar relatório: " + err.message);
+    }
+  };
+
   const handleSendReportEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!recipientEmail || !generatedReport) return;
+    const contentToSend = viewingReport ? viewingReportContent : generatedReport;
+    if (!recipientEmail || !contentToSend) return;
     setSendingEmail(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -892,6 +1123,19 @@ export default function PatientDetail() {
       if (!token) {
         throw new Error("Sessão expirada.");
       }
+
+      const repObj = viewingReport || {
+        type: aiReportType,
+        period_label: aiPeriod === '3_months' ? 'Últimos 3 meses' : aiPeriod === '6_months' ? 'Últimos 6 meses' : 'Período Personalizado',
+        content: generatedReport,
+        status: 'draft'
+      };
+
+      const doc = generateReportPDF(repObj, patient, professional);
+      const pdfBase64 = doc.output('datauristring').split(',')[1];
+      const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+      const docLabel = repObj.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
+      const filename = `${docLabel}_${cleanPatientName}.pdf`;
 
       const response = await fetch(`/api/patients/${id}/send-report-email`, {
         method: 'POST',
@@ -902,7 +1146,9 @@ export default function PatientDetail() {
         body: JSON.stringify({
           toEmail: recipientEmail,
           subject: emailSubject,
-          textContent: generatedReport
+          textContent: contentToSend,
+          pdfBase64,
+          filename
         })
       });
 
@@ -912,7 +1158,7 @@ export default function PatientDetail() {
         throw new Error(result.error || "Erro ao enviar o e-mail.");
       }
 
-      alert("E-mail enviado com sucesso!");
+      alert("E-mail enviado com sucesso com o PDF assinado em anexo!");
       setShowEmailInput(false);
     } catch (err: any) {
       console.error("Erro ao enviar e-mail:", err);
@@ -2424,11 +2670,26 @@ export default function PatientDetail() {
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               {viewingReport.status === 'signed' ? (
-                <div className="flex items-center space-x-2 bg-emerald-50 border border-emerald-100 p-3.5 rounded-xl text-emerald-800 text-xs leading-relaxed">
-                  <Shield size={16} className="text-emerald-600 shrink-0" />
-                  <div>
-                    <p className="font-semibold">Este documento foi assinado digitalmente e está fechado (somente leitura).</p>
-                    <p className="text-[10px] text-emerald-700">Assinado por {viewingReport.signed_by_name} ({viewingReport.signed_by_register}) em {formatDateTime(viewingReport.signature_date)} | IP: {viewingReport.signature_ip}</p>
+                <div className="flex flex-col space-y-2.5">
+                  <div className="flex items-center space-x-2 bg-emerald-50 border border-emerald-100 p-3.5 rounded-xl text-emerald-800 text-xs leading-relaxed">
+                    <Shield size={16} className="text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold">Este documento foi assinado digitalmente e está fechado (somente leitura).</p>
+                      <p className="text-[10px] text-emerald-700">Assinado por {viewingReport.signed_by_name} ({viewingReport.signed_by_register}) em {formatDateTime(viewingReport.signature_date)} | IP: {viewingReport.signature_ip}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-amber-50 border border-amber-100 p-3.5 rounded-xl text-amber-800 text-xs">
+                    <div className="flex items-center space-x-2">
+                      <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                      <span>A edição deste relatório está bloqueada porque ele já foi assinado e fechado. Para editá-lo, você deve duplicá-lo.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDuplicateReport(viewingReport)}
+                      className="w-full sm:w-auto px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-semibold text-[11px] transition-colors whitespace-nowrap cursor-pointer shrink-0"
+                    >
+                      Duplicar Relatório
+                    </button>
                   </div>
                 </div>
               ) : (
@@ -2658,7 +2919,10 @@ export default function PatientDetail() {
                     <button
                       type="button"
                       onClick={() => {
-                        handlePrintReport(viewingReportContent, viewingReport.period_label, viewingReport.type, viewingReport);
+                        const doc = generateReportPDF(viewingReport, patient, professional);
+                        const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+                        const docLabel = viewingReport.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
+                        doc.save(`${docLabel}_${cleanPatientName}.pdf`);
                       }}
                       className="btn-outline py-2 px-3 text-xs flex items-center space-x-1.5 cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                     >
@@ -2760,7 +3024,7 @@ export default function PatientDetail() {
               <button
                 type="button"
                 onClick={() => {
-                  handleShareWhatsApp(whatsAppConfirmContent, whatsAppConfirmType);
+                  handleShareWhatsApp(whatsAppConfirmContent, whatsAppConfirmType, viewingReport);
                   setShowWhatsAppConfirmModal(false);
                 }}
                 className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl flex items-center space-x-1.5 transition-colors cursor-pointer shadow-sm"

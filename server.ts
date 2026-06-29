@@ -3303,13 +3303,15 @@ app.post("/api/patients/:id/semantic-index", requireAuth, requireActiveSubscript
 
       try {
         const response = await ai.models.embedContent({
-          model: "text-embedding-004",
+          model: "gemini-embedding-001",
           contents: evo.transcription_text.trim(),
+          config: {
+            outputDimensionality: 768
+          }
         });
 
-        const embedding = (response as any).embedding;
-        if (embedding?.values) {
-          const embeddingVector = embedding.values;
+        if (response.embeddings && response.embeddings[0]?.values) {
+          const embeddingVector = response.embeddings[0].values;
           const vectorString = `[${embeddingVector.join(",")}]`;
 
           const { error: updateError } = await supabaseAdmin
@@ -3403,12 +3405,14 @@ app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscrip
         if (!evo.transcription_text?.trim()) continue;
         try {
           const embedRes = await ai.models.embedContent({
-            model: "text-embedding-004",
+            model: "gemini-embedding-001",
             contents: evo.transcription_text.trim(),
+            config: {
+              outputDimensionality: 768
+            }
           });
-          const embedding = (embedRes as any).embedding;
-          if (embedding?.values) {
-            const vectorString = `[${embedding.values.join(",")}]`;
+          if (embedRes.embeddings && embedRes.embeddings[0]?.values) {
+            const vectorString = `[${embedRes.embeddings[0].values.join(",")}]`;
             await supabaseAdmin
               .from("evolutions")
               .update({ embedding: vectorString } as any)
@@ -3422,16 +3426,18 @@ app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscrip
 
     // Gerar embedding para a consulta
     const queryEmbedResponse = await ai.models.embedContent({
-      model: "text-embedding-004",
+      model: "gemini-embedding-001",
       contents: query.trim(),
+      config: {
+        outputDimensionality: 768
+      }
     });
 
-    const queryEmbedding = (queryEmbedResponse as any).embedding;
-    if (!queryEmbedding?.values) {
+    if (!queryEmbedResponse.embeddings || !queryEmbedResponse.embeddings[0]?.values) {
       throw new Error("Não foi possível gerar embeddings para a pergunta.");
     }
 
-    const queryVector = queryEmbedding.values;
+    const queryVector = queryEmbedResponse.embeddings[0].values;
     const queryVectorString = `[${queryVector.join(",")}]`;
 
     // Buscar evoluções por similaridade vetorial via RPC match_evolutions
