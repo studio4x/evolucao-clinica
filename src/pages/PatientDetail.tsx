@@ -197,13 +197,61 @@ export default function PatientDetail() {
     }
   };
 
-  const handlePrintReport = (content: string, periodLabel: string, type: 'evolution_report' | 'pdi_draft') => {
+  const [signingReportId, setSigningReportId] = useState<string | null>(null);
+
+  const handleSignReportDirectly = async (reportId: string) => {
+    if (!window.confirm("Deseja assinar e fechar este relatório? Após assinar, ele se tornará imutável para fins de conformidade legal e não poderá mais ser alterado ou excluído.")) {
+      return;
+    }
+    setSigningReportId(reportId);
+    try {
+      const { error } = await supabase
+        .from('patient_reports')
+        .update({
+          status: 'signed'
+        })
+        .eq('id', reportId);
+
+      if (error) throw error;
+
+      void sendNotification({
+        title: "🔒 Relatório Assinado Digitalmente",
+        content: `O relatório do paciente ${patient?.full_name} foi fechado e assinado com segurança no servidor.`,
+        type: "success",
+        link: `/painel/patients/${patient?.id}`
+      });
+
+      alert(`Relatório assinado com sucesso!`);
+      setShowViewReportModal(false);
+      setViewingReport(null);
+      await fetchData();
+    } catch (error: any) {
+      console.error("Erro ao assinar relatório:", error);
+      alert("Erro ao assinar relatório: " + (error.message || error));
+    } finally {
+      setSigningReportId(null);
+    }
+  };
+
+  const handlePrintReport = (content: string, periodLabel: string, type: 'evolution_report' | 'pdi_draft', rep?: any) => {
     const originalTitle = document.title;
     const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
     const docLabel = type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
     document.title = `${docLabel}_${cleanPatientName}`;
 
-    setPrintSignatureInfo(null);
+    if (rep && rep.status === 'signed') {
+      setPrintSignatureInfo({
+        method: rep.signature_method,
+        date: rep.signature_date,
+        ip: rep.signature_ip,
+        hash: rep.signature_hash,
+        name: rep.signed_by_name,
+        register: rep.signed_by_register
+      });
+    } else {
+      setPrintSignatureInfo(null);
+    }
+
     setPrintMode('report');
     setPrintContent(content);
     setPrintPeriodLabel(periodLabel);
@@ -1530,6 +1578,12 @@ export default function PatientDetail() {
                             {docLabel}
                           </span>
                           <span className="text-xs text-brand-text-muted">{rep.period_label}</span>
+                          {rep.status === 'signed' && (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 text-[9px] font-bold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              <Shield size={9} />
+                              <span>Assinado</span>
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs font-medium text-brand-text-muted">Emitido em: {formattedDate}</p>
                       </div>
@@ -1552,6 +1606,7 @@ export default function PatientDetail() {
                             setViewingReportContent(rep.content);
                             setOriginalReportContent(rep.content);
                             setShowViewReportModal(true);
+                            setHistoryEditMode(false);
                             setShowEmailInput(false);
                             setShowExportOptions(false);
                           }}
@@ -2071,27 +2126,39 @@ export default function PatientDetail() {
 
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="flex justify-between items-center text-xs text-brand-text-muted bg-brand-bg/50 p-3 rounded-lg border border-brand-border/50">
-                <p><span className="font-semibold text-brand-text">Período:</span> {viewingReport.period_label}</p>
-                <p><span className="font-semibold text-brand-text">Gerado em:</span> {new Date(viewingReport.created_at).toLocaleDateString('pt-BR')}</p>
-              </div>
+              {viewingReport.status === 'signed' ? (
+                <div className="flex items-center space-x-2 bg-emerald-50 border border-emerald-100 p-3.5 rounded-xl text-emerald-800 text-xs leading-relaxed">
+                  <Shield size={16} className="text-emerald-600 shrink-0" />
+                  <div>
+                    <p className="font-semibold">Este documento foi assinado digitalmente e está fechado (somente leitura).</p>
+                    <p className="text-[10px] text-emerald-700">Assinado por {viewingReport.signed_by_name} ({viewingReport.signed_by_register}) em {formatDateTime(viewingReport.signature_date)} | IP: {viewingReport.signature_ip}</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-between items-center text-xs text-brand-text-muted bg-brand-bg/50 p-3 rounded-lg border border-brand-border/50">
+                  <p><span className="font-semibold text-brand-text">Período:</span> {viewingReport.period_label}</p>
+                  <p><span className="font-semibold text-brand-text">Gerado em:</span> {new Date(viewingReport.created_at).toLocaleDateString('pt-BR')}</p>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider">
                     Conteúdo do Relatório
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setHistoryEditMode(prev => !prev)}
-                    className="flex items-center space-x-1 text-xs text-brand-primary border border-brand-primary/30 px-2.5 py-1 rounded-lg hover:bg-brand-primary/5 transition-colors cursor-pointer"
-                  >
-                    {historyEditMode ? (
-                      <><Eye size={12} /><span>Visualizar</span></>
-                    ) : (
-                      <><Edit3 size={12} /><span>Editar</span></>
-                    )}
-                  </button>
+                  {viewingReport.status !== 'signed' && (
+                    <button
+                      type="button"
+                      onClick={() => setHistoryEditMode(prev => !prev)}
+                      className="flex items-center space-x-1 text-xs text-brand-primary border border-brand-primary/30 px-2.5 py-1 rounded-lg hover:bg-brand-primary/5 transition-colors cursor-pointer"
+                    >
+                      {historyEditMode ? (
+                        <><Eye size={12} /><span>Visualizar</span></>
+                      ) : (
+                        <><Edit3 size={12} /><span>Editar</span></>
+                      )}
+                    </button>
+                  )}
                 </div>
                 {historyEditMode ? (
                   <textarea
@@ -2165,10 +2232,50 @@ export default function PatientDetail() {
               {/* Botões do Histórico */}
               <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-brand-border">
                 <div className="flex flex-wrap gap-2">
+                  {viewingReport.status !== 'signed' && (
+                    <button
+                      type="button"
+                      onClick={() => handleSignReportDirectly(viewingReport.id)}
+                      disabled={signingReportId === viewingReport.id}
+                      className="btn-primary py-2 px-3 text-xs flex items-center space-x-1.5 cursor-pointer bg-brand-primary hover:bg-brand-primary/95 text-white"
+                    >
+                      {signingReportId === viewingReport.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Shield size={14} />
+                      )}
+                      <span>Assinar e Fechar</span>
+                    </button>
+                  )}
+
+                  {historyEditMode && viewingReportContent !== originalReportContent && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const { error } = await supabase
+                            .from('patient_reports')
+                            .update({ content: viewingReportContent })
+                            .eq('id', viewingReport.id);
+                          if (error) throw error;
+                          setReports(prev => prev.map(r => r.id === viewingReport.id ? { ...r, content: viewingReportContent } : r));
+                          setOriginalReportContent(viewingReportContent);
+                          alert("Relatório salvo com sucesso no banco!");
+                        } catch (err: any) {
+                          alert("Erro ao salvar: " + err.message);
+                        }
+                      }}
+                      className="btn-primary py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer"
+                    >
+                      <Check size={14} />
+                      <span>Salvar Edição</span>
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText(viewingReport.content)
+                      navigator.clipboard.writeText(viewingReportContent)
                         .then(() => {
                           setIsCopied(true);
                           setTimeout(() => setIsCopied(false), 2000);
@@ -2190,35 +2297,37 @@ export default function PatientDetail() {
                     )}
                   </button>
 
-                  {viewingReport.google_doc_url && viewingReportContent === viewingReport.content ? (
-                    <a
-                      href={viewingReport.google_doc_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
-                    >
-                      <ExternalLink size={14} />
-                      <span>Ver no Google Drive</span>
-                    </a>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleAutoSaveToLinkedDoc}
-                      disabled={exportingDoc}
-                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
-                    >
-                      {exportingDoc ? (
-                        <>
-                          <Loader2 size={12} className="animate-spin" />
-                          <span>Salvando...</span>
-                        </>
-                      ) : (
-                        <>
-                          <FileText size={14} />
-                          <span>Salvar no Google Docs</span>
-                        </>
-                      )}
-                    </button>
+                  {viewingReport.status !== 'signed' && (
+                    viewingReport.google_doc_url && viewingReportContent === viewingReport.content ? (
+                      <a
+                        href={viewingReport.google_doc_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
+                      >
+                        <ExternalLink size={14} />
+                        <span>Ver no Google Drive</span>
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleAutoSaveToLinkedDoc}
+                        disabled={exportingDoc}
+                        className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5"
+                      >
+                        {exportingDoc ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" />
+                            <span>Salvando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <FileText size={14} />
+                            <span>Salvar no Google Docs</span>
+                          </>
+                        )}
+                      </button>
+                    )
                   )}
 
                   <button
@@ -2248,16 +2357,29 @@ export default function PatientDetail() {
                     <span>Enviar ao paciente por WhatsApp</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handlePrintReport(viewingReportContent, viewingReport.period_label, viewingReport.type);
-                    }}
-                    className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
-                  >
-                    <Printer size={14} />
-                    <span>Imprimir / PDF</span>
-                  </button>
+                  {viewingReport.status === 'signed' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handlePrintReport(viewingReportContent, viewingReport.period_label, viewingReport.type, viewingReport);
+                      }}
+                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1.5 cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    >
+                      <Download size={14} />
+                      <span>Baixar PDF</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handlePrintReport(viewingReportContent, viewingReport.period_label, viewingReport.type);
+                      }}
+                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
+                    >
+                      <Printer size={14} />
+                      <span>Imprimir / PDF</span>
+                    </button>
+                  )}
                 </div>
                 
                 <button
