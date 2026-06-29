@@ -125,6 +125,14 @@ export default function PatientDetail() {
   const [editingEvolutionText, setEditingEvolutionText] = useState('');
   const [savingEvolutionId, setSavingEvolutionId] = useState<string | null>(null);
   const [signingEvolutionId, setSigningEvolutionId] = useState<string | null>(null);
+  const [expandedEvoIds, setExpandedEvoIds] = useState<Record<string, boolean>>({});
+
+  const toggleEvoExpansion = (evoId: string) => {
+    setExpandedEvoIds(prev => ({
+      ...prev,
+      [evoId]: !prev[evoId]
+    }));
+  };
 
   const handleSaveEditedEvolution = async (evoId: string) => {
     if (!editingEvolutionText.trim()) {
@@ -1345,9 +1353,20 @@ export default function PatientDetail() {
                             {evo.status === 'signed' ? (
                               <p className="whitespace-pre-line">{evo.transcription_text}</p>
                             ) : (
-                              <p className="whitespace-pre-line line-clamp-4 hover:line-clamp-none transition-all duration-350 cursor-pointer" title="Clique para expandir">
-                                {evo.transcription_text}
-                              </p>
+                              <div className="space-y-2">
+                                <p className={`whitespace-pre-line ${expandedEvoIds[evo.id] ? '' : 'line-clamp-4'}`}>
+                                  {evo.transcription_text}
+                                </p>
+                                {evo.transcription_text && evo.transcription_text.length > 200 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleEvoExpansion(evo.id)}
+                                    className="text-xs text-brand-primary hover:underline font-semibold focus:outline-none cursor-pointer"
+                                  >
+                                    {expandedEvoIds[evo.id] ? 'Ler menos' : 'Ler mais...'}
+                                  </button>
+                                )}
+                              </div>
                             )}
 
                             {evo.status === 'signed' ? (
