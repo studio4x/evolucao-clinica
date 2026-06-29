@@ -3220,10 +3220,282 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
     });
 
     res.json({ success: true, provider: result.provider });
-
   } catch (err: any) {
     console.error("Erro ao enviar e-mail com relatório:", err);
     res.status(500).json({ error: err.message || "Erro ao enviar e-mail." });
+  }
+});
+
+// --- API BUSCA SEMÂNTICA (RAG CLÍNICO) ---
+
+// 1. Indexar evoluções pendentes de um paciente
+app.post("/api/patients/:id/semantic-index", requireAuth, requireActiveSubscription, async (req: any, res) => {
+  try {
+    const patientId = req.params.id;
+    
+    // Validar se o paciente pertence ao profissional
+    const { data: patient, error: patientError } = await supabaseAdmin
+      .from("patients")
+      .select("id, full_name")
+      .eq("id", patientId)
+      .eq("professional_id", req.user.id)
+      .single();
+
+    if (patientError || !patient) {
+      return res.status(404).json({ error: "Paciente não encontrado ou não pertence a este profissional." });
+    }
+
+    // Buscar evoluções sem embedding
+    const { data: evos, error: evosError } = await supabaseAdmin
+      .from("evolutions")
+      .select("id, transcription_text")
+      .eq("patient_id", patientId)
+      .eq("professional_id", req.user.id)
+      .eq("transcription_status", "completed")
+      .is("embedding", null);
+
+    if (evosError) throw evosError;
+
+    if (!evos || evos.length === 0) {
+      return res.json({ success: true, indexedCount: 0, message: "Todas as evoluções já estão indexadas." });
+    }
+
+    // Obter chave do Gemini
+    let apiKey = "";
+    try {
+      const { data: settingsData, error: settingsError } = await supabaseAdmin
+        .from("settings")
+        .select("api_key")
+        .eq("id", "gemini")
+        .single();
+      if (!settingsError && settingsData?.api_key) {
+        apiKey = settingsData.api_key;
+      }
+    } catch (e) {
+      console.warn("Erro ao ler chave do Gemini do banco:", e);
+    }
+
+    if (!apiKey) {
+      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+    }
+
+    if (!apiKey) {
+      return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+    let indexedCount = 0;
+
+    for (const evo of evos) {
+      if (!evo.transcription_text?.trim()) continue;
+
+      try {
+        const response = await ai.models.embedContent({
+          model: "text-embedding-004",
+          contents: evo.transcription_text.trim(),
+        });
+
+        const embedding = (response as any).embedding;
+        if (embedding?.values) {
+          const embeddingVector = embedding.values;
+          const vectorString = `[${embeddingVector.join(",")}]`;
+
+          const { error: updateError } = await supabaseAdmin
+            .from("evolutions")
+            .update({ embedding: vectorString } as any)
+            .eq("id", evo.id);
+
+          if (updateError) {
+            console.error(`Erro ao atualizar embedding da evolução ${evo.id}:`, updateError);
+          } else {
+            indexedCount++;
+          }
+        }
+      } catch (embedError) {
+        console.error(`Erro ao gerar embedding para evolução ${evo.id}:`, embedError);
+      }
+    }
+
+    res.json({
+      success: true,
+      indexedCount,
+      totalPending: evos.length,
+      message: `${indexedCount} evoluções indexadas com sucesso.`
+    });
+
+  } catch (err: any) {
+    console.error("Erro na indexação semântica das evoluções:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao indexar evoluções." });
+  }
+});
+
+// 2. Realizar busca semântica em evoluções (RAG Clínico)
+app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscription, async (req: any, res) => {
+  try {
+    const patientId = req.params.id;
+    const { query } = req.body;
+
+    if (!query || !query.trim()) {
+      return res.status(400).json({ error: "O parâmetro 'query' é obrigatório." });
+    }
+
+    // Validar se o paciente pertence ao profissional
+    const { data: patient, error: patientError } = await supabaseAdmin
+      .from("patients")
+      .select("id, full_name")
+      .eq("id", patientId)
+      .eq("professional_id", req.user.id)
+      .single();
+
+    if (patientError || !patient) {
+      return res.status(404).json({ error: "Paciente não encontrado ou não pertence a este profissional." });
+    }
+
+    // Obter chave do Gemini
+    let apiKey = "";
+    try {
+      const { data: settingsData, error: settingsError } = await supabaseAdmin
+        .from("settings")
+        .select("api_key")
+        .eq("id", "gemini")
+        .single();
+      if (!settingsError && settingsData?.api_key) {
+        apiKey = settingsData.api_key;
+      }
+    } catch (e) {
+      console.warn("Erro ao ler chave do Gemini do banco:", e);
+    }
+
+    if (!apiKey) {
+      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+    }
+
+    if (!apiKey) {
+      return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Auto-indexação silenciosa de evoluções pendentes antes de buscar
+    const { data: pendingEvos, error: pendingError } = await supabaseAdmin
+      .from("evolutions")
+      .select("id, transcription_text")
+      .eq("patient_id", patientId)
+      .eq("professional_id", req.user.id)
+      .eq("transcription_status", "completed")
+      .is("embedding", null);
+
+    if (!pendingError && pendingEvos && pendingEvos.length > 0) {
+      console.log(`[RAG-Index] Indexando ${pendingEvos.length} evoluções pendentes para o paciente ${patient.full_name}...`);
+      for (const evo of pendingEvos) {
+        if (!evo.transcription_text?.trim()) continue;
+        try {
+          const embedRes = await ai.models.embedContent({
+            model: "text-embedding-004",
+            contents: evo.transcription_text.trim(),
+          });
+          const embedding = (embedRes as any).embedding;
+          if (embedding?.values) {
+            const vectorString = `[${embedding.values.join(",")}]`;
+            await supabaseAdmin
+              .from("evolutions")
+              .update({ embedding: vectorString } as any)
+              .eq("id", evo.id);
+          }
+        } catch (e) {
+          console.error(`[RAG-Index] Erro ao indexar evolução ${evo.id}:`, e);
+        }
+      }
+    }
+
+    // Gerar embedding para a consulta
+    const queryEmbedResponse = await ai.models.embedContent({
+      model: "text-embedding-004",
+      contents: query.trim(),
+    });
+
+    const queryEmbedding = (queryEmbedResponse as any).embedding;
+    if (!queryEmbedding?.values) {
+      throw new Error("Não foi possível gerar embeddings para a pergunta.");
+    }
+
+    const queryVector = queryEmbedding.values;
+    const queryVectorString = `[${queryVector.join(",")}]`;
+
+    // Buscar evoluções por similaridade vetorial via RPC match_evolutions
+    const { data: matchResults, error: matchError } = await supabaseAdmin
+      .rpc("match_evolutions", {
+        query_embedding: queryVectorString,
+        match_threshold: 0.35,
+        match_count: 5,
+        p_patient_id: patientId,
+        p_professional_id: req.user.id
+      });
+
+    if (matchError) {
+      console.error("Erro na busca vetorial match_evolutions:", matchError);
+      throw matchError;
+    }
+
+    // Se nenhum trecho corresponder
+    if (!matchResults || matchResults.length === 0) {
+      return res.json({
+        answer: "Não encontrei nenhuma informação relevante ou menções semelhantes nas evoluções gravadas deste paciente para a pergunta feita.",
+        sources: []
+      });
+    }
+
+    // Construir contexto textual para a IA
+    const contextText = matchResults
+      .map((evo: any, idx: number) => {
+        return `[Fonte ${idx + 1}]
+Data da sessão: ${evo.session_date || new Date(evo.created_at).toLocaleDateString("pt-BR")}
+Texto: ${evo.transcription_text.trim()}
+---`;
+      })
+      .join("\n\n");
+
+    const systemPrompt = `Você é um assistente de IA especializado em RAG Clínico (Geração Aumentada por Recuperação) para terapeutas.
+Sua tarefa é responder a perguntas do terapeuta sobre o histórico do paciente baseando-se EXCLUSIVAMENTE nas evoluções clínicas fornecidas no contexto abaixo.
+
+Informações importantes para a resposta:
+1. Responda de forma profissional, direta, acolhedora e precisa, com tom clínico.
+2. Cite explicitamente a data de cada sessão ao mencionar informações dela. Ex: "Na sessão de 15/05/2026, foi relatado que..." ou "...(sessão de 12/04/2026)."
+3. Se o contexto não contiver a resposta para a pergunta, diga honestamente que não encontrou referências exatas nas evoluções e resuma o que há de mais próximo ou relevante.
+4. Mantenha a resposta concisa e de leitura rápida para o terapeuta.
+5. Use formatação Markdown (negrito, listas, etc.) para estruturar a resposta de forma elegante.
+
+CONTEXTO DAS EVOLUÇÕES DO PACIENTE:
+${contextText}`;
+
+    // Chamar o modelo Gemini para sintetizar a resposta
+    console.log(`[RAG-Search] Sintetizando resposta para a pergunta: "${query}"...`);
+    const geminiResponse = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        { role: "user", parts: [{ text: query.trim() }] }
+      ],
+      config: {
+        systemInstruction: systemPrompt,
+        temperature: 0.2,
+      }
+    });
+
+    const answer = geminiResponse.text || "Não foi possível formular uma resposta.";
+
+    res.json({
+      answer,
+      sources: matchResults.map((evo: any) => ({
+        id: evo.id,
+        session_date: evo.session_date,
+        created_at: evo.created_at,
+        transcription_text: evo.transcription_text
+      }))
+    });
+
+  } catch (err: any) {
+    console.error("Erro na busca semântica RAG:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao realizar busca semântica." });
   }
 });
 
@@ -3231,8 +3503,6 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
 app.all(/^\/api\/.*$/, (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
 });
-
-// Error handling middleware to ensure JSON responses for API errors
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error("Express error:", err);
   if (req.path && req.path.startsWith('/api/')) {

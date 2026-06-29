@@ -129,6 +129,112 @@ export default function PatientDetail() {
   const [expandedEvoIds, setExpandedEvoIds] = useState<Record<string, boolean>>({});
   const [printSignatureInfo, setPrintSignatureInfo] = useState<any>(null);
 
+  // Estados para a busca semântica (RAG Clínico)
+  const [semanticQuery, setSemanticQuery] = useState('');
+  const [semanticLoading, setSemanticLoading] = useState(false);
+  const [semanticAnswer, setSemanticAnswer] = useState<string | null>(null);
+  const [semanticSources, setSemanticSources] = useState<any[]>([]);
+  const [indexingPending, setIndexingPending] = useState(false);
+  const [highlightedEvoId, setHighlightedEvoId] = useState<string | null>(null);
+
+  const handleSemanticSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!semanticQuery.trim() || !id) return;
+
+    setSemanticLoading(true);
+    setSemanticAnswer(null);
+    setSemanticSources([]);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error("Sessão expirada. Faça login novamente.");
+      }
+
+      const response = await fetch(`/api/patients/${id}/semantic-search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ query: semanticQuery.trim() })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao realizar a busca semântica.');
+      }
+
+      setSemanticAnswer(result.answer);
+      setSemanticSources(result.sources || []);
+      
+      // Recarregar dados para atualizar o estado local das evoluções (embeddings gerados sob demanda)
+      await fetchData();
+    } catch (error: any) {
+      console.error("Erro na busca semântica:", error);
+      alert("Erro na busca: " + (error.message || error));
+    } finally {
+      setSemanticLoading(false);
+    }
+  };
+
+  const handleManualIndex = async () => {
+    if (!id) return;
+    setIndexingPending(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      if (!token) {
+        throw new Error("Sessão expirada. Faça login novamente.");
+      }
+
+      const response = await fetch(`/api/patients/${id}/semantic-index`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao indexar evoluções.');
+      }
+
+      alert(result.message || 'Indexação concluída com sucesso!');
+      await fetchData();
+    } catch (error: any) {
+      console.error("Erro ao indexar evoluções:", error);
+      alert("Erro na indexação: " + (error.message || error));
+    } finally {
+      setIndexingPending(false);
+    }
+  };
+
+  const scrollToAndExpandEvolution = (evoId: string) => {
+    setExpandedEvoIds(prev => ({
+      ...prev,
+      [evoId]: true
+    }));
+    setHighlightedEvoId(evoId);
+
+    setTimeout(() => {
+      const element = document.getElementById(`evolution-card-${evoId}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 150);
+
+    setTimeout(() => {
+      setHighlightedEvoId(null);
+    }, 3000);
+  };
+
   const toggleEvoExpansion = (evoId: string) => {
     setExpandedEvoIds(prev => ({
       ...prev,
@@ -1301,7 +1407,194 @@ export default function PatientDetail() {
           </div>
         </div>
 
-        <div className="md:col-span-2">
+        <div className="md:col-span-2 space-y-6">
+          {/* Card de Busca Semântica (RAG Clínico) */}
+          <div className="card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+              <div className="flex items-center space-x-2 text-brand-primary">
+                <Sparkles size={22} className="text-brand-primary animate-pulse" />
+                <div>
+                  <h3 className="font-display font-semibold text-lg text-brand-text mb-0">Busca Semântica & RAG Clínico</h3>
+                  <p className="text-xs text-brand-text-muted">Consulte o prontuário e as evoluções clínicas usando linguagem natural</p>
+                </div>
+              </div>
+              
+              {/* Status de Indexação */}
+              {evolutions.length > 0 && (
+                <div className="text-right">
+                  <span className="text-[11px] bg-brand-primary/10 text-brand-primary font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit sm:ml-auto">
+                    <span className="w-1.5 h-1.5 bg-brand-primary rounded-full animate-ping" />
+                    <span>
+                      {(() => {
+                        const totalCompleted = evolutions.filter(e => e.transcription_status === 'completed').length;
+                        const indexedCount = evolutions.filter(e => e.transcription_status === 'completed' && e.embedding).length;
+                        const pendingCount = totalCompleted - indexedCount;
+                        return pendingCount === 0
+                          ? `Todas as ${indexedCount} evoluções prontas`
+                          : `${indexedCount} de ${totalCompleted} evoluções indexadas`;
+                      })()}
+                    </span>
+                  </span>
+                  {(() => {
+                    const totalCompleted = evolutions.filter(e => e.transcription_status === 'completed').length;
+                    const indexedCount = evolutions.filter(e => e.transcription_status === 'completed' && e.embedding).length;
+                    const pendingCount = totalCompleted - indexedCount;
+                    return pendingCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={handleManualIndex}
+                        disabled={indexingPending}
+                        className="text-[10px] text-brand-primary hover:underline font-medium mt-1 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        {indexingPending ? (
+                          <>
+                            <Loader2 size={10} className="animate-spin" />
+                            <span>Indexando...</span>
+                          </>
+                        ) : (
+                          <span>Indexar {pendingCount} pendentes agora</span>
+                        )}
+                      </button>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+            </div>
+
+            {evolutions.length === 0 ? (
+              <p className="text-xs text-brand-text-muted">Grave a primeira evolução para poder fazer buscas semânticas.</p>
+            ) : (
+              <form onSubmit={handleSemanticSearch} className="space-y-3">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={semanticQuery}
+                    onChange={(e) => setSemanticQuery(e.target.value)}
+                    placeholder='Tente: "Qual foi a última dosagem de Ritalina?" ou "Quando ele apresentou resistência ao contato visual?"'
+                    className="w-full pl-11 pr-24 py-3 bg-white/70 backdrop-blur-sm border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all shadow-sm placeholder:text-brand-text-muted/65"
+                  />
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-muted">
+                    <MessageCircle size={18} />
+                  </div>
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center space-x-1">
+                    {semanticQuery && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSemanticQuery('');
+                          setSemanticAnswer(null);
+                          setSemanticSources([]);
+                        }}
+                        className="p-1.5 text-brand-text-muted hover:text-brand-text rounded-lg hover:bg-brand-bg transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      disabled={semanticLoading || !semanticQuery.trim()}
+                      className="bg-brand-primary text-white px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-brand-primary-dark transition-colors shadow-sm disabled:opacity-50 flex items-center space-x-1 cursor-pointer"
+                    >
+                      {semanticLoading ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Buscando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={12} />
+                          <span>Perguntar</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* Resposta do RAG */}
+            {semanticLoading && (
+              <div className="mt-4 p-5 bg-white/50 backdrop-blur-sm border border-brand-border rounded-xl space-y-3 animate-pulse">
+                <div className="flex items-center space-x-2 text-brand-text-muted text-xs font-medium">
+                  <Loader2 size={14} className="animate-spin text-brand-primary" />
+                  <span>Consultando evoluções e analisando registros médicos...</span>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-brand-bg rounded w-3/4" />
+                  <div className="h-4 bg-brand-bg rounded w-5/6" />
+                  <div className="h-4 bg-brand-bg rounded w-2/3" />
+                </div>
+              </div>
+            )}
+
+            {semanticAnswer && !semanticLoading && (
+              <div className="mt-4 p-5 bg-white/90 backdrop-blur-sm border border-brand-border rounded-xl shadow-sm space-y-4">
+                <div className="border-b border-brand-border/60 pb-2.5 flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5 text-brand-primary">
+                    <Sparkles size={14} />
+                    <span className="text-xs font-bold uppercase tracking-wider">Resposta da IA</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(semanticAnswer || '');
+                      alert("Resposta copiada para a área de transferência!");
+                    }}
+                    className="text-brand-text-muted hover:text-brand-primary p-1 rounded hover:bg-brand-bg transition-colors flex items-center gap-1 text-[11px] font-medium cursor-pointer"
+                    title="Copiar resposta"
+                  >
+                    <Copy size={12} />
+                    <span>Copiar</span>
+                  </button>
+                </div>
+
+                <div 
+                  className="prose prose-sm text-sm text-brand-text leading-relaxed max-w-none"
+                  dangerouslySetInnerHTML={{ __html: parseMarkdown(semanticAnswer) }}
+                />
+
+                {/* Fontes/Referências */}
+                {semanticSources.length > 0 && (
+                  <div className="pt-3 border-t border-brand-border/60">
+                    <h4 className="text-[11px] font-bold text-brand-text-muted uppercase tracking-wider mb-2 flex items-center gap-1">
+                      <Clock size={12} />
+                      <span>Trechos Relevantes das Evoluções</span>
+                    </h4>
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {semanticSources.map((source) => (
+                        <div 
+                          key={source.id} 
+                          className="bg-brand-bg/40 hover:bg-brand-bg/80 border border-brand-border/40 hover:border-brand-primary/20 rounded-xl p-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all duration-200"
+                        >
+                          <div className="space-y-1 max-w-[82%]">
+                            <div className="flex items-center space-x-2">
+                              <span className="text-[11px] font-semibold text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full">
+                                Sessão: {source.session_date || new Date(source.created_at).toLocaleDateString('pt-BR')}
+                              </span>
+                            </div>
+                            <p className="text-xs text-brand-text-muted italic line-clamp-2">
+                              "{source.transcription_text}"
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => scrollToAndExpandEvolution(source.id)}
+                            className="text-xs font-semibold text-brand-primary hover:text-brand-primary-dark transition-colors inline-flex items-center gap-1 shrink-0 self-end sm:self-auto cursor-pointer"
+                          >
+                            <span>Ver Sessão</span>
+                            <ExternalLink size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="card">
             <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
               <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
@@ -1350,7 +1643,11 @@ export default function PatientDetail() {
                 </div>
               ) : (
                 evolutions.map((evo) => (
-                  <div key={evo.id} className="p-6 hover:bg-brand-bg transition-colors">
+                  <div 
+                    key={evo.id} 
+                    id={`evolution-card-${evo.id}`}
+                    className={`p-6 hover:bg-brand-bg transition-all duration-500 ${highlightedEvoId === evo.id ? 'bg-amber-50 ring-2 ring-brand-primary/40 border-brand-primary/30 shadow-sm rounded-xl' : ''}`}
+                  >
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
                         <Clock size={16} className="text-brand-text-muted" />
