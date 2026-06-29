@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
@@ -126,6 +126,7 @@ export default function PatientDetail() {
   const [savingEvolutionId, setSavingEvolutionId] = useState<string | null>(null);
   const [signingEvolutionId, setSigningEvolutionId] = useState<string | null>(null);
   const [expandedEvoIds, setExpandedEvoIds] = useState<Record<string, boolean>>({});
+  const [printSignatureInfo, setPrintSignatureInfo] = useState<any>(null);
 
   const toggleEvoExpansion = (evoId: string) => {
     setExpandedEvoIds(prev => ({
@@ -196,6 +197,7 @@ export default function PatientDetail() {
   };
 
   const handlePrintReport = (content: string, periodLabel: string, type: 'evolution_report' | 'pdi_draft') => {
+    setPrintSignatureInfo(null);
     setPrintMode('report');
     setPrintContent(content);
     setPrintPeriodLabel(periodLabel);
@@ -206,6 +208,7 @@ export default function PatientDetail() {
   };
 
   const handlePrintProntuario = async () => {
+    setPrintSignatureInfo(null);
     if (!patient?.google_doc_id) {
       alert("Nenhum prontuário do Google Docs vinculado a este paciente.");
       return;
@@ -251,6 +254,20 @@ export default function PatientDetail() {
     setPrintDocType('Evolução Clínica');
     setPrintPeriodLabel('');
     setProntuarioDocContent(`Data da evolução: ${formatDateTime(evo.created_at)}\n\n${evolutionText}`);
+    
+    if (evo.status === 'signed') {
+      setPrintSignatureInfo({
+        method: evo.signature_method,
+        date: evo.signature_date,
+        ip: evo.signature_ip,
+        hash: evo.signature_hash,
+        name: evo.signed_by_name,
+        register: evo.signed_by_register
+      });
+    } else {
+      setPrintSignatureInfo(null);
+    }
+
     setTimeout(() => {
       window.print();
     }, 200);
@@ -1284,6 +1301,17 @@ export default function PatientDetail() {
                       </div>
                       
                       <div className="flex items-center gap-2">
+                        {evo.status === 'signed' && (
+                          <button
+                            type="button"
+                            onClick={() => handlePrintEvolution(evo)}
+                            className="btn-outline h-8 px-2 flex items-center gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 cursor-pointer text-xs font-semibold rounded-xl"
+                            title="Baixar PDF do Prontuário Assinado"
+                          >
+                            <Download size={13} />
+                            <span>Baixar PDF</span>
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => handlePrintEvolution(evo)}
@@ -2355,20 +2383,38 @@ export default function PatientDetail() {
         )}
 
         {/* Assinatura / Rodapé */}
-        <div className="mt-16 pt-6 border-t border-stone-200 text-center space-y-2" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-          <div className="inline-block border-t border-stone-400 w-64 pt-1.5 text-xs text-stone-600">
-            Assinatura do Profissional
+        {printSignatureInfo ? (
+          <div className="mt-12 pt-4 border-t-2 border-dashed border-emerald-300 bg-emerald-50/50 p-4 rounded-xl text-xs space-y-2 text-stone-800" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+            <div className="flex items-center space-x-2 text-emerald-700 font-bold">
+              <Shield size={14} className="text-emerald-600" />
+              <span>DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[10px] text-stone-600">
+              <div><strong>Assinado por:</strong> {printSignatureInfo.name} ({printSignatureInfo.register})</div>
+              <div><strong>Data/Hora da Assinatura:</strong> {formatDateTime(printSignatureInfo.date)}</div>
+              <div><strong>Endereço IP:</strong> {printSignatureInfo.ip}</div>
+              <div><strong>Algoritmo:</strong> SHA-256</div>
+              <div className="col-span-2 font-mono break-all text-[9px] bg-white p-2 border border-emerald-100 rounded">
+                <strong>Hash de Integridade (Assinatura):</strong> {printSignatureInfo.hash}
+              </div>
+            </div>
           </div>
-          <p className="text-xs font-bold text-stone-800">{professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</p>
-          {professional?.professional_register && (
-            <p className="text-[10px] text-stone-500">
-              {professional.professional_title || 'Terapeuta'} | {professional.professional_register}
+        ) : (
+          <div className="mt-16 pt-6 border-t border-stone-200 text-center space-y-2" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+            <div className="inline-block border-t border-stone-400 w-64 pt-1.5 text-xs text-stone-600">
+              Assinatura do Profissional
+            </div>
+            <p className="text-xs font-bold text-stone-800">{professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</p>
+            {professional?.professional_register && (
+              <p className="text-[10px] text-stone-500">
+                {professional.professional_title || 'Terapeuta'} | {professional.professional_register}
+              </p>
+            )}
+            <p className="text-[9px] text-stone-400 mt-2">
+              Documento gerado e emitido via plataforma digital Evolução Clínica em {new Date().toLocaleDateString('pt-BR')}.
             </p>
-          )}
-          <p className="text-[9px] text-stone-400 mt-2">
-            Documento gerado e emitido via plataforma digital Evolução Clínica em {new Date().toLocaleDateString('pt-BR')}.
-          </p>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
