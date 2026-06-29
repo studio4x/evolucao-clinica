@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download } from 'lucide-react';
@@ -197,6 +198,11 @@ export default function PatientDetail() {
   };
 
   const handlePrintReport = (content: string, periodLabel: string, type: 'evolution_report' | 'pdi_draft') => {
+    const originalTitle = document.title;
+    const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+    const docLabel = type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
+    document.title = `${docLabel}_${cleanPatientName}`;
+
     setPrintSignatureInfo(null);
     setPrintMode('report');
     setPrintContent(content);
@@ -204,6 +210,7 @@ export default function PatientDetail() {
     setPrintDocType(type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)');
     setTimeout(() => {
       window.print();
+      document.title = originalTitle;
     }, 200);
   };
 
@@ -225,6 +232,10 @@ export default function PatientDetail() {
     }
 
     setPrintingProntuario(true);
+    const originalTitle = document.title;
+    const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+    document.title = `Prontuario_Evolucoes_${cleanPatientName}`;
+
     try {
       const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
       setProntuarioDocContent(content);
@@ -233,11 +244,13 @@ export default function PatientDetail() {
       setPrintPeriodLabel('');
       setTimeout(() => {
         window.print();
+        document.title = originalTitle;
         setPrintingProntuario(false);
       }, 300);
     } catch (err: any) {
       console.error("Erro ao carregar prontuário do Google Docs:", err);
       alert("Erro ao ler prontuário do Google Docs: " + (err.message || err));
+      document.title = originalTitle;
       setPrintingProntuario(false);
     }
   };
@@ -249,6 +262,11 @@ export default function PatientDetail() {
       alert('Esta evolução não possui conteúdo para impressão.');
       return;
     }
+
+    const originalTitle = document.title;
+    const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+    const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+    document.title = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}`;
 
     setPrintMode('prontuario');
     setPrintDocType('Evolução Clínica');
@@ -270,6 +288,7 @@ export default function PatientDetail() {
 
     setTimeout(() => {
       window.print();
+      document.title = originalTitle;
     }, 200);
   };
 
@@ -2338,84 +2357,87 @@ export default function PatientDetail() {
 
 
       {/* Área de Impressão Oculta na Tela, Visível na Impressão */}
-      <div id="print-area" className="hidden print:block font-sans bg-white text-stone-900 leading-relaxed max-w-[800px] mx-auto">
-        {/* Cabecalho Timbrado */}
-        <div className="border-b-2 border-brand-primary pb-4 mb-6 flex justify-between items-end">
-          <div>
-            <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider mb-1">Evolução Clínica</h1>
-            <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
-          </div>
-          <div className="text-right text-[10px] text-brand-text-muted">
-            <p>Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
-          </div>
-        </div>
-
-        {/* Identificacao do Relatório / Prontuário */}
-        <div className="mb-6 bg-stone-50 p-4 rounded-xl border border-stone-200">
-          <h2 className="text-xs font-bold text-brand-primary uppercase tracking-wider border-b border-stone-200 pb-1.5 mb-2.5">
-            {printDocType || 'Documento Clínico'}
-          </h2>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-stone-800 font-sans">
-            <div><strong className="text-stone-600 font-semibold">Paciente:</strong> {patient?.full_name}</div>
-            <div><strong className="text-stone-600 font-semibold">Profissional:</strong> {professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</div>
-            {professional?.professional_title && (
-              <div><strong className="text-stone-600 font-semibold">Título Profissional:</strong> {professional.professional_title}</div>
-            )}
-            {professional?.professional_register && (
-              <div><strong className="text-stone-600 font-semibold">Registro Profissional:</strong> {professional.professional_register}</div>
-            )}
-            {printPeriodLabel && (
-              <div className="col-span-2"><strong className="text-stone-600 font-semibold">Período de Análise:</strong> {printPeriodLabel}</div>
-            )}
-          </div>
-        </div>
-
-        {/* Conteudo Dinâmico conforme printMode */}
-        {printMode === 'report' ? (
-          <div
-            className="report-content print-report-content text-sm text-stone-800"
-            dangerouslySetInnerHTML={{ __html: parseMarkdown(printContent) }}
-          />
-        ) : (
-          <div className="whitespace-pre-wrap font-sans text-sm text-stone-800 leading-relaxed">
-            {prontuarioDocContent || <span className="italic text-stone-400">Nenhum registro encontrado no documento do Google Docs.</span>}
-          </div>
-        )}
-
-        {/* Assinatura / Rodapé */}
-        {printSignatureInfo ? (
-          <div className="mt-12 pt-4 border-t-2 border-dashed border-emerald-300 bg-emerald-50/50 p-4 rounded-xl text-xs space-y-2 text-stone-800" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-            <div className="flex items-center space-x-2 text-emerald-700 font-bold">
-              <Shield size={14} className="text-emerald-600" />
-              <span>DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO</span>
+      {createPortal(
+        <div id="print-area" className="hidden print:block font-sans bg-white text-stone-900 leading-relaxed max-w-[800px] mx-auto">
+          {/* Cabecalho Timbrado */}
+          <div className="border-b-2 border-brand-primary pb-4 mb-6 flex justify-between items-end">
+            <div>
+              <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider mb-1">Evolução Clínica</h1>
+              <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-[10px] text-stone-600">
-              <div><strong>Assinado por:</strong> {printSignatureInfo.name} ({printSignatureInfo.register})</div>
-              <div><strong>Data/Hora da Assinatura:</strong> {formatDateTime(printSignatureInfo.date)}</div>
-              <div><strong>Endereço IP:</strong> {printSignatureInfo.ip}</div>
-              <div><strong>Algoritmo:</strong> SHA-256</div>
-              <div className="col-span-2 font-mono break-all text-[9px] bg-white p-2 border border-emerald-100 rounded">
-                <strong>Hash de Integridade (Assinatura):</strong> {printSignatureInfo.hash}
+            <div className="text-right text-[10px] text-brand-text-muted">
+              <p>Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
+            </div>
+          </div>
+
+          {/* Identificacao do Relatório / Prontuário */}
+          <div className="mb-6 bg-stone-50 p-4 rounded-xl border border-stone-200">
+            <h2 className="text-xs font-bold text-brand-primary uppercase tracking-wider border-b border-stone-200 pb-1.5 mb-2.5">
+              {printDocType || 'Documento Clínico'}
+            </h2>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs text-stone-800 font-sans">
+              <div><strong className="text-stone-600 font-semibold">Paciente:</strong> {patient?.full_name}</div>
+              <div><strong className="text-stone-600 font-semibold">Profissional:</strong> {professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</div>
+              {professional?.professional_title && (
+                <div><strong className="text-stone-600 font-semibold">Título Profissional:</strong> {professional.professional_title}</div>
+              )}
+              {professional?.professional_register && (
+                <div><strong className="text-stone-600 font-semibold">Registro Profissional:</strong> {professional.professional_register}</div>
+              )}
+              {printPeriodLabel && (
+                <div className="col-span-2"><strong className="text-stone-600 font-semibold">Período de Análise:</strong> {printPeriodLabel}</div>
+              )}
+            </div>
+          </div>
+
+          {/* Conteudo Dinâmico conforme printMode */}
+          {printMode === 'report' ? (
+            <div
+              className="report-content print-report-content text-sm text-stone-800"
+              dangerouslySetInnerHTML={{ __html: parseMarkdown(printContent) }}
+            />
+          ) : (
+            <div className="whitespace-pre-wrap font-sans text-sm text-stone-800 leading-relaxed">
+              {prontuarioDocContent || <span className="italic text-stone-400">Nenhum registro encontrado no documento do Google Docs.</span>}
+            </div>
+          )}
+
+          {/* Assinatura / Rodapé */}
+          {printSignatureInfo ? (
+            <div className="mt-12 pt-4 border-t-2 border-dashed border-emerald-300 bg-emerald-50/50 p-4 rounded-xl text-xs space-y-2 text-stone-800" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+              <div className="flex items-center space-x-2 text-emerald-700 font-bold">
+                <Shield size={14} className="text-emerald-600" />
+                <span>DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[10px] text-stone-600">
+                <div><strong>Assinado por:</strong> {printSignatureInfo.name} ({printSignatureInfo.register})</div>
+                <div><strong>Data/Hora da Assinatura:</strong> {formatDateTime(printSignatureInfo.date)}</div>
+                <div><strong>Endereço IP:</strong> {printSignatureInfo.ip}</div>
+                <div><strong>Algoritmo:</strong> SHA-256</div>
+                <div className="col-span-2 font-mono break-all text-[9px] bg-white p-2 border border-emerald-100 rounded">
+                  <strong>Hash de Integridade (Assinatura):</strong> {printSignatureInfo.hash}
+                </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="mt-16 pt-6 border-t border-stone-200 text-center space-y-2" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-            <div className="inline-block border-t border-stone-400 w-64 pt-1.5 text-xs text-stone-600">
-              Assinatura do Profissional
-            </div>
-            <p className="text-xs font-bold text-stone-800">{professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</p>
-            {professional?.professional_register && (
-              <p className="text-[10px] text-stone-500">
-                {professional.professional_title || 'Terapeuta'} | {professional.professional_register}
+          ) : (
+            <div className="mt-16 pt-6 border-t border-stone-200 text-center space-y-2" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+              <div className="inline-block border-t border-stone-400 w-64 pt-1.5 text-xs text-stone-600">
+                Assinatura do Profissional
+              </div>
+              <p className="text-xs font-bold text-stone-800">{professional?.full_name || user?.user_metadata?.full_name || 'Profissional'}</p>
+              {professional?.professional_register && (
+                <p className="text-[10px] text-stone-500">
+                  {professional.professional_title || 'Terapeuta'} | {professional.professional_register}
+                </p>
+              )}
+              <p className="text-[9px] text-stone-400 mt-2">
+                Documento gerado e emitido via plataforma digital Evolução Clínica em {new Date().toLocaleDateString('pt-BR')}.
               </p>
-            )}
-            <p className="text-[9px] text-stone-400 mt-2">
-              Documento gerado e emitido via plataforma digital Evolução Clínica em {new Date().toLocaleDateString('pt-BR')}.
-            </p>
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
