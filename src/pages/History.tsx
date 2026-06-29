@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User, Shield } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
@@ -339,6 +339,16 @@ export default function History() {
                       <div className="flex items-center space-x-2 mb-1">
                         <Clock size={16} className="text-brand-text-muted" />
                         <span className="font-medium text-brand-text text-sm">{formatDateTime(evo.created_at)}</span>
+                        {evo.status === 'signed' ? (
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                            <Shield size={10} />
+                            <span>Assinado</span>
+                          </span>
+                        ) : (
+                          <span className="text-[10px] bg-amber-100 text-amber-800 font-semibold px-2 py-0.5 rounded-full">
+                            Rascunho
+                          </span>
+                        )}
                       </div>
                       <Link to={`/painel/patients/${evo.patient_id}`} className="text-brand-primary hover:text-brand-primary-hover hover:underline font-semibold text-lg">
                         {patient?.full_name || 'Paciente Desconhecido'}
@@ -368,8 +378,14 @@ export default function History() {
                   </div>
                   
                   {evo.transcription_text && (
-                    <div className="mt-4 text-sm text-brand-text-muted bg-brand-bg p-4 rounded-xl border border-brand-border">
+                    <div className="mt-4 text-sm text-brand-text-muted bg-brand-bg p-4 rounded-xl border border-brand-border space-y-2">
                       <p className="line-clamp-2">{evo.transcription_text}</p>
+                      {evo.status === 'signed' && (
+                        <div className="text-[10px] text-emerald-700 flex items-center space-x-1.5 pt-2 border-t border-emerald-100/50">
+                          <Shield size={12} className="text-emerald-500 shrink-0" />
+                          <span>Assinado Digitalmente ({evo.signature_method === 'govbr' ? 'Gov.br' : 'Chave do App'}) em {formatDateTime(evo.signature_date)}</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
