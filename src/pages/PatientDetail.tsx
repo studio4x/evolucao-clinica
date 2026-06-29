@@ -124,15 +124,7 @@ export default function PatientDetail() {
   const [editingEvolutionId, setEditingEvolutionId] = useState<string | null>(null);
   const [editingEvolutionText, setEditingEvolutionText] = useState('');
   const [savingEvolutionId, setSavingEvolutionId] = useState<string | null>(null);
-  
-  const [showSignModal, setShowSignModal] = useState(false);
-  const [signingEvolution, setSigningEvolution] = useState<any | null>(null);
-  const [signMethod, setSignMethod] = useState<'govbr' | 'app_key' | null>(null);
-  const [showGovBrAuthSim, setShowGovBrAuthSim] = useState(false);
-  const [govBrCpf, setGovBrCpf] = useState('');
-  const [govBrCode, setGovBrCode] = useState('');
-  const [govBrStep, setGovBrStep] = useState<1 | 2>(1);
-  const [signingProgress, setSigningProgress] = useState(false);
+  const [signingEvolutionId, setSigningEvolutionId] = useState<string | null>(null);
 
   const handleSaveEditedEvolution = async (evoId: string) => {
     if (!editingEvolutionText.trim()) {
@@ -163,66 +155,35 @@ export default function PatientDetail() {
     }
   };
 
-  const generateHash = async (message: string) => {
-    const msgBuffer = new TextEncoder().encode(message);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    return hashHex;
-  };
-
-  const handleSignEvolution = async (evo: any, method: 'govbr' | 'app_key', cpf?: string) => {
-    setSigningProgress(true);
+  const handleSignEvolutionDirectly = async (evoId: string) => {
+    if (!window.confirm("Deseja assinar e fechar esta evolução? Após assinar, ela se tornará imutável para fins de conformidade legal e não poderá mais ser alterada ou excluída.")) {
+      return;
+    }
+    setSigningEvolutionId(evoId);
     try {
-      let ip = '127.0.0.1';
-      try {
-        const ipRes = await fetch('https://api.ipify.org?format=json');
-        const ipData = await ipRes.json();
-        ip = ipData.ip || '127.0.0.1';
-      } catch (e) {
-        console.warn("Could not fetch IP, using fallback", e);
-      }
-
-      const profName = professional?.full_name || user?.email || 'Profissional de Saúde';
-      const profReg = professional?.professional_register || 'Registro não informado';
-      const signatureDate = new Date().toISOString();
-      
-      const contentToHash = `${evo.id}|${evo.transcription_text}|${signatureDate}|${ip}|${profName}|${profReg}`;
-      const hash = await generateHash(contentToHash);
-
       const { error } = await supabase
         .from('evolutions')
         .update({
-          status: 'signed',
-          signature_method: method,
-          signature_date: signatureDate,
-          signature_ip: ip,
-          signature_hash: hash,
-          signed_by_name: profName,
-          signed_by_register: profReg
+          status: 'signed'
         })
-        .eq('id', evo.id);
+        .eq('id', evoId);
 
       if (error) throw error;
 
       void sendNotification({
         title: "🔒 Evolução Assinada Digitalmente",
-        content: `A evolução do paciente ${patient?.full_name} foi assinada via ${method === 'govbr' ? 'Gov.br' : 'Chave do App'} e está protegida retroativamente.`,
+        content: `A evolução do paciente ${patient?.full_name} foi fechada e assinada com segurança no servidor.`,
         type: "success",
         link: `/painel/patients/${patient?.id}`
       });
 
-      alert(`Evolução assinada com sucesso com validade jurídica!`);
-      setShowSignModal(false);
-      setShowGovBrAuthSim(false);
-      setSigningEvolution(null);
-      setSignMethod(null);
+      alert(`Evolução assinada com sucesso!`);
       await fetchData();
     } catch (error: any) {
       console.error("Erro ao assinar evolução:", error);
       alert("Erro ao assinar evolução: " + (error.message || error));
     } finally {
-      setSigningProgress(false);
+      setSigningEvolutionId(null);
     }
   };
 
@@ -1418,13 +1379,15 @@ export default function PatientDetail() {
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setSigningEvolution(evo);
-                                    setShowSignModal(true);
-                                  }}
+                                  onClick={() => handleSignEvolutionDirectly(evo.id)}
+                                  disabled={signingEvolutionId === evo.id}
                                   className="btn-primary py-1 px-2.5 text-[11px] flex items-center space-x-1 cursor-pointer bg-brand-primary hover:bg-brand-primary/95 text-white"
                                 >
-                                  <Shield size={11} />
+                                  {signingEvolutionId === evo.id ? (
+                                    <Loader2 size={11} className="animate-spin" />
+                                  ) : (
+                                    <Shield size={11} />
+                                  )}
                                   <span>Assinar e Fechar</span>
                                 </button>
                               </div>
@@ -2325,172 +2288,7 @@ export default function PatientDetail() {
         </div>
       )}
 
-      {/* Modal de Escolha do Método de Assinatura */}
-      {showSignModal && signingEvolution && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col border border-brand-border">
-            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50 rounded-t-2xl">
-              <div className="flex items-center space-x-2 text-brand-primary">
-                <Shield size={20} className="text-brand-primary" />
-                <h3 className="text-lg font-display font-semibold text-brand-primary mb-0">
-                  Assinatura Digital e Fechamento
-                </h3>
-              </div>
-              <button 
-                onClick={() => {
-                  setShowSignModal(false);
-                  setSigningEvolution(null);
-                }}
-                className="text-gray-400 hover:text-gray-600 cursor-pointer p-1"
-              >
-                <X size={20} />
-              </button>
-            </div>
 
-            <div className="p-6 space-y-6">
-              <div className="bg-brand-primary/5 border border-brand-primary/10 rounded-xl p-4 text-xs text-brand-text-muted leading-relaxed">
-                <p className="font-semibold text-brand-primary mb-1">⚖️ Atenção Profissional:</p>
-                Ao assinar e fechar esta evolução, o status mudará para <span className="font-semibold text-emerald-600">Assinado (signed)</span>.
-                Ela se tornará imutável (somente leitura) para garantir validade jurídica completa perante os conselhos e auditorias de saúde.
-              </div>
-
-              <div className="space-y-4">
-                <button
-                  onClick={() => {
-                    setGovBrStep(1);
-                    setGovBrCpf('');
-                    setGovBrCode('');
-                    setShowGovBrAuthSim(true);
-                  }}
-                  className="w-full flex items-center justify-between p-4 border border-brand-primary/20 hover:border-brand-primary hover:bg-brand-primary/5 rounded-xl transition-all text-left cursor-pointer group animate-pulse"
-                >
-                  <div className="space-y-1 pr-4">
-                    <div className="flex items-center space-x-2">
-                      <span className="bg-blue-600 text-white font-extrabold text-[10px] px-1.5 py-0.5 rounded">gov.br</span>
-                      <p className="text-sm font-semibold text-brand-text">Assinatura Eletrônica Gov.br</p>
-                    </div>
-                    <p className="text-xs text-brand-text-muted">Acesso e autenticação segura com sua conta Gov.br. Gratuito e com validade ICP-Brasil.</p>
-                  </div>
-                  <span className="text-brand-primary font-medium text-xs shrink-0 group-hover:translate-x-1 transition-transform">→</span>
-                </button>
-
-                <button
-                  onClick={() => handleSignEvolution(signingEvolution, 'app_key')}
-                  disabled={signingProgress}
-                  className="w-full flex items-center justify-between p-4 border border-brand-border hover:border-brand-primary hover:bg-brand-primary/5 rounded-xl transition-all text-left cursor-pointer group"
-                >
-                  <div className="space-y-1 pr-4">
-                    <div className="flex items-center space-x-2">
-                      <Shield size={14} className="text-brand-primary" />
-                      <p className="text-sm font-semibold text-brand-text">Chave Interna do Aplicativo</p>
-                    </div>
-                    <p className="text-xs text-brand-text-muted">Assinatura local com carimbo de tempo do servidor, identificação do profissional e registro de IP.</p>
-                  </div>
-                  <span className="text-brand-primary font-medium text-xs shrink-0 group-hover:translate-x-1 transition-transform">→</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Simulação Gov.br */}
-      {showGovBrAuthSim && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full flex flex-col border border-brand-border">
-            <div className="bg-[#004a92] text-white px-6 py-4 rounded-t-2xl flex justify-between items-center">
-              <div className="flex items-center space-x-2">
-                <span className="bg-white text-[#004a92] font-black text-xs px-2 py-0.5 rounded">gov.br</span>
-                <span className="font-semibold text-sm">Assinatura Digital</span>
-              </div>
-              <button 
-                onClick={() => setShowGovBrAuthSim(false)}
-                className="text-white hover:text-gray-200 cursor-pointer p-1"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {govBrStep === 1 ? (
-                <>
-                  <p className="text-sm text-brand-text font-medium">Identifique-se no gov.br:</p>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">CPF</label>
-                      <input
-                        type="text"
-                        value={govBrCpf}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          if (val.length <= 11) {
-                            setGovBrCpf(val.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") || val);
-                          }
-                        }}
-                        placeholder="000.000.000-00"
-                        className="w-full p-2.5 text-sm border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary"
-                      />
-                    </div>
-                    <button
-                      onClick={() => {
-                        const cleanCpf = govBrCpf.replace(/\D/g, '');
-                        if (cleanCpf.length !== 11) {
-                          alert("Por favor, digite um CPF válido.");
-                          return;
-                        }
-                        setGovBrStep(2);
-                      }}
-                      className="w-full bg-[#004a92] hover:bg-[#003b75] text-white text-sm font-semibold py-2 px-4 rounded-lg cursor-pointer text-center"
-                    >
-                      Avançar
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="space-y-1 bg-blue-50 text-blue-900 border border-blue-100 p-3 rounded-lg text-xs leading-relaxed">
-                    <p className="font-semibold">Código Enviado!</p>
-                    Um código de verificação de 6 dígitos foi enviado via SMS e notificação no app Gov.br do CPF <span className="font-semibold">{govBrCpf}</span>.
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs text-brand-text-muted mb-1">Código de Confirmação</label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        value={govBrCode}
-                        onChange={(e) => setGovBrCode(e.target.value.replace(/\D/g, ''))}
-                        placeholder="123456"
-                        className="w-full p-2.5 text-sm border border-brand-border rounded-lg focus:outline-none focus:border-brand-primary text-center tracking-widest font-mono text-lg"
-                      />
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (govBrCode.length !== 6) {
-                          alert("Digite o código de 6 dígitos.");
-                          return;
-                        }
-                        void handleSignEvolution(signingEvolution, 'govbr', govBrCpf);
-                      }}
-                      disabled={signingProgress}
-                      className="w-full bg-[#004a92] hover:bg-[#003b75] text-white text-sm font-semibold py-2.5 px-4 rounded-lg cursor-pointer flex items-center justify-center space-x-2"
-                    >
-                      {signingProgress && <Loader2 size={16} className="animate-spin" />}
-                      <span>Assinar Documento</span>
-                    </button>
-                    <button
-                      onClick={() => setGovBrStep(1)}
-                      className="w-full text-center text-xs text-[#004a92] hover:underline cursor-pointer"
-                    >
-                      Voltar
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Área de Impressão Oculta na Tela, Visível na Impressão */}
       <div id="print-area" className="hidden print:block font-sans bg-white text-stone-900 leading-relaxed max-w-[800px] mx-auto">
