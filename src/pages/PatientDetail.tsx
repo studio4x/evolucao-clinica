@@ -931,27 +931,51 @@ export default function PatientDetail() {
     const primaryRgb = hexToRgb(siteConfig.colors?.primary || '#005C13') || { r: 0, g: 92, b: 19 };
 
     // Cabecalho Timbrado
+    let taglineX = margin;
+    const appName = siteConfig.pwa_app_name || "Evolução Clínica";
+
     if (logoBase64) {
+      // Garantir fundo branco sob o logo
+      doc.setFillColor(255, 255, 255);
+      doc.rect(margin, 11, 40, 14, 'F');
+      
       try {
-        doc.addImage(logoBase64, 'PNG', margin, 12, 40, 14, undefined, 'FAST');
+        doc.addImage(logoBase64, 'PNG', margin, 11, 40, 14, undefined, 'FAST');
       } catch (err) {
         console.error("Error drawing logo in PDF:", err);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(18);
         doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
-        doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+        doc.text(appName, margin, 20);
       }
+      
+      // Linha divisória vertical
+      doc.setDrawColor(200, 195, 190); // stone-300
+      doc.setLineWidth(0.25);
+      doc.line(margin + 44, 11, margin + 44, 25);
+      
+      taglineX = margin + 48;
     } else {
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
       doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
-      doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+      doc.text(appName, margin, 20);
+      
+      const appNameWidth = doc.getTextWidth(appName);
+      
+      // Linha divisória vertical
+      doc.setDrawColor(200, 195, 190); // stone-300
+      doc.setLineWidth(0.25);
+      doc.line(margin + appNameWidth + 5, 11, margin + appNameWidth + 5, 25);
+      
+      taglineX = margin + appNameWidth + 9;
     }
 
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(87, 83, 78); // Brand text-muted
-    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", margin, 25);
+    // Tagline na mesma linha com tipografia atrativa (Times Italic)
+    doc.setFont('Times', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(120, 113, 108); // text-stone-500
+    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", taglineX, 19);
 
     doc.setDrawColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     doc.setLineWidth(0.5);
@@ -1167,27 +1191,51 @@ export default function PatientDetail() {
     const primaryRgb = hexToRgb(siteConfig.colors?.primary || '#005C13') || { r: 0, g: 92, b: 19 };
 
     // Cabecalho Timbrado
+    let taglineX = margin;
+    const appName = siteConfig.pwa_app_name || "Evolução Clínica";
+
     if (logoBase64) {
+      // Garantir fundo branco sob o logo
+      doc.setFillColor(255, 255, 255);
+      doc.rect(margin, 11, 40, 14, 'F');
+      
       try {
-        doc.addImage(logoBase64, 'PNG', margin, 12, 40, 14, undefined, 'FAST');
+        doc.addImage(logoBase64, 'PNG', margin, 11, 40, 14, undefined, 'FAST');
       } catch (err) {
         console.error("Error drawing logo in PDF:", err);
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(18);
         doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
-        doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+        doc.text(appName, margin, 20);
       }
+      
+      // Linha divisória vertical
+      doc.setDrawColor(200, 195, 190); // stone-300
+      doc.setLineWidth(0.25);
+      doc.line(margin + 44, 11, margin + 44, 25);
+      
+      taglineX = margin + 48;
     } else {
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
       doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
-      doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+      doc.text(appName, margin, 20);
+      
+      const appNameWidth = doc.getTextWidth(appName);
+      
+      // Linha divisória vertical
+      doc.setDrawColor(200, 195, 190); // stone-300
+      doc.setLineWidth(0.25);
+      doc.line(margin + appNameWidth + 5, 11, margin + appNameWidth + 5, 25);
+      
+      taglineX = margin + appNameWidth + 9;
     }
 
-    doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(87, 83, 78); // Brand text-muted
-    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", margin, 25);
+    // Tagline na mesma linha com tipografia atrativa (Times Italic)
+    doc.setFont('Times', 'italic');
+    doc.setFontSize(8.5);
+    doc.setTextColor(120, 113, 108); // text-stone-500
+    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", taglineX, 19);
 
     doc.setDrawColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     doc.setLineWidth(0.5);
@@ -3337,18 +3385,20 @@ export default function PatientDetail() {
       {createPortal(
         <div id="print-area" className="hidden print:block font-sans bg-white text-stone-900 leading-relaxed max-w-[800px] mx-auto">
           {/* Cabecalho Timbrado */}
-          <div className="border-b-2 border-brand-primary pb-4 mb-6 flex justify-between items-end">
-            <div>
+          <div className="border-b-2 border-brand-primary pb-4 mb-6 flex justify-between items-center">
+            <div className="flex items-center gap-4">
               {siteConfig.logo_light_url ? (
-                <img src={siteConfig.logo_light_url} alt="Logo" className="h-10 object-contain mb-1" />
+                <div className="bg-white p-1 rounded border border-stone-100 flex items-center justify-center">
+                  <img src={siteConfig.logo_light_url} alt="Logo" className="h-10 object-contain bg-white" style={{ backgroundColor: '#ffffff' }} />
+                </div>
               ) : (
-                <>
-                  <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider mb-1">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>
-                  <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
-                </>
+                <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider leading-none">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>
               )}
+              <span className="text-xs text-stone-500 italic border-l border-stone-300 pl-4 font-serif tracking-wide leading-none py-1.5">
+                Plataforma Inteligente de Acompanhamento Terapêutico
+              </span>
             </div>
-            <div className="text-right text-[10px] text-brand-text-muted">
+            <div className="text-right text-[10px] text-brand-text-muted shrink-0">
               <p>Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
             </div>
           </div>
