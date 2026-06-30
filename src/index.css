@@ -54,6 +54,10 @@
 
 /* Estilos de Impressão Limpa */
 @media print {
+  @page {
+    margin: 2cm 2cm 2cm 3cm !important;
+  }
+
   /* Oculta completamente o root do React e elementos extras para evitar páginas vazias */
   #root, .no-print {
     display: none !important;
@@ -76,7 +80,7 @@
     top: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 24px !important;
+    padding: 0 !important;
     background: white !important;
     color: #1c1917 !important;
   }

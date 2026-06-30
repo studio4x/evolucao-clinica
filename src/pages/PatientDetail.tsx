@@ -925,8 +925,8 @@ export default function PatientDetail() {
     });
 
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 20;
-    const contentWidth = pageWidth - (2 * margin);
+    const margin = 30; // 3cm Margem Esquerda
+    const contentWidth = pageWidth - margin - 20; // 2cm Margem Direita
 
     const primaryRgb = hexToRgb(siteConfig.colors?.primary || '#005C13') || { r: 0, g: 92, b: 19 };
 
@@ -955,7 +955,7 @@ export default function PatientDetail() {
 
     doc.setDrawColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     doc.setLineWidth(0.5);
-    doc.line(margin, 28, pageWidth - margin, 28);
+    doc.line(margin, 28, pageWidth - 20, 28);
 
     // Identificação do Documento
     doc.setFontSize(12);
@@ -982,7 +982,7 @@ export default function PatientDetail() {
     y += 8;
     doc.setDrawColor(231, 229, 228);
     doc.setLineWidth(0.2);
-    doc.line(margin, y, pageWidth - margin, y);
+    doc.line(margin, y, pageWidth - 20, y);
 
     // Conteúdo do Relatório
     y += 10;
@@ -1019,7 +1019,7 @@ export default function PatientDetail() {
       } else if (trimmed.startsWith('---')) {
         y += 2;
         doc.setDrawColor(231, 229, 228);
-        doc.line(margin, y, pageWidth - margin, y);
+        doc.line(margin, y, pageWidth - 20, y);
         y += 4;
       } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
         doc.setFont('Helvetica', 'normal');
@@ -1122,7 +1122,7 @@ export default function PatientDetail() {
       // Desenhar uma linha sutil acima do rodape
       doc.setDrawColor(231, 229, 228);
       doc.setLineWidth(0.2);
-      doc.line(margin, 281, pageWidth - margin, 281);
+      doc.line(margin, 281, pageWidth - 20, 281);
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(7);
@@ -1142,11 +1142,11 @@ export default function PatientDetail() {
         const line2 = `Data: ${formattedDate} | Hash: ${shortHash}`;
         doc.text(line2, margin, 289);
         
-        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 289);
+        doc.text(pageText, pageWidth - 20 - doc.getTextWidth(pageText), 289);
       } else {
         const line1 = `Rascunho de Documento - Não possui validade jurídica antes de ser assinado`;
         doc.text(line1, margin, 285);
-        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 289);
+        doc.text(pageText, pageWidth - 20 - doc.getTextWidth(pageText), 289);
       }
     }
 
