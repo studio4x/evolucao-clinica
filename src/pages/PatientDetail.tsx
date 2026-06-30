@@ -1956,7 +1956,11 @@ export default function PatientDetail() {
               <Bell size={20} className="text-brand-primary" />
               <h3 className="font-semibold text-brand-text mb-0">Lembretes de Evolução</h3>
             </div>
-            
+
+            <p className="text-xs text-brand-text-muted leading-relaxed">
+              Configure os dias e o horário das sessões deste paciente para receber notificações (no painel e por e-mail) assim que o atendimento terminar, ajudando você a manter o histórico clínico sempre em dia.
+            </p>
+
             <div className="space-y-4">
               <label className="flex items-center space-x-2 text-sm text-brand-text cursor-pointer">
                 <input
