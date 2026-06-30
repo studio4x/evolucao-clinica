@@ -8,6 +8,7 @@ import { jsPDF } from 'jspdf';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 
 const blobToBase64 = (blob: Blob): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -21,7 +22,30 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
   });
 };
 
+const getBase64ImageFromUrl = async (url: string): Promise<string> => {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const hexToRgb = (hex: string) => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (_, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+};
+
 export default function History() {
+  const siteConfig = useSiteConfig();
   const [evolutions, setEvolutions] = useState<any[]>([]);
   const [patientsMap, setPatientsMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
@@ -85,7 +109,7 @@ export default function History() {
     }
   };
 
-  const generateEvolutionPDF = (evo: any, pat: any, prof: any) => {
+  const generateEvolutionPDF = (evo: any, pat: any, prof: any, logoBase64?: string | null) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -96,25 +120,39 @@ export default function History() {
     const margin = 20;
     const contentWidth = pageWidth - (2 * margin);
 
+    const primaryRgb = hexToRgb(siteConfig.colors?.primary || '#005C13') || { r: 0, g: 92, b: 19 };
+
     // Cabecalho Timbrado
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.setTextColor(0, 92, 19); // Brand primary color (#005C13)
-    doc.text("Evolução Clínica", margin, 20);
+    if (logoBase64) {
+      try {
+        doc.addImage(logoBase64, 'PNG', margin, 12, 40, 14, undefined, 'FAST');
+      } catch (err) {
+        console.error("Error drawing logo in PDF:", err);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+        doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+      }
+    } else {
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+      doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+    }
 
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(87, 83, 78); // Brand text-muted
     doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", margin, 25);
 
-    doc.setDrawColor(0, 92, 19);
+    doc.setDrawColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     doc.setLineWidth(0.5);
     doc.line(margin, 28, pageWidth - margin, 28);
 
     // Identificação do Documento
     doc.setFontSize(12);
     doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(0, 92, 19);
+    doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     doc.text('Evolução Clínica', margin, 38);
 
     // Tabela de Dados
@@ -595,8 +633,16 @@ export default function History() {
                       {evo.status === 'signed' && (
                         <button
                           type="button"
-                          onClick={() => {
-                            const doc = generateEvolutionPDF(evo, patient, professional);
+                          onClick={async () => {
+                            let logoBase64 = null;
+                            if (siteConfig.logo_light_url) {
+                              try {
+                                logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                              } catch (err) {
+                                console.error("Error preloading logo:", err);
+                              }
+                            }
+                            const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
                             const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
                             const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
                             doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
@@ -665,8 +711,14 @@ export default function History() {
         {/* Logo/Timbre fictício */}
         <div className="flex justify-between items-center border-b-2 border-brand-primary pb-3 mb-6">
           <div>
-            <h1 className="text-xl font-display font-bold text-brand-primary">Evolução Clínica</h1>
-            <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
+            {siteConfig.logo_light_url ? (
+              <img src={siteConfig.logo_light_url} alt="Logo" className="h-10 object-contain mb-1" />
+            ) : (
+              <>
+                <h1 className="text-xl font-display font-bold text-brand-primary">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>
+                <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
+              </>
+            )}
           </div>
           <div className="text-right text-xs">
             <p className="font-bold text-brand-text">Paciente: {printPatientName}</p>

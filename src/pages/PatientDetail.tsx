@@ -11,6 +11,7 @@ import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogle
 import { sendNotification } from '../services/notificationHelper';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import DOMPurify from 'dompurify';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 
 // Converte Markdown para HTML e remove conteúdo potencialmente perigoso antes da renderização
 const parseMarkdown = (md: string): string => {
@@ -20,6 +21,28 @@ const parseMarkdown = (md: string): string => {
   } catch {
     return DOMPurify.sanitize(md, { USE_PROFILES: { html: true } });
   }
+};
+
+const getBase64ImageFromUrl = async (url: string): Promise<string> => {
+  const res = await fetch(url);
+  const blob = await res.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
+const hexToRgb = (hex: string) => {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (_, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
 };
 
 // Remove marcadores Markdown para exportar texto limpo (Google Docs, e-mail)
@@ -47,6 +70,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 };
 
 export default function PatientDetail() {
+  const siteConfig = useSiteConfig();
   const { id } = useParams();
   const navigate = useNavigate();
   const [patient, setPatient] = useState<any>(null);
@@ -893,7 +917,7 @@ export default function PatientDetail() {
     }
   };
 
-  const generateReportPDF = (rep: any, pat: any, prof: any) => {
+  const generateReportPDF = (rep: any, pat: any, prof: any, logoBase64?: string | null) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -904,25 +928,39 @@ export default function PatientDetail() {
     const margin = 20;
     const contentWidth = pageWidth - (2 * margin);
 
+    const primaryRgb = hexToRgb(siteConfig.colors?.primary || '#005C13') || { r: 0, g: 92, b: 19 };
+
     // Cabecalho Timbrado
-    doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.setTextColor(0, 92, 19); // Brand primary color (#005C13)
-    doc.text("Evolução Clínica", margin, 20);
+    if (logoBase64) {
+      try {
+        doc.addImage(logoBase64, 'PNG', margin, 12, 40, 14, undefined, 'FAST');
+      } catch (err) {
+        console.error("Error drawing logo in PDF:", err);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+        doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+      }
+    } else {
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+      doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+    }
 
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(87, 83, 78); // Brand text-muted
     doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", margin, 25);
 
-    doc.setDrawColor(0, 92, 19);
+    doc.setDrawColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     doc.setLineWidth(0.5);
     doc.line(margin, 28, pageWidth - margin, 28);
 
     // Identificação do Documento
     doc.setFontSize(12);
     doc.setFont('Helvetica', 'bold');
-    doc.setTextColor(0, 92, 19);
+    doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     const docTitle = rep.type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)';
     doc.text(docTitle, margin, 38);
 
@@ -968,14 +1006,14 @@ export default function PatientDetail() {
         y += 4;
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(14);
-        doc.setTextColor(0, 92, 19);
+        doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
         doc.text(trimmed.substring(2), margin, y);
         y += 8;
       } else if (trimmed.startsWith('## ')) {
         y += 3;
         doc.setFont('Helvetica', 'bold');
         doc.setFontSize(11);
-        doc.setTextColor(0, 92, 19);
+        doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
         doc.text(trimmed.substring(3), margin, y);
         y += 6;
       } else if (trimmed.startsWith('---')) {
@@ -1167,7 +1205,16 @@ export default function PatientDetail() {
         status: 'draft'
       };
 
-      const doc = generateReportPDF(repObj, patient, professional);
+      let logoBase64 = null;
+      if (siteConfig.logo_light_url) {
+        try {
+          logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+        } catch (err) {
+          console.error("Error preloading logo:", err);
+        }
+      }
+
+      const doc = generateReportPDF(repObj, patient, professional, logoBase64);
       const pdfBase64 = doc.output('datauristring').split(',')[1];
       const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
       const docLabel = repObj.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
@@ -2954,8 +3001,16 @@ export default function PatientDetail() {
                   {viewingReport.status === 'signed' ? (
                     <button
                       type="button"
-                      onClick={() => {
-                        const doc = generateReportPDF(viewingReport, patient, professional);
+                      onClick={async () => {
+                        let logoBase64 = null;
+                        if (siteConfig.logo_light_url) {
+                          try {
+                            logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                          } catch (err) {
+                            console.error("Error preloading logo:", err);
+                          }
+                        }
+                        const doc = generateReportPDF(viewingReport, patient, professional, logoBase64);
                         const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
                         const docLabel = viewingReport.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
                         doc.save(`${docLabel}_${cleanPatientName}.pdf`);
@@ -3081,8 +3136,14 @@ export default function PatientDetail() {
           {/* Cabecalho Timbrado */}
           <div className="border-b-2 border-brand-primary pb-4 mb-6 flex justify-between items-end">
             <div>
-              <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider mb-1">Evolução Clínica</h1>
-              <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
+              {siteConfig.logo_light_url ? (
+                <img src={siteConfig.logo_light_url} alt="Logo" className="h-10 object-contain mb-1" />
+              ) : (
+                <>
+                  <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider mb-1">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>
+                  <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
+                </>
+              )}
             </div>
             <div className="text-right text-[10px] text-brand-text-muted">
               <p>Data de Emissão: {new Date().toLocaleDateString('pt-BR')}</p>
