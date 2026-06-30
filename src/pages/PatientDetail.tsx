@@ -2060,18 +2060,18 @@ export default function PatientDetail() {
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-              <div className="flex items-center space-x-2 text-brand-primary">
-                <Sparkles size={22} className="text-brand-primary animate-pulse" />
-                <div>
-                  <h3 className="font-display font-semibold text-lg text-brand-text mb-0">Pesquisa Inteligente no Histórico</h3>
-                  <p className="text-xs text-brand-text-muted">Faça perguntas para encontrar informações rapidamente nas anotações do paciente</p>
+              <div className="flex items-center space-x-2 text-brand-primary flex-1 min-w-0 sm:max-w-[55%] md:max-w-[65%]">
+                <Sparkles size={22} className="text-brand-primary animate-pulse flex-shrink-0" />
+                <div className="min-w-0">
+                  <h3 className="font-display font-semibold text-base sm:text-lg text-brand-text mb-0 truncate sm:whitespace-normal">Pesquisa Inteligente no Histórico</h3>
+                  <p className="text-xs text-brand-text-muted leading-normal">Faça perguntas para encontrar informações rapidamente nas anotações do paciente</p>
                 </div>
               </div>
               
               {/* Status de Indexação */}
               {evolutions.length > 0 && (
-                <div className="text-right">
-                  <span className="text-[11px] bg-brand-primary/10 text-brand-primary font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit sm:ml-auto">
+                <div className="text-right flex-shrink-0 sm:min-w-[180px]">
+                  <span className="text-[11px] bg-brand-primary/10 text-brand-primary font-semibold px-2.5 py-1 rounded-full flex items-center gap-1.5 w-fit sm:ml-auto whitespace-nowrap">
                     <span className="w-1.5 h-1.5 bg-brand-primary rounded-full animate-ping" />
                     <span>
                       {(() => {
@@ -2093,7 +2093,7 @@ export default function PatientDetail() {
                         type="button"
                         onClick={handleManualIndex}
                         disabled={indexingPending}
-                        className="text-[10px] text-brand-primary hover:underline font-medium mt-1 inline-flex items-center gap-1 cursor-pointer"
+                        className="text-[10px] text-brand-primary hover:underline font-medium mt-1 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                       >
                         {indexingPending ? (
                           <>
@@ -2119,8 +2119,8 @@ export default function PatientDetail() {
                     type="text"
                     value={semanticQuery}
                     onChange={(e) => setSemanticQuery(e.target.value)}
-                    placeholder='Tente: "Qual foi a última dosagem de Ritalina?" ou "Quando ele apresentou resistência ao contato visual?"'
-                    className="w-full pl-11 pr-24 py-3 bg-white/70 backdrop-blur-sm border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all shadow-sm placeholder:text-brand-text-muted/65"
+                    placeholder='Tente: "Qual a última dosagem de Ritalina?" ou "Teve resistência ao contato visual?"'
+                    className="w-full pl-11 pr-20 sm:pr-28 py-3 bg-white/70 backdrop-blur-sm border border-brand-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary transition-all shadow-sm placeholder:text-brand-text-muted/65"
                   />
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-text-muted">
                     <MessageCircle size={18} />
@@ -2142,17 +2142,17 @@ export default function PatientDetail() {
                     <button
                       type="submit"
                       disabled={semanticLoading || !semanticQuery.trim()}
-                      className="bg-brand-primary text-white px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-brand-primary-dark transition-colors shadow-sm disabled:opacity-50 flex items-center space-x-1 cursor-pointer"
+                      className="bg-brand-primary text-white px-3 sm:px-4 py-1.5 rounded-lg text-xs font-semibold hover:bg-brand-primary-dark transition-colors shadow-sm disabled:opacity-50 flex items-center space-x-1 cursor-pointer"
                     >
                       {semanticLoading ? (
                         <>
                           <Loader2 size={12} className="animate-spin" />
-                          <span>Buscando...</span>
+                          <span className="hidden sm:inline">Buscando...</span>
                         </>
                       ) : (
                         <>
                           <Send size={12} />
-                          <span>Perguntar</span>
+                          <span className="hidden sm:inline">Perguntar</span>
                         </>
                       )}
                     </button>
