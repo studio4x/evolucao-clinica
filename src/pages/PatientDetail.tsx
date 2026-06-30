@@ -1211,7 +1211,7 @@ export default function PatientDetail() {
     }
 
     // Rodapé de Assinatura Corrente em Todas as Páginas
-    const totalPages = doc.internal.getNumberOfPages();
+    const totalPages = doc.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
       
@@ -1430,7 +1430,7 @@ export default function PatientDetail() {
     }
 
     // Rodapé de Assinatura Corrente em Todas as Páginas
-    const totalPages = doc.internal.getNumberOfPages();
+    const totalPages = doc.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
       
