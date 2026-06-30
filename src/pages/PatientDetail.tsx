@@ -1911,11 +1911,18 @@ export default function PatientDetail() {
                 )}
                 <span>{printingProntuario ? 'Processando...' : 'Imprimir Prontuário'}</span>
               </button>
+
+              <div className="pt-3 border-t border-brand-border/60">
+                <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">Observações</span>
+                <p className="text-xs text-brand-text mt-1 leading-relaxed whitespace-pre-wrap">
+                  {patient.notes || 'Nenhuma observação registrada.'}
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}
-          <div className="card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-4 md:order-none">
+          <div className="card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-3 md:order-none">
             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/20 to-transparent pointer-events-none" />
             
             <div className="flex items-center justify-between mb-3">
@@ -1944,7 +1951,7 @@ export default function PatientDetail() {
             />
           </div>
 
-          <div className="card p-6 space-y-4 order-7 md:order-none">
+          <div className="card p-6 space-y-4 order-6 md:order-none">
             <div className="flex items-center space-x-2 text-brand-primary">
               <Bell size={20} className="text-brand-primary" />
               <h3 className="font-semibold text-brand-text mb-0">Lembretes de Evolução</h3>
@@ -2045,18 +2052,11 @@ export default function PatientDetail() {
               </div>
             </div>
           </div>
-
-          <div className="card p-6 order-3 md:order-none">
-            <h3 className="font-semibold text-brand-text mb-2">Observações</h3>
-            <p className="text-sm text-brand-text-muted whitespace-pre-wrap">
-              {patient.notes || 'Nenhuma observação registrada.'}
-            </p>
-          </div>
         </div>
 
         <div className="contents md:block md:col-span-2 md:space-y-6">
           {/* Card de Busca Semântica (Pesquisa Inteligente) */}
-          <div className="card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-5 md:order-none">
+          <div className="card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-4 md:order-none">
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -2242,7 +2242,7 @@ export default function PatientDetail() {
             )}
           </div>
 
-          <div className="card order-6 md:order-none">
+          <div className="card order-5 md:order-none">
             <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
               <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
               {evolutions.length > 0 && (
@@ -2474,7 +2474,7 @@ export default function PatientDetail() {
           </div>
 
           {/* Seção Unificada de Relatórios Clínicos */}
-          <div className="card order-8 md:order-none">
+          <div className="card order-7 md:order-none">
             <div className="px-6 py-4 border-b border-brand-border bg-brand-bg/50 flex flex-col gap-4 rounded-t-2xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center space-x-2">
