@@ -117,8 +117,8 @@ export default function History() {
     });
 
     const pageWidth = doc.internal.pageSize.getWidth();
-    const margin = 30; // 3cm Margem Esquerda
-    const contentWidth = pageWidth - margin - 20; // 2cm Margem Direita
+    const margin = 20; // 2cm Margem Esquerda
+    const contentWidth = pageWidth - (2 * margin); // 2cm Margem Direita (20mm)
 
     const primaryRgb = hexToRgb(siteConfig.colors?.primary || '#005C13') || { r: 0, g: 92, b: 19 };
 
@@ -163,11 +163,16 @@ export default function History() {
       taglineX = margin + appNameWidth + 9;
     }
 
-    // Tagline na mesma linha com tipografia atrativa (Times Italic)
-    doc.setFont('Times', 'italic');
-    doc.setFontSize(8.5);
+    // Tagline na mesma linha com tipografia Outfit/Helvetica Bold 11, e subtexto abaixo
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(28, 25, 22); // text-stone-800
+    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", taglineX, 16);
+    
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(7.5);
     doc.setTextColor(120, 113, 108); // text-stone-500
-    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", taglineX, 19);
+    doc.text("Emitido por evolucaoclinica.app.br", taglineX, 21);
 
     doc.setDrawColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
     doc.setLineWidth(0.5);
@@ -742,9 +747,14 @@ export default function History() {
             ) : (
               <h1 className="text-xl font-display font-bold text-brand-primary leading-none">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>
             )}
-            <span className="text-xs text-stone-500 italic border-l border-stone-300 pl-4 font-serif tracking-wide leading-none py-1.5">
-              Plataforma Inteligente de Acompanhamento Terapêutico
-            </span>
+            <div className="border-l border-stone-300 pl-4 py-0.5 flex flex-col justify-center">
+              <span className="text-[20px] font-bold text-stone-800 leading-tight" style={{ fontFamily: 'Outfit, ui-sans-serif, system-ui, sans-serif' }}>
+                Plataforma Inteligente de Acompanhamento Terapêutico
+              </span>
+              <span className="text-[10px] text-stone-500 font-medium leading-none mt-1">
+                Emitido por evolucaoclinica.app.br
+              </span>
+            </div>
           </div>
           <div className="text-right text-xs shrink-0">
             <p className="font-bold text-brand-text">Paciente: {printPatientName}</p>
