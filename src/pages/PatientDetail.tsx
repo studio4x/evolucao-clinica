@@ -140,6 +140,10 @@ export default function PatientDetail() {
   const [printMode, setPrintMode] = useState<'report' | 'prontuario'>('report');
   const [professional, setProfessional] = useState<any>(null);
   const [printingProntuario, setPrintingProntuario] = useState(false);
+  const [showPrintFilterModal, setShowPrintFilterModal] = useState(false);
+  const [printStartDate, setPrintStartDate] = useState('');
+  const [printEndDate, setPrintEndDate] = useState('');
+  const [printSource, setPrintSource] = useState<'platform' | 'google_doc'>('platform');
   const [prontuarioDocContent, setProntuarioDocContent] = useState('');
 
   // Estados de toggle Visualizar/Editar relatório
@@ -397,44 +401,107 @@ export default function PatientDetail() {
     }, 200);
   };
 
-  const handlePrintProntuario = async () => {
+  const handlePrintProntuario = () => {
+    setShowPrintFilterModal(true);
+  };
+
+  const handleExecutePrintProntuario = async () => {
     setPrintSignatureInfo(null);
-    if (!patient?.google_doc_id) {
-      alert("Nenhum prontuário do Google Docs vinculado a este paciente.");
-      return;
-    }
+    setShowPrintFilterModal(false);
 
-    if (!hasClinicalAccess) {
-      alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
-      await requestGoogleOAuth({
-        requiredScopes: 'clinicalDocs',
-        currentGrantedScopes: googleGrantedScopes,
-        redirectTo: getCurrentGoogleOAuthRedirectUrl()
+    if (printSource === 'google_doc') {
+      if (!patient?.google_doc_id) {
+        alert("Nenhum prontuário do Google Docs vinculado a este paciente.");
+        return;
+      }
+
+      if (!hasClinicalAccess) {
+        alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
+        await requestGoogleOAuth({
+          requiredScopes: 'clinicalDocs',
+          currentGrantedScopes: googleGrantedScopes,
+          redirectTo: getCurrentGoogleOAuthRedirectUrl()
+        });
+        return;
+      }
+
+      setPrintingProntuario(true);
+      const originalTitle = document.title;
+      const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+      document.title = `Prontuario_Evolucoes_${cleanPatientName}`;
+
+      try {
+        const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
+        setProntuarioDocContent(content);
+        setPrintMode('prontuario');
+        setPrintDocType('Prontuário de Evoluções Clínicas (Google Docs)');
+        setPrintPeriodLabel('');
+        setTimeout(() => {
+          window.print();
+          document.title = originalTitle;
+          setPrintingProntuario(false);
+        }, 300);
+      } catch (err: any) {
+        console.error("Erro ao carregar prontuário do Google Docs:", err);
+        alert("Erro ao ler prontuário do Google Docs: " + (err.message || err));
+        document.title = originalTitle;
+        setPrintingProntuario(false);
+      }
+    } else {
+      // Platform Database Evolutions
+      if (evolutions.length === 0) {
+        alert("Não há evoluções cadastradas nesta plataforma para este paciente.");
+        return;
+      }
+
+      const start = printStartDate ? new Date(printStartDate + 'T00:00:00') : null;
+      const end = printEndDate ? new Date(printEndDate + 'T23:59:59') : null;
+
+      const filtered = evolutions.filter(evo => {
+        const d = new Date(evo.created_at);
+        return (!start || d >= start) && (!end || d <= end);
+      }).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+      if (filtered.length === 0) {
+        alert("Nenhuma evolução encontrada no período selecionado.");
+        return;
+      }
+
+      setPrintingProntuario(true);
+      const originalTitle = document.title;
+      const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+      document.title = `Prontuario_Evolucoes_${cleanPatientName}`;
+
+      let contentText = "";
+      filtered.forEach((evo) => {
+        const dateStr = formatDateTime(evo.created_at);
+        const signedInfo = evo.status === 'signed'
+          ? `[Documento Assinado Digitalmente por: ${evo.signed_by_name || 'Profissional'} (${evo.signed_by_register || ''}) em ${new Date(evo.signature_date).toLocaleString('pt-BR')}]`
+          : '[Rascunho]';
+        
+        contentText += `======================================================================\n`;
+        contentText += `EVOLUÇÃO CLÍNICA - DATA: ${dateStr} - ${signedInfo}\n`;
+        contentText += `======================================================================\n\n`;
+        contentText += `${evo.transcription_text || evo.content || ''}\n\n\n`;
       });
-      return;
-    }
 
-    setPrintingProntuario(true);
-    const originalTitle = document.title;
-    const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-    document.title = `Prontuario_Evolucoes_${cleanPatientName}`;
-
-    try {
-      const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
-      setProntuarioDocContent(content);
+      setProntuarioDocContent(contentText);
       setPrintMode('prontuario');
-      setPrintDocType('Prontuário de Evoluções Clínicas (Google Docs)');
-      setPrintPeriodLabel('');
+      setPrintDocType('Prontuário de Evoluções Clínicas (Plataforma)');
+      setPrintPeriodLabel(start && end 
+        ? `De ${start.toLocaleDateString('pt-BR')} até ${end.toLocaleDateString('pt-BR')}` 
+        : start 
+          ? `A partir de ${start.toLocaleDateString('pt-BR')}` 
+          : end 
+            ? `Até ${end.toLocaleDateString('pt-BR')}` 
+            : 'Todo o Período'
+      );
+
       setTimeout(() => {
         window.print();
         document.title = originalTitle;
         setPrintingProntuario(false);
       }, 300);
-    } catch (err: any) {
-      console.error("Erro ao carregar prontuário do Google Docs:", err);
-      alert("Erro ao ler prontuário do Google Docs: " + (err.message || err));
-      document.title = originalTitle;
-      setPrintingProntuario(false);
     }
   };
 
@@ -1807,41 +1874,44 @@ export default function PatientDetail() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-1 space-y-6">
           <div className="card p-6">
-            <h3 className="font-semibold text-brand-text mb-4">Prontuário Vinculado</h3>
-            {patient.google_doc_id ? (
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <FileText className="text-brand-primary mt-1 flex-shrink-0" size={20} />
-                  <p className="text-sm font-medium text-brand-text break-words">{patient.google_doc_name}</p>
+            <h3 className="font-semibold text-brand-text mb-4">Prontuário</h3>
+            <div className="space-y-3">
+              {patient.google_doc_id ? (
+                <>
+                  <div className="flex items-start space-x-3">
+                    <FileText className="text-brand-primary mt-1 flex-shrink-0" size={20} />
+                    <p className="text-sm font-medium text-brand-text break-words">{patient.google_doc_name}</p>
+                  </div>
+                  <a 
+                    href={patient.google_doc_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition-colors text-sm font-medium"
+                  >
+                    <ExternalLink size={16} />
+                    <span>Abrir no Google Docs</span>
+                  </a>
+                </>
+              ) : (
+                <div className="text-xs text-brand-text-muted text-center py-2 bg-brand-bg rounded-xl border border-brand-border">
+                  Sem documento Google Docs vinculado. <Link to={`/painel/patients/${id}/edit`} className="text-brand-primary hover:underline font-semibold">Vincular agora</Link>.
                 </div>
-                <a 
-                  href={patient.google_doc_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 transition-colors text-sm font-medium"
-                >
-                  <ExternalLink size={16} />
-                  <span>Abrir no Google Docs</span>
-                </a>
-                <button
-                  type="button"
-                  onClick={handlePrintProntuario}
-                  disabled={printingProntuario}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 border border-brand-primary text-brand-primary bg-white hover:bg-brand-primary/5 rounded-xl transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
-                >
-                  {printingProntuario ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Printer size={16} />
-                  )}
-                  <span>{printingProntuario ? 'Lendo Google Doc...' : 'Imprimir Prontuário'}</span>
-                </button>
-              </div>
-            ) : (
-              <div className="text-sm text-brand-text-muted text-center py-4">
-                Nenhum documento vinculado. <Link to={`/painel/patients/${id}/edit`} className="text-brand-primary hover:underline">Vincular agora</Link>.
-              </div>
-            )}
+              )}
+              
+              <button
+                type="button"
+                onClick={handlePrintProntuario}
+                disabled={printingProntuario}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2 border border-brand-primary text-brand-primary bg-white hover:bg-brand-primary/5 rounded-xl transition-colors text-sm font-medium disabled:opacity-50 cursor-pointer"
+              >
+                {printingProntuario ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Printer size={16} />
+                )}
+                <span>{printingProntuario ? 'Processando...' : 'Imprimir Prontuário'}</span>
+              </button>
+            </div>
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}
@@ -2510,6 +2580,113 @@ export default function PatientDetail() {
           </div>
         </div>
       </div>
+
+      {showPrintFilterModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col border border-brand-border">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50 rounded-t-2xl">
+              <div className="flex items-center space-x-2 text-brand-primary">
+                <Printer size={20} className="text-brand-primary" />
+                <h3 className="text-lg font-display font-semibold text-brand-primary mb-0">Imprimir Prontuário</h3>
+              </div>
+              <button 
+                onClick={() => setShowPrintFilterModal(false)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-2">Origem dos Dados</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPrintSource('platform')}
+                    className={`p-3 rounded-xl border text-xs font-medium transition-all text-center flex flex-col items-center justify-center gap-1.5 cursor-pointer ${
+                      printSource === 'platform'
+                        ? 'border-brand-primary bg-brand-primary/5 text-brand-primary font-semibold shadow-sm'
+                        : 'border-brand-border bg-white text-brand-text hover:bg-brand-bg/50'
+                    }`}
+                  >
+                    <span>Evoluções da Plataforma</span>
+                    <span className="text-[9px] font-normal text-stone-500">({evolutions.length} registros)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPrintSource('google_doc')}
+                    disabled={!patient?.google_doc_id}
+                    className={`p-3 rounded-xl border text-xs font-medium transition-all text-center flex flex-col items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                      printSource === 'google_doc'
+                        ? 'border-brand-primary bg-brand-primary/5 text-brand-primary font-semibold shadow-sm'
+                        : 'border-brand-border bg-white text-brand-text hover:bg-brand-bg/50'
+                    }`}
+                  >
+                    <span>Arquivo do Google Docs</span>
+                    <span className="text-[9px] font-normal text-stone-500">(Completo)</span>
+                  </button>
+                </div>
+              </div>
+
+              {printSource === 'platform' ? (
+                <div className="space-y-3">
+                  <div className="bg-brand-primary/5 p-3 rounded-xl border border-brand-primary/10 text-xs text-brand-primary">
+                    Filtre o período das evoluções que deseja consolidar para impressão. Deixe em branco para imprimir todas.
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="printStartDate" className="block text-xs font-medium text-brand-text-muted mb-1">Data Inicial</label>
+                      <input
+                        type="date"
+                        id="printStartDate"
+                        value={printStartDate}
+                        onChange={(e) => setPrintStartDate(e.target.value)}
+                        className="input-field py-1.5 text-xs text-brand-text rounded-xl"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="printEndDate" className="block text-xs font-medium text-brand-text-muted mb-1">Data Final</label>
+                      <input
+                        type="date"
+                        id="printEndDate"
+                        value={printEndDate}
+                        onChange={(e) => setPrintEndDate(e.target.value)}
+                        className="input-field py-1.5 text-xs text-brand-text rounded-xl"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-200 text-xs text-amber-800 leading-relaxed">
+                  O prontuário do Google Docs é um arquivo de texto contínuo e será importado na íntegra. Não é possível aplicar filtros de período neste modo.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-brand-bg/30 border-t border-brand-border flex justify-end space-x-3 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setShowPrintFilterModal(false)}
+                className="btn-outline text-xs px-4 py-2"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleExecutePrintProntuario}
+                className="bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Printer size={14} />
+                <span>Iniciar Impressão</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAiModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
