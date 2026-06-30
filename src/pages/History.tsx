@@ -230,7 +230,7 @@ export default function History() {
       // Desenhar uma linha sutil acima do rodape
       doc.setDrawColor(231, 229, 228);
       doc.setLineWidth(0.2);
-      doc.line(margin, 282, pageWidth - margin, 282);
+      doc.line(margin, 281, pageWidth - margin, 281);
 
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(7);
@@ -241,14 +241,20 @@ export default function History() {
       if (evo.status === 'signed') {
         const shortHash = evo.signature_hash ? `${evo.signature_hash.substring(0, 16)}...` : '';
         const formattedDate = new Date(evo.signature_date || evo.created_at).toLocaleDateString('pt-BR');
-        const footerText = `🔒 Assinado Digitalmente | Profissional: ${evo.signed_by_name || prof?.full_name} | Data: ${formattedDate} | Hash: ${shortHash}`;
         
-        doc.text(footerText, margin, 287);
-        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 287);
+        // Linha 1: Dados do profissional
+        const line1 = `Assinado Digitalmente por: ${evo.signed_by_name || prof?.full_name} (${evo.signed_by_register || prof?.professional_register})`;
+        doc.text(line1, margin, 285);
+        
+        // Linha 2: Data, Hash e Página
+        const line2 = `Data: ${formattedDate} | Hash: ${shortHash}`;
+        doc.text(line2, margin, 289);
+        
+        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 289);
       } else {
-        const footerText = `Rascunho de Documento - Não possui validade jurídica antes de ser assinado`;
-        doc.text(footerText, margin, 287);
-        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 287);
+        const line1 = `Rascunho de Documento - Não possui validade jurídica antes de ser assinado`;
+        doc.text(line1, margin, 285);
+        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 289);
       }
     }
 
