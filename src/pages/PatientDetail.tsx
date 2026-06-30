@@ -1028,7 +1028,7 @@ export default function PatientDetail() {
     // Carimbo de Assinatura se estiver assinado
     if (rep.status === 'signed') {
       y += 12;
-      if (y > 240) {
+      if (y > 230) {
         doc.addPage();
         y = 30;
       }
@@ -1059,7 +1059,7 @@ export default function PatientDetail() {
     } else {
       // Rodapé normal de assinatura manual
       y += 20;
-      if (y > 260) {
+      if (y > 250) {
         doc.addPage();
         y = 30;
       }
@@ -1074,6 +1074,36 @@ export default function PatientDetail() {
       doc.setFont('Helvetica', 'normal');
       doc.setFontSize(8);
       doc.text(prof?.professional_register || '', pageWidth / 2, y + 9, { align: 'center' });
+    }
+
+    // Rodapé de Assinatura Corrente em Todas as Páginas
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      
+      // Desenhar uma linha sutil acima do rodape
+      doc.setDrawColor(231, 229, 228);
+      doc.setLineWidth(0.2);
+      doc.line(margin, 282, pageWidth - margin, 282);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(120, 113, 108); // text-stone-500
+
+      const pageText = `Página ${i} de ${totalPages}`;
+      
+      if (rep.status === 'signed') {
+        const shortHash = rep.signature_hash ? `${rep.signature_hash.substring(0, 16)}...` : '';
+        const formattedDate = new Date(rep.signature_date).toLocaleDateString('pt-BR');
+        const footerText = `🔒 Assinado Digitalmente | Profissional: ${rep.signed_by_name} (${rep.signed_by_register}) | Data: ${formattedDate} | Hash: ${shortHash}`;
+        
+        doc.text(footerText, margin, 287);
+        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 287);
+      } else {
+        const footerText = `Rascunho de Documento - Não possui validade jurídica antes de ser assinado`;
+        doc.text(footerText, margin, 287);
+        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 287);
+      }
     }
 
     return doc;
