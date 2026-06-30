@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User, Shield } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User, Shield, Printer, Download } from 'lucide-react';
+import { jsPDF } from 'jspdf';
 import { GoogleGenAI } from "@google/genai";
 import { appendToGoogleDoc } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
@@ -28,6 +30,14 @@ export default function History() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+
+  const [professional, setProfessional] = useState<any>(null);
+  const [printMode, setPrintMode] = useState<'prontuario' | 'report' | null>(null);
+  const [printDocType, setPrintDocType] = useState('');
+  const [printPeriodLabel, setPrintPeriodLabel] = useState('');
+  const [printSignatureInfo, setPrintSignatureInfo] = useState<any>(null);
+  const [prontuarioDocContent, setProntuarioDocContent] = useState('');
+  const [printPatientName, setPrintPatientName] = useState('');
 
   const fetchHistory = async () => {
     if (!user) return;
@@ -59,11 +69,230 @@ export default function History() {
       
       setPatientsMap(pMap);
       setEvolutions(evos || []);
+
+      const { data: profData, error: profError } = await supabase
+        .from('professionals')
+        .select('full_name, professional_title, professional_register')
+        .eq('id', user.id)
+        .single();
+      if (!profError && profData) {
+        setProfessional(profData);
+      }
     } catch (error) {
       console.error("Error fetching history:", error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const generateEvolutionPDF = (evo: any, pat: any, prof: any) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const contentWidth = pageWidth - (2 * margin);
+
+    // Cabecalho Timbrado
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(0, 92, 19); // Brand primary color (#005C13)
+    doc.text("Evolução Clínica", margin, 20);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(87, 83, 78); // Brand text-muted
+    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", margin, 25);
+
+    doc.setDrawColor(0, 92, 19);
+    doc.setLineWidth(0.5);
+    doc.line(margin, 28, pageWidth - margin, 28);
+
+    // Identificação do Documento
+    doc.setFontSize(12);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(0, 92, 19);
+    doc.text('Evolução Clínica', margin, 38);
+
+    // Tabela de Dados
+    doc.setFontSize(9);
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(28, 25, 22); // text-color
+    
+    let y = 46;
+    doc.text(`Paciente: ${pat?.full_name || 'Não informado'}`, margin, y);
+    doc.text(`Profissional: ${prof?.full_name || 'Não informado'}`, pageWidth / 2 + 10, y);
+    
+    y += 6;
+    if (prof?.professional_register) {
+      doc.text(`Registro Profissional: ${prof.professional_register}`, margin, y);
+    }
+    doc.text(`Data da Sessão: ${new Date(evo.created_at).toLocaleString('pt-BR')}`, pageWidth / 2 + 10, y);
+    
+    y += 8;
+    doc.setDrawColor(231, 229, 228);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageWidth - margin, y);
+
+    // Conteúdo da Evolução
+    y += 10;
+    
+    const lines = (evo.transcription_text || evo.content || '').split('\n');
+    
+    for (const line of lines) {
+      if (y > 270) {
+        doc.addPage();
+        y = 20; // reset y
+      }
+
+      const trimmed = line.trim();
+      if (!trimmed) {
+        y += 4;
+        continue;
+      }
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(28, 25, 22);
+      
+      const splitText = doc.splitTextToSize(trimmed, contentWidth);
+      
+      for (let i = 0; i < splitText.length; i++) {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(splitText[i], margin, y);
+        y += 5.5;
+      }
+      y += 2;
+    }
+
+    // Carimbo de Assinatura se estiver assinado
+    if (evo.status === 'signed') {
+      y += 12;
+      if (y > 230) {
+        doc.addPage();
+        y = 30;
+      }
+      
+      // Caixa de Assinatura
+      doc.setFillColor(240, 253, 244); // bg-emerald-50
+      doc.setDrawColor(167, 243, 208); // border-emerald-200
+      doc.setLineWidth(0.3);
+      doc.rect(margin, y, contentWidth, 38, 'FD');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(4, 120, 87); // text-emerald-700
+      doc.text("DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO", margin + 5, y + 6);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(55, 65, 81);
+      doc.text(`Assinado por: ${evo.signed_by_name || prof?.full_name} (${evo.signed_by_register || prof?.professional_register})`, margin + 5, y + 14);
+      
+      const formattedDate = new Date(evo.signature_date || evo.created_at).toLocaleString('pt-BR');
+      doc.text(`Data/Hora: ${formattedDate}`, margin + 5, y + 20);
+      doc.text(`IP de Origem: ${evo.signature_ip || '127.0.0.1'}   |   Algoritmo: SHA-256`, margin + 5, y + 26);
+      
+      doc.setFont('Courier', 'normal');
+      doc.setFontSize(7);
+      doc.text(`Hash: ${evo.signature_hash || ''}`, margin + 5, y + 32);
+    } else {
+      // Rodapé normal de assinatura manual
+      y += 20;
+      if (y > 250) {
+        doc.addPage();
+        y = 30;
+      }
+      doc.setDrawColor(87, 83, 78);
+      doc.setLineWidth(0.3);
+      doc.line(pageWidth / 2 - 30, y, pageWidth / 2 + 30, y);
+      
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(28, 25, 22);
+      doc.text(prof?.full_name || 'Profissional de Saúde', pageWidth / 2, y + 5, { align: 'center' });
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(prof?.professional_register || '', pageWidth / 2, y + 9, { align: 'center' });
+    }
+
+    // Rodapé de Assinatura Corrente em Todas as Páginas
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      
+      // Desenhar uma linha sutil acima do rodape
+      doc.setDrawColor(231, 229, 228);
+      doc.setLineWidth(0.2);
+      doc.line(margin, 282, pageWidth - margin, 282);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(120, 113, 108);
+
+      const pageText = `Página ${i} de ${totalPages}`;
+      
+      if (evo.status === 'signed') {
+        const shortHash = evo.signature_hash ? `${evo.signature_hash.substring(0, 16)}...` : '';
+        const formattedDate = new Date(evo.signature_date || evo.created_at).toLocaleDateString('pt-BR');
+        const footerText = `🔒 Assinado Digitalmente | Profissional: ${evo.signed_by_name || prof?.full_name} | Data: ${formattedDate} | Hash: ${shortHash}`;
+        
+        doc.text(footerText, margin, 287);
+        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 287);
+      } else {
+        const footerText = `Rascunho de Documento - Não possui validade jurídica antes de ser assinado`;
+        doc.text(footerText, margin, 287);
+        doc.text(pageText, pageWidth - margin - doc.getTextWidth(pageText), 287);
+      }
+    }
+
+    return doc;
+  };
+
+  const handlePrintEvolution = (evo: any) => {
+    const evolutionText = (evo.transcription_text || evo.content || '').trim();
+
+    if (!evolutionText) {
+      alert('Esta evolução não possui conteúdo para impressão.');
+      return;
+    }
+
+    const patient = patientsMap[evo.patient_id];
+    setPrintPatientName(patient?.full_name || 'Paciente');
+    const originalTitle = document.title;
+    const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+    const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+    document.title = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}`;
+
+    setPrintMode('prontuario');
+    setPrintDocType('Evolução Clínica');
+    setPrintPeriodLabel('');
+    setProntuarioDocContent(`Data da evolução: ${formatDateTime(evo.created_at)}\n\n${evolutionText}`);
+    
+    if (evo.status === 'signed') {
+      setPrintSignatureInfo({
+        method: evo.signature_method,
+        date: evo.signature_date,
+        ip: evo.signature_ip,
+        hash: evo.signature_hash,
+        name: evo.signed_by_name || professional?.full_name,
+        register: evo.signed_by_register || professional?.professional_register
+      });
+    } else {
+      setPrintSignatureInfo(null);
+    }
+
+    setTimeout(() => {
+      window.print();
+      document.title = originalTitle;
+      setPrintMode(null);
+    }, 200);
   };
 
   useEffect(() => {
@@ -283,7 +512,8 @@ export default function History() {
   if (loading) return <div className="p-8 text-center">Carregando histórico...</div>;
 
   return (
-    <div className="space-y-6">
+    <>
+      <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-display font-semibold text-brand-primary">Histórico de Evoluções</h1>
         {evolutions.length > 0 && (
@@ -356,6 +586,33 @@ export default function History() {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      {evo.status === 'signed' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const doc = generateEvolutionPDF(evo, patient, professional);
+                            const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+                            const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                            doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
+                          }}
+                          className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer font-semibold"
+                          title="Baixar PDF do Prontuário Assinado"
+                        >
+                          <Download size={14} />
+                          <span>Baixar PDF</span>
+                        </button>
+                      )}
+                      
+                      <button
+                        type="button"
+                        onClick={() => handlePrintEvolution(evo)}
+                        className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-brand-border bg-white text-brand-text hover:bg-gray-50 cursor-pointer"
+                        title="Imprimir evolução"
+                      >
+                        <Printer size={14} />
+                        <span>Imprimir</span>
+                      </button>
+
                       {patient?.google_doc_id && (
                         <a
                           href={`https://docs.google.com/document/d/${patient.google_doc_id}/edit`}
@@ -395,5 +652,65 @@ export default function History() {
         </div>
       </div>
     </div>
+
+    {/* Portal de Impressão de prontuário/relatório (fora do #root do App) */}
+    {printMode && createPortal(
+      <div id="print-area">
+        {/* Logo/Timbre fictício */}
+        <div className="flex justify-between items-center border-b-2 border-brand-primary pb-3 mb-6">
+          <div>
+            <h1 className="text-xl font-display font-bold text-brand-primary">Evolução Clínica</h1>
+            <p className="text-[10px] text-brand-text-muted">Plataforma Inteligente de Acompanhamento Terapêutico</p>
+          </div>
+          <div className="text-right text-xs">
+            <p className="font-bold text-brand-text">Paciente: {printPatientName}</p>
+          </div>
+        </div>
+
+        <div className="flex justify-between items-start text-xs border-b border-brand-border pb-4 mb-6">
+          <div>
+            <p className="font-semibold text-brand-text uppercase tracking-wider text-[10px] text-brand-text-muted mb-1">Documento</p>
+            <p className="font-semibold text-sm text-brand-primary">{printDocType}</p>
+          </div>
+          <div className="text-right">
+            <p className="font-semibold text-brand-text uppercase tracking-wider text-[10px] text-brand-text-muted mb-1">Profissional Responsável</p>
+            <p className="font-semibold text-brand-text">{professional?.full_name}</p>
+            {professional?.professional_register && (
+              <p className="text-brand-text-muted text-[10px]">{professional.professional_register}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Conteudo Dinâmico */}
+        <div className="whitespace-pre-wrap font-sans text-sm text-stone-800 leading-relaxed">
+          {prontuarioDocContent}
+        </div>
+
+        {/* Assinatura / Rodapé */}
+        {printSignatureInfo ? (
+          <div className="mt-12 pt-4 border-t-2 border-dashed border-emerald-300 bg-emerald-50/50 p-4 rounded-xl text-xs space-y-2 text-stone-800" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+            <div className="flex items-center space-x-2 text-emerald-700 font-bold">
+              <Shield size={14} className="text-emerald-600" />
+              <span>DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO</span>
+            </div>
+            <p>O profissional acima declarou a autoria deste registro clínico no sistema em conformidade com as diretrizes do conselho federal de sua categoria.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] text-stone-600 font-mono mt-2 bg-white/70 p-2.5 rounded-lg border border-emerald-100">
+              <p><strong>Assinado por:</strong> {printSignatureInfo.name || professional?.full_name} ({printSignatureInfo.register || professional?.professional_register})</p>
+              <p><strong>Data/Hora Assinatura:</strong> {new Date(printSignatureInfo.date).toLocaleString('pt-BR')}</p>
+              <p><strong>IP de Origem:</strong> {printSignatureInfo.ip}</p>
+              <p className="sm:col-span-2 break-all"><strong>Hash SHA-256:</strong> {printSignatureInfo.hash}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-16 pt-8 flex flex-col items-center" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+            <div className="w-48 border-b border-brand-text-muted/30"></div>
+            <p className="text-xs font-semibold text-brand-text mt-2">{professional?.full_name}</p>
+            <p className="text-[10px] text-brand-text-muted">{professional?.professional_register}</p>
+          </div>
+        )}
+      </div>,
+      document.body
+    )}
+    </>
   );
 }
