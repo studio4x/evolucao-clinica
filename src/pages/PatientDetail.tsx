@@ -971,13 +971,13 @@ export default function PatientDetail() {
     
     let y = 46;
     doc.text(`Paciente: ${pat?.full_name || 'Não informado'}`, margin, y);
-    doc.text(`Profissional: ${prof?.full_name || 'Não informado'}`, pageWidth / 2 + 10, y);
+    doc.text(`Profissional: ${prof?.full_name || 'Não informado'}`, margin + contentWidth / 2, y);
     
     y += 6;
     if (prof?.professional_register) {
       doc.text(`Registro Profissional: ${prof.professional_register}`, margin, y);
     }
-    doc.text(`Período de Análise: ${rep.period_label || 'Não informado'}`, pageWidth / 2 + 10, y);
+    doc.text(`Período de Análise: ${rep.period_label || 'Não informado'}`, margin + contentWidth / 2, y);
     
     y += 8;
     doc.setDrawColor(231, 229, 228);
@@ -1136,6 +1136,196 @@ export default function PatientDetail() {
         
         // Linha 1: Dados do profissional
         const line1 = `Assinado Digitalmente por: ${rep.signed_by_name} (${rep.signed_by_register})`;
+        doc.text(line1, margin, 285);
+        
+        // Linha 2: Data, Hash e Página
+        const line2 = `Data: ${formattedDate} | Hash: ${shortHash}`;
+        doc.text(line2, margin, 289);
+        
+        doc.text(pageText, pageWidth - 20 - doc.getTextWidth(pageText), 289);
+      } else {
+        const line1 = `Rascunho de Documento - Não possui validade jurídica antes de ser assinado`;
+        doc.text(line1, margin, 285);
+        doc.text(pageText, pageWidth - 20 - doc.getTextWidth(pageText), 289);
+      }
+    }
+
+    return doc;
+  };
+
+  const generateEvolutionPDF = (evo: any, pat: any, prof: any, logoBase64?: string | null) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 30; // 3cm Margem Esquerda
+    const contentWidth = pageWidth - margin - 20; // 2cm Margem Direita
+
+    const primaryRgb = hexToRgb(siteConfig.colors?.primary || '#005C13') || { r: 0, g: 92, b: 19 };
+
+    // Cabecalho Timbrado
+    if (logoBase64) {
+      try {
+        doc.addImage(logoBase64, 'PNG', margin, 12, 40, 14, undefined, 'FAST');
+      } catch (err) {
+        console.error("Error drawing logo in PDF:", err);
+        doc.setFont('Helvetica', 'bold');
+        doc.setFontSize(18);
+        doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+        doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+      }
+    } else {
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+      doc.text(siteConfig.pwa_app_name || "Evolução Clínica", margin, 20);
+    }
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(87, 83, 78); // Brand text-muted
+    doc.text("Plataforma Inteligente de Acompanhamento Terapêutico", margin, 25);
+
+    doc.setDrawColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+    doc.setLineWidth(0.5);
+    doc.line(margin, 28, pageWidth - 20, 28);
+
+    // Identificação do Documento
+    doc.setFontSize(12);
+    doc.setFont('Helvetica', 'bold');
+    doc.setTextColor(primaryRgb.r, primaryRgb.g, primaryRgb.b);
+    doc.text('Evolução Clínica', margin, 38);
+
+    // Tabela de Dados
+    doc.setFontSize(9);
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(28, 25, 22); // text-color
+    
+    let y = 46;
+    doc.text(`Paciente: ${pat?.full_name || 'Não informado'}`, margin, y);
+    doc.text(`Profissional: ${prof?.full_name || 'Não informado'}`, margin + contentWidth / 2, y);
+    
+    y += 6;
+    if (prof?.professional_register) {
+      doc.text(`Registro Profissional: ${prof.professional_register}`, margin, y);
+    }
+    doc.text(`Data da Sessão: ${new Date(evo.created_at).toLocaleString('pt-BR')}`, margin + contentWidth / 2, y);
+    
+    y += 8;
+    doc.setDrawColor(231, 229, 228);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y, pageWidth - 20, y);
+
+    // Conteúdo da Evolução
+    y += 10;
+    
+    const lines = (evo.transcription_text || evo.content || '').split('\n');
+    
+    for (const line of lines) {
+      if (y > 270) {
+        doc.addPage();
+        y = 20; // reset y
+      }
+
+      const trimmed = line.trim();
+      if (!trimmed) {
+        y += 4; // espaco em branco
+        continue;
+      }
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor(28, 25, 22);
+      
+      const splitText = doc.splitTextToSize(trimmed, contentWidth);
+      
+      for (let i = 0; i < splitText.length; i++) {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        doc.text(splitText[i], margin, y);
+        y += 5.5;
+      }
+      y += 2;
+    }
+
+    // Carimbo de Assinatura se estiver assinado
+    if (evo.status === 'signed') {
+      y += 12;
+      if (y > 230) {
+        doc.addPage();
+        y = 30;
+      }
+      
+      // Caixa de Assinatura
+      doc.setFillColor(240, 253, 244); // bg-emerald-50
+      doc.setDrawColor(167, 243, 208); // border-emerald-200
+      doc.setLineWidth(0.3);
+      doc.rect(margin, y, contentWidth, 38, 'FD');
+
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(4, 120, 87); // text-emerald-700
+      doc.text("DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO", margin + 5, y + 6);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(55, 65, 81);
+      doc.text(`Assinado por: ${evo.signed_by_name || prof?.full_name} (${evo.signed_by_register || prof?.professional_register})`, margin + 5, y + 14);
+      
+      const formattedDate = new Date(evo.signature_date || evo.created_at).toLocaleString('pt-BR');
+      doc.text(`Data/Hora: ${formattedDate}`, margin + 5, y + 20);
+      doc.text(`IP de Origem: ${evo.signature_ip || '127.0.0.1'}   |   Algoritmo: SHA-256`, margin + 5, y + 26);
+      
+      doc.setFont('Courier', 'normal');
+      doc.setFontSize(7);
+      doc.text(`Hash: ${evo.signature_hash || ''}`, margin + 5, y + 32);
+    } else {
+      // Rodapé normal de assinatura manual
+      y += 20;
+      if (y > 250) {
+        doc.addPage();
+        y = 30;
+      }
+      doc.setDrawColor(87, 83, 78);
+      doc.setLineWidth(0.3);
+      doc.line(pageWidth / 2 - 30, y, pageWidth / 2 + 30, y);
+      
+      doc.setFont('Helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(28, 25, 22);
+      doc.text(prof?.full_name || 'Profissional de Saúde', pageWidth / 2, y + 5, { align: 'center' });
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.text(prof?.professional_register || '', pageWidth / 2, y + 9, { align: 'center' });
+    }
+
+    // Rodapé de Assinatura Corrente em Todas as Páginas
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      
+      // Desenhar uma linha sutil acima do rodape
+      doc.setDrawColor(231, 229, 228);
+      doc.setLineWidth(0.2);
+      doc.line(margin, 281, pageWidth - 20, 281);
+
+      doc.setFont('Helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(120, 113, 108);
+
+      const pageText = `Página ${i} de ${totalPages}`;
+      
+      if (evo.status === 'signed') {
+        const shortHash = evo.signature_hash ? `${evo.signature_hash.substring(0, 16)}...` : '';
+        const formattedDate = new Date(evo.signature_date || evo.created_at).toLocaleDateString('pt-BR');
+        
+        // Linha 1: Dados do profissional
+        const line1 = `Assinado Digitalmente por: ${evo.signed_by_name || prof?.full_name} (${evo.signed_by_register || prof?.professional_register})`;
         doc.text(line1, margin, 285);
         
         // Linha 2: Data, Hash e Página
@@ -1997,7 +2187,20 @@ export default function PatientDetail() {
                         {evo.status === 'signed' && (
                           <button
                             type="button"
-                            onClick={() => handlePrintEvolution(evo)}
+                            onClick={async () => {
+                              let logoBase64 = null;
+                              if (siteConfig.logo_light_url) {
+                                try {
+                                  logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                                } catch (err) {
+                                  console.error("Error preloading logo:", err);
+                                }
+                              }
+                              const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
+                              const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+                              const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                              doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
+                            }}
                             className="btn-outline h-8 px-2 flex items-center gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 cursor-pointer text-xs font-semibold rounded-xl"
                             title="Baixar PDF do Prontuário Assinado"
                           >

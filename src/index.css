@@ -55,7 +55,7 @@
 /* Estilos de Impressão Limpa */
 @media print {
   @page {
-    margin: 2cm 2cm 2cm 3cm !important;
+    margin: 0 !important;
   }
 
   /* Oculta completamente o root do React e elementos extras para evitar páginas vazias */
@@ -80,9 +80,13 @@
     top: 0 !important;
     width: 100% !important;
     margin: 0 !important;
-    padding: 0 !important;
+    padding-top: 20mm !important;
+    padding-right: 20mm !important;
+    padding-bottom: 20mm !important;
+    padding-left: 30mm !important;
     background: white !important;
     color: #1c1917 !important;
+    box-sizing: border-box !important;
   }
 
   #print-area * {
