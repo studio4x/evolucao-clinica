@@ -3,12 +3,13 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File } from 'lucide-react';
+import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding, getOnboardingState } from '../utils/onboarding';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 
 declare global {
   interface Window {
@@ -149,6 +150,7 @@ export default function PatientForm() {
   const [loading, setLoading] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
+  const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
   const [formData, setFormData] = useState<PatientFormValues>(emptyPatientFormValues);
   const pendingPatientIdRef = useRef<string | null>(null);
 
@@ -744,7 +746,15 @@ export default function PatientForm() {
               </option>
             ))}
           </select>
-          <p className="text-xs text-brand-text-muted mt-1">
+          <button
+            type="button"
+            onClick={() => setIsTemplateHelpOpen(true)}
+            className="mt-1.5 text-xs text-brand-primary hover:text-brand-primary-hover hover:underline flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0"
+          >
+            <HelpCircle className="w-3.5 h-3.5" />
+            Não sabe qual escolher? Ver diferenças dos templates
+          </button>
+          <p className="text-xs text-brand-text-muted mt-1.5">
             Define o formato metodológico clínico padrão para as evoluções deste paciente (ex: SOAP, ABA, TCC).
           </p>
         </div>
@@ -1217,6 +1227,11 @@ export default function PatientForm() {
         confirmLabel="Autorizar acesso ao Google"
         mode="onboarding"
         showCloseButton={false}
+      />
+
+      <TemplateExplanationModal
+        isOpen={isTemplateHelpOpen}
+        onClose={() => setIsTemplateHelpOpen(false)}
       />
     </div>
   );

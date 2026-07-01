@@ -3,10 +3,11 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
+import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, HelpCircle } from 'lucide-react';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
@@ -48,6 +49,7 @@ export default function NewEvolution() {
   const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
 
   // Estados para visualização/edição do prontuário no modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -887,6 +889,14 @@ export default function NewEvolution() {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={() => setIsTemplateHelpOpen(true)}
+              className="mt-1.5 text-xs text-brand-primary hover:text-brand-primary-hover hover:underline flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              Não sabe qual escolher? Ver diferenças dos templates
+            </button>
           </div>
         </div>
 
@@ -1338,6 +1348,11 @@ export default function NewEvolution() {
         confirmLabel="Voltar ao cadastro do paciente"
         mode="onboarding"
         showCloseButton={false}
+      />
+
+      <TemplateExplanationModal
+        isOpen={isTemplateHelpOpen}
+        onClose={() => setIsTemplateHelpOpen(false)}
       />
     </div>
   );
