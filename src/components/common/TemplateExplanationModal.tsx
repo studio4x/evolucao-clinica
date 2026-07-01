@@ -124,6 +124,27 @@ export default function TemplateExplanationModal({ isOpen, onClose }: TemplateEx
 
   const currentTemplate = TEMPLATE_DETAILS.find(t => t.id === activeTab) || TEMPLATE_DETAILS[1];
 
+  const renderFormattedExample = (text: string) => {
+    const paragraphs = text.split('\n\n');
+    return paragraphs.map((para, i) => {
+      const parts = para.split('**');
+      return (
+        <p key={i} className={i > 0 ? 'mt-3.5' : ''}>
+          {parts.map((part, index) => {
+            if (index % 2 === 1) {
+              return (
+                <strong key={index} className="font-bold text-brand-text-dark">
+                  {part}
+                </strong>
+              );
+            }
+            return part;
+          })}
+        </p>
+      );
+    });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-fade-in backdrop-blur-xs">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] md:h-auto max-h-[85vh] flex flex-col overflow-hidden border border-brand-border animate-scale-up">
@@ -221,8 +242,8 @@ export default function TemplateExplanationModal({ isOpen, onClose }: TemplateEx
                 </div>
                 
                 {/* Styled sheet of patient record */}
-                <div className="text-sm text-stone-700 leading-relaxed font-sans whitespace-pre-line">
-                  {currentTemplate.example}
+                <div className="text-sm text-stone-700 leading-relaxed font-sans">
+                  {renderFormattedExample(currentTemplate.example)}
                 </div>
               </div>
             </div>
