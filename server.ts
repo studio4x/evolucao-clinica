@@ -3543,6 +3543,54 @@ ${contextText}`;
   }
 });
 
+// Endpoint público para visualização de relatórios assinados
+app.get("/api/public/reports/:reportId", async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    
+    // 1. Buscar relatório assinado
+    const { data: report, error: reportError } = await supabaseAdmin
+      .from("patient_reports")
+      .select("*")
+      .eq("id", reportId)
+      .single();
+
+    if (reportError || !report || report.status !== 'signed') {
+      return res.status(404).json({ error: "Documento não encontrado ou indisponível." });
+    }
+
+    // 2. Buscar paciente
+    const { data: patient, error: patientError } = await supabaseAdmin
+      .from("patients")
+      .select("id, full_name, birth_date")
+      .eq("id", report.patient_id)
+      .single();
+
+    // 3. Buscar profissional
+    const { data: professional, error: professionalError } = await supabaseAdmin
+      .from("professionals")
+      .select("id, full_name, professional_register, professional_title")
+      .eq("id", report.professional_id)
+      .single();
+
+    // 4. Buscar configurações públicas da marca (opcional)
+    const { data: brandSettings } = await supabaseAdmin
+      .from("settings")
+      .eq("id", "brand_settings")
+      .single();
+
+    res.json({
+      report,
+      patient,
+      professional,
+      brandSettings: brandSettings?.api_key ? JSON.parse(brandSettings.api_key) : null
+    });
+  } catch (err: any) {
+    console.error("Erro ao obter relatório público:", err);
+    res.status(500).json({ error: err.message || "Erro ao obter relatório." });
+  }
+});
+
 // API 404 Catch-all
 app.all(/^\/api\/.*$/, (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
@@ -3568,54 +3616,6 @@ export async function startServer() {
     } else {
       console.log(`Servidor iniciado com chave Gemini detectada.`);
     }
-
-    // Endpoint público para visualização de relatórios assinados
-    app.get("/api/public/reports/:reportId", async (req, res) => {
-      try {
-        const { reportId } = req.params;
-        
-        // 1. Buscar relatório assinado
-        const { data: report, error: reportError } = await supabaseAdmin
-          .from("patient_reports")
-          .select("*")
-          .eq("id", reportId)
-          .single();
-
-        if (reportError || !report || report.status !== 'signed') {
-          return res.status(404).json({ error: "Documento não encontrado ou indisponível." });
-        }
-
-        // 2. Buscar paciente
-        const { data: patient, error: patientError } = await supabaseAdmin
-          .from("patients")
-          .select("id, full_name, birth_date")
-          .eq("id", report.patient_id)
-          .single();
-
-        // 3. Buscar profissional
-        const { data: professional, error: professionalError } = await supabaseAdmin
-          .from("professionals")
-          .select("id, full_name, professional_register, professional_title")
-          .eq("id", report.professional_id)
-          .single();
-
-        // 4. Buscar configurações públicas da marca (opcional)
-        const { data: brandSettings } = await supabaseAdmin
-          .from("settings")
-          .eq("id", "brand_settings")
-          .single();
-
-        res.json({
-          report,
-          patient,
-          professional,
-          brandSettings: brandSettings?.api_key ? JSON.parse(brandSettings.api_key) : null
-        });
-      } catch (err: any) {
-        console.error("Erro ao obter relatório público:", err);
-        res.status(500).json({ error: err.message || "Erro ao obter relatório." });
-      }
-    });
 
     // Vite middleware for development
     if (process.env.NODE_ENV !== "production") {
