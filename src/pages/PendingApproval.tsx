@@ -9,7 +9,7 @@ import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandA
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 
 export default function PendingApproval() {
-  const { user, profileStatus, profileRole, setUser, setProfileInfo } = useAuthStore();
+  const { user, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const siteConfig = useSiteConfig();
@@ -21,14 +21,26 @@ export default function PendingApproval() {
     if (!user) {
       navigate('/login', { replace: true });
     } else if (profileStatus === 'active') {
-      if (profileRole !== 'admin' && !isOnboardingComplete(user.id)) {
+      const isPendingCheckoutFlow = sessionStorage.getItem('pending_checkout_flow') === 'true';
+      const now = new Date();
+      const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+      const isExpired = endsAt ? endsAt < now : false;
+      const isActive = isPendingCheckoutFlow
+        ? subscriptionStatus === 'active'
+        : (subscriptionStatus === 'active' || subscriptionStatus === 'trialing');
+
+      if (profileRole === 'admin') {
+        navigate('/admin/professionals', { replace: true });
+      } else if (isPendingCheckoutFlow && (!isActive || isExpired)) {
+        navigate('/painel/subscription', { replace: true });
+      } else if (!isOnboardingComplete(user.id)) {
         navigate(getOnboardingDestination(user.id), { replace: true });
       } else {
         // Se já estiver ativo, pode ir direto para a raiz
         navigate('/painel/dashboard', { replace: true });
       }
     }
-  }, [user, profileStatus, profileRole, navigate]);
+  }, [user, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, navigate]);
 
   useEffect(() => {
     if (!user || profileStatus === 'active') {
@@ -71,10 +83,6 @@ export default function PendingApproval() {
           profile.subscription_ends_at || null,
           profile.trial_ends_at || null
         );
-
-        if (nextStatus === 'active') {
-          navigate('/painel/dashboard', { replace: true });
-        }
       } catch (error) {
         console.error('Erro ao sincronizar acesso pendente:', error);
       }
