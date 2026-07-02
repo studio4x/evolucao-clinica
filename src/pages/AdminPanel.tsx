@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -12,6 +12,7 @@ import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupp
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import { completeOnboarding } from '../utils/onboarding';
+import AdminFaqCrud from '../components/support/AdminFaqCrud';
 
 interface Professional {
   id: string;
@@ -142,6 +143,7 @@ export default function AdminPanel() {
     if (path.endsWith('/support')) return 'support';
     if (path.endsWith('/profile')) return 'profile';
     if (path.endsWith('/brand')) return 'brand';
+    if (path.endsWith('/faq')) return 'faq';
     return 'professionals'; // default
   };
 
@@ -160,10 +162,11 @@ export default function AdminPanel() {
     { key: 'email_history', label: 'Histórico de E-mails', icon: Clock },
     { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
     { key: 'brand', label: 'Identidade Visual', icon: Globe },
+    { key: 'faq', label: 'Gerenciar FAQ', icon: HelpCircle },
     { key: 'profile', label: 'Meu Perfil', icon: User }
   ] as const;
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'faq') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -177,6 +180,7 @@ export default function AdminPanel() {
     else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
     else if (tab === 'support') navigate('/admin/support');
     else if (tab === 'brand') navigate('/admin/brand');
+    else if (tab === 'faq') navigate('/admin/faq');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -4954,6 +4958,26 @@ export default function AdminPanel() {
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+            ) : activeTab === 'faq' ? (
+              /* Aba de Gerenciamento do FAQ do Sistema [NEW] */
+              <div className="space-y-6">
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <HelpCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Gerenciar FAQ
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Gerencie as dúvidas e respostas frequentes exibidas no Guia de Uso dos profissionais.
+                      </p>
+                    </div>
+                  </div>
+                  <AdminFaqCrud />
                 </div>
               </div>
             ) : activeTab === 'brand' ? (
