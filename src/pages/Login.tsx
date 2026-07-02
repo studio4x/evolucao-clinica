@@ -17,13 +17,17 @@ export default function Login() {
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [searchParams] = useSearchParams();
-  const fromPlan = searchParams.get('from_plan') === '1';
+  const fromPlan = searchParams.get('from_plan');
 
   useEffect(() => {
-    if (fromPlan) {
+    if (fromPlan === 'monthly' || fromPlan === 'yearly' || fromPlan === '1') {
       sessionStorage.setItem('pending_checkout_flow', 'true');
-    } else {
+      if (fromPlan === 'monthly' || fromPlan === 'yearly') {
+        sessionStorage.setItem('selected_checkout_plan', fromPlan);
+      }
+    } else if (fromPlan === null) {
       sessionStorage.removeItem('pending_checkout_flow');
+      sessionStorage.removeItem('selected_checkout_plan');
     }
   }, [fromPlan]);
 
