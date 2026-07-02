@@ -620,7 +620,19 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Compartilhamento via WhatsApp integrado</span>
+                    <span>Busca Semântica por IA (Pesquisa Inteligente - RAG)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check size={16} className="text-brand-primary flex-shrink-0" />
+                    <span>Assinatura Digital com Validade Jurídica (SHA-256)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check size={16} className="text-brand-primary flex-shrink-0" />
+                    <span>Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Check size={16} className="text-brand-primary flex-shrink-0" />
+                    <span>Filtro de Período na Impressão do Prontuário</span>
                   </li>
                 </ul>
               </div>
@@ -666,11 +678,11 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Suporte prioritário via e-mail</span>
+                    <span>Suporte prioritário via e-mail e WhatsApp</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Garantia de novos recursos exclusivos</span>
+                    <span>Garantia de novos recursos em primeira mão</span>
                   </li>
                 </ul>
               </div>

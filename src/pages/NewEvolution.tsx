@@ -30,9 +30,36 @@ export default function NewEvolution() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, isAuthReady } = useAuthStore();
+  const { 
+    user, 
+    googleAccessToken, 
+    googleGrantedScopes, 
+    setGoogleAccessToken, 
+    isAuthReady,
+    subscriptionStatus,
+    subscriptionEndsAt,
+    profileRole
+  } = useAuthStore();
   const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+
+  const isPlanActive = () => {
+    if (profileRole === 'admin') return true;
+    const now = new Date();
+    const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+    const isExpired = endsAt ? endsAt < now : false;
+    const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+    return isActive && !isExpired;
+  };
+
+  const checkPlanActiveAndAlert = (actionName: string): boolean => {
+    if (!isPlanActive()) {
+      alert(`Para acessar e utilizar a funcionalidade "${actionName}", você precisa ter um plano de assinatura ativo. Por favor, regularize seu plano.`);
+      navigate('/painel/subscription');
+      return false;
+    }
+    return true;
+  };
   const isOnboardingMode = searchParams.get('onboarding') === '1';
   
   const [patient, setPatient] = useState<any>(null);
@@ -891,7 +918,11 @@ export default function NewEvolution() {
             </select>
             <button
               type="button"
-              onClick={() => setIsTemplateHelpOpen(true)}
+              onClick={() => {
+                if (checkPlanActiveAndAlert("Comparação de Modelos Clínicos")) {
+                  setIsTemplateHelpOpen(true);
+                }
+              }}
               className="mt-1.5 text-xs text-brand-primary hover:text-brand-primary-hover hover:underline flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0"
             >
               <HelpCircle className="w-3.5 h-3.5" />

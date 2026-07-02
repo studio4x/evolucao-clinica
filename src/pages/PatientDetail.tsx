@@ -82,8 +82,34 @@ export default function PatientDetail() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const { 
+    user, 
+    googleAccessToken, 
+    googleGrantedScopes, 
+    setGoogleAccessToken,
+    subscriptionStatus,
+    subscriptionEndsAt,
+    profileRole
+  } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+
+  const isPlanActive = () => {
+    if (profileRole === 'admin') return true;
+    const now = new Date();
+    const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+    const isExpired = endsAt ? endsAt < now : false;
+    const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+    return isActive && !isExpired;
+  };
+
+  const checkPlanActiveAndAlert = (actionName: string): boolean => {
+    if (!isPlanActive()) {
+      alert(`Para acessar e utilizar a funcionalidade "${actionName}", você precisa ter um plano de assinatura ativo. Por favor, regularize seu plano.`);
+      navigate('/painel/subscription');
+      return false;
+    }
+    return true;
+  };
 
   // Estados para as configurações de lembretes
   const [reminderActive, setReminderActive] = useState(false);
@@ -180,6 +206,10 @@ export default function PatientDetail() {
     e.preventDefault();
     if (!semanticQuery.trim() || !id) return;
 
+    if (!checkPlanActiveAndAlert("Busca Semântica por IA")) {
+      return;
+    }
+
     setSemanticLoading(true);
     setSemanticAnswer(null);
     setSemanticSources([]);
@@ -229,6 +259,11 @@ export default function PatientDetail() {
 
   const handleManualIndex = async () => {
     if (!id) return;
+    
+    if (!checkPlanActiveAndAlert("Busca Semântica por IA")) {
+      return;
+    }
+
     setIndexingPending(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -325,6 +360,9 @@ export default function PatientDetail() {
   };
 
   const handleSignEvolutionDirectly = async (evoId: string) => {
+    if (!checkPlanActiveAndAlert("Assinatura Digital")) {
+      return;
+    }
     if (!window.confirm("Deseja assinar e fechar esta evolução? Após assinar, ela se tornará imutável para fins de conformidade legal e não poderá mais ser alterada ou excluída.")) {
       return;
     }
@@ -363,6 +401,9 @@ export default function PatientDetail() {
   };
 
   const executeReportSignature = async (reportId: string) => {
+    if (!checkPlanActiveAndAlert("Assinatura Digital")) {
+      return;
+    }
     setSigningReportId(reportId);
     try {
       const { data: updatedReport, error } = await supabase
@@ -427,6 +468,9 @@ export default function PatientDetail() {
   };
 
   const handlePrintProntuario = () => {
+    if (!checkPlanActiveAndAlert("Filtro de Período na Impressão")) {
+      return;
+    }
     setShowPrintFilterModal(true);
   };
 
@@ -568,6 +612,9 @@ export default function PatientDetail() {
   };
 
   const handleShareWhatsApp = (content: string, type: string, rep?: any) => {
+    if (!checkPlanActiveAndAlert("Compartilhamento Seguro")) {
+      return;
+    }
     const docLabel = type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)';
     
     let messageText = '';
@@ -1287,6 +1334,11 @@ export default function PatientDetail() {
     e.preventDefault();
     const contentToSend = viewingReport ? viewingReportContent : generatedReport;
     if (!recipientEmail || !contentToSend) return;
+
+    if (!checkPlanActiveAndAlert("Compartilhamento Seguro")) {
+      return;
+    }
+
     setSendingEmail(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
