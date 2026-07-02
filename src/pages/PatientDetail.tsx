@@ -2888,6 +2888,51 @@ export default function PatientDetail() {
                       )}
 
 
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isLastReportSigned) {
+                            setBlockedFeatureModal({
+                              isOpen: true,
+                              title: 'Assinatura Necessária',
+                              message: 'Para enviar este relatório por e-mail, ele precisa estar digitalmente assinado e fechado.'
+                            });
+                            return;
+                          }
+                          const docLabel = aiReportType === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
+                          setEmailSubject(`[Evolução Clínica] ${docLabel} - ${patient?.full_name}`);
+                          setRecipientEmail('');
+                          setShowEmailInput(true);
+                        }}
+                        className={`btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 ${!isLastReportSigned ? 'opacity-50' : ''}`}
+                        title={!isLastReportSigned ? "Assine o relatório para poder enviar por e-mail" : ""}
+                      >
+                        <Mail size={14} />
+                        <span>Enviar por E-mail</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!isLastReportSigned) {
+                            setBlockedFeatureModal({
+                              isOpen: true,
+                              title: 'Assinatura Necessária',
+                              message: 'Para enviar este relatório por WhatsApp, ele precisa estar digitalmente assinado e fechado.'
+                            });
+                            return;
+                          }
+                          setWhatsAppConfirmContent(generatedReport);
+                          setWhatsAppConfirmType(aiReportType);
+                          setShowWhatsAppConfirmModal(true);
+                        }}
+                        className={`btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 ${!isLastReportSigned ? 'opacity-50' : ''}`}
+                        title={!isLastReportSigned ? "Assine o relatório para poder enviar por WhatsApp" : ""}
+                      >
+                        <MessageCircle size={14} className={isLastReportSigned ? "text-emerald-600" : "text-gray-400"} />
+                        <span>Enviar ao paciente por WhatsApp</span>
+                      </button>
+
                       {lastGeneratedReportId && !isLastReportSigned && (
                         <button
                           type="button"
