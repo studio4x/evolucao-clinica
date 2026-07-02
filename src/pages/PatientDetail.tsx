@@ -1553,6 +1553,9 @@ export default function PatientDetail() {
     });
   };
 
+  const lastReportObj = reports.find(r => r.id === lastGeneratedReportId);
+  const isLastReportSigned = lastReportObj?.status === 'signed';
+
   if (loading) return <div>Carregando...</div>;
   if (!patient) return <div>Paciente não encontrado.</div>;
 
@@ -2846,17 +2849,63 @@ export default function PatientDetail() {
                       )}
 
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const periodLabel = aiPeriod === '3_months' ? 'Últimos 3 meses' : aiPeriod === '6_months' ? 'Últimos 6 meses' : 'Período Personalizado';
-                          handlePrintReport(generatedReport, periodLabel, aiReportType);
-                        }}
-                        className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
-                      >
-                        <Printer size={14} />
-                        <span>Imprimir / PDF</span>
-                      </button>
+                      {lastGeneratedReportId && !isLastReportSigned && (
+                        <button
+                          type="button"
+                          onClick={() => handleSignReportDirectly(lastGeneratedReportId)}
+                          disabled={signingReportId === lastGeneratedReportId}
+                          className="btn-primary py-2 px-3 text-xs flex items-center space-x-1.5 cursor-pointer bg-brand-primary hover:bg-brand-primary/95 text-white"
+                        >
+                          {signingReportId === lastGeneratedReportId ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Shield size={14} />
+                          )}
+                          <span>Assinar e Fechar</span>
+                        </button>
+                      )}
+
+                      {isLastReportSigned ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            let logoBase64 = null;
+                            if (siteConfig.logo_light_url) {
+                              try {
+                                logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                              } catch (err) {
+                                console.error("Error preloading logo:", err);
+                              }
+                            }
+                            if (lastReportObj) {
+                              const doc = generateReportPDF(lastReportObj, patient, professional, siteConfig, logoBase64);
+                              const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+                              const docLabel = lastReportObj.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
+                              doc.save(`${docLabel}_${cleanPatientName}.pdf`);
+                            }
+                          }}
+                          className="btn-outline py-2 px-3 text-xs flex items-center space-x-1.5 cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        >
+                          <Download size={14} />
+                          <span>Baixar PDF</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBlockedFeatureModal({
+                              isOpen: true,
+                              title: 'Assinatura Necessária',
+                              message: 'Para imprimir ou gerar o PDF deste relatório, ele precisa estar digitalmente assinado e fechado.'
+                            });
+                          }}
+                          className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 opacity-50"
+                          title="Assine o relatório para poder imprimir / gerar PDF"
+                        >
+                          <Printer size={14} />
+                          <span>Imprimir / PDF</span>
+                        </button>
+                      )}
                     </div>
                     
                     <button
