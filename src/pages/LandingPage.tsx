@@ -620,11 +620,11 @@ export default function LandingPage() {
                   </li>
                   <li className="flex items-center gap-2">
                     <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Busca Semântica por IA (Pesquisa Inteligente - RAG)</span>
+                    <span>Pesquisa Inteligente por IA (Pergunte ao Prontuário)</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Assinatura Digital com Validade Jurídica (SHA-256)</span>
+                    <span>Assinatura Digital de Documentos com Proteção Legal</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check size={16} className="text-brand-primary flex-shrink-0" />

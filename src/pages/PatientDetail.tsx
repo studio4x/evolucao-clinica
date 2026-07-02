@@ -206,7 +206,7 @@ export default function PatientDetail() {
     e.preventDefault();
     if (!semanticQuery.trim() || !id) return;
 
-    if (!checkPlanActiveAndAlert("Busca Semântica por IA")) {
+    if (!checkPlanActiveAndAlert("Pesquisa Inteligente por IA")) {
       return;
     }
 
@@ -260,7 +260,7 @@ export default function PatientDetail() {
   const handleManualIndex = async () => {
     if (!id) return;
     
-    if (!checkPlanActiveAndAlert("Busca Semântica por IA")) {
+    if (!checkPlanActiveAndAlert("Pesquisa Inteligente por IA")) {
       return;
     }
 
@@ -3500,7 +3500,7 @@ export default function PatientDetail() {
                 </h4>
                 <ul className="text-xs text-amber-700 list-disc list-inside space-y-1 pl-1">
                   <li>O documento se tornará <strong>imutável</strong> e não poderá mais ser editado ou excluído.</li>
-                  <li>Será gerado um hash criptográfico <strong>SHA-256</strong> exclusivo que atesta a integridade do conteúdo.</li>
+                  <li>Será gerado um código digital exclusivo que atesta a autenticidade e integridade do conteúdo.</li>
                   <li>O carimbo de assinatura conterá a data/hora oficial e o IP da sua conexão.</li>
                   <li>Isso garante a conformidade com a <strong>LGPD</strong> e resoluções dos conselhos federais de saúde.</li>
                 </ul>
@@ -3685,9 +3685,9 @@ export default function PatientDetail() {
                 <div><strong>Assinado por:</strong> {printSignatureInfo.name} ({printSignatureInfo.register})</div>
                 <div><strong>Data/Hora da Assinatura:</strong> {formatDateTime(printSignatureInfo.date)}</div>
                 <div><strong>Endereço IP:</strong> {printSignatureInfo.ip}</div>
-                <div><strong>Algoritmo:</strong> SHA-256</div>
+                <div><strong>Segurança:</strong> Criptografia de Alta Proteção</div>
                 <div className="col-span-2 font-mono break-all text-[9px] bg-white p-2 border border-emerald-100 rounded">
-                  <strong>Hash de Integridade (Assinatura):</strong> {printSignatureInfo.hash}
+                  <strong>Chave de Autenticidade Digital:</strong> {printSignatureInfo.hash}
                 </div>
               </div>
             </div>
