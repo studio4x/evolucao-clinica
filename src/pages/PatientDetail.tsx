@@ -133,6 +133,10 @@ export default function PatientDetail() {
     title: string;
     message: string;
   } | null>(null);
+  const [showSignConfirmModal, setShowSignConfirmModal] = useState<{
+    isOpen: boolean;
+    reportId: string;
+  } | null>(null);
   const [originalReportContent, setOriginalReportContent] = useState('');
 
   // Estados do Mural de Notas Rápidas
@@ -354,10 +358,11 @@ export default function PatientDetail() {
 
   const [signingReportId, setSigningReportId] = useState<string | null>(null);
 
-  const handleSignReportDirectly = async (reportId: string) => {
-    if (!window.confirm("Deseja assinar e fechar este relatório? Após assinar, ele se tornará imutável para fins de conformidade legal e não poderá mais ser alterado ou excluído.")) {
-      return;
-    }
+  const handleSignReportDirectly = (reportId: string) => {
+    setShowSignConfirmModal({ isOpen: true, reportId });
+  };
+
+  const executeReportSignature = async (reportId: string) => {
     setSigningReportId(reportId);
     try {
       const { data: updatedReport, error } = await supabase
@@ -3404,6 +3409,76 @@ export default function PatientDetail() {
                 className="bg-brand-primary text-white hover:bg-brand-primary-hover font-medium text-xs px-4 py-2 rounded-xl transition-all duration-200 cursor-pointer"
               >
                 Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação e Explicação de Assinatura Digital e Fechamento */}
+      {showSignConfirmModal?.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full flex flex-col border border-brand-border animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50 rounded-t-2xl">
+              <div className="flex items-center space-x-2 text-brand-primary">
+                <Shield size={20} className="text-brand-primary" />
+                <h3 className="text-lg font-display font-semibold text-brand-text mb-0">
+                  Assinatura Digital e Fechamento
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowSignConfirmModal(null)}
+                className="text-gray-400 hover:text-gray-600 cursor-pointer transition-colors p-1"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-brand-text-muted leading-relaxed">
+                Você está prestes a <strong>assinar digitalmente</strong> e fechar este relatório clínico. A assinatura digital garante a autenticidade e a conformidade jurídica do documento.
+              </p>
+              
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2.5">
+                <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-0 flex items-center space-x-1.5">
+                  <AlertTriangle size={14} />
+                  <span>Atenção aos efeitos legais:</span>
+                </h4>
+                <ul className="text-xs text-amber-700 list-disc list-inside space-y-1 pl-1">
+                  <li>O documento se tornará <strong>imutável</strong> e não poderá mais ser editado ou excluído.</li>
+                  <li>Será gerado um hash criptográfico <strong>SHA-256</strong> exclusivo que atesta a integridade do conteúdo.</li>
+                  <li>O carimbo de assinatura conterá a data/hora oficial e o IP da sua conexão.</li>
+                  <li>Isso garante a conformidade com a <strong>LGPD</strong> e resoluções dos conselhos federais de saúde.</li>
+                </ul>
+              </div>
+
+              <p className="text-xs text-brand-text-muted leading-relaxed">
+                Deseja prosseguir com a homologação e fechamento deste documento?
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-brand-border flex justify-end space-x-3 bg-brand-bg/20 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setShowSignConfirmModal(null)}
+                className="px-4 py-2 border border-brand-border text-xs font-medium rounded-xl hover:bg-gray-100 text-brand-text-muted transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const reportId = showSignConfirmModal.reportId;
+                  setShowSignConfirmModal(null);
+                  await executeReportSignature(reportId);
+                }}
+                className="px-5 py-2 btn-primary bg-brand-primary text-white hover:bg-brand-primary-hover text-xs font-semibold rounded-xl flex items-center space-x-1.5 cursor-pointer shadow-md"
+              >
+                <Shield size={14} />
+                <span>Confirmar Assinatura</span>
               </button>
             </div>
           </div>
