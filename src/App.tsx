@@ -26,6 +26,7 @@ import { CookieConsent } from './components/CookieConsent';
 
 import PendingApproval from './pages/PendingApproval';
 import Onboarding from './pages/Onboarding';
+import CheckoutPage from './pages/CheckoutPage';
 import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
@@ -42,7 +43,7 @@ const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const location = useLocation();
-  const isOnboardingRoute = location.pathname.startsWith('/onboarding');
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding') || location.pathname === '/checkout';
   
   if (!isAuthReady) {
     return <SplashScreen message="Preparando seu ambiente clínico..." />;
@@ -78,8 +79,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const isActive = subscriptionStatus === 'active';
 
     if (!isActive || isExpired) {
-      if (location.pathname !== '/painel/subscription') {
-        return <Navigate to="/painel/subscription" replace />;
+      if (location.pathname !== '/checkout') {
+        return <Navigate to="/checkout" replace />;
       }
       return <>{children}</>;
     } else {
@@ -539,6 +540,7 @@ export default function App() {
       
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/pending" element={<PendingApproval />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />

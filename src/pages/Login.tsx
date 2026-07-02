@@ -48,7 +48,7 @@ export default function Login() {
       } else if (profileRole === 'admin') {
         navigate('/admin/professionals', { replace: true });
       } else if (isPendingCheckoutFlow && (!isActive || isExpired)) {
-        navigate('/painel/subscription', { replace: true });
+        navigate('/checkout', { replace: true });
       } else if (!isOnboardingComplete(user.id)) {
         navigate(getOnboardingDestination(user.id), { replace: true });
       } else {
