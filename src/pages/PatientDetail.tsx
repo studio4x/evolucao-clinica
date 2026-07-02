@@ -199,6 +199,13 @@ export default function PatientDetail() {
 
       const result = await response.json();
 
+      if (response.status === 401) {
+        alert("Sua sessão de acesso expirou por razões de segurança. Você será redirecionado para a tela de login.");
+        await supabase.auth.signOut();
+        navigate('/login');
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(result.error || 'Erro ao realizar a busca semântica.');
       }
@@ -236,6 +243,13 @@ export default function PatientDetail() {
       });
 
       const result = await response.json();
+
+      if (response.status === 401) {
+        alert("Sua sessão de acesso expirou por razões de segurança. Você será redirecionado para a tela de login.");
+        await supabase.auth.signOut();
+        navigate('/login');
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(result.error || 'Erro ao indexar evoluções.');
@@ -779,6 +793,24 @@ export default function PatientDetail() {
 
       const result = await response.json();
 
+      if (response.status === 401) {
+        if (result.error && (result.error.includes("Google") || result.error.includes("Sessão do Google"))) {
+          alert("Sua sessão do Google expirou. Vamos redirecionar você para reautenticar de forma segura.");
+          setGoogleAccessToken(null);
+          await requestGoogleOAuth({
+            requiredScopes: 'clinicalDocs',
+            currentGrantedScopes: googleGrantedScopes,
+            redirectTo: getCurrentGoogleOAuthRedirectUrl()
+          });
+          return;
+        } else {
+          alert("Sua sessão de acesso expirou por razões de segurança. Você será redirecionado para a tela de login.");
+          await supabase.auth.signOut();
+          navigate('/login');
+          return;
+        }
+      }
+
       if (!response.ok) {
         throw new Error(result.error || "Erro ao gerar o relatório por IA.");
       }
@@ -1302,6 +1334,13 @@ export default function PatientDetail() {
       });
 
       const result = await response.json();
+
+      if (response.status === 401) {
+        alert("Sua sessão de acesso expirou por razões de segurança. Você será redirecionado para a tela de login.");
+        await supabase.auth.signOut();
+        navigate('/login');
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(result.error || "Erro ao enviar o e-mail.");
