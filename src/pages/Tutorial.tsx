@@ -13,7 +13,8 @@ import {
   ChevronUp, 
   Sparkles,
   BookOpen,
-  Loader2
+  Loader2,
+  LifeBuoy
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
@@ -285,6 +286,28 @@ export default function Tutorial() {
         >
           <span>Cadastrar Novo Paciente</span>
           <ArrowRight size={20} />
+        </button>
+      </div>
+
+      {/* Seção de Suporte */}
+      <div className="card p-6 md:p-8 bg-gradient-to-r from-brand-bg to-brand-primary/5 border border-brand-border rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-md transition-all">
+        <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
+          <div className="p-3 bg-brand-primary/10 rounded-2xl text-brand-primary">
+            <LifeBuoy size={32} className="animate-spin-slow" />
+          </div>
+          <div>
+            <h3 className="text-lg font-display font-bold text-brand-text">Ainda precisa de ajuda?</h3>
+            <p className="text-sm text-brand-text-muted mt-1 max-w-xl">
+              Não encontrou a resposta para a sua dúvida ou precisa de auxílio técnico? Nosso time de atendimento está pronto para ajudar. Abra um ticket no suporte!
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={() => navigate('/painel/support')}
+          className="btn-outline px-6 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white cursor-pointer bg-white"
+        >
+          <span>Acessar Canal de Suporte</span>
+          <ArrowRight size={16} />
         </button>
       </div>
     </div>
