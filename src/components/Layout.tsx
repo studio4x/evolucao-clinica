@@ -120,6 +120,14 @@ export default function Layout() {
     navItems.push({ name: 'Painel Admin', path: '/admin', icon: ShieldCheck });
   }
 
+  const bottomNavItems = [
+    { name: 'Início', path: '/painel/dashboard', icon: LayoutDashboard },
+    { name: 'Pacientes', path: '/painel/patients', icon: Users },
+    { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
+    { name: 'Notif.', path: '/painel/notifications', icon: Bell },
+    { name: 'Perfil', path: '/painel/profile', icon: User },
+  ];
+
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
       {/* Mobile Header */}
@@ -259,7 +267,7 @@ export default function Layout() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-x-hidden flex flex-col">
+      <div className="flex-1 overflow-x-hidden flex flex-col pb-16 md:pb-0">
         <TrialBanner />
         <main className="p-4 md:p-8 w-full md:w-[90%] max-w-none mx-auto flex-1">
           <Outlet />
@@ -276,6 +284,35 @@ export default function Layout() {
 
       {/* Fila de Sincronização Offline */}
       <OfflineQueueMonitor />
+
+      {/* Menu Inferior Mobile */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center py-2 pb-safe">
+        {bottomNavItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
+          return (
+            <Link
+              key={item.name}
+              to={item.path}
+              className={`flex flex-col items-center justify-center flex-1 py-1 transition-all duration-200 ${
+                isActive 
+                  ? 'text-brand-primary font-semibold scale-105' 
+                  : 'text-brand-text-muted hover:text-brand-primary'
+              }`}
+            >
+              <div className="relative">
+                <Icon size={20} className={isActive ? 'stroke-[2.5px]' : 'stroke-[1.8px]'} />
+                {item.name === 'Notif.' && unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] mt-1 font-sans">{item.name}</span>
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }
