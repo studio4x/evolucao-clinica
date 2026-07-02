@@ -3576,6 +3576,7 @@ app.get("/api/public/reports/:reportId", async (req, res) => {
     // 4. Buscar configurações públicas da marca (opcional)
     const { data: brandSettings } = await supabaseAdmin
       .from("settings")
+      .select("api_key")
       .eq("id", "brand_settings")
       .single();
 
