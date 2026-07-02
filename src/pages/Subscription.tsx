@@ -765,26 +765,25 @@ export default function Subscription() {
                   </button>
                 ) : (
                   <div className="space-y-3">
-                    <div className="w-full rounded-3xl border border-brand-border/60 bg-brand-bg/70 p-2 shadow-sm transition-shadow hover:shadow-md">
-                      <GooglePayButton
-                        environment={paymentSettings.environment}
-                        buttonType="subscribe"
-                        buttonColor="black"
-                        buttonSizeMode="fill"
-                        buttonLocale="pt"
-                        paymentRequest={getGooglePayRequest(plan.price, paymentSettings)}
-                        onLoadPaymentData={(paymentRequest) => {
-                          handleGooglePaySuccess(plan.id, paymentRequest);
-                        }}
-                        onError={(error) => {
-                          void handleGooglePayError(plan.id, error);
-                        }}
-                        onCancel={(reason) => {
-                          console.log('Pagamento cancelado pelo usuário:', reason);
-                        }}
-                        style={{ display: 'block', width: '100%', height: '56px' }}
-                      />
-                    </div>
+                    <GooglePayButton
+                      environment={paymentSettings.environment}
+                      buttonType="subscribe"
+                      buttonColor="black"
+                      buttonSizeMode="fill"
+                      buttonLocale="pt"
+                      buttonCornerRadius={8}
+                      paymentRequest={getGooglePayRequest(plan.price, paymentSettings)}
+                      onLoadPaymentData={(paymentRequest) => {
+                        handleGooglePaySuccess(plan.id, paymentRequest);
+                      }}
+                      onError={(error) => {
+                        void handleGooglePayError(plan.id, error);
+                      }}
+                      onCancel={(reason) => {
+                        console.log('Pagamento cancelado pelo usuário:', reason);
+                      }}
+                      style={{ width: '100%', height: '48px' }}
+                    />
                     
                     {profileRole === 'admin' && (
                       <button
