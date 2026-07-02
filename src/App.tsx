@@ -75,7 +75,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     const now = new Date();
     const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
     const isExpired = endsAt ? endsAt < now : false;
-    const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+    const isActive = subscriptionStatus === 'active';
 
     if (!isActive || isExpired) {
       if (location.pathname !== '/painel/subscription') {

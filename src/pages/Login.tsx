@@ -33,7 +33,9 @@ export default function Login() {
       const now = new Date();
       const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
       const isExpired = endsAt ? endsAt < now : false;
-      const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+      const isActive = isPendingCheckoutFlow
+        ? subscriptionStatus === 'active'
+        : (subscriptionStatus === 'active' || subscriptionStatus === 'trialing');
 
       if (profileStatus === 'pending') {
         navigate('/pending', { replace: true });
