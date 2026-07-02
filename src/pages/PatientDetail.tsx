@@ -128,6 +128,11 @@ export default function PatientDetail() {
   const [loadingFolderHierarchy, setLoadingFolderHierarchy] = useState(false);
   const [originalGeneratedReport, setOriginalGeneratedReport] = useState('');
   const [viewingReportContent, setViewingReportContent] = useState('');
+  const [blockedFeatureModal, setBlockedFeatureModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+  } | null>(null);
   const [originalReportContent, setOriginalReportContent] = useState('');
 
   // Estados do Mural de Notas Rápidas
@@ -3142,14 +3147,21 @@ export default function PatientDetail() {
 
                   <button
                     type="button"
-                    disabled={viewingReport.status !== 'signed'}
                     onClick={() => {
+                      if (viewingReport.status !== 'signed') {
+                        setBlockedFeatureModal({
+                          isOpen: true,
+                          title: 'Assinatura Necessária',
+                          message: 'Para enviar este relatório por e-mail, ele precisa estar digitalmente assinado e fechado.'
+                        });
+                        return;
+                      }
                       const docLabel = viewingReport.type === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
                       setEmailSubject(`[Evolução Clínica] ${docLabel} - ${patient?.full_name}`);
                       setRecipientEmail('');
                       setShowEmailInput(true);
                     }}
-                    className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 ${viewingReport.status !== 'signed' ? 'opacity-50' : ''}`}
                     title={viewingReport.status !== 'signed' ? "Assine o relatório para poder enviar por e-mail" : ""}
                   >
                     <Mail size={14} />
@@ -3158,13 +3170,20 @@ export default function PatientDetail() {
 
                   <button
                     type="button"
-                    disabled={viewingReport.status !== 'signed'}
                     onClick={() => {
+                      if (viewingReport.status !== 'signed') {
+                        setBlockedFeatureModal({
+                          isOpen: true,
+                          title: 'Assinatura Necessária',
+                          message: 'Para enviar este relatório por WhatsApp, ele precisa estar digitalmente assinado e fechado.'
+                        });
+                        return;
+                      }
                       setWhatsAppConfirmContent(viewingReportContent);
                       setWhatsAppConfirmType(viewingReport.type);
                       setShowWhatsAppConfirmModal(true);
                     }}
-                    className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 ${viewingReport.status !== 'signed' ? 'opacity-50' : ''}`}
                     title={viewingReport.status !== 'signed' ? "Assine o relatório para poder enviar por WhatsApp" : ""}
                   >
                     <MessageCircle size={14} className={viewingReport.status === 'signed' ? "text-emerald-600" : "text-gray-400"} />
@@ -3197,9 +3216,14 @@ export default function PatientDetail() {
                     <button
                       type="button"
                       onClick={() => {
-                        handlePrintReport(viewingReportContent, viewingReport.period_label, viewingReport.type);
+                        setBlockedFeatureModal({
+                          isOpen: true,
+                          title: 'Assinatura Necessária',
+                          message: 'Para imprimir ou gerar o PDF deste relatório, ele precisa estar digitalmente assinado e fechado.'
+                        });
                       }}
-                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50"
+                      className="btn-outline py-2 px-3 text-xs flex items-center space-x-1 cursor-pointer border-brand-border bg-white text-brand-text hover:bg-gray-50 opacity-50"
+                      title="Assine o relatório para poder imprimir / gerar PDF"
                     >
                       <Printer size={14} />
                       <span>Imprimir / PDF</span>
@@ -3220,6 +3244,34 @@ export default function PatientDetail() {
                   Fechar
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Explicativo de Recurso Bloqueado (LGPD / Assinatura Pendente) */}
+      {blockedFeatureModal?.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-brand-border animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center space-x-3 text-amber-500 mb-3">
+              <AlertTriangle size={24} className="stroke-[2.5px]" />
+              <h3 className="text-base font-bold text-brand-text mb-0">
+                {blockedFeatureModal.title}
+              </h3>
+            </div>
+            
+            <p className="text-sm text-brand-text-muted mb-5 leading-relaxed">
+              {blockedFeatureModal.message}
+            </p>
+            
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setBlockedFeatureModal(null)}
+                className="bg-brand-primary text-white hover:bg-brand-primary-hover font-medium text-xs px-4 py-2 rounded-xl transition-all duration-200 cursor-pointer"
+              >
+                Entendi
+              </button>
             </div>
           </div>
         </div>
