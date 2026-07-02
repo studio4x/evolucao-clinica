@@ -125,7 +125,7 @@ export default function Profile() {
     }
   };
 
-  const handleRestartOnboarding = () => {
+  const handleRestartOnboarding = async () => {
     if (!user) return;
 
     const confirmed = window.confirm(
@@ -137,7 +137,19 @@ export default function Profile() {
     setResettingOnboarding(true);
     try {
       clearOnboardingState(user.id);
+      
+      const { error } = await supabase
+        .from('professionals')
+        .update({ onboarding_completed: false })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Erro ao resetar status de onboarding no banco:', error);
+      }
+
       navigate('/onboarding', { replace: true });
+    } catch (err) {
+      console.error('Erro ao reiniciar onboarding:', err);
     } finally {
       setResettingOnboarding(false);
     }

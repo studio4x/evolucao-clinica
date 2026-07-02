@@ -31,7 +31,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import LandingPage from './pages/LandingPage';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
-import { getOnboardingDestination, isOnboardingComplete } from './utils/onboarding';
+import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
 
@@ -383,6 +383,19 @@ export default function App() {
             );
 
             pendingOnboardingNoticeRef.current = profileData.status === 'pending' ? session.user.id : null;
+
+            // Sincronização do status do onboarding
+            const localComplete = isOnboardingComplete(session.user.id);
+            const dbComplete = profileData.onboarding_completed === true;
+
+            if (dbComplete && !localComplete) {
+              completeOnboarding(session.user.id);
+            } else if (localComplete && !dbComplete) {
+              await supabase
+                .from('professionals')
+                .update({ onboarding_completed: true })
+                .eq('id', session.user.id);
+            }
           } catch (profileError) {
             console.error('Erro ao processar perfil do profissional:', profileError);
             const isMissingProfile = profileError instanceof Error && (
@@ -438,6 +451,19 @@ export default function App() {
 
                       if (updatedProf.status !== 'pending') {
                         pendingOnboardingNoticeRef.current = null;
+                      }
+
+                      // Sincronização do status do onboarding em tempo real
+                      const localComplete = isOnboardingComplete(session.user.id);
+                      const dbComplete = updatedProf.onboarding_completed === true;
+
+                      if (dbComplete && !localComplete) {
+                        completeOnboarding(session.user.id);
+                      } else if (localComplete && !dbComplete) {
+                        await supabase
+                          .from('professionals')
+                          .update({ onboarding_completed: true })
+                          .eq('id', session.user.id);
                       }
                     } else {
                       await clearInvalidProfessionalSession();

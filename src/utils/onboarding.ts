@@ -1,3 +1,5 @@
+import { supabase } from '../supabaseClient';
+
 export type OnboardingStep = 'intro' | 'patient' | 'evolution' | 'agenda' | 'complete';
 
 export interface OnboardingState {
@@ -71,10 +73,23 @@ export const clearOnboardingState = (userId?: string | null) => {
 };
 
 export const completeOnboarding = (userId: string): OnboardingState => {
-  return setOnboardingState(userId, {
+  const nextState = setOnboardingState(userId, {
     step: 'complete',
     completedAt: new Date().toISOString()
   });
+
+  // Atualiza assincronamente no banco de dados
+  supabase
+    .from('professionals')
+    .update({ onboarding_completed: true })
+    .eq('id', userId)
+    .then(({ error }) => {
+      if (error) {
+        console.error('Erro ao marcar onboarding como completo no banco de dados:', error);
+      }
+    });
+
+  return nextState;
 };
 
 export const getOnboardingDestination = (userId?: string | null): string => {
