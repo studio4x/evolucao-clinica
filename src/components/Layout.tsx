@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
@@ -146,13 +146,8 @@ export default function Layout() {
           )}
         </Link>
         <div className="flex items-center space-x-2">
-          <Link to="/painel/notifications" className="p-2 text-brand-primary relative">
-            <Bell size={22} />
-            {unreadCount > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white">
-                {unreadCount}
-              </span>
-            )}
+          <Link to="/painel/tutorial" className="p-2 text-brand-primary" title="Ajuda">
+            <HelpCircle size={22} />
           </Link>
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-brand-primary">
             {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
