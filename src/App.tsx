@@ -68,6 +68,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // Se o fluxo pendente de checkout do plano da home estiver ativo
+  const isPendingCheckoutFlow = typeof window !== 'undefined' && window.sessionStorage.getItem('pending_checkout_flow') === 'true';
+
+  if (isPendingCheckoutFlow && profileRole !== 'admin') {
+    const now = new Date();
+    const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+    const isExpired = endsAt ? endsAt < now : false;
+    const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+
+    if (!isActive || isExpired) {
+      if (location.pathname !== '/painel/subscription') {
+        return <Navigate to="/painel/subscription" replace />;
+      }
+      return <>{children}</>;
+    } else {
+      // Plano ficou ativo! Limpamos a flag e deixamos seguir para o onboarding
+      window.sessionStorage.removeItem('pending_checkout_flow');
+    }
+  }
+
   if (profileRole !== 'admin' && user && !isOnboardingComplete(user.id)) {
     const destination = getOnboardingDestination(user.id);
     const cleanDestPath = destination.split('?')[0];

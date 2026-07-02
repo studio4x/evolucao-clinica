@@ -637,7 +637,7 @@ export default function LandingPage() {
                 </ul>
               </div>
 
-              <Link to="/login" className="btn-outline w-full py-3.5 text-center font-bold text-sm shadow-sm hover:border-brand-primary/50 transition-colors">
+              <Link to="/login?from_plan=1" className="btn-outline w-full py-3.5 text-center font-bold text-sm shadow-sm hover:border-brand-primary/50 transition-colors">
                 Experimentar Plano Mensal
               </Link>
             </div>
@@ -687,7 +687,7 @@ export default function LandingPage() {
                 </ul>
               </div>
 
-              <Link to="/login" className="btn-primary w-full py-4 text-center font-bold text-sm shadow-md hover:shadow-lg">
+              <Link to="/login?from_plan=1" className="btn-primary w-full py-4 text-center font-bold text-sm shadow-md hover:shadow-lg">
                 Assinar Plano Anual
               </Link>
             </div>

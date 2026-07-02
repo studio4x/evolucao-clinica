@@ -1,4 +1,4 @@
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
@@ -13,25 +13,43 @@ export default function Login() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
-  const { user, isAuthReady, profileStatus, profileRole } = useAuthStore();
+  const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
+  const [searchParams] = useSearchParams();
+  const fromPlan = searchParams.get('from_plan') === '1';
+
+  useEffect(() => {
+    if (fromPlan) {
+      sessionStorage.setItem('pending_checkout_flow', 'true');
+    } else {
+      sessionStorage.removeItem('pending_checkout_flow');
+    }
+  }, [fromPlan]);
 
   useEffect(() => {
     if (isAuthReady && user) {
+      const isPendingCheckoutFlow = sessionStorage.getItem('pending_checkout_flow') === 'true';
+      const now = new Date();
+      const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+      const isExpired = endsAt ? endsAt < now : false;
+      const isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trialing';
+
       if (profileStatus === 'pending') {
         navigate('/pending', { replace: true });
       } else if (profileStatus === 'inactive') {
         navigate('/pending?status=inactive', { replace: true });
       } else if (profileRole === 'admin') {
         navigate('/admin/professionals', { replace: true });
+      } else if (isPendingCheckoutFlow && (!isActive || isExpired)) {
+        navigate('/painel/subscription', { replace: true });
       } else if (!isOnboardingComplete(user.id)) {
         navigate(getOnboardingDestination(user.id), { replace: true });
       } else {
         navigate('/painel/dashboard', { replace: true });
       }
     }
-  }, [user, isAuthReady, profileStatus, profileRole, navigate]);
+  }, [user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, navigate]);
 
   const executeGoogleLogin = async () => {
     setLoading(true);
