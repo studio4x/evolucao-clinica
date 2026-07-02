@@ -544,19 +544,21 @@ export default function PatientDetail() {
   };
 
   const handleShareWhatsApp = (content: string, type: string, rep?: any) => {
-    const cleanText = stripMarkdown(content);
-    const docLabel = type === 'evolution_report' ? 'Relatório de Evolução' : 'Plano de Desenvolvimento Individual (PDI)';
+    const docLabel = type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)';
     
-    let signatureStamp = '';
+    let messageText = '';
     if (rep && rep.status === 'signed') {
       const formattedDate = new Date(rep.signature_date).toLocaleString('pt-BR');
       const publicLink = `${window.location.origin}/public/reports/${rep.id}`;
-      signatureStamp = `\n\n----------------------------------------\n🔒 *DOCUMENTO ASSINADO DIGITALMENTE*\nAssinado por: ${rep.signed_by_name} (${rep.signed_by_register})\nData/Hora: ${formattedDate}\nIP de Origem: ${rep.signature_ip}\nAlgoritmo: SHA-256\nHash de Integridade: ${rep.signature_hash}\n\n🔗 *Link de Visualização:*\n${publicLink}\n----------------------------------------`;
+      
+      messageText = `Olá! O *${docLabel}* do paciente *${patient?.full_name}* foi emitido e assinado digitalmente por *${rep.signed_by_name}* em ${formattedDate}.\n\nPara visualizar o documento oficial homologado e realizar o download do PDF original, acesse o link seguro abaixo:\n🔗 ${publicLink}\n\n----------------------------------------\n🔒 *DOCUMENTO ASSINADO DIGITALMENTE*\nHash SHA-256: ${rep.signature_hash}\n----------------------------------------`;
+    } else {
+      const cleanText = stripMarkdown(content);
+      const header = `*${docLabel} - ${patient?.full_name}*\n\n`;
+      messageText = header + cleanText;
     }
 
-    const header = `*${docLabel} - ${patient?.full_name}*\n\n`;
-    const fullMessage = header + cleanText + signatureStamp;
-    const encodedMsg = encodeURIComponent(fullMessage);
+    const encodedMsg = encodeURIComponent(messageText);
     const phone = patient?.phone ? patient.phone.replace(/\D/g, '') : '';
     
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -1274,6 +1276,9 @@ export default function PatientDetail() {
       const docLabel = repObj.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
       const filename = `${docLabel}_${cleanPatientName}.pdf`;
 
+      const docLabelForEmail = repObj.type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)';
+      const emailIntroText = `Olá,\n\nGostaríamos de informar que o ${docLabelForEmail} do paciente ${patient?.full_name} foi emitido e assinado digitalmente com sucesso por ${professional?.full_name || 'Profissional de Saúde'}.\n\nO documento oficial contendo o relatório completo foi anexado a este e-mail em formato PDF para seu controle e visualização.\n\nVocê também pode acessar a via oficial assinada a qualquer momento utilizando o link de autenticidade digital.`;
+
       const response = await fetch(`/api/patients/${id}/send-report-email`, {
         method: 'POST',
         headers: {
@@ -1283,7 +1288,7 @@ export default function PatientDetail() {
         body: JSON.stringify({
           toEmail: recipientEmail,
           subject: emailSubject,
-          textContent: contentToSend,
+          textContent: emailIntroText,
           pdfBase64,
           filename,
           reportId: viewingReport?.id || null,
