@@ -747,7 +747,7 @@ async function sendEmailViaSmtp(
 
 async function sendEmailViaBrevo(
   settings: any,
-  input: Pick<EmailDeliveryInput, "recipientEmail" | "recipientName" | "subject" | "textContent" | "htmlContent">
+  input: EmailDeliveryInput
 ) {
   if (!settings?.brevo_api_key) {
     throw new Error("Brevo não configurado na plataforma.");
@@ -779,7 +779,15 @@ async function sendEmailViaBrevo(
       ],
       subject: input.subject,
       ...(input.htmlContent ? { htmlContent: input.htmlContent } : {}),
-      ...(input.textContent ? { textContent: input.textContent } : {})
+      ...(input.textContent ? { textContent: input.textContent } : {}),
+      ...(input.pdfBase64 && input.filename ? {
+        attachment: [
+          {
+            name: input.filename,
+            content: input.pdfBase64
+          }
+        ]
+      } : {})
     })
   });
 
@@ -3168,7 +3176,7 @@ Escreva em português brasileiro de forma prática, detalhada e empática.`;
 app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscription, async (req: any, res) => {
   try {
     const patientId = req.params.id;
-    const { toEmail, subject, textContent } = req.body;
+    const { toEmail, subject, textContent, pdfBase64, filename, reportId, origin } = req.body;
 
     if (!toEmail || !subject || !textContent) {
       return res.status(400).json({ error: "Parâmetros 'toEmail', 'subject' e 'textContent' são obrigatórios." });
@@ -3207,6 +3215,7 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
     }
 
     const theme = await getEmailTheme();
+    const publicLink = reportId ? `${origin || "https://evolucaoclinica.app.br"}/public/reports/${reportId}` : null;
 
     // Formatar como HTML (quebrando linhas)
     const formattedHtml = buildEmailShell(theme, {
@@ -3216,6 +3225,20 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
         <div style="padding:0; background:${theme.surface}; color:${theme.text}; line-height:1.7; font-size:15px; white-space:pre-wrap; font-family:inherit;">
           ${escapeHtml(textContent).replace(/\n/g, "<br/>")}
         </div>
+        ${publicLink ? `
+        <div style="margin-top: 30px; text-align: center; border-top: 1px dashed ${theme.border || '#e7e5e4'}; padding-top: 25px;">
+          <p style="font-size: 14px; color: ${theme.textMuted || '#78716c'}; margin-bottom: 15px; font-family: inherit;">
+            Este documento foi assinado digitalmente. Para visualizar o documento original assinado e realizar o download do PDF homologado, clique no botão abaixo:
+          </p>
+          <a href="${publicLink}" style="display: inline-block; padding: 12px 24px; background: #059669; color: #ffffff; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; font-family: inherit; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+            Visualizar PDF Assinado 🔒
+          </a>
+          <p style="font-size: 11px; color: ${theme.textMuted || '#78716c'}; margin-top: 12px; font-family: inherit;">
+            Se o botão não funcionar, copie e cole este link no navegador:<br/>
+            <a href="${publicLink}" style="color: #3b82f6; text-decoration: underline;">${publicLink}</a>
+          </p>
+        </div>
+        ` : ""}
       `,
       footerHtml: "Enviado com segurança via Evolução Clínica - Plataforma Inteligente"
     });
@@ -3228,7 +3251,9 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
       textContent,
       htmlContent: formattedHtml,
       source: "report",
-      allowFallback: true
+      allowFallback: true,
+      pdfBase64,
+      filename
     });
 
     res.json({ success: true, provider: result.provider });
@@ -3543,6 +3568,54 @@ export async function startServer() {
     } else {
       console.log(`Servidor iniciado com chave Gemini detectada.`);
     }
+
+    // Endpoint público para visualização de relatórios assinados
+    app.get("/api/public/reports/:reportId", async (req, res) => {
+      try {
+        const { reportId } = req.params;
+        
+        // 1. Buscar relatório assinado
+        const { data: report, error: reportError } = await supabaseAdmin
+          .from("patient_reports")
+          .select("*")
+          .eq("id", reportId)
+          .single();
+
+        if (reportError || !report || report.status !== 'signed') {
+          return res.status(404).json({ error: "Documento não encontrado ou indisponível." });
+        }
+
+        // 2. Buscar paciente
+        const { data: patient, error: patientError } = await supabaseAdmin
+          .from("patients")
+          .select("id, full_name, birth_date")
+          .eq("id", report.patient_id)
+          .single();
+
+        // 3. Buscar profissional
+        const { data: professional, error: professionalError } = await supabaseAdmin
+          .from("professionals")
+          .select("id, full_name, professional_register, professional_title")
+          .eq("id", report.professional_id)
+          .single();
+
+        // 4. Buscar configurações públicas da marca (opcional)
+        const { data: brandSettings } = await supabaseAdmin
+          .from("settings")
+          .eq("id", "brand_settings")
+          .single();
+
+        res.json({
+          report,
+          patient,
+          professional,
+          brandSettings: brandSettings?.api_key ? JSON.parse(brandSettings.api_key) : null
+        });
+      } catch (err: any) {
+        console.error("Erro ao obter relatório público:", err);
+        res.status(500).json({ error: err.message || "Erro ao obter relatório." });
+      }
+    });
 
     // Vite middleware for development
     if (process.env.NODE_ENV !== "production") {

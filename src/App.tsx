@@ -30,6 +30,7 @@ import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import LandingPage from './pages/LandingPage';
+import PublicReportView from './pages/PublicReportView';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
@@ -522,6 +523,7 @@ export default function App() {
         <Route path="/pending" element={<PendingApproval />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/public/reports/:reportId" element={<PublicReportView />} />
         
         {/* Admin Panel Routes */}
         <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
