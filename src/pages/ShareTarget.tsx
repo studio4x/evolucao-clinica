@@ -219,7 +219,7 @@ export default function ShareTarget() {
       // 1. Save initial state
       const { error: insertError } = await supabase
         .from('evolutions')
-        .insert(evolutionData);
+        .upsert(evolutionData);
       if (insertError) throw insertError;
 
       // 2. Transcribe with AI

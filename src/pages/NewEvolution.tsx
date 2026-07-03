@@ -710,7 +710,7 @@ export default function NewEvolution() {
       
       const { error: insertError } = await supabase
         .from('evolutions')
-        .insert(evolutionData);
+        .upsert(evolutionData);
       if (insertError) throw insertError;
 
       const transcription = await transcribeAllAudios();
