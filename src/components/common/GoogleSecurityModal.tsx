@@ -296,6 +296,40 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
     }
   };
 
+  const handleMouseDown = (event: React.MouseEvent) => {
+    if ((event.target as HTMLElement).closest('button, a')) return;
+    touchStartX.current = event.clientX;
+    touchCurrentX.current = event.clientX;
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (event: React.MouseEvent) => {
+    if (!isDragging) return;
+    const deltaX = event.clientX - touchStartX.current;
+    touchCurrentX.current = event.clientX;
+    setDragOffset(deltaX);
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    const deltaX = touchCurrentX.current - touchStartX.current;
+
+    if (deltaX <= -swipeThreshold && currentSlide < slides.length - 1) {
+      setCurrentSlide((prev) => Math.min(slides.length - 1, prev + 1));
+    } else if (deltaX >= swipeThreshold && currentSlide > 0) {
+      setCurrentSlide((prev) => Math.max(0, prev - 1));
+    } else {
+      setDragOffset(0);
+      setIsDragging(false);
+    }
+  };
+
+  const handleMouseLeave = () => {
+    if (isDragging) {
+      handleMouseUp();
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-brand-border animate-in zoom-in-95 duration-200">
@@ -325,55 +359,81 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
             </p>
           </div>
 
-          <div
-            className="overflow-hidden select-none"
-            style={{
-              touchAction: 'pan-y',
-              height: slideViewportHeight ? `${slideViewportHeight}px` : 'auto',
-            }}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onTouchCancel={handleTouchEnd}
-          >
-            <div
-              className="flex items-stretch will-change-transform"
-              style={{
-                transform: `translateX(calc(-${currentSlide * 100}% + ${dragOffset}px))`,
-                transition: isDragging ? 'none' : 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
-              }}
+          <div className="relative flex items-center">
+            <button
+              type="button"
+              onClick={() => setCurrentSlide((prev) => Math.max(0, prev - 1))}
+              disabled={currentSlide === 0}
+              className="hidden md:flex absolute -left-3 z-10 items-center justify-center w-9 h-9 rounded-full border border-brand-border bg-white text-brand-primary shadow-md hover:bg-stone-50 hover:border-brand-primary/30 transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+              aria-label="Slide anterior"
             >
-              {slides.map((slide, index) => {
-                const SlideIcon = slide.icon;
-                return (
-                  <div key={slide.title} className="w-full flex-shrink-0 px-1 h-full">
-                    <div
-                      ref={(node) => {
-                        slideRefs.current[index] = node;
-                      }}
-                      className={`h-full min-h-[240px] sm:min-h-[260px] rounded-3xl border p-4 sm:p-5 flex flex-col justify-center gap-3 ${slide.accentClasses}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`p-2.5 rounded-2xl shadow-sm ${slide.iconClasses}`}>
-                          <SlideIcon size={22} />
-                        </div>
-                        <div className="space-y-1.5">
-                          <span className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
-                            {slide.eyebrow}
-                          </span>
-                          <h4 className="text-base sm:text-lg font-display font-bold text-brand-primary leading-tight">
-                            {slide.title}
-                          </h4>
-                          <p className="text-sm text-brand-text-muted leading-relaxed max-w-prose">
-                            {slide.description}
-                          </p>
+              <ChevronLeft size={18} strokeWidth={2.5} />
+            </button>
+
+            <div
+              className="overflow-hidden select-none flex-1 cursor-grab active:cursor-grabbing"
+              style={{
+                touchAction: 'pan-y',
+                height: slideViewportHeight ? `${slideViewportHeight}px` : 'auto',
+              }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseLeave}
+            >
+              <div
+                className="flex items-stretch will-change-transform"
+                style={{
+                  transform: `translateX(calc(-${currentSlide * 100}% + ${dragOffset}px))`,
+                  transition: isDragging ? 'none' : 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
+                }}
+              >
+                {slides.map((slide, index) => {
+                  const SlideIcon = slide.icon;
+                  return (
+                    <div key={slide.title} className="w-full flex-shrink-0 px-1 h-full">
+                      <div
+                        ref={(node) => {
+                          slideRefs.current[index] = node;
+                        }}
+                        className={`h-full min-h-[240px] sm:min-h-[260px] rounded-3xl border p-4 sm:p-5 flex flex-col justify-center gap-3 ${slide.accentClasses}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`p-2.5 rounded-2xl shadow-sm ${slide.iconClasses}`}>
+                            <SlideIcon size={22} />
+                          </div>
+                          <div className="space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] opacity-75">
+                              {slide.eyebrow}
+                            </span>
+                            <h4 className="text-base sm:text-lg font-display font-bold text-brand-primary leading-tight">
+                              {slide.title}
+                            </h4>
+                            <p className="text-sm text-brand-text-muted leading-relaxed max-w-prose">
+                              {slide.description}
+                            </p>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => setCurrentSlide((prev) => Math.min(slides.length - 1, prev + 1))}
+              disabled={currentSlide === slides.length - 1}
+              className="hidden md:flex absolute -right-3 z-10 items-center justify-center w-9 h-9 rounded-full border border-brand-border bg-white text-brand-primary shadow-md hover:bg-stone-50 hover:border-brand-primary/30 transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+              aria-label="Próximo slide"
+            >
+              <ChevronRight size={18} strokeWidth={2.5} />
+            </button>
           </div>
 
           <div className="flex items-center justify-center gap-2">
