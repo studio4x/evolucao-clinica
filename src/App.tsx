@@ -31,6 +31,7 @@ import AdminPanel from './pages/AdminPanel';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import LandingPage from './pages/LandingPage';
+import DeleteAccount from './pages/DeleteAccount';
 import PublicReportView from './pages/PublicReportView';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
@@ -545,6 +546,7 @@ export default function App() {
         <Route path="/pending" element={<PendingApproval />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />
         <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/delete-account" element={<DeleteAccount />} />
         <Route path="/public/reports/:reportId" element={<PublicReportView />} />
         
         {/* Admin Panel Routes */}
