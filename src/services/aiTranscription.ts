@@ -26,6 +26,14 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
   const maxRetries = 3;
   let retryCount = 0;
 
+  // Normalização de MIME type para compatibilidade com o Gemini
+  let normalizedMimeType = mimeType || 'audio/webm';
+  if (normalizedMimeType === 'application/ogg') {
+    normalizedMimeType = 'audio/ogg';
+  } else if (normalizedMimeType === 'application/octet-stream') {
+    normalizedMimeType = 'audio/ogg';
+  }
+
   const prompt = customPrompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
   const base64Audio = await blobToBase64(audioBlob);
 
@@ -90,7 +98,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         contents: {
           parts: [
             { text: prompt },
-            { inlineData: { data: base64Audio, mimeType } }
+            { inlineData: { data: base64Audio, mimeType: normalizedMimeType } }
           ]
         }
       });
