@@ -512,7 +512,7 @@ export default function Profile() {
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold">
+                  <h3 className="text-lg font-bold text-white">
                     {deleteStep === 1 ? 'Excluir conta definitivamente' : 'Confirmação final'}
                   </h3>
                   <p className="text-sm text-white/85">
