@@ -351,7 +351,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
                       ref={(node) => {
                         slideRefs.current[index] = node;
                       }}
-                      className={`h-full min-h-[240px] sm:min-h-[260px] rounded-3xl border p-4 sm:p-5 flex flex-col justify-start gap-3 ${slide.accentClasses}`}
+                      className={`h-full min-h-[240px] sm:min-h-[260px] rounded-3xl border p-4 sm:p-5 flex flex-col justify-center gap-3 ${slide.accentClasses}`}
                     >
                       <div className="flex items-start gap-3">
                         <div className={`p-2.5 rounded-2xl shadow-sm ${slide.iconClasses}`}>
