@@ -62,12 +62,14 @@ export async function appendToGoogleDoc(
   }
   
   const resolvedSessionTime = options?.sessionTime || insertionTime;
-  const header = `Data da sessão: ${formattedDate} às ${resolvedSessionTime}`;
+  const header = `📅 DATA DA SESSÃO: ${formattedDate} às ${resolvedSessionTime}`;
   
   const uniqueId = options?.evolutionId || 'N/A';
-  const footer = `Texto inserido pelo App Evolução Clínica em ${insertionDate} às ${insertionTime}.\nChave única da evolução: ${uniqueId}`;
   
-  const textToAppend = `${header}\n\nEvolução:\n${transcription}\n\n${footer}\n\n----------------------------------------\n\n`;
+  const divider = "────────────────────────────────────────────────────────";
+  const footer = `${divider}\n🔒 REGISTRO DE INSERÇÃO SISTÊMICA\n• Aplicativo: Evolução Clínica\n• Inserido em: ${insertionDate} às ${insertionTime}\n• Chave de autenticidade: ${uniqueId}\n${divider}`;
+  
+  const textToAppend = `${header}\n\nEvolução:\n${transcription}\n\n${footer}\n\n\n`;
 
   const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
   
