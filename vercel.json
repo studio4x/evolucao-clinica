@@ -7,6 +7,7 @@
   },
   "rewrites": [
     { "source": "/sw.js", "destination": "/sw.js" },
+    { "source": "/.well-known/assetlinks.json", "destination": "/.well-known/assetlinks.json" },
     { "source": "/manifest.webmanifest", "destination": "/api/manifest" },
     { "source": "/icon-192x192.png", "destination": "/icon-192x192.png" },
     { "source": "/icon-512x512.png", "destination": "/icon-512x512.png" },
@@ -22,6 +23,13 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
+    {
+      "source": "/.well-known/assetlinks.json",
+      "headers": [
+        { "key": "Content-Type", "value": "application/json" },
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
     {
       "source": "/sw.js",
       "headers": [
