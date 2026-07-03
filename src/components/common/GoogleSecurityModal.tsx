@@ -284,15 +284,16 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   };
 
   const handleTouchEnd = () => {
+    if (!isDragging) return;
     const deltaX = touchCurrentX.current - touchStartX.current;
+
+    setIsDragging(false);
+    setDragOffset(0);
 
     if (deltaX <= -swipeThreshold && currentSlide < slides.length - 1) {
       setCurrentSlide((prev) => Math.min(slides.length - 1, prev + 1));
     } else if (deltaX >= swipeThreshold && currentSlide > 0) {
       setCurrentSlide((prev) => Math.max(0, prev - 1));
-    } else {
-      setDragOffset(0);
-      setIsDragging(false);
     }
   };
 
@@ -314,13 +315,13 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
     if (!isDragging) return;
     const deltaX = touchCurrentX.current - touchStartX.current;
 
+    setIsDragging(false);
+    setDragOffset(0);
+
     if (deltaX <= -swipeThreshold && currentSlide < slides.length - 1) {
       setCurrentSlide((prev) => Math.min(slides.length - 1, prev + 1));
     } else if (deltaX >= swipeThreshold && currentSlide > 0) {
       setCurrentSlide((prev) => Math.max(0, prev - 1));
-    } else {
-      setDragOffset(0);
-      setIsDragging(false);
     }
   };
 
@@ -364,7 +365,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
               type="button"
               onClick={() => setCurrentSlide((prev) => Math.max(0, prev - 1))}
               disabled={currentSlide === 0}
-              className="hidden md:flex absolute -left-3 z-10 items-center justify-center w-9 h-9 rounded-full border border-brand-border bg-white text-brand-primary shadow-md hover:bg-stone-50 hover:border-brand-primary/30 transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+              className="flex absolute -left-3 z-10 items-center justify-center w-9 h-9 rounded-full border border-brand-border bg-white text-brand-primary shadow-md hover:bg-stone-50 hover:border-brand-primary/30 transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
               aria-label="Slide anterior"
             >
               <ChevronLeft size={18} strokeWidth={2.5} />
@@ -429,7 +430,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
               type="button"
               onClick={() => setCurrentSlide((prev) => Math.min(slides.length - 1, prev + 1))}
               disabled={currentSlide === slides.length - 1}
-              className="hidden md:flex absolute -right-3 z-10 items-center justify-center w-9 h-9 rounded-full border border-brand-border bg-white text-brand-primary shadow-md hover:bg-stone-50 hover:border-brand-primary/30 transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
+              className="flex absolute -right-3 z-10 items-center justify-center w-9 h-9 rounded-full border border-brand-border bg-white text-brand-primary shadow-md hover:bg-stone-50 hover:border-brand-primary/30 transition-all active:scale-95 disabled:opacity-20 disabled:pointer-events-none"
               aria-label="Próximo slide"
             >
               <ChevronRight size={18} strokeWidth={2.5} />
