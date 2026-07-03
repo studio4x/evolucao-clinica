@@ -65,6 +65,19 @@ export default function NewEvolution() {
   const [patient, setPatient] = useState<any>(null);
   const dateParam = searchParams.get('date');
   const [sessionDate, setSessionDate] = useState(dateParam || new Date().toISOString().split('T')[0]);
+  
+  const [sessionTime, setSessionTime] = useState(() => {
+    const saved = localStorage.getItem('evolucao-clinica:default-session-time');
+    if (saved) return saved;
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
+
+  const handleSessionTimeChange = (time: string) => {
+    setSessionTime(time);
+    localStorage.setItem('evolucao-clinica:default-session-time', time);
+  };
+
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [audioItems, setAudioItems] = useState<AudioEvolutionItem[]>([]);
@@ -164,6 +177,7 @@ export default function NewEvolution() {
         patientName: patient.full_name,
         googleDocId: patient.google_doc_id,
         sessionDate,
+        sessionTime,
         audioBlob: draftBlobs[0],
         audioBlobs: draftBlobs,
         mimeType: draftBlobs[0].type || 'audio/webm',
@@ -176,6 +190,7 @@ export default function NewEvolution() {
           professional_id: user.id,
           patient_id: patient.id,
           session_date: sessionDate,
+          session_time: sessionTime,
           transcription_status: 'processing',
           google_doc_append_status: 'pending',
           audio_duration_seconds: duration,
@@ -313,6 +328,9 @@ export default function NewEvolution() {
       updateAudioItems(items);
       setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
       setSessionDate(recoveredDraft.sessionDate);
+      if (recoveredDraft.sessionTime) {
+        setSessionTime(recoveredDraft.sessionTime);
+      }
       draftIdRef.current = recoveredDraft.id;
       recordingTimeRef.current = recoveredDraft.recordingTime || 0;
       setStatus('idle');
@@ -336,6 +354,9 @@ export default function NewEvolution() {
       updateAudioItems(items);
       setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
       setSessionDate(recoveredDraft.sessionDate);
+      if (recoveredDraft.sessionTime) {
+        setSessionTime(recoveredDraft.sessionTime);
+      }
       draftIdRef.current = recoveredDraft.id;
       recordingTimeRef.current = recoveredDraft.recordingTime || getTotalAudioDuration(items);
       setStatus('idle');
@@ -664,6 +685,7 @@ export default function NewEvolution() {
       professional_id: user.id,
       patient_id: patient.id,
       session_date: sessionDate,
+      session_time: sessionTime,
       transcription_status: 'processing',
       google_doc_append_status: 'pending',
       audio_duration_seconds: totalAudioDuration,
@@ -721,7 +743,11 @@ export default function NewEvolution() {
         googleAccessToken,
         patient.google_doc_id,
         sessionDate,
-        transcription
+        transcription,
+        {
+          sessionTime,
+          evolutionId
+        }
       );
 
       const { error: updateError } = await supabase
@@ -890,7 +916,7 @@ export default function NewEvolution() {
       )}
 
       <div className="card p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">Data da Sessão</label>
             <input
@@ -898,6 +924,17 @@ export default function NewEvolution() {
               required
               value={sessionDate}
               onChange={e => setSessionDate(e.target.value)}
+              className="input-field p-2"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">Horário da Sessão</label>
+            <input
+              type="time"
+              required
+              value={sessionTime}
+              onChange={e => handleSessionTimeChange(e.target.value)}
               className="input-field p-2"
             />
           </div>

@@ -45,10 +45,15 @@ export async function appendToGoogleDoc(
   googleAccessToken: string,
   googleDocId: string,
   sessionDate: string,
-  transcription: string
+  transcription: string,
+  options?: {
+    sessionTime?: string;
+    evolutionId?: string;
+  }
 ) {
   const now = new Date();
-  const formattedTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const insertionDate = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+  const insertionTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   
   let formattedDate = sessionDate;
   if (sessionDate && sessionDate.includes('-')) {
@@ -56,7 +61,13 @@ export async function appendToGoogleDoc(
     formattedDate = `${day}/${month}/${year}`;
   }
   
-  const textToAppend = `Data da sessão: ${formattedDate} às ${formattedTime}\n\nEvolução:\n${transcription}\n\n----------------------------------------\n\n`;
+  const resolvedSessionTime = options?.sessionTime || insertionTime;
+  const header = `Data da sessão: ${formattedDate} às ${resolvedSessionTime}`;
+  
+  const uniqueId = options?.evolutionId || 'N/A';
+  const footer = `Texto inserido pelo App Evolução Clínica em ${insertionDate} às ${insertionTime}.\nChave única da evolução: ${uniqueId}`;
+  
+  const textToAppend = `${header}\n\nEvolução:\n${transcription}\n\n${footer}\n\n----------------------------------------\n\n`;
 
   const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
   

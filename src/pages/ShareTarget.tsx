@@ -59,6 +59,17 @@ export default function ShareTarget() {
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [sessionTime, setSessionTime] = useState(() => {
+    const saved = localStorage.getItem('evolucao-clinica:default-session-time');
+    if (saved) return saved;
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
+
+  const handleSessionTimeChange = (time: string) => {
+    setSessionTime(time);
+    localStorage.setItem('evolucao-clinica:default-session-time', time);
+  };
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [status, setStatus] = useState<'loading' | 'idle' | 'processing' | 'success' | 'error'>('loading');
@@ -200,6 +211,7 @@ export default function ShareTarget() {
       professional_id: user?.id || '',
       patient_id: selectedPatientId,
       session_date: sessionDate,
+      session_time: sessionTime,
       audio_url: '',
       transcription_status: 'processing',
       transcription_text: '',
@@ -246,7 +258,11 @@ export default function ShareTarget() {
         googleAccessToken,
         patient.google_doc_id,
         sessionDate,
-        transcription
+        transcription,
+        {
+          sessionTime,
+          evolutionId
+        }
       );
 
       // 4. Update Supabase
@@ -435,17 +451,32 @@ export default function ShareTarget() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-brand-text mb-1">
-                  Data da Sessão
-                </label>
-                <input
-                  type="date"
-                  value={sessionDate}
-                  onChange={(e) => setSessionDate(e.target.value)}
-                  className="input-field p-2"
-                  disabled={status === 'processing'}
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-brand-text mb-1">
+                    Data da Sessão
+                  </label>
+                  <input
+                    type="date"
+                    value={sessionDate}
+                    onChange={(e) => setSessionDate(e.target.value)}
+                    className="input-field p-2"
+                    disabled={status === 'processing'}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-brand-text mb-1">
+                    Horário da Sessão
+                  </label>
+                  <input
+                    type="time"
+                    value={sessionTime}
+                    onChange={(e) => handleSessionTimeChange(e.target.value)}
+                    className="input-field p-2"
+                    disabled={status === 'processing'}
+                  />
+                </div>
               </div>
 
               {status === 'error' && (

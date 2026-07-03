@@ -454,7 +454,11 @@ export default function History() {
           currentToken!,
           patient.google_doc_id,
           evo.session_date,
-          transcription
+          transcription,
+          {
+            sessionTime: (evo as any).session_time || undefined,
+            evolutionId: evo.id
+          }
         );
 
         // Update Supabase with success

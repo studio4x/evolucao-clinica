@@ -112,7 +112,16 @@ export function OfflineQueueMonitor() {
         const mergedTranscription = transcriptions.join('\n\n');
 
         setSyncStatus(`Inserindo ${item.patientName} no Google Docs...`);
-        await appendToGoogleDoc(googleAccessToken, item.googleDocId, item.sessionDate, mergedTranscription);
+        await appendToGoogleDoc(
+          googleAccessToken,
+          item.googleDocId,
+          item.sessionDate,
+          mergedTranscription,
+          {
+            sessionTime: item.sessionTime || (item.evolutionData?.session_time) || undefined,
+            evolutionId: item.id
+          }
+        );
 
         setSyncStatus(`Salvando ${item.patientName}...`);
         const { error: upsertError } = await supabase
