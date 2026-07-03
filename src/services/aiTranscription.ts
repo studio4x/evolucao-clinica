@@ -30,25 +30,56 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
   const base64Audio = await blobToBase64(audioBlob);
 
   const attemptTranscription = async (): Promise<string> => {
-    let keySource: 'env' | 'none' = 'none';
+    let keySource: 'db' | 'env' | 'none' = 'none';
+    let apiKey = "";
+
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      
+      if (token) {
+        const response = await fetch('/api/gemini-key', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data.apiKey) {
+            apiKey = data.apiKey;
+            keySource = 'db';
+            console.log('[AI-Service] Usando chave dinâmica obtida do servidor (banco de dados/env)');
+          }
+        } else {
+          console.warn(`[AI-Service] Resposta do servidor ao buscar chave: ${response.status}`);
+        }
+      }
+    } catch (fetchError) {
+      console.warn("[AI-Service] Falha ao obter chave dinâmica do servidor, usando fallback local:", fetchError);
+    }
+
+    if (!apiKey) {
       const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
       const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
-      const apiKey = backupKey ? backupKey : mainKey;
+      apiKey = backupKey ? backupKey : mainKey;
 
       if (apiKey) {
         keySource = 'env';
-        console.log(`[AI-Service] Usando chave estática ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'}`);
+        console.log(`[AI-Service] Usando chave estática local ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'}`);
       }
+    }
 
+    try {
       if (!apiKey) {
         console.error("[AI-Service] ERRO: Nenhuma chave da API Gemini encontrada.");
         throw new Error("Configuração de API ausente. Verifique as chaves.");
       }
 
-      const keyLabel = keySource === 'env'
-        ? 'estática do servidor'
-        : 'não encontrada';
+      const keyLabel = keySource === 'db'
+        ? 'dinâmica do banco de dados'
+        : keySource === 'env'
+          ? 'estática de fallback'
+          : 'não encontrada';
       console.log(`[AI-Service] Usando chave ${keyLabel} - Tentativa ${retryCount + 1}`);
 
       const ai = new GoogleGenAI({ apiKey });
@@ -134,9 +165,12 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         return attemptTranscription();
       }
       
-      const sourceMsg = keySource === 'env'
-        ? 'Chave estática de fallback do servidor'
-        : 'Chave não encontrada';
+      let sourceMsg = 'Chave não encontrada';
+      if (keySource === 'db') {
+        sourceMsg = 'Chave dinâmica obtida do servidor';
+      } else if (keySource === 'env') {
+        sourceMsg = 'Chave estática de fallback do servidor';
+      }
       
       const errorMessage = error.message || errorContent;
       throw new Error(`${errorMessage} (Origem da chave: ${sourceMsg})`);

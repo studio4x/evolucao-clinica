@@ -1010,6 +1010,33 @@ app.get("/api/brand-bootstrap", async (_req, res) => {
   }
 });
 
+app.get("/api/gemini-key", requireAuth, async (req: any, res) => {
+  try {
+    let apiKey = "";
+    const { data, error } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "gemini")
+      .maybeSingle();
+
+    if (!error && data?.api_key) {
+      apiKey = data.api_key;
+    } else {
+      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+    }
+
+    if (!apiKey) {
+      return res.status(404).json({ error: "Chave do Gemini nao configurada no servidor." });
+    }
+
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.json({ apiKey });
+  } catch (err: any) {
+    console.error("Erro ao obter chave do Gemini:", err);
+    res.status(500).json({ error: "Erro interno ao obter chave do Gemini." });
+  }
+});
+
 const DEFAULT_PUBLIC_PAYMENT_SETTINGS = {
   environment: "TEST",
   googleMerchantId: "BCR2DN7TTCHMTFAJ",
