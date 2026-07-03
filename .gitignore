@@ -8,3 +8,10 @@ coverage/
 !.env.example
 .vercel
 supabase/.temp/
+
+# Android TWA binaries and signing keys
+*.apk
+*.aab
+*.keystore
+*.idsig
+.gradle/

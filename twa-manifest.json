@@ -1,0 +1,74 @@
+{
+  "packageId": "com.evolucaoclinica.app",
+  "host": "evolucaoclinica.app.br",
+  "name": "Evolução Clínica",
+  "launcherName": "Evolucao",
+  "display": "standalone",
+  "themeColor": "#005C13",
+  "themeColorDark": "#000000",
+  "navigationColor": "#000000",
+  "navigationColorDark": "#000000",
+  "navigationDividerColor": "#000000",
+  "navigationDividerColorDark": "#000000",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": true,
+  "startUrl": "/?utm_source=pwa",
+  "iconUrl": "https://evolucaoclinica.app.br/icon-512x512.png",
+  "maskableIconUrl": "https://evolucaoclinica.app.br/icon-512x512-maskable.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "c:\\PLATAFORMAS VS CODE\\EVOLUÇÃO CLINICA\\evolucao-clinica\\android.keystore",
+    "alias": "android"
+  },
+  "appVersionName": "1",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://evolucaoclinica.app.br/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://evolucaoclinica.app.br/",
+  "minSdkVersion": 21,
+  "shareTarget": {
+    "action": "https://evolucaoclinica.app.br/api/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "audio",
+          "accept": [
+            "audio/*",
+            "video/*",
+            "application/ogg",
+            ".opus",
+            ".ogg",
+            ".mp3",
+            ".wav",
+            ".m4a",
+            ".weba",
+            "*/*"
+          ]
+        }
+      ]
+    }
+  },
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": [],
+  "launchHandlerClientMode": "",
+  "displayOverride": [],
+  "appVersion": "1"
+}
