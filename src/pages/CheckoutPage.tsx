@@ -362,7 +362,7 @@ export default function CheckoutPage() {
                   buttonColor="black"
                   buttonSizeMode="fill"
                   buttonLocale="pt"
-                  buttonCornerRadius={8}
+                  buttonRadius={8}
                   paymentRequest={getGooglePayRequest(planDetails.price, paymentSettings)}
                   onLoadPaymentData={(paymentRequest) => {
                     handleGooglePaySuccess(selectedCheckoutPlan, paymentRequest);

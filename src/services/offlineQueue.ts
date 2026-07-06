@@ -12,6 +12,7 @@ export interface PendingEvolution {
   evolutionData: any; // o objeto inicial que vai para o firestore também
   status?: 'draft' | 'pending'; // 'draft' para gravação em progresso/interrompida, 'pending' para pronto para sync offline
   recordingTime?: number; // duração em segundos gravada até agora
+  sessionTime?: string;
 }
 
 const DB_NAME = 'EvolutionOfflineSyncDB';

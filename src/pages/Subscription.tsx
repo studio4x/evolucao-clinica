@@ -774,7 +774,7 @@ export default function Subscription() {
                         buttonColor="black"
                         buttonSizeMode="fill"
                         buttonLocale="pt"
-                        buttonCornerRadius={8}
+                        buttonRadius={8}
                         paymentRequest={getGooglePayRequest(plan.price, paymentSettings)}
                         onLoadPaymentData={(paymentRequest) => {
                           handleGooglePaySuccess(plan.id, paymentRequest);
