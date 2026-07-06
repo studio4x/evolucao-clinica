@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Heart, Cloud, Upload, Trash2, Printer, Image as ImageIcon, Sparkles, Check, RefreshCw } from 'lucide-react';
+import { useSiteConfig } from '../hooks/useSiteConfig';
 
 // Custom SVG Caduceus Icon
 const CaduceusIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
@@ -51,6 +52,7 @@ interface CardData {
 }
 
 export default function StorePresentation() {
+  const siteConfig = useSiteConfig();
   const [cardImages, setCardImages] = useState<Record<number, string>>({});
   const [gradientType, setGradientType] = useState<'teal-white' | 'green-white' | 'teal-dark'>('teal-white');
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
@@ -147,24 +149,35 @@ export default function StorePresentation() {
     window.print();
   };
 
-  const getGradientClass = () => {
+  const getCardBgStyle = () => {
+    const primary = siteConfig.colors.primary;
     switch (gradientType) {
       case 'green-white':
-        return 'from-[#005C13] via-[#0b6b2d] to-white text-[#1c1917]';
+        return {
+          backgroundImage: `linear-gradient(to bottom, ${primary}, ${primary} 35%, #ffffff 85%)`
+        };
       case 'teal-dark':
-        return 'from-[#042f2b] via-[#09423b] to-[#111827] text-white';
+        return {
+          backgroundImage: `linear-gradient(to bottom, ${primary}, #111827)`
+        };
       case 'teal-white':
       default:
-        return 'from-[#0a3d36] via-[#104e45] to-white text-[#1c1917]';
+        return {
+          backgroundImage: 'linear-gradient(to bottom, #0a3d36, #104e45 35%, #ffffff 85%)'
+        };
     }
   };
 
   const getDotPatternColor = () => {
-    return gradientType === 'teal-dark' ? 'rgba(255, 255, 255, 0.04)' : 'rgba(0, 92, 19, 0.03)';
+    if (gradientType === 'teal-dark') return 'rgba(255, 255, 255, 0.04)';
+    if (gradientType === 'green-white') return `${siteConfig.colors.primary}0d`; // ~5% opacity
+    return 'rgba(0, 92, 19, 0.03)';
   };
 
-  const getCornerBorderColor = () => {
-    return gradientType === 'teal-dark' ? 'border-teal-400/25' : 'border-teal-800/20';
+  const getCornerBorderColorStyle = () => {
+    if (gradientType === 'teal-dark') return { borderColor: 'rgba(45, 212, 191, 0.25)' };
+    if (gradientType === 'green-white') return { borderColor: `${siteConfig.colors.primary}33` }; // ~20% opacity
+    return { borderColor: 'rgba(17, 94, 89, 0.2)' };
   };
 
   const renderFloatingIcons = (icons: CardData['icons']) => {
@@ -208,7 +221,10 @@ export default function StorePresentation() {
         return (
           <div className="w-full h-full bg-slate-50 flex flex-col text-left text-[9px] font-sans text-slate-800 select-none">
             {/* Status bar */}
-            <div className="h-3.5 bg-emerald-700 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0">
+            <div 
+              className="h-3.5 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0"
+              style={{ backgroundColor: siteConfig.colors.primary }}
+            >
               <span>09:41</span>
               <div className="flex gap-0.5 items-center">
                 <span>5G</span>
@@ -219,13 +235,31 @@ export default function StorePresentation() {
             {/* Top app header */}
             <div className="bg-white border-b border-slate-200 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-xs">
               <div className="flex items-center gap-1">
-                <div className="w-4.5 h-4.5 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-[7px] shrink-0">EC</div>
+                <div 
+                  className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-white font-bold text-[7px] shrink-0"
+                  style={{ backgroundColor: siteConfig.colors.primary }}
+                >
+                  EC
+                </div>
                 <div className="min-w-0">
-                  <h4 className="font-bold text-[8px] text-emerald-800 leading-none truncate">Nova Evolução</h4>
+                  <h4 
+                    className="font-bold text-[8px] leading-none truncate"
+                    style={{ color: siteConfig.colors.primary }}
+                  >
+                    Nova Evolução
+                  </h4>
                   <span className="text-[5.5px] text-slate-400 block truncate">Paciente: Ana Maria</span>
                 </div>
               </div>
-              <span className="bg-emerald-100 text-emerald-700 text-[5px] px-1 py-0.5 rounded font-bold shrink-0">EM ANDAMENTO</span>
+              <span 
+                className="text-[5px] px-1 py-0.5 rounded font-bold shrink-0"
+                style={{ 
+                  backgroundColor: `${siteConfig.colors.primary}1f`, 
+                  color: siteConfig.colors.primary 
+                }}
+              >
+                EM ANDAMENTO
+              </span>
             </div>
 
             {/* Form body */}
@@ -254,18 +288,18 @@ export default function StorePresentation() {
                 <div className="bg-white p-1 rounded border border-slate-100">
                   <span className="text-[5.5px] text-slate-400 block font-bold leading-none">DOR (EVA)</span>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[7.5px] font-bold text-emerald-600">3/10</span>
+                    <span className="text-[7.5px] font-bold" style={{ color: siteConfig.colors.primary }}>3/10</span>
                     <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="w-[30%] h-full bg-emerald-500 rounded-full"></div>
+                      <div className="w-[30%] h-full rounded-full" style={{ backgroundColor: siteConfig.colors.primary }}></div>
                     </div>
                   </div>
                 </div>
                 <div className="bg-white p-1 rounded border border-slate-100">
                   <span className="text-[5.5px] text-slate-400 block font-bold leading-none">MOBILIDADE</span>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[7.5px] font-bold text-emerald-600">85%</span>
+                    <span className="text-[7.5px] font-bold" style={{ color: siteConfig.colors.primary }}>85%</span>
                     <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="w-[85%] h-full bg-emerald-500 rounded-full"></div>
+                      <div className="w-[85%] h-full rounded-full" style={{ backgroundColor: siteConfig.colors.primary }}></div>
                     </div>
                   </div>
                 </div>
@@ -281,7 +315,11 @@ export default function StorePresentation() {
 
             {/* Footer with action button */}
             <div className="p-1.5 bg-white border-t border-slate-100 shrink-0">
-              <button type="button" className="w-full bg-emerald-600 text-white rounded py-1 text-[7.5px] font-bold shadow-xs flex items-center justify-center">
+              <button 
+                type="button" 
+                className="w-full text-white rounded py-1 text-[7.5px] font-bold shadow-xs flex items-center justify-center cursor-pointer"
+                style={{ backgroundColor: siteConfig.colors.primary }}
+              >
                 <span>Salvar no Google Docs</span>
               </button>
             </div>
@@ -292,7 +330,10 @@ export default function StorePresentation() {
         return (
           <div className="w-full h-full bg-slate-50 flex flex-col text-left text-[9px] font-sans text-slate-800 select-none">
             {/* Status bar */}
-            <div className="h-3.5 bg-teal-800 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0">
+            <div 
+              className="h-3.5 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0"
+              style={{ backgroundColor: siteConfig.colors.primary }}
+            >
               <span>09:41</span>
               <div className="flex gap-0.5 items-center">
                 <span>5G</span>
@@ -302,7 +343,7 @@ export default function StorePresentation() {
             
             {/* Top app header */}
             <div className="bg-white border-b border-slate-200 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-sm">
-              <h4 className="font-bold text-[8.5px] text-teal-800">Minha Agenda</h4>
+              <h4 className="font-bold text-[8.5px]" style={{ color: siteConfig.colors.primary }}>Minha Agenda</h4>
               <div className="w-3.5 h-3.5 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-[7px]">🔔</div>
             </div>
 
@@ -312,7 +353,11 @@ export default function StorePresentation() {
                 const dayNum = 6 + idx;
                 const isSelected = dayNum === 8; // Wed selected
                 return (
-                  <div key={idx} className={`w-5 py-0.5 rounded transition-colors ${isSelected ? 'bg-teal-600 text-white font-bold' : 'text-slate-500'}`}>
+                  <div 
+                    key={idx} 
+                    className="w-5 py-0.5 rounded transition-colors"
+                    style={isSelected ? { backgroundColor: siteConfig.colors.primary, color: '#fff', fontWeight: 'bold' } : { color: '#64748b' }}
+                  >
                     <div className="text-[5px] uppercase">{day}</div>
                     <div className="text-[7.5px] mt-0.2">{dayNum}</div>
                   </div>
@@ -325,13 +370,25 @@ export default function StorePresentation() {
               <div className="text-[5.5px] text-slate-400 font-bold uppercase tracking-wider pl-0.5 shrink-0">Próximos Clientes</div>
               
               {/* Item 1 */}
-              <div className="bg-white p-1.5 rounded border-l-[2.5px] border-l-emerald-500 border-y border-r border-slate-100 shadow-2xs flex justify-between items-center shrink-0">
+              <div 
+                className="bg-white p-1.5 rounded border-y border-r border-slate-100 border-l-[2.5px] shadow-2xs flex justify-between items-center shrink-0"
+                style={{ borderLeftColor: siteConfig.colors.primary }}
+              >
                 <div className="space-y-0.2 min-w-0">
-                  <div className="text-[5.5px] text-emerald-600 font-bold">09:00 - 10:00</div>
+                  <div className="text-[5.5px] font-bold" style={{ color: siteConfig.colors.primary }}>09:00 - 10:00</div>
                   <div className="font-bold text-slate-700 text-[7.5px] leading-tight truncate">Ana Maria Silva</div>
                   <div className="text-[5.5px] text-slate-400 truncate">Fisioterapia Ortopédica</div>
                 </div>
-                <span className="bg-emerald-50 text-emerald-700 text-[4.5px] px-1 py-0.3 rounded font-bold border border-emerald-100 shrink-0">CONFIRMADO</span>
+                <span 
+                  className="text-[4.5px] px-1 py-0.3 rounded font-bold border shrink-0"
+                  style={{ 
+                    backgroundColor: `${siteConfig.colors.primary}12`, 
+                    color: siteConfig.colors.primary, 
+                    borderColor: `${siteConfig.colors.primary}1f` 
+                  }}
+                >
+                  CONFIRMADO
+                </span>
               </div>
 
               {/* Item 2 */}
@@ -371,20 +428,36 @@ export default function StorePresentation() {
             
             {/* Top app header */}
             <div className="bg-slate-950 border-b border-slate-800 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-sm">
-              <h4 className="font-bold text-[8.5px] text-teal-400">Segurança & LGPD</h4>
-              <span className="text-[5px] bg-teal-500/10 text-teal-400 px-1 py-0.5 rounded border border-teal-500/20 font-mono shrink-0">SSL 256-BIT</span>
+              <h4 className="font-bold text-[8.5px]" style={{ color: siteConfig.colors.accent }}>Segurança & LGPD</h4>
+              <span 
+                className="text-[5px] px-1 py-0.5 rounded font-mono shrink-0 border"
+                style={{ 
+                  backgroundColor: `${siteConfig.colors.accent}12`, 
+                  color: siteConfig.colors.accent, 
+                  borderColor: `${siteConfig.colors.accent}2b` 
+                }}
+              >
+                SSL 256-BIT
+              </span>
             </div>
 
             {/* Security stats content */}
             <div className="p-2 flex-1 overflow-hidden flex flex-col gap-2 min-h-0">
               {/* Circular shield check indicator */}
               <div className="py-1.5 flex flex-col items-center justify-center space-y-0.5 bg-slate-950/40 rounded-lg border border-slate-800 shrink-0">
-                <div className="w-8 h-8 rounded-full bg-teal-500/10 border border-teal-500/35 flex items-center justify-center text-teal-400 animate-pulse">
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center animate-pulse border"
+                  style={{ 
+                    backgroundColor: `${siteConfig.colors.accent}12`, 
+                    color: siteConfig.colors.accent, 
+                    borderColor: `${siteConfig.colors.accent}4d` 
+                  }}
+                >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 </div>
-                <div className="text-[8px] font-bold text-teal-400 leading-none">Proteção Ativa</div>
+                <div className="text-[8px] font-bold leading-none" style={{ color: siteConfig.colors.accent }}>Proteção Ativa</div>
                 <div className="text-[5.5px] text-slate-500">Dados 100% criptografados</div>
               </div>
 
@@ -396,7 +469,10 @@ export default function StorePresentation() {
                     <div className="font-bold text-[7.5px] text-slate-200 leading-none">Criptografia</div>
                     <div className="text-[5.5px] text-slate-550 truncate mt-0.5">Banco de dados AES-256</div>
                   </div>
-                  <div className="w-5.5 h-3 bg-teal-500 rounded-full p-0.5 flex justify-end items-center shrink-0">
+                  <div 
+                    className="w-5.5 h-3 rounded-full p-0.5 flex justify-end items-center shrink-0"
+                    style={{ backgroundColor: siteConfig.colors.accent }}
+                  >
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
                 </div>
@@ -407,7 +483,10 @@ export default function StorePresentation() {
                     <div className="font-bold text-[7.5px] text-slate-200 leading-none">Backup Nuvem</div>
                     <div className="text-[5.5px] text-slate-550 truncate mt-0.5">Sincronização imediata</div>
                   </div>
-                  <div className="w-5.5 h-3 bg-teal-500 rounded-full p-0.5 flex justify-end items-center shrink-0">
+                  <div 
+                    className="w-5.5 h-3 rounded-full p-0.5 flex justify-end items-center shrink-0"
+                    style={{ backgroundColor: siteConfig.colors.accent }}
+                  >
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
                 </div>
@@ -418,7 +497,10 @@ export default function StorePresentation() {
                     <div className="font-bold text-[7.5px] text-slate-200 leading-none">Autenticação</div>
                     <div className="text-[5.5px] text-slate-550 truncate mt-0.5">Acesso via Face ID</div>
                   </div>
-                  <div className="w-5.5 h-3 bg-teal-500 rounded-full p-0.5 flex justify-end items-center shrink-0">
+                  <div 
+                    className="w-5.5 h-3 rounded-full p-0.5 flex justify-end items-center shrink-0"
+                    style={{ backgroundColor: siteConfig.colors.accent }}
+                  >
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
                 </div>
@@ -527,9 +609,9 @@ export default function StorePresentation() {
                 key={card.id}
                 onPaste={(e) => handlePaste(card.id, e)}
                 className={`relative w-full aspect-[9/16] max-w-[345px] rounded-[24px] overflow-hidden flex flex-col justify-between pt-5 pb-4 px-4 border shadow-lg transition-all duration-300 group hover:shadow-xl select-none ${
-                  gradientType === 'teal-dark' ? 'border-slate-800' : 'border-slate-200'
-                } bg-gradient-to-b ${getGradientClass()}`}
-                style={{ contentVisibility: 'auto' }}
+                  gradientType === 'teal-dark' ? 'border-slate-800 text-white' : 'border-slate-200 text-[#1c1917]'
+                }`}
+                style={{ contentVisibility: 'auto', ...getCardBgStyle() }}
               >
                 {/* SVG Dot Pattern Background */}
                 <div
@@ -541,19 +623,26 @@ export default function StorePresentation() {
                 ></div>
 
                 {/* Decorative Technical Corner Frames */}
-                <div className={`absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 ${getCornerBorderColor()} pointer-events-none rounded-tl-sm`}></div>
-                <div className={`absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 ${getCornerBorderColor()} pointer-events-none rounded-tr-sm`}></div>
-                <div className={`absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 ${getCornerBorderColor()} pointer-events-none rounded-bl-sm`}></div>
-                <div className={`absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 ${getCornerBorderColor()} pointer-events-none rounded-br-sm`}></div>
+                <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 rounded-tl-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
+                <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 rounded-tr-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
+                <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 rounded-bl-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
+                <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 rounded-br-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
 
                 {/* Floating Aesthetic Medical/Security Icons */}
                 {renderFloatingIcons(card.icons)}
 
                 {/* Top Title/Brand Row */}
                 <div className="flex justify-between items-center w-full z-20 px-1">
-                  <span className={`text-[8.5px] font-bold tracking-widest font-display ${
-                    gradientType === 'teal-dark' ? 'text-teal-400' : 'text-emerald-800'
-                  }`}>
+                  <span 
+                    className="text-[8.5px] font-bold tracking-widest font-display"
+                    style={{
+                      color: gradientType === 'teal-dark' 
+                        ? '#2dd4bf' 
+                        : gradientType === 'green-white' 
+                        ? siteConfig.colors.primary 
+                        : '#065f46'
+                    }}
+                  >
                     EVOLUÇÃO CLÍNICA
                   </span>
                   <div className="flex items-center gap-1 opacity-90">
