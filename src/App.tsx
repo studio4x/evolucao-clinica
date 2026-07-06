@@ -33,7 +33,6 @@ import TermsOfService from './pages/TermsOfService';
 import LandingPage from './pages/LandingPage';
 import DeleteAccount from './pages/DeleteAccount';
 import PublicReportView from './pages/PublicReportView';
-import StorePresentation from './pages/StorePresentation';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
@@ -549,7 +548,6 @@ export default function App() {
         <Route path="/terms" element={<TermsOfService />} />
         <Route path="/delete-account" element={<DeleteAccount />} />
         <Route path="/public/reports/:reportId" element={<PublicReportView />} />
-        <Route path="/store-presentation" element={<StorePresentation />} />
         
         {/* Admin Panel Routes */}
         <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
