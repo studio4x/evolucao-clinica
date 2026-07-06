@@ -700,7 +700,7 @@ export default function Subscription() {
             const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
             
             return (
-              <div key={plan.id} className={`card border bg-white rounded-3xl p-8 flex flex-col justify-between relative shadow-xl ${
+              <div key={plan.id} className={`card border bg-white rounded-3xl p-8 flex flex-col justify-between relative shadow-xl overflow-visible ${
                 isCurrentPlan
                   ? 'border-brand-primary shadow-brand-primary/10 ring-2 ring-brand-primary/10' 
                   : 'border-brand-primary/10 shadow-brand-primary/5 hover:border-brand-primary/25 transition-all'

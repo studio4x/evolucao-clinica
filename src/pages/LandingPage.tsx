@@ -647,7 +647,7 @@ export default function LandingPage() {
               return (
                 <div 
                   key={plan.id}
-                  className={`card bg-white p-8 relative flex flex-col justify-between transition-all duration-300 ${
+                  className={`card bg-white p-8 relative flex flex-col justify-between transition-all duration-300 overflow-visible ${
                     isYearly 
                       ? 'border-brand-primary shadow-lg shadow-brand-primary/5 hover:shadow-xl' 
                       : 'border-brand-border hover:border-brand-primary/20 hover:shadow-xl'
