@@ -206,65 +206,65 @@ export default function StorePresentation() {
     switch (type) {
       case 'form':
         return (
-          <div className="w-full h-full bg-slate-50 flex flex-col text-left text-[10px] font-sans text-slate-800 select-none">
+          <div className="w-full h-full bg-slate-50 flex flex-col text-left text-[9px] font-sans text-slate-800 select-none">
             {/* Status bar */}
-            <div className="h-4 bg-emerald-700 text-white px-2 flex justify-between items-center text-[8px] font-medium shrink-0">
+            <div className="h-3.5 bg-emerald-700 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0">
               <span>09:41</span>
-              <div className="flex gap-1 items-center">
+              <div className="flex gap-0.5 items-center">
                 <span>5G</span>
-                <span className="w-4 h-2 border border-white rounded-[2px] bg-white flex-none"></span>
+                <span className="w-3 h-1.5 border border-white rounded-[1px] bg-white flex-none"></span>
               </div>
             </div>
             
             {/* Top app header */}
-            <div className="bg-white border-b border-slate-200 px-3 py-2 flex items-center justify-between shrink-0 shadow-sm">
-              <div className="flex items-center gap-1.5">
-                <div className="w-5 h-5 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-[8px]">EC</div>
-                <div>
-                  <h4 className="font-bold text-[9px] text-emerald-800 leading-none">Nova Evolução</h4>
-                  <span className="text-[6px] text-slate-400">Paciente: Ana Maria</span>
+            <div className="bg-white border-b border-slate-200 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-xs">
+              <div className="flex items-center gap-1">
+                <div className="w-4.5 h-4.5 rounded-full bg-emerald-600 flex items-center justify-center text-white font-bold text-[7px] shrink-0">EC</div>
+                <div className="min-w-0">
+                  <h4 className="font-bold text-[8px] text-emerald-800 leading-none truncate">Nova Evolução</h4>
+                  <span className="text-[5.5px] text-slate-400 block truncate">Paciente: Ana Maria</span>
                 </div>
               </div>
-              <span className="bg-emerald-100 text-emerald-700 text-[6px] px-1.5 py-0.5 rounded font-bold">EM ANDAMENTO</span>
+              <span className="bg-emerald-100 text-emerald-700 text-[5px] px-1 py-0.5 rounded font-bold shrink-0">EM ANDAMENTO</span>
             </div>
 
             {/* Form body */}
-            <div className="p-2.5 flex-1 overflow-hidden space-y-2">
+            <div className="p-2 flex-1 overflow-hidden flex flex-col gap-1.5 min-h-0">
               {/* Patient info box */}
-              <div className="bg-white p-2 rounded border border-slate-100 shadow-xs space-y-1">
-                <div className="flex justify-between items-center text-[7px] text-slate-400">
-                  <span>Plano de Tratamento</span>
+              <div className="bg-white p-1.5 rounded border border-slate-100 shadow-2xs space-y-0.5 shrink-0">
+                <div className="flex justify-between items-center text-[6px] text-slate-400">
+                  <span>Plano Clínico</span>
                   <span>Sessão 4 de 10</span>
                 </div>
-                <div className="font-semibold text-slate-700 text-[9px]">Fisioterapia Ortopédica</div>
+                <div className="font-bold text-slate-700 text-[8px] leading-tight">Fisioterapia Ortopédica</div>
               </div>
 
               {/* Text evolution */}
-              <div className="space-y-1">
-                <label className="text-[7px] text-slate-400 font-bold uppercase tracking-wider block">Evolução Clínica</label>
-                <div className="bg-white p-2 rounded border border-slate-200 text-slate-600 font-normal leading-relaxed text-[7px] h-[78px] overflow-hidden relative">
+              <div className="flex-1 flex flex-col min-h-0 min-w-0">
+                <label className="text-[6px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Evolução Clínica</label>
+                <div className="bg-white p-1.5 rounded border border-slate-200 text-slate-600 font-normal leading-normal text-[6.5px] flex-1 overflow-hidden relative">
                   <p>Paciente relata melhora significativa na dor lombar (EVA de 7 para 3) após última sessão de mobilizações articulares.</p>
-                  <p className="mt-1">Realizado hoje fortalecimento do complexo pélvico-lombar através de pranchas isométricas e pontes, associado à liberação miofascial de eretores da espinha...</p>
+                  <p className="mt-1">Realizado hoje fortalecimento do complexo pélvico-lombar através de pranchas isométricas e pontes...</p>
                   <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
                 </div>
               </div>
 
               {/* Sliders and fields */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="bg-white p-1.5 rounded border border-slate-100">
-                  <span className="text-[6px] text-slate-400 block font-bold">INTENSIDADE DOR</span>
+              <div className="grid grid-cols-2 gap-1.5 shrink-0">
+                <div className="bg-white p-1 rounded border border-slate-100">
+                  <span className="text-[5.5px] text-slate-400 block font-bold leading-none">DOR (EVA)</span>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[8px] font-bold text-emerald-600">3/10</span>
-                    <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <span className="text-[7.5px] font-bold text-emerald-600">3/10</span>
+                    <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden">
                       <div className="w-[30%] h-full bg-emerald-500 rounded-full"></div>
                     </div>
                   </div>
                 </div>
-                <div className="bg-white p-1.5 rounded border border-slate-100">
-                  <span className="text-[6px] text-slate-400 block font-bold">MOBILIDADE</span>
+                <div className="bg-white p-1 rounded border border-slate-100">
+                  <span className="text-[5.5px] text-slate-400 block font-bold leading-none">MOBILIDADE</span>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[8px] font-bold text-emerald-600">85%</span>
-                    <div className="flex-1 h-1 bg-slate-100 rounded-full overflow-hidden">
+                    <span className="text-[7.5px] font-bold text-emerald-600">85%</span>
+                    <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden">
                       <div className="w-[85%] h-full bg-emerald-500 rounded-full"></div>
                     </div>
                   </div>
@@ -272,16 +272,16 @@ export default function StorePresentation() {
               </div>
 
               {/* Tags */}
-              <div className="flex gap-1 flex-wrap">
-                <span className="bg-teal-50 text-teal-700 text-[6px] px-1 py-0.5 rounded border border-teal-100">Liberação Miofascial</span>
-                <span className="bg-teal-50 text-teal-700 text-[6px] px-1 py-0.5 rounded border border-teal-100">Dor Lombar</span>
-                <span className="bg-slate-100 text-slate-600 text-[6px] px-1 py-0.5 rounded border border-slate-200">+3</span>
+              <div className="flex gap-0.5 flex-wrap shrink-0">
+                <span className="bg-teal-50 text-teal-700 text-[5.5px] px-1 py-0.5 rounded border border-teal-100 leading-none">Miofascial</span>
+                <span className="bg-teal-50 text-teal-700 text-[5.5px] px-1 py-0.5 rounded border border-teal-100 leading-none">Lombar</span>
+                <span className="bg-slate-100 text-slate-650 text-[5.5px] px-1 py-0.5 rounded border border-slate-200 leading-none">+3</span>
               </div>
             </div>
 
             {/* Footer with action button */}
-            <div className="p-2 bg-white border-t border-slate-100 shrink-0">
-              <button type="button" className="w-full bg-emerald-600 text-white rounded py-1.5 text-[8px] font-bold shadow-xs flex items-center justify-center gap-1">
+            <div className="p-1.5 bg-white border-t border-slate-100 shrink-0">
+              <button type="button" className="w-full bg-emerald-600 text-white rounded py-1 text-[7.5px] font-bold shadow-xs flex items-center justify-center">
                 <span>Salvar no Google Docs</span>
               </button>
             </div>
@@ -290,78 +290,68 @@ export default function StorePresentation() {
 
       case 'calendar':
         return (
-          <div className="w-full h-full bg-slate-50 flex flex-col text-left text-[10px] font-sans text-slate-800 select-none">
+          <div className="w-full h-full bg-slate-50 flex flex-col text-left text-[9px] font-sans text-slate-800 select-none">
             {/* Status bar */}
-            <div className="h-4 bg-teal-800 text-white px-2 flex justify-between items-center text-[8px] font-medium shrink-0">
+            <div className="h-3.5 bg-teal-800 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0">
               <span>09:41</span>
-              <div className="flex gap-1 items-center">
+              <div className="flex gap-0.5 items-center">
                 <span>5G</span>
-                <span className="w-4 h-2 border border-white rounded-[2px] bg-white flex-none"></span>
+                <span className="w-3 h-1.5 border border-white rounded-[1px] bg-white flex-none"></span>
               </div>
             </div>
             
             {/* Top app header */}
-            <div className="bg-white border-b border-slate-200 px-3 py-2 flex items-center justify-between shrink-0 shadow-sm">
-              <h4 className="font-bold text-[10px] text-teal-800">Minha Agenda</h4>
-              <div className="w-4 h-4 rounded-full bg-slate-100 flex items-center justify-center text-slate-555 text-[8px]">🔔</div>
+            <div className="bg-white border-b border-slate-200 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-sm">
+              <h4 className="font-bold text-[8.5px] text-teal-800">Minha Agenda</h4>
+              <div className="w-3.5 h-3.5 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-[7px]">🔔</div>
             </div>
 
             {/* Calendar header dates */}
-            <div className="bg-white px-2 py-1.5 border-b border-slate-150 flex justify-between shrink-0 text-center text-[7px]">
+            <div className="bg-white px-1.5 py-1 border-b border-slate-150 flex justify-between shrink-0 text-center text-[6px]">
               {['S', 'T', 'Q', 'Q', 'S', 'S'].map((day, idx) => {
                 const dayNum = 6 + idx;
                 const isSelected = dayNum === 8; // Wed selected
                 return (
-                  <div key={idx} className={`w-6 py-1 rounded transition-colors ${isSelected ? 'bg-teal-600 text-white font-bold' : 'text-slate-600'}`}>
-                    <div className="text-[6px] uppercase">{day}</div>
-                    <div className="text-[8px] mt-0.5">{dayNum}</div>
+                  <div key={idx} className={`w-5 py-0.5 rounded transition-colors ${isSelected ? 'bg-teal-600 text-white font-bold' : 'text-slate-500'}`}>
+                    <div className="text-[5px] uppercase">{day}</div>
+                    <div className="text-[7.5px] mt-0.2">{dayNum}</div>
                   </div>
                 );
               })}
             </div>
 
             {/* Schedule list */}
-            <div className="p-2 flex-1 overflow-hidden space-y-1.5">
-              <div className="text-[6px] text-slate-400 font-bold uppercase tracking-wider pl-1">Próximos Clientes</div>
+            <div className="p-1.5 flex-1 overflow-hidden flex flex-col gap-1 min-h-0">
+              <div className="text-[5.5px] text-slate-400 font-bold uppercase tracking-wider pl-0.5 shrink-0">Próximos Clientes</div>
               
               {/* Item 1 */}
-              <div className="bg-white p-2 rounded border-l-[3px] border-l-emerald-500 border-y border-r border-slate-100 shadow-xs flex justify-between items-center">
-                <div className="space-y-0.5">
-                  <div className="text-[6px] text-emerald-600 font-bold">09:00 - 10:00</div>
-                  <div className="font-bold text-slate-700 text-[8px]">Ana Maria Silva</div>
-                  <div className="text-[6px] text-slate-400">Fisioterapia Ortopédica</div>
+              <div className="bg-white p-1.5 rounded border-l-[2.5px] border-l-emerald-500 border-y border-r border-slate-100 shadow-2xs flex justify-between items-center shrink-0">
+                <div className="space-y-0.2 min-w-0">
+                  <div className="text-[5.5px] text-emerald-600 font-bold">09:00 - 10:00</div>
+                  <div className="font-bold text-slate-700 text-[7.5px] leading-tight truncate">Ana Maria Silva</div>
+                  <div className="text-[5.5px] text-slate-400 truncate">Fisioterapia Ortopédica</div>
                 </div>
-                <span className="bg-emerald-50 text-emerald-700 text-[5px] px-1 py-0.5 rounded font-bold border border-emerald-100">CONFIRMADO</span>
+                <span className="bg-emerald-50 text-emerald-700 text-[4.5px] px-1 py-0.3 rounded font-bold border border-emerald-100 shrink-0">CONFIRMADO</span>
               </div>
 
               {/* Item 2 */}
-              <div className="bg-white p-2 rounded border-l-[3px] border-l-sky-500 border-y border-r border-slate-100 shadow-xs flex justify-between items-center">
-                <div className="space-y-0.5">
-                  <div className="text-[6px] text-sky-600 font-bold">10:30 - 11:30</div>
-                  <div className="font-bold text-slate-700 text-[8px]">João Carlos Medeiros</div>
-                  <div className="text-[6px] text-slate-400">Quiropraxia Clínica</div>
+              <div className="bg-white p-1.5 rounded border-l-[2.5px] border-l-sky-500 border-y border-r border-slate-100 shadow-2xs flex justify-between items-center shrink-0">
+                <div className="space-y-0.2 min-w-0">
+                  <div className="text-[5.5px] text-sky-600 font-bold">10:30 - 11:30</div>
+                  <div className="font-bold text-slate-700 text-[7.5px] leading-tight truncate">João Carlos Medeiros</div>
+                  <div className="text-[5.5px] text-slate-400 truncate">Quiropraxia Clínica</div>
                 </div>
-                <span className="bg-sky-50 text-sky-700 text-[5px] px-1 py-0.5 rounded font-bold border border-sky-100">EM ANDAMENTO</span>
+                <span className="bg-sky-50 text-sky-700 text-[4.5px] px-1 py-0.3 rounded font-bold border border-sky-100 shrink-0">EM CURSO</span>
               </div>
 
               {/* Item 3 */}
-              <div className="bg-white p-2 rounded border-l-[3px] border-l-amber-500 border-y border-r border-slate-100 shadow-xs flex justify-between items-center opacity-85">
-                <div className="space-y-0.5">
-                  <div className="text-[6px] text-amber-600 font-bold">14:00 - 15:00</div>
-                  <div className="font-bold text-slate-700 text-[8px]">Roberta Costa</div>
-                  <div className="text-[6px] text-slate-400">Avaliação Postural</div>
+              <div className="bg-white p-1.5 rounded border-l-[2.5px] border-l-amber-500 border-y border-r border-slate-100 shadow-2xs flex justify-between items-center opacity-85 shrink-0">
+                <div className="space-y-0.2 min-w-0">
+                  <div className="text-[5.5px] text-amber-600 font-bold">14:00 - 15:00</div>
+                  <div className="font-bold text-slate-700 text-[7.5px] leading-tight truncate">Roberta Costa</div>
+                  <div className="text-[5.5px] text-slate-400 truncate">Avaliação Postural</div>
                 </div>
-                <span className="bg-amber-50 text-amber-700 text-[5px] px-1 py-0.5 rounded font-bold border border-amber-100">AGUARDANDO</span>
-              </div>
-
-              {/* Item 4 */}
-              <div className="bg-white p-2 rounded border-l-[3px] border-l-slate-300 border-y border-r border-slate-100 shadow-xs flex justify-between items-center opacity-70">
-                <div className="space-y-0.5">
-                  <div className="text-[6px] text-slate-500 font-bold">15:30 - 16:30</div>
-                  <div className="font-bold text-slate-700 text-[8px]">Carlos Souza</div>
-                  <div className="text-[6px] text-slate-400">Reabilitação Joelho</div>
-                </div>
-                <span className="bg-slate-50 text-slate-600 text-[5px] px-1 py-0.5 rounded font-bold border border-slate-100">PENDENTE</span>
+                <span className="bg-amber-50 text-amber-700 text-[4.5px] px-1 py-0.3 rounded font-bold border border-amber-100 shrink-0">AGUARDANDO</span>
               </div>
             </div>
           </div>
@@ -369,67 +359,67 @@ export default function StorePresentation() {
 
       case 'security':
         return (
-          <div className="w-full h-full bg-slate-900 flex flex-col text-left text-[10px] font-sans text-slate-300 select-none">
+          <div className="w-full h-full bg-slate-900 flex flex-col text-left text-[9px] font-sans text-slate-300 select-none">
             {/* Status bar */}
-            <div className="h-4 bg-slate-955 text-slate-450 px-2 flex justify-between items-center text-[8px] font-medium shrink-0">
+            <div className="h-3.5 bg-slate-950 text-slate-500 px-2 flex justify-between items-center text-[7px] font-medium shrink-0">
               <span>09:41</span>
-              <div className="flex gap-1 items-center">
+              <div className="flex gap-0.5 items-center">
                 <span>5G</span>
-                <span className="w-4 h-2 border border-slate-700 rounded-[2px] bg-slate-400 flex-none"></span>
+                <span className="w-3 h-1.5 border border-slate-700 rounded-[1px] bg-slate-500 flex-none"></span>
               </div>
             </div>
             
             {/* Top app header */}
-            <div className="bg-slate-950 border-b border-slate-800 px-3 py-2 flex items-center justify-between shrink-0 shadow-sm">
-              <h4 className="font-bold text-[10px] text-teal-400">Segurança & LGPD</h4>
-              <span className="text-[6px] bg-teal-500/10 text-teal-400 px-1 py-0.5 rounded border border-teal-500/20 font-mono">SSL 256-BIT</span>
+            <div className="bg-slate-950 border-b border-slate-800 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-sm">
+              <h4 className="font-bold text-[8.5px] text-teal-400">Segurança & LGPD</h4>
+              <span className="text-[5px] bg-teal-500/10 text-teal-400 px-1 py-0.5 rounded border border-teal-500/20 font-mono shrink-0">SSL 256-BIT</span>
             </div>
 
             {/* Security stats content */}
-            <div className="p-3 flex-1 overflow-hidden space-y-3">
+            <div className="p-2 flex-1 overflow-hidden flex flex-col gap-2 min-h-0">
               {/* Circular shield check indicator */}
-              <div className="py-2 flex flex-col items-center justify-center space-y-1 bg-slate-950/40 rounded-lg border border-slate-800">
-                <div className="w-10 h-10 rounded-full bg-teal-500/10 border border-teal-500/35 flex items-center justify-center text-teal-400 animate-pulse">
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+              <div className="py-1.5 flex flex-col items-center justify-center space-y-0.5 bg-slate-950/40 rounded-lg border border-slate-800 shrink-0">
+                <div className="w-8 h-8 rounded-full bg-teal-500/10 border border-teal-500/35 flex items-center justify-center text-teal-400 animate-pulse">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 </div>
-                <div className="text-[9px] font-bold text-teal-400">Proteção Ativa</div>
-                <div className="text-[6px] text-slate-500">Prontuário 100% criptografado</div>
+                <div className="text-[8px] font-bold text-teal-400 leading-none">Proteção Ativa</div>
+                <div className="text-[5.5px] text-slate-500">Dados 100% criptografados</div>
               </div>
 
               {/* Toggles list */}
-              <div className="space-y-2">
+              <div className="flex-1 flex flex-col gap-1 overflow-hidden">
                 {/* Toggle 1 */}
-                <div className="bg-slate-950/20 p-2 rounded border border-slate-800/80 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-[8px] text-slate-200">Criptografia em Repouso</div>
-                    <div className="text-[6px] text-slate-550">Banco de dados AES-256</div>
+                <div className="bg-slate-950/20 p-1.5 rounded border border-slate-800/80 flex items-center justify-between shrink-0">
+                  <div className="min-w-0">
+                    <div className="font-bold text-[7.5px] text-slate-200 leading-none">Criptografia</div>
+                    <div className="text-[5.5px] text-slate-550 truncate mt-0.5">Banco de dados AES-256</div>
                   </div>
-                  <div className="w-6 h-3.5 bg-teal-500 rounded-full p-0.5 flex justify-end items-center cursor-pointer transition-colors duration-200">
-                    <div className="w-2.5 h-2.5 bg-slate-900 rounded-full"></div>
+                  <div className="w-5.5 h-3 bg-teal-500 rounded-full p-0.5 flex justify-end items-center shrink-0">
+                    <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
                 </div>
 
                 {/* Toggle 2 */}
-                <div className="bg-slate-950/20 p-2 rounded border border-slate-800/80 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-[8px] text-slate-200">Backup Automático em Nuvem</div>
-                    <div className="text-[6px] text-slate-550">Sincronização imediata</div>
+                <div className="bg-slate-950/20 p-1.5 rounded border border-slate-800/80 flex items-center justify-between shrink-0">
+                  <div className="min-w-0">
+                    <div className="font-bold text-[7.5px] text-slate-200 leading-none">Backup Nuvem</div>
+                    <div className="text-[5.5px] text-slate-550 truncate mt-0.5">Sincronização imediata</div>
                   </div>
-                  <div className="w-6 h-3.5 bg-teal-500 rounded-full p-0.5 flex justify-end items-center cursor-pointer transition-colors duration-200">
-                    <div className="w-2.5 h-2.5 bg-slate-900 rounded-full"></div>
+                  <div className="w-5.5 h-3 bg-teal-500 rounded-full p-0.5 flex justify-end items-center shrink-0">
+                    <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
                 </div>
 
                 {/* Toggle 3 */}
-                <div className="bg-slate-950/20 p-2 rounded border border-slate-800/80 flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-[8px] text-slate-200">Autenticação Biométrica</div>
-                    <div className="text-[6px] text-slate-550">Face ID ou Impressão Digital</div>
+                <div className="bg-slate-950/20 p-1.5 rounded border border-slate-800/80 flex items-center justify-between shrink-0">
+                  <div className="min-w-0">
+                    <div className="font-bold text-[7.5px] text-slate-200 leading-none">Autenticação</div>
+                    <div className="text-[5.5px] text-slate-550 truncate mt-0.5">Acesso via Face ID</div>
                   </div>
-                  <div className="w-6 h-3.5 bg-teal-500 rounded-full p-0.5 flex justify-end items-center cursor-pointer transition-colors duration-200">
-                    <div className="w-2.5 h-2.5 bg-slate-900 rounded-full"></div>
+                  <div className="w-5.5 h-3 bg-teal-500 rounded-full p-0.5 flex justify-end items-center shrink-0">
+                    <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
                 </div>
               </div>
@@ -440,15 +430,15 @@ export default function StorePresentation() {
       case 'empty':
       default:
         return (
-          <div className="w-full h-full bg-stone-550/5 flex flex-col items-center justify-center p-4 text-center select-none group-hover:bg-teal-50/10 transition-colors">
-            <div className="p-3 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 group-hover:text-teal-650 group-hover:bg-teal-50 group-hover:border-teal-300 transition-all duration-300">
-              <ImageIcon className="w-8 h-8 opacity-75" />
+          <div className="w-full h-full bg-stone-550/5 flex flex-col items-center justify-center p-3 text-center select-none group-hover:bg-teal-50/10 transition-colors">
+            <div className="p-2.5 rounded-full bg-slate-100 border border-dashed border-slate-300 text-slate-400 group-hover:text-teal-650 group-hover:bg-teal-50 group-hover:border-teal-300 transition-all duration-300">
+              <ImageIcon className="w-6 h-6 opacity-75" />
             </div>
-            <div className="mt-3 font-semibold text-slate-500 text-[10px] uppercase tracking-wider group-hover:text-teal-700 transition-colors">
+            <div className="mt-2 font-semibold text-slate-500 text-[8px] uppercase tracking-wider group-hover:text-teal-700 transition-colors px-1 leading-tight">
               {type === 'empty' ? '[CAPTURAS DO SEU APP AQUI]' : 'Adicionar Imagem'}
             </div>
-            <p className="text-[7px] text-slate-400 mt-1 px-4 leading-normal">
-              Clique para fazer upload ou cole com <kbd className="bg-slate-200 px-1 py-0.5 rounded text-slate-650 text-[6px]">Ctrl+V</kbd>
+            <p className="text-[6px] text-slate-400 mt-0.5 px-2 leading-normal">
+              Clique para upload ou cole com <kbd className="bg-slate-200 px-1 py-0.2 rounded text-slate-650 text-[5px]">Ctrl+V</kbd>
             </p>
           </div>
         );
@@ -536,7 +526,7 @@ export default function StorePresentation() {
               <div
                 key={card.id}
                 onPaste={(e) => handlePaste(card.id, e)}
-                className={`relative w-full aspect-[9/16] max-w-[345px] rounded-[24px] overflow-hidden flex flex-col justify-between py-6 px-5 border shadow-lg transition-all duration-300 group hover:shadow-xl select-none ${
+                className={`relative w-full aspect-[9/16] max-w-[345px] rounded-[24px] overflow-hidden flex flex-col justify-between pt-5 pb-4 px-4 border shadow-lg transition-all duration-300 group hover:shadow-xl select-none ${
                   gradientType === 'teal-dark' ? 'border-slate-800' : 'border-slate-200'
                 } bg-gradient-to-b ${getGradientClass()}`}
                 style={{ contentVisibility: 'auto' }}
@@ -561,20 +551,20 @@ export default function StorePresentation() {
 
                 {/* Top Title/Brand Row */}
                 <div className="flex justify-between items-center w-full z-20 px-1">
-                  <span className={`text-[9px] font-bold tracking-widest font-display ${
+                  <span className={`text-[8.5px] font-bold tracking-widest font-display ${
                     gradientType === 'teal-dark' ? 'text-teal-400' : 'text-emerald-800'
                   }`}>
                     EVOLUÇÃO CLÍNICA
                   </span>
                   <div className="flex items-center gap-1 opacity-90">
-                    <GooglePlayLogo className="w-3.5 h-3.5" />
-                    <span className="text-[7px] font-bold text-slate-500 font-mono tracking-tighter">PLAY STORE</span>
+                    <GooglePlayLogo className="w-3 h-3" />
+                    <span className="text-[6.5px] font-bold text-slate-500 font-mono tracking-tighter">PLAY STORE</span>
                   </div>
                 </div>
 
                 {/* Main Prominent Feature Title */}
-                <div className="mt-4 text-center px-1.5 z-20">
-                  <h2 className={`font-display font-extrabold text-[13px] md:text-[14px] leading-tight tracking-wide text-center uppercase drop-shadow-xs ${
+                <div className="mt-3 text-center px-1 z-20">
+                  <h2 className={`font-display font-extrabold text-[11px] md:text-[12px] leading-tight tracking-wide text-center uppercase drop-shadow-xs ${
                     gradientType === 'teal-dark' ? 'text-white' : 'text-slate-900'
                   }`}>
                     {card.title}
@@ -582,7 +572,7 @@ export default function StorePresentation() {
                 </div>
 
                 {/* Smartphone Mockup Frame */}
-                <div className="relative w-[82%] aspect-[9/17.8] bg-neutral-900 rounded-[28px] p-[5px] mx-auto mt-4 shadow-xl border-[4.5px] border-neutral-900 z-20 transition-transform duration-300 group-hover:scale-[1.02] flex flex-col justify-between overflow-hidden">
+                <div className="relative w-[63%] aspect-[9/19.5] shrink-0 bg-neutral-900 rounded-[22px] p-[4px] mx-auto mt-2.5 shadow-xl border-[4px] border-neutral-900 z-20 transition-transform duration-300 group-hover:scale-[1.01] flex flex-col justify-between overflow-hidden">
                   
                   {/* Phone Notch/Dynamic Island */}
                   <div className="absolute top-1 left-1/2 -translate-x-1/2 w-14 h-2.5 bg-neutral-900 rounded-full z-30 flex items-center justify-between px-2">
@@ -596,7 +586,7 @@ export default function StorePresentation() {
                   {/* Inner Screen Container */}
                   <div
                     onClick={() => triggerFileSelect(card.id)}
-                    className="relative w-full h-full bg-slate-100 rounded-[22px] overflow-hidden flex flex-col justify-between cursor-pointer group"
+                    className="relative w-full h-full bg-slate-100 rounded-[18px] overflow-hidden flex flex-col justify-between cursor-pointer group"
                     title="Clique para enviar ou cole uma imagem real"
                   >
                     {hasUserImage ? (
@@ -649,8 +639,8 @@ export default function StorePresentation() {
                 </div>
 
                 {/* Bottom Portuguese Description Text */}
-                <div className="mt-4 px-2 min-h-[38px] flex items-center justify-center text-center z-20">
-                  <p className={`font-sans text-[10px] font-semibold leading-normal ${
+                <div className="mt-2.5 px-1 min-h-[32px] flex items-center justify-center text-center z-20">
+                  <p className={`font-sans text-[9px] font-semibold leading-snug ${
                     gradientType === 'teal-dark' ? 'text-teal-200/90' : 'text-stone-600/90'
                   }`}>
                     {card.description}
