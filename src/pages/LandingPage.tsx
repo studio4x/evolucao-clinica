@@ -189,26 +189,26 @@ export default function LandingPage() {
             </div>
 
             {/* Desktop Navigation */}
-            <nav className="hidden md:flex space-x-8 text-sm font-semibold text-brand-text-muted">
-              <button onClick={() => scrollToSection('recursos')} className="hover:text-brand-primary transition-colors cursor-pointer">Recursos</button>
-              <button onClick={() => scrollToSection('como-funciona')} className="hover:text-brand-primary transition-colors cursor-pointer">Como Funciona</button>
-              <button onClick={() => scrollToSection('demonstracao')} className="hover:text-brand-primary transition-colors cursor-pointer">Demonstração</button>
-              <button onClick={() => scrollToSection('planos')} className="hover:text-brand-primary transition-colors cursor-pointer">Planos</button>
-              <button onClick={() => scrollToSection('faq')} className="hover:text-brand-primary transition-colors cursor-pointer">FAQ</button>
+            <nav className="hidden lg:flex space-x-8 text-sm font-semibold text-brand-text-muted">
+              <button onClick={() => scrollToSection('recursos')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Recursos</button>
+              <button onClick={() => scrollToSection('como-funciona')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Como Funciona</button>
+              <button onClick={() => scrollToSection('demonstracao')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Demonstração</button>
+              <button onClick={() => scrollToSection('planos')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Planos</button>
+              <button onClick={() => scrollToSection('faq')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">FAQ</button>
             </nav>
 
             {/* Auth CTA Buttons */}
-            <div className="hidden md:flex items-center space-x-4">
+            <div className="hidden lg:flex items-center space-x-4">
               {user ? (
-                <Link to="/painel" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg">
+                <Link to="/painel" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg whitespace-nowrap">
                   Acessar Painel <ArrowRight size={16} />
                 </Link>
               ) : (
                 <>
-                  <Link to="/login" className="text-sm font-semibold text-brand-text-muted hover:text-brand-primary transition-colors">
+                  <Link to="/login" className="text-sm font-semibold text-brand-text-muted hover:text-brand-primary transition-colors whitespace-nowrap">
                     Entrar
                   </Link>
-                  <Link to="/login" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg">
+                  <Link to="/login" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg whitespace-nowrap">
                     Teste gratuito de 7 dias
                   </Link>
                 </>
@@ -216,7 +216,7 @@ export default function LandingPage() {
             </div>
 
             {/* Mobile Menu Button */}
-            <div className="md:hidden flex items-center">
+            <div className="lg:hidden flex items-center">
               <button 
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
                 className="text-brand-primary p-2 focus:outline-none"
@@ -230,7 +230,7 @@ export default function LandingPage() {
 
         {/* Mobile Navigation Dropdown */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-white border-t border-brand-border py-4 px-6 space-y-4 shadow-xl">
+          <div className="lg:hidden bg-white border-t border-brand-border py-4 px-6 space-y-4 shadow-xl">
             <button onClick={() => scrollToSection('recursos')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Recursos</button>
             <button onClick={() => scrollToSection('como-funciona')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Como Funciona</button>
             <button onClick={() => scrollToSection('demonstracao')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Demonstração</button>
