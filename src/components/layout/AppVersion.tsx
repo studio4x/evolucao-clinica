@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const APP_VERSION = "v1.10.281";
+export const APP_VERSION = "v1.10.282";
 
 export const AppVersion = () => {
   return (

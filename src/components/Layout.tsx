@@ -129,9 +129,9 @@ export default function Layout() {
   ];
 
   return (
-    <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
+    <div className="min-h-screen bg-brand-bg flex flex-col lg:flex-row">
       {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+      <div className="lg:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <Link to="/">
           {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
             <img
@@ -158,11 +158,11 @@ export default function Layout() {
       {/* Sidebar */}
       <div className={`
         ${isMobileMenuOpen ? 'flex' : 'hidden'} 
-        md:flex flex-col w-full md:w-64 bg-white border-r border-brand-border flex-shrink-0
-        fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
+        lg:flex flex-col w-full lg:w-64 bg-white border-r border-brand-border flex-shrink-0
+        fixed lg:sticky top-[73px] lg:top-0 z-50 lg:z-0 h-[calc(100vh-73px)] lg:h-screen shadow-sm
       `}>
         <div className="flex-1 overflow-y-auto">
-          <div className="p-4 hidden md:block border-b border-brand-border/50">
+          <div className="p-4 hidden lg:block border-b border-brand-border/50">
             <Link to="/" className="flex justify-center">
               {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
                 <img
@@ -262,9 +262,9 @@ export default function Layout() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-x-hidden flex flex-col pb-16 md:pb-0">
+      <div className="flex-1 overflow-x-hidden flex flex-col pb-16 lg:pb-0">
         <TrialBanner />
-        <main className="p-4 md:p-8 w-full md:w-[90%] max-w-none mx-auto flex-1">
+        <main className="p-4 lg:p-8 w-full lg:w-[90%] max-w-none mx-auto flex-1">
           <Outlet />
         </main>
         <footer className="p-8 mt-auto flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-brand-border/30 text-brand-text-muted">
@@ -281,7 +281,7 @@ export default function Layout() {
       <OfflineQueueMonitor />
 
       {/* Menu Inferior Mobile */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center py-2 pb-safe">
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center py-2 pb-safe">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
