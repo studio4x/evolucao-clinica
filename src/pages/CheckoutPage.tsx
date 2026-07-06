@@ -70,8 +70,28 @@ export default function CheckoutPage() {
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [paymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
 
+  const [plans, setPlans] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('plans')
+          .select('*')
+          .order('price', { ascending: true });
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setPlans(data);
+        }
+      } catch (e) {
+        console.error("Error fetching plans in checkout:", e);
+      }
+    };
+    fetchPlans();
+  }, []);
+
   const getPlanDetails = (planId: string) => {
-    return DEFAULT_PLANS.find((plan) => plan.id === planId) || DEFAULT_PLANS[0];
+    return (plans.length > 0 ? plans : DEFAULT_PLANS).find((plan) => plan.id === planId) || DEFAULT_PLANS.find((plan) => plan.id === planId) || DEFAULT_PLANS[0];
   };
 
   const handleLogout = async () => {

@@ -24,6 +24,45 @@ import { APP_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
+import { supabase } from '../supabaseClient';
+
+const DEFAULT_PLANS = [
+  {
+    id: 'monthly',
+    name: 'Plano Mensal',
+    price: 49.90,
+    equivalent_monthly_price: null,
+    discount_text: null,
+    tag_text: 'Mês a Mês',
+    description: 'Flexibilidade para experimentar sem amarras contratuais.',
+    features: [
+      'Pacientes ilimitados',
+      'Evoluções clínicas com IA ilimitadas',
+      'Integração com Google Docs em tempo real',
+      'Gravação e transcrição de áudio nativa',
+      'Geração de Relatórios & PDI por IA',
+      'Pesquisa Inteligente por IA (Pergunte ao Prontuário)',
+      'Assinatura Digital de Documentos com Proteção Legal',
+      'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
+      'Filtro de Período na Impressão do Prontuário'
+    ]
+  },
+  {
+    id: 'yearly',
+    name: 'Plano Anual',
+    price: 499.00,
+    equivalent_monthly_price: 41.58,
+    discount_text: 'Melhor Custo-Benefício (17% OFF)',
+    tag_text: 'Popular',
+    description: 'A alternativa perfeita para consolidar sua economia anual.',
+    features: [
+      'Tudo do plano mensal',
+      'Desconto de ~17% sobre o valor',
+      'Suporte prioritário via e-mail e WhatsApp',
+      'Garantia de novos recursos em primeira mão'
+    ]
+  }
+];
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -32,6 +71,26 @@ export default function LandingPage() {
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
+
+  const [plans, setPlans] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('plans')
+          .select('*')
+          .order('price', { ascending: true });
+        if (error) throw error;
+        if (data && data.length > 0) {
+          setPlans(data);
+        }
+      } catch (e) {
+        console.error("Error fetching plans in landing page:", e);
+      }
+    };
+    fetchPlans();
+  }, []);
   
   // States for the interactive simulation
   const [simStep, setSimStep] = useState<'idle' | 'recording' | 'transcribing' | 'completed'>('idle');
@@ -580,117 +639,76 @@ export default function LandingPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {/* Plano Mensal */}
-            <div className="card bg-white p-8 relative flex flex-col justify-between border-brand-border hover:border-brand-primary/20 hover:shadow-xl transition-all duration-300">
-              <div>
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-2xl font-bold font-display text-brand-primary">Plano Mensal</h3>
-                  <span className="px-3 py-1 bg-brand-bg text-brand-text-muted text-xs font-bold rounded-full border border-brand-border">
-                    Mês a Mês
-                  </span>
+            {(plans.length > 0 ? plans : DEFAULT_PLANS).map((plan) => {
+              const isYearly = plan.id === 'yearly';
+              const formattedPrice = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.price);
+              const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
+              
+              return (
+                <div 
+                  key={plan.id}
+                  className={`card bg-white p-8 relative flex flex-col justify-between transition-all duration-300 ${
+                    isYearly 
+                      ? 'border-brand-primary shadow-lg shadow-brand-primary/5 hover:shadow-xl' 
+                      : 'border-brand-border hover:border-brand-primary/20 hover:shadow-xl'
+                  }`}
+                >
+                  {isYearly && plan.discount_text && (
+                    <div className="absolute -top-3.5 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-brand-primary text-white text-[10px] font-bold tracking-widest uppercase rounded-full shadow">
+                      {plan.discount_text}
+                    </div>
+                  )}
+
+                  <div>
+                    <div className={`flex justify-between items-center mb-4 ${isYearly ? 'mt-1' : ''}`}>
+                      <h3 className="text-2xl font-bold font-display text-brand-primary">{plan.name}</h3>
+                      <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                        isYearly 
+                          ? 'bg-brand-primary/10 text-brand-primary' 
+                          : 'bg-brand-bg text-brand-text-muted border border-brand-border'
+                      }`}>
+                        {plan.tag_text || (isYearly ? 'Popular' : 'Mês a Mês')}
+                      </span>
+                    </div>
+                    <p className="text-brand-text-muted text-sm mb-6">
+                      {plan.description || (isYearly ? 'A alternativa perfeita para consolidar sua economia anual.' : 'Flexibilidade para experimentar sem amarras contratuais.')}
+                    </p>
+                    
+                    <div className={`flex items-baseline ${isYearly && plan.equivalent_monthly_price ? 'mb-1' : 'mb-6'}`}>
+                      <span className="text-sm font-bold text-brand-text-muted mr-1">R$</span>
+                      <span className="text-4xl font-extrabold font-display text-brand-primary">{formattedPrice}</span>
+                      <span className="text-sm text-brand-text-muted ml-1">{periodLabel}</span>
+                    </div>
+                    
+                    {isYearly && plan.equivalent_monthly_price && (
+                      <p className="text-xs text-brand-accent-hover font-bold mb-6">
+                        Equivalente a R$ {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.equivalent_monthly_price)} por mês pago anualmente
+                      </p>
+                    )}
+
+                    <ul className="space-y-3 mb-8 text-sm text-brand-text">
+                      {plan.features?.map((feature: string, idx: number) => (
+                        <li key={idx} className={`flex items-center gap-2 ${isYearly && idx === 0 ? 'font-semibold text-brand-primary' : ''}`}>
+                          <Check size={16} className="text-brand-primary flex-shrink-0" />
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <Link 
+                    to={`/login?from_plan=${plan.id}`} 
+                    className={`w-full py-4 text-center font-bold text-sm transition-all ${
+                      isYearly 
+                        ? 'btn-primary shadow-md hover:shadow-lg' 
+                        : 'btn-outline shadow-sm hover:border-brand-primary/50'
+                    }`}
+                  >
+                    {isYearly ? 'Assinar Plano Anual' : 'Experimentar Plano Mensal'}
+                  </Link>
                 </div>
-                <p className="text-brand-text-muted text-sm mb-6">Flexibilidade para experimentar sem amarras contratuais.</p>
-                
-                <div className="flex items-baseline mb-6">
-                  <span className="text-sm font-bold text-brand-text-muted mr-1">R$</span>
-                  <span className="text-4xl font-extrabold font-display text-brand-primary">49,90</span>
-                  <span className="text-sm text-brand-text-muted ml-1">/mês</span>
-                </div>
-
-                <ul className="space-y-3 mb-8 text-sm text-brand-text">
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Pacientes ilimitados</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Evoluções clínicas com IA ilimitadas</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Integração com Google Docs em tempo real</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Gravação e transcrição de áudio nativa</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Geração de Relatórios & PDI por IA</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Pesquisa Inteligente por IA (Pergunte ao Prontuário)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Assinatura Digital de Documentos com Proteção Legal</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Filtro de Período na Impressão do Prontuário</span>
-                  </li>
-                </ul>
-              </div>
-
-              <Link to="/login?from_plan=monthly" className="btn-outline w-full py-3.5 text-center font-bold text-sm shadow-sm hover:border-brand-primary/50 transition-colors">
-                Experimentar Plano Mensal
-              </Link>
-            </div>
-
-            {/* Plano Anual */}
-            <div className="card bg-white p-8 relative flex flex-col justify-between border-brand-primary shadow-lg shadow-brand-primary/5 hover:shadow-xl transition-all duration-300">
-              {/* Highlight ribbon */}
-              <div className="absolute -top-3.5 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-brand-primary text-white text-[10px] font-bold tracking-widest uppercase rounded-full shadow">
-                Melhor Custo-Benefício (17% OFF)
-              </div>
-
-              <div>
-                <div className="flex justify-between items-center mb-4 mt-1">
-                  <h3 className="text-2xl font-bold font-display text-brand-primary">Plano Anual</h3>
-                  <span className="px-3 py-1 bg-brand-primary/10 text-brand-primary text-xs font-bold rounded-full">
-                    Popular
-                  </span>
-                </div>
-                <p className="text-brand-text-muted text-sm mb-6">A alternativa perfeita para consolidar sua economia anual.</p>
-                
-                <div className="flex items-baseline mb-1">
-                  <span className="text-sm font-bold text-brand-text-muted mr-1">R$</span>
-                  <span className="text-4xl font-extrabold font-display text-brand-primary">499,00</span>
-                  <span className="text-sm text-brand-text-muted ml-1">/ano</span>
-                </div>
-                <p className="text-xs text-brand-accent-hover font-bold mb-6">
-                  Equivalente a R$ 41,58 por mês pago anualmente
-                </p>
-
-                <ul className="space-y-3 mb-8 text-sm text-brand-text">
-                  <li className="flex items-center gap-2 font-semibold text-brand-primary">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Tudo do plano mensal</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Desconto de ~17% sobre o valor</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Suporte prioritário via e-mail e WhatsApp</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <Check size={16} className="text-brand-primary flex-shrink-0" />
-                    <span>Garantia de novos recursos em primeira mão</span>
-                  </li>
-                </ul>
-              </div>
-
-              <Link to="/login?from_plan=yearly" className="btn-primary w-full py-4 text-center font-bold text-sm shadow-md hover:shadow-lg">
-                Assinar Plano Anual
-              </Link>
-            </div>
+              );
+            })}
           </div>
 
           {/* CDC Guarantee Mention */}
