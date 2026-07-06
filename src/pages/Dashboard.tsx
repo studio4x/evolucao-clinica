@@ -521,7 +521,7 @@ export default function Dashboard() {
       )}
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Link to="/painel/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">

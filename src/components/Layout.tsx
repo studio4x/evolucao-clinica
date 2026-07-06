@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
@@ -19,6 +19,9 @@ export default function Layout() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return window.innerWidth >= 768 && window.innerWidth < 1024;
+  });
 
   useEffect(() => {
     const checkStandalone = () => {
@@ -129,9 +132,9 @@ export default function Layout() {
   ];
 
   return (
-    <div className="min-h-screen bg-brand-bg flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
       {/* Mobile Header */}
-      <div className="lg:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+      <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
         <Link to="/">
           {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
             <img
@@ -158,38 +161,66 @@ export default function Layout() {
       {/* Sidebar */}
       <div className={`
         ${isMobileMenuOpen ? 'flex' : 'hidden'} 
-        lg:flex flex-col w-full lg:w-64 bg-white border-r border-brand-border flex-shrink-0
-        fixed lg:sticky top-[73px] lg:top-0 z-50 lg:z-0 h-[calc(100vh-73px)] lg:h-screen shadow-sm
+        md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
+        fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
+        transition-all duration-300 relative
+        ${isCollapsed ? 'w-full md:w-20' : 'w-full md:w-64'}
       `}>
+        {/* Toggle Collapse Button - Only visible on desktop/tablet (md) */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="hidden md:flex absolute -right-3 top-6 z-50 bg-white border border-brand-border rounded-full p-1 shadow-md hover:bg-brand-bg transition-all cursor-pointer items-center justify-center text-brand-primary"
+          title={isCollapsed ? "Expandir menu" : "Recolher menu"}
+        >
+          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
         <div className="flex-1 overflow-y-auto">
-          <div className="p-4 hidden lg:block border-b border-brand-border/50">
+          <div className="p-4 hidden md:block border-b border-brand-border/50">
             <Link to="/" className="flex justify-center">
-              {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
-                <img
-                  src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-                  alt={siteConfig.pwa_app_name || "Evolução Clínica"}
-                  className="h-28 w-auto max-w-full object-contain"
-                />
+              {isCollapsed ? (
+                (siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
+                  <img
+                    src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
+                    alt={siteConfig.pwa_app_name || "Evolução Clínica"}
+                    className="h-10 w-10 object-contain"
+                  />
+                ) : (
+                  <span className="text-xl font-display font-bold text-brand-primary block text-center">
+                    EC
+                  </span>
+                )
               ) : (
-                <span className="text-xl font-display font-bold text-brand-primary py-4 block text-center">
-                  {siteConfig.pwa_app_name || "Evolução Clínica"}
-                </span>
+                (siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
+                  <img
+                    src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
+                    alt={siteConfig.pwa_app_name || "Evolução Clínica"}
+                    className="h-28 w-auto max-w-full object-contain"
+                  />
+                ) : (
+                  <span className="text-xl font-display font-bold text-brand-primary py-4 block text-center">
+                    {siteConfig.pwa_app_name || "Evolução Clínica"}
+                  </span>
+                )
               )}
             </Link>
           </div>
 
-          <div className="px-4 py-6">
-            <div className="flex items-center space-x-3 px-4 py-3 mb-6 bg-brand-bg rounded-xl border border-brand-border/50">
+          <div className={`${isCollapsed ? 'px-2' : 'px-4'} py-6`}>
+            <div className={`flex items-center mb-6 bg-brand-bg rounded-xl border border-brand-border/50 ${isCollapsed ? 'justify-center p-2' : 'space-x-3 px-4 py-3'}`}>
               <img 
                 src={user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user?.user_metadata?.full_name || user?.email || 'Profissional') + '&background=005C13&color=fff'} 
                 alt="Profile" 
-                className="w-10 h-10 rounded-full border border-brand-border object-cover"
+                className="w-10 h-10 rounded-full border border-brand-border object-cover flex-shrink-0"
                 referrerPolicy="no-referrer"
+                title={isCollapsed ? (user?.user_metadata?.full_name || user?.email || 'Profissional') : undefined}
               />
-              <div className="overflow-hidden">
-                <p className="text-sm font-medium text-brand-text truncate">{user?.user_metadata?.full_name || user?.email || 'Profissional'}</p>
-                <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
-              </div>
+              {!isCollapsed && (
+                <div className="overflow-hidden">
+                  <p className="text-sm font-medium text-brand-text truncate">{user?.user_metadata?.full_name || user?.email || 'Profissional'}</p>
+                  <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
+                </div>
+              )}
             </div>
 
             <nav className="space-y-2">
@@ -201,22 +232,40 @@ export default function Layout() {
                     key={item.name}
                     to={item.path}
                     onClick={() => setIsMobileMenuOpen(false)}
-                    className={`flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-200 ${
+                    title={isCollapsed ? item.name : undefined}
+                    className={`flex items-center rounded-xl transition-all duration-200 relative group ${
+                      isCollapsed 
+                        ? 'justify-center p-3' 
+                        : 'justify-between px-4 py-3'
+                    } ${
                       isActive 
                         ? 'bg-brand-primary text-white shadow-sm' 
                         : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
                     }`}
                   >
-                    <div className="flex items-center space-x-3">
-                      <Icon size={20} />
-                      <span className="font-medium">{item.name}</span>
+                    <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
+                      <Icon size={20} className="flex-shrink-0" />
+                      {!isCollapsed && <span className="font-medium">{item.name}</span>}
                     </div>
                     {item.name === 'Notificações' && unreadCount > 0 && (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isActive ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white animate-pulse'
-                      }`}>
-                        {unreadCount}
-                      </span>
+                      isCollapsed ? (
+                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center border border-white animate-pulse">
+                          {unreadCount}
+                        </span>
+                      ) : (
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          isActive ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white animate-pulse'
+                        }`}>
+                          {unreadCount}
+                        </span>
+                      )
+                    )}
+                    
+                    {/* Tooltip on hover when collapsed */}
+                    {isCollapsed && (
+                      <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+                        {item.name}
+                      </div>
                     )}
                   </Link>
                 );
@@ -225,14 +274,22 @@ export default function Layout() {
           </div>
         </div>
 
-        <div className="p-4 border-t border-brand-border bg-white space-y-2">
+        <div className={`${isCollapsed ? 'p-2' : 'p-4'} border-t border-brand-border bg-white space-y-2`}>
           {!isStandalone && deferredPrompt && (
             <button
               onClick={handleInstallClick}
-              className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-colors"
+              title={isCollapsed ? "Instalar App" : undefined}
+              className={`flex items-center rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-all duration-200 relative group ${
+                isCollapsed ? 'justify-center p-3 w-full' : 'space-x-3 px-4 py-3 w-full'
+              }`}
             >
-              <Download size={20} />
-              <span className="font-medium">Instalar App</span>
+              <Download size={20} className="flex-shrink-0" />
+              {!isCollapsed && <span className="font-medium">Instalar App</span>}
+              {isCollapsed && (
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+                  Instalar App
+                </div>
+              )}
             </button>
           )}
           <div className="w-full">
@@ -241,30 +298,48 @@ export default function Layout() {
                 const text = "Olá! Estou usando o aplicativo Evolução Clínica para gerenciar meus prontuários com IA e achei fantástico. Facilita muito o dia a dia! Dá uma olhada: " + window.location.origin;
                 window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
               }}
-              className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary-hover transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              title={isCollapsed ? "Compartilhar App" : undefined}
+              className={`flex items-center rounded-xl text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary-hover transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer relative group ${
+                isCollapsed ? 'justify-center p-3 w-full' : 'space-x-3 px-4 py-3 w-full'
+              }`}
             >
-              <Share2 size={20} />
-              <span className="font-medium">Compartilhar App</span>
+              <Share2 size={20} className="flex-shrink-0" />
+              {!isCollapsed && <span className="font-medium">Compartilhar App</span>}
+              {isCollapsed && (
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+                  Compartilhar App
+                </div>
+              )}
             </button>
-            <span className="text-[10px] text-brand-text-muted pl-12 block -mt-1 mb-2">
-              Compartilhamento via WhatsApp
-            </span>
+            {!isCollapsed && (
+              <span className="text-[10px] text-brand-text-muted pl-12 block -mt-1 mb-2">
+                Compartilhamento via WhatsApp
+              </span>
+            )}
           </div>
           <button
             onClick={handleLogout}
-            className="flex items-center space-x-3 px-4 py-3 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors"
+            title={isCollapsed ? "Sair" : undefined}
+            className={`flex items-center rounded-xl text-red-600 hover:bg-red-50 transition-colors relative group ${
+              isCollapsed ? 'justify-center p-3 w-full' : 'space-x-3 px-4 py-3 w-full'
+            }`}
           >
-            <LogOut size={20} />
-            <span className="font-medium">Sair</span>
+            <LogOut size={20} className="flex-shrink-0" />
+            {!isCollapsed && <span className="font-medium">Sair</span>}
+            {isCollapsed && (
+              <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+                Sair
+              </div>
+            )}
           </button>
-          <AppVersion />
+          <AppVersion collapsed={isCollapsed} />
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-x-hidden flex flex-col pb-16 lg:pb-0">
+      <div className="flex-1 overflow-x-hidden flex flex-col pb-16 md:pb-0">
         <TrialBanner />
-        <main className="p-4 lg:p-8 w-full lg:w-[90%] max-w-none mx-auto flex-1">
+        <main className="p-4 md:p-8 w-full md:w-[90%] max-w-none mx-auto flex-1">
           <Outlet />
         </main>
         <footer className="p-8 mt-auto flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-brand-border/30 text-brand-text-muted">
@@ -281,7 +356,7 @@ export default function Layout() {
       <OfflineQueueMonitor />
 
       {/* Menu Inferior Mobile */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center py-2 pb-safe">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center py-2 pb-safe">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
