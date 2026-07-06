@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Heart, Cloud, Upload, Trash2, Printer, Image as ImageIcon, Sparkles, Check, RefreshCw } from 'lucide-react';
+import { Heart, Cloud, Upload, Trash2, Printer, Image as ImageIcon, Sparkles, Check, RefreshCw, LayoutGrid, Smartphone } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 
 // Custom SVG Caduceus Icon
@@ -13,19 +13,10 @@ const CaduceusIcon = ({ className = "w-6 h-6" }: { className?: string }) => (
     strokeLinejoin="round"
     className={className}
   >
-    {/* Central staff */}
     <line x1="12" y1="2" x2="12" y2="22" strokeWidth="2.2" />
-    
-    {/* Wings */}
     <path d="M12 5c-2.5-2.5-6.5-2-7.5.5.5 1.5 3.5 2.5 7.5.5M12 5c2.5-2.5 6.5-2 7.5.5-.5 1.5-3.5 2.5-7.5.5" fill="currentColor" fillOpacity="0.1" />
-    
-    {/* Left Snake winding */}
     <path d="M8.5 7.5c1-1 2.5.5 3.5 1.5s1 2.5 0 3.5-3.5 2-3.5 3.5c0 1.5 1.5 2.5 3.5 1.5.7-.4 1.4-1.2 2-1.7" />
-    
-    {/* Right Snake winding */}
     <path d="M15.5 7.5c-1-1-2.5.5-3.5 1.5s-1 2.5 0 3.5 3.5 2 3.5 3.5c0 1.5-1.5 2.5-3.5 1.5-.7-.4-1.4-1.2-2-1.7" />
-    
-    {/* Pinecone or bulb at the top of the staff */}
     <circle cx="12" cy="2" r="1.2" fill="currentColor" />
   </svg>
 );
@@ -42,6 +33,18 @@ const GooglePlayLogo = ({ className = "w-4 h-4" }: { className?: string }) => (
   </svg>
 );
 
+// Curved wave SVG boundary component
+const WaveDecoration = ({ fillColor }: { fillColor: string }) => (
+  <svg
+    viewBox="0 0 100 100"
+    fill={fillColor}
+    className="absolute bottom-0 left-0 w-full h-[25%] translate-y-[98%] z-0 pointer-events-none transition-colors duration-300"
+    preserveAspectRatio="none"
+  >
+    <path d="M0 0 L 100 0 L 100 35 C 75 75, 25 15, 0 50 Z" />
+  </svg>
+);
+
 interface CardData {
   id: number;
   title: string;
@@ -54,7 +57,8 @@ interface CardData {
 export default function StorePresentation() {
   const siteConfig = useSiteConfig();
   const [cardImages, setCardImages] = useState<Record<number, string>>({});
-  const [gradientType, setGradientType] = useState<'teal-white' | 'green-white' | 'teal-dark'>('teal-white');
+  const [gradientType, setGradientType] = useState<'teal-white' | 'green-white' | 'teal-dark'>('green-white');
+  const [viewMode, setViewMode] = useState<'board' | 'individual'>('board');
   const fileInputRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   // Five App Store Panels data as requested
@@ -149,35 +153,37 @@ export default function StorePresentation() {
     window.print();
   };
 
-  const getCardBgStyle = () => {
-    const primary = siteConfig.colors.primary;
+  // Get primary brand colors
+  const primaryColor = siteConfig.colors.primary;
+  const primaryHoverColor = siteConfig.colors.primary_hover;
+  const accentColor = siteConfig.colors.accent;
+
+  const getGradientColors = () => {
     switch (gradientType) {
       case 'green-white':
-        return {
-          backgroundImage: `linear-gradient(to bottom, ${primary}, ${primary} 35%, #ffffff 85%)`
-        };
+        return { start: primaryColor, end: primaryHoverColor || '#00470e' };
       case 'teal-dark':
-        return {
-          backgroundImage: `linear-gradient(to bottom, ${primary}, #111827)`
-        };
+        return { start: '#042f2b', end: '#09423b' };
       case 'teal-white':
       default:
-        return {
-          backgroundImage: 'linear-gradient(to bottom, #0a3d36, #104e45 35%, #ffffff 85%)'
-        };
+        return { start: '#0a3d36', end: '#104e45' };
     }
   };
 
+  const getCardBgStyle = () => {
+    const { start, end } = getGradientColors();
+    return {
+      backgroundImage: `linear-gradient(to bottom, ${start}, ${end})`
+    };
+  };
+
   const getDotPatternColor = () => {
-    if (gradientType === 'teal-dark') return 'rgba(255, 255, 255, 0.04)';
-    if (gradientType === 'green-white') return `${siteConfig.colors.primary}0d`; // ~5% opacity
-    return 'rgba(0, 92, 19, 0.03)';
+    return gradientType === 'teal-dark' ? 'rgba(255, 255, 255, 0.04)' : `${primaryColor}0c`;
   };
 
   const getCornerBorderColorStyle = () => {
     if (gradientType === 'teal-dark') return { borderColor: 'rgba(45, 212, 191, 0.25)' };
-    if (gradientType === 'green-white') return { borderColor: `${siteConfig.colors.primary}33` }; // ~20% opacity
-    return { borderColor: 'rgba(17, 94, 89, 0.2)' };
+    return { borderColor: `${primaryColor}29` }; // ~16% opacity
   };
 
   const renderFloatingIcons = (icons: CardData['icons']) => {
@@ -223,7 +229,7 @@ export default function StorePresentation() {
             {/* Status bar */}
             <div 
               className="h-3.5 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0"
-              style={{ backgroundColor: siteConfig.colors.primary }}
+              style={{ backgroundColor: primaryColor }}
             >
               <span>09:41</span>
               <div className="flex gap-0.5 items-center">
@@ -237,14 +243,14 @@ export default function StorePresentation() {
               <div className="flex items-center gap-1">
                 <div 
                   className="w-4.5 h-4.5 rounded-full flex items-center justify-center text-white font-bold text-[7px] shrink-0"
-                  style={{ backgroundColor: siteConfig.colors.primary }}
+                  style={{ backgroundColor: primaryColor }}
                 >
                   EC
                 </div>
                 <div className="min-w-0">
                   <h4 
                     className="font-bold text-[8px] leading-none truncate"
-                    style={{ color: siteConfig.colors.primary }}
+                    style={{ color: primaryColor }}
                   >
                     Nova Evolução
                   </h4>
@@ -254,8 +260,8 @@ export default function StorePresentation() {
               <span 
                 className="text-[5px] px-1 py-0.5 rounded font-bold shrink-0"
                 style={{ 
-                  backgroundColor: `${siteConfig.colors.primary}1f`, 
-                  color: siteConfig.colors.primary 
+                  backgroundColor: `${primaryColor}1f`, 
+                  color: primaryColor 
                 }}
               >
                 EM ANDAMENTO
@@ -276,7 +282,7 @@ export default function StorePresentation() {
               {/* Text evolution */}
               <div className="flex-1 flex flex-col min-h-0 min-w-0">
                 <label className="text-[6px] text-slate-400 font-bold uppercase tracking-wider block mb-0.5">Evolução Clínica</label>
-                <div className="bg-white p-1.5 rounded border border-slate-200 text-slate-600 font-normal leading-normal text-[6.5px] flex-1 overflow-hidden relative">
+                <div className="bg-white p-1.5 rounded border border-slate-200 text-slate-650 font-normal leading-normal text-[6.5px] flex-1 overflow-hidden relative">
                   <p>Paciente relata melhora significativa na dor lombar (EVA de 7 para 3) após última sessão de mobilizações articulares.</p>
                   <p className="mt-1">Realizado hoje fortalecimento do complexo pélvico-lombar através de pranchas isométricas e pontes...</p>
                   <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
@@ -288,18 +294,18 @@ export default function StorePresentation() {
                 <div className="bg-white p-1 rounded border border-slate-100">
                   <span className="text-[5.5px] text-slate-400 block font-bold leading-none">DOR (EVA)</span>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[7.5px] font-bold" style={{ color: siteConfig.colors.primary }}>3/10</span>
+                    <span className="text-[7.5px] font-bold" style={{ color: primaryColor }}>3/10</span>
                     <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="w-[30%] h-full rounded-full" style={{ backgroundColor: siteConfig.colors.primary }}></div>
+                      <div className="w-[30%] h-full rounded-full" style={{ backgroundColor: primaryColor }}></div>
                     </div>
                   </div>
                 </div>
                 <div className="bg-white p-1 rounded border border-slate-100">
                   <span className="text-[5.5px] text-slate-400 block font-bold leading-none">MOBILIDADE</span>
                   <div className="flex items-center gap-1 mt-0.5">
-                    <span className="text-[7.5px] font-bold" style={{ color: siteConfig.colors.primary }}>85%</span>
+                    <span className="text-[7.5px] font-bold" style={{ color: primaryColor }}>85%</span>
                     <div className="flex-1 h-0.5 bg-slate-100 rounded-full overflow-hidden">
-                      <div className="w-[85%] h-full rounded-full" style={{ backgroundColor: siteConfig.colors.primary }}></div>
+                      <div className="w-[85%] h-full rounded-full" style={{ backgroundColor: primaryColor }}></div>
                     </div>
                   </div>
                 </div>
@@ -318,7 +324,7 @@ export default function StorePresentation() {
               <button 
                 type="button" 
                 className="w-full text-white rounded py-1 text-[7.5px] font-bold shadow-xs flex items-center justify-center cursor-pointer"
-                style={{ backgroundColor: siteConfig.colors.primary }}
+                style={{ backgroundColor: primaryColor }}
               >
                 <span>Salvar no Google Docs</span>
               </button>
@@ -332,7 +338,7 @@ export default function StorePresentation() {
             {/* Status bar */}
             <div 
               className="h-3.5 text-white px-2 flex justify-between items-center text-[7px] font-medium shrink-0"
-              style={{ backgroundColor: siteConfig.colors.primary }}
+              style={{ backgroundColor: primaryColor }}
             >
               <span>09:41</span>
               <div className="flex gap-0.5 items-center">
@@ -343,7 +349,7 @@ export default function StorePresentation() {
             
             {/* Top app header */}
             <div className="bg-white border-b border-slate-200 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-sm">
-              <h4 className="font-bold text-[8.5px]" style={{ color: siteConfig.colors.primary }}>Minha Agenda</h4>
+              <h4 className="font-bold text-[8.5px]" style={{ color: primaryColor }}>Minha Agenda</h4>
               <div className="w-3.5 h-3.5 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-[7px]">🔔</div>
             </div>
 
@@ -356,7 +362,7 @@ export default function StorePresentation() {
                   <div 
                     key={idx} 
                     className="w-5 py-0.5 rounded transition-colors"
-                    style={isSelected ? { backgroundColor: siteConfig.colors.primary, color: '#fff', fontWeight: 'bold' } : { color: '#64748b' }}
+                    style={isSelected ? { backgroundColor: primaryColor, color: '#fff', fontWeight: 'bold' } : { color: '#64748b' }}
                   >
                     <div className="text-[5px] uppercase">{day}</div>
                     <div className="text-[7.5px] mt-0.2">{dayNum}</div>
@@ -372,19 +378,19 @@ export default function StorePresentation() {
               {/* Item 1 */}
               <div 
                 className="bg-white p-1.5 rounded border-y border-r border-slate-100 border-l-[2.5px] shadow-2xs flex justify-between items-center shrink-0"
-                style={{ borderLeftColor: siteConfig.colors.primary }}
+                style={{ borderLeftColor: primaryColor }}
               >
                 <div className="space-y-0.2 min-w-0">
-                  <div className="text-[5.5px] font-bold" style={{ color: siteConfig.colors.primary }}>09:00 - 10:00</div>
+                  <div className="text-[5.5px] font-bold" style={{ color: primaryColor }}>09:00 - 10:00</div>
                   <div className="font-bold text-slate-700 text-[7.5px] leading-tight truncate">Ana Maria Silva</div>
                   <div className="text-[5.5px] text-slate-400 truncate">Fisioterapia Ortopédica</div>
                 </div>
                 <span 
                   className="text-[4.5px] px-1 py-0.3 rounded font-bold border shrink-0"
                   style={{ 
-                    backgroundColor: `${siteConfig.colors.primary}12`, 
-                    color: siteConfig.colors.primary, 
-                    borderColor: `${siteConfig.colors.primary}1f` 
+                    backgroundColor: `${primaryColor}12`, 
+                    color: primaryColor, 
+                    borderColor: `${primaryColor}1f` 
                   }}
                 >
                   CONFIRMADO
@@ -428,13 +434,13 @@ export default function StorePresentation() {
             
             {/* Top app header */}
             <div className="bg-slate-950 border-b border-slate-800 px-2 py-1.5 flex items-center justify-between shrink-0 shadow-sm">
-              <h4 className="font-bold text-[8.5px]" style={{ color: siteConfig.colors.accent }}>Segurança & LGPD</h4>
+              <h4 className="font-bold text-[8.5px]" style={{ color: accentColor }}>Segurança & LGPD</h4>
               <span 
                 className="text-[5px] px-1 py-0.5 rounded font-mono shrink-0 border"
                 style={{ 
-                  backgroundColor: `${siteConfig.colors.accent}12`, 
-                  color: siteConfig.colors.accent, 
-                  borderColor: `${siteConfig.colors.accent}2b` 
+                  backgroundColor: `${accentColor}12`, 
+                  color: accentColor, 
+                  borderColor: `${accentColor}2b` 
                 }}
               >
                 SSL 256-BIT
@@ -448,16 +454,16 @@ export default function StorePresentation() {
                 <div 
                   className="w-8 h-8 rounded-full flex items-center justify-center animate-pulse border"
                   style={{ 
-                    backgroundColor: `${siteConfig.colors.accent}12`, 
-                    color: siteConfig.colors.accent, 
-                    borderColor: `${siteConfig.colors.accent}4d` 
+                    backgroundColor: `${accentColor}12`, 
+                    color: accentColor, 
+                    borderColor: `${accentColor}4d` 
                   }}
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                 </div>
-                <div className="text-[8px] font-bold leading-none" style={{ color: siteConfig.colors.accent }}>Proteção Ativa</div>
+                <div className="text-[8px] font-bold leading-none" style={{ color: accentColor }}>Proteção Ativa</div>
                 <div className="text-[5.5px] text-slate-500">Dados 100% criptografados</div>
               </div>
 
@@ -471,7 +477,7 @@ export default function StorePresentation() {
                   </div>
                   <div 
                     className="w-5.5 h-3 rounded-full p-0.5 flex justify-end items-center shrink-0"
-                    style={{ backgroundColor: siteConfig.colors.accent }}
+                    style={{ backgroundColor: accentColor }}
                   >
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
@@ -485,7 +491,7 @@ export default function StorePresentation() {
                   </div>
                   <div 
                     className="w-5.5 h-3 rounded-full p-0.5 flex justify-end items-center shrink-0"
-                    style={{ backgroundColor: siteConfig.colors.accent }}
+                    style={{ backgroundColor: accentColor }}
                   >
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
@@ -499,7 +505,7 @@ export default function StorePresentation() {
                   </div>
                   <div 
                     className="w-5.5 h-3 rounded-full p-0.5 flex justify-end items-center shrink-0"
-                    style={{ backgroundColor: siteConfig.colors.accent }}
+                    style={{ backgroundColor: accentColor }}
                   >
                     <div className="w-2 h-2 bg-slate-900 rounded-full"></div>
                   </div>
@@ -527,8 +533,300 @@ export default function StorePresentation() {
     }
   };
 
+  // Render a tall vertical card (used for Column 1/Left cards, and all cards in individual mode)
+  const renderVerticalCard = (card: CardData, isIndividual = false) => {
+    const hasUserImage = !!cardImages[card.id];
+    const { end } = getGradientColors();
+
+    return (
+      <div
+        key={card.id}
+        onPaste={(e) => handlePaste(card.id, e)}
+        className={`relative w-full aspect-[9/16] rounded-[24px] overflow-hidden flex flex-col justify-between pt-5 pb-5 px-5 border shadow-md transition-all duration-300 group hover:shadow-lg select-none bg-white ${
+          gradientType === 'teal-dark' ? 'border-slate-800 text-white' : 'border-slate-200 text-[#1c1917]'
+        } ${isIndividual ? 'max-w-[345px]' : ''}`}
+      >
+        {/* Top Wave Background Container */}
+        <div 
+          className="absolute top-0 left-0 w-full h-[70%] z-0 overflow-hidden"
+          style={getCardBgStyle()}
+        >
+          {/* Curved Wave Mask at the bottom of the top gradient section */}
+          <WaveDecoration fillColor={gradientType === 'teal-dark' ? '#111827' : '#ffffff'} />
+        </div>
+
+        {/* SVG Dot Pattern Background */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-40 z-10"
+          style={{
+            backgroundImage: `radial-gradient(circle, ${getDotPatternColor()} 1.1px, transparent 1.1px)`,
+            backgroundSize: '15px 15px'
+          }}
+        ></div>
+
+        {/* Decorative Technical Corner Brackets */}
+        <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 rounded-tl-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+        <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 rounded-tr-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+        <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 rounded-bl-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+        <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 rounded-br-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+
+        {/* Floating Medical/Security Background Icons */}
+        {renderFloatingIcons(card.icons)}
+
+        {/* Top Title/Brand Row */}
+        <div className="flex justify-between items-center w-full z-20 px-1">
+          <span 
+            className="text-[8px] font-bold tracking-widest font-display"
+            style={{
+              color: gradientType === 'teal-dark' 
+                ? '#2dd4bf' 
+                : gradientType === 'green-white' 
+                ? primaryColor 
+                : '#065f46'
+            }}
+          >
+            EVOLUÇÃO CLÍNICA
+          </span>
+          <div className="flex items-center gap-1 opacity-80">
+            <GooglePlayLogo className="w-2.5 h-2.5" />
+            <span className="text-[6px] font-bold text-slate-500 font-mono tracking-tighter">PLAY STORE</span>
+          </div>
+        </div>
+
+        {/* Prominent Title */}
+        <div className="mt-3.5 text-center px-1 z-20">
+          <h2 className="font-display font-extrabold text-[12px] md:text-[13px] leading-tight tracking-normal text-center uppercase drop-shadow-xs text-white">
+            {card.title}
+          </h2>
+        </div>
+
+        {/* Smartphone Mockup */}
+        <div className="relative w-[63%] aspect-[9/19.5] shrink-0 bg-neutral-900 rounded-[22px] p-[4px] mx-auto mt-2.5 shadow-xl border-[4px] border-neutral-900 z-20 transition-transform duration-300 group-hover:scale-[1.01] flex flex-col justify-between overflow-hidden">
+          {/* Notch */}
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 w-14 h-2.5 bg-neutral-900 rounded-full z-30 flex items-center justify-between px-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-800"></span>
+            <span className="w-3 h-1 bg-slate-800 rounded-full"></span>
+          </div>
+
+          {/* Reflection */}
+          <div className="absolute inset-0 pointer-events-none z-20 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-70"></div>
+          
+          {/* Inner Screen */}
+          <div
+            onClick={() => triggerFileSelect(card.id)}
+            className="relative w-full h-full bg-slate-100 rounded-[18px] overflow-hidden flex flex-col justify-between cursor-pointer"
+            title="Clique para carregar ou colar uma imagem"
+          >
+            {hasUserImage ? (
+              <div className="relative w-full h-full">
+                <img
+                  src={cardImages[card.id]}
+                  alt={`Captura ${card.id}`}
+                  className="w-full h-full object-cover object-top"
+                />
+                <div className="no-print absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      triggerFileSelect(card.id);
+                    }}
+                    className="p-1 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => removeImage(card.id, e)}
+                    className="p-1 bg-red-650 text-white rounded hover:bg-red-750 transition-colors"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              renderMockScreen(card.defaultScreenType)
+            )}
+          </div>
+          
+          <input
+            type="file"
+            ref={(el) => { fileInputRefs.current[card.id] = el; }}
+            accept="image/*"
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                handleImageUpload(card.id, e.target.files[0]);
+              }
+            }}
+            className="hidden"
+          />
+        </div>
+
+        {/* Bottom Description */}
+        <div className="mt-3 px-2 min-h-[38px] flex items-center justify-center text-center z-20">
+          <p className={`font-sans text-[9px] font-semibold leading-normal ${
+            gradientType === 'teal-dark' ? 'text-teal-200/90' : 'text-slate-600/90'
+          }`}>
+            {card.description}
+          </p>
+        </div>
+      </div>
+    );
+  };
+
+  // Render a shorter split-layout card (used in Right Column / Column 2 of Board View)
+  const renderHorizontalCard = (card: CardData) => {
+    const hasUserImage = !!cardImages[card.id];
+
+    return (
+      <div
+        key={card.id}
+        onPaste={(e) => handlePaste(card.id, e)}
+        className={`relative w-full rounded-[24px] overflow-hidden flex flex-col justify-between pt-5 pb-5 px-5 border shadow-md transition-all duration-300 group hover:shadow-lg select-none bg-white min-h-[220px] ${
+          gradientType === 'teal-dark' ? 'border-slate-800 text-white' : 'border-slate-200 text-[#1c1917]'
+        }`}
+      >
+        {/* Top Wave Background Container */}
+        <div 
+          className="absolute top-0 left-0 w-full h-[62%] z-0 overflow-hidden"
+          style={getCardBgStyle()}
+        >
+          <WaveDecoration fillColor={gradientType === 'teal-dark' ? '#111827' : '#ffffff'} />
+        </div>
+
+        {/* SVG Dot Pattern Background */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-40 z-10"
+          style={{
+            backgroundImage: `radial-gradient(circle, ${getDotPatternColor()} 1.1px, transparent 1.1px)`,
+            backgroundSize: '15px 15px'
+          }}
+        ></div>
+
+        {/* Decorative Technical Corner Brackets */}
+        <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 rounded-tl-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+        <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 rounded-tr-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+        <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 rounded-bl-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+        <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 rounded-br-sm pointer-events-none z-10" style={getCornerBorderColorStyle()}></div>
+
+        {/* Floating Background Icons */}
+        {renderFloatingIcons(card.icons)}
+
+        {/* Top Title/Brand Row */}
+        <div className="flex justify-between items-center w-full z-20 px-1">
+          <span 
+            className="text-[8px] font-bold tracking-widest font-display"
+            style={{
+              color: gradientType === 'teal-dark' 
+                ? '#2dd4bf' 
+                : gradientType === 'green-white' 
+                ? primaryColor 
+                : '#065f46'
+            }}
+          >
+            EVOLUÇÃO CLÍNICA
+          </span>
+          <div className="flex items-center gap-1 opacity-80">
+            <GooglePlayLogo className="w-2.5 h-2.5" />
+            <span className="text-[6px] font-bold text-slate-500 font-mono tracking-tighter">PLAY STORE</span>
+          </div>
+        </div>
+
+        {/* Prominent Title */}
+        <div className="mt-3.5 text-left px-1 z-20">
+          <h2 className="font-display font-extrabold text-[12px] md:text-[13px] leading-tight tracking-normal text-left uppercase drop-shadow-xs text-white">
+            {card.title}
+          </h2>
+        </div>
+
+        {/* Split Bottom Content (Description on Left, Phone mockup on Right) */}
+        <div className="flex-1 flex items-center justify-between mt-3 z-20 gap-3 min-h-0">
+          {/* Left Description Side */}
+          <div className="w-[52%] pr-1 flex flex-col justify-center gap-2">
+            <p className={`font-sans text-[9.5px] font-semibold leading-normal ${
+              gradientType === 'teal-dark' ? 'text-teal-200/90' : 'text-slate-650'
+            }`}>
+              {card.description}
+            </p>
+            {card.icons.includes('checkmark') && (
+              <div className="flex items-center gap-1 opacity-25">
+                <div className="p-1 bg-emerald-500/25 rounded-full border border-emerald-500/40">
+                  <Check className="w-3.5 h-3.5 text-emerald-650" strokeWidth={2.5} />
+                </div>
+                <span className="text-[7px] font-bold text-slate-400 font-sans uppercase">Acesso Seguro</span>
+              </div>
+            )}
+          </div>
+
+          {/* Right Phone Mockup Side (Tilted Slightly to the right) */}
+          <div className="w-[45%] flex items-center justify-center relative py-1">
+            <div className="relative w-[85%] aspect-[9/19.5] shrink-0 bg-neutral-900 rounded-[20px] p-[3px] shadow-lg border-[3px] border-neutral-900 transition-transform duration-300 rotate-[5deg] hover:rotate-0 hover:scale-[1.03] flex flex-col justify-between overflow-hidden">
+              {/* Notch */}
+              <div className="absolute top-1 left-1/2 -translate-x-1/2 w-10 h-1.5 bg-neutral-900 rounded-full z-30 flex items-center justify-between px-1.5">
+                <span className="w-1 h-1 rounded-full bg-slate-800"></span>
+              </div>
+
+              {/* Reflection */}
+              <div className="absolute inset-0 pointer-events-none z-20 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-70"></div>
+              
+              {/* Inner Screen */}
+              <div
+                onClick={() => triggerFileSelect(card.id)}
+                className="relative w-full h-full bg-slate-100 rounded-[16px] overflow-hidden flex flex-col justify-between cursor-pointer"
+                title="Clique para carregar ou colar uma imagem"
+              >
+                {hasUserImage ? (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={cardImages[card.id]}
+                      alt={`Captura ${card.id}`}
+                      className="w-full h-full object-cover object-top"
+                    />
+                    <div className="no-print absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerFileSelect(card.id);
+                        }}
+                        className="p-1 bg-teal-600 text-white rounded hover:bg-teal-700 transition-colors"
+                      >
+                        <RefreshCw className="w-2.5 h-2.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => removeImage(card.id, e)}
+                        className="p-1 bg-red-650 text-white rounded hover:bg-red-750 transition-colors"
+                      >
+                        <Trash2 className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  renderMockScreen(card.defaultScreenType)
+                )}
+              </div>
+              
+              <input
+                type="file"
+                ref={(el) => { fileInputRefs.current[card.id] = el; }}
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    handleImageUpload(card.id, e.target.files[0]);
+                  }
+                }}
+                className="hidden"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-[#f1f5f9] flex flex-col font-sans">
       {/* Tool Header (hidden in print) */}
       <header className="no-print bg-white border-b border-slate-200 px-6 py-4 flex flex-col sm:flex-row gap-4 items-center justify-between shadow-xs sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -542,6 +840,28 @@ export default function StorePresentation() {
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
+          {/* View Mode Toggle */}
+          <div className="flex bg-slate-100 rounded-lg p-1 border border-slate-200">
+            <button
+              onClick={() => setViewMode('board')}
+              className={`text-xs px-2.5 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'board' ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Modo Quadro (Quadro Geral)</span>
+            </button>
+            <button
+              onClick={() => setViewMode('individual')}
+              className={`text-xs px-2.5 py-1.5 rounded-md font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
+                viewMode === 'individual' ? 'bg-white text-teal-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Capturas Individuais (9:16)</span>
+            </button>
+          </div>
+
           {/* Preset Colors */}
           <div className="flex bg-slate-100 rounded-lg p-1 border border-slate-200">
             <button
@@ -555,7 +875,7 @@ export default function StorePresentation() {
             <button
               onClick={() => setGradientType('green-white')}
               className={`text-xs px-2.5 py-1.5 rounded-md font-medium transition-all ${
-                gradientType === 'green-white' ? 'bg-white text-[#005C13] shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                gradientType === 'green-white' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
               }`}
             >
               Verde Marca
@@ -600,145 +920,50 @@ export default function StorePresentation() {
       {/* Main Grid Area */}
       <main className="flex-1 p-6 md:p-10 max-w-7xl mx-auto w-full">
         {/* Printable Area Wrapper */}
-        <div id="print-area" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 md:gap-8 justify-items-center">
-          {cards.map((card) => {
-            const hasUserImage = !!cardImages[card.id];
-            
-            return (
-              <div
-                key={card.id}
-                onPaste={(e) => handlePaste(card.id, e)}
-                className={`relative w-full aspect-[9/16] max-w-[345px] rounded-[24px] overflow-hidden flex flex-col justify-between pt-5 pb-4 px-4 border shadow-lg transition-all duration-300 group hover:shadow-xl select-none ${
-                  gradientType === 'teal-dark' ? 'border-slate-800 text-white' : 'border-slate-200 text-[#1c1917]'
-                }`}
-                style={{ contentVisibility: 'auto', ...getCardBgStyle() }}
-              >
-                {/* SVG Dot Pattern Background */}
-                <div
-                  className="absolute inset-0 pointer-events-none opacity-45"
-                  style={{
-                    backgroundImage: `radial-gradient(circle, ${getDotPatternColor()} 1.2px, transparent 1.2px)`,
-                    backgroundSize: '16px 16px'
-                  }}
-                ></div>
-
-                {/* Decorative Technical Corner Frames */}
-                <div className="absolute top-4 left-4 w-4 h-4 border-t-2 border-l-2 rounded-tl-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
-                <div className="absolute top-4 right-4 w-4 h-4 border-t-2 border-r-2 rounded-tr-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
-                <div className="absolute bottom-4 left-4 w-4 h-4 border-b-2 border-l-2 rounded-bl-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
-                <div className="absolute bottom-4 right-4 w-4 h-4 border-b-2 border-r-2 rounded-br-sm pointer-events-none" style={getCornerBorderColorStyle()}></div>
-
-                {/* Floating Aesthetic Medical/Security Icons */}
-                {renderFloatingIcons(card.icons)}
-
-                {/* Top Title/Brand Row */}
-                <div className="flex justify-between items-center w-full z-20 px-1">
-                  <span 
-                    className="text-[8.5px] font-bold tracking-widest font-display"
-                    style={{
-                      color: gradientType === 'teal-dark' 
-                        ? '#2dd4bf' 
-                        : gradientType === 'green-white' 
-                        ? siteConfig.colors.primary 
-                        : '#065f46'
-                    }}
-                  >
-                    EVOLUÇÃO CLÍNICA
-                  </span>
-                  <div className="flex items-center gap-1 opacity-90">
-                    <GooglePlayLogo className="w-3 h-3" />
-                    <span className="text-[6.5px] font-bold text-slate-500 font-mono tracking-tighter">PLAY STORE</span>
-                  </div>
+        {viewMode === 'board' ? (
+          /* BOARD VIEW MODE (Matches user's reference image structure exactly) */
+          <div 
+            id="print-area" 
+            className="bg-gradient-to-tr from-teal-50/60 via-[#e0f2fe]/40 to-[#e2f1f0] p-8 md:p-10 rounded-[32px] border border-slate-200/50 shadow-md grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch"
+          >
+            {/* Board Header Section inside printable area */}
+            <div className="col-span-12 flex justify-between items-center pb-2 border-b border-slate-200/40">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-[#005C13]/10 rounded-lg">
+                  <Sparkles className="w-5 h-5 text-[#005C13]" />
                 </div>
-
-                {/* Main Prominent Feature Title */}
-                <div className="mt-3 text-center px-1 z-20">
-                  <h2 className={`font-display font-extrabold text-[11px] md:text-[12px] leading-tight tracking-wide text-center uppercase drop-shadow-xs ${
-                    gradientType === 'teal-dark' ? 'text-white' : 'text-slate-900'
-                  }`}>
-                    {card.title}
-                  </h2>
-                </div>
-
-                {/* Smartphone Mockup Frame */}
-                <div className="relative w-[63%] aspect-[9/19.5] shrink-0 bg-neutral-900 rounded-[22px] p-[4px] mx-auto mt-2.5 shadow-xl border-[4px] border-neutral-900 z-20 transition-transform duration-300 group-hover:scale-[1.01] flex flex-col justify-between overflow-hidden">
-                  
-                  {/* Phone Notch/Dynamic Island */}
-                  <div className="absolute top-1 left-1/2 -translate-x-1/2 w-14 h-2.5 bg-neutral-900 rounded-full z-30 flex items-center justify-between px-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-800"></span>
-                    <span className="w-3 h-1 bg-slate-800 rounded-full"></span>
-                  </div>
-
-                  {/* Reflection highlights overlay */}
-                  <div className="absolute inset-0 pointer-events-none z-20 bg-gradient-to-tr from-transparent via-white/5 to-white/10 opacity-70"></div>
-                  
-                  {/* Inner Screen Container */}
-                  <div
-                    onClick={() => triggerFileSelect(card.id)}
-                    className="relative w-full h-full bg-slate-100 rounded-[18px] overflow-hidden flex flex-col justify-between cursor-pointer group"
-                    title="Clique para enviar ou cole uma imagem real"
-                  >
-                    {hasUserImage ? (
-                      <div className="relative w-full h-full">
-                        <img
-                          src={cardImages[card.id]}
-                          alt={`Captura ${card.id}`}
-                          className="w-full h-full object-cover object-top"
-                        />
-                        {/* Overlay to remove / modify in dashboard */}
-                        <div className="no-print absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              triggerFileSelect(card.id);
-                            }}
-                            className="p-1.5 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors shadow-sm"
-                            title="Trocar Imagem"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => removeImage(card.id, e)}
-                            className="p-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
-                            title="Remover e usar padrão"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      renderMockScreen(card.defaultScreenType)
-                    )}
-                  </div>
-                  
-                  {/* Hidden Input for Local File Loading */}
-                  <input
-                    type="file"
-                    ref={(el) => { fileInputRefs.current[card.id] = el; }}
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files?.[0]) {
-                        handleImageUpload(card.id, e.target.files[0]);
-                      }
-                    }}
-                    className="hidden"
-                  />
-                </div>
-
-                {/* Bottom Portuguese Description Text */}
-                <div className="mt-2.5 px-1 min-h-[32px] flex items-center justify-center text-center z-20">
-                  <p className={`font-sans text-[9px] font-semibold leading-snug ${
-                    gradientType === 'teal-dark' ? 'text-teal-200/90' : 'text-stone-600/90'
-                  }`}>
-                    {card.description}
-                  </p>
-                </div>
+                <span className="font-display font-extrabold text-base tracking-normal text-slate-800 uppercase">
+                  Evolução Clínica
+                </span>
               </div>
-            );
-          })}
-        </div>
+              <div className="flex items-center gap-1.5 opacity-90">
+                <GooglePlayLogo className="w-4 h-4" />
+                <span className="text-[9px] font-bold text-slate-500 font-mono tracking-tighter">DISPONÍVEL NO GOOGLE PLAY</span>
+              </div>
+            </div>
+
+            {/* Left Column - Card 1 & Card 3 (Vertical Cards) */}
+            <div className="lg:col-span-5 flex flex-col gap-8 h-full">
+              {renderVerticalCard(cards[0])}
+              {renderVerticalCard(cards[2])}
+            </div>
+
+            {/* Right Column - Card 2, Card 4 & Card 5 (Shorter split cards) */}
+            <div className="lg:col-span-7 flex flex-col gap-8 h-full justify-between">
+              {renderHorizontalCard(cards[1])}
+              {renderHorizontalCard(cards[3])}
+              {renderHorizontalCard(cards[4])}
+            </div>
+          </div>
+        ) : (
+          /* INDIVIDUAL screenshot export grid (strictly 9:16 vertical cards for all five items) */
+          <div 
+            id="print-area" 
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 md:gap-8 justify-items-center"
+          >
+            {cards.map((card) => renderVerticalCard(card, true))}
+          </div>
+        )}
       </main>
 
       {/* Printing layout styling overrides */}
@@ -760,6 +985,9 @@ export default function StorePresentation() {
             margin: 0 !important;
             background: white !important;
             width: 100% !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
           }
           #print-area > div {
             page-break-after: always !important;
