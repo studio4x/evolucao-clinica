@@ -815,7 +815,9 @@ export default function History() {
                                     const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
                                     const pdfBlob = doc.output('blob');
                                     const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-                                    const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                                    const cleanDate = evo.session_date
+                                      ? evo.session_date.split('-').reverse().join('-')
+                                      : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
                                     const fileName = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`;
                                     try {
                                       await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);
