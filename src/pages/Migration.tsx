@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, UploadCloud, CheckCircle2, Lock, Shield, FileText, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import { Database, UploadCloud, CheckCircle2, Lock, Shield, FileText, ArrowRight, Loader2, RefreshCw, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { createMigrationRequest, fetchMyMigrationRequests, getMigrationAttachmentUrl, MigrationRequest } from '../services/migration';
 
@@ -311,6 +311,25 @@ export default function Migration() {
         {/* Form Column */}
         <div className="lg:col-span-2 card p-6 bg-white border border-brand-border rounded-3xl h-fit">
           <h3 className="text-lg font-bold text-brand-text mb-4">Nova Solicitação</h3>
+
+          {/* Recomendações de Boas Práticas */}
+          <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 text-xs space-y-2 text-amber-900 leading-relaxed mb-4">
+            <span className="font-bold flex items-center gap-1.5 text-amber-950">
+              <HelpCircle size={14} className="text-amber-600 shrink-0" />
+              Recomendações e Boas Práticas:
+            </span>
+            <ul className="list-disc list-inside space-y-1.5 pl-1">
+              <li>
+                <strong>Uma solicitação por paciente:</strong> Para garantir a precisão da importação e organização do prontuário, <span className="underline">solicite uma migração individual para cada paciente</span>, anexando os arquivos específicos dele.
+              </li>
+              <li>
+                <strong>Nomenclatura do arquivo:</strong> Nomeie os arquivos com o nome completo do paciente para facilitar o cadastro.
+              </li>
+              <li>
+                <strong>Formatos recomendados:</strong> Planilhas (.xlsx, .csv) ou textos (.docx, .pdf). Se possuir múltiplos arquivos do mesmo paciente, envie-os compactados em um arquivo `.zip`.
+              </li>
+            </ul>
+          </div>
           
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Plataforma Anterior */}
