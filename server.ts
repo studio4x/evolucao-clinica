@@ -7,9 +7,10 @@ import nodemailer from "nodemailer";
 import { Client as PostgresClient } from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
-import mammoth from "mammoth";
-// @ts-ignore
-import pdfParse from "pdf-parse";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const mammoth = require("mammoth");
+const pdfParse = require("pdf-parse");
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
 
 dotenv.config();
