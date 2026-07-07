@@ -2325,7 +2325,18 @@ export default function PatientDetail() {
                                   const fileName = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`;
                                   try {
                                     await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);
+                                    
+                                    const { error: updateError } = await supabase
+                                      .from('evolutions')
+                                      .update({
+                                        google_doc_append_status: 'completed',
+                                        google_doc_append_at: new Date().toISOString()
+                                      })
+                                      .eq('id', evo.id);
+                                    if (updateError) throw updateError;
+
                                     alert("PDF da evolução salvo com sucesso na pasta do paciente no Google Drive!");
+                                    await fetchData();
                                   } catch (err: any) {
                                     console.error("Error uploading PDF:", err);
                                     alert("Erro ao salvar PDF: " + (err.message || err));
