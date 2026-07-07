@@ -25,6 +25,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 import { supabase } from '../supabaseClient';
+import { FeatureTooltip } from '../components/common/FeatureTooltip';
 
 const GooglePayLogo = ({ className = "h-4 w-auto" }: { className?: string }) => (
   <svg 
@@ -709,7 +710,10 @@ export default function LandingPage() {
                         {plan.features?.map((feature: string, idx: number) => (
                           <li key={idx} className={`flex items-center gap-2 ${isYearly && idx === 0 ? 'font-semibold text-brand-primary' : ''}`}>
                             <Check size={16} className="text-brand-primary flex-shrink-0" />
-                            <span>{feature}</span>
+                            <span>
+                              {feature}
+                              <FeatureTooltip feature={feature} />
+                            </span>
                           </li>
                         ))}
                       </ul>

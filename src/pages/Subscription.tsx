@@ -6,6 +6,7 @@ import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, Aler
 import GooglePayButton from '@google-pay/button-react';
 import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
 import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
+import { FeatureTooltip } from '../components/common/FeatureTooltip';
 
 const DEFAULT_PLANS = [
   {
@@ -775,7 +776,10 @@ export default function Subscription() {
                       {plan.features.map((feature: string, idx: number) => (
                         <li key={idx} className="flex items-center space-x-3">
                           <Check className="w-5 h-5 text-brand-primary flex-shrink-0" />
-                          <span>{feature}</span>
+                          <span>
+                            {feature}
+                            <FeatureTooltip feature={feature} />
+                          </span>
                         </li>
                       ))}
                     </ul>
