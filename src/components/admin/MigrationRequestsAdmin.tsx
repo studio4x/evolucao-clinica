@@ -313,6 +313,27 @@ export default function MigrationRequestsAdmin() {
     }
   };
 
+  const checkAndAutoComplete = async (sessions: DetectedSession[]) => {
+    if (!selectedRequest) return;
+    const allLaunched = sessions.length > 0 && sessions.every(s => s.launched);
+    if (allLaunched && selectedRequest.status !== 'completed') {
+      try {
+        setSaving(true);
+        const notes = adminNotes || 'Importação concluída com sucesso via ferramenta de migração.';
+        const updated = await updateMigrationRequestStatus(selectedRequest.id, 'completed', notes);
+        setSuccess(`Todas as sessões foram importadas! Solicitação marcada como concluída.`);
+        setSelectedRequest(updated);
+        setAdminNotes(notes);
+        await loadRequests(false);
+      } catch (err: any) {
+        console.error('Error auto-completing migration request:', err);
+        setError('Importação realizada, mas erro ao atualizar status da solicitação.');
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
   const handleLaunchDetectedSession = async (sessionItem: DetectedSession, index: number) => {
     if (!selectedRequest) return;
     try {
@@ -346,9 +367,13 @@ export default function MigrationRequestsAdmin() {
         throw new Error(result.errors[0].error);
       }
 
-      setDetectedSessions(prev => prev.map((s, idx) => idx === index ? { ...s, launched: true, launchError: undefined } : s));
+      const updated = detectedSessions.map((s, idx) => idx === index ? { ...s, launched: true, launchError: undefined } : s);
+      setDetectedSessions(updated);
       setExistingEvolutionsCount(prev => prev + 1);
       setEvolutionSuccess(`Sessão do dia ${formatLocalDate(sessionItem.date)} importada com sucesso!`);
+
+      // Auto complete request if all sessions are now successfully imported
+      await checkAndAutoComplete(updated);
     } catch (err: any) {
       console.error('Error launching session:', err);
       setDetectedSessions(prev => prev.map((s, idx) => idx === index ? { ...s, launchError: err.message || 'Erro ao lançar' } : s));
@@ -410,6 +435,9 @@ export default function MigrationRequestsAdmin() {
       } else {
         setEvolutionError('Nenhuma nova sessão pôde ser importada.');
       }
+
+      // Auto complete request if all sessions are now successfully imported
+      await checkAndAutoComplete(updatedSessions);
     } catch (err: any) {
       console.error('Error importing all:', err);
       setEvolutionError(err.message || 'Erro ao importar todas as sessões.');
