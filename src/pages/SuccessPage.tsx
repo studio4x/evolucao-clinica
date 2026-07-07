@@ -1,10 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { CheckCircle2, ArrowRight, ShieldCheck, CreditCard, Sparkles, Check, Mail } from 'lucide-react';
+import { CheckCircle2, ArrowRight, ShieldCheck, CreditCard, Sparkles, Check, Mail, Loader2 } from 'lucide-react';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination } from '../utils/onboarding';
+import { supabase } from '../supabaseClient';
 
 const GooglePayLogo = ({ className = "h-3.5 w-auto" }: { className?: string }) => (
   <svg 
@@ -64,6 +65,7 @@ export default function SuccessPage() {
   const { user, subscriptionPlan } = useAuthStore();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
+  const [isProceeding, setIsProceeding] = useState(false);
 
   const state = location.state as {
     transactionId?: string;
@@ -118,11 +120,26 @@ export default function SuccessPage() {
     }
   }, [state]);
 
-  const handleProceed = () => {
-    if (!user) {
-      navigate('/login', { replace: true });
-      return;
+  const handleProceed = async () => {
+    if (!user || isProceeding) return;
+    setIsProceeding(true);
+    try {
+      const { data, error } = await supabase
+        .from('professionals')
+        .select('onboarding_completed')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (!error && data?.onboarding_completed) {
+        navigate('/painel/dashboard', { replace: true });
+        return;
+      }
+    } catch (e) {
+      console.error("Erro ao verificar onboarding no banco:", e);
+    } finally {
+      setIsProceeding(false);
     }
+
     const destination = getOnboardingDestination(user.id);
     navigate(destination, { replace: true });
   };
@@ -285,8 +302,12 @@ export default function SuccessPage() {
               )}
               <button
                 onClick={handleProceed}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-colors bg-brand-bg text-brand-text hover:bg-brand-primary/10 border border-brand-border text-sm cursor-pointer"
+                disabled={isProceeding}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-colors bg-brand-bg text-brand-text hover:bg-brand-primary/10 border border-brand-border text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
+                {isProceeding ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-brand-primary" />
+                ) : null}
                 <span>Continuar</span>
               </button>
             </div>
