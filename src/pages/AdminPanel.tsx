@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -13,6 +13,7 @@ import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import { completeOnboarding } from '../utils/onboarding';
 import AdminFaqCrud from '../components/support/AdminFaqCrud';
+import MigrationRequestsAdmin from '../components/admin/MigrationRequestsAdmin';
 
 interface Professional {
   id: string;
@@ -135,6 +136,7 @@ export default function AdminPanel() {
     if (path.endsWith('/token-usage')) return 'token_usage';
     if (path.endsWith('/plans')) return 'plans';
     if (path.endsWith('/transactions')) return 'transactions';
+    if (path.endsWith('/migrations')) return 'migrations';
     if (path.endsWith('/push-notifications')) return 'push_notifications';
     if (path.endsWith('/email-notifications')) return 'email_notifications';
     if (path.endsWith('/email-history')) return 'email_history';
@@ -157,6 +159,7 @@ export default function AdminPanel() {
     { key: 'plans', label: 'Planos SaaS', icon: Coins },
     { key: 'google_pay_config', label: 'Google Pay & Stripe', icon: CreditCard },
     { key: 'transactions', label: 'Transações', icon: Clock },
+    { key: 'migrations', label: 'Migrações VIP', icon: Database },
     { key: 'support', label: 'Suporte / Tickets', icon: LifeBuoy },
     { key: 'push_notifications', label: 'Notificações Push', icon: Bell },
     { key: 'email_notifications', label: 'E-mails do Sistema', icon: Mail },
@@ -168,7 +171,7 @@ export default function AdminPanel() {
     { key: 'profile', label: 'Meu Perfil', icon: User }
   ] as const;
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -176,6 +179,7 @@ export default function AdminPanel() {
     else if (tab === 'plans') navigate('/admin/plans');
     else if (tab === 'profile') navigate('/admin/profile');
     else if (tab === 'transactions') navigate('/admin/transactions');
+    else if (tab === 'migrations') navigate('/admin/migrations');
     else if (tab === 'push_notifications') navigate('/admin/push-notifications');
     else if (tab === 'email_notifications') navigate('/admin/email-notifications');
     else if (tab === 'email_history') navigate('/admin/email-history');
@@ -4758,6 +4762,8 @@ export default function AdminPanel() {
                     </div>
                   </form>
               </div>
+            ) : activeTab === 'migrations' ? (
+              <MigrationRequestsAdmin />
             ) : activeTab === 'email_history' ? (
               <EmailHistory />
             ) : activeTab === 'support' ? (

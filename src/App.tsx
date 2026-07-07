@@ -21,6 +21,7 @@ import Profile from './pages/Profile';
 import Notifications from './pages/Notifications';
 import SupportTickets from './pages/SupportTickets';
 import SupportTicketDetail from './pages/SupportTicketDetail';
+import Migration from './pages/Migration';
 
 import { CookieConsent } from './components/CookieConsent';
 
@@ -568,6 +569,7 @@ export default function App() {
           <Route path="tutorial" element={<Tutorial />} />
           <Route path="share-target" element={<ShareTarget />} />
           <Route path="subscription" element={<Subscription />} />
+          <Route path="migration" element={<Migration />} />
           <Route path="profile" element={<Profile />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="support" element={<SupportTickets />} />

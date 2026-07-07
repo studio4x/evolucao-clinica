@@ -2373,6 +2373,126 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
 });
 
 
+// 4.0.5. Notificação de Solicitações de Migração de Prontuários (In-App, Push e E-mail)
+app.post("/api/migrations/notify", requireAuth, async (req: any, res) => {
+  const { requestId, action, previousStatus, newStatus } = req.body;
+
+  if (!requestId || !action) {
+    return res.status(400).json({ error: "requestId e action sao obrigatorios" });
+  }
+
+  try {
+    // 1. Obter a solicitação
+    const { data: request, error: requestError } = await supabaseAdmin
+      .from("migration_requests")
+      .select("*")
+      .eq("id", requestId)
+      .single();
+
+    if (requestError || !request) {
+      return res.status(404).json({ error: "Solicitacao de migracao nao encontrada" });
+    }
+
+    // 2. Obter perfis do criador e do remetente
+    const { data: creator } = await supabaseAdmin
+      .from("professionals")
+      .select("full_name, subscription_plan, role")
+      .eq("id", request.user_id)
+      .single();
+
+    const { data: sender } = await supabaseAdmin
+      .from("professionals")
+      .select("full_name, role")
+      .eq("id", req.user.id)
+      .single();
+
+    const isSenderAdmin = sender?.role === "admin";
+    const isOwner = request.user_id === req.user.id;
+
+    if (!isSenderAdmin && !isOwner) {
+      return res.status(403).json({ error: "Nao autorizado" });
+    }
+
+    const link = `/painel/migration`;
+    let notificationsSent = 0;
+
+    const notifyAdmins = async (title: string, content: string, type: string = "info") => {
+      const { data: admins } = await supabaseAdmin
+        .from("professionals")
+        .select("id")
+        .eq("role", "admin");
+
+      if (admins && admins.length > 0) {
+        for (const admin of admins) {
+          if (admin.id !== req.user.id) {
+            await sendNotificationInternal(admin.id, title, content, type, link);
+            notificationsSent++;
+          }
+        }
+      }
+    };
+
+    if (action === "create") {
+      const platformLabel = request.previous_platform === 'other_software' 
+        ? request.other_platform_name 
+        : request.previous_platform === 'excel_word' 
+        ? 'Excel/Word' 
+        : request.previous_platform === 'paper' 
+        ? 'Papel' 
+        : request.previous_platform;
+
+      // Notificar o próprio usuário
+      await sendNotificationInternal(
+        request.user_id,
+        "Solicitação de Migração Recebida",
+        `Sua solicitação de importação de prontuários da plataforma '${platformLabel}' foi recebida. Analisaremos os dados em breve!`,
+        "success",
+        link
+      );
+      notificationsSent++;
+
+      // Notificar administradores
+      await notifyAdmins(
+        `👑 Nova Solicitação de Migração`,
+        `O profissional ${creator?.full_name || "Desconhecido"} enviou arquivos para importar cerca de ${request.estimated_patients} pacientes.`,
+        "info"
+      );
+    }
+    else if (action === "status_change") {
+      if (isSenderAdmin) {
+        let statusLabel = "";
+        let type: "info" | "success" | "error" = "info";
+        
+        if (newStatus === "in_progress") {
+          statusLabel = "está em andamento";
+          type = "info";
+        } else if (newStatus === "completed") {
+          statusLabel = "foi concluída com sucesso! Seus pacientes e históricos foram importados.";
+          type = "success";
+        } else if (newStatus === "cancelled") {
+          statusLabel = "foi cancelada";
+          type = "error";
+        }
+
+        await sendNotificationInternal(
+          request.user_id,
+          "Atualização da Migração de Prontuários",
+          `Sua solicitação de migração ${statusLabel}. ` + (request.admin_notes ? `Observações do suporte: "${request.admin_notes}"` : ""),
+          type,
+          link
+        );
+        notificationsSent++;
+      }
+    }
+
+    res.json({ success: true, notificationsSent });
+  } catch (err: any) {
+    console.error("Erro ao disparar notificacao de migracao:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // 4.1. Cron para Enviar Lembretes de Evoluções Clínicas Pendentes
 app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
   const authHeader = req.headers.authorization;
