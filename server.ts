@@ -2517,100 +2517,70 @@ async function extractTextFromBuffer(buffer: Buffer, fileName: string): Promise<
 }
 
 // 4.0.6. Analisar Documento de Migração de Prontuários (Apenas Admins)
-app.post("/api/migrations/analyze", requireAuth, async (req: any, res) => {
+app.post("/api/migrations/extract-text", requireAuth, async (req: any, res) => {
   const { requestId } = req.body;
   const user = req.user;
 
-  if (!requestId) {
-    return res.status(400).json({ error: "requestId é obrigatório" });
-  }
+  if (!requestId) return res.status(400).json({ error: "requestId é obrigatório" });
 
   try {
-    // 1. Validar se o usuário é admin
-    const { data: prof, error: profError } = await supabaseAdmin
-      .from("professionals")
-      .select("role")
-      .eq("id", user.id)
-      .single();
+    const { data: prof, error: profError } = await supabaseAdmin.from("professionals").select("role").eq("id", user.id).single();
+    if (profError || !prof || prof.role !== "admin") return res.status(403).json({ error: "Apenas administradores podem usar esta ferramenta." });
 
-    if (profError || !prof || prof.role !== "admin") {
-      return res.status(403).json({ error: "Apenas administradores podem usar esta ferramenta." });
-    }
+    const { data: request, error: requestError } = await supabaseAdmin.from("migration_requests").select("*").eq("id", requestId).single();
+    if (requestError || !request) return res.status(404).json({ error: "Solicitação não encontrada." });
+    if (!request.attachment_url) return res.status(400).json({ error: "Nenhum arquivo anexo na solicitação." });
 
-    // 2. Obter a solicitação
-    const { data: request, error: requestError } = await supabaseAdmin
-      .from("migration_requests")
-      .select("*")
-      .eq("id", requestId)
-      .single();
-
-    if (requestError || !request) {
-      return res.status(404).json({ error: "Solicitação de migração não encontrada." });
-    }
-
-    if (!request.attachment_url) {
-      return res.status(400).json({ error: "Esta solicitação não contém nenhum arquivo anexo para analisar." });
-    }
-
-    // 3. Fazer download do arquivo do storage do Supabase
     console.log(`[Concierge-AI] Baixando arquivo: ${request.attachment_url}`);
-    const { data: fileData, error: downloadError } = await supabaseAdmin.storage
-      .from("support_attachments")
-      .download(request.attachment_url);
-
-    if (downloadError || !fileData) {
-      console.error("[Concierge-AI] Erro ao baixar arquivo do storage:", downloadError);
-      return res.status(500).json({ error: "Falha ao baixar o arquivo anexo do storage." });
-    }
+    const { data: fileData, error: downloadError } = await supabaseAdmin.storage.from("support_attachments").download(request.attachment_url);
+    if (downloadError || !fileData) return res.status(500).json({ error: "Falha ao baixar o arquivo." });
 
     const buffer = Buffer.from(await fileData.arrayBuffer());
     const fileName = request.attachment_name || "document.bin";
 
-    // 4. Extrair texto do buffer
     console.log(`[Concierge-AI] Extraindo texto de: ${fileName}`);
     let extractedText = "";
     try {
       extractedText = await extractTextFromBuffer(buffer, fileName);
     } catch (parseErr: any) {
-      console.error("[Concierge-AI] Erro ao extrair texto do arquivo:", parseErr);
-      return res.status(400).json({ error: parseErr.message || "Erro ao ler o conteúdo do arquivo." });
+      return res.status(400).json({ error: parseErr.message || "Erro ao extrair o texto." });
     }
 
-    if (!extractedText.trim()) {
-      return res.status(400).json({ error: "O arquivo lido parece estar vazio ou não contém texto legível." });
-    }
+    if (!extractedText.trim()) return res.status(400).json({ error: "O arquivo parece estar vazio." });
 
-    // 5. Configurar Gemini API
+    res.json({ success: true, text: extractedText });
+  } catch (err: any) {
+    console.error("Erro na extração de texto:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao extrair texto." });
+  }
+});
+
+app.post("/api/migrations/analyze-chunk", requireAuth, async (req: any, res) => {
+  const { textChunk } = req.body;
+  const user = req.user;
+
+  if (!textChunk) return res.status(400).json({ error: "textChunk é obrigatório" });
+
+  try {
+    const { data: prof, error: profError } = await supabaseAdmin.from("professionals").select("role").eq("id", user.id).single();
+    if (profError || !prof || prof.role !== "admin") return res.status(403).json({ error: "Apenas administradores podem usar esta ferramenta." });
+
     let apiKey = "";
     try {
-      const { data: settingsData, error: settingsError } = await supabaseAdmin
-        .from("settings")
-        .select("api_key")
-        .eq("id", "gemini")
-        .single();
-      if (!settingsError && settingsData?.api_key) {
-        apiKey = settingsData.api_key;
-      }
-    } catch (e) {
-      console.warn("Erro ao ler chave do Gemini do banco:", e);
-    }
+      const { data: settingsData, error: settingsError } = await supabaseAdmin.from("settings").select("api_key").eq("id", "gemini").single();
+      if (!settingsError && settingsData?.api_key) apiKey = settingsData.api_key;
+    } catch (e) { }
 
-    if (!apiKey) {
-      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
-    }
-
-    if (!apiKey) {
-      return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
-    }
+    if (!apiKey) apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+    if (!apiKey) return res.status(500).json({ error: "Chave do Gemini ausente no servidor." });
 
     const ai = new GoogleGenAI({ apiKey });
 
-    // 6. Enviar para o Gemini
-    console.log(`[Concierge-AI] Enviando texto extraído para análise do Gemini (${extractedText.length} caracteres)...`);
+    console.log(`[Concierge-AI] Analisando chunk de texto (${textChunk.length} caracteres)...`);
     const prompt = `Analise o texto a seguir contendo anotações de evolução clínica de um paciente. 
 Identifique todas as sessões de terapia/atendimento listadas no texto.
 Para cada sessão identificada, extraia:
-1. A data da sessão no formato YYYY-MM-DD. Se a data estiver parcial (ex: "10 de Março"), infira o ano com base no contexto ou assuma 2026. Se não houver data de jeito nenhum, tente deduzir ou use a data atual.
+1. A data da sessão no formato YYYY-MM-DD. Se a data estiver parcial (ex: "10 de Março"), infira o ano com base no contexto ou assuma 2026. Se não houver data, tente deduzir ou use a data atual.
 2. O horário da sessão no formato HH:MM (se houver, senão retorne nulo).
 3. O conteúdo clínico completo da evolução/anotação dessa sessão (remova cabeçalhos repetitivos desnecessários, mas preserve todo o relato do atendimento).
 
@@ -2624,28 +2594,22 @@ Retorne os dados estritamente em formato JSON válido como um array de objetos. 
 ]
 
 Texto a ser analisado:
-${extractedText}`;
+${textChunk}`;
 
     const geminiResponse = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
-      config: {
-        responseMimeType: "application/json"
-      }
+      config: { responseMimeType: "application/json" }
     });
 
     const responseText = geminiResponse.text || "";
-    if (!responseText) {
-      throw new Error("O Gemini não retornou nenhum texto de análise.");
-    }
+    if (!responseText) throw new Error("O Gemini não retornou nenhum texto.");
 
     const sessions = JSON.parse(responseText);
-    console.log(`[Concierge-AI] Sucesso! Identificadas ${sessions.length} sessões.`);
-
     res.json({ success: true, sessions });
 
   } catch (err: any) {
-    console.error("Erro no processamento da migração por IA:", err);
+    console.error("Erro no processamento da migração por IA (chunk):", err);
     res.status(500).json({ error: err.message || "Erro interno ao processar arquivo com IA." });
   }
 });

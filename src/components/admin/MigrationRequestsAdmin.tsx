@@ -45,6 +45,7 @@ export default function MigrationRequestsAdmin() {
   const [analyzingDoc, setAnalyzingDoc] = useState(false);
   const [importingAll, setImportingAll] = useState(false);
   const [expandedSessionIndex, setExpandedSessionIndex] = useState<number | null>(null);
+  const [analysisProgress, setAnalysisProgress] = useState<{current: number, total: number} | null>(null);
 
   const loadRequests = async (showLoading = true) => {
     try {
@@ -206,10 +207,35 @@ export default function MigrationRequestsAdmin() {
     }
   };
 
+  const chunkText = (text: string, maxChunkSize: number = 15000): string[] => {
+    const chunks = [];
+    let currentIndex = 0;
+    while (currentIndex < text.length) {
+      let end = currentIndex + maxChunkSize;
+      if (end >= text.length) {
+        chunks.push(text.slice(currentIndex));
+        break;
+      }
+      let breakPoint = text.lastIndexOf('\n\n', end);
+      if (breakPoint > currentIndex) {
+        end = breakPoint + 2;
+      } else {
+        breakPoint = text.lastIndexOf('\n', end);
+        if (breakPoint > currentIndex) {
+          end = breakPoint + 1;
+        }
+      }
+      chunks.push(text.slice(currentIndex, end));
+      currentIndex = end;
+    }
+    return chunks;
+  };
+
   const handleAnalyzeDocument = async () => {
     if (!selectedRequest) return;
     try {
       setAnalyzingDoc(true);
+      setAnalysisProgress(null);
       setEvolutionError('');
       setEvolutionSuccess('');
       setDetectedSessions([]);
@@ -218,27 +244,50 @@ export default function MigrationRequestsAdmin() {
       const token = session.data.session?.access_token;
       if (!token) throw new Error('Usuário não autenticado.');
 
-      const response = await fetch('/api/migrations/analyze', {
+      // 1. Extrair o texto completo
+      const extractResponse = await fetch('/api/migrations/extract-text', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ requestId: selectedRequest.id })
       });
-
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao analisar o documento.');
+      
+      const extractResult = await extractResponse.json();
+      if (!extractResponse.ok) {
+        throw new Error(extractResult.error || 'Erro ao extrair o documento.');
       }
 
-      setDetectedSessions(result.sessions || []);
-      setEvolutionSuccess(`Documento analisado com sucesso! Identificadas ${result.sessions?.length || 0} sessões.`);
+      const text = extractResult.text;
+      const chunks = chunkText(text, 15000);
+      
+      let allSessions: DetectedSession[] = [];
+      
+      // 2. Analisar cada chunk em série
+      for (let i = 0; i < chunks.length; i++) {
+        setAnalysisProgress({ current: i + 1, total: chunks.length });
+        const analyzeResponse = await fetch('/api/migrations/analyze-chunk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+          body: JSON.stringify({ textChunk: chunks[i] })
+        });
+        
+        const analyzeResult = await analyzeResponse.json();
+        if (!analyzeResponse.ok) {
+          throw new Error(analyzeResult.error || `Erro ao analisar parte ${i + 1} do documento.`);
+        }
+        
+        if (analyzeResult.sessions && Array.isArray(analyzeResult.sessions)) {
+          allSessions = allSessions.concat(analyzeResult.sessions);
+        }
+      }
+
+      setDetectedSessions(allSessions);
+      setEvolutionSuccess(`Documento analisado com sucesso! Identificadas ${allSessions.length} sessões.`);
     } catch (err: any) {
       console.error('Error analyzing document:', err);
       setEvolutionError(err.message || 'Erro ao analisar o documento.');
     } finally {
       setAnalyzingDoc(false);
+      setAnalysisProgress(null);
     }
   };
 
@@ -807,7 +856,7 @@ export default function MigrationRequestsAdmin() {
                               {analyzingDoc ? (
                                 <>
                                   <Loader2 className="animate-spin" size={13} />
-                                  <span>Analisando arquivo...</span>
+                                  <span>{analysisProgress ? `Analisando parte ${analysisProgress.current} de ${analysisProgress.total}...` : 'Lendo arquivo...'}</span>
                                 </>
                               ) : (
                                 <>
