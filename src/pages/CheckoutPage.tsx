@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import GooglePayButton from '@google-pay/button-react';
 import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
-import { Check, ShieldCheck, Sparkles, LogOut, ArrowRight, Clock, HelpCircle, AlertTriangle } from 'lucide-react';
+import { Check, ShieldCheck, Sparkles, LogOut, ArrowRight, Clock, HelpCircle, AlertTriangle, CreditCard } from 'lucide-react';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
@@ -538,6 +538,26 @@ export default function CheckoutPage() {
               >
                 Sim, iniciar teste
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Overlay de carregamento do Google Pay */}
+      {loadingPlan && (loadingPlan === 'monthly' || loadingPlan === 'yearly') && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-8 text-center space-y-6 shadow-2xl border border-brand-primary/10 animate-in zoom-in-95 duration-200">
+            <div className="relative flex justify-center animate-bounce">
+              <div className="w-16 h-16 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                <CreditCard className="w-8 h-8" />
+              </div>
+              <div className="absolute top-0 w-16 h-16 rounded-full border-4 border-brand-primary/20 border-t-brand-primary animate-spin" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-display font-bold text-brand-primary">Processando seu pagamento...</h3>
+              <p className="text-xs text-brand-text-muted leading-relaxed">
+                Estamos validando sua transação com segurança no Google Pay. Por favor, não feche ou recarregue esta página.
+              </p>
             </div>
           </div>
         </div>
