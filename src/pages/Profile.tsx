@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle } from 'lucide-react';
-import { clearOnboardingState } from '../utils/onboarding';
+import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
 
 export default function Profile() {
@@ -18,7 +18,9 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resettingOnboarding, setResettingOnboarding] = useState(false);
-  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(() => {
+    return user ? isOnboardingComplete(user.id) : false;
+  });
   const [deleteStep, setDeleteStep] = useState<1 | 2 | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -68,6 +70,7 @@ export default function Profile() {
         setFirstName(nameParts[0] || '');
         setLastName(nameParts.slice(1).join(' ') || '');
         setProfessionalTitle(user.user_metadata?.professional_title || 'Terapeuta');
+        setOnboardingCompleted(isOnboardingComplete(user.id));
       } finally {
         setLoading(false);
       }

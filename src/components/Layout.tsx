@@ -163,7 +163,7 @@ export default function Layout() {
         ${isMobileMenuOpen ? 'flex' : 'hidden'} 
         md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
         fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
-        transition-all duration-300 relative
+        transition-all duration-300 relative overflow-x-hidden
         ${isCollapsed ? 'w-full md:w-20' : 'w-full md:w-64'}
       `}>
         {/* Toggle Collapse Button - Only visible on desktop/tablet (md) */}
@@ -175,7 +175,7 @@ export default function Layout() {
           {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="flex-1 overflow-y-auto no-scrollbar-x">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar-x">
           <div className="p-4 hidden md:block border-b border-brand-border/50">
             <Link to="/" className="flex justify-center">
               {isCollapsed ? (
@@ -255,13 +255,6 @@ export default function Layout() {
                         {unreadCount}
                       </span>
                     )}
-                    
-                    {/* Tooltip on hover when collapsed */}
-                    {isCollapsed && (
-                      <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
-                        {item.name}
-                      </div>
-                    )}
                   </Link>
                 );
               })}
@@ -280,11 +273,6 @@ export default function Layout() {
             >
               <Download size={20} className="flex-shrink-0" />
               {!isCollapsed && <span className="font-medium">Instalar App</span>}
-              {isCollapsed && (
-                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
-                  Instalar App
-                </div>
-              )}
             </button>
           )}
           <div className="w-full">
@@ -300,11 +288,6 @@ export default function Layout() {
             >
               <Share2 size={20} className="flex-shrink-0" />
               {!isCollapsed && <span className="font-medium">Compartilhar App</span>}
-              {isCollapsed && (
-                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
-                  Compartilhar App
-                </div>
-              )}
             </button>
             {!isCollapsed && (
               <span className="text-[10px] text-brand-text-muted pl-12 block -mt-1 mb-2">
@@ -321,11 +304,6 @@ export default function Layout() {
           >
             <LogOut size={20} className="flex-shrink-0" />
             {!isCollapsed && <span className="font-medium">Sair</span>}
-            {isCollapsed && (
-              <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
-                Sair
-              </div>
-            )}
           </button>
           <AppVersion collapsed={isCollapsed} />
         </div>
