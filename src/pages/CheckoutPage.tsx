@@ -154,8 +154,17 @@ export default function CheckoutPage() {
       sessionStorage.removeItem('pending_checkout_flow');
       sessionStorage.removeItem('selected_checkout_plan');
       
-      const destination = getOnboardingDestination(user.id);
-      navigate(destination, { replace: true });
+      const transactionId = data.chargeId || data.paymentIntentId || `gpay-${Date.now()}`;
+      navigate('/checkout/success', {
+        state: {
+          transactionId,
+          planId: plan,
+          planName: plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal',
+          amount: plan === 'yearly' ? 499.00 : 49.90,
+          paymentMethod: paymentLabel
+        },
+        replace: true
+      });
     } catch (error: any) {
       console.error("Erro ao processar assinatura via Google Pay:", error);
       alert(`Falha ao processar pagamento: ${error.message || error}`);
@@ -225,8 +234,17 @@ export default function CheckoutPage() {
       sessionStorage.removeItem('pending_checkout_flow');
       sessionStorage.removeItem('selected_checkout_plan');
 
-      const destination = getOnboardingDestination(user.id);
-      navigate(destination, { replace: true });
+      const simulatedTxId = `sim-${Date.now().toString().slice(-6)}`;
+      navigate('/checkout/success', {
+        state: {
+          transactionId: simulatedTxId,
+          planId: plan,
+          planName: plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal',
+          amount: plan === 'yearly' ? 499.00 : 49.90,
+          paymentMethod: 'Google Pay (Simulado)'
+        },
+        replace: true
+      });
     } catch (error: any) {
       console.error("Erro ao simular pagamento:", error);
       alert("Falha na simulação: " + error.message);
