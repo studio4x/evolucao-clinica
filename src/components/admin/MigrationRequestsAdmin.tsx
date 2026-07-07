@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Search, FileText, Download, CheckCircle2, AlertCircle, Loader2, MessageSquare, HelpCircle, RefreshCw } from 'lucide-react';
+import { Database, Search, FileText, Download, CheckCircle2, AlertCircle, Loader2, MessageSquare, HelpCircle, RefreshCw, PlusCircle, Calendar, ShieldAlert } from 'lucide-react';
 import { fetchAdminMigrationRequests, updateMigrationRequestStatus, getMigrationAttachmentUrl, MigrationRequest } from '../../services/migration';
+import { supabase } from '../../supabaseClient';
 
 export default function MigrationRequestsAdmin() {
   const [requests, setRequests] = useState<MigrationRequest[]>([]);
@@ -16,6 +17,17 @@ export default function MigrationRequestsAdmin() {
   const [selectedRequest, setSelectedRequest] = useState<MigrationRequest | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Evolution Import Tool State
+  const [patientId, setPatientId] = useState<string | null>(null);
+  const [patientStatus, setPatientStatus] = useState<'not_found' | 'found' | 'loading'>('loading');
+  const [existingEvolutionsCount, setExistingEvolutionsCount] = useState(0);
+  const [sessionDate, setSessionDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [sessionTime, setSessionTime] = useState('');
+  const [transcriptionText, setTranscriptionText] = useState('');
+  const [isCreatingEvolution, setIsCreatingEvolution] = useState(false);
+  const [evolutionSuccess, setEvolutionSuccess] = useState('');
+  const [evolutionError, setEvolutionError] = useState('');
 
   const loadRequests = async (showLoading = true) => {
     try {
@@ -35,11 +47,54 @@ export default function MigrationRequestsAdmin() {
     loadRequests(true);
   }, []);
 
+  const checkPatientStatus = async (userId: string, name: string) => {
+    try {
+      setPatientStatus('loading');
+      setPatientId(null);
+      setExistingEvolutionsCount(0);
+
+      const { data, error } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('professional_id', userId)
+        .eq('full_name', name)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (data) {
+        setPatientId(data.id);
+        setPatientStatus('found');
+        
+        // Fetch evolutions count
+        const { count, error: countError } = await supabase
+          .from('evolutions')
+          .select('*', { count: 'exact', head: true })
+          .eq('patient_id', data.id);
+        
+        if (!countError) {
+          setExistingEvolutionsCount(count || 0);
+        }
+      } else {
+        setPatientStatus('not_found');
+      }
+    } catch (err) {
+      console.error('Error checking patient status:', err);
+      setPatientStatus('not_found');
+    }
+  };
+
   const handleSelectRequest = (req: MigrationRequest) => {
     setSelectedRequest(req);
     setAdminNotes(req.adminNotes || '');
     setSuccess('');
     setError('');
+    setEvolutionSuccess('');
+    setEvolutionError('');
+    setTranscriptionText('');
+    setSessionDate(new Date().toISOString().split('T')[0]);
+    setSessionTime('');
+    checkPatientStatus(req.userId, req.patientName);
   };
 
   const handleUpdateStatus = async (status: 'pending' | 'in_progress' | 'completed' | 'cancelled') => {
@@ -61,6 +116,73 @@ export default function MigrationRequestsAdmin() {
       setError('Erro ao salvar as alterações.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCreateEvolution = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRequest) return;
+    if (!transcriptionText.trim()) {
+      alert('Por favor, digite o texto da evolução.');
+      return;
+    }
+
+    try {
+      setIsCreatingEvolution(true);
+      setEvolutionError('');
+      setEvolutionSuccess('');
+
+      let currentPatientId = patientId;
+
+      // 1. Create patient if not found
+      if (patientStatus === 'not_found' || !currentPatientId) {
+        const { data: newPatient, error: patientError } = await supabase
+          .from('patients')
+          .insert({
+            professional_id: selectedRequest.userId,
+            full_name: selectedRequest.patientName,
+            status: 'active'
+          })
+          .select('id')
+          .single();
+
+        if (patientError) throw patientError;
+        currentPatientId = newPatient.id;
+        setPatientId(currentPatientId);
+        setPatientStatus('found');
+      }
+
+      // 2. Insert evolution
+      const { error: evolutionError } = await supabase
+        .from('evolutions')
+        .insert({
+          professional_id: selectedRequest.userId,
+          patient_id: currentPatientId,
+          session_date: sessionDate,
+          session_time: sessionTime || null,
+          transcription_text: transcriptionText,
+          transcription_status: 'completed',
+          google_doc_append_status: 'pending',
+          status: 'draft'
+        });
+
+      if (evolutionError) throw evolutionError;
+
+      setEvolutionSuccess(`Evolução cadastrada com sucesso para o paciente ${selectedRequest.patientName}! (Rascunho criado)`);
+      setTranscriptionText('');
+      
+      // Update evolutions count
+      const { count } = await supabase
+        .from('evolutions')
+        .select('*', { count: 'exact', head: true })
+        .eq('patient_id', currentPatientId);
+      
+      setExistingEvolutionsCount(count || 0);
+    } catch (err: any) {
+      console.error('Error creating evolution:', err);
+      setEvolutionError(`Falha ao criar evolução: ${err.message || err}`);
+    } finally {
+      setIsCreatingEvolution(false);
     }
   };
 
@@ -195,10 +317,10 @@ export default function MigrationRequestsAdmin() {
           </div>
         </div>
 
-        {/* Layout: Table list + Edit Pane */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Table List */}
-          <div className="lg:col-span-2 border border-brand-border rounded-2xl overflow-hidden h-[500px] overflow-y-auto">
+        {/* Layout: Three-column Grid (List, Details, Evolution Tool) */}
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+          {/* Column 1: Table List (width 4/12) */}
+          <div className="xl:col-span-4 border border-brand-border rounded-2xl overflow-hidden h-[580px] overflow-y-auto bg-white shadow-inner">
             {loading ? (
               <div className="p-12 text-center text-brand-text-muted text-sm">
                 <Loader2 className="animate-spin text-brand-primary mx-auto mb-3" size={24} />
@@ -216,8 +338,7 @@ export default function MigrationRequestsAdmin() {
                 <thead className="bg-brand-bg text-brand-text font-semibold sticky top-0 z-10 border-b border-brand-border">
                   <tr>
                     <th className="px-4 py-3">Profissional</th>
-                    <th className="px-4 py-3">Origem / Qtd</th>
-                    <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3">Origem</th>
                     <th className="px-4 py-3 text-right">Ação</th>
                   </tr>
                 </thead>
@@ -227,7 +348,7 @@ export default function MigrationRequestsAdmin() {
                       key={req.id} 
                       onClick={() => handleSelectRequest(req)}
                       className={`hover:bg-brand-bg/30 transition-colors cursor-pointer ${
-                        selectedRequest?.id === req.id ? 'bg-brand-primary/5' : ''
+                        selectedRequest?.id === req.id ? 'bg-brand-primary/5 border-l-4 border-brand-primary' : ''
                       }`}
                     >
                       <td className="px-4 py-4">
@@ -240,24 +361,13 @@ export default function MigrationRequestsAdmin() {
                           {getPlatformLabel(req.previousPlatform, req.otherPlatformName)}
                         </div>
                         <div className="text-[10px] text-brand-text-muted mt-0.5">
-                          Paciente: {req.patientName}
+                          Pac: {req.patientName}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 text-right">
                         <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold ${getStatusBadgeClass(req.status)}`}>
                           {getStatusLabel(req.status)}
                         </span>
-                      </td>
-                      <td className="px-4 py-4 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectRequest(req);
-                          }}
-                          className="text-xs font-bold text-brand-primary hover:underline"
-                        >
-                          Gerenciar
-                        </button>
                       </td>
                     </tr>
                   ))}
@@ -266,88 +376,90 @@ export default function MigrationRequestsAdmin() {
             )}
           </div>
 
-          {/* Edit Pane / Detail Panel */}
-          <div className="border border-brand-border rounded-2xl p-4 bg-brand-bg/10 flex flex-col justify-between h-[500px] overflow-y-auto">
+          {/* Column 2: Edit & Details Pane (width 4/12) */}
+          <div className="xl:col-span-4 border border-brand-border rounded-2xl p-4 bg-brand-bg/10 flex flex-col justify-between h-[580px] overflow-y-auto shadow-sm">
             {selectedRequest ? (
-              <div className="space-y-4">
-                <div className="flex justify-between items-start border-b border-brand-border/60 pb-3">
-                  <div>
-                    <h3 className="font-bold text-brand-text text-sm">Detalhes da Migração</h3>
-                    <p className="text-[10px] text-brand-text-muted mt-0.5">ID: {selectedRequest.id}</p>
-                  </div>
-                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusBadgeClass(selectedRequest.status)}`}>
-                    {getStatusLabel(selectedRequest.status)}
-                  </span>
-                </div>
-
-                {success && (
-                  <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl text-[10px] flex items-start gap-2">
-                    <CheckCircle2 size={12} className="text-emerald-600 shrink-0 mt-0.5" />
-                    <div>{success}</div>
-                  </div>
-                )}
-
-                {error && (
-                  <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-[10px] flex items-start gap-2">
-                    <AlertCircle size={12} className="text-rose-600 shrink-0 mt-0.5" />
-                    <div>{error}</div>
-                  </div>
-                )}
-
-                <div className="space-y-3 text-xs leading-relaxed">
-                  <div>
-                    <span className="font-bold text-brand-text block">Profissional:</span>
-                    <span>{selectedRequest.professionalName} ({selectedRequest.professionalEmail})</span>
+              <div className="space-y-4 flex-grow flex flex-col justify-between">
+                <div className="space-y-4">
+                  <div className="flex justify-between items-start border-b border-brand-border/60 pb-3">
+                    <div>
+                      <h3 className="font-bold text-brand-text text-sm">Detalhes da Migração</h3>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">ID: {selectedRequest.id}</p>
+                    </div>
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${getStatusBadgeClass(selectedRequest.status)}`}>
+                      {getStatusLabel(selectedRequest.status)}
+                    </span>
                   </div>
 
-                  <div>
-                    <span className="font-bold text-brand-text block">Plataforma Origem:</span>
-                    <span>{getPlatformLabel(selectedRequest.previousPlatform, selectedRequest.otherPlatformName)}</span>
-                  </div>
+                  {success && (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl text-[10px] flex items-start gap-2 animate-fadeIn">
+                      <CheckCircle2 size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+                      <div>{success}</div>
+                    </div>
+                  )}
 
-                  <div>
-                    <span className="font-bold text-brand-text block">Paciente:</span>
-                    <span>{selectedRequest.patientName}</span>
-                  </div>
+                  {error && (
+                    <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-[10px] flex items-start gap-2 animate-fadeIn">
+                      <AlertCircle size={12} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div>{error}</div>
+                    </div>
+                  )}
 
-                  <div>
-                    <span className="font-bold text-brand-text block">Arquivo de Backup:</span>
-                    {selectedRequest.attachmentName ? (
-                      <button
-                        onClick={() => handleDownloadAttachment(selectedRequest)}
-                        className="inline-flex items-center text-xs font-bold text-brand-primary hover:underline gap-1 mt-1 cursor-pointer"
-                      >
-                        <Download size={12} />
-                        <span>Baixar {selectedRequest.attachmentName}</span>
-                      </button>
-                    ) : (
-                      <span className="text-brand-text-muted">Sem anexo enviado</span>
-                    )}
-                  </div>
+                  <div className="space-y-3 text-xs leading-relaxed">
+                    <div>
+                      <span className="font-bold text-brand-text block">Profissional:</span>
+                      <span>{selectedRequest.professionalName} ({selectedRequest.professionalEmail})</span>
+                    </div>
 
-                  <div>
-                    <span className="font-bold text-brand-text block">Instruções do Usuário:</span>
-                    <p className="bg-white border border-brand-border/60 p-2.5 rounded-xl text-[10px] text-brand-text whitespace-pre-wrap max-h-[100px] overflow-y-auto mt-1">
-                      {selectedRequest.notes || 'Sem observações adicionais.'}
-                    </p>
-                  </div>
+                    <div>
+                      <span className="font-bold text-brand-text block">Plataforma Origem:</span>
+                      <span>{getPlatformLabel(selectedRequest.previousPlatform, selectedRequest.otherPlatformName)}</span>
+                    </div>
 
-                  {/* Edit Admin Notes */}
-                  <div className="space-y-1">
-                    <label className="font-bold text-brand-text block">Observações do Suporte (Visível ao Usuário):</label>
-                    <textarea
-                      placeholder="Ex: Arquivos recebidos e processamento concluído! Seus 42 pacientes já estão cadastrados no seu painel..."
-                      value={adminNotes}
-                      onChange={(e) => setAdminNotes(e.target.value)}
-                      rows={4}
-                      className="w-full p-2 bg-white border border-brand-border/80 rounded-xl text-[10px] focus:outline-none focus:border-brand-primary resize-none"
-                    />
+                    <div>
+                      <span className="font-bold text-brand-text block">Paciente:</span>
+                      <span className="font-semibold text-brand-primary">{selectedRequest.patientName}</span>
+                    </div>
+
+                    <div>
+                      <span className="font-bold text-brand-text block">Arquivo de Backup:</span>
+                      {selectedRequest.attachmentName ? (
+                        <button
+                          onClick={() => handleDownloadAttachment(selectedRequest)}
+                          className="inline-flex items-center text-xs font-bold text-brand-primary hover:underline gap-1 mt-1 cursor-pointer"
+                        >
+                          <Download size={12} />
+                          <span>Baixar {selectedRequest.attachmentName}</span>
+                        </button>
+                      ) : (
+                        <span className="text-brand-text-muted">Sem anexo enviado</span>
+                      )}
+                    </div>
+
+                    <div>
+                      <span className="font-bold text-brand-text block">Instruções do Usuário:</span>
+                      <p className="bg-white border border-brand-border/60 p-2.5 rounded-xl text-[10px] text-brand-text whitespace-pre-wrap max-h-[90px] overflow-y-auto mt-1">
+                        {selectedRequest.notes || 'Sem observações adicionais.'}
+                      </p>
+                    </div>
+
+                    {/* Edit Admin Notes */}
+                    <div className="space-y-1">
+                      <label className="font-bold text-brand-text block">Observações do Suporte (Visível ao Usuário):</label>
+                      <textarea
+                        placeholder="Ex: Arquivos recebidos e processamento concluído! Seus 42 pacientes já estão cadastrados no seu painel..."
+                        value={adminNotes}
+                        onChange={(e) => setAdminNotes(e.target.value)}
+                        rows={3}
+                        className="w-full p-2 bg-white border border-brand-border/80 rounded-xl text-[10px] focus:outline-none focus:border-brand-primary resize-none"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Action Buttons */}
                 <div className="pt-3 border-t border-brand-border/60 space-y-2">
-                  <span className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Alterar Status</span>
+                  <span className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Alterar Status da Solicitação</span>
                   
                   <div className="grid grid-cols-2 gap-2">
                     <button
@@ -389,6 +501,140 @@ export default function MigrationRequestsAdmin() {
                 <Database className="mx-auto text-brand-text-muted/60" size={32} />
                 <p className="font-semibold text-brand-text">Nenhuma solicitação selecionada</p>
                 <p className="text-[10px] leading-relaxed">Selecione um registro na lista ao lado para ver os detalhes da importação e gerenciar o status.</p>
+              </div>
+            )}
+          </div>
+
+          {/* Column 3: Direct Evolution Import Tool (width 4/12) */}
+          <div className="xl:col-span-4 border border-brand-border rounded-2xl p-4 bg-white flex flex-col justify-between h-[580px] overflow-y-auto shadow-sm">
+            {selectedRequest ? (
+              <div className="space-y-4 flex-grow flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start border-b border-brand-border/60 pb-3">
+                    <div>
+                      <h3 className="font-bold text-brand-text text-sm flex items-center gap-1.5">
+                        <PlusCircle className="text-brand-primary" size={16} />
+                        <span>Lançador de Evoluções</span>
+                      </h3>
+                      <p className="text-[10px] text-brand-text-muted mt-0.5">Cadastre a evolução direto para o profissional.</p>
+                    </div>
+                  </div>
+
+                  {/* Patient Status Alert */}
+                  {patientStatus === 'loading' ? (
+                    <div className="bg-gray-50 border border-gray-200 p-2.5 rounded-xl text-[10px] text-gray-500 flex items-center gap-2">
+                      <Loader2 className="animate-spin text-brand-primary" size={12} />
+                      <span>Verificando cadastro do paciente no Supabase...</span>
+                    </div>
+                  ) : patientStatus === 'found' ? (
+                    <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl text-[10px] text-emerald-800 space-y-1">
+                      <div className="font-bold flex items-center gap-1">
+                        <CheckCircle2 size={12} className="text-emerald-600 shrink-0" />
+                        <span>Paciente já cadastrado pelo profissional</span>
+                      </div>
+                      <p className="text-[9px] text-emerald-700">
+                        Evoluções registradas para ele: <strong className="text-emerald-900">{existingEvolutionsCount} sessões</strong>.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 border border-amber-200 p-2.5 rounded-xl text-[10px] text-amber-800 space-y-1">
+                      <div className="font-bold flex items-center gap-1">
+                        <ShieldAlert size={12} className="text-amber-600 shrink-0" />
+                        <span>Paciente novo (não cadastrado)</span>
+                      </div>
+                      <p className="text-[9px] text-amber-700">
+                        Ao salvar a primeira evolução, <strong className="underline">o paciente será criado automaticamente</strong> na conta do profissional.
+                      </p>
+                    </div>
+                  )}
+
+                  {evolutionSuccess && (
+                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl text-[10px] flex items-start gap-2 animate-fadeIn">
+                      <CheckCircle2 size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+                      <div>{evolutionSuccess}</div>
+                    </div>
+                  )}
+
+                  {evolutionError && (
+                    <div className="bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-xl text-[10px] flex items-start gap-2 animate-fadeIn">
+                      <AlertCircle size={12} className="text-rose-600 shrink-0 mt-0.5" />
+                      <div>{evolutionError}</div>
+                    </div>
+                  )}
+
+                  {/* Form */}
+                  <form onSubmit={handleCreateEvolution} className="space-y-3.5 pt-1">
+                    {/* Session Date & Time */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Data da Sessão</label>
+                        <div className="relative">
+                          <input
+                            type="date"
+                            required
+                            value={sessionDate}
+                            onChange={(e) => setSessionDate(e.target.value)}
+                            className="w-full p-2 bg-brand-bg/40 border border-brand-border rounded-xl text-[10px] focus:outline-none focus:border-brand-primary"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Horário (Opcional)</label>
+                        <input
+                          type="time"
+                          value={sessionTime}
+                          onChange={(e) => setSessionTime(e.target.value)}
+                          className="w-full p-2 bg-brand-bg/40 border border-brand-border rounded-xl text-[10px] focus:outline-none focus:border-brand-primary"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Session content */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-brand-text uppercase tracking-wider block">Texto da Evolução Clínica</label>
+                      <textarea
+                        required
+                        placeholder="Cole aqui o prontuário/conteúdo da sessão do paciente que está migrando..."
+                        value={transcriptionText}
+                        onChange={(e) => setTranscriptionText(e.target.value)}
+                        rows={7}
+                        className="w-full p-2.5 bg-brand-bg/40 border border-brand-border rounded-xl text-[10px] focus:outline-none focus:border-brand-primary font-sans resize-none"
+                      />
+                    </div>
+
+                    {/* Submit Button */}
+                    <button
+                      type="submit"
+                      disabled={isCreatingEvolution || patientStatus === 'loading'}
+                      className="w-full bg-brand-primary hover:bg-brand-primary-hover text-white py-2.5 px-4 rounded-xl font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-1.5 disabled:opacity-50 cursor-pointer text-xs"
+                    >
+                      {isCreatingEvolution ? (
+                        <>
+                          <Loader2 className="animate-spin" size={14} />
+                          <span>Lançando evolução...</span>
+                        </>
+                      ) : (
+                        <>
+                          <PlusCircle size={14} />
+                          <span>
+                            {patientStatus === 'not_found' ? 'Criar Paciente e Lançar' : 'Lançar Evolução (Rascunho)'}
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </div>
+
+                <div className="text-[9px] text-brand-text-muted leading-relaxed border-t border-brand-border/60 pt-2">
+                  ℹ️ A evolução será lançada como <strong>Rascunho (Draft)</strong> e com a transcrição concluída. O profissional poderá revisar, editar e realizar a Assinatura Digital Jurídica no painel dele.
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-brand-text-muted text-xs my-auto p-6 space-y-2">
+                <PlusCircle className="mx-auto text-brand-text-muted/60" size={32} />
+                <p className="font-semibold text-brand-text">Aguardando seleção</p>
+                <p className="text-[10px] leading-relaxed">Selecione uma solicitação de migração para habilitar o lançador automático de evoluções.</p>
               </div>
             )}
           </div>
