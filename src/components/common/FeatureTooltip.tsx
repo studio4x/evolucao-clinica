@@ -36,9 +36,6 @@ export const FeatureTooltip: React.FC<FeatureTooltipProps> = ({ feature }) => {
   const cleanFeature = feature.trim().toLowerCase();
   const description = FEATURE_DESCRIPTIONS[cleanFeature];
 
-  // If we don't have a specific description, do not render the info icon to keep the list clean
-  if (!description) return null;
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -53,6 +50,9 @@ export const FeatureTooltip: React.FC<FeatureTooltipProps> = ({ feature }) => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [show]);
+
+  // If we don't have a specific description, do not render the info icon to keep the list clean
+  if (!description) return null;
 
   return (
     <div 
