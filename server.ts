@@ -7,6 +7,9 @@ import nodemailer from "nodemailer";
 import { Client as PostgresClient } from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
+import mammoth from "mammoth";
+// @ts-ignore
+import pdfParse from "pdf-parse";
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
 
 dotenv.config();
@@ -2489,6 +2492,160 @@ app.post("/api/migrations/notify", requireAuth, async (req: any, res) => {
   } catch (err: any) {
     console.error("Erro ao disparar notificacao de migracao:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// Helper para extrair texto de buffers de documentos
+async function extractTextFromBuffer(buffer: Buffer, fileName: string): Promise<string> {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  
+  if (ext === 'txt' || ext === 'csv') {
+    return buffer.toString('utf-8');
+  } 
+  else if (ext === 'docx') {
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  } 
+  else if (ext === 'pdf') {
+    const data = await pdfParse(buffer);
+    return data.text;
+  }
+  else {
+    throw new Error(`Formato de arquivo não suportado para análise automática: .${ext}`);
+  }
+}
+
+// 4.0.6. Analisar Documento de Migração de Prontuários (Apenas Admins)
+app.post("/api/migrations/analyze", requireAuth, async (req: any, res) => {
+  const { requestId } = req.body;
+  const user = req.user;
+
+  if (!requestId) {
+    return res.status(400).json({ error: "requestId é obrigatório" });
+  }
+
+  try {
+    // 1. Validar se o usuário é admin
+    const { data: prof, error: profError } = await supabaseAdmin
+      .from("professionals")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    if (profError || !prof || prof.role !== "admin") {
+      return res.status(403).json({ error: "Apenas administradores podem usar esta ferramenta." });
+    }
+
+    // 2. Obter a solicitação
+    const { data: request, error: requestError } = await supabaseAdmin
+      .from("migration_requests")
+      .select("*")
+      .eq("id", requestId)
+      .single();
+
+    if (requestError || !request) {
+      return res.status(404).json({ error: "Solicitação de migração não encontrada." });
+    }
+
+    if (!request.attachment_url) {
+      return res.status(400).json({ error: "Esta solicitação não contém nenhum arquivo anexo para analisar." });
+    }
+
+    // 3. Fazer download do arquivo do storage do Supabase
+    console.log(`[Concierge-AI] Baixando arquivo: ${request.attachment_url}`);
+    const { data: fileData, error: downloadError } = await supabaseAdmin.storage
+      .from("support_attachments")
+      .download(request.attachment_url);
+
+    if (downloadError || !fileData) {
+      console.error("[Concierge-AI] Erro ao baixar arquivo do storage:", downloadError);
+      return res.status(500).json({ error: "Falha ao baixar o arquivo anexo do storage." });
+    }
+
+    const buffer = Buffer.from(await fileData.arrayBuffer());
+    const fileName = request.attachment_name || "document.bin";
+
+    // 4. Extrair texto do buffer
+    console.log(`[Concierge-AI] Extraindo texto de: ${fileName}`);
+    let extractedText = "";
+    try {
+      extractedText = await extractTextFromBuffer(buffer, fileName);
+    } catch (parseErr: any) {
+      console.error("[Concierge-AI] Erro ao extrair texto do arquivo:", parseErr);
+      return res.status(400).json({ error: parseErr.message || "Erro ao ler o conteúdo do arquivo." });
+    }
+
+    if (!extractedText.trim()) {
+      return res.status(400).json({ error: "O arquivo lido parece estar vazio ou não contém texto legível." });
+    }
+
+    // 5. Configurar Gemini API
+    let apiKey = "";
+    try {
+      const { data: keyData } = await supabaseAdmin
+        .from("secrets")
+        .select("value")
+        .eq("id", "gemini")
+        .single();
+      if (keyData?.value) {
+        apiKey = keyData.value;
+      }
+    } catch (e) {
+      console.warn("Erro ao ler chave do Gemini do banco:", e);
+    }
+
+    if (!apiKey) {
+      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+    }
+
+    if (!apiKey) {
+      return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    // 6. Enviar para o Gemini
+    console.log(`[Concierge-AI] Enviando texto extraído para análise do Gemini (${extractedText.length} caracteres)...`);
+    const prompt = `Analise o texto a seguir contendo anotações de evolução clínica de um paciente. 
+Identifique todas as sessões de terapia/atendimento listadas no texto.
+Para cada sessão identificada, extraia:
+1. A data da sessão no formato YYYY-MM-DD. Se a data estiver parcial (ex: "10 de Março"), infira o ano com base no contexto ou assuma 2026. Se não houver data de jeito nenhum, tente deduzir ou use a data atual.
+2. O horário da sessão no formato HH:MM (se houver, senão retorne nulo).
+3. O conteúdo clínico completo da evolução/anotação dessa sessão (remova cabeçalhos repetitivos desnecessários, mas preserve todo o relato do atendimento).
+
+Retorne os dados estritamente em formato JSON válido como um array de objetos. Não adicione markdown (como \`\`\`json ou similar), blocos de código ou explicações. Retorne EXCLUSIVAMENTE o JSON estruturado no formato:
+[
+  {
+    "date": "YYYY-MM-DD",
+    "time": "HH:MM",
+    "content": "Texto da evolução..."
+  }
+]
+
+Texto a ser analisado:
+${extractedText}`;
+
+    const geminiResponse = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const responseText = geminiResponse.text || "";
+    if (!responseText) {
+      throw new Error("O Gemini não retornou nenhum texto de análise.");
+    }
+
+    const sessions = JSON.parse(responseText);
+    console.log(`[Concierge-AI] Sucesso! Identificadas ${sessions.length} sessões.`);
+
+    res.json({ success: true, sessions });
+
+  } catch (err: any) {
+    console.error("Erro no processamento da migração por IA:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao processar arquivo com IA." });
   }
 });
 
