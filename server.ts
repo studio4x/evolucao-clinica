@@ -2583,13 +2583,13 @@ app.post("/api/migrations/analyze", requireAuth, async (req: any, res) => {
     // 5. Configurar Gemini API
     let apiKey = "";
     try {
-      const { data: keyData } = await supabaseAdmin
-        .from("secrets")
-        .select("value")
+      const { data: settingsData, error: settingsError } = await supabaseAdmin
+        .from("settings")
+        .select("api_key")
         .eq("id", "gemini")
         .single();
-      if (keyData?.value) {
-        apiKey = keyData.value;
+      if (!settingsError && settingsData?.api_key) {
+        apiKey = settingsData.api_key;
       }
     } catch (e) {
       console.warn("Erro ao ler chave do Gemini do banco:", e);
