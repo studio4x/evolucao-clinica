@@ -544,6 +544,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
         <Route path="/checkout/success" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
+        <Route path="/checkout/sucess" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
         <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
         <Route path="/pending" element={<PendingApproval />} />
         <Route path="/privacy" element={<PrivacyPolicy />} />

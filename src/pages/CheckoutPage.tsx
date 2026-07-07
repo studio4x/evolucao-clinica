@@ -212,7 +212,7 @@ export default function CheckoutPage() {
       sessionStorage.removeItem('pending_checkout_flow');
       sessionStorage.removeItem('selected_checkout_plan');
       const transactionId = data.subscriptionId || data.chargeId || data.paymentIntentId || `gpay-${Date.now()}`;
-      navigate('/checkout/success', {
+      navigate('/checkout/sucess', {
         state: {
           transactionId,
           subscriptionId: data.subscriptionId,
@@ -297,7 +297,7 @@ export default function CheckoutPage() {
       sessionStorage.removeItem('selected_checkout_plan');
 
       const simulatedTxId = `sim-${Date.now().toString().slice(-6)}`;
-      navigate('/checkout/success', {
+      navigate('/checkout/sucess', {
         state: {
           transactionId: simulatedTxId,
           planId: plan,

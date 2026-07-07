@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
@@ -181,6 +182,7 @@ export default function Subscription() {
     trialEndsAt,
     setProfileInfo
   } = useAuthStore();
+  const navigate = useNavigate();
 
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [showWebhookGuide, setShowWebhookGuide] = useState(false);
@@ -356,9 +358,17 @@ export default function Subscription() {
         trialEndsAt
       );
 
-      setSuccessMessage(`Plano ${plan === 'monthly' ? 'Mensal' : 'Anual'} ativado com sucesso através da simulação!`);
-      fetchTransactions();
-      setTimeout(() => setSuccessMessage(null), 8000);
+      const simulatedTxId = `sim-${Date.now().toString().slice(-6)}`;
+      navigate('/checkout/sucess', {
+        state: {
+          transactionId: simulatedTxId,
+          planId: plan,
+          planName: plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal',
+          amount: plan === 'yearly' ? 499.00 : 49.90,
+          paymentMethod: 'Simulador Admin (Pix/Checkout)'
+        },
+        replace: true
+      });
     } catch (error: any) {
       console.error("Erro ao simular pagamento:", error);
       alert("Erro ao processar assinatura simulada no Supabase: " + (error.message || error));
@@ -501,8 +511,22 @@ export default function Subscription() {
         trialEndsAt
       );
 
-      await sendPaymentEmailAndShowModal('success', plan, paymentLabel, data);
-      fetchTransactions();
+      const transactionId = data.subscriptionId || data.chargeId || data.paymentIntentId || `gpay-${Date.now()}`;
+      navigate('/checkout/sucess', {
+        state: {
+          transactionId,
+          subscriptionId: data.subscriptionId,
+          invoiceId: data.invoiceId,
+          invoiceUrl: data.invoiceUrl,
+          invoicePdfUrl: data.invoicePdfUrl,
+          endsAt: data.endsAt,
+          planId: plan,
+          planName: data.planName || (plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal'),
+          amount: data.amountPaid || (plan === 'yearly' ? 199.00 : 39.00),
+          paymentMethod: paymentLabel
+        },
+        replace: true
+      });
     } catch (error: any) {
       console.error("Erro ao processar assinatura via Google Pay:", error);
       const paymentLabel = getGooglePayPaymentLabel(paymentData);
