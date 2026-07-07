@@ -163,7 +163,7 @@ export default function Layout() {
         ${isMobileMenuOpen ? 'flex' : 'hidden'} 
         md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
         fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
-        transition-all duration-300 relative overflow-x-hidden
+        transition-all duration-300 relative
         ${isCollapsed ? 'w-full md:w-20' : 'w-full md:w-64'}
       `}>
         {/* Toggle Collapse Button - Only visible on desktop/tablet (md) */}
