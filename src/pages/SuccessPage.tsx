@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { CheckCircle2, ArrowRight, ShieldCheck, CreditCard, Sparkles } from 'lucide-react';
+import { CheckCircle2, ArrowRight, ShieldCheck, CreditCard, Sparkles, Check, Mail } from 'lucide-react';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination } from '../utils/onboarding';
 
@@ -22,6 +22,42 @@ const GooglePayLogo = ({ className = "h-3.5 w-auto" }: { className?: string }) =
   </svg>
 );
 
+const formatRenewalDate = (dateStr: string) => {
+  try {
+    return new Date(dateStr).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateStr;
+  }
+};
+
+const getPlanBenefitsList = (planId: string) => {
+  const defaultMonthlyBenefits = [
+    'Pacientes ilimitados',
+    'Evoluções clínicas com IA ilimitadas',
+    'Integração com Google Docs em tempo real',
+    'Gravação e transcrição de áudio nativa',
+    'Geração de Relatórios & PDI por IA',
+    'Lembrete e envio de WhatsApp para aniversariantes',
+    'Compartilhamento de relatórios via WhatsApp',
+    'Impressão de prontuários do Google Docs'
+  ];
+
+  const defaultYearlyBenefits = [
+    'Tudo do plano mensal',
+    'Desconto de ~17% sobre o valor mensal',
+    'Suporte prioritário via e-mail e WhatsApp',
+    'Garantia de novos recursos exclusivo em primeira mão'
+  ];
+
+  return planId === 'yearly' ? defaultYearlyBenefits : defaultMonthlyBenefits;
+};
+
 export default function SuccessPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -31,6 +67,11 @@ export default function SuccessPage() {
 
   const state = location.state as {
     transactionId?: string;
+    subscriptionId?: string;
+    invoiceId?: string;
+    invoiceUrl?: string;
+    invoicePdfUrl?: string;
+    endsAt?: string;
     planId: string;
     planName: string;
     amount: number;
@@ -129,64 +170,128 @@ export default function SuccessPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col justify-center items-center py-12 px-6 relative z-10 max-w-xl mx-auto w-full">
-        <div className="w-full space-y-8 text-center animate-fade-in">
-          <div className="card bg-white p-6 md:p-8 rounded-3xl border border-brand-border shadow-2xl text-center space-y-6 relative overflow-hidden">
+      <main className="flex-1 flex flex-col justify-center items-center py-12 px-6 relative z-10 max-w-2xl mx-auto w-full animate-fade-in">
+        <div className="w-full space-y-8">
+          <div className="card bg-white p-6 md:p-8 rounded-3xl border border-brand-border shadow-2xl space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-2xl pointer-events-none" />
 
-            <div className="w-16 h-16 bg-brand-primary/10 rounded-full flex items-center justify-center text-brand-primary mx-auto">
-              <CheckCircle2 className="w-10 h-10" />
-            </div>
-
-            <div className="space-y-2">
-              <h2 className="text-2xl font-display font-bold text-brand-text">
-                Assinatura Confirmada!
-              </h2>
-              <p className="text-xs text-brand-text-muted max-w-sm mx-auto">
-                Parabéns! Seu acesso à plataforma Evolução Clínica foi liberado instantaneamente.
-              </p>
+            <div className="flex items-start gap-4 text-left">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-bg text-brand-primary text-[11px] font-bold uppercase tracking-wider">
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Assinatura confirmada</span>
+                </div>
+                <h3 className="text-2xl font-display font-bold text-brand-text">Bem-vindo ao {displayPlanName}</h3>
+                <p className="text-sm leading-relaxed text-brand-text-muted">
+                  Seu pedido foi processado com sucesso usando {displayPaymentMethod}. Um e-mail foi enviado com os dados da sua assinatura.
+                </p>
+              </div>
             </div>
 
             {/* Transaction Data Table */}
-            <div className="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-4 text-left space-y-3.5">
-              <h3 className="text-[10px] font-bold text-brand-primary uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" />
-                Detalhes da Transação
-              </h3>
-
-              <div className="space-y-2.5 text-xs">
-                <div className="flex justify-between items-center py-1 border-b border-brand-border/40">
-                  <span className="text-brand-text-muted font-medium">Pedido / Transação</span>
-                  <span className="text-brand-text font-mono font-semibold">{displayTransactionId}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-brand-border/40">
-                  <span className="text-brand-text-muted font-medium">Plano Contratado</span>
-                  <span className="text-brand-text font-bold">{displayPlanName}</span>
-                </div>
-                <div className="flex justify-between items-center py-1 border-b border-brand-border/40">
-                  <span className="text-brand-text-muted font-medium">Valor Cobrado</span>
-                  <span className="text-brand-primary font-bold">R$ {formattedAmount}</span>
-                </div>
-                <div className="flex justify-between items-center py-1">
-                  <span className="text-brand-text-muted font-medium">Forma de Pagamento</span>
-                  <span className="text-brand-text font-medium flex items-center gap-1">
-                    <CreditCard className="w-3.5 h-3.5 text-brand-text-muted" />
-                    {displayPaymentMethod}
-                  </span>
+            <div className="grid grid-cols-1 gap-4 text-left">
+              <div className="rounded-2xl border border-brand-border bg-brand-bg/40 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted mb-2">Resumo da transação</p>
+                <div className="space-y-2.5 text-sm text-brand-text">
+                  <p className="flex items-start gap-2">
+                    <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                    <span>Plano: {displayPlanName}</span>
+                  </p>
+                  <p className="flex items-start gap-2">
+                    <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                    <span>Valor: R$ {formattedAmount}</span>
+                  </p>
+                  <p className="flex items-start gap-2">
+                    <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                    <span>Forma de pagamento: {displayPaymentMethod}</span>
+                  </p>
+                  {state?.subscriptionId && (
+                    <p className="flex items-start gap-2">
+                      <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                      <span>Assinatura Google Pay: {state.subscriptionId}</span>
+                    </p>
+                  )}
+                  {state?.invoiceId && (
+                    <p className="flex items-start gap-2">
+                      <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                      <span>Fatura Google Pay: {state.invoiceId}</span>
+                    </p>
+                  )}
+                  {state?.endsAt && (
+                    <p className="flex items-start gap-2">
+                      <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                      <span>Próxima renovação: {formatRenewalDate(state.endsAt)}</span>
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Navigation Button */}
-            <button
-              onClick={handleProceed}
-              className="btn-primary w-full py-3.5 font-bold text-sm cursor-pointer flex items-center justify-center gap-2"
-            >
-              <span>Começar Onboarding</span>
-              <ArrowRight size={16} />
-            </button>
+            {/* Welcome and Benefits Section */}
+            <div className="rounded-2xl border border-brand-border bg-white p-5 space-y-4 text-left">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted">Boas-vindas e benefícios</p>
+                  <p className="text-lg font-bold text-brand-primary mt-1">O que você desbloqueou</p>
+                </div>
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wider">
+                  Plano ativo
+                </span>
+              </div>
 
-            <div className="flex justify-center items-center gap-1.5 text-[10px] text-brand-text-muted select-none">
+              <p className="text-sm text-brand-text-muted leading-relaxed">
+                {state?.planId === 'yearly'
+                  ? 'Você escolheu a melhor opção para manter a operação rodando com previsibilidade e foco no longo prazo.'
+                  : 'Você ativou uma assinatura flexível, pensada para quem quer controle mês a mês sem perder produtividade.'}
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {getPlanBenefitsList(state?.planId || 'monthly').map((benefit) => (
+                  <div key={benefit} className="rounded-xl border bg-brand-bg/40 border-brand-border/60 p-3 text-sm leading-relaxed text-brand-text">
+                    <div className="flex items-start gap-2">
+                      <Check className="w-4 h-4 mt-0.5 shrink-0 text-brand-primary" />
+                      <span>{benefit}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-1 w-full">
+              {state?.invoiceUrl && (
+                <a
+                  href={state.invoiceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-brand-primary/15 bg-brand-primary text-white font-bold hover:bg-brand-primary-hover transition-colors text-sm"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>Ver fatura</span>
+                </a>
+              )}
+              {state?.invoicePdfUrl && (
+                <a
+                  href={state.invoicePdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-brand-border bg-white text-brand-text font-bold hover:bg-brand-bg transition-colors text-sm"
+                >
+                  <span>Baixar PDF</span>
+                </a>
+              )}
+              <button
+                onClick={handleProceed}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-colors bg-brand-bg text-brand-text hover:bg-brand-primary/10 border border-brand-border text-sm cursor-pointer"
+              >
+                <span>Continuar</span>
+              </button>
+            </div>
+
+            <div className="flex justify-center items-center gap-1.5 text-[10px] text-brand-text-muted select-none pt-2">
               <ShieldCheck className="w-4 h-4 text-brand-primary flex-shrink-0" />
               <span>Transação protegida e auditada pelo</span>
               <GooglePayLogo className="h-3.5 w-auto" />

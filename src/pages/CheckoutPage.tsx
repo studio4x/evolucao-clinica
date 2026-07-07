@@ -211,14 +211,18 @@ export default function CheckoutPage() {
 
       sessionStorage.removeItem('pending_checkout_flow');
       sessionStorage.removeItem('selected_checkout_plan');
-      
-      const transactionId = data.chargeId || data.paymentIntentId || `gpay-${Date.now()}`;
+      const transactionId = data.subscriptionId || data.chargeId || data.paymentIntentId || `gpay-${Date.now()}`;
       navigate('/checkout/success', {
         state: {
           transactionId,
+          subscriptionId: data.subscriptionId,
+          invoiceId: data.invoiceId,
+          invoiceUrl: data.invoiceUrl,
+          invoicePdfUrl: data.invoicePdfUrl,
+          endsAt: data.endsAt,
           planId: plan,
-          planName: plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal',
-          amount: plan === 'yearly' ? 499.00 : 49.90,
+          planName: data.planName || (plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal'),
+          amount: data.amountPaid || (plan === 'yearly' ? 199.00 : 39.00),
           paymentMethod: paymentLabel
         },
         replace: true
