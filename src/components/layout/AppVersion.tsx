@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const APP_VERSION = "v1.10.293";
+export const APP_VERSION = "v1.10.294";
 export const PLAY_STORE_VERSION = "1.0.0";
 
 interface AppVersionProps {
@@ -8,9 +8,9 @@ interface AppVersionProps {
 }
 
 export const AppVersion = ({ collapsed }: AppVersionProps) => {
-  const versionText = collapsed
-    ? `${APP_VERSION} (${PLAY_STORE_VERSION})`
-    : `Build ${APP_VERSION} (App v${PLAY_STORE_VERSION})`;
+  if (collapsed) return null;
+
+  const versionText = `Build ${APP_VERSION} (App v${PLAY_STORE_VERSION})`;
 
   return (
     <div className="text-center pt-2">

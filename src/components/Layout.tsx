@@ -5,7 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
-import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
+import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
 
@@ -175,21 +175,15 @@ export default function Layout() {
           {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto no-scrollbar-x">
           <div className="p-4 hidden md:block border-b border-brand-border/50">
             <Link to="/" className="flex justify-center">
               {isCollapsed ? (
-                (siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
-                  <img
-                    src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-                    alt={siteConfig.pwa_app_name || "Evolução Clínica"}
-                    className="h-10 w-10 object-contain"
-                  />
-                ) : (
-                  <span className="text-xl font-display font-bold text-brand-primary block text-center">
-                    EC
-                  </span>
-                )
+                <img
+                  src={appendBrandAssetVersion(getBrandIconUrl(siteConfig), assetSignature)}
+                  alt={siteConfig.pwa_app_name || "Evolução Clínica"}
+                  className="h-10 w-10 object-contain"
+                />
               ) : (
                 (siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
                   <img
@@ -244,26 +238,27 @@ export default function Layout() {
                     }`}
                   >
                     <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'space-x-3'}`}>
-                      <Icon size={20} className="flex-shrink-0" />
+                      <div className="relative">
+                        <Icon size={20} className="flex-shrink-0" />
+                        {item.name === 'Notificações' && unreadCount > 0 && isCollapsed && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[8px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white animate-pulse">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
                       {!isCollapsed && <span className="font-medium">{item.name}</span>}
                     </div>
-                    {item.name === 'Notificações' && unreadCount > 0 && (
-                      isCollapsed ? (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center border border-white animate-pulse">
-                          {unreadCount}
-                        </span>
-                      ) : (
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                          isActive ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white animate-pulse'
-                        }`}>
-                          {unreadCount}
-                        </span>
-                      )
+                    {item.name === 'Notificações' && unreadCount > 0 && !isCollapsed && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isActive ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white animate-pulse'
+                      }`}>
+                        {unreadCount}
+                      </span>
                     )}
                     
                     {/* Tooltip on hover when collapsed */}
                     {isCollapsed && (
-                      <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+                      <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
                         {item.name}
                       </div>
                     )}
@@ -286,7 +281,7 @@ export default function Layout() {
               <Download size={20} className="flex-shrink-0" />
               {!isCollapsed && <span className="font-medium">Instalar App</span>}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
                   Instalar App
                 </div>
               )}
@@ -306,7 +301,7 @@ export default function Layout() {
               <Share2 size={20} className="flex-shrink-0" />
               {!isCollapsed && <span className="font-medium">Compartilhar App</span>}
               {isCollapsed && (
-                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+                <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
                   Compartilhar App
                 </div>
               )}
@@ -327,7 +322,7 @@ export default function Layout() {
             <LogOut size={20} className="flex-shrink-0" />
             {!isCollapsed && <span className="font-medium">Sair</span>}
             {isCollapsed && (
-              <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
+              <div className="absolute left-full ml-3 px-2.5 py-1.5 bg-brand-text text-white text-xs rounded-lg invisible opacity-0 group-hover:visible group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap pointer-events-none z-50 shadow-lg font-sans">
                 Sair
               </div>
             )}

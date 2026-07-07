@@ -187,3 +187,10 @@
   margin: 0.75rem 0;
 }
 
+/* Hide horizontal scrollbar specifically */
+.no-scrollbar-x::-webkit-scrollbar:horizontal {
+  display: none;
+}
+.no-scrollbar-x {
+  -ms-overflow-style: none;  /* IE and Edge */
+}
