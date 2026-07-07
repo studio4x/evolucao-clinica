@@ -5,7 +5,7 @@ export interface MigrationRequest {
   userId: string;
   previousPlatform: string;
   otherPlatformName: string | null;
-  estimatedPatients: number;
+  patientName: string;
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
   attachmentUrl: string | null;
   attachmentName: string | null;
@@ -61,7 +61,7 @@ export async function fetchMyMigrationRequests(): Promise<MigrationRequest[]> {
 export async function createMigrationRequest(
   previousPlatform: string,
   otherPlatformName: string | null,
-  estimatedPatients: number,
+  patientName: string,
   notes: string | null,
   file?: File | null
 ): Promise<MigrationRequest> {
@@ -96,7 +96,7 @@ export async function createMigrationRequest(
       user_id: user.id,
       previous_platform: previousPlatform,
       other_platform_name: otherPlatformName,
-      estimated_patients: estimatedPatients,
+      patient_name: patientName,
       notes: notes,
       attachment_url: attachmentUrl,
       attachment_name: attachmentName,
@@ -223,7 +223,7 @@ function mapMigrationRequest(row: any): MigrationRequest {
     userId: row.user_id,
     previousPlatform: row.previous_platform,
     otherPlatformName: row.other_platform_name,
-    estimatedPatients: row.estimated_patients,
+    patientName: row.patient_name,
     status: row.status,
     attachmentUrl: row.attachment_url,
     attachmentName: row.attachment_name,

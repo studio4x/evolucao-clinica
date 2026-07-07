@@ -18,7 +18,7 @@ export default function Migration() {
   // Form State
   const [previousPlatform, setPreviousPlatform] = useState('excel_word');
   const [otherPlatformName, setOtherPlatformName] = useState('');
-  const [estimatedPatients, setEstimatedPatients] = useState('');
+  const [patientName, setPatientName] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
 
@@ -60,8 +60,8 @@ export default function Migration() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!estimatedPatients || parseInt(estimatedPatients) <= 0) {
-      alert('Por favor, informe a quantidade de pacientes.');
+    if (!patientName.trim()) {
+      alert('Por favor, informe o nome do paciente.');
       return;
     }
 
@@ -73,7 +73,7 @@ export default function Migration() {
       await createMigrationRequest(
         previousPlatform,
         previousPlatform === 'other_software' ? otherPlatformName : null,
-        parseInt(estimatedPatients),
+        patientName,
         notes,
         file
       );
@@ -83,7 +83,7 @@ export default function Migration() {
       // Reset form
       setPreviousPlatform('excel_word');
       setOtherPlatformName('');
-      setEstimatedPatients('');
+      setPatientName('');
       setNotes('');
       setFile(null);
       
@@ -367,18 +367,17 @@ export default function Migration() {
               </div>
             )}
 
-            {/* Qtd Pacientes */}
+            {/* Nome do Paciente */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
-                Qtd Estimada de Pacientes
+                Nome do Paciente
               </label>
               <input
-                type="number"
+                type="text"
                 required
-                min="1"
-                placeholder="Ex: 45"
-                value={estimatedPatients}
-                onChange={(e) => setEstimatedPatients(e.target.value)}
+                placeholder="Ex: João da Silva"
+                value={patientName}
+                onChange={(e) => setPatientName(e.target.value)}
                 className="w-full p-3 bg-brand-bg/50 border border-brand-border rounded-2xl text-sm focus:outline-none focus:border-brand-primary"
               />
             </div>
@@ -470,7 +469,7 @@ export default function Migration() {
                 <thead>
                   <tr className="bg-brand-bg text-brand-text font-semibold text-xs border-b border-brand-border">
                     <th className="px-6 py-4">Solicitação / Data</th>
-                    <th className="px-6 py-4">Dados</th>
+                    <th className="px-6 py-4">Paciente</th>
                     <th className="px-6 py-4">Arquivo</th>
                     <th className="px-6 py-4">Status</th>
                   </tr>
@@ -488,7 +487,7 @@ export default function Migration() {
                       </td>
                       <td className="px-6 py-5">
                         <div className="text-xs text-brand-text font-semibold">
-                          ~{request.estimatedPatients} paciente{request.estimatedPatients > 1 ? 's' : ''}
+                          {request.patientName}
                         </div>
                         {request.notes && (
                           <div className="text-[10px] text-brand-text-muted max-w-[200px] truncate mt-0.5" title={request.notes}>

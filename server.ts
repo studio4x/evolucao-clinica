@@ -2454,7 +2454,7 @@ app.post("/api/migrations/notify", requireAuth, async (req: any, res) => {
       // Notificar administradores
       await notifyAdmins(
         `👑 Nova Solicitação de Migração`,
-        `O profissional ${creator?.full_name || "Desconhecido"} enviou arquivos para importar cerca de ${request.estimated_patients} pacientes.`,
+        `O profissional ${creator?.full_name || "Desconhecido"} enviou arquivos para importar o prontuário do paciente ${request.patient_name}.`,
         "info"
       );
     }

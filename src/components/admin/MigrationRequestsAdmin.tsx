@@ -240,7 +240,7 @@ export default function MigrationRequestsAdmin() {
                           {getPlatformLabel(req.previousPlatform, req.otherPlatformName)}
                         </div>
                         <div className="text-[10px] text-brand-text-muted mt-0.5">
-                          ~{req.estimatedPatients} pacientes
+                          Paciente: {req.patientName}
                         </div>
                       </td>
                       <td className="px-4 py-4">
@@ -306,8 +306,8 @@ export default function MigrationRequestsAdmin() {
                   </div>
 
                   <div>
-                    <span className="font-bold text-brand-text block">Quantidade Pacientes:</span>
-                    <span>~{selectedRequest.estimatedPatients} paciente(s)</span>
+                    <span className="font-bold text-brand-text block">Paciente:</span>
+                    <span>{selectedRequest.patientName}</span>
                   </div>
 
                   <div>
