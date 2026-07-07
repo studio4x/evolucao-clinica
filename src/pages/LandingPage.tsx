@@ -26,6 +26,22 @@ import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandA
 import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 import { supabase } from '../supabaseClient';
 
+const GooglePayLogo = ({ className = "h-4 w-auto" }: { className?: string }) => (
+  <svg 
+    viewBox="0 0 80 38.1" 
+    className={className} 
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path fill="#5F6368" d="M37.8,19.7V29h-3V6h7.8c1.9,0,3.7,0.7,5.1,2c1.4,1.2,2.1,3,2.1,4.9c0,1.9-0.7,3.6-2.1,4.9c-1.4,1.3-3.1,2-5.1,2L37.8,19.7L37.8,19.7z M37.8,8.8v8h5c1.1,0,2.2-0.4,2.9-1.2c1.6-1.5,1.6-4,0.1-5.5c0,0-0.1-0.1-0.1-0.1c-0.8-0.8-1.8-1.3-2.9-1.2L37.8,8.8L37.8,8.8z"/>
+    <path fill="#5F6368" d="M56.7,12.8c2.2,0,3.9,0.6,5.2,1.8s1.9,2.8,1.9,4.8V29H61v-2.2h-0.1c-1.2,1.8-2.9,2.7-4.9,2.7c-1.7,0-3.2-0.5-4.4-1.5c-1.1-1-1.8-2.4-1.8-3.9c0-1.6,0.6-2.9,1.8-3.9c1.2-1,2.9-1.4,4.9-1.4c1.8,0,3.2,0.3,4.3,1v-0.7c0-1-0.4-2-1.2-2.6c-0.8-0.7-1.8-1.1-2.9-1.1c-1.7,0-3,0.7-3.9,2.1l-2.6-1.6C51.8,13.8,53.9,12.8,56.7,12.8z M52.9,24.2c0,0.8,0.4,1.5,1,1.9c0.7,0.5,1.5,0.8,2.3,0.8c1.2,0,2.4-0.5,3.3-1.4c1-0.9,1.5-2,1.5-3.2c-0.9-0.7-2.2-1.1-3.9-1.1c-1.2,0-2.2,0.3-3,0.9C53.3,22.6,52.9,23.3,52.9,24.2z"/>
+    <path fill="#5F6368" d="M80,13.3l-9.9,22.7h-3l3.7-7.9l-6.5-14.7h3.2l4.7,11.3h0.1l4.6-11.3H80z"/>
+    <path fill="#4285F4" d="M25.9,17.7c0-0.9-0.1-1.8-0.2-2.7H13.2v5.1h7.1c-0.3,1.6-1.2,3.1-2.6,4v3.3H22C24.5,25.1,25.9,21.7,25.9,17.7z"/>
+    <path fill="#34A853" d="M13.2,30.6c3.6,0,6.6-1.2,8.8-3.2l-4.3-3.3c-1.2,0.8-2.7,1.3-4.5,1.3c-3.4,0-6.4-2.3-7.4-5.5H1.4v3.4C3.7,27.8,8.2,30.6,13.2,30.6z"/>
+    <path fill="#FBBC04" d="M5.8,19.9c-0.6-1.6-0.6-3.4,0-5.1v-3.4H1.4c-1.9,3.7-1.9,8.1,0,11.9L5.8,19.9z"/>
+    <path fill="#EA4335" d="M13.2,9.4c1.9,0,3.7,0.7,5.1,2l0,0l3.8-3.8c-2.4-2.2-5.6-3.5-8.8-3.4c-5,0-9.6,2.8-11.8,7.3l4.4,3.4C6.8,11.7,9.8,9.4,13.2,9.4z"/>
+  </svg>
+);
+
 const DEFAULT_PLANS = [
   {
     id: 'monthly',
@@ -645,67 +661,75 @@ export default function LandingPage() {
               const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
               
               return (
-                <div 
-                  key={plan.id}
-                  className={`card bg-white p-8 relative flex flex-col justify-between transition-all duration-300 overflow-visible ${
-                    isYearly 
-                      ? 'border-brand-primary shadow-lg shadow-brand-primary/5 hover:shadow-xl' 
-                      : 'border-brand-border hover:border-brand-primary/20 hover:shadow-xl'
-                  }`}
-                >
-                  {isYearly && plan.discount_text && (
-                    <div className="absolute -top-3.5 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-brand-primary text-white text-[10px] font-bold tracking-widest uppercase rounded-full shadow">
-                      {plan.discount_text}
-                    </div>
-                  )}
-
-                  <div>
-                    <div className={`flex justify-between items-center mb-4 ${isYearly ? 'mt-1' : ''}`}>
-                      <h3 className="text-2xl font-bold font-display text-brand-primary">{plan.name}</h3>
-                      <span className={`px-3 py-1 text-xs font-bold rounded-full ${
-                        isYearly 
-                          ? 'bg-brand-primary/10 text-brand-primary' 
-                          : 'bg-brand-bg text-brand-text-muted border border-brand-border'
-                      }`}>
-                        {plan.tag_text || (isYearly ? 'Popular' : 'Mês a Mês')}
-                      </span>
-                    </div>
-                    <p className="text-brand-text-muted text-sm mb-6">
-                      {plan.description || (isYearly ? 'A alternativa perfeita para consolidar sua economia anual.' : 'Flexibilidade para experimentar sem amarras contratuais.')}
-                    </p>
-                    
-                    <div className={`flex items-baseline ${isYearly && plan.equivalent_monthly_price ? 'mb-1' : 'mb-6'}`}>
-                      <span className="text-sm font-bold text-brand-text-muted mr-1">R$</span>
-                      <span className="text-4xl font-extrabold font-display text-brand-primary">{formattedPrice}</span>
-                      <span className="text-sm text-brand-text-muted ml-1">{periodLabel}</span>
-                    </div>
-                    
-                    {isYearly && plan.equivalent_monthly_price && (
-                      <p className="text-xs text-brand-accent-hover font-bold mb-6">
-                        Equivalente a R$ {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.equivalent_monthly_price)} por mês pago anualmente
-                      </p>
-                    )}
-
-                    <ul className="space-y-3 mb-8 text-sm text-brand-text">
-                      {plan.features?.map((feature: string, idx: number) => (
-                        <li key={idx} className={`flex items-center gap-2 ${isYearly && idx === 0 ? 'font-semibold text-brand-primary' : ''}`}>
-                          <Check size={16} className="text-brand-primary flex-shrink-0" />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <Link 
-                    to={`/login?from_plan=${plan.id}`} 
-                    className={`w-full py-4 text-center font-bold text-sm transition-all ${
+                <div key={plan.id} className="flex flex-col items-center gap-3.5 w-full h-full">
+                  <div 
+                    className={`card bg-white p-8 relative flex flex-col justify-between transition-all duration-300 overflow-visible w-full flex-1 ${
                       isYearly 
-                        ? 'btn-primary shadow-md hover:shadow-lg' 
-                        : 'btn-outline shadow-sm hover:border-brand-primary/50'
+                        ? 'border-brand-primary shadow-lg shadow-brand-primary/5 hover:shadow-xl' 
+                        : 'border-brand-border hover:border-brand-primary/20 hover:shadow-xl'
                     }`}
                   >
-                    {isYearly ? 'Assinar Plano Anual' : 'Experimentar Plano Mensal'}
-                  </Link>
+                    {isYearly && plan.discount_text && (
+                      <div className="absolute -top-3.5 left-1/2 transform -translate-x-1/2 px-4 py-1 bg-brand-primary text-white text-[10px] font-bold tracking-widest uppercase rounded-full shadow">
+                        {plan.discount_text}
+                      </div>
+                    )}
+
+                    <div>
+                      <div className={`flex justify-between items-center mb-4 ${isYearly ? 'mt-1' : ''}`}>
+                        <h3 className="text-2xl font-bold font-display text-brand-primary">{plan.name}</h3>
+                        <span className={`px-3 py-1 text-xs font-bold rounded-full ${
+                          isYearly 
+                            ? 'bg-brand-primary/10 text-brand-primary' 
+                            : 'bg-brand-bg text-brand-text-muted border border-brand-border'
+                        }`}>
+                          {plan.tag_text || (isYearly ? 'Popular' : 'Mês a Mês')}
+                        </span>
+                      </div>
+                      <p className="text-brand-text-muted text-sm mb-6">
+                        {plan.description || (isYearly ? 'A alternativa perfeita para consolidar sua economia anual.' : 'Flexibilidade para experimentar sem amarras contratuais.')}
+                      </p>
+                      
+                      <div className={`flex items-baseline ${isYearly && plan.equivalent_monthly_price ? 'mb-1' : 'mb-6'}`}>
+                        <span className="text-sm font-bold text-brand-text-muted mr-1">R$</span>
+                        <span className="text-4xl font-extrabold font-display text-brand-primary">{formattedPrice}</span>
+                        <span className="text-sm text-brand-text-muted ml-1">{periodLabel}</span>
+                      </div>
+                      
+                      {isYearly && plan.equivalent_monthly_price && (
+                        <p className="text-xs text-brand-accent-hover font-bold mb-6">
+                          Equivalente a R$ {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.equivalent_monthly_price)} por mês pago anualmente
+                        </p>
+                      )}
+
+                      <ul className="space-y-3 mb-8 text-sm text-brand-text">
+                        {plan.features?.map((feature: string, idx: number) => (
+                          <li key={idx} className={`flex items-center gap-2 ${isYearly && idx === 0 ? 'font-semibold text-brand-primary' : ''}`}>
+                            <Check size={16} className="text-brand-primary flex-shrink-0" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <Link 
+                      to={`/login?from_plan=${plan.id}`} 
+                      className={`w-full py-4 text-center font-bold text-sm transition-all ${
+                        isYearly 
+                          ? 'btn-primary shadow-md hover:shadow-lg' 
+                          : 'btn-outline shadow-sm hover:border-brand-primary/50'
+                      }`}
+                    >
+                      {isYearly ? 'Assinar Plano Anual' : 'Experimentar Plano Mensal'}
+                    </Link>
+                  </div>
+                  
+                  {/* Google Pay Promotional Label */}
+                  <div className="flex items-center justify-center gap-2 text-xs text-brand-text-muted select-none mt-1">
+                    <ShieldCheck size={14} className="text-brand-primary flex-shrink-0" />
+                    <span>Pague com segurança usando</span>
+                    <GooglePayLogo className="h-4 w-auto" />
+                  </div>
                 </div>
               );
             })}
