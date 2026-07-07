@@ -25,8 +25,7 @@ const DEFAULT_PLANS = [
       'Geração de Relatórios & PDI por IA',
       'Pesquisa Inteligente por IA (Pergunte ao Prontuário)',
       'Assinatura Digital de Documentos com Proteção Legal',
-      'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
-      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
+      'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)'
     ]
   },
   {
@@ -37,7 +36,8 @@ const DEFAULT_PLANS = [
       'Tudo do plano mensal',
       'Desconto de ~17% sobre o valor mensal',
       'Suporte prioritário via ticket',
-      'Garantia de novos recursos exclusivos em primeira mão'
+      'Garantia de novos recursos exclusivos em primeira mão',
+      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
     ]
   }
 ];

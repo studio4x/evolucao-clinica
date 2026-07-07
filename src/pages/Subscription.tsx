@@ -25,8 +25,7 @@ const DEFAULT_PLANS = [
       'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
       'Filtro de Período na Impressão do Prontuário',
       'Lembrete e envio de WhatsApp para aniversariantes',
-      'Impressão de prontuários do Google Docs',
-      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
+      'Impressão de prontuários do Google Docs'
     ],
     button_text_simulate: 'Assinar Mensal (Simulado)',
     tag_text: 'Recorrente',
@@ -42,7 +41,8 @@ const DEFAULT_PLANS = [
       'Tudo do plano mensal',
       'Desconto de ~17% sobre o valor mensal',
       'Suporte prioritário via ticket',
-      'Garantia de novos recursos exclusivos em primeira mão'
+      'Garantia de novos recursos exclusivos em primeira mão',
+      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
     ],
     button_text_simulate: 'Assinar Anual (Simulado)',
     tag_text: 'Popular',

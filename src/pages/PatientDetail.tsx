@@ -440,7 +440,9 @@ export default function PatientDetail() {
             const doc = generateEvolutionPDF({ ...evoObj, status: 'signed' }, patient, professional, logoBase64);
             const pdfBlob = doc.output('blob');
             const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-            const cleanDate = new Date(evoObj.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+            const cleanDate = evoObj.session_date
+              ? evoObj.session_date.split('-').reverse().join('-')
+              : new Date(evoObj.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
             const fileName = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`;
             
             await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);
@@ -655,7 +657,9 @@ export default function PatientDetail() {
 
     const originalTitle = document.title;
     const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-    const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+    const cleanDate = evo.session_date
+      ? evo.session_date.split('-').reverse().join('-')
+      : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
     document.title = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}`;
 
     setPrintMode('prontuario');
@@ -2297,7 +2301,9 @@ export default function PatientDetail() {
                               }
                               const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
                               const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-                              const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                              const cleanDate = evo.session_date
+                                ? evo.session_date.split('-').reverse().join('-')
+                                : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
                               doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
                             }}
                             className="btn-outline h-8 px-2 flex items-center gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 cursor-pointer text-xs font-semibold rounded-xl"
@@ -2356,7 +2362,9 @@ export default function PatientDetail() {
                                     const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
                                     const pdfBlob = doc.output('blob');
                                     const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-                                    const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                                    const cleanDate = evo.session_date
+                                      ? evo.session_date.split('-').reverse().join('-')
+                                      : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
                                     const fileName = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`;
                                     try {
                                       await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);

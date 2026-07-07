@@ -344,7 +344,9 @@ export default function History() {
     setPrintPatientName(patient?.full_name || 'Paciente');
     const originalTitle = document.title;
     const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-    const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+    const cleanDate = evo.session_date
+      ? evo.session_date.split('-').reverse().join('-')
+      : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
     document.title = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}`;
 
     setPrintMode('prontuario');
@@ -752,7 +754,9 @@ export default function History() {
                               }
                               const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
                               const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-                              const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                              const cleanDate = evo.session_date
+                                ? evo.session_date.split('-').reverse().join('-')
+                                : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
                               doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
                             }}
                             className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer font-semibold rounded-xl"

@@ -1,4 +1,4 @@
--- Adiciona a funcionalidade de migração assistida por IA na listagem de funcionalidades do Plano Mensal
+-- Remove a funcionalidade de migração do Plano Mensal (se houver) e adiciona ao Plano Anual
 UPDATE public.plans 
 SET features = ARRAY[
   'Pacientes ilimitados',
@@ -11,7 +11,16 @@ SET features = ARRAY[
   'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
   'Filtro de Período na Impressão do Prontuário',
   'Lembrete e envio de WhatsApp para aniversariantes',
-  'Impressão de prontuários do Google Docs',
-  'Migração assistida de prontuários por IA (PDF/Word/Excel)'
+  'Impressão de prontuários do Google Docs'
 ]
 WHERE id = 'monthly';
+
+UPDATE public.plans 
+SET features = ARRAY[
+  'Tudo do plano mensal',
+  'Desconto de ~17% sobre o valor mensal',
+  'Suporte prioritário via ticket',
+  'Garantia de novos recursos exclusivos em primeira mão',
+  'Migração assistida de prontuários por IA (PDF/Word/Excel)'
+]
+WHERE id = 'yearly';
