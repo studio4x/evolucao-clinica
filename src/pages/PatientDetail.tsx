@@ -3,11 +3,11 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download, CloudOff } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
-import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent } from '../services/googleDocs';
+import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent, uploadPdfToGoogleDrive } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import DOMPurify from 'dompurify';
@@ -78,6 +78,7 @@ export default function PatientDetail() {
   const [evolutions, setEvolutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [syncingEvolutionId, setSyncingEvolutionId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -359,6 +360,49 @@ export default function PatientDetail() {
     }
   };
 
+  const handleSaveToGoogleDocs = async (evo: any) => {
+    if (!hasClinicalAccess || !googleAccessToken) {
+      alert("Google Drive não autenticado. Por favor, conecte sua conta Google no painel.");
+      return;
+    }
+    if (!patient?.google_doc_id) {
+      alert("Este paciente não possui um documento de prontuário associado no Google Docs.");
+      return;
+    }
+
+    setSyncingEvolutionId(evo.id);
+    try {
+      await appendToGoogleDoc(
+        googleAccessToken,
+        patient.google_doc_id,
+        evo.session_date,
+        evo.transcription_text,
+        {
+          sessionTime: evo.session_time || undefined,
+          evolutionId: evo.id
+        }
+      );
+
+      const { error } = await supabase
+        .from('evolutions')
+        .update({
+          google_doc_append_status: 'completed',
+          google_doc_append_at: new Date().toISOString()
+        })
+        .eq('id', evo.id);
+
+      if (error) throw error;
+
+      alert("Evolução salva no prontuário do Google Docs com sucesso!");
+      await fetchData();
+    } catch (err: any) {
+      console.error("Erro ao salvar no Google Docs:", err);
+      alert("Falha ao salvar no Google Docs: " + (err.message || err));
+    } finally {
+      setSyncingEvolutionId(null);
+    }
+  };
+
   const handleSignEvolutionDirectly = async (evoId: string) => {
     if (!checkPlanActiveAndAlert("Assinatura Digital")) {
       return;
@@ -368,6 +412,7 @@ export default function PatientDetail() {
     }
     setSigningEvolutionId(evoId);
     try {
+      // Assina no banco
       const { error } = await supabase
         .from('evolutions')
         .update({
@@ -376,6 +421,31 @@ export default function PatientDetail() {
         .eq('id', evoId);
 
       if (error) throw error;
+
+      // Oferecer salvar o PDF na pasta do Google Drive do paciente
+      if (hasClinicalAccess && googleAccessToken && patient?.target_folder_id) {
+        const savePdf = window.confirm("Deseja salvar automaticamente o PDF desta evolução assinada na pasta do prontuário no Google Drive?");
+        if (savePdf) {
+          let logoBase64 = null;
+          if (siteConfig.logo_light_url) {
+            try {
+              logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+            } catch (err) {
+              console.error("Error preloading logo:", err);
+            }
+          }
+          const evoObj = evolutions.find(e => e.id === evoId);
+          if (evoObj) {
+            const doc = generateEvolutionPDF({ ...evoObj, status: 'signed' }, patient, professional, logoBase64);
+            const pdfBlob = doc.output('blob');
+            const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+            const cleanDate = new Date(evoObj.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+            const fileName = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`;
+            
+            await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);
+          }
+        }
+      }
 
       void sendNotification({
         title: "🔒 Evolução Assinada Digitalmente",
@@ -2181,6 +2251,20 @@ export default function PatientDetail() {
                             Rascunho
                           </span>
                         )}
+
+                        {patient?.google_doc_id && (
+                          evo.google_doc_append_status === 'completed' ? (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <FileText size={10} />
+                              <span>Google Docs</span>
+                            </span>
+                          ) : (
+                            <span className="text-[10px] bg-stone-100 text-stone-500 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1" title="Não salvo no Google Docs">
+                              <CloudOff size={10} />
+                              <span>Apenas Local</span>
+                            </span>
+                          )
+                        )}
                       </div>
                       
                       <div className="flex items-center gap-2">
@@ -2309,6 +2393,22 @@ export default function PatientDetail() {
                               </div>
                             ) : (
                               <div className="flex items-center justify-end space-x-2 pt-2 border-t border-brand-border/40">
+                                {patient?.google_doc_id && evo.google_doc_append_status !== 'completed' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveToGoogleDocs(evo)}
+                                    disabled={syncingEvolutionId === evo.id}
+                                    className="btn-outline py-1 px-2.5 text-[11px] flex items-center space-x-1 border-blue-200 text-blue-600 hover:bg-blue-50 cursor-pointer"
+                                    title="Salvar esta evolução no prontuário do Google Docs"
+                                  >
+                                    {syncingEvolutionId === evo.id ? (
+                                      <Loader2 size={11} className="animate-spin" />
+                                    ) : (
+                                      <FileText size={11} />
+                                    )}
+                                    <span>Salvar no Google Docs</span>
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => {
