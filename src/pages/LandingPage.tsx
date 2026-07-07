@@ -46,7 +46,7 @@ const DEFAULT_PLANS = [
   {
     id: 'monthly',
     name: 'Plano Mensal',
-    price: 49.90,
+    price: 39.00,
     equivalent_monthly_price: null,
     discount_text: null,
     tag_text: 'Mês a Mês',
@@ -60,15 +60,18 @@ const DEFAULT_PLANS = [
       'Pesquisa Inteligente por IA (Pergunte ao Prontuário)',
       'Assinatura Digital de Documentos com Proteção Legal',
       'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
-      'Filtro de Período na Impressão do Prontuário'
+      'Filtro de Período na Impressão do Prontuário',
+      'Lembrete e envio de WhatsApp para aniversariantes',
+      'Impressão de prontuários do Google Docs',
+      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
     ]
   },
   {
     id: 'yearly',
     name: 'Plano Anual',
-    price: 499.00,
-    equivalent_monthly_price: 41.58,
-    discount_text: 'Melhor Custo-Benefício (17% OFF)',
+    price: 199.00,
+    equivalent_monthly_price: 16.58,
+    discount_text: '42% OFF',
     tag_text: 'Popular',
     description: 'A alternativa perfeita para consolidar sua economia anual.',
     features: [

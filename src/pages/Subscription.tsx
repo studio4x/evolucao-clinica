@@ -12,7 +12,7 @@ const DEFAULT_PLANS = [
     id: 'monthly',
     name: 'Plano Mensal',
     description: 'Flexibilidade e controle mês a mês',
-    price: 49.90,
+    price: 39.00,
     equivalent_monthly_price: null,
     features: [
       'Pacientes ilimitados',
@@ -25,7 +25,8 @@ const DEFAULT_PLANS = [
       'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
       'Filtro de Período na Impressão do Prontuário',
       'Lembrete e envio de WhatsApp para aniversariantes',
-      'Impressão de prontuários do Google Docs'
+      'Impressão de prontuários do Google Docs',
+      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
     ],
     button_text_simulate: 'Assinar Mensal (Simulado)',
     tag_text: 'Recorrente',
@@ -35,17 +36,17 @@ const DEFAULT_PLANS = [
     id: 'yearly',
     name: 'Plano Anual',
     description: 'Melhor custo-benefício anualizado',
-    price: 499.00,
-    equivalent_monthly_price: 41.58,
+    price: 199.00,
+    equivalent_monthly_price: 16.58,
     features: [
       'Tudo do plano mensal',
       'Desconto de ~17% sobre o valor mensal',
-      'Suporte prioritário via e-mail e WhatsApp',
-      'Garantia de novos recursos em primeira mão'
+      'Suporte prioritário via ticket',
+      'Garantia de novos recursos exclusivos em primeira mão'
     ],
     button_text_simulate: 'Assinar Anual (Simulado)',
     tag_text: 'Popular',
-    discount_text: '17% OFF'
+    discount_text: '42% OFF'
   }
 ];
 
