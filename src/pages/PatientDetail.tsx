@@ -1653,6 +1653,18 @@ export default function PatientDetail() {
     });
   };
 
+  const formatEvolutionDate = (evo: any) => {
+    if (evo.session_date) {
+      const parts = evo.session_date.split('-');
+      const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : evo.session_date;
+      if (evo.session_time) {
+        return `${formattedDate}, ${evo.session_time.substring(0, 5)}`;
+      }
+      return formattedDate;
+    }
+    return formatDateTime(evo.created_at);
+  };
+
   const lastReportObj = reports.find(r => r.id === lastGeneratedReportId);
   const isLastReportSigned = lastReportObj?.status === 'signed';
 
@@ -2156,7 +2168,7 @@ export default function PatientDetail() {
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="flex items-center space-x-2">
                         <Clock size={16} className="text-brand-text-muted" />
-                        <span className="font-medium text-brand-text text-sm">{formatDateTime(evo.created_at)}</span>
+                        <span className="font-medium text-brand-text text-sm">{formatEvolutionDate(evo)}</span>
                         {evo.status === 'signed' ? (
                           <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                             <Shield size={10} />

@@ -586,6 +586,18 @@ export default function History() {
     });
   };
 
+  const formatEvolutionDate = (evo: any) => {
+    if (evo.session_date) {
+      const parts = evo.session_date.split('-');
+      const formattedDate = parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : evo.session_date;
+      if (evo.session_time) {
+        return `${formattedDate}, ${evo.session_time.substring(0, 5)}`;
+      }
+      return formattedDate;
+    }
+    return formatDateTime(evo.created_at);
+  };
+
   if (loading) return <div className="p-8 text-center">Carregando histórico...</div>;
 
   return (
@@ -645,7 +657,7 @@ export default function History() {
                     <div>
                       <div className="flex items-center space-x-2 mb-1">
                         <Clock size={16} className="text-brand-text-muted" />
-                        <span className="font-medium text-brand-text text-sm">{formatDateTime(evo.created_at)}</span>
+                        <span className="font-medium text-brand-text text-sm">{formatEvolutionDate(evo)}</span>
                         {evo.status === 'signed' ? (
                           <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
                             <Shield size={10} />
