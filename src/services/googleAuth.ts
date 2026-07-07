@@ -108,6 +108,10 @@ export const requestGoogleOAuth = async ({
   const isExpandingScopes = scopes.some((scope) => !currentGrantedScopes.includes(scope));
   const resolvedPrompt = prompt ?? (!isLoginOnlyRequest && isExpandingScopes ? 'consent' : undefined);
 
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('oauth_redirect_path', window.location.pathname + window.location.search);
+  }
+
   const queryParams = {
     include_granted_scopes: 'true',
     access_type: 'offline',

@@ -152,6 +152,12 @@ function RootRoute() {
       return <Navigate to={getOnboardingDestination(user.id)} replace />;
     }
 
+    const oauthRedirectPath = localStorage.getItem('oauth_redirect_path');
+    if (oauthRedirectPath) {
+      localStorage.removeItem('oauth_redirect_path');
+      return <Navigate to={oauthRedirectPath} replace />;
+    }
+
     return <Navigate to="/painel/dashboard" replace />;
   }
 
