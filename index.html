@@ -183,6 +183,125 @@
           return null;
         };
 
+        const trackingStorageKey = 'evolucao-clinica:tracking-config';
+
+        const fetchTrackingSettingsFromSupabase = function () {
+          if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('%VITE_') || supabaseAnonKey.includes('%VITE_')) {
+            return null;
+          }
+
+          const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/settings?id=eq.tracking_settings&select=api_key`;
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', endpoint, false);
+          xhr.setRequestHeader('apikey', supabaseAnonKey);
+          xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
+          xhr.setRequestHeader('Accept', 'application/vnd.pgrst.object+json');
+          xhr.send(null);
+
+          if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+            const parsed = JSON.parse(xhr.responseText);
+            return parsed && parsed.api_key ? JSON.parse(parsed.api_key) : null;
+          }
+
+          return null;
+        };
+
+        const injectTracking = function (tracking) {
+          if (!tracking) return;
+
+          const injectHtmlContent = function (htmlString, target, locationTag) {
+            if (!htmlString) return;
+            const temp = document.createElement('div');
+            temp.innerHTML = htmlString;
+            Array.from(temp.childNodes).forEach(function (node) {
+              if (node.tagName === 'SCRIPT') {
+                const script = document.createElement('script');
+                script.setAttribute('data-tracking-injected', locationTag || 'true');
+                if (node.src) {
+                  script.src = node.src;
+                  script.async = node.async;
+                  script.defer = node.defer;
+                } else {
+                  script.textContent = node.textContent;
+                }
+                target.appendChild(script);
+              } else {
+                if (node.nodeType === 1) { // ELEMENT_NODE
+                  node.setAttribute('data-tracking-injected', locationTag || 'true');
+                }
+                target.appendChild(node.cloneNode(true));
+              }
+            });
+          };
+
+          // 1. Google Tag Manager
+          if (tracking.gtm_id) {
+            const gtmId = tracking.gtm_id.trim();
+            const gtmScript = document.createElement('script');
+            gtmScript.setAttribute('data-tracking-injected', 'gtm');
+            gtmScript.textContent = "(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':" +
+              "new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0]," +
+              "j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=" +
+              "'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);" +
+              "})(window,document,'script','dataLayer','" + gtmId + "');";
+            document.head.appendChild(gtmScript);
+
+            const gtmNoscript = document.createElement('noscript');
+            gtmNoscript.setAttribute('data-tracking-injected', 'gtm');
+            const gtmIframe = document.createElement('iframe');
+            gtmIframe.src = "https://www.googletagmanager.com/ns.html?id=" + gtmId;
+            gtmIframe.height = "0";
+            gtmIframe.width = "0";
+            gtmIframe.style.display = "none";
+            gtmIframe.style.visibility = "hidden";
+            gtmNoscript.appendChild(gtmIframe);
+            document.body.insertBefore(gtmNoscript, document.body.firstChild);
+          }
+
+          // 2. Facebook Pixel
+          if (tracking.fb_pixel_id) {
+            const pixelId = tracking.fb_pixel_id.trim();
+            const pixelScript = document.createElement('script');
+            pixelScript.setAttribute('data-tracking-injected', 'fb-pixel');
+            pixelScript.textContent = "!function(f,b,e,v,n,t,s)" +
+              "{if(f.fbq)return;n=f.fbq=function(){n.callMethod?" +
+              "n.callMethod.apply(n,arguments):n.queue.push(arguments)};" +
+              "if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';" +
+              "n.queue=[];t=b.createElement(e);t.async=!0;" +
+              "t.src=v;s=b.getElementsByTagName(e)[0];" +
+              "s.parentNode.insertBefore(t,s)}(window, document,'script'," +
+              "'https://connect.facebook.net/en_US/fbevents.js');" +
+              "fbq('init', '" + pixelId + "');" +
+              "fbq('track', 'PageView');";
+            document.head.appendChild(pixelScript);
+
+            const pixelNoscript = document.createElement('noscript');
+            pixelNoscript.setAttribute('data-tracking-injected', 'fb-pixel');
+            const pixelImg = document.createElement('img');
+            pixelImg.height = "1";
+            pixelImg.width = "1";
+            pixelImg.style.display = "none";
+            pixelImg.src = "https://www.facebook.com/tr?id=" + pixelId + "&ev=PageView&noscript=1";
+            pixelNoscript.appendChild(pixelImg);
+            document.body.insertBefore(pixelNoscript, document.body.firstChild);
+          }
+
+          // 3. Custom Head scripts
+          if (tracking.head_scripts) {
+            injectHtmlContent(tracking.head_scripts, document.head, 'head');
+          }
+
+          // 4. Custom Body scripts
+          if (tracking.body_scripts) {
+            injectHtmlContent(tracking.body_scripts, document.body, 'body');
+          }
+
+          // 5. Custom Footer scripts
+          if (tracking.footer_scripts) {
+            injectHtmlContent(tracking.footer_scripts, document.body, 'footer');
+          }
+        };
+
         const hydrate = function (config) {
           if (!config || !config.colors) return false;
           window.__INITIAL_SITE_CONFIG__ = config;
@@ -200,6 +319,15 @@
           const publicConfig = fetchBrandSettingsFromSupabase();
           if (publicConfig) {
             hydrate(publicConfig);
+            try {
+              const trackingConfig = fetchTrackingSettingsFromSupabase();
+              if (trackingConfig) {
+                injectTracking(trackingConfig);
+                localStorage.setItem(trackingStorageKey, JSON.stringify(trackingConfig));
+              }
+            } catch (trackError) {
+              console.error('Failed to load tracking settings:', trackError);
+            }
             return;
           }
 
@@ -216,6 +344,10 @@
           const stored = localStorage.getItem(storageKey);
           if (stored) {
             hydrate(JSON.parse(stored));
+          }
+          const storedTracking = localStorage.getItem(trackingStorageKey);
+          if (storedTracking) {
+            injectTracking(JSON.parse(storedTracking));
           }
         } catch (error) {
           // Sem bootstrap disponível, o app segue com o tema padrão compilado.

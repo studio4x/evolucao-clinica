@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -143,6 +143,7 @@ export default function AdminPanel() {
     if (path.endsWith('/support')) return 'support';
     if (path.endsWith('/profile')) return 'profile';
     if (path.endsWith('/brand')) return 'brand';
+    if (path.endsWith('/tracking')) return 'tracking';
     if (path.endsWith('/faq')) return 'faq';
     return 'professionals'; // default
   };
@@ -162,11 +163,12 @@ export default function AdminPanel() {
     { key: 'email_history', label: 'Histórico de E-mails', icon: Clock },
     { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
     { key: 'brand', label: 'Identidade Visual', icon: Globe },
+    { key: 'tracking', label: 'Rastreamento', icon: Code },
     { key: 'faq', label: 'Gerenciar FAQ', icon: HelpCircle },
     { key: 'profile', label: 'Meu Perfil', icon: User }
   ] as const;
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'faq') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate('/admin/gemini-config');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -180,6 +182,7 @@ export default function AdminPanel() {
     else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
     else if (tab === 'support') navigate('/admin/support');
     else if (tab === 'brand') navigate('/admin/brand');
+    else if (tab === 'tracking') navigate('/admin/tracking');
     else if (tab === 'faq') navigate('/admin/faq');
   };
 
@@ -229,6 +232,93 @@ export default function AdminPanel() {
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
   const [brandSaveSuccess, setBrandSaveSuccess] = useState(false);
+  // Estados de Rastreamento (Google Tag Manager, Facebook Pixel, Head, Body, Footer)
+  const [gtmId, setGtmId] = useState('');
+  const [fbPixelId, setFbPixelId] = useState('');
+  const [headScripts, setHeadScripts] = useState('');
+  const [bodyScripts, setBodyScripts] = useState('');
+  const [footerScripts, setFooterScripts] = useState('');
+  const [trackingSettingsLoading, setTrackingSettingsLoading] = useState(false);
+  const [savingTracking, setSavingTracking] = useState(false);
+  const [trackingSaveSuccess, setTrackingSaveSuccess] = useState(false);
+  const [trackingSaveError, setTrackingSaveError] = useState<string | null>(null);
+
+  // Efeito para carregar as configurações de rastreamento
+  useEffect(() => {
+    if (user && profileRole === 'admin' && activeTab === 'tracking') {
+      const fetchTrackingSettings = async () => {
+        setTrackingSettingsLoading(true);
+        setTrackingSaveError(null);
+        try {
+          const { data, error } = await supabase
+            .from('settings')
+            .select('api_key')
+            .eq('id', 'tracking_settings')
+            .single();
+          
+          if (!error && data && data.api_key) {
+            const parsed = JSON.parse(data.api_key);
+            setGtmId(parsed.gtm_id || '');
+            setFbPixelId(parsed.fb_pixel_id || '');
+            setHeadScripts(parsed.head_scripts || '');
+            setBodyScripts(parsed.body_scripts || '');
+            setFooterScripts(parsed.footer_scripts || '');
+          }
+        } catch (err: any) {
+          console.error('Error fetching tracking settings:', err);
+          setTrackingSaveError('Falha ao carregar as configurações de rastreamento.');
+        } finally {
+          setTrackingSettingsLoading(false);
+        }
+      };
+      
+      void fetchTrackingSettings();
+    }
+  }, [user, profileRole, activeTab]);
+
+  const handleSaveTrackingSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || profileRole !== 'admin') return;
+
+    setSavingTracking(true);
+    setTrackingSaveSuccess(false);
+    setTrackingSaveError(null);
+
+    try {
+      const payload = {
+        gtm_id: gtmId,
+        fb_pixel_id: fbPixelId,
+        head_scripts: headScripts,
+        body_scripts: bodyScripts,
+        footer_scripts: footerScripts
+      };
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'tracking_settings',
+          api_key: JSON.stringify(payload),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
+        });
+
+      if (error) throw error;
+      
+      setTrackingSaveSuccess(true);
+      
+      // Update local storage so scripts can be loaded immediately or updated
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('evolucao-clinica:tracking-config', JSON.stringify(payload));
+      }
+
+      setTimeout(() => setTrackingSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error saving tracking settings:', err);
+      setTrackingSaveError(err.message || 'Erro desconhecido ao salvar as configurações.');
+    } finally {
+      setSavingTracking(false);
+    }
+  };
 
   const [uploadingLight, setUploadingLight] = useState(false);
   const [uploadingDark, setUploadingDark] = useState(false);
@@ -4978,6 +5068,146 @@ export default function AdminPanel() {
                     </div>
                   </div>
                   <AdminFaqCrud />
+                </div>
+              </div>
+            ) : activeTab === 'tracking' ? (
+              <div className="space-y-6 max-w-4xl">
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Code className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Códigos de Rastreamento & Scripts
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Configure o Google Tag Manager, Facebook Pixel e injete códigos customizados no cabeçalho, corpo e rodapé.
+                      </p>
+                    </div>
+                  </div>
+
+                  {trackingSettingsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+                      <p className="text-sm text-brand-text-muted">Carregando configurações...</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveTrackingSettings} className="space-y-6">
+                      {trackingSaveError && (
+                        <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          <span>{trackingSaveError}</span>
+                        </div>
+                      )}
+
+                      {trackingSaveSuccess && (
+                        <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-lg text-sm flex items-center gap-2 animate-fadeIn">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          <span>Configurações salvas com sucesso!</span>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
+                            Google Tag Manager ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="GTM-XXXXXXX"
+                            value={gtmId}
+                            onChange={(e) => setGtmId(e.target.value)}
+                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono"
+                          />
+                          <p className="text-[11px] text-brand-text-muted">ID do container do seu GTM. Ex: GTM-ABC1234.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
+                            Facebook Pixel ID
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 123456789012345"
+                            value={fbPixelId}
+                            onChange={(e) => setFbPixelId(e.target.value)}
+                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono"
+                          />
+                          <p className="text-[11px] text-brand-text-muted">Apenas o ID numérico do seu Pixel do Facebook.</p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-5 pt-5 border-t border-brand-border">
+                        <div>
+                          <h3 className="text-sm font-semibold text-brand-primary flex items-center gap-2">
+                            <Sparkles className="w-4 h-4" />
+                            Scripts Customizados Avançados
+                          </h3>
+                          <p className="text-xs text-brand-text-muted mt-1">Use estes campos para injetar scripts gerais, tags de verificação ou qualquer outro script necessário.</p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
+                            Código no Head (fim do &lt;head&gt;)
+                          </label>
+                          <textarea
+                            rows={4}
+                            placeholder="<!-- Ex: Meta tags de verificação, scripts de terceiros, CSS customizado -->"
+                            value={headScripts}
+                            onChange={(e) => setHeadScripts(e.target.value)}
+                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono leading-relaxed"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
+                            Código no Body (início do &lt;body&gt;)
+                          </label>
+                          <textarea
+                            rows={4}
+                            placeholder="<!-- Ex: Scripts noscript, contêineres de rastreamento alternativos -->"
+                            value={bodyScripts}
+                            onChange={(e) => setBodyScripts(e.target.value)}
+                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono leading-relaxed"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
+                            Código no Footer (fim do &lt;body&gt;)
+                          </label>
+                          <textarea
+                            rows={4}
+                            placeholder="<!-- Ex: Widgets de chat, botões de contato, scripts de fechamento -->"
+                            value={footerScripts}
+                            onChange={(e) => setFooterScripts(e.target.value)}
+                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono leading-relaxed"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-4 border-t border-brand-border">
+                        <button
+                          type="submit"
+                          disabled={savingTracking}
+                          className="px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover text-white rounded-lg text-sm font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors duration-200"
+                        >
+                          {savingTracking ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <span>Salvando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="h-4 w-4" />
+                              <span>Salvar Configurações</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               </div>
             ) : activeTab === 'brand' ? (
