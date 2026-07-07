@@ -18,6 +18,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resettingOnboarding, setResettingOnboarding] = useState(false);
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean | null>(null);
   const [deleteStep, setDeleteStep] = useState<1 | 2 | null>(null);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [deletingAccount, setDeletingAccount] = useState(false);
@@ -36,7 +37,7 @@ export default function Profile() {
         // Busca os dados da tabela professionals
         const { data, error } = await supabase
           .from('professionals')
-          .select('full_name, professional_title, professional_register')
+          .select('full_name, professional_title, professional_register, onboarding_completed')
           .eq('id', user.id)
           .single();
 
@@ -50,6 +51,7 @@ export default function Profile() {
           }
           setProfessionalTitle(data.professional_title || 'Terapeuta');
           setProfessionalRegister(data.professional_register || '');
+          setOnboardingCompleted(data.onboarding_completed === true);
         } else {
           // Fallback para metadados do auth
           const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
@@ -428,7 +430,20 @@ export default function Profile() {
                   <Sparkles size={18} />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-semibold text-brand-primary">Reiniciar onboarding</h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-brand-primary">Reiniciar onboarding</h4>
+                    {onboardingCompleted !== null && (
+                      onboardingCompleted ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200 select-none">
+                          Concluído
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200 select-none">
+                          Pendente
+                        </span>
+                      )
+                    )}
+                  </div>
                   <p className="text-xs text-brand-text-muted leading-relaxed max-w-xl">
                     Use esta opção se quiser rever o fluxo inicial da plataforma, refazer a criação do primeiro paciente,
                     gerar uma evolução e repetir a etapa de sincronização da agenda.
