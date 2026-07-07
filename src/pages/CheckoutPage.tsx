@@ -68,11 +68,36 @@ export default function CheckoutPage() {
 
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [showTrialModal, setShowTrialModal] = useState(false);
-  const [paymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
+  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
 
   const [plans, setPlans] = useState<any[]>([]);
 
   useEffect(() => {
+    const fetchPaymentSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('api_key')
+          .eq('id', 'payment_settings')
+          .maybeSingle();
+
+        if (error) throw error;
+        if (data && data.api_key) {
+          const parsed = JSON.parse(data.api_key);
+          setPaymentSettings({
+            environment: parsed.environment || 'TEST',
+            googleMerchantId: parsed.googleMerchantId || '',
+            stripeProdPublishableKey: parsed.stripeProdPublishableKey || '',
+            stripeProdSecretKey: parsed.stripeProdSecretKey || '',
+            stripeSandboxPublishableKey: parsed.stripeSandboxPublishableKey || '',
+            stripeSandboxSecretKey: parsed.stripeSandboxSecretKey || ''
+          });
+        }
+      } catch (e) {
+        console.error("Error fetching payment settings in checkout:", e);
+      }
+    };
+
     const fetchPlans = async () => {
       try {
         const { data, error } = await supabase
@@ -87,6 +112,8 @@ export default function CheckoutPage() {
         console.error("Error fetching plans in checkout:", e);
       }
     };
+
+    fetchPaymentSettings();
     fetchPlans();
   }, []);
 
