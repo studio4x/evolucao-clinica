@@ -769,6 +769,7 @@ export default function Subscription() {
                   ) : (
                     <div className="space-y-3">
                       <GooglePayButton
+                        key={`${paymentSettings.environment}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
                         environment={paymentSettings.environment}
                         buttonType="subscribe"
                         buttonColor="black"

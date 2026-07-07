@@ -75,22 +75,19 @@ export default function CheckoutPage() {
   useEffect(() => {
     const fetchPaymentSettings = async () => {
       try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('api_key')
-          .eq('id', 'payment_settings')
-          .maybeSingle();
+        const response = await fetch('/api/payment-settings', {
+          cache: 'no-store'
+        });
 
-        if (error) throw error;
-        if (data && data.api_key) {
-          const parsed = JSON.parse(data.api_key);
+        if (!response.ok) {
+          throw new Error('Falha ao carregar configurações públicas de pagamento.');
+        }
+
+        const parsed = await response.json();
+        if (parsed) {
           setPaymentSettings({
-            environment: parsed.environment || 'TEST',
-            googleMerchantId: parsed.googleMerchantId || '',
-            stripeProdPublishableKey: parsed.stripeProdPublishableKey || '',
-            stripeProdSecretKey: parsed.stripeProdSecretKey || '',
-            stripeSandboxPublishableKey: parsed.stripeSandboxPublishableKey || '',
-            stripeSandboxSecretKey: parsed.stripeSandboxSecretKey || ''
+            ...DEFAULT_PAYMENT_SETTINGS,
+            ...parsed
           });
         }
       } catch (e) {
@@ -402,6 +399,7 @@ export default function CheckoutPage() {
                 </div>
 
                 <GooglePayButton
+                  key={`${paymentSettings.environment}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
                   environment={paymentSettings.environment}
                   buttonType="subscribe"
                   buttonColor="black"
