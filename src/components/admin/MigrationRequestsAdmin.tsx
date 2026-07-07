@@ -112,7 +112,14 @@ export default function MigrationRequestsAdmin() {
     setTranscriptionText('');
     setSessionDate(new Date().toISOString().split('T')[0]);
     setSessionTime('');
-    setDetectedSessions([]);
+    
+    if (req.aiAnalysisResult && Array.isArray(req.aiAnalysisResult)) {
+      setDetectedSessions(req.aiAnalysisResult);
+      setEvolutionSuccess(`Recuperada análise salva com ${req.aiAnalysisResult.length} sessões.`);
+    } else {
+      setDetectedSessions([]);
+    }
+    
     setExpandedSessionIndex(null);
     setActiveTab(req.attachmentName ? 'ai' : 'manual');
     checkPatientStatus(req.userId, req.patientName);
@@ -282,6 +289,21 @@ export default function MigrationRequestsAdmin() {
 
       setDetectedSessions(allSessions);
       setEvolutionSuccess(`Documento analisado com sucesso! Identificadas ${allSessions.length} sessões.`);
+
+      // 3. Salvar o resultado da análise para não perder
+      if (allSessions.length > 0) {
+        try {
+          await fetch('/api/migrations/save-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ requestId: selectedRequest.id, sessions: allSessions })
+          });
+          // Update the local selected request object so it doesn't re-analyze if tab is switched
+          selectedRequest.aiAnalysisResult = allSessions;
+        } catch (saveErr) {
+          console.error('Failed to save analysis result:', saveErr);
+        }
+      }
     } catch (err: any) {
       console.error('Error analyzing document:', err);
       setEvolutionError(err.message || 'Erro ao analisar o documento.');
@@ -297,52 +319,35 @@ export default function MigrationRequestsAdmin() {
       setEvolutionError('');
       setEvolutionSuccess('');
       
-      let currentPatientId = patientId;
+      const sessionResponse = await supabase.auth.getSession();
+      const token = sessionResponse.data.session?.access_token;
+      
+      const response = await fetch('/api/migrations/import-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          requestId: selectedRequest.id,
+          sessionsToImport: [sessionItem],
+          patientName: selectedRequest.patientName,
+          professionalId: selectedRequest.userId,
+          forcePatientId: patientId
+        })
+      });
 
-      // 1. Create patient if not found
-      if (patientStatus === 'not_found' || !currentPatientId) {
-        const { data: newPatient, error: patientError } = await supabase
-          .from('patients')
-          .insert({
-            professional_id: selectedRequest.userId,
-            full_name: selectedRequest.patientName,
-            status: 'active'
-          })
-          .select('id')
-          .single();
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Erro ao importar sessão.');
 
-        if (patientError) throw patientError;
-        currentPatientId = newPatient.id;
-        setPatientId(currentPatientId);
+      if (result.patientId && result.patientId !== patientId) {
+        setPatientId(result.patientId);
         setPatientStatus('found');
       }
 
-      // 2. Insert evolution
-      const { error: evolutionError } = await supabase
-        .from('evolutions')
-        .insert({
-          professional_id: selectedRequest.userId,
-          patient_id: currentPatientId,
-          session_date: sessionItem.date,
-          session_time: sessionItem.time || null,
-          transcription_text: sessionItem.content,
-          transcription_status: 'completed',
-          google_doc_append_status: 'pending',
-          status: 'draft'
-        });
+      if (result.errors && result.errors.length > 0) {
+        throw new Error(result.errors[0].error);
+      }
 
-      if (evolutionError) throw evolutionError;
-
-      // Mark as launched in local state
       setDetectedSessions(prev => prev.map((s, idx) => idx === index ? { ...s, launched: true, launchError: undefined } : s));
-      
-      // Update count
-      const { count } = await supabase
-        .from('evolutions')
-        .select('*', { count: 'exact', head: true })
-        .eq('patient_id', currentPatientId);
-      
-      setExistingEvolutionsCount(count || 0);
+      setExistingEvolutionsCount(prev => prev + 1);
       setEvolutionSuccess(`Sessão do dia ${formatLocalDate(sessionItem.date)} importada com sucesso!`);
     } catch (err: any) {
       console.error('Error launching session:', err);
@@ -356,71 +361,52 @@ export default function MigrationRequestsAdmin() {
       setImportingAll(true);
       setEvolutionError('');
       setEvolutionSuccess('');
+      
+      const unlaunched = detectedSessions.filter(s => !s.launched);
+      if (unlaunched.length === 0) return;
 
-      let currentPatientId = patientId;
+      const sessionResponse = await supabase.auth.getSession();
+      const token = sessionResponse.data.session?.access_token;
+      
+      const response = await fetch('/api/migrations/import-sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({
+          requestId: selectedRequest.id,
+          sessionsToImport: unlaunched,
+          patientName: selectedRequest.patientName,
+          professionalId: selectedRequest.userId,
+          forcePatientId: patientId
+        })
+      });
 
-      // 1. Create patient if not found
-      if (patientStatus === 'not_found' || !currentPatientId) {
-        const { data: newPatient, error: patientError } = await supabase
-          .from('patients')
-          .insert({
-            professional_id: selectedRequest.userId,
-            full_name: selectedRequest.patientName,
-            status: 'active'
-          })
-          .select('id')
-          .single();
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Erro ao importar sessões.');
 
-        if (patientError) throw patientError;
-        currentPatientId = newPatient.id;
-        setPatientId(currentPatientId);
+      if (result.patientId && result.patientId !== patientId) {
+        setPatientId(result.patientId);
         setPatientStatus('found');
       }
 
-      let launchedCount = 0;
       const updatedSessions = [...detectedSessions];
+      const errorMap = new Map<string, string>((result.errors || []).map((e: any) => [e.date, e.error]));
 
-      // Loop through all unlaunched sessions
-      for (let i = 0; i < updatedSessions.length; i++) {
-        const s = updatedSessions[i];
-        if (s.launched) continue;
-
-        try {
-          const { error: evolutionError } = await supabase
-            .from('evolutions')
-            .insert({
-              professional_id: selectedRequest.userId,
-              patient_id: currentPatientId,
-              session_date: s.date,
-              session_time: s.time || null,
-              transcription_text: s.content,
-              transcription_status: 'completed',
-              google_doc_append_status: 'pending',
-              status: 'draft'
-            });
-
-          if (evolutionError) throw evolutionError;
-          s.launched = true;
-          s.launchError = undefined;
-          launchedCount++;
-        } catch (err: any) {
-          s.launchError = err.message || 'Erro ao lançar';
+      for (let s of updatedSessions) {
+        if (!s.launched) {
+          if (errorMap.has(s.date)) {
+            s.launchError = errorMap.get(s.date);
+          } else {
+            s.launched = true;
+            s.launchError = undefined;
+          }
         }
       }
 
-      // Force state update
       setDetectedSessions(updatedSessions);
+      setExistingEvolutionsCount(prev => prev + (result.launchedCount || 0));
 
-      // Update count
-      const { count } = await supabase
-        .from('evolutions')
-        .select('*', { count: 'exact', head: true })
-        .eq('patient_id', currentPatientId);
-      
-      setExistingEvolutionsCount(count || 0);
-
-      if (launchedCount > 0) {
-        setEvolutionSuccess(`Importadas com sucesso ${launchedCount} sessões de evolução!`);
+      if (result.launchedCount > 0) {
+        setEvolutionSuccess(`Importadas com sucesso ${result.launchedCount} sessões de evolução!`);
       } else {
         setEvolutionError('Nenhuma nova sessão pôde ser importada.');
       }

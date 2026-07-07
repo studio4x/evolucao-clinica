@@ -2614,6 +2614,96 @@ ${textChunk}`;
   }
 });
 
+app.post("/api/migrations/save-analysis", requireAuth, async (req: any, res) => {
+  const { requestId, sessions } = req.body;
+  const user = req.user;
+
+  if (!requestId || !sessions) return res.status(400).json({ error: "requestId e sessions são obrigatórios." });
+
+  try {
+    const { data: prof, error: profError } = await supabaseAdmin.from("professionals").select("role").eq("id", user.id).single();
+    if (profError || !prof || prof.role !== "admin") return res.status(403).json({ error: "Apenas administradores podem usar esta ferramenta." });
+
+    const { error: updateError } = await supabaseAdmin
+      .from("migration_requests")
+      .update({ ai_analysis_result: sessions })
+      .eq("id", requestId);
+
+    if (updateError) throw updateError;
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Erro ao salvar análise:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao salvar análise." });
+  }
+});
+
+app.post("/api/migrations/import-sessions", requireAuth, async (req: any, res) => {
+  const { requestId, sessionsToImport, patientName, professionalId, forcePatientId } = req.body;
+  const user = req.user;
+
+  if (!requestId || !sessionsToImport || !patientName || !professionalId) {
+    return res.status(400).json({ error: "Dados incompletos para importação." });
+  }
+
+  try {
+    const { data: prof, error: profError } = await supabaseAdmin.from("professionals").select("role").eq("id", user.id).single();
+    if (profError || !prof || prof.role !== "admin") return res.status(403).json({ error: "Apenas administradores podem usar esta ferramenta." });
+
+    let currentPatientId = forcePatientId;
+
+    if (!currentPatientId) {
+      const { data: existingPatient } = await supabaseAdmin
+        .from("patients")
+        .select("id")
+        .eq("professional_id", professionalId)
+        .eq("full_name", patientName)
+        .maybeSingle();
+
+      if (existingPatient) {
+        currentPatientId = existingPatient.id;
+      } else {
+        const { data: newPatient, error: createPatientError } = await supabaseAdmin
+          .from("patients")
+          .insert({ professional_id: professionalId, full_name: patientName, status: "active" })
+          .select("id")
+          .single();
+
+        if (createPatientError) throw createPatientError;
+        currentPatientId = newPatient.id;
+      }
+    }
+
+    let launchedCount = 0;
+    const errors = [];
+
+    for (const session of sessionsToImport) {
+      const { error: evolutionError } = await supabaseAdmin
+        .from("evolutions")
+        .insert({
+          professional_id: professionalId,
+          patient_id: currentPatientId,
+          session_date: session.date,
+          session_time: session.time || null,
+          transcription_text: session.content,
+          transcription_status: "completed",
+          google_doc_append_status: "pending",
+          status: "draft"
+        });
+
+      if (evolutionError) {
+        errors.push({ date: session.date, error: evolutionError.message });
+      } else {
+        launchedCount++;
+      }
+    }
+
+    res.json({ success: true, launchedCount, patientId: currentPatientId, errors });
+  } catch (err: any) {
+    console.error("Erro na importação em lote:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao importar sessões." });
+  }
+});
+
 
 // 4.1. Cron para Enviar Lembretes de Evoluções Clínicas Pendentes
 app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {

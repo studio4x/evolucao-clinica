@@ -15,6 +15,7 @@ export interface MigrationRequest {
   updatedAt: string;
   professionalName?: string;
   professionalEmail?: string;
+  aiAnalysisResult?: any[] | null;
 }
 
 const SUPPORT_ATTACHMENTS_BUCKET = 'support_attachments';
@@ -230,6 +231,7 @@ function mapMigrationRequest(row: any): MigrationRequest {
     notes: row.notes,
     adminNotes: row.admin_notes,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    aiAnalysisResult: row.ai_analysis_result
   };
 }
