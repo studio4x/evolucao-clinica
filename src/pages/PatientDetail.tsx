@@ -2198,6 +2198,20 @@ export default function PatientDetail() {
               )}
             </div>
 
+            {!patient?.google_doc_id && (
+              <div className="p-4 bg-amber-50 border-b border-amber-100 flex items-start space-x-3 text-amber-800 text-sm">
+                <AlertTriangle className="text-amber-500 mt-0.5 flex-shrink-0" size={18} />
+                <div>
+                  <p className="font-semibold text-amber-900">Integração com Google Docs Inativa</p>
+                  <p className="mt-0.5 text-xs text-amber-700 leading-relaxed">
+                    Este paciente foi importado/criado sem uma pasta ou prontuário vinculados no Google Drive. 
+                    Para enviar evoluções para o prontuário do Google Docs e salvar os PDFs automaticamente, acesse as configurações do paciente e faça o vínculo. 
+                    <Link to={`/painel/patients/${id}/edit`} className="underline font-bold text-amber-900 hover:text-amber-950 ml-1">Configurar agora</Link>
+                  </p>
+                </div>
+              </div>
+            )}
+
             {showClearConfirm && (
               <div className="p-6 bg-red-50 border-b border-red-100">
                 <p className="text-red-900 font-medium mb-2">Deseja limpar todas as evoluções?</p>
@@ -2269,28 +2283,62 @@ export default function PatientDetail() {
                       
                       <div className="flex items-center gap-2">
                         {evo.status === 'signed' && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              let logoBase64 = null;
-                              if (siteConfig.logo_light_url) {
-                                try {
-                                  logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
-                                } catch (err) {
-                                  console.error("Error preloading logo:", err);
+                          <>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                let logoBase64 = null;
+                                if (siteConfig.logo_light_url) {
+                                  try {
+                                    logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                                  } catch (err) {
+                                    console.error("Error preloading logo:", err);
+                                  }
                                 }
-                              }
-                              const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
-                              const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
-                              const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
-                              doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
-                            }}
-                            className="btn-outline h-8 px-2 flex items-center gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 cursor-pointer text-xs font-semibold rounded-xl"
-                            title="Baixar PDF do Prontuário Assinado"
-                          >
-                            <Download size={13} />
-                            <span>Baixar PDF</span>
-                          </button>
+                                const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
+                                const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+                                const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                                doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
+                              }}
+                              className="btn-outline h-8 px-2 flex items-center gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 cursor-pointer text-xs font-semibold rounded-xl"
+                              title="Baixar PDF do Prontuário Assinado"
+                            >
+                              <Download size={13} />
+                              <span>Baixar PDF</span>
+                            </button>
+                            {hasClinicalAccess && googleAccessToken && patient?.target_folder_id && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  let logoBase64 = null;
+                                  if (siteConfig.logo_light_url) {
+                                    try {
+                                      logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                                    } catch (err) {
+                                      console.error("Error preloading logo:", err);
+                                    }
+                                  }
+                                  const doc = generateEvolutionPDF(evo, patient, professional, logoBase64);
+                                  const pdfBlob = doc.output('blob');
+                                  const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
+                                  const cleanDate = new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
+                                  const fileName = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`;
+                                  try {
+                                    await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);
+                                    alert("PDF da evolução salvo com sucesso na pasta do paciente no Google Drive!");
+                                  } catch (err: any) {
+                                    console.error("Error uploading PDF:", err);
+                                    alert("Erro ao salvar PDF: " + (err.message || err));
+                                  }
+                                }}
+                                className="btn-outline h-8 px-2 flex items-center gap-1 border-blue-200 text-blue-600 hover:bg-blue-50 cursor-pointer text-xs font-semibold rounded-xl"
+                                title="Salvar PDF da evolução assinada no Google Drive"
+                              >
+                                <ExternalLink size={13} />
+                                <span>Salvar no Drive</span>
+                              </button>
+                            )}
+                          </>
                         )}
                         <button
                           type="button"
@@ -2385,10 +2433,26 @@ export default function PatientDetail() {
                                     Assinado Digitalmente ({evo.signature_method === 'govbr' ? 'Gov.br' : 'Chave do App'})
                                   </span>
                                 </div>
-                                <div className="flex flex-wrap gap-x-3 gap-y-1 text-emerald-600">
+                                <div className="flex flex-wrap gap-x-3 gap-y-1 text-emerald-600 items-center">
                                   <span>📅 {formatDateTime(evo.signature_date)}</span>
                                   <span>👤 {evo.signed_by_name} ({evo.signed_by_register})</span>
                                   <span>💻 IP: {evo.signature_ip}</span>
+                                  {patient?.google_doc_id && evo.google_doc_append_status !== 'completed' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveToGoogleDocs(evo)}
+                                      disabled={syncingEvolutionId === evo.id}
+                                      className="ml-2 btn-outline py-0.5 px-2 text-[10px] flex items-center space-x-1 border-blue-200 text-blue-600 bg-white hover:bg-blue-50 cursor-pointer rounded-lg"
+                                      title="Salvar esta evolução assinada no prontuário do Google Docs"
+                                    >
+                                      {syncingEvolutionId === evo.id ? (
+                                        <Loader2 size={10} className="animate-spin" />
+                                      ) : (
+                                        <FileText size={10} />
+                                      )}
+                                      <span>Salvar no Google Docs</span>
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ) : (
