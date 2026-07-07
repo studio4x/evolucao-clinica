@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
@@ -9,6 +9,8 @@ import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
+import { trackBeginCheckout } from '../services/analytics';
+
 
 const DEFAULT_PLANS = [
   {
@@ -113,6 +115,38 @@ export default function CheckoutPage() {
     fetchPaymentSettings();
     fetchPlans();
   }, []);
+
+  const hasTrackedCheckoutRef = useRef(false);
+
+  useEffect(() => {
+    if (selectedCheckoutPlan && !hasTrackedCheckoutRef.current) {
+      const isPlansLoaded = plans.length > 0;
+      if (isPlansLoaded) {
+        const planDetails = getPlanDetails(selectedCheckoutPlan);
+        trackBeginCheckout(
+          planDetails.id,
+          planDetails.name,
+          planDetails.price
+        );
+        hasTrackedCheckoutRef.current = true;
+      }
+    }
+  }, [selectedCheckoutPlan, plans]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (selectedCheckoutPlan && !hasTrackedCheckoutRef.current) {
+        const planDetails = getPlanDetails(selectedCheckoutPlan);
+        trackBeginCheckout(
+          planDetails.id,
+          planDetails.name,
+          planDetails.price
+        );
+        hasTrackedCheckoutRef.current = true;
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [selectedCheckoutPlan]);
 
   const getPlanDetails = (planId: string) => {
     return (plans.length > 0 ? plans : DEFAULT_PLANS).find((plan) => plan.id === planId) || DEFAULT_PLANS.find((plan) => plan.id === planId) || DEFAULT_PLANS[0];

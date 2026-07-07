@@ -3,6 +3,11 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { APP_VERSION } from './components/layout/AppVersion';
+import { initAnalytics } from './services/analytics';
+
+// Inicializa o Google Analytics
+initAnalytics();
+
 
 // Registro do Service Worker
 if ("serviceWorker" in navigator) {
