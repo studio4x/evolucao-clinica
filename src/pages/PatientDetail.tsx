@@ -2320,7 +2320,7 @@ export default function PatientDetail() {
                         {activeDropdownId === evo.id && (
                           <>
                             <div className="fixed inset-0 z-10" onClick={() => setActiveDropdownId(null)} />
-                            <div className="absolute right-0 top-9 w-52 bg-white border border-brand-border rounded-xl shadow-lg py-1.5 z-20 animate-in fade-in slide-in-from-top-1 duration-150">
+                            <div className="absolute right-0 top-9 w-72 bg-white border border-brand-border rounded-xl shadow-lg py-1.5 z-20 animate-in fade-in slide-in-from-top-1 duration-150">
                               {/* 1. Salvar no Google Docs (se configurado e pendente) */}
                               {patient?.google_doc_id && evo.google_doc_append_status !== 'completed' && (
                                 <button
@@ -2329,10 +2329,13 @@ export default function PatientDetail() {
                                     setActiveDropdownId(null);
                                     handleSaveToGoogleDocs(evo);
                                   }}
-                                  className="w-full text-left px-4 py-2 text-xs text-brand-text hover:bg-brand-bg flex items-center space-x-2 transition-colors cursor-pointer font-medium"
+                                  className="w-full text-left px-4 py-2 hover:bg-brand-bg flex items-start space-x-2.5 transition-colors cursor-pointer"
                                 >
-                                  <FileText size={14} className="text-blue-600" />
-                                  <span>Salvar no Google Docs</span>
+                                  <FileText size={15} className="text-blue-600 mt-0.5 shrink-0" />
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-semibold text-brand-text">Enviar Texto ao Prontuário</span>
+                                    <span className="text-[10px] text-stone-400 font-normal mt-0.5 leading-tight">Adiciona o texto desta evolução ao prontuário no Google Docs</span>
+                                  </div>
                                 </button>
                               )}
 
@@ -2374,10 +2377,13 @@ export default function PatientDetail() {
                                       alert("Erro ao salvar PDF: " + (err.message || err));
                                     }
                                   }}
-                                  className="w-full text-left px-4 py-2 text-xs text-brand-text hover:bg-brand-bg flex items-center space-x-2 transition-colors cursor-pointer font-medium"
+                                  className="w-full text-left px-4 py-2 hover:bg-brand-bg flex items-start space-x-2.5 transition-colors cursor-pointer"
                                 >
-                                  <ExternalLink size={14} className="text-blue-500" />
-                                  <span>Salvar no Google Drive</span>
+                                  <ExternalLink size={15} className="text-emerald-600 mt-0.5 shrink-0" />
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-semibold text-brand-text">Salvar PDF Assinado no Drive</span>
+                                    <span className="text-[10px] text-stone-400 font-normal mt-0.5 leading-tight">Salva uma cópia oficial em PDF na pasta do Google Drive</span>
+                                  </div>
                                 </button>
                               )}
 
@@ -2388,10 +2394,13 @@ export default function PatientDetail() {
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   onClick={() => setActiveDropdownId(null)}
-                                  className="w-full text-left px-4 py-2 text-xs text-brand-text hover:bg-brand-bg flex items-center space-x-2 transition-colors cursor-pointer font-medium"
+                                  className="w-full text-left px-4 py-2 hover:bg-brand-bg flex items-start space-x-2.5 transition-colors cursor-pointer"
                                 >
-                                  <FileText size={14} className="text-brand-primary" />
-                                  <span>Abrir Documento Google</span>
+                                  <FileText size={15} className="text-blue-500 mt-0.5 shrink-0" />
+                                  <div className="flex flex-col">
+                                    <span className="text-xs font-semibold text-brand-text">Abrir Prontuário (Google Docs)</span>
+                                    <span className="text-[10px] text-stone-400 font-normal mt-0.5 leading-tight">Acessa o documento de prontuário integrado do paciente</span>
+                                  </div>
                                 </a>
                               )}
 
@@ -2402,10 +2411,13 @@ export default function PatientDetail() {
                                   setActiveDropdownId(null);
                                   handlePrintEvolution(evo);
                                 }}
-                                className="w-full text-left px-4 py-2 text-xs text-brand-text hover:bg-brand-bg flex items-center space-x-2 transition-colors cursor-pointer font-medium"
+                                className="w-full text-left px-4 py-2 hover:bg-brand-bg flex items-start space-x-2.5 transition-colors cursor-pointer"
                               >
-                                <Printer size={14} className="text-stone-500" />
-                                <span>Imprimir Evolução</span>
+                                <Printer size={15} className="text-stone-500 mt-0.5 shrink-0" />
+                                <div className="flex flex-col">
+                                  <span className="text-xs font-semibold text-brand-text">Imprimir / PDF Local</span>
+                                  <span className="text-[10px] text-stone-400 font-normal mt-0.5 leading-tight">Gera versão para impressão ou download local</span>
+                                </div>
                               </button>
                             </div>
                           </>
