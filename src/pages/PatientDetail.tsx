@@ -769,6 +769,8 @@ export default function PatientDetail() {
         .eq('patient_id', id)
         .eq('professional_id', user.id)
         .eq('transcription_status', 'completed')
+        .order('session_date', { ascending: false, nullsFirst: false })
+        .order('session_time', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false });
       if (evosError) throw evosError;
       setEvolutions(evosData || []);
