@@ -274,10 +274,13 @@ export default function Profile() {
       return;
     }
 
+    const confirmBackup = window.confirm("Deseja gerar e baixar um arquivo de backup completo contendo os seus dados cadastrais, fichas de pacientes e prontuários?");
+    if (!confirmBackup) return;
+
     try {
       setBackingUp(true);
       await downloadBackupJsonLocal(user.id, `${firstName} ${lastName}`);
-      setSuccessMessage('Backup JSON gerado com sucesso!');
+      setSuccessMessage('Backup completo baixado com sucesso!');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao gerar backup:", err);
@@ -326,6 +329,9 @@ export default function Profile() {
       return;
     }
 
+    const confirmBackup = window.confirm("Deseja gerar e enviar uma cópia de segurança completa para a sua conta do Google Drive agora?");
+    if (!confirmBackup) return;
+
     try {
       setUploadingBackupDrive(true);
       const jsonString = await generateBackupJson(user.id);
@@ -342,7 +348,7 @@ export default function Profile() {
       if (tsError) throw tsError;
       setLastBackupAt(new Date().toISOString());
       
-      setSuccessMessage('Backup enviado para o seu Google Drive com sucesso!');
+      setSuccessMessage('Cópia de segurança salva com sucesso no seu Google Drive!');
       setTimeout(() => setSuccessMessage(''), 4000);
       
       // Recarregar a lista
@@ -785,7 +791,7 @@ export default function Profile() {
               ) : (
                 <div className="border border-brand-border rounded-2xl p-5 bg-white space-y-6">
                   <p className="text-xs text-brand-text-muted leading-relaxed">
-                    Sua conta possui o sistema de backup seguro e soberania dos dados. Toda a sua configuração de conta, lista de pacientes, evoluções clínicas assinadas e relatórios de IA são compilados em um arquivo JSON. Você pode restaurar qualquer backup anterior diretamente do seu Google Drive.
+                    Sua conta possui o sistema de backup seguro e soberania dos dados. Toda a sua configuração de conta, lista de pacientes, evoluções clínicas assinadas e relatórios de IA são compilados em um arquivo de segurança. Você pode restaurar qualquer backup anterior diretamente do seu Google Drive.
                   </p>
 
                   <div className="flex flex-col md:flex-row gap-5">
@@ -863,12 +869,12 @@ export default function Profile() {
                           {backingUp ? (
                             <>
                               <Loader2 size={14} className="animate-spin" />
-                              <span>Exportando JSON...</span>
+                              <span>Exportando backup...</span>
                             </>
                           ) : (
                             <>
                               <Download size={14} />
-                              <span>Baixar Backup Local (JSON)</span>
+                              <span>Baixar Backup Local</span>
                             </>
                           )}
                         </button>

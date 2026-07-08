@@ -349,7 +349,20 @@ export async function runAutoBackupIfNeeded(
       const jsonString = await generateBackupJson(userId);
       await uploadBackupToGoogleDrive(googleAccessToken, jsonString, professionalName);
       await updateLastBackupTimestamp(userId);
-      console.log('[BackupService] Backup automático periódico concluído com sucesso!');
+      
+      // Inserir notificação de sucesso no sistema
+      const freqText = prefs.backupFrequency === 'daily' ? 'diária' : prefs.backupFrequency === 'weekly' ? 'semanal' : 'mensal';
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: userId,
+          title: 'Backup automático concluído',
+          message: `A sincronização de segurança ${freqText} dos seus prontuários no Google Drive foi realizada com sucesso.`,
+          type: 'success',
+          link: '/painel/profile'
+        });
+
+      console.log('[BackupService] Backup automático periódico concluído com sucesso e notificação gerada!');
     }
   } catch (err) {
     console.error('[BackupService] Erro ao rodar backup automático em background:', err);
