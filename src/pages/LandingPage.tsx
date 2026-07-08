@@ -184,6 +184,18 @@ export default function LandingPage() {
     {
       q: "Posso cancelar ou alterar meu plano a qualquer momento?",
       a: "Sim! Não há cláusulas de fidelidade ou burocracia. Você pode cancelar sua assinatura recorrente ou migrar de plano diretamente pelo painel administrativo do aplicativo com apenas um clique."
+    },
+    {
+      q: "Como funciona a Migração VIP de prontuários antigos por IA?",
+      a: "Disponibilizada sem custo adicional para assinantes do Plano Anual, nossa equipe técnica utiliza robôs de IA dedicados para extrair, estruturar e importar todo o seu histórico antigo de prontuários (sejam arquivos em PDF, documentos do Word ou planilhas do Excel) diretamente para o aplicativo de forma 100% segura e rápida."
+    },
+    {
+      q: "Como funciona o Backup e Restauração automática no Google Drive?",
+      a: "Exclusivo do Plano Anual, o aplicativo compila suas configurações de conta, ficha de pacientes e evoluções em um arquivo de segurança no seu Google Drive pessoal. Você define a frequência (diário, semanal ou mensal) e pode restaurar de forma inteligente qualquer uma das últimas 3 versões históricas em apenas 1 clique (mesclando os registros sem apagar novos dados)."
+    },
+    {
+      q: "Posso colocar o logotipo do meu consultório nos relatórios em PDF?",
+      a: "Sim! Assinantes do Plano Anual podem fazer o upload do seu logotipo na tela de Perfil. Uma vez configurado, ele será aplicado de forma elegante no topo de todas as evoluções clínicas assinadas e relatórios gerados por IA prontos para impressão ou exportação em PDF."
     }
   ];
 
