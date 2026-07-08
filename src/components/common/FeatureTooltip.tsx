@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Info } from 'lucide-react';
 
 interface FeatureTooltipProps {
@@ -35,6 +35,9 @@ const FEATURE_DESCRIPTIONS: Record<string, string> = {
 export const FeatureTooltip: React.FC<FeatureTooltipProps> = ({ feature }) => {
   const [show, setShow] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [styleOffset, setStyleOffset] = useState<React.CSSProperties>({});
+  const [arrowStyle, setArrowStyle] = useState<React.CSSProperties>({});
 
   const cleanFeature = feature.trim().toLowerCase();
   const description = FEATURE_DESCRIPTIONS[cleanFeature];
@@ -52,6 +55,39 @@ export const FeatureTooltip: React.FC<FeatureTooltipProps> = ({ feature }) => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
+  }, [show]);
+
+  useLayoutEffect(() => {
+    if (show && tooltipRef.current) {
+      const rect = tooltipRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      
+      let leftOffset = 0;
+      const padding = 16; // Mínimo de distância da borda da tela
+      
+      if (rect.right > viewportWidth - padding) {
+        leftOffset = (viewportWidth - padding) - rect.right;
+      } else if (rect.left < padding) {
+        leftOffset = padding - rect.left;
+      }
+      
+      if (leftOffset !== 0) {
+        setStyleOffset({
+          transform: `translateX(calc(-50% + ${leftOffset}px)) scale(1)`,
+        });
+        setArrowStyle({
+          left: `calc(50% - ${leftOffset}px)`,
+        });
+      } else {
+        setStyleOffset({
+          transform: `translateX(-50%) scale(1)`,
+        });
+        setArrowStyle({});
+      }
+    } else {
+      setStyleOffset({});
+      setArrowStyle({});
+    }
   }, [show]);
 
   // If we don't have a specific description, do not render the info icon to keep the list clean
@@ -77,16 +113,24 @@ export const FeatureTooltip: React.FC<FeatureTooltipProps> = ({ feature }) => {
       </button>
 
       <div 
-        className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-2.5 w-60 bg-slate-950/95 backdrop-blur-md text-white text-xs rounded-xl p-3 shadow-2xl border border-white/10 leading-relaxed font-normal transition-all duration-200 origin-bottom ${
+        ref={tooltipRef}
+        className={`absolute bottom-full left-1/2 mb-2.5 w-60 bg-slate-950/95 backdrop-blur-md text-white text-xs rounded-xl p-3 shadow-2xl border border-white/10 leading-relaxed font-normal transition-all duration-200 origin-bottom ${
           show 
-            ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' 
-            : 'opacity-0 scale-95 translate-y-1 pointer-events-none'
+            ? 'opacity-100 pointer-events-auto translate-y-0' 
+            : 'opacity-0 pointer-events-none translate-y-1'
         }`}
-        style={{ zIndex: 100 }}
+        style={{ 
+          zIndex: 100,
+          transform: styleOffset.transform || `translateX(-50%) scale(${show ? 1 : 0.95})`,
+          ...styleOffset
+        }}
       >
         <div className="relative text-left">
           {description}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-slate-950 border-r border-b border-white/10 rotate-45" />
+          <div 
+            className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-slate-950 border-r border-b border-white/10 rotate-45" 
+            style={arrowStyle}
+          />
         </div>
       </div>
     </div>
