@@ -26,7 +26,10 @@ const FEATURE_DESCRIPTIONS: Record<string, string> = {
   'suporte prioritário via ticket': 'Atendimento prioritário via chamado/ticket de suporte com tempo de resposta reduzido.',
   'garantia de novos recursos em primeira mão': 'Acesso antecipado a novas ferramentas de inteligência artificial e atualizações da plataforma.',
   'garantia de novos recursos exclusivos em primeira mão': 'Acesso antecipado a novas ferramentas de inteligência artificial e atualizações da plataforma.',
-  'migração assistida de prontuários por ia (pdf/word/excel)': 'Importamos todos os seus prontuários antigos de outros sistemas de forma automática usando inteligência artificial.'
+  'migração assistida de prontuários por ia (pdf/word/excel)': 'Importamos todos os seus prontuários antigos de outros sistemas de forma automática usando inteligência artificial.',
+  'logotipo personalizado nos relatórios e evoluções (pdf/impresso)': 'Faça o upload do seu logotipo profissional e exiba-o no cabeçalho das evoluções assinadas e dos relatórios clínicos gerados em PDF.',
+  'backup e restauração completa de dados no google drive (diário/semanal/mensal)': 'Sincronize todo o acervo clínico e configurações no Google Drive com histórico de até 3 snapshots anteriores para restauração inteligente em 1 clique.',
+  'backup e restauração no google drive (diário/semanal/mensal)': 'Sincronize todo o acervo clínico e configurações no Google Drive com histórico de até 3 snapshots anteriores para restauração inteligente em 1 clique.'
 };
 
 export const FeatureTooltip: React.FC<FeatureTooltipProps> = ({ feature }) => {
