@@ -451,3 +451,78 @@ export async function uploadZipToGoogleDrive(
 
   return await response.json();
 }
+
+export async function uploadJsonToGoogleDrive(
+  googleAccessToken: string,
+  jsonString: string,
+  fileName: string,
+  parentFolderId?: string
+) {
+  const metadata = {
+    name: fileName,
+    mimeType: 'application/json',
+    parents: parentFolderId ? [parentFolderId] : undefined
+  };
+
+  const boundary = 'foo_bar_boundary';
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelimiter = `\r\n--${boundary}--`;
+
+  const multipartRequestBody =
+    delimiter +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    JSON.stringify(metadata) +
+    delimiter +
+    'Content-Type: application/json\r\n\r\n' +
+    jsonString +
+    closeDelimiter;
+
+  const response = await googleApiFetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${googleAccessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: multipartRequestBody
+    },
+    'JSON upload'
+  );
+
+  return await response.json();
+}
+
+export async function downloadGoogleFileContent(
+  googleAccessToken: string,
+  fileId: string
+): Promise<string> {
+  const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+  
+  const response = await googleApiFetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`
+    }
+  }, 'JSON download');
+
+  return await response.text();
+}
+
+export async function listBackupFilesFromGoogleDrive(
+  googleAccessToken: string,
+  folderId: string
+) {
+  const q = `'${folderId}' in parents and name contains 'EvolucaoClinica_Backup_' and mimeType = 'application/json' and trashed = false`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,createdTime,size)&orderBy=createdTime desc&pageSize=10`;
+
+  const response = await googleApiFetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`
+    }
+  }, 'List backups');
+
+  const data = await response.json();
+  return data.files || [];
+}

@@ -5,7 +5,15 @@ import { useAuthStore } from '../store/authStore';
 import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle, Upload, Lock, Image, Download, Cloud, Database } from 'lucide-react';
 import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
-import { getBackupPreferences, updateBackupPreferences, generateBackupZip, downloadBackupZip, uploadBackupToGoogleDrive } from '../services/backupService';
+import { 
+  getBackupPreferences, 
+  updateBackupPreferences, 
+  generateBackupJson, 
+  downloadBackupJsonLocal, 
+  uploadBackupToGoogleDrive,
+  getBackupsListFromDrive,
+  restoreBackupFromDrive
+} from '../services/backupService';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -36,6 +44,11 @@ export default function Profile() {
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
   const [backingUp, setBackingUp] = useState(false);
   const [uploadingBackupDrive, setUploadingBackupDrive] = useState(false);
+  const [backupFrequency, setBackupFrequency] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const [backupsList, setBackupsList] = useState<any[]>([]);
+  const [loadingBackupsList, setLoadingBackupsList] = useState(false);
+  const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null);
+  const [showRestoreConfirmModal, setShowRestoreConfirmModal] = useState<any | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -48,7 +61,7 @@ export default function Profile() {
         // Busca os dados da tabela professionals
         const { data, error } = await supabase
           .from('professionals')
-          .select('full_name, professional_title, professional_register, onboarding_completed, custom_logo_url, subscription_plan, auto_backup_enabled, last_backup_at')
+          .select('full_name, professional_title, professional_register, onboarding_completed, custom_logo_url, subscription_plan, auto_backup_enabled, backup_frequency, last_backup_at')
           .eq('id', user.id)
           .single();
 
@@ -66,6 +79,7 @@ export default function Profile() {
           setCustomLogoUrl(data.custom_logo_url || '');
           setDbSubscriptionPlan(data.subscription_plan || null);
           setAutoBackupEnabled(data.auto_backup_enabled || false);
+          setBackupFrequency((data.backup_frequency as 'daily' | 'weekly' | 'monthly') || 'monthly');
           setLastBackupAt(data.last_backup_at || null);
         } else {
           // Fallback para metadados do auth
@@ -91,6 +105,29 @@ export default function Profile() {
 
     loadProfile();
   }, [user]);
+
+  const loadGoogleBackups = async (token?: string) => {
+    const activeToken = token || googleAccessToken;
+    if (!activeToken || !isYearly) return;
+
+    try {
+      setLoadingBackupsList(true);
+      const list = await getBackupsListFromDrive(activeToken);
+      setBackupsList(list);
+    } catch (err) {
+      console.error('[Profile] Erro ao carregar backups do Drive:', err);
+    } finally {
+      setLoadingBackupsList(false);
+    }
+  };
+
+  const isYearly = dbSubscriptionPlan === 'yearly' || subscriptionPlan === 'yearly';
+
+  useEffect(() => {
+    if (googleAccessToken && isYearly) {
+      loadGoogleBackups(googleAccessToken);
+    }
+  }, [googleAccessToken, isYearly]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,8 +179,6 @@ export default function Profile() {
       setSaving(false);
     }
   };
-
-  const isYearly = dbSubscriptionPlan === 'yearly' || subscriptionPlan === 'yearly';
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -241,8 +276,8 @@ export default function Profile() {
 
     try {
       setBackingUp(true);
-      await downloadBackupZip(user.id, `${firstName} ${lastName}`);
-      setSuccessMessage('Backup compactado gerado com sucesso!');
+      await downloadBackupJsonLocal(user.id, `${firstName} ${lastName}`);
+      setSuccessMessage('Backup JSON gerado com sucesso!');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao gerar backup:", err);
@@ -261,13 +296,26 @@ export default function Profile() {
 
     try {
       const newVal = !autoBackupEnabled;
-      await updateBackupPreferences(user.id, newVal);
+      await updateBackupPreferences(user.id, newVal, backupFrequency);
       setAutoBackupEnabled(newVal);
-      setSuccessMessage(newVal ? 'Backup automático mensal ativado!' : 'Backup automático desativado!');
+      setSuccessMessage(newVal ? 'Backup automático ativado!' : 'Backup automático desativado!');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao atualizar backup automático:", err);
       alert("Erro ao salvar preferência de backup: " + (err.message || err));
+    }
+  };
+
+  const handleChangeBackupFrequency = async (freq: 'daily' | 'weekly' | 'monthly') => {
+    if (!user) return;
+    try {
+      await updateBackupPreferences(user.id, autoBackupEnabled, freq);
+      setBackupFrequency(freq);
+      setSuccessMessage(`Frequência de backup alterada para: ${freq === 'daily' ? 'Diário' : freq === 'weekly' ? 'Semanal' : 'Mensal'}`);
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err: any) {
+      console.error("Erro ao alterar frequência do backup:", err);
+      alert("Erro ao salvar frequência: " + (err.message || err));
     }
   };
 
@@ -280,8 +328,8 @@ export default function Profile() {
 
     try {
       setUploadingBackupDrive(true);
-      const zipBlob = await generateBackupZip(user.id);
-      await uploadBackupToGoogleDrive(googleAccessToken, zipBlob, `${firstName} ${lastName}`);
+      const jsonString = await generateBackupJson(user.id);
+      await uploadBackupToGoogleDrive(googleAccessToken, jsonString, `${firstName} ${lastName}`);
       
       const { error: tsError } = await supabase
         .from('professionals')
@@ -296,11 +344,34 @@ export default function Profile() {
       
       setSuccessMessage('Backup enviado para o seu Google Drive com sucesso!');
       setTimeout(() => setSuccessMessage(''), 4000);
+      
+      // Recarregar a lista
+      await loadGoogleBackups();
     } catch (err: any) {
       console.error("Erro ao enviar backup para o Drive:", err);
       alert("Erro ao enviar backup para o Drive: " + (err.message || err));
     } finally {
       setUploadingBackupDrive(false);
+    }
+  };
+
+  const handleRestoreBackup = async (backupFile: any) => {
+    if (!user || !googleAccessToken) return;
+    
+    try {
+      setRestoringBackupId(backupFile.id);
+      const result = await restoreBackupFromDrive(googleAccessToken, backupFile.id, user.id);
+      
+      alert(`Restauração concluída com sucesso!\n\nDados importados/atualizados:\n- ${result.patientsCount} Pacientes\n- ${result.evolutionsCount} Evoluções Clínicas\n- ${result.reportsCount} Relatórios/PDIs`);
+      
+      setSuccessMessage('Dados restaurados com sucesso!');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err: any) {
+      console.error("Erro ao restaurar backup:", err);
+      alert("Erro na restauração: " + (err.message || err));
+    } finally {
+      setRestoringBackupId(null);
+      setShowRestoreConfirmModal(null);
     }
   };
 
@@ -696,10 +767,10 @@ export default function Profile() {
                     <div className="space-y-1.5 max-w-lg">
                       <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-2">
                         <Sparkles size={16} className="text-amber-600" />
-                        Backup Completo em Lote (ZIP)
+                        Backup Completo e Restauração (Google Drive)
                       </h4>
                       <p className="text-xs text-amber-700/80 leading-relaxed">
-                        Exporte de uma única vez todo o histórico de prontuários, dados cadastrais e relatórios gerados por IA de todos os seus pacientes em um arquivo ZIP estruturado, ou configure um backup mensal automatizado diretamente na sua conta do Google Drive.
+                        Exporte as configurações da sua conta, a ficha de todos os seus pacientes e prontuários completos em um único arquivo de backup em nuvem, com restauração fácil em 1 clique e histórico de 3 versões.
                       </p>
                     </div>
                     <button
@@ -712,87 +783,63 @@ export default function Profile() {
                   </div>
                 </div>
               ) : (
-                <div className="border border-brand-border rounded-2xl p-5 bg-white space-y-5">
+                <div className="border border-brand-border rounded-2xl p-5 bg-white space-y-6">
                   <p className="text-xs text-brand-text-muted leading-relaxed">
-                    Exporte todo o seu acervo clínico estruturado. O arquivo compactado (.zip) conterá pastas individuais para cada paciente com seus dados de cadastro, histórico consolidado de evoluções em formato Markdown legível e todos os relatórios/PDIs gerados por IA.
+                    Sua conta possui o sistema de backup seguro e soberania dos dados. Toda a sua configuração de conta, lista de pacientes, evoluções clínicas assinadas e relatórios de IA são compilados em um arquivo JSON. Você pode restaurar qualquer backup anterior diretamente do seu Google Drive.
                   </p>
 
                   <div className="flex flex-col md:flex-row gap-5">
-                    {/* Opção 1: Download Manual */}
-                    <div className="flex-1 border border-brand-border/60 rounded-2xl p-4 bg-brand-bg/10 flex flex-col justify-between space-y-4">
-                      <div className="space-y-2">
-                        <h4 className="text-sm font-semibold text-brand-primary flex items-center gap-1.5">
-                          <Database size={16} className="text-brand-primary/80" />
-                          Backup Manual em 1 Clique
-                        </h4>
-                        <p className="text-xs text-brand-text-muted leading-relaxed">
-                          Gere e faça o download imediato do seu banco de prontuários em um arquivo ZIP legível.
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleManualBackup}
-                        disabled={backingUp}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary text-white px-4 py-2.5 text-xs font-semibold hover:bg-brand-primary/95 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {backingUp ? (
-                          <>
-                            <Loader2 size={14} className="animate-spin" />
-                            <span>Compilando ZIP...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Download size={14} />
-                            <span>Baixar ZIP Completo</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Opção 2: Google Drive Auto Backup */}
-                    <div className="flex-1 border border-brand-border/60 rounded-2xl p-4 bg-brand-bg/10 flex flex-col justify-between space-y-4">
-                      <div className="space-y-2">
+                    {/* Painel Esquerdo: Configurações de backup automático e manual */}
+                    <div className="flex-1 border border-brand-border/60 rounded-2xl p-5 bg-brand-bg/10 space-y-5">
+                      <div className="space-y-1.5 border-b border-brand-border/40 pb-3">
                         <h4 className="text-sm font-semibold text-brand-primary flex items-center gap-1.5">
                           <Cloud size={16} className="text-brand-primary/80" />
-                          Nuvem (Google Drive)
+                          Sincronização no Google Drive
                         </h4>
                         <p className="text-xs text-brand-text-muted leading-relaxed">
-                          Sincronize automaticamente seus backups para o Drive ou faça upload de um backup em lote agora mesmo.
+                          Configure e controle os snapshots automáticos na sua conta pessoal.
                         </p>
                       </div>
-                      
-                      <div className="space-y-3 pt-1">
-                        {/* Toggle de backup automático */}
-                        <div className="flex items-center justify-between">
-                          <div className="space-y-0.5">
-                            <span className="text-xs font-semibold text-brand-primary block">Backup Mensal Automático</span>
-                            <span className="text-[10px] text-brand-text-muted block">Salva no Drive a cada 30 dias</span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={handleToggleAutoBackup}
-                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${autoBackupEnabled ? 'bg-brand-primary' : 'bg-stone-200'}`}
-                          >
-                            <span
-                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autoBackupEnabled ? 'translate-x-4' : 'translate-x-0'}`}
-                            />
-                          </button>
-                        </div>
 
-                        {/* Informação sobre último backup */}
-                        <div className="text-[10px] text-brand-text-muted pt-1 border-t border-brand-border/40 flex justify-between">
-                          <span>Último backup no Drive:</span>
-                          <span className="font-semibold text-brand-primary">
-                            {lastBackupAt ? new Date(lastBackupAt).toLocaleString('pt-BR') : 'Nunca realizado'}
-                          </span>
+                      {/* Toggle de ativação */}
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-semibold text-brand-primary block">Backup Automático</span>
+                          <span className="text-[10px] text-brand-text-muted block">Gera cópias periódicas na nuvem</span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={handleToggleAutoBackup}
+                          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${autoBackupEnabled ? 'bg-brand-primary' : 'bg-stone-200'}`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${autoBackupEnabled ? 'translate-x-4' : 'translate-x-0'}`}
+                          />
+                        </button>
+                      </div>
 
+                      {/* Dropdown de Frequência */}
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-brand-primary block">Frequência da Automação</label>
+                        <select
+                          value={backupFrequency}
+                          onChange={(e) => handleChangeBackupFrequency(e.target.value as any)}
+                          disabled={!autoBackupEnabled}
+                          className="w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-xs text-brand-text focus:outline-none focus:ring-1 focus:ring-brand-primary/30 disabled:opacity-50 disabled:bg-stone-50 cursor-pointer font-medium"
+                        >
+                          <option value="daily">Diário (a cada 24 horas)</option>
+                          <option value="weekly">Semanal (a cada 7 dias)</option>
+                          <option value="monthly">Mensal (a cada 30 dias)</option>
+                        </select>
+                      </div>
+
+                      {/* Botões de Ação Manuais */}
+                      <div className="pt-2 space-y-2">
                         <button
                           type="button"
                           onClick={handleManualDriveBackup}
                           disabled={uploadingBackupDrive || !googleAccessToken}
-                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-brand-primary/20 bg-white text-brand-primary px-4 py-2.5 text-xs font-semibold hover:bg-brand-primary/5 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                          title={!googleAccessToken ? 'Conecte sua conta do Google acima para usar esta função' : 'Salvar cópia compactada agora no Google Drive'}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary text-white px-4 py-2.5 text-xs font-semibold hover:bg-brand-primary/95 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-primary/10"
                         >
                           {uploadingBackupDrive ? (
                             <>
@@ -802,16 +849,205 @@ export default function Profile() {
                           ) : (
                             <>
                               <Cloud size={14} />
-                              <span>Enviar para o Drive agora</span>
+                              <span>Salvar no Drive Agora</span>
                             </>
                           )}
                         </button>
+
+                        <button
+                          type="button"
+                          onClick={handleManualBackup}
+                          disabled={backingUp}
+                          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-brand-primary/20 bg-white text-brand-primary px-4 py-2.5 text-xs font-semibold hover:bg-brand-primary/5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {backingUp ? (
+                            <>
+                              <Loader2 size={14} className="animate-spin" />
+                              <span>Exportando JSON...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Download size={14} />
+                              <span>Baixar Backup Local (JSON)</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="text-[10px] text-brand-text-muted pt-2 border-t border-brand-border/40 flex justify-between">
+                        <span>Último backup realizado:</span>
+                        <span className="font-semibold text-brand-primary">
+                          {lastBackupAt ? new Date(lastBackupAt).toLocaleString('pt-BR') : 'Nunca realizado'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Painel Direito: Histórico de Versões e Ações de Restauração */}
+                    <div className="flex-1 border border-brand-border/60 rounded-2xl p-5 bg-brand-bg/10 flex flex-col justify-between space-y-4">
+                      <div className="space-y-1.5 border-b border-brand-border/40 pb-3 flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-brand-primary flex items-center gap-1.5">
+                            <Database size={16} className="text-brand-primary/80" />
+                            Versões Anteriores (Drive)
+                          </h4>
+                          <p className="text-xs text-brand-text-muted leading-relaxed">
+                            Restaurar dados salvos. Mantemos as 3 versões mais recentes.
+                          </p>
+                        </div>
+                        {googleAccessToken && (
+                          <button
+                            type="button"
+                            onClick={() => loadGoogleBackups()}
+                            disabled={loadingBackupsList}
+                            className="p-1.5 text-brand-primary hover:bg-brand-primary/5 rounded-lg transition-colors cursor-pointer"
+                            title="Atualizar lista de backups"
+                          >
+                            <RefreshCcw size={14} className={loadingBackupsList ? 'animate-spin' : ''} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex-1 flex flex-col justify-center">
+                        {!googleAccessToken ? (
+                          <div className="text-center py-6 px-4 border border-dashed border-stone-300 rounded-2xl bg-white/50 space-y-2">
+                            <ShieldAlert size={24} className="text-stone-400 mx-auto" />
+                            <h5 className="text-xs font-semibold text-brand-primary">Google Drive Desconectado</h5>
+                            <p className="text-[10px] text-brand-text-muted leading-relaxed max-w-[220px] mx-auto">
+                              Conecte sua conta do Google na seção de integração acima para gerenciar os arquivos de backup.
+                            </p>
+                          </div>
+                        ) : loadingBackupsList ? (
+                          <div className="text-center py-10">
+                            <Loader2 size={24} className="animate-spin text-brand-primary mx-auto mb-2" />
+                            <span className="text-xs text-brand-text-muted font-medium">Buscando backups no seu Drive...</span>
+                          </div>
+                        ) : backupsList.length === 0 ? (
+                          <div className="text-center py-8 px-4 border border-dashed border-stone-200 rounded-2xl bg-white/50 space-y-1">
+                            <Database size={22} className="text-stone-400 mx-auto mb-1" />
+                            <h5 className="text-xs font-semibold text-brand-primary">Nenhum backup encontrado</h5>
+                            <p className="text-[10px] text-brand-text-muted leading-relaxed">
+                              Realize o primeiro backup no Drive para exibir a lista de restauração.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2.5">
+                            {backupsList.slice(0, 3).map((backup, idx) => {
+                              // Formatar nome do arquivo de backup
+                              let displayName = backup.name;
+                              const dateMatch = backup.name.match(/Backup_.*_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/);
+                              if (dateMatch) {
+                                const [_, datePart, h, m, s] = dateMatch;
+                                const [y, mo, d] = datePart.split('-');
+                                displayName = `Backup do dia ${d}/${mo}/${y} às ${h}:${m}:${s}`;
+                              }
+                              const sizeKB = backup.size ? `${(parseInt(backup.size) / 1024).toFixed(1)} KB` : 'Tamanho desconhecido';
+
+                              return (
+                                <div key={backup.id} className="bg-white border border-brand-border/60 rounded-xl p-3 flex items-center justify-between gap-3 shadow-sm">
+                                  <div className="space-y-0.5 min-w-0">
+                                    <span className="text-xs font-semibold text-brand-primary block truncate" title={backup.name}>
+                                      {displayName}
+                                    </span>
+                                    <div className="flex items-center gap-2 text-[10px] text-brand-text-muted">
+                                      <span>Versão {idx + 1 === 1 ? 'mais recente' : `${idx + 1}ª anterior`}</span>
+                                      <span>•</span>
+                                      <span>{sizeKB}</span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => setShowRestoreConfirmModal(backup)}
+                                    disabled={restoringBackupId !== null}
+                                    className="btn-outline h-7 px-2.5 text-[10px] font-semibold border-brand-primary/20 text-brand-primary hover:bg-brand-primary/5 rounded-lg flex items-center gap-1 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shrink-0"
+                                  >
+                                    {restoringBackupId === backup.id ? (
+                                      <>
+                                        <Loader2 size={10} className="animate-spin" />
+                                        <span>Restaurando...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <RefreshCcw size={10} />
+                                        <span>Restaurar</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Modal de Confirmação de Restauração */}
+            {showRestoreConfirmModal && (
+              <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl border border-brand-border overflow-hidden">
+                  <div className="bg-gradient-to-r from-brand-primary to-brand-accent px-6 py-5 text-white">
+                    <div className="flex items-center gap-3">
+                      <div className="rounded-2xl bg-white/15 p-2.5">
+                        <AlertTriangle className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-bold text-white">Restaurar Prontuários</h3>
+                        <p className="text-xs text-white/80">Confirmação de Importação de Backup</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-6 space-y-4">
+                    <p className="text-xs text-brand-text leading-relaxed">
+                      Você está prestes a restaurar os prontuários a partir do arquivo selecionado:
+                    </p>
+                    
+                    <div className="bg-brand-bg/50 border border-brand-border/60 rounded-2xl p-3 text-xs text-brand-primary font-medium">
+                      {showRestoreConfirmModal.name.match(/Backup_.*_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/) ? (() => {
+                        const m = showRestoreConfirmModal.name.match(/Backup_.*_(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})/);
+                        const [y, mo, d] = m[1].split('-');
+                        return `Snapshot do dia ${d}/${mo}/${y} às ${m[2]}:${m[3]}:${m[4]}`;
+                      })() : showRestoreConfirmModal.name}
+                    </div>
+
+                    <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4 text-xs text-amber-800 space-y-2 leading-relaxed">
+                      <p className="font-semibold flex items-center gap-1">
+                        <AlertCircle size={14} className="text-amber-600" />
+                        Informações Importantes:
+                      </p>
+                      <ul className="space-y-1 list-disc pl-4">
+                        <li>A restauração é inteligente: ela **mescla** os dados do backup. Pacientes ou evoluções novas cadastradas após este backup **não serão excluídos**.</li>
+                        <li>Os registros clínicos correspondentes que já existem serão atualizados para o estado em que estavam no backup.</li>
+                      </ul>
+                    </div>
+
+                    <p className="text-[10px] text-brand-text-muted">
+                      Esta operação é segura e utiliza atualizações idempotentes por UUID. Deseja prosseguir com a restauração?
+                    </p>
+
+                    <div className="flex justify-end gap-3 pt-2 border-t border-brand-border/40">
+                      <button
+                        type="button"
+                        onClick={() => setShowRestoreConfirmModal(null)}
+                        className="rounded-xl border border-brand-border px-4 py-2.5 text-xs font-semibold text-brand-text hover:bg-stone-50 transition-colors cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreBackup(showRestoreConfirmModal)}
+                        className="rounded-xl bg-brand-primary text-white px-5 py-2.5 text-xs font-semibold hover:bg-brand-primary/95 transition-colors cursor-pointer shadow-md shadow-brand-primary/10"
+                      >
+                        Confirmar e Restaurar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Seção de Senha Explicativa */}
             <div className="space-y-3 pt-2">
