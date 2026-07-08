@@ -80,7 +80,8 @@ const DEFAULT_PLANS = [
       'Suporte prioritário via e-mail e WhatsApp',
       'Garantia de novos recursos em primeira mão',
       'Migração assistida de prontuários por IA (PDF/Word/Excel)',
-      'Logotipo personalizado nos relatórios e evoluções (PDF/Impresso)'
+      'Logotipo personalizado nos relatórios e evoluções (PDF/Impresso)',
+      'Backup e Restauração no Google Drive (Diário/Semanal/Mensal)'
     ]
   }
 ];
