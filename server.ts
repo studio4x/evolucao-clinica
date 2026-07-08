@@ -14,6 +14,7 @@ const pdfParse = require("pdf-parse");
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
 
 dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 export const app = express();
 const PORT = Number(process.env.PORT) || 3000;
