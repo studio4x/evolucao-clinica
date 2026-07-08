@@ -397,3 +397,57 @@ export async function uploadPdfToGoogleDrive(
 
   return await response.json();
 }
+
+export async function uploadZipToGoogleDrive(
+  googleAccessToken: string,
+  zipBlob: Blob,
+  fileName: string,
+  parentFolderId?: string
+) {
+  const metadata = {
+    name: fileName,
+    mimeType: 'application/zip',
+    parents: parentFolderId ? [parentFolderId] : undefined
+  };
+
+  const boundary = 'foo_bar_boundary';
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelimiter = `\r\n--${boundary}--`;
+
+  const reader = new FileReader();
+  const base64Promise = new Promise<string>((resolve) => {
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64);
+    };
+    reader.readAsDataURL(zipBlob);
+  });
+
+  const base64Data = await base64Promise;
+
+  const multipartRequestBody =
+    delimiter +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    JSON.stringify(metadata) +
+    delimiter +
+    'Content-Type: application/zip\r\n' +
+    'Content-Transfer-Encoding: base64\r\n\r\n' +
+    base64Data +
+    closeDelimiter;
+
+  const response = await googleApiFetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${googleAccessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: multipartRequestBody
+    },
+    'ZIP upload'
+  );
+
+  return await response.json();
+}

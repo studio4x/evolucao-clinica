@@ -10,7 +10,7 @@ import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
 
 export default function Layout() {
-  const { user, profileRole } = useAuthStore();
+  const { user, profileRole, googleAccessToken, subscriptionPlan } = useAuthStore();
   const siteConfig = useSiteConfig();
   const navigate = useNavigate();
   const location = useLocation();
@@ -89,6 +89,22 @@ export default function Layout() {
       void supabase.removeChannel(channel);
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !googleAccessToken || subscriptionPlan !== 'yearly') return;
+
+    const triggerBackup = async () => {
+      try {
+        const { runAutoBackupIfNeeded } = await import('../services/backupService');
+        await runAutoBackupIfNeeded(user.id, googleAccessToken, user.user_metadata?.full_name || 'Terapeuta');
+      } catch (err) {
+        console.error('[Layout] Falha ao executar backup em background:', err);
+      }
+    };
+
+    const timer = setTimeout(triggerBackup, 5000);
+    return () => clearTimeout(timer);
+  }, [user, googleAccessToken, subscriptionPlan]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {
