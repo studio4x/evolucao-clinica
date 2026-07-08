@@ -274,12 +274,37 @@ export async function restoreBackupFromDrive(
   // 5. Restaurar Evoluções (upsert em lote)
   let evolutionsRestored = 0;
   if (backupData.evolutions && backupData.evolutions.length > 0) {
-    const { error: evoError } = await supabase
+    const evoIds = backupData.evolutions.map((e: any) => e.id).filter(Boolean);
+    
+    // Buscar evoluções já existentes no banco de dados e seus respectivos status
+    const { data: existingEvos, error: fetchError } = await supabase
       .from('evolutions')
-      .upsert(backupData.evolutions);
+      .select('id, status')
+      .in('id', evoIds);
 
-    if (evoError) throw new Error(`Falha ao restaurar evoluções: ${evoError.message}`);
-    evolutionsRestored = backupData.evolutions.length;
+    if (fetchError) {
+      console.warn('[BackupService] Erro ao verificar evoluções existentes:', fetchError.message);
+    }
+
+    const signedEvoIdsInDb = new Set(
+      (existingEvos || [])
+        .filter((e: any) => e.status === 'signed')
+        .map((e: any) => e.id)
+    );
+
+    // Filtrar para remover evoluções que já estão assinadas no banco de dados (que disparariam o trigger de proteção)
+    const evolutionsToUpsert = backupData.evolutions.filter((e: any) => !signedEvoIdsInDb.has(e.id));
+
+    if (evolutionsToUpsert.length > 0) {
+      const { error: evoError } = await supabase
+        .from('evolutions')
+        .upsert(evolutionsToUpsert);
+
+      if (evoError) throw new Error(`Falha ao restaurar evoluções: ${evoError.message}`);
+      evolutionsRestored = evolutionsToUpsert.length;
+    } else {
+      console.log('[BackupService] Todas as evoluções já estavam assinadas no banco de dados. Upsert de evoluções ignorado para proteção.');
+    }
   }
 
   // 6. Restaurar Relatórios e PDIs (upsert em lote)
@@ -291,12 +316,37 @@ export async function restoreBackupFromDrive(
       professional_id: userId
     }));
 
-    const { error: repError } = await supabase
-      .from('patient_reports')
-      .upsert(sanitizedReports);
+    const repIds = sanitizedReports.map((r: any) => r.id).filter(Boolean);
 
-    if (repError) throw new Error(`Falha ao restaurar relatórios: ${repError.message}`);
-    reportsRestored = sanitizedReports.length;
+    // Buscar relatórios já existentes no banco de dados e seus respectivos status
+    const { data: existingReps, error: fetchRepError } = await supabase
+      .from('patient_reports')
+      .select('id, status')
+      .in('id', repIds);
+
+    if (fetchRepError) {
+      console.warn('[BackupService] Erro ao verificar relatórios existentes:', fetchRepError.message);
+    }
+
+    const signedRepIdsInDb = new Set(
+      (existingReps || [])
+        .filter((r: any) => r.status === 'signed')
+        .map((r: any) => r.id)
+    );
+
+    // Filtrar para remover relatórios que já estão assinadas no banco de dados (que disparariam o trigger de proteção)
+    const reportsToUpsert = sanitizedReports.filter((r: any) => !signedRepIdsInDb.has(r.id));
+
+    if (reportsToUpsert.length > 0) {
+      const { error: repError } = await supabase
+        .from('patient_reports')
+        .upsert(reportsToUpsert);
+
+      if (repError) throw new Error(`Falha ao restaurar relatórios: ${repError.message}`);
+      reportsRestored = reportsToUpsert.length;
+    } else {
+      console.log('[BackupService] Todos os relatórios já estavam assinados no banco de dados. Upsert de relatórios ignorado para proteção.');
+    }
   }
 
   return {
