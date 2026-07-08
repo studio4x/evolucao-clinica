@@ -8,7 +8,7 @@ import { clearPendingGoogleScopes } from '../services/googleAuth';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, googleAccessToken, setUser, setGoogleAccessToken, setGoogleGrantedScopes, setProfileInfo } = useAuthStore();
+  const { user, googleAccessToken, setUser, setGoogleAccessToken, setGoogleGrantedScopes, setProfileInfo, subscriptionPlan } = useAuthStore();
   
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
