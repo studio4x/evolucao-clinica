@@ -211,6 +211,15 @@
 
           const injectHtmlContent = function (htmlString, target, locationTag) {
             if (!htmlString) return;
+            if (!target) {
+              document.addEventListener('DOMContentLoaded', function () {
+                const actualTarget = locationTag === 'head' ? document.head : document.body;
+                if (actualTarget) {
+                  injectHtmlContent(htmlString, actualTarget, locationTag);
+                }
+              });
+              return;
+            }
             const temp = document.createElement('div');
             temp.innerHTML = htmlString;
             Array.from(temp.childNodes).forEach(function (node) {
@@ -255,7 +264,16 @@
             gtmIframe.style.display = "none";
             gtmIframe.style.visibility = "hidden";
             gtmNoscript.appendChild(gtmIframe);
-            document.body.insertBefore(gtmNoscript, document.body.firstChild);
+            
+            if (document.body) {
+              document.body.insertBefore(gtmNoscript, document.body.firstChild);
+            } else {
+              document.addEventListener('DOMContentLoaded', function () {
+                if (document.body) {
+                  document.body.insertBefore(gtmNoscript, document.body.firstChild);
+                }
+              });
+            }
           }
 
           // 2. Facebook Pixel
@@ -283,7 +301,16 @@
             pixelImg.style.display = "none";
             pixelImg.src = "https://www.facebook.com/tr?id=" + pixelId + "&ev=PageView&noscript=1";
             pixelNoscript.appendChild(pixelImg);
-            document.body.insertBefore(pixelNoscript, document.body.firstChild);
+            
+            if (document.body) {
+              document.body.insertBefore(pixelNoscript, document.body.firstChild);
+            } else {
+              document.addEventListener('DOMContentLoaded', function () {
+                if (document.body) {
+                  document.body.insertBefore(pixelNoscript, document.body.firstChild);
+                }
+              });
+            }
           }
 
           // 3. Custom Head scripts
