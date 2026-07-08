@@ -8,6 +8,7 @@ import { AppVersion } from './layout/AppVersion';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
+import { runAutoBackupIfNeeded } from '../services/backupService';
 
 export default function Layout() {
   const { user, profileRole, googleAccessToken, subscriptionPlan } = useAuthStore();
@@ -95,7 +96,6 @@ export default function Layout() {
 
     const triggerBackup = async () => {
       try {
-        const { runAutoBackupIfNeeded } = await import('../services/backupService');
         await runAutoBackupIfNeeded(user.id, googleAccessToken, user.user_metadata?.full_name || 'Terapeuta');
       } catch (err) {
         console.error('[Layout] Falha ao executar backup em background:', err);
