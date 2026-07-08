@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle } from 'lucide-react';
+import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle, Upload, Lock, Image } from 'lucide-react';
 import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
 
@@ -28,6 +28,10 @@ export default function Profile() {
   const [errorMessage, setErrorMessage] = useState('');
   const [deleteErrorMessage, setDeleteErrorMessage] = useState('');
 
+  const [customLogoUrl, setCustomLogoUrl] = useState('');
+  const [dbSubscriptionPlan, setDbSubscriptionPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none' | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
   useEffect(() => {
     const loadProfile = async () => {
       if (!user) return;
@@ -39,7 +43,7 @@ export default function Profile() {
         // Busca os dados da tabela professionals
         const { data, error } = await supabase
           .from('professionals')
-          .select('full_name, professional_title, professional_register, onboarding_completed')
+          .select('full_name, professional_title, professional_register, onboarding_completed, custom_logo_url, subscription_plan')
           .eq('id', user.id)
           .single();
 
@@ -54,6 +58,8 @@ export default function Profile() {
           setProfessionalTitle(data.professional_title || 'Terapeuta');
           setProfessionalRegister(data.professional_register || '');
           setOnboardingCompleted(data.onboarding_completed === true);
+          setCustomLogoUrl(data.custom_logo_url || '');
+          setDbSubscriptionPlan(data.subscription_plan || null);
         } else {
           // Fallback para metadados do auth
           const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
@@ -127,6 +133,95 @@ export default function Profile() {
       setErrorMessage(err.message || 'Ocorreu um erro ao atualizar o perfil.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const isYearly = dbSubscriptionPlan === 'yearly' || subscriptionPlan === 'yearly';
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!isYearly) {
+      alert("A personalização do logotipo é uma funcionalidade exclusiva do Plano Anual.");
+      return;
+    }
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert("Por favor, envie uma imagem nos formatos PNG, JPG ou WEBP.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("A imagem deve ter no máximo 2MB.");
+      return;
+    }
+
+    try {
+      setUploadingLogo(true);
+      const fileExt = file.name.split('.').pop() || 'png';
+      const filePath = `custom_logos/${user.id}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('brand')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('brand')
+        .getPublicUrl(filePath);
+
+      const publicUrl = publicUrlData.publicUrl;
+      setCustomLogoUrl(publicUrl);
+
+      const { error: dbError } = await supabase
+        .from('professionals')
+        .update({
+          custom_logo_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (dbError) throw dbError;
+
+      setSuccessMessage('Logotipo personalizado atualizado com sucesso!');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err: any) {
+      console.error("Erro ao fazer upload do logotipo:", err);
+      alert("Erro ao fazer upload: " + (err.message || err));
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!user) return;
+    try {
+      setUploadingLogo(true);
+
+      const { error: dbError } = await supabase
+        .from('professionals')
+        .update({
+          custom_logo_url: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (dbError) throw dbError;
+
+      setCustomLogoUrl('');
+      setSuccessMessage('Logotipo personalizado removido com sucesso!');
+      setTimeout(() => setSuccessMessage(''), 4000);
+    } catch (err: any) {
+      console.error("Erro ao remover logotipo:", err);
+      alert("Erro ao remover logotipo: " + (err.message || err));
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -405,6 +500,102 @@ export default function Profile() {
               <p className="text-[10px] text-brand-text-muted">
                 O e-mail não pode ser alterado pois é a credencial de login oficial.
               </p>
+            </div>
+
+            {/* Logotipo Personalizado - Funcionalidade Anual */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between border-b border-brand-border/40 pb-2">
+                <h2 className="text-lg font-display font-semibold text-brand-primary">
+                  Logotipo Personalizado
+                </h2>
+                {!isYearly && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm">
+                    <Lock size={10} /> Plano Anual
+                  </span>
+                )}
+              </div>
+
+              {!isYearly ? (
+                <div className="bg-gradient-to-br from-amber-50/40 to-orange-50/20 border border-amber-200/60 rounded-2xl p-5 relative overflow-hidden">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1.5 max-w-lg">
+                      <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                        <Sparkles size={16} className="text-amber-600" />
+                        Timbre Exclusivo com Sua Marca
+                      </h4>
+                      <p className="text-xs text-amber-700/80 leading-relaxed">
+                        Personalize os seus relatórios, planos de desenvolvimento (PDI) e evoluções clínicas impressas ou em PDF com o seu próprio logotipo ou o logotipo da sua clínica.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate('/painel/subscription')}
+                      className="btn-primary py-2 px-4 text-xs font-semibold shrink-0 cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white border-0 shadow-md shadow-amber-500/10 active:scale-95 transition-all animate-none flex items-center justify-center"
+                    >
+                      Assinar Plano Anual
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="border border-brand-border rounded-2xl p-5 bg-white space-y-4">
+                  <p className="text-xs text-brand-text-muted leading-relaxed">
+                    Envie uma imagem com o seu logotipo profissional ou da sua clínica. Formatos aceitos: PNG, JPG ou WEBP (máx. 2MB). Este logotipo substituirá a marca padrão da plataforma no cabeçalho das evoluções e relatórios clínicos impressos e em PDF.
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-5">
+                    {customLogoUrl ? (
+                      <div className="relative w-32 h-32 bg-stone-50 rounded-2xl border border-brand-border flex items-center justify-center p-2 group overflow-hidden">
+                        <img src={customLogoUrl} alt="Logo Timbre" className="max-h-full max-w-full object-contain" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRemoveLogo}
+                            disabled={uploadingLogo}
+                            className="p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors cursor-pointer"
+                            title="Remover Logotipo"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-32 h-32 bg-stone-50 rounded-2xl border border-dashed border-stone-300 flex flex-col items-center justify-center text-stone-400 p-2">
+                        <Image size={24} className="text-stone-300 mb-1" />
+                        <span className="text-[10px] text-center font-medium">Sem logotipo</span>
+                      </div>
+                    )}
+
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <label className="inline-flex items-center gap-2 rounded-xl bg-brand-primary text-white px-4 py-2.5 text-xs font-semibold hover:bg-brand-primary/95 transition-colors shadow-md shadow-brand-primary/10 active:scale-95 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+                          <Upload size={14} />
+                          <span>{uploadingLogo ? 'Carregando...' : 'Enviar Logotipo'}</span>
+                          <input
+                            type="file"
+                            accept="image/png, image/jpeg, image/jpg, image/webp"
+                            onChange={handleLogoUpload}
+                            disabled={uploadingLogo}
+                            className="hidden"
+                          />
+                        </label>
+                        {customLogoUrl && (
+                          <button
+                            type="button"
+                            onClick={handleRemoveLogo}
+                            disabled={uploadingLogo}
+                            className="rounded-xl border border-red-200 text-red-600 bg-red-50/50 px-4 py-2.5 text-xs font-semibold hover:bg-red-100/70 transition-colors cursor-pointer"
+                          >
+                            Remover
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-brand-text-muted">
+                        Para melhor visualização no cabeçalho dos documentos, recomendamos imagens horizontais com fundo transparente ou branco.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Seção de Senha Explicativa */}

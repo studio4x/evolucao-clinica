@@ -91,7 +91,8 @@ export default function PatientDetail() {
     setGoogleAccessToken,
     subscriptionStatus,
     subscriptionEndsAt,
-    profileRole
+    profileRole,
+    subscriptionPlan
   } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
@@ -177,6 +178,11 @@ export default function PatientDetail() {
   const [printDocType, setPrintDocType] = useState('');
   const [printMode, setPrintMode] = useState<'report' | 'prontuario'>('report');
   const [professional, setProfessional] = useState<any>(null);
+
+  const getLogoUrl = () => {
+    const isYearly = professional?.subscription_plan === 'yearly' || subscriptionPlan === 'yearly';
+    return (isYearly && professional?.custom_logo_url) ? professional.custom_logo_url : siteConfig.logo_light_url;
+  };
   const [printingProntuario, setPrintingProntuario] = useState(false);
   const [showPrintFilterModal, setShowPrintFilterModal] = useState(false);
   const [printStartDate, setPrintStartDate] = useState('');
@@ -428,9 +434,10 @@ export default function PatientDetail() {
         const savePdf = window.confirm("Deseja salvar automaticamente o PDF desta evolução assinada na pasta do prontuário no Google Drive?");
         if (savePdf) {
           let logoBase64 = null;
-          if (siteConfig.logo_light_url) {
+          const currentLogoUrl = getLogoUrl();
+          if (currentLogoUrl) {
             try {
-              logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+              logoBase64 = await getBase64ImageFromUrl(currentLogoUrl);
             } catch (err) {
               console.error("Error preloading logo:", err);
             }
@@ -863,7 +870,7 @@ export default function PatientDetail() {
       // Buscar dados do profissional logado da tabela professionals
       const { data: profData, error: profError } = await supabase
         .from('professionals')
-        .select('full_name, professional_title, professional_register')
+        .select('full_name, professional_title, professional_register, custom_logo_url, subscription_plan')
         .eq('id', user.id)
         .single();
       if (!profError && profData) {
@@ -1433,9 +1440,10 @@ export default function PatientDetail() {
       };
 
       let logoBase64 = null;
-      if (siteConfig.logo_light_url) {
+      const currentLogoUrl = getLogoUrl();
+      if (currentLogoUrl) {
         try {
-          logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+          logoBase64 = await getBase64ImageFromUrl(currentLogoUrl);
         } catch (err) {
           console.error("Error preloading logo:", err);
         }
@@ -2292,9 +2300,10 @@ export default function PatientDetail() {
                             type="button"
                             onClick={async () => {
                               let logoBase64 = null;
-                              if (siteConfig.logo_light_url) {
+                              const currentLogoUrl = getLogoUrl();
+                              if (currentLogoUrl) {
                                 try {
-                                  logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                                  logoBase64 = await getBase64ImageFromUrl(currentLogoUrl);
                                 } catch (err) {
                                   console.error("Error preloading logo:", err);
                                 }
@@ -2352,9 +2361,10 @@ export default function PatientDetail() {
                                   onClick={async () => {
                                     setActiveDropdownId(null);
                                     let logoBase64 = null;
-                                    if (siteConfig.logo_light_url) {
+                                    const currentLogoUrl = getLogoUrl();
+                                    if (currentLogoUrl) {
                                       try {
-                                        logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                                        logoBase64 = await getBase64ImageFromUrl(currentLogoUrl);
                                       } catch (err) {
                                         console.error("Error preloading logo:", err);
                                       }
@@ -3224,9 +3234,10 @@ export default function PatientDetail() {
                           type="button"
                           onClick={async () => {
                             let logoBase64 = null;
-                            if (siteConfig.logo_light_url) {
+                            const currentLogoUrl = getLogoUrl();
+                            if (currentLogoUrl) {
                               try {
-                                logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                                logoBase64 = await getBase64ImageFromUrl(currentLogoUrl);
                               } catch (err) {
                                 console.error("Error preloading logo:", err);
                               }
@@ -3598,9 +3609,10 @@ export default function PatientDetail() {
                       type="button"
                       onClick={async () => {
                         let logoBase64 = null;
-                        if (siteConfig.logo_light_url) {
+                        const currentLogoUrl = getLogoUrl();
+                        if (currentLogoUrl) {
                           try {
-                            logoBase64 = await getBase64ImageFromUrl(siteConfig.logo_light_url);
+                            logoBase64 = await getBase64ImageFromUrl(currentLogoUrl);
                           } catch (err) {
                             console.error("Error preloading logo:", err);
                           }
@@ -3834,10 +3846,10 @@ export default function PatientDetail() {
           {/* Cabecalho Timbrado */}
           <div className="border-b-2 border-brand-primary pb-4 mb-6 flex justify-between items-center">
             <div className="flex items-center gap-4">
-              {siteConfig.logo_light_url ? (
-                <div className="bg-white p-1 rounded border border-stone-100 flex items-center justify-center">
-                  <img src={siteConfig.logo_light_url} alt="Logo" className="h-10 object-contain bg-white" style={{ backgroundColor: '#ffffff' }} />
-                </div>
+            {getLogoUrl() ? (
+              <div className="bg-white p-1 rounded border border-stone-100 flex items-center justify-center">
+                <img src={getLogoUrl()} alt="Logo" className="h-10 object-contain bg-white" style={{ backgroundColor: '#ffffff' }} />
+              </div>
               ) : (
                 <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider leading-none">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>
               )}

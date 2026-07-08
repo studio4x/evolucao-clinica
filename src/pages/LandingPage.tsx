@@ -79,7 +79,8 @@ const DEFAULT_PLANS = [
       'Desconto de ~17% sobre o valor',
       'Suporte prioritário via e-mail e WhatsApp',
       'Garantia de novos recursos em primeira mão',
-      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
+      'Migração assistida de prontuários por IA (PDF/Word/Excel)',
+      'Logotipo personalizado nos relatórios e evoluções (PDF/Impresso)'
     ]
   }
 ];

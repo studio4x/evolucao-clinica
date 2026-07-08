@@ -43,7 +43,8 @@ const DEFAULT_PLANS = [
       'Desconto de ~17% sobre o valor mensal',
       'Suporte prioritário via ticket',
       'Garantia de novos recursos exclusivos em primeira mão',
-      'Migração assistida de prontuários por IA (PDF/Word/Excel)'
+      'Migração assistida de prontuários por IA (PDF/Word/Excel)',
+      'Logotipo personalizado nos relatórios e evoluções (PDF/Impresso)'
     ],
     button_text_simulate: 'Assinar Anual (Simulado)',
     tag_text: 'Popular',
