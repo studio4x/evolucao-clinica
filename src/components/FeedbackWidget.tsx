@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Star, Send, X, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { MessageSquare, Star, Send, X, CheckCircle2, ShieldAlert, Lightbulb } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 
@@ -101,15 +101,18 @@ export const FeedbackWidget = () => {
 
   return (
     <>
-      {/* Botão Flutuante Discreto */}
+      {/* Botão de Aba Lateral Esquerda (Estilo Feedback/Sugestões) */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-6 z-[60] flex items-center justify-center p-3.5 bg-gradient-to-tr from-brand-primary to-[#076c9a] text-white rounded-full shadow-2xl hover:scale-110 active:scale-95 transition-all duration-300 group cursor-pointer border border-white/10"
+        className="fixed left-0 top-[45%] -translate-y-1/2 z-[60] bg-[#076c9a] text-white flex flex-col items-center gap-2.5 py-4 px-2 rounded-r-xl shadow-lg border border-l-0 border-white/10 cursor-pointer hover:pr-3.5 hover:bg-[#065b82] transition-all duration-200 select-none group"
         title="Enviar sugestão de melhoria"
       >
-        <MessageSquare className="w-5.5 h-5.5 group-hover:rotate-12 transition-transform" />
-        <span className="max-w-0 overflow-hidden group-hover:max-w-28 group-hover:ml-2 transition-all duration-300 font-semibold text-xs whitespace-nowrap hidden md:inline">
-          Sugerir & Avaliar
+        <Lightbulb className="w-4.5 h-4.5 group-hover:animate-pulse text-amber-300 shrink-0" />
+        <span 
+          className="font-bold text-[9px] uppercase tracking-wider select-none font-sans" 
+          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+        >
+          Sugestões
         </span>
       </button>
 
