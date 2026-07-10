@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"></noscript>
     
 
     <title>Evolução Clínica - Prontuários e Evoluções com IA</title>
@@ -391,29 +392,39 @@
           xhr.send(null);
         };
 
-        // Dispara requisições assíncronas em background
-        fetchBrandSettingsAsync(function (publicConfig) {
-          if (publicConfig) {
-            hydrate(publicConfig);
-            
-            // Busca o tracking sequencialmente de forma assíncrona
-            fetchTrackingSettingsAsync(function (trackingConfig) {
-              if (trackingConfig) {
-                injectTracking(trackingConfig);
-                try {
-                  localStorage.setItem(trackingStorageKey, JSON.stringify(trackingConfig));
-                } catch (e) {}
-              }
-            });
-          } else {
-            // Se o Supabase falhar, tenta da API local de forma assíncrona
-            fetchBrandSettingsFromApiAsync(function (apiConfig) {
-              if (apiConfig) {
-                hydrate(apiConfig);
-              }
-            });
-          }
-        });
+        // Dispara requisições assíncronas em background de forma deferida (após load da página)
+        const initBackgroundFetch = function () {
+          fetchBrandSettingsAsync(function (publicConfig) {
+            if (publicConfig) {
+              hydrate(publicConfig);
+              
+              // Busca o tracking sequencialmente de forma assíncrona
+              fetchTrackingSettingsAsync(function (trackingConfig) {
+                if (trackingConfig) {
+                  injectTracking(trackingConfig);
+                  try {
+                    localStorage.setItem(trackingStorageKey, JSON.stringify(trackingConfig));
+                  } catch (e) {}
+                }
+              });
+            } else {
+              // Se o Supabase falhar, tenta da API local de forma assíncrona
+              fetchBrandSettingsFromApiAsync(function (apiConfig) {
+                if (apiConfig) {
+                  hydrate(apiConfig);
+                }
+              });
+            }
+          });
+        };
+
+        if (window.addEventListener) {
+          window.addEventListener('load', function() {
+            setTimeout(initBackgroundFetch, 1000); // Executa 1 segundo após o load para não concorrer com LCP
+          });
+        } else {
+          setTimeout(initBackgroundFetch, 2000);
+        }
       })();
     </script>
   </head>
