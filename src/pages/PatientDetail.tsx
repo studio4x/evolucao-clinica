@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download, CloudOff, MoreVertical } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { transcribeAudio } from '../services/aiTranscription';
 import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent, uploadPdfToGoogleDrive } from '../services/googleDocs';
@@ -58,17 +58,7 @@ const stripMarkdown = (md: string): string => {
     .trim();
 };
 
-const blobToBase64 = (blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = (reader.result as string).split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-};
+
 
 export default function PatientDetail() {
   const siteConfig = useSiteConfig();
@@ -1543,37 +1533,18 @@ export default function PatientDetail() {
 
     const attemptProcess = async () => {
       try {
-        // 1. Fetch audio and transcribe with Gemini (Frontend)
-        console.log("Iniciando transcrição no frontend...");
+        // 1. Fetch audio and transcribe with Gemini (Backend Proxy)
+        console.log("Iniciando transcrição via backend...");
         
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-          throw new Error("Chave da API Gemini não encontrada no ambiente.");
-        }
-
         const audioResponse = await fetch(evo.audio_url);
         if (!audioResponse.ok) throw new Error("Falha ao baixar áudio para reprocessamento.");
         const audioBlob = await audioResponse.blob();
         
-        const ai = new GoogleGenAI({ apiKey });
-        const base64Audio = await blobToBase64(audioBlob);
-        
-        const prompt = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
-
-        const geminiResponse = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: {
-            parts: [
-              { text: prompt },
-              { inlineData: { data: base64Audio, mimeType: audioBlob.type || 'audio/webm' } }
-            ]
-          }
+        const transcription = await transcribeAudio({
+          audioBlob,
+          mimeType: audioBlob.type || 'audio/webm',
+          audioDuration: evo.audio_duration_seconds || 0
         });
-
-        const transcription = geminiResponse.text;
-        if (!transcription) {
-          throw new Error("A IA não retornou nenhuma transcrição.");
-        }
 
         console.log("Transcrição concluída. Inserindo no Google Docs...");
 

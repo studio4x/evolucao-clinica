@@ -1016,7 +1016,18 @@ app.get("/api/brand-bootstrap", async (_req, res) => {
 });
 
 app.get("/api/gemini-key", requireAuth, async (req: any, res) => {
+  res.status(410).json({ error: "Este endpoint foi desativado por motivos de segurança. A chave de API do Gemini não é mais exposta ao cliente." });
+});
+
+app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
   try {
+    const { audioBase64, mimeType, prompt, audioDuration } = req.body;
+
+    if (!audioBase64 || !mimeType) {
+      return res.status(400).json({ error: "Parâmetros 'audioBase64' e 'mimeType' são obrigatórios." });
+    }
+
+    // 1. Obter a chave do Gemini
     let apiKey = "";
     const { data, error } = await supabaseAdmin
       .from("settings")
@@ -1031,16 +1042,64 @@ app.get("/api/gemini-key", requireAuth, async (req: any, res) => {
     }
 
     if (!apiKey) {
-      return res.status(404).json({ error: "Chave do Gemini nao configurada no servidor." });
+      return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
     }
 
-    res.setHeader("Cache-Control", "no-store, max-age=0");
-    res.json({ apiKey });
+    // 2. Instanciar o SDK do Gemini no Backend de forma protegida
+    const ai = new GoogleGenAI({ apiKey });
+    const modelName = "gemini-2.5-flash";
+
+    console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${audioDuration || 0}s)...`);
+    
+    const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+
+    const geminiResponse = await ai.models.generateContent({
+      model: modelName,
+      contents: {
+        parts: [
+          { text: transcriptionPrompt },
+          { inlineData: { data: audioBase64, mimeType: mimeType } }
+        ]
+      }
+    });
+
+    const transcription = geminiResponse.text;
+    if (!transcription) {
+      throw new Error("O Gemini não retornou nenhum texto de transcrição.");
+    }
+
+    // 3. Registrar o log de consumo diretamente no banco
+    const usageMetadata = (geminiResponse as any).usageMetadata;
+    if (usageMetadata) {
+      const promptTokens = usageMetadata.promptTokenCount || 0;
+      const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
+      const totalTokens = usageMetadata.totalTokenCount || 0;
+      const costUsd = (promptTokens * 0.00000030) + (candidatesTokens * 0.00000250);
+
+      try {
+        await supabaseAdmin.from('usage_logs').insert({
+          professional_id: req.user.id,
+          model: modelName,
+          prompt_tokens: promptTokens,
+          candidates_tokens: candidatesTokens,
+          total_tokens: totalTokens,
+          cost_usd: costUsd,
+          audio_duration_seconds: audioDuration || 0,
+          created_at: new Date().toISOString()
+        });
+        console.log("[AI-Backend] Log de consumo gravado com sucesso.");
+      } catch (dbError) {
+        console.error("[AI-Backend] Erro ao gravar log de consumo:", dbError);
+      }
+    }
+
+    res.json({ success: true, transcription });
   } catch (err: any) {
-    console.error("Erro ao obter chave do Gemini:", err);
-    res.status(500).json({ error: "Erro interno ao obter chave do Gemini." });
+    console.error("Erro na transcrição via backend:", err);
+    res.status(500).json({ error: err.message || "Erro interno ao processar a transcrição." });
   }
 });
+
 
 const DEFAULT_PUBLIC_PAYMENT_SETTINGS = {
   environment: "TEST",

@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { supabase } from "../supabaseClient";
 
 export interface TranscriptionOptions {
@@ -38,150 +37,67 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
   const base64Audio = await blobToBase64(audioBlob);
 
   const attemptTranscription = async (): Promise<string> => {
-    let keySource: 'db' | 'env' | 'none' = 'none';
-    let apiKey = "";
-
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
       
-      if (token) {
-        const response = await fetch('/api/gemini-key', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.apiKey) {
-            apiKey = data.apiKey;
-            keySource = 'db';
-            console.log('[AI-Service] Usando chave dinâmica obtida do servidor (banco de dados/env)');
-          }
-        } else {
-          console.warn(`[AI-Service] Resposta do servidor ao buscar chave: ${response.status}`);
-        }
-      }
-    } catch (fetchError) {
-      console.warn("[AI-Service] Falha ao obter chave dinâmica do servidor, usando fallback local:", fetchError);
-    }
-
-    if (!apiKey) {
-      const mainKey = process.env.GEMINI_API_KEY || import.meta.env.VITE_GEMINI_API_KEY;
-      const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
-      apiKey = backupKey ? backupKey : mainKey;
-
-      if (apiKey) {
-        keySource = 'env';
-        console.log(`[AI-Service] Usando chave estática local ${apiKey === backupKey ? 'SECUNDÁRIA (REAL)' : 'PRINCIPAL (GRATUITA)'}`);
-      }
-    }
-
-    try {
-      if (!apiKey) {
-        console.error("[AI-Service] ERRO: Nenhuma chave da API Gemini encontrada.");
-        throw new Error("Configuração de API ausente. Verifique as chaves.");
+      if (!token) {
+        throw new Error("Usuário não autenticado. Faça login novamente.");
       }
 
-      const keyLabel = keySource === 'db'
-        ? 'dinâmica do banco de dados'
-        : keySource === 'env'
-          ? 'estática de fallback'
-          : 'não encontrada';
-      console.log(`[AI-Service] Usando chave ${keyLabel} - Tentativa ${retryCount + 1}`);
+      console.log(`[AI-Service] Enviando áudio para transcrição via backend - Tentativa ${retryCount + 1}`);
 
-      const ai = new GoogleGenAI({ apiKey });
-      
-      // Timeout de 55 segundos para a chamada da IA
-      const transcriptionPromise = ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: {
-          parts: [
-            { text: prompt },
-            { inlineData: { data: base64Audio, mimeType: normalizedMimeType } }
-          ]
-        }
+      const response = await fetch('/api/ai/transcribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          audioBase64: base64Audio,
+          mimeType: normalizedMimeType,
+          prompt,
+          audioDuration
+        })
       });
 
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Timeout: A IA demorou muito para responder (55s).")), 55000)
-      );
+      const data = await response.json();
 
-      const geminiResponse = await Promise.race([transcriptionPromise, timeoutPromise]) as any;
-
-      const transcription = geminiResponse.text;
-      if (!transcription) {
-        throw new Error("A IA não retornou nenhuma transcrição.");
+      if (!response.ok) {
+        throw new Error(data.error || `Erro do servidor (HTTP ${response.status})`);
       }
 
-      // Captura e grava metadados de uso de tokens do Gemini
-      const usageMetadata = geminiResponse.usageMetadata;
-      if (usageMetadata) {
-        const promptTokens = usageMetadata.promptTokenCount || 0;
-        const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
-        const totalTokens = usageMetadata.totalTokenCount || 0;
-        
-        // Custo Gemini 2.5 Flash:
-        // Input: $0.30 / 1M tokens ($0.00000030 / token)
-        // Output: $2.50 / 1M tokens ($0.00000250 / token)
-        const costUsd = (promptTokens * 0.00000030) + (candidatesTokens * 0.00000250);
-
-        try {
-          const { data: { user } } = await supabase.auth.getUser();
-          
-          await supabase.from('usage_logs').insert({
-            professional_id: user?.id || 'unknown',
-            model: "gemini-2.5-flash",
-            prompt_tokens: promptTokens,
-            candidates_tokens: candidatesTokens,
-            total_tokens: totalTokens,
-            cost_usd: costUsd,
-            audio_duration_seconds: audioDuration || 0,
-            created_at: new Date().toISOString()
-          });
-          console.log("[AI-Service] Log de consumo gravado no Supabase com sucesso.");
-        } catch (dbError) {
-          console.error("[AI-Service] Erro ao salvar log de consumo no Supabase:", dbError);
-        }
+      if (!data.success || !data.transcription) {
+        throw new Error("Resposta de transcrição inválida obtida do servidor.");
       }
 
-      console.log("[AI-Service] Transcrição concluída com sucesso.");
-      return transcription;
+      console.log("[AI-Service] Transcrição via backend concluída com sucesso.");
+      return data.transcription;
+
     } catch (error: any) {
-      // Detecção aprimorada de erro de cota (429)
-      const errorContent = typeof error === 'string' ? error : (error.message || JSON.stringify(error));
+      const errorContent = error.message || JSON.stringify(error);
       const isQuotaError = errorContent.includes('429') || 
                            errorContent.includes('exhausted') || 
-                           errorContent.includes('RESOURCE_EXHAUSTED') ||
-                           error.status === 429;
+                           errorContent.includes('RESOURCE_EXHAUSTED');
 
-      console.error("[AI-Service] Erro detectado:", errorContent);
+      console.error("[AI-Service] Erro na transcrição:", errorContent);
       
-      if (retryCount < maxRetries && (error.message === 'Failed to fetch' || isQuotaError)) {
+      if (retryCount < maxRetries) {
         retryCount++;
-        const backupKey = process.env.GEMINI_API_KEY_REAL || import.meta.env.VITE_GEMINI_API_KEY_REAL;
-        const isFallbackNext = !!(backupKey && retryCount > 0);
-        
-        // Aumenta o delay significativamente para erros de cota (mínimo 15 segundos)
+        // Se for erro de cota, aumenta o delay (mínimo 15 segundos)
         const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
         
-        console.log(`[AI-Service] Retrying in ${delay}ms... (Next is Fallback: ${isFallbackNext})`);
+        console.log(`[AI-Service] Tentando re-executar em ${delay}ms...`);
         
-        if (onRetry) onRetry(retryCount, delay, isFallbackNext);
+        if (onRetry) {
+          onRetry(retryCount, delay, false);
+        }
         
         await new Promise(resolve => setTimeout(resolve, delay));
         return attemptTranscription();
       }
       
-      let sourceMsg = 'Chave não encontrada';
-      if (keySource === 'db') {
-        sourceMsg = 'Chave dinâmica obtida do servidor';
-      } else if (keySource === 'env') {
-        sourceMsg = 'Chave estática de fallback do servidor';
-      }
-      
-      const errorMessage = error.message || errorContent;
-      throw new Error(`${errorMessage} (Origem da chave: ${sourceMsg})`);
+      throw new Error(`${errorContent} (Erro na comunicação com o backend de transcrição)`);
     }
   };
 
