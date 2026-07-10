@@ -30,13 +30,14 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Evolução Clínica - Prontuários e Evoluções com IA" />
     <meta property="og:description" content="Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive." />
-    <meta property="og:image" content="/og-image-social.png" />
+    <meta property="og:image" content="https://www.evolucaoclinica.app.br/og-image-social.png" />
+    <meta property="og:image:alt" content="Evolução Clínica - Prontuários e Evoluções com IA" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Evolução Clínica - Prontuários e Evoluções com IA" />
     <meta name="twitter:description" content="Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive." />
-    <meta name="twitter:image" content="/og-image-social.png" />
+    <meta name="twitter:image" content="https://www.evolucaoclinica.app.br/og-image-social.png" />
     <script>
       (function () {
         const storageKey = 'evolucao-clinica:site-config';
@@ -133,7 +134,7 @@
 
           const faviconUrl = config.favicon_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
           const appleTouchIconUrl = config.pwa_icon_192_url || faviconUrl;
-          const socialImageUrl = appendVersion(config.social_share_url || '/og-image-social.png', assetSignature);
+          const socialImageUrl = appendVersion(config.social_share_url || 'https://www.evolucaoclinica.app.br/og-image-social.png', assetSignature);
           const title = config.pwa_app_name || defaultTitle;
           const description = config.pwa_description || defaultDescription;
 
@@ -143,9 +144,10 @@
           setLink("link[rel='manifest']", 'manifest', appendVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
           updateThemeMeta(config.pwa_theme_color || '#005C13');
           updateMeta("meta[name='apple-mobile-web-app-title']", 'name', 'apple-mobile-web-app-title', title);
-          updateMeta("meta[property='og:title']", 'property', 'og:title', title);
+           updateMeta("meta[property='og:title']", 'property', 'og:title', title);
           updateMeta("meta[property='og:description']", 'property', 'og:description', description);
           updateMeta("meta[property='og:image']", 'property', 'og:image', socialImageUrl);
+          updateMeta("meta[property='og:image:alt']", 'property', 'og:image:alt', title);
           updateMeta("meta[name='twitter:title']", 'name', 'twitter:title', title);
           updateMeta("meta[name='twitter:description']", 'name', 'twitter:description', description);
           updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', socialImageUrl);
