@@ -257,10 +257,14 @@ export default function LandingPage() {
             </div>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex space-x-8 text-sm font-semibold text-brand-text-muted">
+            <nav className="hidden lg:flex space-x-3 xl:space-x-5 text-sm font-semibold text-brand-text-muted">
               <button onClick={() => scrollToSection('recursos')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Recursos</button>
+              <button onClick={() => scrollToSection('especialidades')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Especialidades</button>
               <button onClick={() => scrollToSection('como-funciona')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Como Funciona</button>
-              <button onClick={() => scrollToSection('demonstracao')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Demonstração</button>
+              <button onClick={() => scrollToSection('demonstracao')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Demo</button>
+              <button onClick={() => scrollToSection('calculadora')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Simulador</button>
+              <button onClick={() => scrollToSection('comparativo')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Comparativo</button>
+              <button onClick={() => scrollToSection('seguranca')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Segurança</button>
               <button onClick={() => scrollToSection('planos')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Planos</button>
               <button onClick={() => scrollToSection('faq')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">FAQ</button>
             </nav>
@@ -300,8 +304,12 @@ export default function LandingPage() {
         {mobileMenuOpen && (
           <div className="lg:hidden bg-white border-t border-brand-border py-4 px-6 space-y-4 shadow-xl">
             <button onClick={() => scrollToSection('recursos')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Recursos</button>
+            <button onClick={() => scrollToSection('especialidades')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Especialidades</button>
             <button onClick={() => scrollToSection('como-funciona')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Como Funciona</button>
             <button onClick={() => scrollToSection('demonstracao')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Demonstração</button>
+            <button onClick={() => scrollToSection('calculadora')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Simulador</button>
+            <button onClick={() => scrollToSection('comparativo')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Comparativo</button>
+            <button onClick={() => scrollToSection('seguranca')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Segurança</button>
             <button onClick={() => scrollToSection('planos')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Planos</button>
             <button onClick={() => scrollToSection('faq')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">FAQ</button>
             <div className="pt-4 border-t border-brand-border flex flex-col gap-3">
@@ -541,7 +549,7 @@ export default function LandingPage() {
       </section>
 
       {/* ESPECIALIDADES SECTION */}
-      <section className="py-20 bg-brand-bg relative overflow-hidden border-b border-brand-border">
+      <section id="especialidades" className="py-20 bg-brand-bg relative overflow-hidden border-b border-brand-border">
         <div className="absolute top-0 right-0 w-80 h-80 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-4 mb-12">
@@ -850,7 +858,7 @@ export default function LandingPage() {
       </section>
 
       {/* CALCULADORA DE ROI (ECONOMIA DE TEMPO) */}
-      <section className="py-20 bg-white border-t border-brand-border relative overflow-hidden">
+      <section id="calculadora" className="py-20 bg-white border-t border-brand-border relative overflow-hidden">
         <div className="absolute top-1/2 left-0 w-72 h-72 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-4 mb-12">
@@ -940,7 +948,7 @@ export default function LandingPage() {
       </section>
 
       {/* SEÇÃO COMPARATIVA (ANTES VS DEPOIS) */}
-      <section className="py-20 bg-brand-bg border-t border-brand-border">
+      <section id="comparativo" className="py-20 bg-brand-bg border-t border-brand-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-4 mb-16">
             <h2 className="text-3xl font-display font-bold text-center">Compare e sinta a diferença no seu dia a dia</h2>
@@ -1114,7 +1122,7 @@ export default function LandingPage() {
       </section>
 
       {/* SEGURANÇA E SOBERANIA DOS DADOS */}
-      <section className="py-20 bg-brand-bg border-t border-brand-border relative overflow-hidden">
+      <section id="seguranca" className="py-20 bg-brand-bg border-t border-brand-border relative overflow-hidden">
         <div className="absolute top-0 right-0 w-96 h-96 bg-brand-accent/5 rounded-full blur-3xl pointer-events-none" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center space-y-4 mb-16">
