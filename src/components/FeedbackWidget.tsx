@@ -28,11 +28,11 @@ export const FeedbackWidget = () => {
       const fetchProfileName = async () => {
         const { data, error } = await supabase
           .from('professionals')
-          .select('name')
+          .select('full_name')
           .eq('id', user.id)
           .single();
         if (!error && data) {
-          setName(data.name || '');
+          setName(data.full_name || '');
         }
       };
       fetchProfileName();
