@@ -534,7 +534,7 @@ export default function LandingPage() {
           </div>
 
           {/* Tabs header */}
-          <div className="flex flex-wrap justify-center gap-2 mb-10 max-w-4xl mx-auto">
+          <div className="flex flex-wrap md:flex-nowrap justify-center md:justify-center gap-2 mb-10 max-w-5xl mx-auto overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             {[
               { id: 'psicologia', label: 'Psicologia', icon: Brain },
               { id: 'fonoaudiologia', label: 'Fonoaudiologia', icon: Volume2 },
@@ -548,7 +548,7 @@ export default function LandingPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveSpecialty(tab.id)}
-                  className={`flex items-center gap-2 px-5 py-3 rounded-full text-sm font-bold transition-all cursor-pointer ${
+                  className={`flex items-center gap-2 px-4 py-3 rounded-full text-sm font-bold transition-all cursor-pointer whitespace-nowrap ${
                     active 
                       ? 'bg-brand-primary text-white shadow-md' 
                       : 'bg-white text-brand-text-muted hover:text-brand-primary border border-brand-border hover:border-brand-primary/30'
