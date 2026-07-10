@@ -44,13 +44,13 @@ declare global {
 }
 
 export const defaultColors: BrandColors = {
-  primary: "#005C13",
-  primary_hover: "#00470e",
+  primary: "#076c9a",
+  primary_hover: "#0DABA4",
   secondary: "#5C4716",
   secondary_hover: "#4a3912",
-  accent: "#8CC63F",
-  accent_hover: "#7ab332",
-  bg: "#fdfbf7",
+  accent: "#82b9cc",
+  accent_hover: "#6ea3b4",
+  bg: "#edf8fd",
   surface: "#ffffff",
   text: "#1c1917",
   text_muted: "#57534e",
@@ -61,7 +61,7 @@ export const defaultSiteConfig: SiteConfig = {
   pwa_app_name: "Evolução Clínica",
   pwa_short_name: "Evolução Clínica",
   pwa_description: "Gerenciamento de Evoluções Clínicas com IA e Google Docs",
-  pwa_theme_color: "#005C13",
+  pwa_theme_color: "#076c9a",
   pwa_background_color: "#ffffff",
   pwa_icon_192_url: "/icon-192x192.png",
   pwa_icon_512_url: "/icon-512x512.png",
