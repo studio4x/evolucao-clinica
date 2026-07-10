@@ -1109,6 +1109,47 @@ app.get("/api/gemini-key", requireAuth, async (req: any, res) => {
   res.status(410).json({ error: "Este endpoint foi desativado por motivos de segurança. A chave de API do Gemini não é mais exposta ao cliente." });
 });
 
+// Endpoint para listar modelos Gemini disponíveis para a chave configurada
+app.get("/api/ai/list-models", requireAuth, async (req: any, res) => {
+  try {
+    const { apiKey } = await getGeminiSettings();
+    if (!apiKey) {
+      return res.status(500).json({ error: "Chave do Gemini não configurada." });
+    }
+
+    // Chama a API REST do Gemini para listar modelos (sem depender do SDK)
+    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=100`;
+    const response = await fetch(listUrl);
+    const data = await response.json() as any;
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: data?.error?.message || "Erro ao listar modelos." });
+    }
+
+    // Filtra modelos que suportam generateContent e são do tipo gemini-*
+    const models = (data.models || [])
+      .filter((m: any) =>
+        m.name?.includes("gemini") &&
+        Array.isArray(m.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.includes("generateContent")
+      )
+      .map((m: any) => ({
+        name: m.name?.replace("models/", "") || "",
+        displayName: m.displayName || m.name,
+        description: m.description || "",
+        inputTokenLimit: m.inputTokenLimit,
+        outputTokenLimit: m.outputTokenLimit,
+        supportedMethods: m.supportedGenerationMethods,
+      }))
+      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+
+    return res.json({ models });
+  } catch (err: any) {
+    console.error("[AI] Erro ao listar modelos Gemini:", err);
+    return res.status(500).json({ error: err.message || "Erro interno ao listar modelos." });
+  }
+});
+
 app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
   try {
     const { audioBase64, mimeType, prompt, audioDuration } = req.body;

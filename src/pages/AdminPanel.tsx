@@ -652,15 +652,39 @@ export default function AdminPanel() {
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [selectedGeminiModel, setSelectedGeminiModel] = useState('gemini-2.5-flash-preview-05-20');
+  const [availableModels, setAvailableModels] = useState<{ name: string; displayName: string; description: string }[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [modelsError, setModelsError] = useState('');
+  const [modelsFetched, setModelsFetched] = useState(false);
 
-  const GEMINI_MODELS = [
-    { value: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash Preview (Recomendado)', badge: 'Mais Recente' },
-    { value: 'gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro Preview (Alta qualidade)', badge: 'Pro' },
-    { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite (Econômico)', badge: 'Econômico' },
-    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Estável)', badge: 'Estável' },
-    { value: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B (Ultra rápido)', badge: 'Rápido' },
-    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Alta capacidade)', badge: 'Pro' },
+  // Lista de fallback (exibida antes de buscar da API)
+  const GEMINI_MODELS_FALLBACK = [
+    { value: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash Preview', badge: 'Recomendado' },
+    { value: 'gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro Preview', badge: 'Pro' },
+    { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite', badge: 'Econômico' },
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', badge: 'Estável' },
   ];
+
+  const handleFetchAvailableModels = async () => {
+    setLoadingModels(true);
+    setModelsError('');
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+      const res = await fetch('/api/ai/list-models', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro ao listar modelos.');
+      setAvailableModels(data.models || []);
+      setModelsFetched(true);
+    } catch (err: any) {
+      setModelsError(err.message || 'Erro desconhecido ao buscar modelos.');
+    } finally {
+      setLoadingModels(false);
+    }
+  };
 
   // Estados de Consumo de Tokens (usage_logs)
   const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
@@ -3433,7 +3457,7 @@ export default function AdminPanel() {
                           </span>
                         </div>
                         <span className="ml-3 shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary font-bold">
-                          {GEMINI_MODELS.find(m => m.value === selectedGeminiModel)?.badge || 'IA'}
+                          {GEMINI_MODELS_FALLBACK.find(m => m.value === selectedGeminiModel)?.badge || 'IA'}
                         </span>
                       </div>
                       <p className="text-xs text-brand-text-muted leading-relaxed">
@@ -3443,15 +3467,41 @@ export default function AdminPanel() {
 
                     <form onSubmit={handleSaveGeminiKey} className="space-y-6">
                       {/* Seletor de Modelo */}
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
-                          Modelo Gemini a Utilizar
-                        </label>
-                        <p className="text-xs text-brand-text-muted -mt-1">
-                          Escolha o modelo com base na disponibilidade da sua conta Google Cloud. Se um modelo retornar erro 404, tente o próximo da lista.
-                        </p>
-                        <div className="grid grid-cols-1 gap-2">
-                          {GEMINI_MODELS.map((model) => (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                              Modelo Gemini a Utilizar
+                            </label>
+                            <p className="text-xs text-brand-text-muted mt-0.5">
+                              {modelsFetched
+                                ? `${availableModels.length} modelos disponíveis para sua chave API`
+                                : 'Clique em "Verificar" para ver os modelos reais disponíveis para sua chave.'}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleFetchAvailableModels}
+                            disabled={loadingModels || !currentGeminiKey}
+                            className="shrink-0 flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-brand-primary/40 text-brand-primary hover:bg-brand-primary/5 transition-all disabled:opacity-40 cursor-pointer"
+                            title={!currentGeminiKey ? 'Salve uma chave API primeiro' : 'Consultar modelos disponíveis'}
+                          >
+                            {loadingModels
+                              ? <><Loader2 className="w-3 h-3 animate-spin" /><span>Verificando...</span></>
+                              : <><RefreshCw className="w-3 h-3" /><span>Verificar modelos</span></>
+                            }
+                          </button>
+                        </div>
+
+                        {modelsError && (
+                          <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>{modelsError}</span>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 gap-2 max-h-80 overflow-y-auto pr-1">
+                          {(modelsFetched ? availableModels.map(m => ({ value: m.name, label: m.displayName || m.name, badge: '' })) : GEMINI_MODELS_FALLBACK).map((model) => (
                             <label
                               key={model.value}
                               className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
@@ -3474,18 +3524,30 @@ export default function AdminPanel() {
                                 </span>
                                 <div className="font-mono text-[10px] text-brand-text-muted mt-0.5">{model.value}</div>
                               </div>
-                              <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                                model.badge === 'Mais Recente' ? 'bg-emerald-100 text-emerald-700' :
-                                model.badge === 'Pro' ? 'bg-purple-100 text-purple-700' :
-                                model.badge === 'Econômico' ? 'bg-blue-100 text-blue-700' :
-                                model.badge === 'Rápido' ? 'bg-amber-100 text-amber-700' :
-                                'bg-stone-100 text-stone-600'
-                              }`}>
-                                {model.badge}
-                              </span>
+                              {model.badge && (
+                                <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                  model.badge === 'Recomendado' ? 'bg-emerald-100 text-emerald-700' :
+                                  model.badge === 'Pro' ? 'bg-purple-100 text-purple-700' :
+                                  model.badge === 'Econômico' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-stone-100 text-stone-600'
+                                }`}>
+                                  {model.badge}
+                                </span>
+                              )}
+                              {modelsFetched && selectedGeminiModel === model.value && (
+                                <span className="shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700">
+                                  ✓ Disponível
+                                </span>
+                              )}
                             </label>
                           ))}
                         </div>
+
+                        {!modelsFetched && (
+                          <p className="text-[10px] text-brand-text-muted italic">
+                            ⚠️ Lista de fallback exibida. Use "Verificar modelos" para ver os modelos reais disponíveis para sua conta Google Cloud.
+                          </p>
+                        )}
                       </div>
 
                       {/* Input da Chave */}
