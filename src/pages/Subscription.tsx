@@ -40,7 +40,7 @@ const DEFAULT_PLANS = [
     equivalent_monthly_price: 16.58,
     features: [
       'Tudo do plano mensal',
-      'Desconto de ~17% sobre o valor mensal',
+      'Economia de 57% em relação ao plano mensal',
       'Suporte prioritário via ticket',
       'Garantia de novos recursos exclusivos em primeira mão',
       'Migração assistida de prontuários por IA (PDF/Word/Excel)',
@@ -49,7 +49,7 @@ const DEFAULT_PLANS = [
     ],
     button_text_simulate: 'Assinar Anual (Simulado)',
     tag_text: 'Popular',
-    discount_text: '42% OFF'
+    discount_text: '57% OFF'
   }
 ];
 
