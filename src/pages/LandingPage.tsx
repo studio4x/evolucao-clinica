@@ -537,10 +537,10 @@ export default function LandingPage() {
           <div className="flex flex-wrap md:flex-nowrap justify-center md:justify-center gap-2 mb-10 max-w-5xl mx-auto overflow-x-auto pb-2 md:pb-0 scrollbar-none">
             {[
               { id: 'psicologia', label: 'Psicologia', icon: Brain },
+              { id: 'fisioterapia', label: 'Fisioterapia', icon: Activity },
               { id: 'fonoaudiologia', label: 'Fonoaudiologia', icon: Volume2 },
-              { id: 'psicopedagogia', label: 'Psicopedagogia', icon: GraduationCap },
-              { id: 'terapia-ocupacional', label: 'Terapia Ocupacional', icon: Activity },
-              { id: 'medicina', label: 'Medicina & Psiquiatria', icon: Stethoscope }
+              { id: 'outras-clinicas', label: 'Medicina, TO & Psicopedagogia', icon: Stethoscope },
+              { id: 'personalizada', label: 'Qualquer Especialidade ✦', icon: Sparkles }
             ].map((tab) => {
               const Icon = tab.icon;
               const active = activeSpecialty === tab.id;
@@ -585,6 +585,27 @@ export default function LandingPage() {
                 </div>
               </div>
             )}
+            {activeSpecialty === 'fisioterapia' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                    <Activity size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Evoluções para Fisioterapia & Reabilitação</h3>
+                </div>
+                <p className="text-brand-text-muted text-sm leading-relaxed">
+                  Ideal para fisioterapeutas que atuam em ortopedia, neurologia, desportiva ou respiratória. A IA estrutura a evolução com queixas cinético-funcionais, inspeção/palpação, recursos terapêuticos utilizados (cinesioterapia, eletroterapia, terapia manual) e as respostas motoras imediatas do paciente.
+                </p>
+                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
+                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
+                    <p><strong>• Diagnóstico Cinesiológico:</strong> Paciente relata redução na dor lombar (EVA 3/10) e melhora na amplitude de movimento de flexão do tronco.</p>
+                    <p><strong>• Conduta e Exercícios:</strong> Realizado fortalecimento de core, alongamento ativo de cadeia posterior e mobilização articular passiva.</p>
+                    <p><strong>• Evolução Terapêutica:</strong> Melhora no padrão de marcha e estabilidade lombo-pélvica. Mantido o plano de reabilitação.</p>
+                  </div>
+                </div>
+              </div>
+            )}
             {activeSpecialty === 'fonoaudiologia' && (
               <div className="space-y-6 animate-fadeIn">
                 <div className="flex items-center gap-3">
@@ -606,65 +627,43 @@ export default function LandingPage() {
                 </div>
               </div>
             )}
-            {activeSpecialty === 'psicopedagogia' && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                    <GraduationCap size={20} />
-                  </div>
-                  <h3 className="text-xl font-bold font-display text-brand-primary">Relatórios e PDIs para Psicopedagogos</h3>
-                </div>
-                <p className="text-brand-text-muted text-sm leading-relaxed">
-                  Perfeito para acompanhar processos de aprendizagem escolar, diagnóstico e intervenção psicopedagógica (TDAH, dislexia, autismo). Permite que você crie relatórios de sessões lúdicas, registre o progresso em leitura/escrita e organize dados para a elaboração de Planos de Desenvolvimento Individual (PDI) com poucos cliques.
-                </p>
-                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
-                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
-                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
-                    <p><strong>• Foco Cognitivo/Aprendizagem:</strong> Excelente desempenho em tarefas de atenção concentrada com suporte visual. Dificuldade moderada no raciocínio lógico-matemático com frações.</p>
-                    <p><strong>• Recursos Utilizados:</strong> Jogos de tabuleiro temáticos e atividades sensoriais estruturadas.</p>
-                    <p><strong>• Plano de Intervenção:</strong> Próxima sessão focará na mediação de estratégias de cálculo mental com blocos lógicos.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            {activeSpecialty === 'terapia-ocupacional' && (
-              <div className="space-y-6 animate-fadeIn">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
-                    <Activity size={20} />
-                  </div>
-                  <h3 className="text-xl font-bold font-display text-brand-primary">Prontuários para Terapeutas Ocupacionais (TO)</h3>
-                </div>
-                <p className="text-brand-text-muted text-sm leading-relaxed">
-                  Adequado para TOs que trabalham com Integração Sensorial de Ayres, reabilitação física, estimulação precoce e desenvolvimento de Atividades de Vida Diária (AVDs). A IA organiza os dados detalhando a autorregulação do paciente, tolerância aos estímulos sensoriais, coordenação motora fina/grossa e nível de independência demonstrado.
-                </p>
-                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
-                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
-                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
-                    <p><strong>• Perfil Sensório-Motor:</strong> Manteve bom tônus postural durante atividades suspensas. Apresentou defensividade tátil leve ao manusear argila, necessitando de facilitação gradual.</p>
-                    <p><strong>• Prática Ocupacional:</strong> Treino de abotoamento e uso de utensílios de alimentação com feedbacks táteis.</p>
-                    <p><strong>• Planejamento Clínico:</strong> Dar continuidade à dessensibilização tátil e fortalecimento escapular no balanço.</p>
-                  </div>
-                </div>
-              </div>
-            )}
-            {activeSpecialty === 'medicina' && (
+            {activeSpecialty === 'outras-clinicas' && (
               <div className="space-y-6 animate-fadeIn">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
                     <Stethoscope size={20} />
                   </div>
-                  <h3 className="text-xl font-bold font-display text-brand-primary">Anamneses e Condutas Médicas</h3>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Medicina, Terapia Ocupacional & Psicopedagogia</h3>
                 </div>
                 <p className="text-brand-text-muted text-sm leading-relaxed">
-                  Ideal para médicos especialistas e psiquiatras otimizarem a escrita clínica. A IA converte o resumo ditado em uma evolução estruturada contendo: queixa principal (QP), história da doença atual (HDA), exame do estado mental (em psiquiatria), hipótese diagnóstica (conforme CID) e a conduta/prescrição terapêutica adotada.
+                  Suporte robusto a especialidades médicas, reabilitação multidisciplinar e pedagogia clínica. A IA estrutura prontuários com foco em anamneses, condutas farmacológicas, exames do estado mental, integração sensorial (AVDs) e Planos de Desenvolvimento Individual (PDI) escolares.
                 </p>
                 <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
                   <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
                   <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
-                    <p><strong>• Quadro Clínico & Exame Mental:</strong> Paciente vigil, orientado no tempo e espaço, pensamento de curso regular e conteúdo sem delírios. Afeto modulado com leve embotamento sob estresse.</p>
-                    <p><strong>• Hipótese Diagnóstica:</strong> Transtorno misto ansioso e depressivo (CID-10: F41.2 / CID-11: 6B44).</p>
-                    <p><strong>• Conduta e Farmacologia:</strong> Mantida medicação atual. Ajustada posologia noturna para controle da insônia secundária. Solicitado retorno em 30 dias.</p>
+                    <p><strong>• Perfil Clínico e Métricas:</strong> Adaptação para dados de integração sensorial (defensividade tátil), marcos de aprendizado infantil ou exames mentais psiquiátricos.</p>
+                    <p><strong>• Condutas e Diagnósticos:</strong> Registro ágil contendo condutas terapêuticas, hipóteses diagnósticas (CID-10/11) e controle farmacológico.</p>
+                    <p><strong>• Padrão Legal:</strong> Organização impecável em conformidade com as exigências dos conselhos éticos profissionais (CFM, COFFITO, CFP).</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSpecialty === 'personalizada' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                    <Sparkles size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Treinada para Qualquer Especialidade (IA Adaptável)</h3>
+                </div>
+                <p className="text-brand-text-muted text-sm leading-relaxed">
+                  Nossa Inteligência Artificial foi alimentada com terminologias de todo o espectro da saúde e bem-estar (como Nutrição, Odontologia, Enfermagem, Quiropraxia, Pilates, Educação Física, Assistência Social e mais). Você dita o seu resumo clínico do seu jeito e a IA detecta a especialidade e o padrão desejado de forma personalizada.
+                </p>
+                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
+                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
+                    <p><strong>• IA Flexível e Inteligente:</strong> Se você atende em uma área multidisciplinar ou muito específica, a IA se adapta aos seus jargões e ao seu estilo único de registro.</p>
+                    <p><strong>• Estruturação de Métodos:</strong> A IA reconhece o seu método preferido (seja SOAP, estilo livre, tópicos ou tabelas) e organiza tudo perfeitamente para salvar direto no seu Google Drive.</p>
                   </div>
                 </div>
               </div>
