@@ -257,14 +257,11 @@ export default function LandingPage() {
             </div>
 
             {/* Desktop Navigation */}
-            <nav className="hidden lg:flex space-x-3 xl:space-x-5 text-sm font-semibold text-brand-text-muted">
+            <nav className="hidden lg:flex space-x-8 text-sm font-semibold text-brand-text-muted">
               <button onClick={() => scrollToSection('recursos')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Recursos</button>
               <button onClick={() => scrollToSection('especialidades')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Especialidades</button>
               <button onClick={() => scrollToSection('como-funciona')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Como Funciona</button>
-              <button onClick={() => scrollToSection('demonstracao')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Demo</button>
-              <button onClick={() => scrollToSection('calculadora')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Simulador</button>
               <button onClick={() => scrollToSection('comparativo')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Comparativo</button>
-              <button onClick={() => scrollToSection('seguranca')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Segurança</button>
               <button onClick={() => scrollToSection('planos')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">Planos</button>
               <button onClick={() => scrollToSection('faq')} className="hover:text-brand-primary transition-colors cursor-pointer whitespace-nowrap">FAQ</button>
             </nav>
@@ -276,14 +273,9 @@ export default function LandingPage() {
                   Acessar Painel <ArrowRight size={16} />
                 </Link>
               ) : (
-                <>
-                  <Link to="/login" className="text-sm font-semibold text-brand-text-muted hover:text-brand-primary transition-colors whitespace-nowrap">
-                    Entrar
-                  </Link>
-                  <Link to="/login" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg whitespace-nowrap">
-                    Teste gratuito de 7 dias
-                  </Link>
-                </>
+                <Link to="/login" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg whitespace-nowrap">
+                  Teste gratuito de 7 dias
+                </Link>
               )}
             </div>
 
@@ -306,10 +298,7 @@ export default function LandingPage() {
             <button onClick={() => scrollToSection('recursos')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Recursos</button>
             <button onClick={() => scrollToSection('especialidades')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Especialidades</button>
             <button onClick={() => scrollToSection('como-funciona')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Como Funciona</button>
-            <button onClick={() => scrollToSection('demonstracao')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Demonstração</button>
-            <button onClick={() => scrollToSection('calculadora')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Simulador</button>
             <button onClick={() => scrollToSection('comparativo')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Comparativo</button>
-            <button onClick={() => scrollToSection('seguranca')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Segurança</button>
             <button onClick={() => scrollToSection('planos')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">Planos</button>
             <button onClick={() => scrollToSection('faq')} className="block w-full text-left text-base font-medium text-brand-text-muted hover:text-brand-primary">FAQ</button>
             <div className="pt-4 border-t border-brand-border flex flex-col gap-3">
@@ -318,14 +307,9 @@ export default function LandingPage() {
                   Acessar Painel
                 </Link>
               ) : (
-                <>
-                  <Link to="/login" className="btn-outline w-full text-center py-3 font-semibold">
-                    Entrar
-                  </Link>
-                  <Link to="/login" className="btn-primary w-full text-center py-3 font-semibold shadow-md">
-                    Teste gratuito de 7 dias
-                  </Link>
-                </>
+                <Link to="/login" className="btn-primary w-full text-center py-3 font-semibold shadow-md">
+                  Teste gratuito de 7 dias
+                </Link>
               )}
             </div>
           </div>

@@ -127,12 +127,14 @@ export default function AdminPanel() {
       navigate('/admin/professionals', { replace: true });
     } else if (location.pathname.endsWith('/notifications-config') || location.pathname.endsWith('/notifications-config/')) {
       navigate('/admin/push-notifications', { replace: true });
+    } else if (location.pathname.endsWith('/gemini-config') || location.pathname.endsWith('/gemini-config/')) {
+      navigate('/admin/token-usage', { replace: true });
     }
   }, [location.pathname, navigate]);
 
   const getActiveTab = () => {
     const path = location.pathname;
-    if (path.endsWith('/gemini-config')) return 'gemini_config';
+    if (path.endsWith('/gemini-config')) return 'token_usage';
     if (path.endsWith('/google-pay-config')) return 'google_pay_config';
     if (path.endsWith('/token-usage')) return 'token_usage';
     if (path.endsWith('/plans')) return 'plans';
@@ -156,8 +158,7 @@ export default function AdminPanel() {
   const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
   const adminNavItems = [
     { key: 'professionals', label: 'Profissionais', icon: Users },
-    { key: 'gemini_config', label: 'Chave Gemini', icon: Key },
-    { key: 'token_usage', label: 'Consumo API', icon: BarChart3 },
+    { key: 'token_usage', label: 'Consumo & Chaves IA', icon: BarChart3 },
     { key: 'plans', label: 'Planos SaaS', icon: Coins },
     { key: 'google_pay_config', label: 'Google Pay & Stripe', icon: CreditCard },
     { key: 'transactions', label: 'Transações', icon: Clock },
@@ -176,7 +177,7 @@ export default function AdminPanel() {
 
   const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback') => {
     if (tab === 'professionals') navigate('/admin/professionals');
-    else if (tab === 'gemini_config') navigate('/admin/gemini-config');
+    else if (tab === 'gemini_config') navigate('/admin/token-usage');
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
     else if (tab === 'token_usage') navigate('/admin/token-usage');
     else if (tab === 'plans') navigate('/admin/plans');
@@ -656,6 +657,7 @@ export default function AdminPanel() {
   const [loadingUsage, setLoadingUsage] = useState(true);
   const [usageSearchTerm, setUsageSearchTerm] = useState('');
   const [usageViewMode, setUsageViewMode] = useState<'by_user' | 'history'>('by_user');
+  const [tokenUsageSubTab, setTokenUsageSubTab] = useState<'general' | 'metrics'>('general');
 
   // Estados para Edição de Planos (SaaS)
   const [plans, setPlans] = useState<any[]>([]);
@@ -1558,7 +1560,7 @@ export default function AdminPanel() {
       }
     };
     
-    if (user && profileRole === 'admin' && activeTab === 'gemini_config') {
+    if (user && profileRole === 'admin' && activeTab === 'token_usage') {
       fetchGeminiKey();
     }
   }, [user, profileRole, activeTab]);
@@ -2956,92 +2958,6 @@ export default function AdminPanel() {
                       </table>
                     </div>
                   )}
-                </div>
-              </div>
-            ) : activeTab === 'gemini_config' ? (
-              /* Aba de Configuração da API do Gemini */
-              <div className="space-y-6">
-                <div className="card bg-white p-6 md:p-8 border-brand-border">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
-                      <Key className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-display font-bold text-brand-primary">
-                        Configuracao da API do Gemini
-                      </h2>
-                      <p className="text-xs text-brand-text-muted mt-0.5">
-                        Defina a chave global da inteligência artificial do Google para transcricao de audio.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-5 mb-8 space-y-3">
-                    <h3 className="text-sm font-semibold text-brand-primary flex items-center">
-                      <Sparkles className="w-4 h-4 text-brand-accent mr-2" />
-                      Chave Ativa na Plataforma
-                    </h3>
-                    <div className="flex items-center justify-between bg-white border border-brand-border/60 rounded-xl px-4 py-3 shadow-inner">
-                      <span className="font-mono text-sm tracking-wide text-brand-text break-all">
-                        {maskKey(currentGeminiKey)}
-                      </span>
-                    </div>
-                    <p className="text-xs text-brand-text-muted leading-relaxed">
-                      * A chave salva nesta secao e sincronizada em tempo real e possui <strong>prioridade absoluta</strong> sobre as chaves estaticas inseridas em arquivos de variaveis de ambiente (.env).
-                    </p>
-                  </div>
-
-                  <form onSubmit={handleSaveGeminiKey} className="space-y-6">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
-                        Conectar Nova Chave Gemini
-                      </label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
-                        <input
-                          type={showKeyInput ? "text" : "password"}
-                          required
-                          placeholder="Insira a chave API do Gemini (ex: AIzaSy...)"
-                          value={newGeminiKey}
-                          onChange={(e) => setNewGeminiKey(e.target.value)}
-                          className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowKeyInput(!showKeyInput)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
-                        >
-                          {showKeyInput ? <EyeOff size={16} /> : <Eye size={16} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {saveSuccess && (
-                      <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center space-x-2 text-xs text-emerald-700 animate-fadeIn">
-                        <Check className="w-4 h-4 flex-shrink-0" />
-                        <span>Chave da API Gemini salva e atualizada com sucesso no banco de dados!</span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        disabled={saveLoading || !newGeminiKey}
-                        className="btn-primary py-3 px-6 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-50 cursor-pointer"
-                      >
-                        {saveLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Salvando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>Salvar Alteracoes</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
                 </div>
               </div>
             ) : activeTab === 'google_pay_config' ? (
