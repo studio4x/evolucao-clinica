@@ -278,13 +278,12 @@ export default function Layout() {
                       </span>
                     )}
                     {item.isPremium && !isCollapsed && (
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 ${
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center shrink-0 ${
                         isActive 
                           ? 'bg-white/20 text-white' 
                           : 'bg-amber-50 text-amber-600 border border-amber-200'
                       }`} title="Recurso Premium do Plano Anual">
                         <Crown size={10} className="fill-current shrink-0" />
-                        <span>Anual</span>
                       </span>
                     )}
                   </Link>
