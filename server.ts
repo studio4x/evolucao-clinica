@@ -921,33 +921,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
     throw new Error("Usuário não encontrado.");
   }
 
-  // 1. Limpeza em tabelas filhas (públicas)
-  const cleanupTargets: Array<{ table: string; column: string }> = [
-    { table: "usage_logs", column: "professional_id" },
-    { table: "evolutions", column: "professional_id" },
-    { table: "patient_reports", column: "professional_id" },
-    { table: "patients", column: "professional_id" },
-    { table: "transactions", column: "professional_id" },
-    { table: "support_tickets", column: "user_id" },
-    { table: "notifications", column: "user_id" },
-    { table: "push_subscriptions", column: "user_id" },
-    { table: "evolution_templates", column: "professional_id" },
-    { table: "migration_requests", column: "user_id" },
-    { table: "onboarding_notifications", column: "user_id" }
-  ];
-
-  for (const target of cleanupTargets) {
-    const { error } = await supabaseAdmin
-      .from(target.table)
-      .delete()
-      .eq(target.column, targetUserId);
-
-    if (error) {
-      throw new Error(`Falha ao remover dados de ${target.table}: ${error.message}`);
-    }
-  }
-
-  // 2. Limpeza de anexos no Storage
+  // 1. Limpeza de anexos no Storage
   try {
     const { data: supportFiles, error: supportFilesError } = await supabaseAdmin
       .storage
@@ -971,17 +945,52 @@ async function deleteProfessionalAccount(targetUserId: string) {
     console.warn("[DeleteUser] Falha inesperada ao limpar anexos de suporte:", storageError);
   }
 
-  // 3. Remover o perfil do profissional da tabela public.professionals
-  const { error: profDeleteError } = await supabaseAdmin
-    .from("professionals")
-    .delete()
-    .eq("id", targetUserId);
+  // 2. Executa a limpeza pública no Banco de Dados
+  // Primeiro tentamos chamar a RPC 'force_delete_professional' que deleta pulando triggers (permitindo excluir evoluções assinadas)
+  const { error: rpcError } = await supabaseAdmin.rpc("force_delete_professional", {
+    target_user_id: targetUserId
+  });
 
-  if (profDeleteError) {
-    throw new Error(`Falha ao remover o perfil profissional da tabela 'professionals': ${profDeleteError.message}`);
+  if (rpcError) {
+    console.warn("[DeleteUser] Falha ao chamar a RPC force_delete_professional, rodando fallback manual:", rpcError.message);
+
+    // Fallback: deleta manualmente no Node caso a RPC não esteja registrada no banco de dados de produção
+    const cleanupTargets: Array<{ table: string; column: string }> = [
+      { table: "usage_logs", column: "professional_id" },
+      { table: "evolutions", column: "professional_id" },
+      { table: "patient_reports", column: "professional_id" },
+      { table: "patients", column: "professional_id" },
+      { table: "transactions", column: "professional_id" },
+      { table: "support_tickets", column: "user_id" },
+      { table: "notifications", column: "user_id" },
+      { table: "push_subscriptions", column: "user_id" },
+      { table: "evolution_templates", column: "professional_id" },
+      { table: "migration_requests", column: "user_id" },
+      { table: "onboarding_notifications", column: "user_id" }
+    ];
+
+    for (const target of cleanupTargets) {
+      const { error } = await supabaseAdmin
+        .from(target.table)
+        .delete()
+        .eq(target.column, targetUserId);
+
+      if (error) {
+        throw new Error(`Falha ao remover dados de ${target.table}: ${error.message}`);
+      }
+    }
+
+    const { error: profDeleteError } = await supabaseAdmin
+      .from("professionals")
+      .delete()
+      .eq("id", targetUserId);
+
+    if (profDeleteError) {
+      throw new Error(`Falha ao remover o perfil profissional da tabela 'professionals': ${profDeleteError.message}`);
+    }
   }
 
-  // 4. Por fim, excluir a conta de autenticação (auth.users)
+  // 3. Por fim, excluir a conta de autenticação (auth.users)
   const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
   if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
     let errorDetail = "";
