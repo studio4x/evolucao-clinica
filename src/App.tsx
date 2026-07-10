@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { useAuthStore } from './store/authStore';
@@ -7,34 +7,37 @@ import { useSiteConfig } from './hooks/useSiteConfig';
 import { SplashScreen } from './components/layout/SplashScreen';
 import { Download, X } from 'lucide-react';
 import Layout from './components/Layout';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Patients from './pages/Patients';
-import PatientForm from './pages/PatientForm';
-import PatientDetail from './pages/PatientDetail';
-import NewEvolution from './pages/NewEvolution';
-import History from './pages/History';
-import ShareTarget from './pages/ShareTarget';
-import Tutorial from './pages/Tutorial';
-import Subscription from './pages/Subscription';
-import Profile from './pages/Profile';
-import Notifications from './pages/Notifications';
-import SupportTickets from './pages/SupportTickets';
-import SupportTicketDetail from './pages/SupportTicketDetail';
-import Migration from './pages/Migration';
+
+// Componentes carregados de forma preguiçosa (Lazy Loading / Code Splitting)
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Patients = lazy(() => import('./pages/Patients'));
+const PatientForm = lazy(() => import('./pages/PatientForm'));
+const PatientDetail = lazy(() => import('./pages/PatientDetail'));
+const NewEvolution = lazy(() => import('./pages/NewEvolution'));
+const History = lazy(() => import('./pages/History'));
+const ShareTarget = lazy(() => import('./pages/ShareTarget'));
+const Tutorial = lazy(() => import('./pages/Tutorial'));
+const Subscription = lazy(() => import('./pages/Subscription'));
+const Profile = lazy(() => import('./pages/Profile'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const SupportTickets = lazy(() => import('./pages/SupportTickets'));
+const SupportTicketDetail = lazy(() => import('./pages/SupportTicketDetail'));
+const Migration = lazy(() => import('./pages/Migration'));
+const PendingApproval = lazy(() => import('./pages/PendingApproval'));
+const Onboarding = lazy(() => import('./pages/Onboarding'));
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage'));
+const SuccessPage = lazy(() => import('./pages/SuccessPage'));
+const AdminPanel = lazy(() => import('./pages/AdminPanel'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const DeleteAccount = lazy(() => import('./pages/DeleteAccount'));
+const PublicReportView = lazy(() => import('./pages/PublicReportView'));
+
+// LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
+import LandingPage from './pages/LandingPage';
 
 import { CookieConsent } from './components/CookieConsent';
-
-import PendingApproval from './pages/PendingApproval';
-import Onboarding from './pages/Onboarding';
-import CheckoutPage from './pages/CheckoutPage';
-import SuccessPage from './pages/SuccessPage';
-import AdminPanel from './pages/AdminPanel';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import TermsOfService from './pages/TermsOfService';
-import LandingPage from './pages/LandingPage';
-import DeleteAccount from './pages/DeleteAccount';
-import PublicReportView from './pages/PublicReportView';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
@@ -547,48 +550,50 @@ export default function App() {
       <CookieConsent />
       <InstallPrompt />
       
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
-        <Route path="/checkout/success" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
-        <Route path="/checkout/sucess" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
-        <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-        <Route path="/pending" element={<PendingApproval />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-        <Route path="/terms" element={<TermsOfService />} />
-        <Route path="/delete-account" element={<DeleteAccount />} />
-        <Route path="/public/reports/:reportId" element={<PublicReportView />} />
-        
-        {/* Admin Panel Routes */}
-        <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-        
-        {/* Client/Therapist Panel Routes */}
-        <Route path="/painel" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="patients" element={<Patients />} />
-          <Route path="patients/new" element={<PatientForm />} />
-          <Route path="patients/:id/edit" element={<PatientForm />} />
-          <Route path="patients/:id" element={<PatientDetail />} />
-          <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
-          <Route path="history" element={<History />} />
-          <Route path="tutorial" element={<Tutorial />} />
-          <Route path="share-target" element={<ShareTarget />} />
-          <Route path="subscription" element={<Subscription />} />
-          <Route path="migration" element={<Migration />} />
-          <Route path="profile" element={<Profile />} />
-          <Route path="notifications" element={<Notifications />} />
-          <Route path="support" element={<SupportTickets />} />
-          <Route path="support/:ticketId" element={<SupportTicketDetail />} />
-        </Route>
+      <Suspense fallback={<SplashScreen message="Carregando..." />}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+          <Route path="/checkout/success" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
+          <Route path="/checkout/sucess" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
+          <Route path="/onboarding" element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+          <Route path="/pending" element={<PendingApproval />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/delete-account" element={<DeleteAccount />} />
+          <Route path="/public/reports/:reportId" element={<PublicReportView />} />
+          
+          {/* Admin Panel Routes */}
+          <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+          
+          {/* Client/Therapist Panel Routes */}
+          <Route path="/painel" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="patients" element={<Patients />} />
+            <Route path="patients/new" element={<PatientForm />} />
+            <Route path="patients/:id/edit" element={<PatientForm />} />
+            <Route path="patients/:id" element={<PatientDetail />} />
+            <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
+            <Route path="history" element={<History />} />
+            <Route path="tutorial" element={<Tutorial />} />
+            <Route path="share-target" element={<ShareTarget />} />
+            <Route path="subscription" element={<Subscription />} />
+            <Route path="migration" element={<Migration />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="notifications" element={<Notifications />} />
+            <Route path="support" element={<SupportTickets />} />
+            <Route path="support/:ticketId" element={<SupportTicketDetail />} />
+          </Route>
 
-        {/* Redirects */}
-        <Route path="/" element={<RootRoute />} />
-        <Route path="/patients" element={<Navigate to="/painel/patients" replace />} />
-        <Route path="/share-target" element={<Navigate to="/painel/share-target" replace />} />
-        <Route path="/api/share-target" element={<Navigate to="/painel/share-target" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Redirects */}
+          <Route path="/" element={<RootRoute />} />
+          <Route path="/patients" element={<Navigate to="/painel/patients" replace />} />
+          <Route path="/share-target" element={<Navigate to="/painel/share-target" replace />} />
+          <Route path="/api/share-target" element={<Navigate to="/painel/share-target" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }

@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     
 
     <title>Evolução Clínica - Prontuários e Evoluções com IA</title>
@@ -33,6 +36,7 @@
     <meta property="og:description" content="Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive." />
     <meta property="og:image" content="https://www.evolucaoclinica.app.br/og-image-social.png" />
     <meta property="og:image:alt" content="Evolução Clínica - Prontuários e Evoluções com IA" />
+    <meta property="fb:app_id" content="859502203649739" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
@@ -42,6 +46,7 @@
     <script>
       (function () {
         const storageKey = 'evolucao-clinica:site-config';
+        const trackingStorageKey = 'evolucao-clinica:tracking-config';
         const defaultTitle = 'Evolução Clínica - Prontuários e Evoluções com IA';
         const defaultDescription = 'Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive.';
         const supabaseUrl = '%VITE_SUPABASE_URL%';
@@ -145,8 +150,8 @@
           setLink("link[rel='manifest']", 'manifest', appendVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
           updateThemeMeta(config.pwa_theme_color || '#005C13');
           updateMeta("meta[name='apple-mobile-web-app-title']", 'name', 'apple-mobile-web-app-title', title);
-           updateMeta("meta[property='og:url']", 'property', 'og:url', window.location.href);
-           updateMeta("meta[property='og:title']", 'property', 'og:title', title);
+          updateMeta("meta[property='og:url']", 'property', 'og:url', window.location.href);
+          updateMeta("meta[property='og:title']", 'property', 'og:title', title);
           updateMeta("meta[property='og:description']", 'property', 'og:description', description);
           updateMeta("meta[property='og:image']", 'property', 'og:image', socialImageUrl);
           updateMeta("meta[property='og:image:alt']", 'property', 'og:image:alt', title);
@@ -155,64 +160,13 @@
           updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', socialImageUrl);
         };
 
-        const fetchBrandSettingsFromSupabase = function () {
-          if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('%VITE_') || supabaseAnonKey.includes('%VITE_')) {
-            return null;
-          }
-
-          const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/settings?id=eq.brand_settings&select=api_key`;
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', endpoint, false);
-          xhr.setRequestHeader('apikey', supabaseAnonKey);
-          xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
-          xhr.setRequestHeader('Accept', 'application/vnd.pgrst.object+json');
-          xhr.send(null);
-
-          if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
-            const parsed = JSON.parse(xhr.responseText);
-            return parsed && parsed.api_key ? JSON.parse(parsed.api_key) : null;
-          }
-
-          return null;
-        };
-
-        const fetchBrandSettingsFromApi = function () {
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', '/api/brand-bootstrap', false);
-          xhr.send(null);
-
-          if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
-            return JSON.parse(xhr.responseText);
-          }
-
-          return null;
-        };
-
-        const trackingStorageKey = 'evolucao-clinica:tracking-config';
-
-        const fetchTrackingSettingsFromSupabase = function () {
-          if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('%VITE_') || supabaseAnonKey.includes('%VITE_')) {
-            return null;
-          }
-
-          const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/settings?id=eq.tracking_settings&select=api_key`;
-          const xhr = new XMLHttpRequest();
-          xhr.open('GET', endpoint, false);
-          xhr.setRequestHeader('apikey', supabaseAnonKey);
-          xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
-          xhr.setRequestHeader('Accept', 'application/vnd.pgrst.object+json');
-          xhr.send(null);
-
-          if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
-            const parsed = JSON.parse(xhr.responseText);
-            return parsed && parsed.api_key ? JSON.parse(parsed.api_key) : null;
-          }
-
-          return null;
-        };
-
         const injectTracking = function (tracking) {
           if (!tracking) return;
+
+          // Evita dupla injeção se rodar múltiplas vezes
+          if (document.querySelector("[data-tracking-injected='gtm']") || document.querySelector("[data-tracking-injected='fb-pixel']")) {
+            return;
+          }
 
           const injectHtmlContent = function (htmlString, target, locationTag) {
             if (!htmlString) return;
@@ -347,31 +301,7 @@
           return true;
         };
 
-        try {
-          const publicConfig = fetchBrandSettingsFromSupabase();
-          if (publicConfig) {
-            hydrate(publicConfig);
-            try {
-              const trackingConfig = fetchTrackingSettingsFromSupabase();
-              if (trackingConfig) {
-                injectTracking(trackingConfig);
-                localStorage.setItem(trackingStorageKey, JSON.stringify(trackingConfig));
-              }
-            } catch (trackError) {
-              console.error('Failed to load tracking settings:', trackError);
-            }
-            return;
-          }
-
-          const apiConfig = fetchBrandSettingsFromApi();
-          if (apiConfig) {
-            hydrate(apiConfig);
-            return;
-          }
-        } catch (error) {
-          // Falha silenciosa: abaixo tentamos reaproveitar a última configuração salva.
-        }
-
+        // 1. CARREGAMENTO INICIAL IMEDIATO VIA CACHE LOCAL (SÍNCRONO)
         try {
           const stored = localStorage.getItem(storageKey);
           if (stored) {
@@ -382,8 +312,108 @@
             injectTracking(JSON.parse(storedTracking));
           }
         } catch (error) {
-          // Sem bootstrap disponível, o app segue com o tema padrão compilado.
+          // Cache não disponível, segue com tema padrão compilado
         }
+
+        // 2. BUSCA AS ATUALIZAÇÕES DO SUPABASE DE FORMA TOTALMENTE ASSÍNCRONA
+        const fetchBrandSettingsAsync = function (callback) {
+          if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('%VITE_') || supabaseAnonKey.includes('%VITE_')) {
+            return callback(null);
+          }
+
+          const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/settings?id=eq.brand_settings&select=api_key`;
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', endpoint, true); // assíncrono
+          xhr.setRequestHeader('apikey', supabaseAnonKey);
+          xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
+          xhr.setRequestHeader('Accept', 'application/vnd.pgrst.object+json');
+          xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4) {
+              if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+                try {
+                  const parsed = JSON.parse(xhr.responseText);
+                  callback(parsed && parsed.api_key ? JSON.parse(parsed.api_key) : null);
+                } catch (e) {
+                  callback(null);
+                }
+              } else {
+                callback(null);
+              }
+            }
+          };
+          xhr.send(null);
+        };
+
+        const fetchBrandSettingsFromApiAsync = function (callback) {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', '/api/brand-bootstrap', true); // assíncrono
+          xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4) {
+              if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+                try {
+                  callback(JSON.parse(xhr.responseText));
+                } catch (e) {
+                  callback(null);
+                }
+              } else {
+                callback(null);
+              }
+            }
+          };
+          xhr.send(null);
+        };
+
+        const fetchTrackingSettingsAsync = function (callback) {
+          if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('%VITE_') || supabaseAnonKey.includes('%VITE_')) {
+            return callback(null);
+          }
+
+          const endpoint = `${supabaseUrl.replace(/\/$/, '')}/rest/v1/settings?id=eq.tracking_settings&select=api_key`;
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', endpoint, true); // assíncrono
+          xhr.setRequestHeader('apikey', supabaseAnonKey);
+          xhr.setRequestHeader('Authorization', `Bearer ${supabaseAnonKey}`);
+          xhr.setRequestHeader('Accept', 'application/vnd.pgrst.object+json');
+          xhr.onreadystatechange = function () {
+            if (xhr.readyState === 4) {
+              if (xhr.status >= 200 && xhr.status < 300 && xhr.responseText) {
+                try {
+                  const parsed = JSON.parse(xhr.responseText);
+                  callback(parsed && parsed.api_key ? JSON.parse(parsed.api_key) : null);
+                } catch (e) {
+                  callback(null);
+                }
+              } else {
+                callback(null);
+              }
+            }
+          };
+          xhr.send(null);
+        };
+
+        // Dispara requisições assíncronas em background
+        fetchBrandSettingsAsync(function (publicConfig) {
+          if (publicConfig) {
+            hydrate(publicConfig);
+            
+            // Busca o tracking sequencialmente de forma assíncrona
+            fetchTrackingSettingsAsync(function (trackingConfig) {
+              if (trackingConfig) {
+                injectTracking(trackingConfig);
+                try {
+                  localStorage.setItem(trackingStorageKey, JSON.stringify(trackingConfig));
+                } catch (e) {}
+              }
+            });
+          } else {
+            // Se o Supabase falhar, tenta da API local de forma assíncrona
+            fetchBrandSettingsFromApiAsync(function (apiConfig) {
+              if (apiConfig) {
+                hydrate(apiConfig);
+              }
+            });
+          }
+        });
       })();
     </script>
   </head>
