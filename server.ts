@@ -952,10 +952,16 @@ async function deleteProfessionalAccount(targetUserId: string) {
   });
 
   if (rpcError) {
-    console.warn("[DeleteUser] Falha ao chamar a RPC force_delete_professional, rodando fallback manual:", rpcError.message);
+    const isFunctionMissing = 
+      rpcError.code === 'PGRST202' || 
+      /does not exist/i.test(rpcError.message || "") || 
+      /not found/i.test(rpcError.message || "");
 
-    // Fallback: deleta manualmente no Node caso a RPC não esteja registrada no banco de dados de produção
-    const cleanupTargets: Array<{ table: string; column: string }> = [
+    if (isFunctionMissing) {
+      console.warn("[DeleteUser] Falha ao chamar a RPC force_delete_professional, rodando fallback manual:", rpcError.message);
+
+      // Fallback: deleta manualmente no Node caso a RPC não esteja registrada no banco de dados de produção
+      const cleanupTargets: Array<{ table: string; column: string }> = [
       { table: "usage_logs", column: "professional_id" },
       { table: "evolutions", column: "professional_id" },
       { table: "patient_reports", column: "professional_id" },
@@ -988,7 +994,11 @@ async function deleteProfessionalAccount(targetUserId: string) {
     if (profDeleteError) {
       throw new Error(`Falha ao remover o perfil profissional da tabela 'professionals': ${profDeleteError.message}`);
     }
+  } else {
+    // Se a RPC existe mas falhou internamente por outro motivo, lança o erro real da RPC
+    throw new Error(`Falha ao executar a limpeza via banco de dados (RPC): ${rpcError.message}`);
   }
+}
 
   // 3. Por fim, excluir a conta de autenticação (auth.users)
   const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
