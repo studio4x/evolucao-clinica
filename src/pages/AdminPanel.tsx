@@ -3334,217 +3334,331 @@ export default function AdminPanel() {
             ) : activeTab === 'token_usage' ? (
               /* Aba de Consumo de Tokens (Consumo API) [NEW] */
               <div className="space-y-6">
-                {/* Cards de Metricas de Consumo */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="card p-5 bg-white flex items-center space-x-4">
-                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
-                      <Coins className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Custo Total (USD)</p>
-                      <h3 className="text-xl font-bold font-display text-brand-primary">{formatCost(totalUsageCostUsd)}</h3>
-                      <p className="text-[10px] text-brand-text-muted mt-0.5">Est. {formatBRL(totalUsageCostUsd)} BRL</p>
-                    </div>
-                  </div>
+                {/* Sub-navegação interna da página Consumo API */}
+                <div className="flex border-b border-brand-border/60 pb-px gap-6 mb-6">
+                  <button
+                    onClick={() => setTokenUsageSubTab('general')}
+                    className={`pb-3 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center space-x-2 ${
+                      tokenUsageSubTab === 'general'
+                        ? 'border-brand-primary text-brand-primary font-bold'
+                        : 'border-transparent text-brand-text-muted hover:text-brand-primary'
+                    }`}
+                  >
+                    <Key className="w-4 h-4" />
+                    <span>Geral</span>
+                  </button>
+                  <button
+                    onClick={() => setTokenUsageSubTab('metrics')}
+                    className={`pb-3 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center space-x-2 ${
+                      tokenUsageSubTab === 'metrics'
+                        ? 'border-brand-primary text-brand-primary font-bold'
+                        : 'border-transparent text-brand-text-muted hover:text-brand-primary'
+                    }`}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    <span>Consumo de API</span>
+                  </button>
+                </div>
 
-                  <div className="card p-5 bg-white flex items-center space-x-4">
-                    <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
-                      <Activity className="w-6 h-6" />
+                {tokenUsageSubTab === 'general' ? (
+                  /* Aba Geral para inserir a chave API do Gemini */
+                  <div className="card bg-white p-6 md:p-8 border-brand-border shadow-sm">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                        <Key className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-display font-bold text-brand-primary">
+                          Configuração da API do Gemini
+                        </h2>
+                        <p className="text-xs text-brand-text-muted mt-0.5">
+                          Defina a chave global da inteligência artificial do Google. Esta chave será utilizada para todas as funcionalidades que envolvem IA e as APIs do Google (ex: transcrições de áudio, relatórios, PDI).
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total Transcricoes</p>
-                      <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCallsCount}</h3>
-                      <p className="text-[10px] text-brand-text-muted mt-0.5">Chamadas Gemini Flash</p>
-                    </div>
-                  </div>
 
-                  <div className="card p-5 bg-white flex items-center space-x-4">
-                    <div className="p-3 bg-stone-100 rounded-xl text-brand-text-muted">
-                      <BarChart3 className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total de Tokens</p>
-                      <h3 className="text-2xl font-bold font-display text-brand-primary">
-                        {new Intl.NumberFormat('pt-BR').format(totalUsageTokens)}
+                    <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-5 mb-8 space-y-3">
+                      <h3 className="text-sm font-semibold text-brand-primary flex items-center">
+                        <Sparkles className="w-4 h-4 text-brand-accent mr-2" />
+                        Chave Ativa na Plataforma
                       </h3>
-                      <p className="text-[10px] text-brand-text-muted mt-0.5">Input & Output acumulados</p>
-                    </div>
-                  </div>
-
-                  <div className="card p-5 bg-white flex items-center space-x-4">
-                    <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
-                      <Clock className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Tempo Transcrito</p>
-                      <h3 className="text-2xl font-bold font-display text-brand-primary">
-                        {(totalUsageDurationSeconds / 60).toFixed(1)} min
-                      </h3>
-                      <p className="text-[10px] text-brand-text-muted mt-0.5">
-                        {new Intl.NumberFormat('pt-BR').format(totalUsageDurationSeconds)} s totais
+                      <div className="flex items-center justify-between bg-white border border-brand-border/60 rounded-xl px-4 py-3 shadow-inner">
+                        <span className="font-mono text-sm tracking-wide text-brand-text break-all">
+                          {currentGeminiKey ? maskKey(currentGeminiKey) : "Nenhuma chave cadastrada"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-brand-text-muted leading-relaxed">
+                        * A chave salva nesta seção é sincronizada em tempo real e possui <strong>prioridade absoluta</strong> sobre as chaves estáticas inseridas em arquivos de variáveis de ambiente (.env).
                       </p>
                     </div>
-                  </div>
-                </div>
 
-                {/* Sub-Navegacao e Busca do Consumo */}
-                <div className="card p-6 bg-white space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
-                    <input
-                      type="text"
-                      placeholder="Buscar por profissional ou e-mail..."
-                      value={usageSearchTerm}
-                      onChange={(e) => setUsageSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
-                    />
-                  </div>
+                    <form onSubmit={handleSaveGeminiKey} className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                          Conectar Nova Chave Gemini
+                        </label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                          <input
+                            type={showKeyInput ? "text" : "password"}
+                            required
+                            placeholder="Insira a chave API do Gemini (ex: AIzaSy...)"
+                            value={newGeminiKey}
+                            onChange={(e) => setNewGeminiKey(e.target.value)}
+                            className="w-full pl-10 pr-10 py-3.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowKeyInput(!showKeyInput)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
+                          >
+                            {showKeyInput ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                      </div>
 
-                  <div className="flex bg-brand-bg border border-brand-border p-1 rounded-xl gap-1">
-                    <button
-                      onClick={() => setUsageViewMode('by_user')}
-                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                        usageViewMode === 'by_user'
-                          ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
-                          : 'text-brand-text-muted hover:text-brand-primary'
-                      }`}
-                    >
-                      Acumulado por Usuario
-                    </button>
-                    <button
-                      onClick={() => setUsageViewMode('history')}
-                      className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                        usageViewMode === 'history'
-                          ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
-                          : 'text-brand-text-muted hover:text-brand-primary'
-                      }`}
-                    >
-                      Historico de Chamadas
-                    </button>
-                  </div>
-                </div>
+                      {saveSuccess && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center space-x-2 text-xs text-emerald-700 animate-fadeIn">
+                          <Check className="w-4 h-4 flex-shrink-0" />
+                          <span>Chave da API Gemini salva e atualizada com sucesso no banco de dados!</span>
+                        </div>
+                      )}
 
-                {/* Visualizacao do Consumo */}
-                <div className="card bg-white overflow-hidden border border-brand-border">
-                  {loadingUsage ? (
-                    <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
-                      <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
-                      <span className="text-sm">Carregando logs de consumo...</span>
+                      <div className="flex justify-end">
+                        <button
+                          type="submit"
+                          disabled={saveLoading || !newGeminiKey}
+                          className="btn-primary py-3 px-6 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-50 cursor-pointer"
+                        >
+                          {saveLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Salvando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Salvar Alterações</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                ) : (
+                  <>
+                    {/* Cards de Metricas de Consumo */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="card p-5 bg-white flex items-center space-x-4">
+                        <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                          <Coins className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Custo Total (USD)</p>
+                          <h3 className="text-xl font-bold font-display text-brand-primary">{formatCost(totalUsageCostUsd)}</h3>
+                          <p className="text-[10px] text-brand-text-muted mt-0.5">Est. {formatBRL(totalUsageCostUsd)} BRL</p>
+                        </div>
+                      </div>
+
+                      <div className="card p-5 bg-white flex items-center space-x-4">
+                        <div className="p-3 bg-brand-accent/10 rounded-xl text-brand-primary">
+                          <Activity className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total Transcricoes</p>
+                          <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCallsCount}</h3>
+                          <p className="text-[10px] text-brand-text-muted mt-0.5">Chamadas Gemini Flash</p>
+                        </div>
+                      </div>
+
+                      <div className="card p-5 bg-white flex items-center space-x-4">
+                        <div className="p-3 bg-stone-100 rounded-xl text-brand-text-muted">
+                          <BarChart3 className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total de Tokens</p>
+                          <h3 className="text-2xl font-bold font-display text-brand-primary">
+                            {new Intl.NumberFormat('pt-BR').format(totalUsageTokens)}
+                          </h3>
+                          <p className="text-[10px] text-brand-text-muted mt-0.5">Input & Output acumulados</p>
+                        </div>
+                      </div>
+
+                      <div className="card p-5 bg-white flex items-center space-x-4">
+                        <div className="p-3 bg-purple-50 rounded-xl text-purple-600">
+                          <Clock className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Tempo Transcrito</p>
+                          <h3 className="text-2xl font-bold font-display text-brand-primary">
+                            {(totalUsageDurationSeconds / 60).toFixed(1)} min
+                          </h3>
+                          <p className="text-[10px] text-brand-text-muted mt-0.5">
+                            {new Intl.NumberFormat('pt-BR').format(totalUsageDurationSeconds)} s totais
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  ) : usageViewMode === 'by_user' ? (
-                    /* Acumulado por Usuario */
-                    userSummariesList.length === 0 ? (
-                      <div className="p-12 text-center text-brand-text-muted">
-                        <Users className="w-12 h-12 mx-auto text-brand-border mb-3" />
-                        <p className="font-medium text-brand-text">Nenhum registro de consumo encontrado</p>
+
+                    {/* Sub-Navegacao e Busca do Consumo */}
+                    <div className="card p-6 bg-white space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+                      <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                        <input
+                          type="text"
+                          placeholder="Buscar por profissional ou e-mail..."
+                          value={usageSearchTerm}
+                          onChange={(e) => setUsageSearchTerm(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
+                        />
                       </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
-                              <th className="p-4 pl-6">Profissional</th>
-                              <th className="p-4">Chamadas</th>
-                              <th className="p-4">Tempo Transcrito</th>
-                              <th className="p-4">Tokens Entrada</th>
-                              <th className="p-4">Tokens Saida</th>
-                              <th className="p-4">Tokens Totais</th>
-                              <th className="p-4">Custo USD</th>
-                              <th className="p-4 pr-6 text-right">Custo Est. BRL</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
-                            {userSummariesList.map((summary) => (
-                              <tr key={summary.id} className="hover:bg-brand-bg/30 transition-colors">
-                                <td className="p-4 pl-6">
-                                  <div>
-                                    <p className="font-semibold text-brand-text">{summary.name}</p>
-                                    <p className="text-xs text-brand-text-muted">{summary.email}</p>
-                                  </div>
-                                </td>
-                                <td className="p-4 font-semibold text-brand-text">{summary.callsCount}</td>
-                                <td className="p-4 font-medium text-brand-text">
-                                  {(summary.totalDurationSeconds / 60).toFixed(1)} min
-                                </td>
-                                <td className="p-4 text-brand-text-muted">
-                                  {new Intl.NumberFormat('pt-BR').format(summary.promptTokens)}
-                                </td>
-                                <td className="p-4 text-brand-text-muted">
-                                  {new Intl.NumberFormat('pt-BR').format(summary.candidatesTokens)}
-                                </td>
-                                <td className="p-4 text-brand-text-muted font-medium">
-                                  {new Intl.NumberFormat('pt-BR').format(summary.totalTokens)}
-                                </td>
-                                <td className="p-4 font-medium text-brand-primary">{formatCost(summary.totalCostUsd)}</td>
-                                <td className="p-4 pr-6 text-right font-bold text-brand-primary">{formatBRL(summary.totalCostUsd)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+
+                      <div className="flex bg-brand-bg border border-brand-border p-1 rounded-xl gap-1">
+                        <button
+                          onClick={() => setUsageViewMode('by_user')}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                            usageViewMode === 'by_user'
+                              ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
+                              : 'text-brand-text-muted hover:text-brand-primary'
+                          }`}
+                        >
+                          Acumulado por Usuario
+                        </button>
+                        <button
+                          onClick={() => setUsageViewMode('history')}
+                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                            usageViewMode === 'history'
+                              ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
+                              : 'text-brand-text-muted hover:text-brand-primary'
+                          }`}
+                        >
+                          Historico de Chamadas
+                        </button>
                       </div>
-                    )
-                  ) : (
-                    /* Historico de Chamadas */
-                    filteredHistoryLogs.length === 0 ? (
-                      <div className="p-12 text-center text-brand-text-muted">
-                        <Activity className="w-12 h-12 mx-auto text-brand-border mb-3" />
-                        <p className="font-medium text-brand-text">Nenhum registro de historico encontrado</p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
-                              <th className="p-4 pl-6">Data/Hora</th>
-                              <th className="p-4">Profissional</th>
-                              <th className="p-4">Modelo</th>
-                              <th className="p-4">Duração</th>
-                              <th className="p-4">Tokens Entrada</th>
-                              <th className="p-4">Tokens Saida</th>
-                              <th className="p-4">Tokens Totais</th>
-                              <th className="p-4 pr-6 text-right">Custo USD</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
-                            {filteredHistoryLogs.map((log) => (
-                              <tr key={log.id} className="hover:bg-brand-bg/30 transition-colors">
-                                <td className="p-4 pl-6 text-brand-text-muted whitespace-nowrap">
-                                  {formatDate(log.created_at)}
-                                </td>
-                                <td className="p-4">
-                                  <div>
-                                    <p className="font-semibold text-brand-text">{log.professional_name}</p>
-                                    <p className="text-xs text-brand-text-muted">{log.professional_email}</p>
-                                  </div>
-                                </td>
-                                <td className="p-4">
-                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-100 text-brand-text-muted">
-                                    {log.model}
-                                  </span>
-                                </td>
-                                <td className="p-4 text-brand-text font-medium whitespace-nowrap">
-                                  {formatDuration(log.audio_duration_seconds)}
-                                </td>
-                                <td className="p-4 text-brand-text-muted">
-                                  {new Intl.NumberFormat('pt-BR').format(log.prompt_tokens)}
-                                </td>
-                                <td className="p-4 text-brand-text-muted">
-                                  {new Intl.NumberFormat('pt-BR').format(log.candidates_tokens)}
-                                </td>
-                                <td className="p-4 text-brand-text-muted font-medium">
-                                  {new Intl.NumberFormat('pt-BR').format(log.total_tokens)}
-                                </td>
-                                <td className="p-4 pr-6 text-right font-bold text-brand-primary">
-                                  {formatCost(log.cost_usd)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )
-                  )}
-                </div>
+                    </div>
+
+                    {/* Visualizacao do Consumo */}
+                    <div className="card bg-white overflow-hidden border border-brand-border">
+                      {loadingUsage ? (
+                        <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
+                          <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
+                          <span className="text-sm">Carregando logs de consumo...</span>
+                        </div>
+                      ) : usageViewMode === 'by_user' ? (
+                        /* Acumulado por Usuario */
+                        userSummariesList.length === 0 ? (
+                          <div className="p-12 text-center text-brand-text-muted">
+                            <Users className="w-12 h-12 mx-auto text-brand-border mb-3" />
+                            <p className="font-medium text-brand-text">Nenhum registro de consumo encontrado</p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
+                                  <th className="p-4 pl-6">Profissional</th>
+                                  <th className="p-4">Chamadas</th>
+                                  <th className="p-4">Tempo Transcrito</th>
+                                  <th className="p-4">Tokens Entrada</th>
+                                  <th className="p-4">Tokens Saida</th>
+                                  <th className="p-4">Tokens Totais</th>
+                                  <th className="p-4">Custo USD</th>
+                                  <th className="p-4 pr-6 text-right">Custo Est. BRL</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
+                                {userSummariesList.map((summary) => (
+                                  <tr key={summary.id} className="hover:bg-brand-bg/30 transition-colors">
+                                    <td className="p-4 pl-6">
+                                      <div>
+                                        <p className="font-semibold text-brand-text">{summary.name}</p>
+                                        <p className="text-xs text-brand-text-muted">{summary.email}</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-4 font-semibold text-brand-text">{summary.callsCount}</td>
+                                    <td className="p-4 font-medium text-brand-text">
+                                      {(summary.totalDurationSeconds / 60).toFixed(1)} min
+                                    </td>
+                                    <td className="p-4 text-brand-text-muted">
+                                      {new Intl.NumberFormat('pt-BR').format(summary.promptTokens)}
+                                    </td>
+                                    <td className="p-4 text-brand-text-muted">
+                                      {new Intl.NumberFormat('pt-BR').format(summary.candidatesTokens)}
+                                    </td>
+                                    <td className="p-4 text-brand-text-muted font-medium">
+                                      {new Intl.NumberFormat('pt-BR').format(summary.totalTokens)}
+                                    </td>
+                                    <td className="p-4 font-medium text-brand-primary">{formatCost(summary.totalCostUsd)}</td>
+                                    <td className="p-4 pr-6 text-right font-bold text-brand-primary">{formatBRL(summary.totalCostUsd)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      ) : (
+                        /* Historico de Chamadas */
+                        filteredHistoryLogs.length === 0 ? (
+                          <div className="p-12 text-center text-brand-text-muted">
+                            <Activity className="w-12 h-12 mx-auto text-brand-border mb-3" />
+                            <p className="font-medium text-brand-text">Nenhum registro de historico encontrado</p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                              <thead>
+                                <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
+                                  <th className="p-4 pl-6">Data/Hora</th>
+                                  <th className="p-4">Profissional</th>
+                                  <th className="p-4">Modelo</th>
+                                  <th className="p-4">Duração</th>
+                                  <th className="p-4">Tokens Entrada</th>
+                                  <th className="p-4">Tokens Saida</th>
+                                  <th className="p-4">Tokens Totais</th>
+                                  <th className="p-4 pr-6 text-right">Custo USD</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
+                                {filteredHistoryLogs.map((log) => (
+                                  <tr key={log.id} className="hover:bg-brand-bg/30 transition-colors">
+                                    <td className="p-4 pl-6 text-brand-text-muted whitespace-nowrap">
+                                      {formatDate(log.created_at)}
+                                    </td>
+                                    <td className="p-4">
+                                      <div>
+                                        <p className="font-semibold text-brand-text">{log.professional_name}</p>
+                                        <p className="text-xs text-brand-text-muted">{log.professional_email}</p>
+                                      </div>
+                                    </td>
+                                    <td className="p-4">
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-stone-100 text-brand-text-muted">
+                                        {log.model}
+                                      </span>
+                                    </td>
+                                    <td className="p-4 text-brand-text font-medium whitespace-nowrap">
+                                      {formatDuration(log.audio_duration_seconds)}
+                                    </td>
+                                    <td className="p-4 text-brand-text-muted">
+                                      {new Intl.NumberFormat('pt-BR').format(log.prompt_tokens)}
+                                    </td>
+                                    <td className="p-4 text-brand-text-muted">
+                                      {new Intl.NumberFormat('pt-BR').format(log.candidates_tokens)}
+                                    </td>
+                                    <td className="p-4 text-brand-text-muted font-medium">
+                                      {new Intl.NumberFormat('pt-BR').format(log.total_tokens)}
+                                    </td>
+                                    <td className="p-4 pr-6 text-right font-bold text-brand-primary">
+                                      {formatCost(log.cost_usd)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ) : activeTab === 'plans' ? (
               <div className="space-y-6">
