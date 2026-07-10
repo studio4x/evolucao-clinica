@@ -47,7 +47,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/uuid": "^10.0.0",
     "@types/web-push": "^3.6.4",
-    "@vercel/node": "^3.2.24",
+    "@vercel/node": "^4.0.0",
     "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.5.2",
     "postcss": "^8.5.15",
