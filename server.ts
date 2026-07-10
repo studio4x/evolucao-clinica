@@ -1088,7 +1088,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
 
     // 2. Instanciar o SDK do Gemini no Backend de forma protegida
     const ai = new GoogleGenAI({ apiKey });
-    const modelName = "gemini-2.5-flash";
+    const modelName = "gemini-2.0-flash";
 
     console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${audioDuration || 0}s)...`);
     
@@ -2698,7 +2698,7 @@ Texto a ser analisado:
 ${textChunk}`;
 
     const geminiResponse = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -3600,7 +3600,7 @@ Escreva em português brasileiro de forma prática, detalhada e empática.`;
     console.log(`[AI-Report] Enviando solicitação ao Gemini para o paciente ${patient.full_name} (${type})...`);
     
     const geminiResponse = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: systemPrompt
     });
 
@@ -3975,7 +3975,7 @@ ${contextText}`;
     // Chamar o modelo Gemini para sintetizar a resposta
     console.log(`[RAG-Search] Sintetizando resposta para a pergunta: "${query}"...`);
     const geminiResponse = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.0-flash",
       contents: [
         { role: "user", parts: [{ text: query.trim() }] }
       ],
