@@ -30,7 +30,7 @@ export default function PrivacyPolicy() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 26 de junho de 2026
+          Última atualização: 10 de julho de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
@@ -51,6 +51,7 @@ export default function PrivacyPolicy() {
             <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
               <li><strong>Dados de conta:</strong> nome, e-mail, foto de perfil e identificadores recebidos na autenticação com Google.</li>
               <li><strong>Dados operacionais:</strong> preferências, registros de uso, logs técnicos, tokens de sessão e configurações do dispositivo.</li>
+              <li><strong>Metadados de consumo de IA:</strong> duração do áudio enviado, quantidade de solicitações, carimbos de data/hora e métricas necessárias para rate limiting, prevenção de abuso e política de uso justo.</li>
               <li><strong>Dados clínicos inseridos por você:</strong> áudios, transcrições, evoluções, documentos e informações de pacientes cadastradas na plataforma.</li>
               <li><strong>Dados de pagamento e assinatura:</strong> informações de plano, status financeiro e eventos de cobrança gerenciados pelos provedores contratados.</li>
             </ul>
@@ -60,7 +61,8 @@ export default function PrivacyPolicy() {
             <h2 className="text-xl font-display font-semibold text-brand-primary">3. Finalidades de uso</h2>
             <p>
               Utilizamos os dados para autenticar o usuário, gerar transcrições, organizar evoluções clínicas, armazenar arquivos no Google Drive
-              do próprio profissional, oferecer suporte, faturamento, prevenção a fraude e manutenção do serviço.
+              do próprio profissional, oferecer suporte, faturamento, prevenção a fraude, aplicar controles de segurança e uso justo, e manter a
+              previsibilidade operacional do serviço.
             </p>
           </section>
 

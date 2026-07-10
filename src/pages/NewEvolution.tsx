@@ -820,8 +820,12 @@ export default function NewEvolution() {
           console.error("Erro ao salvar na fila offline:", queueErr);
           msg = "Você está sem internet e houve uma falha ao salvar no armazenamento local do navegador. Não feche o aplicativo e espere a conexão voltar.";
         }
+      } else if (msg.includes('Muitas solicitações de transcrição')) {
+        msg = "Você atingiu o limite de 5 transcrições por minuto. Aguarde alguns segundos e tente novamente.";
+      } else if (msg.includes('Limite mensal de transcrição de áudio atingido')) {
+        msg = "Limite mensal de transcrição de áudio atingido. Adquira um pacote de horas adicionais.";
       } else if (msg.includes('429') || msg.includes('exhausted')) {
-        msg = "O limite de processamento gratuito da Google (Gemini) foi atingido. Aguarde cerca de 60 segundos e clique em 'Tentar Novamente'.";
+        msg = "O limite de processamento do provedor de IA foi atingido momentaneamente. Aguarde cerca de 60 segundos e clique em 'Tentar Novamente'.";
       } else if (msg.includes('INSUFFICIENT_SCOPES')) {
         msg = "Sua conta Google foi conectada, mas este token ainda não tem os escopos clinicos completos. Clique em 'Renovar Autenticacao' para aprovar o acesso ao Google Drive e Docs.";
       } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {

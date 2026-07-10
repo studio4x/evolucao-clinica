@@ -65,7 +65,7 @@ const DEFAULT_PLANS = [
     description: 'Flexibilidade para experimentar sem amarras contratuais.',
     features: [
       'Pacientes ilimitados',
-      'Evoluções clínicas com IA ilimitadas',
+      'Transcrições de áudio com uso justo de até 20 horas por mês',
       'Integração com Google Docs em tempo real',
       'Gravação e transcrição de áudio nativa',
       'Geração de Relatórios & PDI por IA',
@@ -193,7 +193,7 @@ export default function LandingPage() {
   const faqs = [
     {
       q: "Como o aplicativo grava e transcreve os áudios?",
-      a: "Você pode gravar diretamente pelo microfone do celular ou computador dentro do aplicativo ou até mesmo compartilhar um arquivo de áudio gravado no WhatsApp ou gravador do celular. Nossa IA avançada transcreve a fala com altíssima precisão técnica, compreendendo termos médicos e termos da área de saúde e psicologia."
+      a: "Você pode gravar diretamente pelo microfone do celular ou computador dentro do aplicativo ou compartilhar um arquivo de áudio gravado no WhatsApp ou no gravador do celular. Cada evolução aceita áudios de até 20 minutos e até 20 MB por arquivo. A transcrição segue uma política de uso justo mensal de até 20 horas por profissional, com opção de contratação adicional quando necessário."
     },
     {
       q: "Como funciona a integração com o Google Drive?",
@@ -979,7 +979,7 @@ export default function LandingPage() {
               <ul className="space-y-4">
                 <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
                   <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
-                  <span><strong>Grave seus áudios sem limite de tempo</strong> e deixe nossa IA transcrever e organizar a evolução.</span>
+                  <span><strong>Grave áudios de até 20 minutos por evolução</strong> e deixe nossa IA transcrever e organizar o registro clínico.</span>
                 </li>
                 <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
                   <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
@@ -1005,7 +1005,7 @@ export default function LandingPage() {
           <div className="text-center space-y-4 mb-16">
             <h2 className="text-3xl sm:text-4xl font-display font-bold">Planos simples e transparentes</h2>
             <p className="text-brand-text-muted max-w-2xl mx-auto text-base">
-              Acesso total e ilimitado para transformar sua rotina de prontuários médicos. Sem taxa de ativação ou fidelidade.
+              Acesso completo para transformar sua rotina de prontuários, com política de uso justo para transcrições de áudio. Sem taxa de ativação ou fidelidade.
             </p>
           </div>
 

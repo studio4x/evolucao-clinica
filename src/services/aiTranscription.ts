@@ -8,6 +8,8 @@ export interface TranscriptionOptions {
   customPrompt?: string;
 }
 
+const MAX_AUDIO_DURATION_SECONDS = 20 * 60;
+const MAX_AUDIO_SIZE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_TRANSCRIPTION_PROMPT = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
 const normalizeMimeType = (mimeType?: string): string => {
@@ -66,12 +68,33 @@ const isModelConfigurationError = (message: string): boolean => {
   );
 };
 
+const isHardLimitError = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('(http 400)') ||
+    normalized.includes('(http 403)') ||
+    normalized.includes('limite máximo de 20 minutos') ||
+    normalized.includes('tamanho máximo permitido de 20 mb') ||
+    normalized.includes('muitas solicitações de transcrição') ||
+    normalized.includes('limite mensal de transcrição de áudio atingido') ||
+    normalized.includes('duração do áudio é obrigatória')
+  );
+};
+
 export const transcribeAudio = async (options: TranscriptionOptions): Promise<string> => {
   const { audioBlob, mimeType, onRetry, audioDuration, customPrompt } = options;
   const maxRetries = 3;
   let retryCount = 0;
   const normalizedMimeType = normalizeMimeType(mimeType || audioBlob.type);
   const prompt = customPrompt || DEFAULT_TRANSCRIPTION_PROMPT;
+
+  if (typeof audioDuration === 'number' && Number.isFinite(audioDuration) && audioDuration > MAX_AUDIO_DURATION_SECONDS) {
+    throw new Error("O áudio excede o limite máximo de 20 minutos por evolução.");
+  }
+
+  if (audioBlob.size > MAX_AUDIO_SIZE_BYTES) {
+    throw new Error("O áudio excede o tamanho máximo permitido de 20 MB por evolução.");
+  }
 
   const attemptTranscription = async (): Promise<string> => {
     try {
@@ -142,16 +165,17 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
 
     } catch (error: any) {
       const errorContent = error.message || JSON.stringify(error);
-      const isQuotaError = errorContent.includes('429') || 
-                           errorContent.includes('exhausted') || 
-                           errorContent.includes('resource_exhausted') ||
-                           errorContent.includes('RESOURCE_EXHAUSTED');
+      const normalizedErrorContent = errorContent.toLowerCase();
+      const isQuotaError = normalizedErrorContent.includes('quota') ||
+                           normalizedErrorContent.includes('exhausted') ||
+                           normalizedErrorContent.includes('resource_exhausted');
       const isBucketError = isBucketMissingError(errorContent);
       const isModelError = isModelConfigurationError(errorContent);
+      const isPolicyError = isHardLimitError(errorContent);
 
       console.error("[AI-Service] Erro na transcrição:", errorContent);
       
-      if (!isBucketError && !isModelError && retryCount < maxRetries) {
+      if (!isBucketError && !isModelError && !isPolicyError && retryCount < maxRetries) {
         retryCount++;
         // Se for erro de cota, aumenta o delay (mínimo 15 segundos)
         const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;

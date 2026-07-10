@@ -1,6 +1,6 @@
 # Evolução Clínica
 
-Plataforma web para registro de evoluções clínicas com áudio, transcrição por IA, organização de prontuários e integração com Google Drive/Google Docs.
+Plataforma web para registro de evoluções clínicas com áudio, transcrição por IA sujeita a limites técnicos e política de uso justo, organização de prontuários e integração com Google Drive/Google Docs.
 
 ## Site público
 

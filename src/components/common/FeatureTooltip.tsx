@@ -7,9 +7,10 @@ interface FeatureTooltipProps {
 
 const FEATURE_DESCRIPTIONS: Record<string, string> = {
   'pacientes ilimitados': 'Cadastre quantos pacientes precisar, sem limites ou cobranças adicionais por registro.',
-  'evoluções clínicas com ia ilimitadas': 'Gere evoluções e prontuários estruturados a partir de anotações ou áudios usando nossa IA avançada.',
+  'evoluções clínicas com ia ilimitadas': 'Gere evoluções e prontuários estruturados a partir de anotações ou áudios com apoio da nossa IA, observados os limites técnicos e operacionais do serviço.',
+  'transcrições de áudio com uso justo de até 20 horas por mês': 'Transcreva áudios clínicos com limite mensal de uso justo de até 1.200 minutos por profissional, preservando previsibilidade e estabilidade do serviço.',
   'integração com google docs em tempo real': 'Sincronize automaticamente seus prontuários e relatórios com documentos no seu Google Drive pessoal.',
-  'gravação e transcrição de áudio nativa': 'Grave suas sessões ou observações direto pelo app e receba a transcrição textual instantânea.',
+  'gravação e transcrição de áudio nativa': 'Grave suas sessões ou observações direto pelo app. Cada evolução aceita áudios de até 20 minutos e até 20 MB por arquivo.',
   'geração de relatórios & pdi por ia': 'Crie Plano de Desenvolvimento Individual (PDI) e relatórios clínicos de evolução com apoio da inteligência artificial.',
   'pesquisa inteligente por ia (pergunte ao prontuário)': 'Faça perguntas em linguagem natural sobre o histórico clínico do paciente e encontre informações na hora.',
   'assinatura digital de documentos com proteção legal': 'Assine digitalmente seus relatórios e evoluções em conformidade com as normas ICP-Brasil e CFM.',
@@ -19,7 +20,7 @@ const FEATURE_DESCRIPTIONS: Record<string, string> = {
   'impressão de prontuários do google docs': 'Gere versões em PDF prontas para impressão mantendo a formatação original do seu Google Docs.',
   
   // Yearly features
-  'tudo do plano mensal': 'Tenha acesso a todas as ferramentas, limites ilimitados e integrações do plano mensal.',
+  'tudo do plano mensal': 'Tenha acesso a todas as ferramentas, integrações e limites operacionais previstos no plano mensal.',
   'desconto de ~17% sobre o valor': 'Ao contratar o plano anual, você economiza comparado ao pagamento mensal acumulado.',
   'desconto de ~17% sobre o valor mensal': 'Ao contratar o plano anual, você economiza comparado ao pagamento mensal acumulado.',
   'suporte prioritário via e-mail e whatsapp': 'Atendimento VIP com tempo de resposta reduzido para esclarecer suas dúvidas.',

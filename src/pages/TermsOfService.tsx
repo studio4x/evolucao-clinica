@@ -30,7 +30,7 @@ export default function TermsOfService() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 26 de junho de 2026
+          Última atualização: 10 de julho de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
@@ -73,7 +73,21 @@ export default function TermsOfService() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Assinaturas, cancelamento e reembolso</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Transcrição por IA, limites técnicos e uso justo</h2>
+            <p>
+              Para preservar a estabilidade da plataforma, a segurança operacional e a previsibilidade de custos, a funcionalidade de transcrição
+              de áudio está sujeita a limites técnicos e comerciais.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
+              <li>Cada evolução aceita áudios de até 20 minutos e até 20 MB por arquivo.</li>
+              <li>O uso da rota de transcrição pode ser limitado a até 5 solicitações por minuto por profissional autenticado.</li>
+              <li>As transcrições de áudio estão sujeitas a política de uso justo de até 1.200 minutos por mês por profissional, salvo contratação de capacidade adicional.</li>
+              <li>Ao atingir o limite mensal vigente, novas transcrições poderão ser bloqueadas até a renovação do ciclo ou aquisição de pacote complementar.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Assinaturas, cancelamento e reembolso</h2>
             <p>
               O acesso integral ao serviço pode depender de plano de assinatura ativo. As condições comerciais, renovação, cobrança e cancelamento
               são exibidas no aplicativo no momento da contratação e podem ser atualizadas conforme a oferta vigente.
@@ -85,7 +99,7 @@ export default function TermsOfService() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Serviços de terceiros e inteligência artificial</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">7. Serviços de terceiros e inteligência artificial</h2>
             <p>
               A plataforma integra serviços de terceiros, inclusive provedores de autenticação, armazenamento, infraestrutura e IA.
               O uso desses serviços é restrito à execução das funcionalidades solicitadas pelo usuário.
@@ -97,7 +111,7 @@ export default function TermsOfService() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">7. Limitação de responsabilidade</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">8. Limitação de responsabilidade</h2>
             <p>
               Não garantimos que a plataforma estará livre de interrupções, falhas ocasionais ou indisponibilidades de terceiros. Na extensão
               permitida pela lei, não nos responsabilizamos por decisões clínicas, administrativas ou financeiras tomadas exclusivamente com base
@@ -106,7 +120,7 @@ export default function TermsOfService() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">8. Alterações e contato</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">9. Alterações e contato</h2>
             <p>
               Podemos atualizar estes Termos de Serviço periodicamente. Mudanças materiais poderão ser comunicadas no aplicativo ou por e-mail.
               O uso contínuo após a publicação das alterações significa aceitação dos novos termos.

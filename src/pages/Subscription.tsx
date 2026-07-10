@@ -17,7 +17,7 @@ const DEFAULT_PLANS = [
     equivalent_monthly_price: null,
     features: [
       'Pacientes ilimitados',
-      'Evoluções clínicas com IA ilimitadas',
+      'Transcrições de áudio com uso justo de até 20 horas por mês',
       'Integração com Google Docs em tempo real',
       'Gravação e transcrição de áudio nativa',
       'Geração de Relatórios & PDI por IA',
@@ -99,7 +99,7 @@ function getPlanDisplayName(plan: SubscriptionPlanLike | undefined, fallbackId: 
 function getPlanBenefitsCopy(plan: SubscriptionPlanLike | undefined, fallbackId: string) {
   const defaultMonthlyBenefits = [
     'Pacientes ilimitados',
-    'Evoluções clínicas com IA ilimitadas',
+    'Transcrições de áudio com uso justo de até 20 horas por mês',
     'Integração com Google Docs em tempo real',
     'Gravação e transcrição de áudio nativa'
   ];
@@ -1205,8 +1205,8 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
               <div className="flex items-start space-x-2.5">
                 <Check className="w-4 h-4 text-brand-primary mt-0.5 flex-shrink-0" />
                 <div>
-                  <strong className="font-semibold block">Evoluções com IA Ilimitadas</strong>
-                  <span>Você não poderá mais transcrever e resumir seus áudios clínicos com a inteligência artificial, tendo que voltar a digitar tudo manualmente.</span>
+                  <strong className="font-semibold block">Transcrições e evoluções com IA</strong>
+                  <span>Você perderá acesso às transcrições de áudio com uso justo mensal e terá de voltar a digitar seus registros manualmente.</span>
                 </div>
               </div>
               <div className="flex items-start space-x-2.5">

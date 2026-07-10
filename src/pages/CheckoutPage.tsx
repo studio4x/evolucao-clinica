@@ -19,7 +19,7 @@ const DEFAULT_PLANS = [
     price: 39.00,
     features: [
       'Pacientes ilimitados',
-      'Evoluções clínicas com IA ilimitadas',
+      'Transcrições de áudio com uso justo de até 20 horas por mês',
       'Integração com Google Docs em tempo real',
       'Gravação e transcrição de áudio nativa',
       'Geração de Relatórios & PDI por IA',

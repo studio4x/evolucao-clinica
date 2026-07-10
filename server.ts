@@ -31,6 +31,14 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 const GEMINI_DEFAULT_MODEL = "gemini-3.5-flash";
 const GEMINI_TRANSCRIPTION_FALLBACK_MODEL = "gemini-3.5-flash";
 const TEMP_AUDIO_BUCKET = "temp-audio";
+const TRANSCRIPTION_MAX_DURATION_SECONDS = 20 * 60;
+const TRANSCRIPTION_MAX_FILE_BYTES = 20 * 1024 * 1024;
+const TRANSCRIPTION_RATE_LIMIT_MAX_REQUESTS = 5;
+const TRANSCRIPTION_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const TRANSCRIPTION_MONTHLY_LIMIT_SECONDS = 20 * 60 * 60;
+const TRANSCRIPTION_USAGE_RESOURCE = "audio_transcription";
+const APP_TIMEZONE = "America/Sao_Paulo";
+const transcriptionRateLimitStore = new Map<string, number[]>();
 
 const DEPRECATED_MODEL_FALLBACKS: Record<string, string> = {
   "gemini-2.0-flash": "gemini-3.5-flash",
@@ -146,6 +154,95 @@ function resolveTranscriptionModel(configuredModel?: string): string {
   }
 
   return candidate;
+}
+
+function getCurrentUsageMonth(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit"
+  }).formatToParts(now);
+
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+
+  if (!year || !month) {
+    throw new Error("Não foi possível determinar o mês corrente para o controle de uso.");
+  }
+
+  return `${year}-${month}-01`;
+}
+
+function parseAudioDurationSeconds(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return Math.ceil(parsed);
+}
+
+function consumeTranscriptionRateLimit(userId: string, now = Date.now()) {
+  const recentRequests = (transcriptionRateLimitStore.get(userId) || [])
+    .filter((timestamp) => now - timestamp < TRANSCRIPTION_RATE_LIMIT_WINDOW_MS);
+
+  if (recentRequests.length >= TRANSCRIPTION_RATE_LIMIT_MAX_REQUESTS) {
+    transcriptionRateLimitStore.set(userId, recentRequests);
+    const retryAfterMs = TRANSCRIPTION_RATE_LIMIT_WINDOW_MS - (now - recentRequests[0]);
+
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000))
+    };
+  }
+
+  recentRequests.push(now);
+  transcriptionRateLimitStore.set(userId, recentRequests);
+
+  return {
+    allowed: true,
+    retryAfterSeconds: 0
+  };
+}
+
+async function getMonthlyTranscriptionUsageSeconds(professionalId: string, usageMonth: string): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from("usage_tracking")
+    .select("used_seconds")
+    .eq("professional_id", professionalId)
+    .eq("resource_type", TRANSCRIPTION_USAGE_RESOURCE)
+    .eq("usage_month", usageMonth)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || "Falha ao consultar o consumo mensal de transcrição.");
+  }
+
+  return Number(data?.used_seconds || 0);
+}
+
+async function incrementMonthlyTranscriptionUsageSeconds(professionalId: string, usageMonth: string, deltaSeconds: number): Promise<number> {
+  const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(professionalId, usageMonth);
+  const nextUsageSeconds = currentUsageSeconds + deltaSeconds;
+
+  const { error } = await supabaseAdmin
+    .from("usage_tracking")
+    .upsert({
+      professional_id: professionalId,
+      resource_type: TRANSCRIPTION_USAGE_RESOURCE,
+      usage_month: usageMonth,
+      used_seconds: nextUsageSeconds,
+      updated_at: new Date().toISOString()
+    }, {
+      onConflict: "professional_id,resource_type,usage_month"
+    });
+
+  if (error) {
+    throw new Error(error.message || "Falha ao atualizar o consumo mensal de transcrição.");
+  }
+
+  return nextUsageSeconds;
 }
 
 
@@ -1270,9 +1367,26 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
 
   try {
     const { audioPath, mimeType, prompt, audioDuration } = req.body || {};
+    const requestedAudioDurationSeconds = parseAudioDurationSeconds(audioDuration);
 
-    if (!audioPath || !mimeType) {
-      return res.status(400).json({ error: "Parâmetros 'audioPath' e 'mimeType' são obrigatórios." });
+    if (!audioPath || !mimeType || !requestedAudioDurationSeconds) {
+      return res.status(400).json({ error: "Parâmetros 'audioPath', 'mimeType' e 'audioDuration' são obrigatórios." });
+    }
+
+    if (requestedAudioDurationSeconds > TRANSCRIPTION_MAX_DURATION_SECONDS) {
+      return res.status(400).json({ error: "O áudio excede o limite máximo de 20 minutos por evolução." });
+    }
+
+    if (typeof audioPath !== "string" || !audioPath.startsWith(`${req.user.id}/`)) {
+      return res.status(403).json({ error: "Você não tem permissão para transcrever este arquivo de áudio." });
+    }
+
+    const rateLimit = consumeTranscriptionRateLimit(req.user.id);
+    if (!rateLimit.allowed) {
+      res.set("Retry-After", String(rateLimit.retryAfterSeconds));
+      return res.status(429).json({
+        error: `Muitas solicitações de transcrição em pouco tempo. Aguarde ${rateLimit.retryAfterSeconds}s e tente novamente.`
+      });
     }
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1285,6 +1399,17 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
 
     const normalizedMimeType = normalizeAudioMimeType(mimeType);
     const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+    const usageMonth = getCurrentUsageMonth();
+    const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(req.user.id, usageMonth);
+
+    if (
+      currentUsageSeconds >= TRANSCRIPTION_MONTHLY_LIMIT_SECONDS ||
+      currentUsageSeconds + requestedAudioDurationSeconds > TRANSCRIPTION_MONTHLY_LIMIT_SECONDS
+    ) {
+      return res.status(403).json({
+        error: "Limite mensal de transcrição de áudio atingido. Adquira um pacote de horas adicionais."
+      });
+    }
 
     // 1. Obter a chave do Gemini e resolver o modelo configurado para transcrição
     const { apiKey, modelName } = await getGeminiSettings();
@@ -1308,9 +1433,14 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     }
 
     const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
+
+    if (audioBuffer.byteLength > TRANSCRIPTION_MAX_FILE_BYTES) {
+      return res.status(400).json({ error: "O áudio excede o tamanho máximo permitido de 20 MB por evolução." });
+    }
+
     const audioBase64 = audioBuffer.toString("base64");
 
-    console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${audioDuration || 0}s)...`);
+    console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${requestedAudioDurationSeconds}s)...`);
 
     const geminiResponse = await ai.models.generateContent({
       model: transcriptionModel,
@@ -1325,6 +1455,17 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     const transcription = geminiResponse.text;
     if (!transcription) {
       throw new Error("O Gemini não retornou nenhum texto de transcrição.");
+    }
+
+    try {
+      const updatedUsageSeconds = await incrementMonthlyTranscriptionUsageSeconds(
+        req.user.id,
+        usageMonth,
+        requestedAudioDurationSeconds
+      );
+      console.log(`[AI-Backend] Consumo mensal atualizado: ${updatedUsageSeconds}s no mês ${usageMonth}.`);
+    } catch (usageTrackingError) {
+      console.error("[AI-Backend] Erro ao atualizar usage_tracking:", usageTrackingError);
     }
 
     // 3. Registrar o log de consumo diretamente no banco
@@ -1347,7 +1488,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
           candidates_tokens: candidatesTokens,
           total_tokens: totalTokens,
           cost_usd: costUsd,
-          audio_duration_seconds: audioDuration || 0,
+          audio_duration_seconds: requestedAudioDurationSeconds,
           created_at: new Date().toISOString()
         });
         console.log("[AI-Backend] Log de consumo gravado com sucesso.");
