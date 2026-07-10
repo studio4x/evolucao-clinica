@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
+import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -1332,7 +1333,11 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
       const promptTokens = usageMetadata.promptTokenCount || 0;
       const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
       const totalTokens = usageMetadata.totalTokenCount || 0;
-      const costUsd = (promptTokens * 0.00000030) + (candidatesTokens * 0.00000250);
+      const costUsd = estimateGeminiTranscriptionCostUsd({
+        model: transcriptionModel,
+        promptTokens,
+        candidatesTokens,
+      });
 
       try {
         await supabaseAdmin.from('usage_logs').insert({
@@ -1370,6 +1375,35 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
         console.error(`[AI-Backend] Erro inesperado ao limpar áudio temporário (${audioPathToCleanup}):`, cleanupErr);
       }
     }
+  }
+});
+
+app.post("/api/admin/usage-logs/reset", requireAuth, requireAdmin, async (_req: any, res) => {
+  try {
+    const { count: existingCount, error: countError } = await supabaseAdmin
+      .from("usage_logs")
+      .select("id", { count: "exact", head: true });
+
+    if (countError) {
+      throw new Error(countError.message || "Falha ao contar os logs de consumo.");
+    }
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("usage_logs")
+      .delete()
+      .gte("created_at", "1970-01-01T00:00:00.000Z");
+
+    if (deleteError) {
+      throw new Error(deleteError.message || "Falha ao resetar os logs de consumo.");
+    }
+
+    return res.json({
+      success: true,
+      deletedCount: existingCount || 0,
+    });
+  } catch (err: any) {
+    console.error("[Admin] Erro ao resetar usage_logs:", err);
+    return res.status(500).json({ error: err.message || "Erro interno ao resetar as métricas de consumo." });
   }
 });
 

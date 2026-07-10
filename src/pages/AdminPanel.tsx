@@ -6,6 +6,7 @@ import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
 import { reloadSiteConfig } from '../hooks/useSiteConfig';
 import { defaultColors, type BrandColors } from '../utils/brandConfig';
+import { estimateGeminiTranscriptionCostUsd } from '../utils/geminiPricing';
 import EmailHistory from './EmailHistory';
 import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
@@ -730,6 +731,9 @@ export default function AdminPanel() {
   const [loadingUsage, setLoadingUsage] = useState(true);
   const [usageSearchTerm, setUsageSearchTerm] = useState('');
   const [usageViewMode, setUsageViewMode] = useState<'by_user' | 'history'>('by_user');
+  const [resettingUsageLogs, setResettingUsageLogs] = useState(false);
+  const [usageResetFeedback, setUsageResetFeedback] = useState('');
+  const [usageResetError, setUsageResetError] = useState('');
   const [tokenUsageSubTab, setTokenUsageSubTab] = useState<'general' | 'metrics'>('general');
 
   // Estados para Edição de Planos (SaaS)
@@ -1694,53 +1698,69 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
-  // Efeito para carregar os logs de consumo do Supabase
-  useEffect(() => {
-    if (!user || profileRole !== 'admin' || activeTab !== 'token_usage') {
+  const fetchUsageLogs = async () => {
+    if (!user || profileRole !== 'admin') {
       return;
     }
 
-    const fetchUsageLogs = async () => {
-      setLoadingUsage(true);
-      const { data, error } = await supabase
-        .from('usage_logs')
-        .select(`
-          id,
-          professional_id,
-          model,
-          prompt_tokens,
-          candidates_tokens,
-          total_tokens,
-          cost_usd,
-          audio_duration_seconds,
-          created_at,
-          professionals (
-            full_name,
-            google_email
-          )
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        console.error("Erro ao carregar logs de consumo:", error);
-      } else {
-        const formattedLogs = (data || []).map((log: any) => ({
+    setLoadingUsage(true);
+    const { data, error } = await supabase
+      .from('usage_logs')
+      .select(`
+        id,
+        professional_id,
+        model,
+        prompt_tokens,
+        candidates_tokens,
+        total_tokens,
+        cost_usd,
+        audio_duration_seconds,
+        created_at,
+        professionals (
+          full_name,
+          google_email
+        )
+      `)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error("Erro ao carregar logs de consumo:", error);
+    } else {
+      const formattedLogs = (data || []).map((log: any) => {
+        const promptTokens = Number(log.prompt_tokens || 0);
+        const candidatesTokens = Number(log.candidates_tokens || 0);
+        const totalTokens = Number(log.total_tokens || 0);
+        const storedCostUsd = Number(log.cost_usd || 0);
+
+        return {
           id: log.id,
           professional_id: log.professional_id,
           professional_name: log.professionals?.full_name || 'Profissional',
           professional_email: log.professionals?.google_email || '',
           model: log.model,
-          prompt_tokens: log.prompt_tokens,
-          candidates_tokens: log.candidates_tokens,
-          total_tokens: log.total_tokens,
-          cost_usd: Number(log.cost_usd || 0),
+          prompt_tokens: promptTokens,
+          candidates_tokens: candidatesTokens,
+          total_tokens: totalTokens,
+          cost_usd: estimateGeminiTranscriptionCostUsd({
+            model: log.model,
+            promptTokens,
+            candidatesTokens,
+            fallbackCostUsd: storedCostUsd,
+          }),
           audio_duration_seconds: Number(log.audio_duration_seconds || 0),
           created_at: log.created_at
-        }));
-        setUsageLogs(formattedLogs);
-      }
-      setLoadingUsage(false);
-    };
+        };
+      });
+      setUsageLogs(formattedLogs);
+    }
+    setLoadingUsage(false);
+  };
+
+  // Efeito para carregar os logs de consumo do Supabase
+  useEffect(() => {
+    if (!user || profileRole !== 'admin' || activeTab !== 'token_usage') {
+      return;
+    }
 
     fetchUsageLogs();
   }, [user, profileRole, activeTab]);
@@ -2477,6 +2497,49 @@ export default function AdminPanel() {
     log.professional_name.toLowerCase().includes(usageSearchTerm.toLowerCase()) ||
     log.professional_email.toLowerCase().includes(usageSearchTerm.toLowerCase())
   );
+
+  const handleResetUsageLogs = async () => {
+    if (resettingUsageLogs) return;
+
+    const confirmed = window.confirm(
+      'Isso vai apagar permanentemente todo o histórico de consumo de API e zerar as métricas do painel. Deseja continuar?'
+    );
+
+    if (!confirmed) return;
+
+    setResettingUsageLogs(true);
+    setUsageResetFeedback('');
+    setUsageResetError('');
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const response = await fetch('/api/admin/usage-logs/reset', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao resetar as métricas de consumo.');
+      }
+
+      setUsageSearchTerm('');
+      setUsageLogs([]);
+      setUsageResetFeedback(`Métricas resetadas com sucesso. ${data.deletedCount || 0} registros removidos.`);
+      await fetchUsageLogs();
+    } catch (err: any) {
+      console.error('Erro ao resetar logs de consumo:', err);
+      setUsageResetError(err.message || 'Erro ao resetar as métricas de consumo.');
+    } finally {
+      setResettingUsageLogs(false);
+    }
+  };
 
   const formatDate = (isoString?: string) => {
     if (!isoString) return '-';
@@ -3705,6 +3768,7 @@ export default function AdminPanel() {
                           <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Custo Total (USD)</p>
                           <h3 className="text-xl font-bold font-display text-brand-primary">{formatCost(totalUsageCostUsd)}</h3>
                           <p className="text-[10px] text-brand-text-muted mt-0.5">Est. {formatBRL(totalUsageCostUsd)} BRL</p>
+                          <p className="text-[10px] text-brand-text-muted mt-0.5">Estimativa recalculada por modelo registrado</p>
                         </div>
                       </div>
 
@@ -3715,7 +3779,7 @@ export default function AdminPanel() {
                         <div>
                           <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider">Total Transcricoes</p>
                           <h3 className="text-2xl font-bold font-display text-brand-primary">{totalCallsCount}</h3>
-                          <p className="text-[10px] text-brand-text-muted mt-0.5">Chamadas Gemini Flash</p>
+                          <p className="text-[10px] text-brand-text-muted mt-0.5">Chamadas registradas no usage_logs</p>
                         </div>
                       </div>
 
@@ -3761,29 +3825,50 @@ export default function AdminPanel() {
                         />
                       </div>
 
-                      <div className="flex bg-brand-bg border border-brand-border p-1 rounded-xl gap-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                        <div className="flex bg-brand-bg border border-brand-border p-1 rounded-xl gap-1">
+                          <button
+                            onClick={() => setUsageViewMode('by_user')}
+                            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                              usageViewMode === 'by_user'
+                                ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
+                                : 'text-brand-text-muted hover:text-brand-primary'
+                            }`}
+                          >
+                            Acumulado por Usuario
+                          </button>
+                          <button
+                            onClick={() => setUsageViewMode('history')}
+                            className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                              usageViewMode === 'history'
+                                ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
+                                : 'text-brand-text-muted hover:text-brand-primary'
+                            }`}
+                          >
+                            Historico de Chamadas
+                          </button>
+                        </div>
                         <button
-                          onClick={() => setUsageViewMode('by_user')}
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                            usageViewMode === 'by_user'
-                              ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
-                              : 'text-brand-text-muted hover:text-brand-primary'
-                          }`}
+                          type="button"
+                          onClick={handleResetUsageLogs}
+                          disabled={resettingUsageLogs || usageLogs.length === 0}
+                          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                         >
-                          Acumulado por Usuario
-                        </button>
-                        <button
-                          onClick={() => setUsageViewMode('history')}
-                          className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                            usageViewMode === 'history'
-                              ? 'bg-white text-brand-primary shadow-sm border border-brand-border/60'
-                              : 'text-brand-text-muted hover:text-brand-primary'
-                          }`}
-                        >
-                          Historico de Chamadas
+                          {resettingUsageLogs ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          <span>Resetar métricas</span>
                         </button>
                       </div>
                     </div>
+
+                    {(usageResetFeedback || usageResetError) && (
+                      <div className={`card p-4 border text-sm ${
+                        usageResetError
+                          ? 'bg-red-50 border-red-100 text-red-700'
+                          : 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                      }`}>
+                        {usageResetError || usageResetFeedback}
+                      </div>
+                    )}
 
                     {/* Visualizacao do Consumo */}
                     <div className="card bg-white overflow-hidden border border-brand-border">
