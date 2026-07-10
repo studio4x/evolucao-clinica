@@ -1025,7 +1025,7 @@ export default function Profile() {
                         Informações Importantes:
                       </p>
                       <ul className="space-y-1 list-disc pl-4">
-                        <li>A restauração é inteligente: ela **mescla** os dados do backup. Pacientes ou evoluções novas cadastradas após este backup **não serão excluídos**.</li>
+                        <li>A restauração é inteligente: ela <strong>mescla</strong> os dados do backup. Pacientes ou evoluções novas cadastradas após este backup <strong>não serão excluídos</strong>.</li>
                         <li>Os registros clínicos correspondentes que já existem serão atualizados para o estado em que estavam no backup.</li>
                       </ul>
                     </div>
@@ -1068,7 +1068,7 @@ export default function Profile() {
                 <div className="space-y-1">
                   <h4 className="text-sm font-semibold text-brand-primary">Senha não necessária</h4>
                   <p className="text-xs text-brand-text-muted leading-relaxed">
-                    Sua conta está vinculada ao **Google Login**. Não é necessária uma senha na nossa plataforma.
+                    Sua conta está vinculada ao <strong>Google Login</strong>. Não é necessária uma senha na nossa plataforma.
                     Para sua segurança, as credenciais e autenticação são gerenciadas diretamente pelo ecossistema do Google.
                   </p>
                 </div>

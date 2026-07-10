@@ -1114,7 +1114,7 @@ export default function LandingPage() {
               </div>
               <h3 className="text-lg font-bold font-display text-brand-primary">Sua Conta, Seu Google Drive</h3>
               <p className="text-brand-text-muted text-xs sm:text-sm leading-relaxed">
-                Cada evolução é salva como um documento Google Docs na sua própria conta pessoal ou corporativa do Google Workspace. Se você decidir parar de usar a nossa plataforma, **todos os seus prontuários continuam integralmente salvos com você** de forma organizada.
+                Cada evolução é salva como um documento Google Docs na sua própria conta pessoal ou corporativa do Google Workspace. Se você decidir parar de usar a nossa plataforma, <strong>todos os seus prontuários continuam integralmente salvos com você</strong> de forma organizada.
               </p>
             </div>
 

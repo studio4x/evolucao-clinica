@@ -2987,7 +2987,7 @@ export default function AdminPanel() {
                       </span>
                     </div>
                     <p className="text-xs text-brand-text-muted leading-relaxed">
-                      * A chave salva nesta secao e sincronizada em tempo real e possui **prioridade absoluta** sobre as chaves estaticas inseridas em arquivos de variaveis de ambiente (.env).
+                      * A chave salva nesta secao e sincronizada em tempo real e possui <strong>prioridade absoluta</strong> sobre as chaves estaticas inseridas em arquivos de variaveis de ambiente (.env).
                     </p>
                   </div>
 
@@ -3376,7 +3376,7 @@ export default function AdminPanel() {
                           </span>
                         </div>
                         <p className="text-[11px] text-brand-text-muted mt-2 leading-relaxed">
-                          * Insira a URL acima na seção **Webhooks** no painel da sua conta Stripe. Se o seu servidor for local (development), utilize uma ferramenta como o **ngrok** ou a CLI do Stripe (`stripe listen --forward-to`) para repassar as requisições para a porta local.
+                          * Insira a URL acima na seção <strong>Webhooks</strong> no painel da sua conta Stripe. Se o seu servidor for local (development), utilize uma ferramenta como o <strong>ngrok</strong> ou a CLI do Stripe (`stripe listen --forward-to`) para repassar as requisições para a porta local.
                         </p>
                       </div>
 
