@@ -966,7 +966,7 @@ export default function LandingPage() {
               <ul className="space-y-4">
                 <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
                   <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
-                  <span><strong>Grave em áudio</strong> por 2 minutos e deixe nossa IA transcrever e organizar a evolução.</span>
+                  <span><strong>Grave seus áudios sem limite de tempo</strong> e deixe nossa IA transcrever e organizar a evolução.</span>
                 </li>
                 <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
                   <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
