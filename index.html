@@ -30,13 +30,13 @@
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Evolução Clínica - Prontuários e Evoluções com IA" />
     <meta property="og:description" content="Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive." />
-    <meta property="og:image" content="/icon-512x512.png" />
+    <meta property="og:image" content="/og-image-social.png" />
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Evolução Clínica - Prontuários e Evoluções com IA" />
     <meta name="twitter:description" content="Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive." />
-    <meta name="twitter:image" content="/icon-512x512.png" />
+    <meta name="twitter:image" content="/og-image-social.png" />
     <script>
       (function () {
         const storageKey = 'evolucao-clinica:site-config';
@@ -133,7 +133,7 @@
 
           const faviconUrl = config.favicon_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
           const appleTouchIconUrl = config.pwa_icon_192_url || faviconUrl;
-          const socialImageUrl = appendVersion(config.social_share_url || config.pwa_icon_512_url || faviconUrl, assetSignature);
+          const socialImageUrl = appendVersion(config.social_share_url || '/og-image-social.png', assetSignature);
           const title = config.pwa_app_name || defaultTitle;
           const description = config.pwa_description || defaultDescription;
 
