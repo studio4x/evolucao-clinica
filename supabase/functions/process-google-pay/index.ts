@@ -210,10 +210,51 @@ serve(async (req) => {
   }
 
   try {
+    // 1. Validar autenticação do usuário via JWT enviado no Header Authorization
+    const authHeader = req.headers.get("Authorization") || "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Token de autorização inválido ou ausente." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+
+    // Inicializar cliente administrativo do Supabase
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Recupera usuário associado ao token
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ success: false, error: "Usuário não autenticado." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { userId, planId, paymentToken, paymentDescriptor } = await req.json();
 
     if (!userId || !planId || !paymentToken) {
       throw new Error("Parâmetros obrigatórios ausentes: userId, planId, paymentToken.");
+    }
+
+    // Validar propriedade: o usuário logado deve ser o dono do userId ou ser um administrador
+    if (user.id !== userId) {
+      const { data: prof, error: profError } = await supabaseAdmin
+        .from("professionals")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (profError || !prof || prof.role !== "admin") {
+        return new Response(
+          JSON.stringify({ success: false, error: "Permissão negada. Você não tem permissão para realizar assinaturas para outro profissional." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Resolve o token ID real de forma robusta (Google Pay retorna JSON ou Objeto)
@@ -236,11 +277,6 @@ serve(async (req) => {
     if (!tokenId) {
       throw new Error("Token de pagamento inválido ou não fornecido.");
     }
-
-    // 1. Inicializar cliente administrativo do Supabase
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // 2. Carregar configurações globais de pagamento do banco de dados (tabela settings)
     const { data: settingsData, error: settingsError } = await supabaseAdmin
