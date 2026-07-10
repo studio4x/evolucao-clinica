@@ -18,7 +18,17 @@ import {
   HelpCircle,
   Menu,
   X,
-  Plus
+  Plus,
+  Brain,
+  Volume2,
+  GraduationCap,
+  Activity,
+  Stethoscope,
+  TrendingUp,
+  Clock,
+  Coins,
+  Database,
+  AlertCircle
 } from 'lucide-react';
 import { APP_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -95,6 +105,9 @@ export default function LandingPage() {
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
 
   const [plans, setPlans] = useState<any[]>([]);
+  const [activeSpecialty, setActiveSpecialty] = useState('psicologia');
+  const [pacientesPorSemana, setPacientesPorSemana] = useState(20);
+  const [tempoPorEvolucao, setTempoPorEvolucao] = useState(15);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -506,6 +519,160 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ESPECIALIDADES SECTION */}
+      <section className="py-20 bg-brand-bg relative overflow-hidden border-b border-brand-border">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center space-y-4 mb-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-primary/10 rounded-full text-brand-primary text-xs font-bold uppercase tracking-wider">
+              <Users size={14} /> Feito para a sua área
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-display font-bold">Adaptável para diversas especialidades de saúde</h2>
+            <p className="text-brand-text-muted max-w-2xl mx-auto text-base">
+              A inteligência artificial do app reconhece os termos técnicos, jargões e abreviações da sua profissão de forma inteligente.
+            </p>
+          </div>
+
+          {/* Tabs header */}
+          <div className="flex flex-wrap justify-center gap-2 mb-10 max-w-4xl mx-auto">
+            {[
+              { id: 'psicologia', label: 'Psicologia', icon: Brain },
+              { id: 'fonoaudiologia', label: 'Fonoaudiologia', icon: Volume2 },
+              { id: 'psicopedagogia', label: 'Psicopedagogia', icon: GraduationCap },
+              { id: 'terapia-ocupacional', label: 'Terapia Ocupacional', icon: Activity },
+              { id: 'medicina', label: 'Medicina & Psiquiatria', icon: Stethoscope }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const active = activeSpecialty === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveSpecialty(tab.id)}
+                  className={`flex items-center gap-2 px-5 py-3 rounded-full text-sm font-bold transition-all cursor-pointer ${
+                    active 
+                      ? 'bg-brand-primary text-white shadow-md' 
+                      : 'bg-white text-brand-text-muted hover:text-brand-primary border border-brand-border hover:border-brand-primary/30'
+                  }`}
+                >
+                  <Icon size={16} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Tab content card */}
+          <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-brand-border p-8 shadow-xl relative overflow-hidden transition-all duration-300">
+            <div className="absolute top-0 left-0 w-2 h-full bg-brand-primary" />
+            {activeSpecialty === 'psicologia' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                    <Brain size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Evoluções Clínicas para Psicólogos</h3>
+                </div>
+                <p className="text-brand-text-muted text-sm leading-relaxed">
+                  Perfeito para registrar sessões de Terapia Cognitivo-Comportamental (TCC), Psicanálise, Fenomenologia, entre outras abordagens. A IA do aplicativo organiza com maestria as queixas trazidas pelo paciente, suas respostas emocionais, hipóteses diagnósticas em evolução e as estratégias/intervenções planejadas para as próximas sessões.
+                </p>
+                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
+                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
+                    <p><strong>• Queixa e Estado Geral:</strong> Paciente traz relato de ansiedade difusa, humor disfórico e crises de pânico engatilhadas no ambiente acadêmico.</p>
+                    <p><strong>• Intervenções do Psicólogo:</strong> Realizada psicoeducação sobre ansiedade e treino de técnicas de respiração diafragmática para regulação.</p>
+                    <p><strong>• Encaminhamentos/Conduta:</strong> Orientado o registro de pensamentos disfuncionais e leitura de material de apoio.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSpecialty === 'fonoaudiologia' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                    <Volume2 size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Evoluções para Fonoaudiologia</h3>
+                </div>
+                <p className="text-brand-text-muted text-sm leading-relaxed">
+                  Desenvolvido para fonoaudiólogos que atuam em linguagem (TEA, atrasos de fala), motricidade orofacial, processamento auditivo ou voz. A IA estrutura a evolução clínica separando o desempenho nas atividades de fonoterapia, as evoluções nos marcos de desenvolvimento e as orientações fornecidas aos familiares.
+                </p>
+                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
+                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
+                    <p><strong>• Aspectos Linguísticos/Auditivos:</strong> Apresentou melhora no contato visual e intenção comunicativa. Demonstrou avanço na articulação dos fonemas /l/ e /lh/.</p>
+                    <p><strong>• Atividades Realizadas:</strong> Uso de jogos simbólicos e pareamento de estímulos visuais para treino de vocabulário.</p>
+                    <p><strong>• Orientações à Família:</strong> Instruído aos pais incentivar a nomeação em contexto domiciliar, evitando antecipar as demandas do paciente.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSpecialty === 'psicopedagogia' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                    <GraduationCap size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Relatórios e PDIs para Psicopedagogos</h3>
+                </div>
+                <p className="text-brand-text-muted text-sm leading-relaxed">
+                  Perfeito para acompanhar processos de aprendizagem escolar, diagnóstico e intervenção psicopedagógica (TDAH, dislexia, autismo). Permite que você crie relatórios de sessões lúdicas, registre o progresso em leitura/escrita e organize dados para a elaboração de Planos de Desenvolvimento Individual (PDI) com poucos cliques.
+                </p>
+                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
+                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
+                    <p><strong>• Foco Cognitivo/Aprendizagem:</strong> Excelente desempenho em tarefas de atenção concentrada com suporte visual. Dificuldade moderada no raciocínio lógico-matemático com frações.</p>
+                    <p><strong>• Recursos Utilizados:</strong> Jogos de tabuleiro temáticos e atividades sensoriais estruturadas.</p>
+                    <p><strong>• Plano de Intervenção:</strong> Próxima sessão focará na mediação de estratégias de cálculo mental com blocos lógicos.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSpecialty === 'terapia-ocupacional' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                    <Activity size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Prontuários para Terapeutas Ocupacionais (TO)</h3>
+                </div>
+                <p className="text-brand-text-muted text-sm leading-relaxed">
+                  Adequado para TOs que trabalham com Integração Sensorial de Ayres, reabilitação física, estimulação precoce e desenvolvimento de Atividades de Vida Diária (AVDs). A IA organiza os dados detalhando a autorregulação do paciente, tolerância aos estímulos sensoriais, coordenação motora fina/grossa e nível de independência demonstrado.
+                </p>
+                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
+                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
+                    <p><strong>• Perfil Sensório-Motor:</strong> Manteve bom tônus postural durante atividades suspensas. Apresentou defensividade tátil leve ao manusear argila, necessitando de facilitação gradual.</p>
+                    <p><strong>• Prática Ocupacional:</strong> Treino de abotoamento e uso de utensílios de alimentação com feedbacks táteis.</p>
+                    <p><strong>• Planejamento Clínico:</strong> Dar continuidade à dessensibilização tátil e fortalecimento escapular no balanço.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {activeSpecialty === 'medicina' && (
+              <div className="space-y-6 animate-fadeIn">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-primary/10 flex items-center justify-center text-brand-primary">
+                    <Stethoscope size={20} />
+                  </div>
+                  <h3 className="text-xl font-bold font-display text-brand-primary">Anamneses e Condutas Médicas</h3>
+                </div>
+                <p className="text-brand-text-muted text-sm leading-relaxed">
+                  Ideal para médicos especialistas e psiquiatras otimizarem a escrita clínica. A IA converte o resumo ditado em uma evolução estruturada contendo: queixa principal (QP), história da doença atual (HDA), exame do estado mental (em psiquiatria), hipótese diagnóstica (conforme CID) e a conduta/prescrição terapêutica adotada.
+                </p>
+                <div className="bg-brand-bg/40 p-4 rounded-2xl border border-brand-border space-y-2">
+                  <p className="text-xs font-bold text-brand-primary uppercase tracking-wider">Como fica o prontuário estruturado:</p>
+                  <div className="text-xs text-brand-text space-y-1 bg-white p-3 rounded-xl border border-brand-border/60">
+                    <p><strong>• Quadro Clínico & Exame Mental:</strong> Paciente vigil, orientado no tempo e espaço, pensamento de curso regular e conteúdo sem delírios. Afeto modulado com leve embotamento sob estresse.</p>
+                    <p><strong>• Hipótese Diagnóstica:</strong> Transtorno misto ansioso e depressivo (CID-10: F41.2 / CID-11: 6B44).</p>
+                    <p><strong>• Conduta e Farmacologia:</strong> Mantida medicação atual. Ajustada posologia noturna para controle da insônia secundária. Solicitado retorno em 30 dias.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* COMO FUNCIONA (TIMELINE) */}
       <section id="como-funciona" className="py-20 bg-brand-bg relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -662,6 +829,164 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* CALCULADORA DE ROI (ECONOMIA DE TEMPO) */}
+      <section className="py-20 bg-white border-t border-brand-border relative overflow-hidden">
+        <div className="absolute top-1/2 left-0 w-72 h-72 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center space-y-4 mb-12">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-accent/15 rounded-full text-brand-primary text-xs font-bold uppercase tracking-wider">
+              <TrendingUp size={14} /> Simule Seus Ganhos
+            </div>
+            <h2 className="text-3xl font-display font-bold">Quanto tempo você vai economizar?</h2>
+            <p className="text-brand-text-muted text-sm sm:text-base max-w-lg mx-auto">
+              Ajuste os valores abaixo com base na sua rotina de atendimentos e descubra quantas horas você recupera ao usar o Evolução Clínica.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-brand-bg/30 p-6 md:p-8 rounded-3xl border border-brand-border shadow-xl">
+            {/* Controles Sliders */}
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-bold text-brand-text">
+                  <span>Pacientes atendidos por semana:</span>
+                  <span className="text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded">{pacientesPorSemana} pacientes</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="5" 
+                  max="60" 
+                  step="1"
+                  value={pacientesPorSemana}
+                  onChange={(e) => setPacientesPorSemana(Number(e.target.value))}
+                  className="w-full h-2 bg-brand-border rounded-lg appearance-none cursor-pointer accent-brand-primary"
+                />
+                <div className="flex justify-between text-[10px] text-brand-text-muted">
+                  <span>5 pacientes</span>
+                  <span>60 pacientes</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-bold text-brand-text">
+                  <span>Tempo gasto por evolução (Manual):</span>
+                  <span className="text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded">{tempoPorEvolucao} minutos</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="5" 
+                  max="45" 
+                  step="5"
+                  value={tempoPorEvolucao}
+                  onChange={(e) => setTempoPorEvolucao(Number(e.target.value))}
+                  className="w-full h-2 bg-brand-border rounded-lg appearance-none cursor-pointer accent-brand-primary"
+                />
+                <div className="flex justify-between text-[10px] text-brand-text-muted">
+                  <span>5 min</span>
+                  <span>45 min</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Resultados */}
+            <div className="bg-white rounded-2xl border border-brand-border p-6 shadow-md space-y-6">
+              <h4 className="text-xs font-bold text-brand-primary uppercase tracking-wider border-b border-brand-primary/10 pb-2 flex items-center gap-1.5">
+                <Clock size={14} /> ESTIMATIVA DE ECONOMIA MENSAL
+              </h4>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div className="bg-brand-bg/50 p-4 rounded-xl border border-brand-border/60">
+                  <p className="text-xs text-brand-text-muted font-semibold uppercase">Tempo Poupado por Mês</p>
+                  <p className="text-3xl font-extrabold text-brand-primary font-display mt-1">
+                    {Math.max(0, Math.round(((pacientesPorSemana * tempoPorEvolucao * 4) / 60) - ((pacientesPorSemana * 3 * 4) / 60)))} horas
+                  </p>
+                  <p className="text-[10px] text-brand-text-muted mt-1 leading-relaxed">
+                    Estimando apenas 3 minutos por evolução com gravação de áudio e inteligência artificial.
+                  </p>
+                </div>
+
+                <div className="bg-brand-primary/[0.03] p-4 rounded-xl border border-brand-primary/10">
+                  <p className="text-xs text-brand-text-muted font-semibold uppercase">O que você ganha com isso</p>
+                  <p className="text-base font-bold text-brand-primary mt-1">
+                    + {Math.round((Math.max(0, ((pacientesPorSemana * tempoPorEvolucao * 4) / 60) - ((pacientesPorSemana * 3 * 4) / 60))) * 1.2)} consultas extras mensais
+                  </p>
+                  <p className="text-[10px] text-brand-text-muted leading-relaxed">
+                    Ou até <strong>{Math.round((Math.max(0, ((pacientesPorSemana * tempoPorEvolucao * 4) / 60) - ((pacientesPorSemana * 3 * 4) / 60))) * 48 / 8)} dias inteiros</strong> de descanso recuperados por ano!
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SEÇÃO COMPARATIVA (ANTES VS DEPOIS) */}
+      <section className="py-20 bg-brand-bg border-t border-brand-border">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center space-y-4 mb-16">
+            <h2 className="text-3xl font-display font-bold text-center">Compare e sinta a diferença no seu dia a dia</h2>
+            <p className="text-brand-text-muted max-w-xl mx-auto text-sm sm:text-base">
+              A diferença entre ter um consultório livre de papelada ou continuar gastando suas horas vagas digitando prontuários.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Antes */}
+            <div className="bg-white rounded-3xl border border-red-100 p-8 shadow-sm space-y-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-red-400" />
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-full bg-red-100 text-red-500 flex items-center justify-center font-bold text-sm">✕</span>
+                <h3 className="text-xl font-bold font-display text-red-900">Rotina Tradicional</h3>
+              </div>
+              <ul className="space-y-4">
+                <li className="flex gap-3 text-sm text-brand-text-muted leading-relaxed">
+                  <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <span><strong>Digitação exaustiva</strong> após cada atendimento ou no final do dia.</span>
+                </li>
+                <li className="flex gap-3 text-sm text-brand-text-muted leading-relaxed">
+                  <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <span><strong>Prontuários atrasados</strong> que se acumulam e invadem seus fins de semana.</span>
+                </li>
+                <li className="flex gap-3 text-sm text-brand-text-muted leading-relaxed">
+                  <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <span><strong>Perda de detalhes importantes</strong> e observações ricas pelo cansaço do dia a dia.</span>
+                </li>
+                <li className="flex gap-3 text-sm text-brand-text-muted leading-relaxed">
+                  <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <span><strong>Dados presos</strong> em sistemas engessados com taxas ocultas de exportação.</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Depois */}
+            <div className="bg-white rounded-3xl border border-brand-primary/20 p-8 shadow-md space-y-6 relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-brand-primary" />
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-full bg-brand-primary/10 text-brand-primary flex items-center justify-center font-bold text-sm">✓</span>
+                <h3 className="text-xl font-bold font-display text-brand-primary">Com o Evolução Clínica</h3>
+              </div>
+              <ul className="space-y-4">
+                <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
+                  <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
+                  <span><strong>Grave em áudio</strong> por 2 minutos e deixe nossa IA transcrever e organizar a evolução.</span>
+                </li>
+                <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
+                  <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
+                  <span><strong>Zero pendências</strong>. Evolução pronta e assinada em segundos após a consulta.</span>
+                </li>
+                <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
+                  <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
+                  <span><strong>Máxima riqueza técnica</strong> contendo todos os detalhes falados no resumo da sessão.</span>
+                </li>
+                <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
+                  <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
+                  <span><strong>Soberania absoluta</strong>. Todos os documentos salvos na sua própria conta do Google Docs.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* PLANOS E PRECOS */}
       <section id="planos" className="py-20 bg-brand-bg border-t border-brand-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -764,6 +1089,57 @@ export default function LandingPage() {
             <p className="text-left text-xs text-brand-text-muted leading-relaxed">
               <strong className="text-brand-text font-bold">Garantia CDC de 7 Dias:</strong> Queremos que você esteja plenamente satisfeito. Se desistir em até 7 dias da compra, cancelamos e estornamos sua transação na hora.
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* SEGURANÇA E SOBERANIA DOS DADOS */}
+      <section className="py-20 bg-brand-bg border-t border-brand-border relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-brand-accent/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center space-y-4 mb-16">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-primary/10 rounded-full text-brand-primary text-xs font-bold uppercase tracking-wider">
+              <Lock size={14} /> Privacidade em Primeiro Lugar
+            </div>
+            <h2 className="text-3xl font-display font-bold">Segurança e soberania real sobre seus prontuários</h2>
+            <p className="text-brand-text-muted text-sm sm:text-base max-w-xl mx-auto">
+              Seus dados clínicos não pertencem a nós. Entenda como garantimos sigilo absoluto e conformidade legal total.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {/* Bloco 1 */}
+            <div className="bg-white rounded-3xl border border-brand-border p-8 shadow-sm space-y-4 hover:shadow-md transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary mb-4">
+                <Database size={24} />
+              </div>
+              <h3 className="text-lg font-bold font-display text-brand-primary">Sua Conta, Seu Google Drive</h3>
+              <p className="text-brand-text-muted text-xs sm:text-sm leading-relaxed">
+                Cada evolução é salva como um documento Google Docs na sua própria conta pessoal ou corporativa do Google Workspace. Se você decidir parar de usar a nossa plataforma, **todos os seus prontuários continuam integralmente salvos com você** de forma organizada.
+              </p>
+            </div>
+
+            {/* Bloco 2 */}
+            <div className="bg-white rounded-3xl border border-brand-border p-8 shadow-sm space-y-4 hover:shadow-md transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary mb-4">
+                <ShieldCheck size={24} />
+              </div>
+              <h3 className="text-lg font-bold font-display text-brand-primary">Conformidade com a LGPD</h3>
+              <p className="text-brand-text-muted text-xs sm:text-sm leading-relaxed">
+                Estruturado em total conformidade com a Lei Geral de Proteção de Dados (LGPD). Todos os canais de transmissão são criptografados por segurança e os prontuários contam com a infraestrutura e proteção do ecossistema Google.
+              </p>
+            </div>
+
+            {/* Bloco 3 */}
+            <div className="bg-white rounded-3xl border border-brand-border p-8 shadow-sm space-y-4 hover:shadow-md transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-brand-primary/10 flex items-center justify-center text-brand-primary mb-4">
+                <Lock size={24} />
+              </div>
+              <h3 className="text-lg font-bold font-display text-brand-primary">Sigilo Médico & Terapêutico</h3>
+              <p className="text-brand-text-muted text-xs sm:text-sm leading-relaxed">
+                Respeito absoluto às diretrizes éticas dos conselhos profissionais de saúde (CFP, CFFa, CFM, COFFITO). A plataforma foi projetada para garantir a confidencialidade do paciente sob as normas vigentes.
+              </p>
+            </div>
           </div>
         </div>
       </section>
