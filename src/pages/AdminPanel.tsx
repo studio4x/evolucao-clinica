@@ -231,6 +231,7 @@ export default function AdminPanel() {
   const [brandPushNotificationIcon, setBrandPushNotificationIcon] = useState('');
   const [brandInstallLogo, setBrandInstallLogo] = useState('');
   const [brandLoadingLogo, setBrandLoadingLogo] = useState('');
+  const [brandSocialShare, setBrandSocialShare] = useState('');
   const [brandVersion, setBrandVersion] = useState('1.0');
   const [brandColors, setBrandColors] = useState<BrandColors>(defaultColors);
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
@@ -333,6 +334,7 @@ export default function AdminPanel() {
   const [uploadingPushNotificationIcon, setUploadingPushNotificationIcon] = useState(false);
   const [uploadingInstallLogo, setUploadingInstallLogo] = useState(false);
   const [uploadingLoadingLogo, setUploadingLoadingLogo] = useState(false);
+  const [uploadingSocialShare, setUploadingSocialShare] = useState(false);
 
   // Efeito para carregar as configurações da marca
   useEffect(() => {
@@ -357,6 +359,7 @@ export default function AdminPanel() {
             setBrandPushNotificationIcon(parsed.pwa_push_notification_icon_url || '');
             setBrandInstallLogo(parsed.pwa_install_logo_url || '');
             setBrandLoadingLogo(parsed.pwa_loading_logo_url || '');
+            setBrandSocialShare(parsed.social_share_url || '');
             setBrandVersion(parsed.version || '1.0');
             if (parsed.colors) {
               setBrandColors({
@@ -386,7 +389,7 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
-  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon' | 'pwa192' | 'pwa512' | 'pwamaskable' | 'pushnotification' | 'install' | 'loading') => {
+  const handleBrandUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'light' | 'dark' | 'favicon' | 'pwa192' | 'pwa512' | 'pwamaskable' | 'pushnotification' | 'install' | 'loading' | 'socialshare') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -399,6 +402,7 @@ export default function AdminPanel() {
     else if (type === 'pushnotification') setUploadingPushNotificationIcon(true);
     else if (type === 'install') setUploadingInstallLogo(true);
     else if (type === 'loading') setUploadingLoadingLogo(true);
+    else if (type === 'socialshare') setUploadingSocialShare(true);
 
     try {
       const fileExt = file.name.split('.').pop();
@@ -428,6 +432,7 @@ export default function AdminPanel() {
         else if (type === 'pushnotification') setBrandPushNotificationIcon(publicUrlData.publicUrl);
         else if (type === 'install') setBrandInstallLogo(publicUrlData.publicUrl);
         else if (type === 'loading') setBrandLoadingLogo(publicUrlData.publicUrl);
+        else if (type === 'socialshare') setBrandSocialShare(publicUrlData.publicUrl);
       }
     } catch (err: any) {
       console.error(`Erro ao fazer upload do ${type}:`, err);
@@ -442,6 +447,7 @@ export default function AdminPanel() {
       else if (type === 'pushnotification') setUploadingPushNotificationIcon(false);
       else if (type === 'install') setUploadingInstallLogo(false);
       else if (type === 'loading') setUploadingLoadingLogo(false);
+      else if (type === 'socialshare') setUploadingSocialShare(false);
       e.target.value = '';
     }
   };
@@ -463,6 +469,7 @@ export default function AdminPanel() {
         pwa_push_notification_icon_url: brandPushNotificationIcon,
         pwa_install_logo_url: brandInstallLogo,
         pwa_loading_logo_url: brandLoadingLogo,
+        social_share_url: brandSocialShare,
         version: newVersion,
         colors: brandColors
       };
@@ -5574,6 +5581,44 @@ export default function AdminPanel() {
                           </div>
                         </div>
 
+                        {/* Imagem de Compartilhamento Social (og:image) */}
+                        <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
+                          <div>
+                            <h3 className="text-sm font-semibold text-brand-primary">Imagem de Compartilhamento Social (Open Graph - og:image)</h3>
+                            <p className="text-xs text-brand-text-muted mt-1">
+                              Esta imagem é exibida como capa quando o link da plataforma ou do site é compartilhado em redes sociais como WhatsApp, Facebook, Telegram, etc.
+                            </p>
+                          </div>
+                          
+                          <div className="flex flex-col sm:flex-row items-center sm:space-x-6 space-y-4 sm:space-y-0">
+                            <div className="flex items-center justify-center p-2 bg-white border border-brand-border rounded-xl w-full sm:w-48 h-28 shadow-inner flex-shrink-0 overflow-hidden">
+                              {brandSocialShare ? (
+                                <img src={brandSocialShare} alt="Preview do compartilhamento social" className="max-h-full max-w-full object-contain" />
+                              ) : (
+                                <span className="text-[10px] text-brand-text-muted text-center">Recomendado: 1200x630px</span>
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2 w-full">
+                              <label className="btn-outline inline-flex text-center py-2.5 px-4 text-xs font-semibold cursor-pointer w-full sm:w-auto justify-center">
+                                {uploadingSocialShare ? (
+                                  <span className="flex items-center"><Loader2 className="w-3.5 h-3.5 animate-spin mr-2" /> Enviando...</span>
+                                ) : (
+                                  <span className="flex items-center"><Upload className="w-3.5 h-3.5 mr-2" /> Upload da Imagem (og:image)</span>
+                                )}
+                                <input 
+                                  type="file" 
+                                  accept="image/png,image/jpeg,image/webp" 
+                                  className="hidden" 
+                                  disabled={uploadingSocialShare}
+                                  onChange={(e) => handleBrandUpload(e, 'socialshare')} 
+                                />
+                              </label>
+                              <p className="text-[10px] text-brand-text-muted">Recomendado: PNG ou JPG na proporção 1.91:1 (Ex: 1200x630px).</p>
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Cores Personalizadas do Tema */}
                         <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
                           <div>
@@ -5627,7 +5672,7 @@ export default function AdminPanel() {
                         <div className="flex space-x-3 w-full sm:w-auto">
                           <button
                             type="submit"
-                            disabled={savingBrand || uploadingLight || uploadingDark || uploadingFavicon || uploadingPwa192 || uploadingPwa512 || uploadingPwaMaskable || uploadingPushNotificationIcon || uploadingInstallLogo || uploadingLoadingLogo}
+                            disabled={savingBrand || uploadingLight || uploadingDark || uploadingFavicon || uploadingPwa192 || uploadingPwa512 || uploadingPwaMaskable || uploadingPushNotificationIcon || uploadingInstallLogo || uploadingLoadingLogo || uploadingSocialShare}
                             className="btn-primary w-full sm:w-auto px-6 py-3 flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
                           >
                             {savingBrand ? (

@@ -127,12 +127,13 @@
             config.pwa_maskable_icon_url || '',
             config.pwa_install_logo_url || '',
             config.pwa_loading_logo_url || '',
+            config.social_share_url || '',
             config.version || ''
           ].join('|'));
 
           const faviconUrl = config.favicon_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
           const appleTouchIconUrl = config.pwa_icon_192_url || faviconUrl;
-          const socialImageUrl = appendVersion(config.pwa_icon_512_url || faviconUrl, assetSignature);
+          const socialImageUrl = appendVersion(config.social_share_url || config.pwa_icon_512_url || faviconUrl, assetSignature);
           const title = config.pwa_app_name || defaultTitle;
           const description = config.pwa_description || defaultDescription;
 
