@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database, Crown } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
@@ -130,7 +130,7 @@ export default function Layout() {
     { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
     { name: 'Como Usar', path: '/painel/tutorial', icon: BookOpen },
     { name: 'Notificações', path: '/painel/notifications', icon: Bell },
-    { name: 'Migração VIP', path: '/painel/migration', icon: Database },
+    { name: 'Migração de Prontuários', path: '/painel/migration', icon: Database, isPremium: true },
     { name: 'Suporte', path: '/painel/support', icon: LifeBuoy },
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
@@ -262,6 +262,11 @@ export default function Layout() {
                             {unreadCount}
                           </span>
                         )}
+                        {item.isPremium && isCollapsed && (
+                          <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white w-3.5 h-3.5 rounded-full flex items-center justify-center border border-white shadow-sm" title="Premium (Plano Anual)">
+                            <Crown size={8} className="fill-white" />
+                          </span>
+                        )}
                       </div>
                       {!isCollapsed && <span className="font-medium">{item.name}</span>}
                     </div>
@@ -270,6 +275,16 @@ export default function Layout() {
                         isActive ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white animate-pulse'
                       }`}>
                         {unreadCount}
+                      </span>
+                    )}
+                    {item.isPremium && !isCollapsed && (
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 shrink-0 ${
+                        isActive 
+                          ? 'bg-white/20 text-white' 
+                          : 'bg-amber-50 text-amber-600 border border-amber-200'
+                      }`} title="Recurso Premium do Plano Anual">
+                        <Crown size={10} className="fill-current shrink-0" />
+                        <span>Anual</span>
                       </span>
                     )}
                   </Link>

@@ -163,7 +163,7 @@ export default function Migration() {
         <div>
           <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
             <Database className="text-brand-primary mr-3 shrink-0" size={32} />
-            <span>Migração VIP (Concierge)</span>
+            <span>Migração de Prontuários</span>
           </h2>
           <p className="text-brand-text-muted text-sm mt-1">
             Migre todo o histórico do seu consultório de forma prática e 100% segura.
@@ -231,7 +231,7 @@ export default function Migration() {
               <div className="space-y-2">
                 <h3 className="text-lg font-bold text-amber-950">Disponível no Plano Anual</h3>
                 <p className="text-xs text-amber-800/80 leading-relaxed max-w-sm mx-auto">
-                  O Serviço de Migração VIP (Concierge) é um benefício exclusivo para assinantes do plano anual da Evolução Clínica.
+                  O Serviço de Migração de Prontuários é um benefício exclusivo para assinantes do plano anual da Evolução Clínica.
                 </p>
               </div>
 
@@ -277,7 +277,7 @@ export default function Migration() {
         <div>
           <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
             <Database className="text-brand-primary mr-3 shrink-0" size={32} />
-            <span>Migração VIP (Concierge)</span>
+            <span>Migração de Prontuários</span>
           </h2>
           <p className="text-brand-text-muted text-sm mt-1">
             Envie as informações do seu sistema anterior para importarmos seus prontuários sem custo adicional.

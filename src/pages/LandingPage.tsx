@@ -186,7 +186,7 @@ export default function LandingPage() {
       a: "Sim! Não há cláusulas de fidelidade ou burocracia. Você pode cancelar sua assinatura recorrente ou migrar de plano diretamente pelo painel administrativo do aplicativo com apenas um clique."
     },
     {
-      q: "Como funciona a Migração VIP de prontuários antigos por IA?",
+      q: "Como funciona a Migração de Prontuários antigos por IA?",
       a: "Disponibilizada sem custo adicional para assinantes do Plano Anual, nossa equipe técnica utiliza robôs de IA dedicados para extrair, estruturar e importar todo o seu histórico antigo de prontuários (sejam arquivos em PDF, documentos do Word ou planilhas do Excel) diretamente para o aplicativo de forma 100% segura e rápida."
     },
     {
