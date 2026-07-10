@@ -651,6 +651,16 @@ export default function AdminPanel() {
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [selectedGeminiModel, setSelectedGeminiModel] = useState('gemini-2.5-flash-preview-05-20');
+
+  const GEMINI_MODELS = [
+    { value: 'gemini-2.5-flash-preview-05-20', label: 'Gemini 2.5 Flash Preview (Recomendado)', badge: 'Mais Recente' },
+    { value: 'gemini-2.5-pro-preview-06-05', label: 'Gemini 2.5 Pro Preview (Alta qualidade)', badge: 'Pro' },
+    { value: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash Lite (Econômico)', badge: 'Econômico' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Estável)', badge: 'Estável' },
+    { value: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B (Ultra rápido)', badge: 'Rápido' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Alta capacidade)', badge: 'Pro' },
+  ];
 
   // Estados de Consumo de Tokens (usage_logs)
   const [usageLogs, setUsageLogs] = useState<UsageLog[]>([]);
@@ -1552,8 +1562,20 @@ export default function AdminPanel() {
           .select('api_key')
           .eq('id', 'gemini')
           .single();
-        if (!error && data) {
-          setCurrentGeminiKey(data.api_key || '');
+        if (!error && data?.api_key) {
+          const raw = data.api_key as string;
+          // Suporta tanto formato JSON quanto string simples (legado)
+          try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') {
+              setCurrentGeminiKey(parsed.key || parsed.api_key || '');
+              if (parsed.model) setSelectedGeminiModel(parsed.model);
+            } else {
+              setCurrentGeminiKey(raw);
+            }
+          } catch {
+            setCurrentGeminiKey(raw);
+          }
         }
       } catch (error) {
         console.error("Erro ao buscar chave do Gemini:", error);
@@ -1986,28 +2008,41 @@ export default function AdminPanel() {
   // Salvar Chave Gemini no Supabase
   const handleSaveGeminiKey = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newGeminiKey) return;
+    // Permite salvar apenas o modelo sem trocar a chave
+    if (!newGeminiKey && !currentGeminiKey) {
+      alert('Por favor, insira uma chave API do Gemini antes de salvar.');
+      return;
+    }
 
     setSaveLoading(true);
     setSaveSuccess(false);
 
     try {
+      // Usa a nova chave se fornecida, caso contrário mantém a atual
+      const keyToSave = newGeminiKey || currentGeminiKey;
+
+      // Salva como JSON com chave + modelo selecionado
+      const payload = JSON.stringify({
+        key: keyToSave,
+        model: selectedGeminiModel,
+      });
+
       const { error } = await supabase
         .from('settings')
         .upsert({
           id: 'gemini',
-          api_key: newGeminiKey,
+          api_key: payload,
           updated_at: new Date().toISOString(),
           updated_by: user?.email || 'admin'
         });
       if (error) throw error;
-      setCurrentGeminiKey(newGeminiKey);
+      if (newGeminiKey) setCurrentGeminiKey(newGeminiKey);
       setNewGeminiKey('');
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 5000);
     } catch (error: any) {
-      console.error("Erro ao salvar chave do Gemini:", error);
-      alert(`Erro ao salvar chave do Gemini: ${error.message}`);
+      console.error("Erro ao salvar configurações do Gemini:", error);
+      alert(`Erro ao salvar configurações do Gemini: ${error.message}`);
     } finally {
       setSaveLoading(false);
     }
@@ -3372,7 +3407,7 @@ export default function AdminPanel() {
                           Configuração da API do Gemini
                         </h2>
                         <p className="text-xs text-brand-text-muted mt-0.5">
-                          Defina a chave global da inteligência artificial do Google. Esta chave será utilizada para todas as funcionalidades que envolvem IA e as APIs do Google (ex: transcrições de áudio, relatórios, PDI).
+                          Defina a chave global e o modelo de IA do Google. Estas configurações serão utilizadas para transcrições de áudio, relatórios e PDI.
                         </p>
                       </div>
                     </div>
@@ -3380,19 +3415,80 @@ export default function AdminPanel() {
                     <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-5 mb-8 space-y-3">
                       <h3 className="text-sm font-semibold text-brand-primary flex items-center">
                         <Sparkles className="w-4 h-4 text-brand-accent mr-2" />
-                        Chave Ativa na Plataforma
+                        Configuração Ativa na Plataforma
                       </h3>
                       <div className="flex items-center justify-between bg-white border border-brand-border/60 rounded-xl px-4 py-3 shadow-inner">
-                        <span className="font-mono text-sm tracking-wide text-brand-text break-all">
-                          {currentGeminiKey ? maskKey(currentGeminiKey) : "Nenhuma chave cadastrada"}
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-semibold">Chave API</span>
+                          <span className="font-mono text-sm tracking-wide text-brand-text break-all">
+                            {currentGeminiKey ? maskKey(currentGeminiKey) : "Nenhuma chave cadastrada"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between bg-white border border-brand-border/60 rounded-xl px-4 py-3 shadow-inner">
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-semibold">Modelo em uso</span>
+                          <span className="font-mono text-sm text-brand-primary font-semibold">
+                            {selectedGeminiModel || "Não configurado"}
+                          </span>
+                        </div>
+                        <span className="ml-3 shrink-0 text-[10px] px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary font-bold">
+                          {GEMINI_MODELS.find(m => m.value === selectedGeminiModel)?.badge || 'IA'}
                         </span>
                       </div>
                       <p className="text-xs text-brand-text-muted leading-relaxed">
-                        * A chave salva nesta seção é sincronizada em tempo real e possui <strong>prioridade absoluta</strong> sobre as chaves estáticas inseridas em arquivos de variáveis de ambiente (.env).
+                        * A configuração salva aqui possui <strong>prioridade absoluta</strong> sobre as variáveis de ambiente (.env). Alterações entram em vigor imediatamente na próxima requisição.
                       </p>
                     </div>
 
                     <form onSubmit={handleSaveGeminiKey} className="space-y-6">
+                      {/* Seletor de Modelo */}
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                          Modelo Gemini a Utilizar
+                        </label>
+                        <p className="text-xs text-brand-text-muted -mt-1">
+                          Escolha o modelo com base na disponibilidade da sua conta Google Cloud. Se um modelo retornar erro 404, tente o próximo da lista.
+                        </p>
+                        <div className="grid grid-cols-1 gap-2">
+                          {GEMINI_MODELS.map((model) => (
+                            <label
+                              key={model.value}
+                              className={`flex items-center gap-3 px-4 py-3 rounded-xl border cursor-pointer transition-all ${
+                                selectedGeminiModel === model.value
+                                  ? 'border-brand-primary bg-brand-primary/5 shadow-sm'
+                                  : 'border-brand-border hover:border-brand-primary/40 hover:bg-brand-bg/60'
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="gemini_model"
+                                value={model.value}
+                                checked={selectedGeminiModel === model.value}
+                                onChange={(e) => setSelectedGeminiModel(e.target.value)}
+                                className="accent-brand-primary shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className={`text-sm font-medium ${selectedGeminiModel === model.value ? 'text-brand-primary' : 'text-brand-text'}`}>
+                                  {model.label}
+                                </span>
+                                <div className="font-mono text-[10px] text-brand-text-muted mt-0.5">{model.value}</div>
+                              </div>
+                              <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                model.badge === 'Mais Recente' ? 'bg-emerald-100 text-emerald-700' :
+                                model.badge === 'Pro' ? 'bg-purple-100 text-purple-700' :
+                                model.badge === 'Econômico' ? 'bg-blue-100 text-blue-700' :
+                                model.badge === 'Rápido' ? 'bg-amber-100 text-amber-700' :
+                                'bg-stone-100 text-stone-600'
+                              }`}>
+                                {model.badge}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Input da Chave */}
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
                           Conectar Nova Chave Gemini
@@ -3401,7 +3497,6 @@ export default function AdminPanel() {
                           <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
                           <input
                             type={showKeyInput ? "text" : "password"}
-                            required
                             placeholder="Insira a chave API do Gemini (ex: AIzaSy...)"
                             value={newGeminiKey}
                             onChange={(e) => setNewGeminiKey(e.target.value)}
@@ -3415,19 +3510,22 @@ export default function AdminPanel() {
                             {showKeyInput ? <EyeOff size={16} /> : <Eye size={16} />}
                           </button>
                         </div>
+                        <p className="text-xs text-brand-text-muted">
+                          Deixe o campo em branco e clique em "Salvar" apenas para atualizar o modelo sem trocar a chave — <em>neste caso, a chave atual será mantida</em>.
+                        </p>
                       </div>
 
                       {saveSuccess && (
                         <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center space-x-2 text-xs text-emerald-700 animate-fadeIn">
                           <Check className="w-4 h-4 flex-shrink-0" />
-                          <span>Chave da API Gemini salva e atualizada com sucesso no banco de dados!</span>
+                          <span>Configurações do Gemini (chave + modelo) salvas com sucesso!</span>
                         </div>
                       )}
 
                       <div className="flex justify-end">
                         <button
                           type="submit"
-                          disabled={saveLoading || !newGeminiKey}
+                          disabled={saveLoading || (!newGeminiKey && !currentGeminiKey)}
                           className="btn-primary py-3 px-6 text-sm font-semibold flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 transition-all hover:shadow-xl active:scale-95 disabled:opacity-50 cursor-pointer"
                         >
                           {saveLoading ? (
@@ -3437,7 +3535,7 @@ export default function AdminPanel() {
                             </>
                           ) : (
                             <>
-                              <span>Salvar Alterações</span>
+                              <span>Salvar Configurações</span>
                             </>
                           )}
                         </button>

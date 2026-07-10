@@ -27,6 +27,55 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
+// Fallback padrão do modelo Gemini (mais estável e amplamente disponível)
+const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash-preview-05-20";
+
+/**
+ * Lê a chave e o modelo do Gemini da tabela settings.
+ * O campo api_key pode ser:
+ *   - JSON: { key: "AIza...", model: "gemini-2.5-flash-preview-05-20" }
+ *   - String simples (legado): "AIza..."
+ * Retorna { apiKey, modelName } com fallbacks para variáveis de ambiente e modelo padrão.
+ */
+async function getGeminiSettings(): Promise<{ apiKey: string; modelName: string }> {
+  let apiKey = "";
+  let modelName = GEMINI_DEFAULT_MODEL;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "gemini")
+      .maybeSingle();
+
+    if (!error && data?.api_key) {
+      const raw = data.api_key as string;
+      // Tenta parsear como JSON (novo formato)
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          apiKey = parsed.key || parsed.api_key || "";
+          modelName = parsed.model || GEMINI_DEFAULT_MODEL;
+        } else {
+          apiKey = raw;
+        }
+      } catch {
+        // Formato legado: string simples
+        apiKey = raw;
+      }
+    }
+  } catch (e) {
+    console.warn("[Gemini] Erro ao ler configurações do banco:", e);
+  }
+
+  if (!apiKey) {
+    apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+  }
+
+  return { apiKey, modelName };
+}
+
+
 // Helper para formatar o campo 'from' corretamente (ex: "Nome" <email@dominio>)
 function buildFromField(smtpFrom: string, smtpUser: string): string {
   if (!smtpFrom) return `"Evolução Clínica" <${smtpUser}>`;
@@ -1068,27 +1117,16 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
       return res.status(400).json({ error: "Parâmetros 'audioBase64' e 'mimeType' são obrigatórios." });
     }
 
-    // 1. Obter a chave do Gemini
-    let apiKey = "";
-    const { data, error } = await supabaseAdmin
-      .from("settings")
-      .select("api_key")
-      .eq("id", "gemini")
-      .maybeSingle();
-
-    if (!error && data?.api_key) {
-      apiKey = data.api_key;
-    } else {
-      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
-    }
+    // 1. Obter a chave e o modelo do Gemini (configuráveis via painel admin)
+    const { apiKey, modelName } = await getGeminiSettings();
 
     if (!apiKey) {
       return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
     }
 
     // 2. Instanciar o SDK do Gemini no Backend de forma protegida
+    console.log(`[AI-Backend] Usando modelo: ${modelName}`);
     const ai = new GoogleGenAI({ apiKey });
-    const modelName = "gemini-2.0-flash";
 
     console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${audioDuration || 0}s)...`);
     
@@ -2698,7 +2736,7 @@ Texto a ser analisado:
 ${textChunk}`;
 
     const geminiResponse = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: (await getGeminiSettings()).modelName,
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -3600,7 +3638,7 @@ Escreva em português brasileiro de forma prática, detalhada e empática.`;
     console.log(`[AI-Report] Enviando solicitação ao Gemini para o paciente ${patient.full_name} (${type})...`);
     
     const geminiResponse = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: (await getGeminiSettings()).modelName,
       contents: systemPrompt
     });
 
@@ -3975,7 +4013,7 @@ ${contextText}`;
     // Chamar o modelo Gemini para sintetizar a resposta
     console.log(`[RAG-Search] Sintetizando resposta para a pergunta: "${query}"...`);
     const geminiResponse = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: (await getGeminiSettings()).modelName,
       contents: [
         { role: "user", parts: [{ text: query.trim() }] }
       ],
