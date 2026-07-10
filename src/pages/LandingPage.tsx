@@ -213,7 +213,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-brand-bg text-brand-text font-sans antialiased">
+    <div className="min-h-screen bg-brand-bg text-brand-text font-sans antialiased overflow-x-hidden">
       {/* HEADER / NAVIGATION */}
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-brand-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

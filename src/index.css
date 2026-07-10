@@ -21,7 +21,7 @@
 
 @layer base {
   body {
-    @apply bg-brand-bg text-brand-text font-sans antialiased selection:bg-brand-accent/30;
+    @apply bg-brand-bg text-brand-text font-sans antialiased selection:bg-brand-accent/30 overflow-x-hidden;
   }
   
   h1, h2, h3, h4, h5, h6 {
