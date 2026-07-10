@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle } from 'lucide-react';
+import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle, ShieldCheck, Lock } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding, getOnboardingState } from '../utils/onboarding';
@@ -1015,6 +1015,14 @@ export default function PatientForm() {
                 ))}
               </div>
 
+              {/* Privacy Badge */}
+              <div className="px-4 py-2.5 bg-brand-primary/5 border-b border-brand-border/60 flex items-center space-x-2 text-xs text-brand-primary">
+                <ShieldCheck size={16} className="flex-shrink-0" />
+                <span>
+                  <strong>Privacidade garantida:</strong> O aplicativo só acessa pastas e prontuários criados por ele mesmo. Seus arquivos pessoais permanecem 100% seguros e inacessíveis.
+                </span>
+              </div>
+
               {/* Toolbar */}
               <div className="p-3 bg-brand-bg/30 flex flex-col space-y-3 border-b border-brand-border">
                 <div className="flex items-center justify-between gap-2">
@@ -1130,21 +1138,23 @@ export default function PatientForm() {
                     })}
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center min-h-[300px] text-brand-text-muted space-y-4 px-8 text-center">
-                    <Folder className="opacity-20" size={64} />
-                    <div>
+                  <div className="flex flex-col items-center justify-center min-h-[300px] text-brand-text-muted space-y-4 px-8 py-6 text-center">
+                    <FolderOpen className="opacity-20 text-brand-primary" size={56} />
+                    <div className="max-w-md space-y-1">
                       <p className="font-bold text-brand-text">Nenhuma subpasta encontrada</p>
-                      <p className="text-sm mt-1">Crie uma nova ou selecione esta pasta atual.</p>
+                      <p className="text-sm leading-relaxed">
+                        Crie uma nova pasta clicando no botão <strong>"Criar Pasta"</strong> acima para organizar seus prontuários de forma segura.
+                      </p>
                     </div>
-                    <div className="pt-4 border-t border-brand-border w-full">
-                      <p className="text-xs mb-3">Não está vendo suas pastas do Drive?</p>
+                    <div className="pt-4 border-t border-brand-border w-full max-w-xs">
+                      <p className="text-xs mb-2">Não está vendo suas pastas de prontuários?</p>
                       <button
                         type="button"
                         onClick={handleExplorerReauthenticate}
-                        className="btn-outline text-xs py-2"
+                        className="btn-outline text-xs py-2 w-full justify-center"
                       >
-                        {isReauthenticating ? <Loader2 size={14} className="animate-spin mr-2" /> : <Plus size={14} className="mr-2" />}
-                        Renovar Acesso ao Drive
+                        {isReauthenticating ? <Loader2 size={14} className="animate-spin mr-2" /> : <RefreshCw size={14} className="mr-2" />}
+                        Sincronizar Google Drive
                       </button>
                     </div>
                   </div>
