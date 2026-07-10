@@ -28,7 +28,8 @@ import {
   Clock,
   Coins,
   Database,
-  AlertCircle
+  AlertCircle,
+  ChevronUp
 } from 'lucide-react';
 import { APP_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -103,6 +104,26 @@ export default function LandingPage() {
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
+  const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 400) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'smooth'
+    });
+  };
 
   const [plans, setPlans] = useState<any[]>([]);
   const [activeSpecialty, setActiveSpecialty] = useState('psicologia');
@@ -1228,6 +1249,17 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Botão Scroll to Top */}
+      <button
+        onClick={scrollToTop}
+        className={`fixed bottom-6 right-6 z-50 p-3 rounded-full bg-brand-primary text-white shadow-lg hover:bg-brand-primary-hover transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary cursor-pointer ${
+          showScrollTop ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+        aria-label="Voltar ao topo"
+      >
+        <ChevronUp size={24} />
+      </button>
     </div>
   );
 }
