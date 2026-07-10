@@ -921,11 +921,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
     throw new Error("Usuário não encontrado.");
   }
 
-  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
-  if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
-    throw new Error(`Falha ao remover a conta de autenticação: ${authDeleteError.message}`);
-  }
-
+  // 1. Limpeza em tabelas filhas (públicas)
   const cleanupTargets: Array<{ table: string; column: string }> = [
     { table: "usage_logs", column: "professional_id" },
     { table: "evolutions", column: "professional_id" },
@@ -934,7 +930,10 @@ async function deleteProfessionalAccount(targetUserId: string) {
     { table: "transactions", column: "professional_id" },
     { table: "support_tickets", column: "user_id" },
     { table: "notifications", column: "user_id" },
-    { table: "push_subscriptions", column: "user_id" }
+    { table: "push_subscriptions", column: "user_id" },
+    { table: "evolution_templates", column: "professional_id" },
+    { table: "migration_requests", column: "user_id" },
+    { table: "onboarding_notifications", column: "user_id" }
   ];
 
   for (const target of cleanupTargets) {
@@ -948,6 +947,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
     }
   }
 
+  // 2. Limpeza de anexos no Storage
   try {
     const { data: supportFiles, error: supportFilesError } = await supabaseAdmin
       .storage
@@ -971,6 +971,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
     console.warn("[DeleteUser] Falha inesperada ao limpar anexos de suporte:", storageError);
   }
 
+  // 3. Remover o perfil do profissional da tabela public.professionals
   const { error: profDeleteError } = await supabaseAdmin
     .from("professionals")
     .delete()
@@ -978,6 +979,14 @@ async function deleteProfessionalAccount(targetUserId: string) {
 
   if (profDeleteError) {
     console.warn(`[DeleteUser] Falha ao remover o perfil do usuário: ${profDeleteError.message}`);
+  }
+
+  // 4. Por fim, excluir a conta de autenticação (auth.users)
+  const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
+  if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
+    const errorDetail = authDeleteError.message || 
+      (typeof authDeleteError === 'object' ? JSON.stringify(authDeleteError) : String(authDeleteError));
+    throw new Error(`Falha ao remover a conta de autenticação: ${errorDetail}`);
   }
 
   return targetProf;
