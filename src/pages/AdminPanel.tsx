@@ -122,36 +122,42 @@ export default function AdminPanel() {
   const navigate = useNavigate();
 
   const location = useLocation();
+  const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+  const tokenUsageBasePath = '/admin/token-usage';
+  const tokenUsageGeneralPath = '/admin/token-usage/geral';
+  const tokenUsageMetricsPath = '/admin/token-usage/consumo-api';
+  const isTokenUsagePath = normalizedPath === tokenUsageBasePath || normalizedPath.startsWith(`${tokenUsageBasePath}/`);
 
   useEffect(() => {
-    if (location.pathname === '/admin' || location.pathname === '/admin/') {
+    if (normalizedPath === '/admin') {
       navigate('/admin/professionals', { replace: true });
-    } else if (location.pathname.endsWith('/notifications-config') || location.pathname.endsWith('/notifications-config/')) {
+    } else if (normalizedPath.endsWith('/notifications-config')) {
       navigate('/admin/push-notifications', { replace: true });
-    } else if (location.pathname.endsWith('/gemini-config') || location.pathname.endsWith('/gemini-config/')) {
-      navigate('/admin/token-usage', { replace: true });
+    } else if (normalizedPath.endsWith('/gemini-config')) {
+      navigate(tokenUsageGeneralPath, { replace: true });
+    } else if (normalizedPath === tokenUsageBasePath) {
+      navigate(tokenUsageMetricsPath, { replace: true });
     }
-  }, [location.pathname, navigate]);
+  }, [navigate, normalizedPath]);
 
   const getActiveTab = () => {
-    const path = location.pathname;
-    if (path.endsWith('/gemini-config')) return 'token_usage';
-    if (path.endsWith('/google-pay-config')) return 'google_pay_config';
-    if (path.endsWith('/token-usage')) return 'token_usage';
-    if (path.endsWith('/plans')) return 'plans';
-    if (path.endsWith('/transactions')) return 'transactions';
-    if (path.endsWith('/migrations')) return 'migrations';
-    if (path.endsWith('/push-notifications')) return 'push_notifications';
-    if (path.endsWith('/email-notifications')) return 'email_notifications';
-    if (path.endsWith('/email-history')) return 'email_history';
-    if (path.endsWith('/vapid-keys')) return 'vapid_keys';
-    if (path.includes('/support/')) return 'support';
-    if (path.endsWith('/support')) return 'support';
-    if (path.endsWith('/profile')) return 'profile';
-    if (path.endsWith('/brand')) return 'brand';
-    if (path.endsWith('/tracking')) return 'tracking';
-    if (path.endsWith('/faq')) return 'faq';
-    if (path.endsWith('/feedback')) return 'feedback';
+    if (normalizedPath.endsWith('/gemini-config')) return 'token_usage';
+    if (normalizedPath.endsWith('/google-pay-config')) return 'google_pay_config';
+    if (isTokenUsagePath) return 'token_usage';
+    if (normalizedPath.endsWith('/plans')) return 'plans';
+    if (normalizedPath.endsWith('/transactions')) return 'transactions';
+    if (normalizedPath.endsWith('/migrations')) return 'migrations';
+    if (normalizedPath.endsWith('/push-notifications')) return 'push_notifications';
+    if (normalizedPath.endsWith('/email-notifications')) return 'email_notifications';
+    if (normalizedPath.endsWith('/email-history')) return 'email_history';
+    if (normalizedPath.endsWith('/vapid-keys')) return 'vapid_keys';
+    if (normalizedPath.includes('/support/')) return 'support';
+    if (normalizedPath.endsWith('/support')) return 'support';
+    if (normalizedPath.endsWith('/profile')) return 'profile';
+    if (normalizedPath.endsWith('/brand')) return 'brand';
+    if (normalizedPath.endsWith('/tracking')) return 'tracking';
+    if (normalizedPath.endsWith('/faq')) return 'faq';
+    if (normalizedPath.endsWith('/feedback')) return 'feedback';
     return 'professionals'; // default
   };
 
@@ -178,9 +184,9 @@ export default function AdminPanel() {
 
   const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback') => {
     if (tab === 'professionals') navigate('/admin/professionals');
-    else if (tab === 'gemini_config') navigate('/admin/token-usage');
+    else if (tab === 'gemini_config') navigate(tokenUsageGeneralPath);
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
-    else if (tab === 'token_usage') navigate('/admin/token-usage');
+    else if (tab === 'token_usage') navigate(tokenUsageMetricsPath);
     else if (tab === 'plans') navigate('/admin/plans');
     else if (tab === 'profile') navigate('/admin/profile');
     else if (tab === 'transactions') navigate('/admin/transactions');
@@ -734,7 +740,7 @@ export default function AdminPanel() {
   const [resettingUsageLogs, setResettingUsageLogs] = useState(false);
   const [usageResetFeedback, setUsageResetFeedback] = useState('');
   const [usageResetError, setUsageResetError] = useState('');
-  const [tokenUsageSubTab, setTokenUsageSubTab] = useState<'general' | 'metrics'>('general');
+  const tokenUsageSubTab: 'general' | 'metrics' = normalizedPath === tokenUsageGeneralPath ? 'general' : 'metrics';
 
   // Estados para Edição de Planos (SaaS)
   const [plans, setPlans] = useState<any[]>([]);
@@ -3498,7 +3504,7 @@ export default function AdminPanel() {
                 {/* Sub-navegação interna da página Consumo API */}
                 <div className="flex border-b border-brand-border/60 pb-px gap-6 mb-6">
                   <button
-                    onClick={() => setTokenUsageSubTab('general')}
+                    onClick={() => navigate(tokenUsageGeneralPath, { replace: true })}
                     className={`pb-3 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center space-x-2 ${
                       tokenUsageSubTab === 'general'
                         ? 'border-brand-primary text-brand-primary font-bold'
@@ -3509,7 +3515,7 @@ export default function AdminPanel() {
                     <span>Geral</span>
                   </button>
                   <button
-                    onClick={() => setTokenUsageSubTab('metrics')}
+                    onClick={() => navigate(tokenUsageMetricsPath, { replace: true })}
                     className={`pb-3 text-sm font-semibold transition-all border-b-2 cursor-pointer flex items-center space-x-2 ${
                       tokenUsageSubTab === 'metrics'
                         ? 'border-brand-primary text-brand-primary font-bold'
