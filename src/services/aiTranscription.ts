@@ -56,6 +56,16 @@ const isBucketMissingError = (message: string): boolean => {
   );
 };
 
+const isModelConfigurationError = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('not found for api version') ||
+    normalized.includes('not supported for generatecontent') ||
+    normalized.includes('model') && normalized.includes('not found') ||
+    normalized.includes('models/')
+  );
+};
+
 export const transcribeAudio = async (options: TranscriptionOptions): Promise<string> => {
   const { audioBlob, mimeType, onRetry, audioDuration, customPrompt } = options;
   const maxRetries = 3;
@@ -137,10 +147,11 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
                            errorContent.includes('resource_exhausted') ||
                            errorContent.includes('RESOURCE_EXHAUSTED');
       const isBucketError = isBucketMissingError(errorContent);
+      const isModelError = isModelConfigurationError(errorContent);
 
       console.error("[AI-Service] Erro na transcrição:", errorContent);
       
-      if (!isBucketError && retryCount < maxRetries) {
+      if (!isBucketError && !isModelError && retryCount < maxRetries) {
         retryCount++;
         // Se for erro de cota, aumenta o delay (mínimo 15 segundos)
         const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
@@ -157,6 +168,10 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
       
       if (isBucketError) {
         throw new Error(`${errorContent} (O bucket temp-audio precisa existir no Supabase Storage)`);
+      }
+
+      if (isModelError) {
+        throw new Error(`${errorContent} (O modelo configurado para transcrição não é compatível com este endpoint)`);
       }
 
       throw new Error(`${errorContent} (Erro na comunicação com o backend de transcrição)`);

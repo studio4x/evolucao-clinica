@@ -28,14 +28,16 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
 const GEMINI_DEFAULT_MODEL = "gemini-3.5-flash";
-const GEMINI_TRANSCRIPTION_MODEL = "gemini-1.5-flash";
+const GEMINI_TRANSCRIPTION_FALLBACK_MODEL = "gemini-3.5-flash";
 const TEMP_AUDIO_BUCKET = "temp-audio";
 
 const DEPRECATED_MODEL_FALLBACKS: Record<string, string> = {
   "gemini-2.0-flash": "gemini-3.5-flash",
   "gemini-2.0-flash-001": "gemini-3.5-flash",
   "gemini-2.0-flash-lite": "gemini-3.1-flash-lite",
-  "gemini-2.0-flash-lite-001": "gemini-3.1-flash-lite"
+  "gemini-2.0-flash-lite-001": "gemini-3.1-flash-lite",
+  "gemini-1.5-flash": "gemini-3.5-flash",
+  "gemini-1.5-flash-001": "gemini-3.5-flash"
 };
 
 /**
@@ -123,6 +125,26 @@ function normalizeAudioMimeType(mimeType?: string): string {
   }
 
   return normalizedMimeType;
+}
+
+function resolveTranscriptionModel(configuredModel?: string): string {
+  const candidate = configuredModel?.trim() || GEMINI_TRANSCRIPTION_FALLBACK_MODEL;
+
+  if (DEPRECATED_MODEL_FALLBACKS[candidate]) {
+    return DEPRECATED_MODEL_FALLBACKS[candidate];
+  }
+
+  // Live/TTS/image-specialized models are poor fits for this synchronous text transcription route.
+  if (
+    candidate.includes("live") ||
+    candidate.includes("tts") ||
+    candidate.includes("image") ||
+    candidate.includes("omni")
+  ) {
+    return GEMINI_TRANSCRIPTION_FALLBACK_MODEL;
+  }
+
+  return candidate;
 }
 
 
@@ -1263,14 +1285,16 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     const normalizedMimeType = normalizeAudioMimeType(mimeType);
     const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
-    // 1. Obter a chave do Gemini (o modelo de transcrição é fixo)
-    const { apiKey } = await getGeminiSettings();
+    // 1. Obter a chave do Gemini e resolver o modelo configurado para transcrição
+    const { apiKey, modelName } = await getGeminiSettings();
 
     if (!apiKey) {
       return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
     }
 
-    console.log(`[AI-Backend] Usando modelo fixo: ${GEMINI_TRANSCRIPTION_MODEL}`);
+    const transcriptionModel = resolveTranscriptionModel(modelName);
+
+    console.log(`[AI-Backend] Usando modelo de transcrição: ${transcriptionModel}`);
     const ai = new GoogleGenAI({ apiKey });
 
     console.log(`[AI-Backend] Baixando áudio do Storage (${TEMP_AUDIO_BUCKET}/${audioPath})...`);
@@ -1288,7 +1312,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${audioDuration || 0}s)...`);
 
     const geminiResponse = await ai.models.generateContent({
-      model: GEMINI_TRANSCRIPTION_MODEL,
+      model: transcriptionModel,
       contents: {
         parts: [
           { text: transcriptionPrompt },
@@ -1313,7 +1337,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
       try {
         await supabaseAdmin.from('usage_logs').insert({
           professional_id: req.user.id,
-          model: GEMINI_TRANSCRIPTION_MODEL,
+          model: transcriptionModel,
           prompt_tokens: promptTokens,
           candidates_tokens: candidatesTokens,
           total_tokens: totalTokens,
