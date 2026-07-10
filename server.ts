@@ -27,10 +27,16 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// gemini-2.0-flash: confirmado disponível para contas Tier 1 do Google AI Studio
-const GEMINI_DEFAULT_MODEL = "gemini-2.0-flash";
+const GEMINI_DEFAULT_MODEL = "gemini-3.5-flash";
 const GEMINI_TRANSCRIPTION_MODEL = "gemini-1.5-flash";
 const TEMP_AUDIO_BUCKET = "temp-audio";
+
+const DEPRECATED_MODEL_FALLBACKS: Record<string, string> = {
+  "gemini-2.0-flash": "gemini-3.5-flash",
+  "gemini-2.0-flash-001": "gemini-3.5-flash",
+  "gemini-2.0-flash-lite": "gemini-3.1-flash-lite",
+  "gemini-2.0-flash-lite-001": "gemini-3.1-flash-lite"
+};
 
 /**
  * Lê a chave e o modelo do Gemini da tabela settings.
@@ -68,6 +74,10 @@ async function getGeminiSettings(): Promise<{ apiKey: string; modelName: string 
     }
   } catch (e) {
     console.warn("[Gemini] Erro ao ler configurações do banco:", e);
+  }
+
+  if (DEPRECATED_MODEL_FALLBACKS[modelName]) {
+    modelName = DEPRECATED_MODEL_FALLBACKS[modelName];
   }
 
   if (!apiKey) {
