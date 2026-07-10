@@ -50,8 +50,6 @@ interface UserUsageSummary {
   name: string;
   email: string;
   callsCount: number;
-  promptTokens: number;
-  candidatesTokens: number;
   totalTokens: number;
   totalCostUsd: number;
   totalDurationSeconds: number;
@@ -2476,16 +2474,12 @@ export default function AdminPanel() {
         name: log.professional_name,
         email: log.professional_email,
         callsCount: 0,
-        promptTokens: 0,
-        candidatesTokens: 0,
         totalTokens: 0,
         totalCostUsd: 0,
         totalDurationSeconds: 0
       };
     }
     userSummaries[pid].callsCount += 1;
-    userSummaries[pid].promptTokens += log.prompt_tokens;
-    userSummaries[pid].candidatesTokens += log.candidates_tokens;
     userSummaries[pid].totalTokens += log.total_tokens;
     userSummaries[pid].totalCostUsd += log.cost_usd;
     userSummaries[pid].totalDurationSeconds += (log.audio_duration_seconds || 0);
@@ -3898,9 +3892,7 @@ export default function AdminPanel() {
                                   <th className="p-4 pl-6">Profissional</th>
                                   <th className="p-4">Chamadas</th>
                                   <th className="p-4">Tempo Transcrito</th>
-                                  <th className="p-4">Tokens Entrada</th>
-                                  <th className="p-4">Tokens Saida</th>
-                                  <th className="p-4">Tokens Totais</th>
+                                  <th className="p-4">Tokens Faturados</th>
                                   <th className="p-4">Custo USD</th>
                                   <th className="p-4 pr-6 text-right">Custo Est. BRL</th>
                                 </tr>
@@ -3917,12 +3909,6 @@ export default function AdminPanel() {
                                     <td className="p-4 font-semibold text-brand-text">{summary.callsCount}</td>
                                     <td className="p-4 font-medium text-brand-text">
                                       {(summary.totalDurationSeconds / 60).toFixed(1)} min
-                                    </td>
-                                    <td className="p-4 text-brand-text-muted">
-                                      {new Intl.NumberFormat('pt-BR').format(summary.promptTokens)}
-                                    </td>
-                                    <td className="p-4 text-brand-text-muted">
-                                      {new Intl.NumberFormat('pt-BR').format(summary.candidatesTokens)}
                                     </td>
                                     <td className="p-4 text-brand-text-muted font-medium">
                                       {new Intl.NumberFormat('pt-BR').format(summary.totalTokens)}
@@ -3951,9 +3937,7 @@ export default function AdminPanel() {
                                   <th className="p-4">Profissional</th>
                                   <th className="p-4">Modelo</th>
                                   <th className="p-4">Duração</th>
-                                  <th className="p-4">Tokens Entrada</th>
-                                  <th className="p-4">Tokens Saida</th>
-                                  <th className="p-4">Tokens Totais</th>
+                                  <th className="p-4">Tokens Faturados</th>
                                   <th className="p-4 pr-6 text-right">Custo USD</th>
                                 </tr>
                               </thead>
@@ -3976,12 +3960,6 @@ export default function AdminPanel() {
                                     </td>
                                     <td className="p-4 text-brand-text font-medium whitespace-nowrap">
                                       {formatDuration(log.audio_duration_seconds)}
-                                    </td>
-                                    <td className="p-4 text-brand-text-muted">
-                                      {new Intl.NumberFormat('pt-BR').format(log.prompt_tokens)}
-                                    </td>
-                                    <td className="p-4 text-brand-text-muted">
-                                      {new Intl.NumberFormat('pt-BR').format(log.candidates_tokens)}
                                     </td>
                                     <td className="p-4 text-brand-text-muted font-medium">
                                       {new Intl.NumberFormat('pt-BR').format(log.total_tokens)}
