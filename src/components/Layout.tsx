@@ -179,8 +179,8 @@ export default function Layout() {
       <div className={`
         ${isMobileMenuOpen ? 'flex' : 'hidden'} 
         md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
-        fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-73px)] md:h-screen shadow-sm
-        transition-all duration-300 md:relative
+        fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-133px)] md:h-screen shadow-sm
+        transition-all duration-300 md:relative overflow-y-auto md:overflow-y-visible
         ${isCollapsed ? 'w-full md:w-20' : 'w-full md:w-64'}
       `}>
         {/* Toggle Collapse Button - Only visible on desktop/tablet (md) */}
@@ -192,7 +192,7 @@ export default function Layout() {
           {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar-x">
+        <div className="flex-1 md:overflow-y-auto overflow-y-visible overflow-x-hidden no-scrollbar-x">
           <div className="p-4 hidden md:block border-b border-brand-border/50">
             <Link to="/" className="flex justify-center">
               {isCollapsed ? (
