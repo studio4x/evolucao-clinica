@@ -943,7 +943,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
       .eq(target.column, targetUserId);
 
     if (error) {
-      console.warn(`[DeleteUser] Falha ao remover dados de ${target.table}: ${error.message}`);
+      throw new Error(`Falha ao remover dados de ${target.table}: ${error.message}`);
     }
   }
 
@@ -978,14 +978,27 @@ async function deleteProfessionalAccount(targetUserId: string) {
     .eq("id", targetUserId);
 
   if (profDeleteError) {
-    console.warn(`[DeleteUser] Falha ao remover o perfil do usuário: ${profDeleteError.message}`);
+    throw new Error(`Falha ao remover o perfil profissional da tabela 'professionals': ${profDeleteError.message}`);
   }
 
   // 4. Por fim, excluir a conta de autenticação (auth.users)
   const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
   if (authDeleteError && !/not found/i.test(authDeleteError.message || "")) {
-    const errorDetail = authDeleteError.message || 
-      (typeof authDeleteError === 'object' ? JSON.stringify(authDeleteError) : String(authDeleteError));
+    let errorDetail = "";
+    if (authDeleteError instanceof Error) {
+      errorDetail = `${authDeleteError.name || 'Error'}: ${authDeleteError.message}`;
+      if ((authDeleteError as any).status) {
+        errorDetail += ` (Status: ${(authDeleteError as any).status})`;
+      }
+    } else if (typeof authDeleteError === 'object' && authDeleteError !== null) {
+      const details: string[] = [];
+      for (const [key, value] of Object.entries(authDeleteError)) {
+        details.push(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
+      }
+      errorDetail = details.length > 0 ? details.join(', ') : JSON.stringify(authDeleteError);
+    } else {
+      errorDetail = String(authDeleteError);
+    }
     throw new Error(`Falha ao remover a conta de autenticação: ${errorDetail}`);
   }
 
