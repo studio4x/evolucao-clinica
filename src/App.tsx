@@ -38,6 +38,7 @@ const PublicReportView = lazy(() => import('./pages/PublicReportView'));
 import LandingPage from './pages/LandingPage';
 
 import { CookieConsent } from './components/CookieConsent';
+import { FeedbackWidget } from './components/FeedbackWidget';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
@@ -549,6 +550,7 @@ export default function App() {
     <Router>
       <CookieConsent />
       <InstallPrompt />
+      <FeedbackWidget />
       
       <Suspense fallback={<SplashScreen message="Carregando..." />}>
         <Routes>
