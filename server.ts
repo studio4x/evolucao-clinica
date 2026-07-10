@@ -27,8 +27,10 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || "";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "";
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-// Fallback padrão do modelo Gemini (mais estável e amplamente disponível)
-const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash-preview-05-20";
+// gemini-2.0-flash: confirmado disponível para contas Tier 1 do Google AI Studio
+const GEMINI_DEFAULT_MODEL = "gemini-2.0-flash";
+const GEMINI_TRANSCRIPTION_MODEL = "gemini-1.5-flash";
+const TEMP_AUDIO_BUCKET = "temp-audio";
 
 /**
  * Lê a chave e o modelo do Gemini da tabela settings.
@@ -73,6 +75,44 @@ async function getGeminiSettings(): Promise<{ apiKey: string; modelName: string 
   }
 
   return { apiKey, modelName };
+}
+
+function extractReadableErrorMessage(err: any): string {
+  const rawMessage = err?.message || err?.error?.message || err?.toString?.() || "Erro interno ao processar a transcrição.";
+
+  try {
+    const parsed = JSON.parse(rawMessage);
+    return parsed?.error?.message || parsed?.message || rawMessage;
+  } catch {
+    return rawMessage;
+  }
+}
+
+function isQuotaRelatedError(err: any): boolean {
+  const message = extractReadableErrorMessage(err).toLowerCase();
+  const status = err?.status || err?.response?.status || err?.cause?.status;
+
+  return (
+    status === 429 ||
+    message.includes("429") ||
+    message.includes("resource_exhausted") ||
+    message.includes("quota") ||
+    message.includes("exhausted")
+  );
+}
+
+function normalizeAudioMimeType(mimeType?: string): string {
+  let normalizedMimeType = mimeType || "audio/webm";
+
+  if (normalizedMimeType.includes(";")) {
+    normalizedMimeType = normalizedMimeType.split(";")[0].trim();
+  }
+
+  if (normalizedMimeType === "application/ogg" || normalizedMimeType === "application/octet-stream") {
+    return "audio/ogg";
+  }
+
+  return normalizedMimeType;
 }
 
 
@@ -1112,7 +1152,7 @@ app.get("/api/gemini-key", requireAuth, async (req: any, res) => {
 // Endpoint para listar modelos Gemini disponíveis para a chave configurada
 app.get("/api/ai/list-models", requireAuth, async (req: any, res) => {
   try {
-    const { apiKey } = await getGeminiSettings();
+    const { apiKey, modelName: currentModel } = await getGeminiSettings();
     if (!apiKey) {
       return res.status(500).json({ error: "Chave do Gemini não configurada." });
     }
@@ -1143,42 +1183,106 @@ app.get("/api/ai/list-models", requireAuth, async (req: any, res) => {
       }))
       .sort((a: any, b: any) => a.name.localeCompare(b.name));
 
-    return res.json({ models });
+    // Retorna também o modelo atualmente configurado no banco
+    return res.json({ models, currentModel });
   } catch (err: any) {
     console.error("[AI] Erro ao listar modelos Gemini:", err);
     return res.status(500).json({ error: err.message || "Erro interno ao listar modelos." });
   }
 });
 
-app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
+// Endpoint para TESTAR se um modelo específico funciona de verdade (chamada real)
+app.post("/api/ai/test-model", requireAuth, async (req: any, res) => {
   try {
-    const { audioBase64, mimeType, prompt, audioDuration } = req.body;
+    const { model } = req.body;
+    const { apiKey, modelName: savedModel } = await getGeminiSettings();
 
-    if (!audioBase64 || !mimeType) {
-      return res.status(400).json({ error: "Parâmetros 'audioBase64' e 'mimeType' são obrigatórios." });
+    if (!apiKey) {
+      return res.status(500).json({ success: false, error: "Chave do Gemini não configurada." });
     }
 
-    // 1. Obter a chave e o modelo do Gemini (configuráveis via painel admin)
-    const { apiKey, modelName } = await getGeminiSettings();
+    const modelToTest = model || savedModel;
+    console.log(`[AI-Test] Testando modelo: ${modelToTest}`);
+
+    const ai = new GoogleGenAI({ apiKey });
+    const testResponse = await ai.models.generateContent({
+      model: modelToTest,
+      contents: "Responda apenas: OK"
+    });
+
+    const text = testResponse.text || "";
+    if (!text) throw new Error("Modelo não retornou resposta.");
+
+    return res.json({
+      success: true,
+      model: modelToTest,
+      response: text.trim(),
+      message: `Modelo ${modelToTest} funcionando corretamente.`
+    });
+  } catch (err: any) {
+    console.error(`[AI-Test] Erro ao testar modelo:`, err);
+    // Extrai a mensagem limpa do erro Gemini
+    let errorMsg = err.message || "Erro ao testar modelo.";
+    try {
+      const parsed = JSON.parse(errorMsg);
+      errorMsg = parsed?.error?.message || errorMsg;
+    } catch { /* não é JSON */ }
+    return res.json({ success: false, model: req.body?.model, error: errorMsg });
+  }
+});
+
+app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
+  let storageAdmin: any = null;
+  let audioPathToCleanup: string | null = null;
+
+  try {
+    const { audioPath, mimeType, prompt, audioDuration } = req.body || {};
+
+    if (!audioPath || !mimeType) {
+      return res.status(400).json({ error: "Parâmetros 'audioPath' e 'mimeType' são obrigatórios." });
+    }
+
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+      return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY não configurada no servidor." });
+    }
+
+    audioPathToCleanup = audioPath;
+    storageAdmin = createClient(supabaseUrl, serviceRoleKey);
+
+    const normalizedMimeType = normalizeAudioMimeType(mimeType);
+    const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+
+    // 1. Obter a chave do Gemini (o modelo de transcrição é fixo)
+    const { apiKey } = await getGeminiSettings();
 
     if (!apiKey) {
       return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
     }
 
-    // 2. Instanciar o SDK do Gemini no Backend de forma protegida
-    console.log(`[AI-Backend] Usando modelo: ${modelName}`);
+    console.log(`[AI-Backend] Usando modelo fixo: ${GEMINI_TRANSCRIPTION_MODEL}`);
     const ai = new GoogleGenAI({ apiKey });
 
+    console.log(`[AI-Backend] Baixando áudio do Storage (${TEMP_AUDIO_BUCKET}/${audioPath})...`);
+    const { data: audioFile, error: downloadError } = await storageAdmin.storage
+      .from(TEMP_AUDIO_BUCKET)
+      .download(audioPath);
+
+    if (downloadError || !audioFile) {
+      throw new Error(downloadError?.message || "Não foi possível baixar o arquivo de áudio do Storage.");
+    }
+
+    const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
+    const audioBase64 = audioBuffer.toString("base64");
+
     console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${audioDuration || 0}s)...`);
-    
-    const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
 
     const geminiResponse = await ai.models.generateContent({
-      model: modelName,
+      model: GEMINI_TRANSCRIPTION_MODEL,
       contents: {
         parts: [
           { text: transcriptionPrompt },
-          { inlineData: { data: audioBase64, mimeType: mimeType } }
+          { inlineData: { data: audioBase64, mimeType: normalizedMimeType } }
         ]
       }
     });
@@ -1199,7 +1303,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
       try {
         await supabaseAdmin.from('usage_logs').insert({
           professional_id: req.user.id,
-          model: modelName,
+          model: GEMINI_TRANSCRIPTION_MODEL,
           prompt_tokens: promptTokens,
           candidates_tokens: candidatesTokens,
           total_tokens: totalTokens,
@@ -1215,8 +1319,23 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
 
     res.json({ success: true, transcription });
   } catch (err: any) {
-    console.error("Erro na transcrição via backend:", err);
-    res.status(500).json({ error: err.message || "Erro interno ao processar a transcrição." });
+    const errorMessage = extractReadableErrorMessage(err);
+    const quotaRelated = isQuotaRelatedError(err);
+    console.error("[AI-Backend] Erro na transcrição via backend:", err);
+    res.status(quotaRelated ? 429 : 500).json({ error: errorMessage || "Erro interno ao processar a transcrição." });
+  } finally {
+    if (audioPathToCleanup && storageAdmin) {
+      try {
+        const { error: cleanupError } = await storageAdmin.storage.from(TEMP_AUDIO_BUCKET).remove([audioPathToCleanup]);
+        if (cleanupError) {
+          console.error(`[AI-Backend] Falha ao remover áudio temporário (${audioPathToCleanup}):`, cleanupError);
+        } else {
+          console.log(`[AI-Backend] Áudio temporário removido com sucesso: ${audioPathToCleanup}`);
+        }
+      } catch (cleanupErr) {
+        console.error(`[AI-Backend] Erro inesperado ao limpar áudio temporário (${audioPathToCleanup}):`, cleanupErr);
+      }
+    }
   }
 });
 

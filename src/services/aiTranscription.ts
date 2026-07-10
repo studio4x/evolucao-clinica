@@ -8,44 +8,79 @@ export interface TranscriptionOptions {
   customPrompt?: string;
 }
 
-const blobToBase64 = (blob: Blob): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64 = (reader.result as string).split(',')[1];
-      resolve(base64);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+const DEFAULT_TRANSCRIPTION_PROMPT = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+
+const normalizeMimeType = (mimeType?: string): string => {
+  let normalizedMimeType = mimeType || 'audio/webm';
+
+  if (normalizedMimeType.includes(';')) {
+    normalizedMimeType = normalizedMimeType.split(';')[0].trim();
+  }
+
+  if (normalizedMimeType === 'application/ogg' || normalizedMimeType === 'application/octet-stream') {
+    return 'audio/ogg';
+  }
+
+  return normalizedMimeType;
+};
+
+const getAudioExtension = (mimeType: string): string => {
+  const normalized = mimeType.toLowerCase();
+
+  if (normalized.includes('webm')) return 'webm';
+  if (normalized.includes('ogg')) return 'ogg';
+  if (normalized.includes('mpeg')) return 'mp3';
+  if (normalized.includes('mp4') || normalized.includes('m4a')) return 'm4a';
+  if (normalized.includes('wav')) return 'wav';
+  if (normalized.includes('aac')) return 'aac';
+
+  const subtype = normalized.includes('/') ? normalized.split('/')[1] : normalized;
+  const sanitized = subtype.split(';')[0].replace(/[^a-z0-9]+/g, '');
+  return sanitized || 'bin';
+};
+
+const buildTempAudioPath = (userId: string, mimeType: string): string => {
+  const timestamp = Date.now();
+  const randomPart = globalThis.crypto?.randomUUID?.().replace(/-/g, '') || Math.random().toString(36).slice(2, 10);
+  const extension = getAudioExtension(mimeType);
+
+  return `${userId}/${timestamp}-${randomPart}.${extension}`;
 };
 
 export const transcribeAudio = async (options: TranscriptionOptions): Promise<string> => {
   const { audioBlob, mimeType, onRetry, audioDuration, customPrompt } = options;
   const maxRetries = 3;
   let retryCount = 0;
-
-  // Normalização de MIME type para compatibilidade com o Gemini
-  let normalizedMimeType = mimeType || 'audio/webm';
-  if (normalizedMimeType === 'application/ogg') {
-    normalizedMimeType = 'audio/ogg';
-  } else if (normalizedMimeType === 'application/octet-stream') {
-    normalizedMimeType = 'audio/ogg';
-  }
-
-  const prompt = customPrompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
-  const base64Audio = await blobToBase64(audioBlob);
+  const normalizedMimeType = normalizeMimeType(mimeType || audioBlob.type);
+  const prompt = customPrompt || DEFAULT_TRANSCRIPTION_PROMPT;
 
   const attemptTranscription = async (): Promise<string> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
+      const userId = session?.user?.id;
       
       if (!token) {
         throw new Error("Usuário não autenticado. Faça login novamente.");
       }
 
-      console.log(`[AI-Service] Enviando áudio para transcrição via backend - Tentativa ${retryCount + 1}`);
+      if (!userId) {
+        throw new Error("Não foi possível identificar o usuário autenticado.");
+      }
+
+      const audioPath = buildTempAudioPath(userId, normalizedMimeType);
+
+      console.log(`[AI-Service] Enviando áudio para transcrição via Storage + backend - Tentativa ${retryCount + 1}`);
+
+      const { error: uploadError } = await supabase.storage.from('temp-audio').upload(audioPath, audioBlob, {
+        contentType: normalizedMimeType,
+        upsert: false,
+        cacheControl: '60',
+      });
+
+      if (uploadError) {
+        throw uploadError;
+      }
 
       const response = await fetch('/api/ai/transcribe', {
         method: 'POST',
@@ -54,17 +89,25 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          audioBase64: base64Audio,
+          audioPath,
           mimeType: normalizedMimeType,
           prompt,
           audioDuration
         })
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any = {};
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = { error: responseText };
+        }
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || `Erro do servidor (HTTP ${response.status})`);
+        throw new Error(`${data.error || 'Erro do servidor'} (HTTP ${response.status})`);
       }
 
       if (!data.success || !data.transcription) {
@@ -78,6 +121,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
       const errorContent = error.message || JSON.stringify(error);
       const isQuotaError = errorContent.includes('429') || 
                            errorContent.includes('exhausted') || 
+                           errorContent.includes('resource_exhausted') ||
                            errorContent.includes('RESOURCE_EXHAUSTED');
 
       console.error("[AI-Service] Erro na transcrição:", errorContent);
@@ -90,7 +134,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         console.log(`[AI-Service] Tentando re-executar em ${delay}ms...`);
         
         if (onRetry) {
-          onRetry(retryCount, delay, false);
+          onRetry(retryCount, delay, isQuotaError);
         }
         
         await new Promise(resolve => setTimeout(resolve, delay));
