@@ -37,14 +37,22 @@ export const appendBrandAssetVersion = (url: string, signature: string) => {
   return `${url}${separator}v=${encodeURIComponent(signature)}`;
 };
 
+export const getBrandFaviconUrl = (config: BrandAssetSource) => {
+  return config.favicon_url || config.pwa_icon_192_url || config.pwa_icon_512_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
+};
+
+export const getBrandAppIconUrl = (config: BrandAssetSource) => {
+  return config.pwa_install_logo_url || config.pwa_icon_192_url || config.pwa_icon_512_url || config.pwa_maskable_icon_url || getBrandFaviconUrl(config);
+};
+
 export const getBrandIconUrl = (config: BrandAssetSource) => {
-  return config.favicon_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
+  return getBrandAppIconUrl(config);
 };
 
 export const getBrandSplashLogoUrl = (config: BrandAssetSource) => {
-  return config.pwa_loading_logo_url || config.logo_dark_url || config.logo_light_url || '';
+  return config.pwa_loading_logo_url || config.pwa_icon_512_url || config.pwa_icon_192_url || config.logo_dark_url || config.logo_light_url || config.pwa_install_logo_url || '';
 };
 
 export const getBrandInstallLogoUrl = (config: BrandAssetSource) => {
-  return config.pwa_install_logo_url || config.logo_dark_url || config.logo_light_url || '';
+  return config.pwa_install_logo_url || config.pwa_icon_192_url || config.pwa_icon_512_url || config.pwa_maskable_icon_url || getBrandFaviconUrl(config);
 };

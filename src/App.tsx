@@ -39,7 +39,7 @@ const Feedback = lazy(() => import('./pages/Feedback'));
 import LandingPage from './pages/LandingPage';
 
 import { CookieConsent } from './components/CookieConsent';
-import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
+import { appendBrandAssetVersion, getBrandAssetSignature } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
@@ -208,16 +208,17 @@ export default function App() {
       meta.content = content;
     };
 
-    const iconUrl = appendBrandAssetVersion(getBrandIconUrl(siteConfig), assetSignature);
-    const splashIconUrl = appendBrandAssetVersion(siteConfig.logo_dark_url || getBrandIconUrl(siteConfig), assetSignature);
+    const faviconUrl = appendBrandAssetVersion('/api/favicon', assetSignature);
+    const appleTouchIconUrl = appendBrandAssetVersion('/apple-touch-icon.png', assetSignature);
+    const splashIconUrl = appendBrandAssetVersion('/icon-512x512.png', assetSignature);
 
-    updateLink("link[rel='icon']", 'icon', iconUrl, 'image/png', '32x32');
-    updateLink("link[rel='shortcut icon']", 'shortcut icon', iconUrl, 'image/png');
-    updateLink("link[rel='apple-touch-icon']", 'apple-touch-icon', iconUrl, 'image/png');
+    updateLink("link[rel='icon']", 'icon', faviconUrl, undefined, '32x32');
+    updateLink("link[rel='shortcut icon']", 'shortcut icon', faviconUrl);
+    updateLink("link[rel='apple-touch-icon']", 'apple-touch-icon', appleTouchIconUrl, 'image/png');
     updateLink("link[rel='manifest']", 'manifest', appendBrandAssetVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
     updateMeta("meta[name='theme-color']", 'name', 'theme-color', siteConfig.pwa_theme_color);
-    updateMeta("meta[property='og:image']", 'property', 'og:image', appendBrandAssetVersion(siteConfig.pwa_icon_512_url || splashIconUrl, assetSignature));
-    updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', appendBrandAssetVersion(siteConfig.pwa_icon_512_url || splashIconUrl, assetSignature));
+    updateMeta("meta[property='og:image']", 'property', 'og:image', splashIconUrl);
+    updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', splashIconUrl);
   }, [siteConfig, assetSignature]);
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);

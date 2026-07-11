@@ -12,6 +12,7 @@ const require = createRequire(import.meta.url);
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
+import { getBrandAssetSignature } from "./src/utils/brandAssets.js";
 import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js";
 
 dotenv.config();
@@ -593,32 +594,103 @@ function getMimeTypeFromPath(filePath: string) {
   if (cleanPath.endsWith(".webp")) return "image/webp";
   if (cleanPath.endsWith(".gif")) return "image/gif";
   if (cleanPath.endsWith(".svg")) return "image/svg+xml";
+  if (cleanPath.endsWith(".ico")) return "image/x-icon";
   return "application/octet-stream";
+}
+
+type BrandAssetPayload = {
+  buffer: Buffer;
+  mimeType: string;
+};
+
+async function readBrandAssetPayload(source: string): Promise<BrandAssetPayload | null> {
+  if (!source) return null;
+
+  const normalizedSource = source.trim();
+  if (!normalizedSource) return null;
+
+  const isAbsoluteUrl = /^https?:\/\//i.test(normalizedSource);
+  const cleanSource = normalizedSource.split("#")[0];
+  const cleanPath = cleanSource.split("?")[0];
+  let buffer: Buffer;
+  let mimeType = getMimeTypeFromPath(cleanPath);
+
+  if (isAbsoluteUrl) {
+    const response = await fetch(normalizedSource);
+    if (!response.ok) {
+      throw new Error(`Falha ao carregar imagem ${normalizedSource}: ${response.status}`);
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    buffer = Buffer.from(arrayBuffer);
+    mimeType = response.headers.get("content-type")?.split(";")[0] || mimeType;
+  } else {
+    const publicPath = path.join(process.cwd(), "public", cleanPath.replace(/^\//, ""));
+    buffer = await readFile(publicPath);
+  }
+
+  return {
+    buffer,
+    mimeType
+  };
+}
+
+async function resolveBrandAssetPayload(
+  candidates: Array<string | undefined | null>,
+  fallbackPublicAsset: string
+): Promise<BrandAssetPayload | null> {
+  const uniqueCandidates = Array.from(
+    new Set(
+      candidates
+        .filter((candidate): candidate is string => typeof candidate === "string" && candidate.trim().length > 0)
+        .map((candidate) => candidate.trim())
+    )
+  );
+
+  for (const candidate of uniqueCandidates) {
+    try {
+      const payload = await readBrandAssetPayload(candidate);
+      if (payload) {
+        return payload;
+      }
+    } catch (error) {
+      console.warn(`[Brand] Falha ao carregar asset ${candidate}:`, error);
+    }
+  }
+
+  try {
+    return await readBrandAssetPayload(fallbackPublicAsset);
+  } catch (error) {
+    console.error(`[Brand] Falha ao carregar fallback local ${fallbackPublicAsset}:`, error);
+    return null;
+  }
+}
+
+async function sendBrandAssetResponse(
+  res: express.Response,
+  candidates: Array<string | undefined | null>,
+  fallbackPublicAsset: string
+) {
+  const asset = await resolveBrandAssetPayload(candidates, fallbackPublicAsset);
+
+  if (!asset) {
+    return res.status(404).end();
+  }
+
+  res.setHeader("Content-Type", asset.mimeType);
+  res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+  return res.send(asset.buffer);
 }
 
 async function imageUrlToDataUri(imageUrl: string) {
   if (!imageUrl) return "";
 
   try {
-    const isAbsoluteUrl = /^https?:\/\//i.test(imageUrl);
-    const cleanUrl = imageUrl.split("?")[0];
-    let buffer: Buffer;
-    let mimeType = getMimeTypeFromPath(cleanUrl);
-
-    if (isAbsoluteUrl) {
-      const response = await fetch(imageUrl);
-      if (!response.ok) {
-        throw new Error(`Falha ao carregar imagem ${imageUrl}: ${response.status}`);
-      }
-      const arrayBuffer = await response.arrayBuffer();
-      buffer = Buffer.from(arrayBuffer);
-      mimeType = response.headers.get("content-type") || mimeType;
-    } else {
-      const publicPath = path.join(process.cwd(), "public", cleanUrl.replace(/^\//, ""));
-      buffer = await readFile(publicPath);
+    const payload = await readBrandAssetPayload(imageUrl);
+    if (!payload) {
+      return "";
     }
 
-    return `data:${mimeType};base64,${buffer.toString("base64")}`;
+    return `data:${payload.mimeType};base64,${payload.buffer.toString("base64")}`;
   } catch (error) {
     console.error("[Brand] Falha ao converter imagem para data URI:", error);
     return "";
@@ -1616,57 +1688,20 @@ app.get("/api/payment-settings", async (_req, res) => {
 // Rota dinâmica para o manifest.webmanifest do PWA
 app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('settings')
-      .select('api_key')
-      .eq('id', 'brand_settings')
-      .single();
-
-    let logoLightUrl = "";
-    let logoDarkUrl = "";
-    let faviconUrl = "";
-    let pwaIcon192 = "";
-    let pwaIcon512 = "";
-    let pwaMaskableIcon = "";
-    let pwaPushNotificationIcon = "";
-    let version = "1.0";
-
-    if (!error && data && data.api_key) {
-      const parsed = JSON.parse(data.api_key);
-      logoLightUrl = parsed.logo_light_url || "";
-      logoDarkUrl = parsed.logo_dark_url || "";
-      faviconUrl = parsed.favicon_url || "";
-      pwaIcon192 = parsed.pwa_icon_192_url || "";
-      pwaIcon512 = parsed.pwa_icon_512_url || "";
-      pwaMaskableIcon = parsed.pwa_maskable_icon_url || "";
-      pwaPushNotificationIcon = parsed.pwa_push_notification_icon_url || "";
-      version = parsed.version || "1.0";
-    }
-
-    const assetSignature = hashString([
-      logoLightUrl,
-      logoDarkUrl,
-      faviconUrl,
-      pwaIcon192,
-      pwaIcon512,
-      pwaMaskableIcon,
-      pwaPushNotificationIcon,
-      version
-    ].join("|"));
-    const brandIcon = faviconUrl || logoDarkUrl || logoLightUrl || "/favicon.png";
-    const splashLogoWithVersion = appendBrandVersion(logoDarkUrl || logoLightUrl || "", assetSignature);
+    const config = await getBrandConfigSnapshot();
+    const assetSignature = getBrandAssetSignature(config);
     const manifest = {
       "id": "/",
-      "name": "Evolução Clínica",
-      "short_name": "Evolução Clínica",
-      "description": "Prontuário eletrônico e evolução clínica profissional com IA para fisioterapeutas e profissionais da saúde.",
+      "name": config.pwa_app_name || defaultSiteConfig.pwa_app_name,
+      "short_name": config.pwa_short_name || config.pwa_app_name || defaultSiteConfig.pwa_short_name,
+      "description": config.pwa_description || defaultSiteConfig.pwa_description,
       "lang": "pt-BR",
       "start_url": "/?utm_source=pwa",
       "scope": "/",
       "display": "standalone",
       "orientation": "portrait",
-      "theme_color": "#005C13",
-      "background_color": "#ffffff",
+      "theme_color": config.pwa_theme_color || defaultSiteConfig.pwa_theme_color,
+      "background_color": config.pwa_background_color || defaultSiteConfig.pwa_background_color,
       "categories": ["medical", "productivity", "health"],
       "prefer_related_applications": false,
       "icons": [
@@ -1687,12 +1722,6 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
           "sizes": "512x512",
           "type": "image/png",
           "purpose": "maskable"
-        },
-        {
-          "src": splashLogoWithVersion,
-          "sizes": "1024x1024",
-          "type": "image/png",
-          "purpose": "any maskable"
         }
       ],
       "screenshots": [
@@ -1746,6 +1775,74 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
   } catch (err: any) {
     console.error("Error generating manifest:", err);
     return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+app.get(["/icon-192x192.png", "/api/pwa-icon/192"], async (_req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    return await sendBrandAssetResponse(res, [
+      config.pwa_icon_192_url,
+      config.pwa_icon_512_url,
+      config.pwa_maskable_icon_url,
+      config.pwa_install_logo_url,
+      config.logo_dark_url,
+      config.logo_light_url
+    ], "/icon-192x192.png");
+  } catch (err: any) {
+    console.error("Erro ao obter ícone PWA 192x192:", err);
+    return res.sendFile(path.join(process.cwd(), "public", "icon-192x192.png"));
+  }
+});
+
+app.get(["/icon-512x512.png", "/api/pwa-icon/512"], async (_req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    return await sendBrandAssetResponse(res, [
+      config.pwa_icon_512_url,
+      config.pwa_icon_192_url,
+      config.pwa_maskable_icon_url,
+      config.pwa_install_logo_url,
+      config.logo_dark_url,
+      config.logo_light_url
+    ], "/icon-512x512.png");
+  } catch (err: any) {
+    console.error("Erro ao obter ícone PWA 512x512:", err);
+    return res.sendFile(path.join(process.cwd(), "public", "icon-512x512.png"));
+  }
+});
+
+app.get(["/icon-512x512-maskable.png", "/api/pwa-icon/maskable"], async (_req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    return await sendBrandAssetResponse(res, [
+      config.pwa_maskable_icon_url,
+      config.pwa_icon_512_url,
+      config.pwa_icon_192_url,
+      config.pwa_install_logo_url,
+      config.logo_dark_url,
+      config.logo_light_url
+    ], "/icon-512x512-maskable.png");
+  } catch (err: any) {
+    console.error("Erro ao obter ícone PWA mascarável:", err);
+    return res.sendFile(path.join(process.cwd(), "public", "icon-512x512-maskable.png"));
+  }
+});
+
+app.get(["/apple-touch-icon.png", "/api/apple-touch-icon"], async (_req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    return await sendBrandAssetResponse(res, [
+      config.pwa_icon_192_url,
+      config.pwa_install_logo_url,
+      config.pwa_icon_512_url,
+      config.favicon_url,
+      config.logo_dark_url,
+      config.logo_light_url
+    ], "/apple-touch-icon.png");
+  } catch (err: any) {
+    console.error("Erro ao obter apple-touch-icon dinâmico:", err);
+    return res.sendFile(path.join(process.cwd(), "public", "apple-touch-icon.png"));
   }
 });
 
@@ -1813,19 +1910,15 @@ app.get(["/api/pwa-install-icon", "/api/pwa-install-icon.svg"], async (req, res)
 // Rota dinâmica para o favicon do site/PWA
 app.get(["/favicon.png", "/favicon.ico", "/api/favicon"], async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('settings')
-      .select('api_key')
-      .eq('id', 'brand_settings')
-      .single();
-
-    if (!error && data && data.api_key) {
-      const parsed = JSON.parse(data.api_key);
-      if (parsed.favicon_url) {
-        res.setHeader("Cache-Control", "no-store, max-age=0");
-        return res.redirect(parsed.favicon_url);
-      }
-    }
+    const config = await getBrandConfigSnapshot();
+    return await sendBrandAssetResponse(res, [
+      config.favicon_url,
+      config.pwa_icon_192_url,
+      config.pwa_icon_512_url,
+      config.pwa_maskable_icon_url,
+      config.logo_dark_url,
+      config.logo_light_url
+    ], "/favicon.png");
   } catch (err) {
     console.error("Erro ao obter favicon dinâmico:", err);
   }

@@ -17,7 +17,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Evolução Clínica - Prontuários e Evoluções com IA" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="apple-touch-icon" href="/api/favicon" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="apple-touch-fullscreen" content="yes" />
 
@@ -28,7 +28,7 @@
     <link rel="manifest" href="/manifest.webmanifest" />
 
     <!-- Favicon -->
-    <link rel="icon" type="image/png" sizes="32x32" href="/api/favicon" />
+    <link rel="icon" sizes="32x32" href="/api/favicon" />
     
     <!-- Open Graph / SEO -->
     <meta property="og:type" content="website" />
@@ -139,15 +139,15 @@
             config.version || ''
           ].join('|'));
 
-          const faviconUrl = config.favicon_url || config.logo_dark_url || config.logo_light_url || '/favicon.png';
-          const appleTouchIconUrl = config.pwa_icon_192_url || faviconUrl;
+          const faviconUrl = appendVersion('/api/favicon', assetSignature);
+          const appleTouchIconUrl = appendVersion('/apple-touch-icon.png', assetSignature);
           const socialImageUrl = appendVersion(config.social_share_url || 'https://www.evolucaoclinica.app.br/og-image-social.png', assetSignature);
           const title = config.pwa_app_name || defaultTitle;
           const description = config.pwa_description || defaultDescription;
 
-          setLink("link[rel='icon']", 'icon', appendVersion(faviconUrl, assetSignature), 'image/png', '32x32');
-          setLink("link[rel='shortcut icon']", 'shortcut icon', appendVersion(faviconUrl, assetSignature), 'image/png');
-          setLink("link[rel='apple-touch-icon']", 'apple-touch-icon', appendVersion(appleTouchIconUrl, assetSignature), 'image/png');
+          setLink("link[rel='icon']", 'icon', faviconUrl, undefined, '32x32');
+          setLink("link[rel='shortcut icon']", 'shortcut icon', faviconUrl);
+          setLink("link[rel='apple-touch-icon']", 'apple-touch-icon', appleTouchIconUrl, 'image/png');
           setLink("link[rel='manifest']", 'manifest', appendVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
           updateThemeMeta(config.pwa_theme_color || '#005C13');
           updateMeta("meta[name='apple-mobile-web-app-title']", 'name', 'apple-mobile-web-app-title', title);
