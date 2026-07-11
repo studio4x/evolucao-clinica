@@ -33,12 +33,12 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const DeleteAccount = lazy(() => import('./pages/DeleteAccount'));
 const PublicReportView = lazy(() => import('./pages/PublicReportView'));
+const Feedback = lazy(() => import('./pages/Feedback'));
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
 
 import { CookieConsent } from './components/CookieConsent';
-import { FeedbackWidget } from './components/FeedbackWidget';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
@@ -550,7 +550,6 @@ export default function App() {
     <Router>
       <CookieConsent />
       <InstallPrompt />
-      <FeedbackWidget />
       
       <Suspense fallback={<SplashScreen message="Carregando..." />}>
         <Routes>
@@ -586,6 +585,7 @@ export default function App() {
             <Route path="notifications" element={<Notifications />} />
             <Route path="support" element={<SupportTickets />} />
             <Route path="support/:ticketId" element={<SupportTicketDetail />} />
+            <Route path="sugestoes" element={<Feedback />} />
           </Route>
 
           {/* Redirects */}

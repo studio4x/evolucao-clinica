@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database, Crown } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
@@ -132,6 +132,7 @@ export default function Layout() {
     { name: 'Notificações', path: '/painel/notifications', icon: Bell },
     { name: 'Migração de Prontuários', path: '/painel/migration', icon: Database, isPremium: true },
     { name: 'Suporte', path: '/painel/support', icon: LifeBuoy },
+    { name: 'Sugestões', path: '/painel/sugestoes', icon: Lightbulb },
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
   ];
