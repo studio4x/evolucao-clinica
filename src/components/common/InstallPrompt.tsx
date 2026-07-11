@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, X } from 'lucide-react';
 import { useSiteConfig } from '../../hooks/useSiteConfig';
-import { appendBrandAssetVersion, getBrandAssetSignature, getBrandInstallLogoUrl } from '../../utils/brandAssets';
+import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../../utils/brandAssets';
 
 export const InstallPrompt = () => {
   const siteConfig = useSiteConfig();
@@ -88,7 +88,7 @@ export const InstallPrompt = () => {
   const appName = siteConfig.pwa_app_name || "Evolução Clínica";
   const installTitle = siteConfig.pwa_install_title || `Instalar ${appName}`;
   const installDesc = siteConfig.pwa_install_description || "Acesse seus prontuários rapidamente e offline direto da tela inicial.";
-  const installLogoUrl = appendBrandAssetVersion(getBrandInstallLogoUrl(siteConfig), assetSignature);
+  const installLogoUrl = appendBrandAssetVersion(getBrandIconUrl(siteConfig), assetSignature);
   const canInstallNatively = Boolean(deferredPrompt);
 
   if (!canInstallNatively) {
