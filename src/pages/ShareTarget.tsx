@@ -471,7 +471,7 @@ export default function ShareTarget() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-brand-text mb-1">
-                    Data da Sessão
+                    Data do Atendimento
                   </label>
                   <input
                     type="date"
@@ -484,7 +484,7 @@ export default function ShareTarget() {
 
                 <div>
                   <label className="block text-sm font-medium text-brand-text mb-1">
-                    Horário da Sessão
+                    Hora do Atendimento
                   </label>
                   <input
                     type="time"
@@ -493,6 +493,9 @@ export default function ShareTarget() {
                     className="input-field p-2"
                     disabled={status === 'processing'}
                   />
+                  <p className="mt-1 text-xs text-brand-text-muted">
+                    Hora em que a sessão foi realizada.
+                  </p>
                 </div>
               </div>
 
