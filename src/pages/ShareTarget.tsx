@@ -49,6 +49,31 @@ const clearSharedFileLocal = (): Promise<void> => {
   });
 };
 
+const getAudioDurationFromFile = async (file: File): Promise<number> => {
+  const objectUrl = URL.createObjectURL(file);
+
+  try {
+    const duration = await new Promise<number>((resolve) => {
+      const audio = document.createElement('audio');
+
+      const finalize = (value: number) => {
+        audio.removeAttribute('src');
+        audio.load();
+        resolve(Number.isFinite(value) ? value : 0);
+      };
+
+      audio.preload = 'metadata';
+      audio.onloadedmetadata = () => finalize(audio.duration || 0);
+      audio.onerror = () => finalize(0);
+      audio.src = objectUrl;
+    });
+
+    return duration;
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+};
+
 const isGoogleReconnectNeededMessage = (message: string) => {
   const normalized = message.toLowerCase();
   return (
@@ -221,6 +246,8 @@ export default function ShareTarget() {
     setStatus('processing');
     setErrorMessage('');
 
+    const estimatedAudioDuration = await getAudioDurationFromFile(audioFile);
+    const safeAudioDuration = Math.max(1, Math.round(estimatedAudioDuration || 0));
     const evolutionId = uuidv4();
     
     const evolutionData = {
@@ -233,6 +260,7 @@ export default function ShareTarget() {
       transcription_status: 'processing',
       transcription_text: '',
       google_doc_append_status: 'pending',
+      audio_duration_seconds: safeAudioDuration,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -252,7 +280,7 @@ export default function ShareTarget() {
       if (insertError) throw insertError;
 
       // 2. Transcribe with AI
-      setErrorMessage("Etapa 2/4: Transcrevendo áudio com IA (Gemini 2.0)...");
+      setErrorMessage("Etapa 2/4: Transcrevendo áudio com IA...");
       let mimeType = audioFile.type;
       
       if (!mimeType || mimeType === 'application/octet-stream') {
@@ -262,6 +290,7 @@ export default function ShareTarget() {
       const transcription = await transcribeAudio({
         audioBlob: audioFile,
         mimeType,
+        audioDuration: safeAudioDuration,
         onRetry: (attempt, delay, isFallback) => {
           setErrorMessage(`Etapa 2/4: Retentativa IA ${attempt}/3 em ${Math.round(delay/1000)}s...`);
         }
