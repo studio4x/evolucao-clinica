@@ -39,6 +39,7 @@ const TRANSCRIPTION_MONTHLY_LIMIT_SECONDS = 20 * 60 * 60;
 const TRANSCRIPTION_USAGE_RESOURCE = "audio_transcription";
 const APP_TIMEZONE = "America/Sao_Paulo";
 const transcriptionRateLimitStore = new Map<string, number[]>();
+let hasWarnedAboutMissingUsageTrackingTable = false;
 
 const DEPRECATED_MODEL_FALLBACKS: Record<string, string> = {
   "gemini-2.0-flash": "gemini-3.5-flash",
@@ -183,6 +184,22 @@ function parseAudioDurationSeconds(value: unknown): number | null {
   return Math.ceil(parsed);
 }
 
+function isUsageTrackingTableMissing(error: { message?: string } | null | undefined) {
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    message.includes("could not find the table 'public.usage_tracking'") ||
+    message.includes("relation \"public.usage_tracking\" does not exist") ||
+    message.includes("relation \"usage_tracking\" does not exist")
+  );
+}
+
+function warnAboutMissingUsageTrackingTable(error: { message?: string } | null | undefined) {
+  if (hasWarnedAboutMissingUsageTrackingTable) return;
+  hasWarnedAboutMissingUsageTrackingTable = true;
+  console.warn("[AI-Backend] Tabela usage_tracking ausente. O limite mensal de transcricao sera ignorado ate a migration ser aplicada.", error?.message || error);
+}
+
 function consumeTranscriptionRateLimit(userId: string, now = Date.now()) {
   const recentRequests = (transcriptionRateLimitStore.get(userId) || [])
     .filter((timestamp) => now - timestamp < TRANSCRIPTION_RATE_LIMIT_WINDOW_MS);
@@ -216,6 +233,10 @@ async function getMonthlyTranscriptionUsageSeconds(professionalId: string, usage
     .maybeSingle();
 
   if (error) {
+    if (isUsageTrackingTableMissing(error)) {
+      warnAboutMissingUsageTrackingTable(error);
+      return 0;
+    }
     throw new Error(error.message || "Falha ao consultar o consumo mensal de transcrição.");
   }
 
@@ -239,6 +260,10 @@ async function incrementMonthlyTranscriptionUsageSeconds(professionalId: string,
     });
 
   if (error) {
+    if (isUsageTrackingTableMissing(error)) {
+      warnAboutMissingUsageTrackingTable(error);
+      return nextUsageSeconds;
+    }
     throw new Error(error.message || "Falha ao atualizar o consumo mensal de transcrição.");
   }
 
