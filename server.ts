@@ -1423,7 +1423,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     storageAdmin = createClient(supabaseUrl, serviceRoleKey);
 
     const normalizedMimeType = normalizeAudioMimeType(mimeType);
-    const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+    const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Retorne somente a transcrição final em texto corrido, sem títulos, sem cabeçalhos, sem resumos, sem contexto adicional, sem explicações, sem listas e sem qualquer frase de abertura ou encerramento.`;
     const usageMonth = getCurrentUsageMonth();
     const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(req.user.id, usageMonth);
 

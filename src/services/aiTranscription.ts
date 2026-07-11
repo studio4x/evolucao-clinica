@@ -10,7 +10,7 @@ export interface TranscriptionOptions {
 
 const MAX_AUDIO_DURATION_SECONDS = 20 * 60;
 const MAX_AUDIO_SIZE_BYTES = 20 * 1024 * 1024;
-const DEFAULT_TRANSCRIPTION_PROMPT = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Entregue um texto corrido, claro, profissional e pronto para ser inserido em prontuário clínico.`;
+const DEFAULT_TRANSCRIPTION_PROMPT = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Retorne somente a transcrição final em texto corrido, sem títulos, sem cabeçalhos, sem resumos, sem contexto adicional, sem explicações, sem listas e sem qualquer frase de abertura ou encerramento.`;
 
 const normalizeMimeType = (mimeType?: string): string => {
   let normalizedMimeType = mimeType || 'audio/webm';
