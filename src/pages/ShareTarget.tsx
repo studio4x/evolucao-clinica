@@ -49,13 +49,26 @@ const clearSharedFileLocal = (): Promise<void> => {
   });
 };
 
+const isGoogleReconnectNeededMessage = (message: string) => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('sessão do google expirou') ||
+    normalized.includes('autenticação do google') ||
+    normalized.includes('authenticação do google') ||
+    normalized.includes('autenticação google') ||
+    normalized.includes('insufficient_scopes') ||
+    normalized.includes('insufficient scopes') ||
+    normalized.includes('unauthenticated') ||
+    normalized.includes('credentials') ||
+    normalized.includes('401')
+  );
+};
+
 
 
 export default function ShareTarget() {
   const navigate = useNavigate();
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
-  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
-  
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
@@ -82,6 +95,8 @@ export default function ShareTarget() {
   const [modalLoading, setModalLoading] = useState(false);
   const [modalSaving, setModalSaving] = useState(false);
   const [modalError, setModalError] = useState('');
+  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const needsGoogleReconnect = !hasClinicalAccess || isGoogleReconnectNeededMessage(errorMessage) || isGoogleReconnectNeededMessage(modalError);
 
   useEffect(() => {
     const loadData = async () => {
@@ -130,7 +145,9 @@ export default function ShareTarget() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
-        redirectTo: getCurrentGoogleOAuthRedirectUrl()
+        redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+        prompt: 'consent',
+        loginHint: user?.email || undefined
       });
       if (error) throw error;
     } catch (error) {
@@ -196,7 +213,7 @@ export default function ShareTarget() {
     }
 
     if (!hasClinicalAccess) {
-      setErrorMessage('Autenticação do Google ausente ou expirada.');
+      setErrorMessage('Sua conexão com o Google está ausente, expirada ou sem permissões clínicas completas. Renove a autenticação abaixo.');
       setStatus('error');
       return;
     }
@@ -479,6 +496,33 @@ export default function ShareTarget() {
                 </div>
               </div>
 
+              {!hasClinicalAccess && user && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                  <div className="flex">
+                    <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+                    <div className="ml-3 flex-1">
+                      <h3 className="text-sm font-medium text-amber-900">Conexão Google indisponível</h3>
+                      <p className="mt-1 text-sm text-amber-800">
+                        A conexão com o Google expirou ou está sem as permissões clínicas completas.
+                        Renove antes de processar o áudio.
+                      </p>
+                      <button
+                        onClick={handleReauthenticate}
+                        disabled={isReauthenticating}
+                        className="mt-3 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-amber-900 bg-amber-100 hover:bg-amber-200 transition-colors disabled:opacity-50"
+                      >
+                        {isReauthenticating ? (
+                          <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-4 w-4 mr-1.5" />
+                        )}
+                        Renovar Autenticação do Google
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {status === 'error' && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                   <div className="flex">
@@ -488,7 +532,7 @@ export default function ShareTarget() {
                       <div className="mt-2 text-sm text-red-700">
                         <p>{errorMessage}</p>
                       </div>
-                      {errorMessage.includes('Sessão do Google expirou') && (
+                      {needsGoogleReconnect && (
                         <button
                           onClick={handleReauthenticate}
                           disabled={isReauthenticating}
@@ -573,7 +617,7 @@ export default function ShareTarget() {
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-center space-y-3">
                   <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
                   <p className="text-sm text-red-700 font-medium">{modalError}</p>
-                  {!hasClinicalAccess && (
+                  {needsGoogleReconnect && (
                     <button
                       onClick={handleReauthenticate}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
