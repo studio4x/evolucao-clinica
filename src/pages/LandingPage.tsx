@@ -267,15 +267,24 @@ export default function LandingPage() {
             </nav>
 
             {/* Auth CTA Buttons */}
-            <div className="hidden lg:flex items-center space-x-4">
+            <div className="hidden lg:flex items-center space-x-3">
               {user ? (
                 <Link to="/painel" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg whitespace-nowrap">
                   Acessar Painel <ArrowRight size={16} />
                 </Link>
               ) : (
-                <Link to="/login" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg whitespace-nowrap">
-                  Teste gratuito de 7 dias
-                </Link>
+                <>
+                  <Link
+                    to="/login"
+                    className="inline-flex items-center gap-2 rounded-full border border-brand-primary/20 bg-brand-text px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-text/15 transition-all hover:-translate-y-0.5 hover:border-brand-text hover:bg-brand-primary hover:shadow-xl hover:shadow-brand-primary/20 whitespace-nowrap"
+                  >
+                    <Lock size={15} />
+                    Entrar
+                  </Link>
+                  <Link to="/login" className="btn-primary flex items-center gap-2 px-6 py-2.5 font-semibold text-sm shadow-md hover:shadow-lg whitespace-nowrap">
+                    Teste gratuito de 7 dias
+                  </Link>
+                </>
               )}
             </div>
 
@@ -307,9 +316,18 @@ export default function LandingPage() {
                   Acessar Painel
                 </Link>
               ) : (
-                <Link to="/login" className="btn-primary w-full text-center py-3 font-semibold shadow-md">
-                  Teste gratuito de 7 dias
-                </Link>
+                <>
+                  <Link
+                    to="/login"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-brand-primary/20 bg-brand-text px-5 py-3 text-center text-base font-bold text-white shadow-lg shadow-brand-text/15 transition-all hover:border-brand-text hover:bg-brand-primary"
+                  >
+                    <Lock size={17} />
+                    Entrar
+                  </Link>
+                  <Link to="/login" className="btn-primary w-full text-center py-3 font-semibold shadow-md">
+                    Teste gratuito de 7 dias
+                  </Link>
+                </>
               )}
             </div>
           </div>
