@@ -1706,19 +1706,19 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       "prefer_related_applications": false,
       "icons": [
         {
-          "src": appendBrandVersion("/icon-192x192.png", assetSignature),
+          "src": appendBrandVersion("/api/pwa-icon/192", assetSignature),
           "sizes": "192x192",
           "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": appendBrandVersion("/icon-512x512.png", assetSignature),
+          "src": appendBrandVersion("/api/pwa-icon/512", assetSignature),
           "sizes": "512x512",
           "type": "image/png",
           "purpose": "any"
         },
         {
-          "src": appendBrandVersion("/icon-512x512-maskable.png", assetSignature),
+          "src": appendBrandVersion("/api/pwa-icon/maskable", assetSignature),
           "sizes": "512x512",
           "type": "image/png",
           "purpose": "maskable"

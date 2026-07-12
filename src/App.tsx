@@ -209,8 +209,8 @@ export default function App() {
     };
 
     const faviconUrl = appendBrandAssetVersion('/api/favicon', assetSignature);
-    const appleTouchIconUrl = appendBrandAssetVersion('/apple-touch-icon.png', assetSignature);
-    const splashIconUrl = appendBrandAssetVersion('/icon-512x512.png', assetSignature);
+    const appleTouchIconUrl = appendBrandAssetVersion('/api/apple-touch-icon', assetSignature);
+    const splashIconUrl = appendBrandAssetVersion('/api/pwa-icon/512', assetSignature);
 
     updateLink("link[rel='icon']", 'icon', faviconUrl, undefined, '32x32');
     updateLink("link[rel='shortcut icon']", 'shortcut icon', faviconUrl);

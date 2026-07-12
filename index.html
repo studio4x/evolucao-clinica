@@ -17,7 +17,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Evolução Clínica - Prontuários e Evoluções com IA" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" href="/api/apple-touch-icon" />
     <meta name="format-detection" content="telephone=no" />
     <meta name="apple-touch-fullscreen" content="yes" />
 
@@ -140,7 +140,7 @@
           ].join('|'));
 
           const faviconUrl = appendVersion('/api/favicon', assetSignature);
-          const appleTouchIconUrl = appendVersion('/apple-touch-icon.png', assetSignature);
+          const appleTouchIconUrl = appendVersion('/api/apple-touch-icon', assetSignature);
           const socialImageUrl = appendVersion(config.social_share_url || 'https://www.evolucaoclinica.app.br/og-image-social.png', assetSignature);
           const title = config.pwa_app_name || defaultTitle;
           const description = config.pwa_description || defaultDescription;
