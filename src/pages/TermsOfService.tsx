@@ -30,7 +30,7 @@ export default function TermsOfService() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 10 de julho de 2026
+          Última atualização: 12 de julho de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
@@ -93,8 +93,19 @@ export default function TermsOfService() {
               são exibidas no aplicativo no momento da contratação e podem ser atualizadas conforme a oferta vigente.
             </p>
             <p>
-              Quando aplicável, cancelamentos e reembolsos seguem a legislação brasileira de proteção ao consumidor e as regras informadas no painel
-              do usuário ou no fluxo de pagamento.
+              As assinaturas podem ser recorrentes e, quando aplicável, permanecem ativas até que o usuário solicite o cancelamento pelos canais
+              disponibilizados na própria plataforma. O cancelamento interrompe as próximas cobranças, observadas as regras do plano contratado e
+              o momento em que a solicitação foi feita.
+            </p>
+            <p>
+              Em conformidade com o art. 49 do Código de Defesa do Consumidor, pagamentos de assinatura realizados na plataforma podem ser
+              reembolsados integralmente em até <strong>7 (sete) dias corridos</strong> contados da data da contratação, desde que a solicitação
+              seja feita pelo titular da conta na área de assinatura do aplicativo ou por canal oficial de suporte.
+            </p>
+            <p>
+              Quando o reembolso elegível é processado, a assinatura vinculada é cancelada e o acesso aos recursos pagos pode ser encerrado de forma
+              imediata. Após o prazo legal de 7 dias, o usuário ainda pode cancelar a renovação da assinatura, mas <strong>não há estorno automático</strong>
+              dos valores já cobrados, salvo obrigação legal específica ou decisão administrativa expressa da plataforma.
             </p>
           </section>
 
