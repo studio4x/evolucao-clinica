@@ -29,6 +29,7 @@ export interface SiteConfig {
   logo_light_url: string;
   logo_dark_url: string;
   favicon_url: string;
+  social_share_url: string;
   version: string;
   colors: BrandColors;
 }
@@ -74,6 +75,7 @@ export const defaultSiteConfig: SiteConfig = {
   logo_light_url: "",
   logo_dark_url: "",
   favicon_url: "/favicon.png",
+  social_share_url: "",
   version: "1.0",
   colors: defaultColors
 };

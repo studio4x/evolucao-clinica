@@ -39,7 +39,7 @@ const Feedback = lazy(() => import('./pages/Feedback'));
 import LandingPage from './pages/LandingPage';
 
 import { CookieConsent } from './components/CookieConsent';
-import { appendBrandAssetVersion, getBrandAssetSignature } from './utils/brandAssets';
+import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
@@ -210,15 +210,15 @@ export default function App() {
 
     const faviconUrl = appendBrandAssetVersion('/api/favicon', assetSignature);
     const appleTouchIconUrl = appendBrandAssetVersion('/api/apple-touch-icon', assetSignature);
-    const splashIconUrl = appendBrandAssetVersion('/api/pwa-icon/512', assetSignature);
+    const socialImageUrl = appendBrandAssetVersion(getBrandSocialShareUrl(siteConfig), assetSignature);
 
     updateLink("link[rel='icon']", 'icon', faviconUrl, undefined, '32x32');
     updateLink("link[rel='shortcut icon']", 'shortcut icon', faviconUrl);
     updateLink("link[rel='apple-touch-icon']", 'apple-touch-icon', appleTouchIconUrl, 'image/png');
     updateLink("link[rel='manifest']", 'manifest', appendBrandAssetVersion('/manifest.webmanifest', assetSignature), 'application/manifest+json');
     updateMeta("meta[name='theme-color']", 'name', 'theme-color', siteConfig.pwa_theme_color);
-    updateMeta("meta[property='og:image']", 'property', 'og:image', splashIconUrl);
-    updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', splashIconUrl);
+    updateMeta("meta[property='og:image']", 'property', 'og:image', socialImageUrl);
+    updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', socialImageUrl);
   }, [siteConfig, assetSignature]);
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);

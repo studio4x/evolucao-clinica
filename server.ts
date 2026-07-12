@@ -1785,7 +1785,6 @@ app.get(["/icon-192x192.png", "/api/pwa-icon/192"], async (_req, res) => {
       config.pwa_icon_192_url,
       config.pwa_icon_512_url,
       config.pwa_maskable_icon_url,
-      config.pwa_install_logo_url,
       config.logo_dark_url,
       config.logo_light_url
     ], "/icon-192x192.png");
@@ -1802,7 +1801,6 @@ app.get(["/icon-512x512.png", "/api/pwa-icon/512"], async (_req, res) => {
       config.pwa_icon_512_url,
       config.pwa_icon_192_url,
       config.pwa_maskable_icon_url,
-      config.pwa_install_logo_url,
       config.logo_dark_url,
       config.logo_light_url
     ], "/icon-512x512.png");
@@ -1819,7 +1817,6 @@ app.get(["/icon-512x512-maskable.png", "/api/pwa-icon/maskable"], async (_req, r
       config.pwa_maskable_icon_url,
       config.pwa_icon_512_url,
       config.pwa_icon_192_url,
-      config.pwa_install_logo_url,
       config.logo_dark_url,
       config.logo_light_url
     ], "/icon-512x512-maskable.png");
@@ -1834,7 +1831,6 @@ app.get(["/apple-touch-icon.png", "/api/apple-touch-icon"], async (_req, res) =>
     const config = await getBrandConfigSnapshot();
     return await sendBrandAssetResponse(res, [
       config.pwa_icon_192_url,
-      config.pwa_install_logo_url,
       config.pwa_icon_512_url,
       config.favicon_url,
       config.logo_dark_url,
@@ -1846,45 +1842,20 @@ app.get(["/apple-touch-icon.png", "/api/apple-touch-icon"], async (_req, res) =>
   }
 });
 
-// Rota dinâmica para ícone branco usado no prompt nativo de instalação
+// Rota dinâmica para o ícone usado nos prompts e banners de instalação
 app.get(["/api/pwa-install-icon", "/api/pwa-install-icon.svg"], async (req, res) => {
   try {
     const sizeParam = Number(req.query.size);
     const size = Number.isFinite(sizeParam) && sizeParam > 0 ? Math.min(Math.max(sizeParam, 128), 1024) : 512;
-
-    const { data, error } = await supabaseAdmin
-      .from('settings')
-      .select('api_key')
-      .eq('id', 'brand_settings')
-      .single();
-
-    let logoLightUrl = "";
-    let logoDarkUrl = "";
-    let faviconUrl = "";
-    let pwaIcon192 = "";
-    let pwaIcon512 = "";
-    let pwaInstallLogo = "";
-    let pwaPushNotificationIcon = "";
-
-    if (!error && data && data.api_key) {
-      const parsed = JSON.parse(data.api_key);
-      logoLightUrl = parsed.logo_light_url || "";
-      logoDarkUrl = parsed.logo_dark_url || "";
-      faviconUrl = parsed.favicon_url || "";
-      pwaIcon192 = parsed.pwa_icon_192_url || "";
-      pwaIcon512 = parsed.pwa_icon_512_url || "";
-      pwaInstallLogo = parsed.pwa_install_logo_url || "";
-      pwaPushNotificationIcon = parsed.pwa_push_notification_icon_url || "";
-    }
-
+    const config = await getBrandConfigSnapshot();
     const candidateSources = [
-      pwaPushNotificationIcon,
-      pwaInstallLogo,
-      pwaIcon512,
-      pwaIcon192,
-      faviconUrl,
-      logoDarkUrl,
-      logoLightUrl,
+      config.pwa_install_logo_url,
+      config.pwa_icon_192_url,
+      config.pwa_icon_512_url,
+      config.pwa_maskable_icon_url,
+      config.logo_dark_url,
+      config.logo_light_url,
+      config.favicon_url,
       "/favicon.png"
     ].filter(Boolean) as string[];
 
@@ -1904,6 +1875,22 @@ app.get(["/api/pwa-install-icon", "/api/pwa-install-icon.svg"], async (req, res)
     res.setHeader("Content-Type", "image/svg+xml");
     res.setHeader("Cache-Control", "no-store, max-age=0");
     return res.status(500).send(`<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><rect width="100%" height="100%" fill="#ffffff"/></svg>`);
+  }
+});
+
+app.get("/api/pwa-notification-icon", async (_req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    return await sendBrandAssetResponse(res, [
+      config.pwa_push_notification_icon_url,
+      config.pwa_icon_192_url,
+      config.favicon_url,
+      config.logo_dark_url,
+      config.logo_light_url
+    ], "/favicon.png");
+  } catch (err: any) {
+    console.error("Erro ao obter ícone de notificações do PWA:", err);
+    return res.sendFile(path.join(process.cwd(), "public", "favicon.png"));
   }
 });
 
