@@ -7,6 +7,7 @@ import nodemailer from "nodemailer";
 import { Client as PostgresClient } from "pg";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
+import sharp from "sharp";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const mammoth = require("mammoth");
@@ -709,6 +710,49 @@ function buildWhiteBackgroundIconSvg(imageDataUri: string, size: number) {
       : "",
     `</svg>`
   ].join("");
+}
+
+async function buildBrandedIconPng(
+  candidates: Array<string | undefined | null>,
+  fallbackPublicAsset: string,
+  size: number,
+  paddingRatio = 0.18
+) {
+  const asset = await resolveBrandAssetPayload(candidates, fallbackPublicAsset);
+  const padding = Math.max(16, Math.round(size * paddingRatio));
+  const innerSize = Math.max(1, size - padding * 2);
+
+  const base = sharp({
+    create: {
+      width: size,
+      height: size,
+      channels: 4,
+      background: "#ffffff"
+    }
+  });
+
+  if (!asset) {
+    return base.png().toBuffer();
+  }
+
+  const iconBuffer = await sharp(asset.buffer, {
+    density: 300
+  })
+    .resize(innerSize, innerSize, {
+      fit: "contain",
+      background: { r: 255, g: 255, b: 255, alpha: 0 }
+    })
+    .png()
+    .toBuffer();
+
+  return base
+    .composite([{
+      input: iconBuffer,
+      left: padding,
+      top: padding
+    }])
+    .png()
+    .toBuffer();
 }
 
 function decodeBase64UrlToBuffer(value: string) {
@@ -1781,13 +1825,17 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
 app.get(["/icon-192x192.png", "/api/pwa-icon/192"], async (_req, res) => {
   try {
     const config = await getBrandConfigSnapshot();
-    return await sendBrandAssetResponse(res, [
+    const buffer = await buildBrandedIconPng([
       config.pwa_icon_192_url,
       config.pwa_icon_512_url,
       config.pwa_maskable_icon_url,
       config.logo_dark_url,
       config.logo_light_url
-    ], "/icon-192x192.png");
+    ], "/icon-192x192.png", 192, 0.16);
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.send(buffer);
   } catch (err: any) {
     console.error("Erro ao obter ícone PWA 192x192:", err);
     return res.sendFile(path.join(process.cwd(), "public", "icon-192x192.png"));
@@ -1797,13 +1845,17 @@ app.get(["/icon-192x192.png", "/api/pwa-icon/192"], async (_req, res) => {
 app.get(["/icon-512x512.png", "/api/pwa-icon/512"], async (_req, res) => {
   try {
     const config = await getBrandConfigSnapshot();
-    return await sendBrandAssetResponse(res, [
+    const buffer = await buildBrandedIconPng([
       config.pwa_icon_512_url,
       config.pwa_icon_192_url,
       config.pwa_maskable_icon_url,
       config.logo_dark_url,
       config.logo_light_url
-    ], "/icon-512x512.png");
+    ], "/icon-512x512.png", 512, 0.16);
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.send(buffer);
   } catch (err: any) {
     console.error("Erro ao obter ícone PWA 512x512:", err);
     return res.sendFile(path.join(process.cwd(), "public", "icon-512x512.png"));
@@ -1813,13 +1865,17 @@ app.get(["/icon-512x512.png", "/api/pwa-icon/512"], async (_req, res) => {
 app.get(["/icon-512x512-maskable.png", "/api/pwa-icon/maskable"], async (_req, res) => {
   try {
     const config = await getBrandConfigSnapshot();
-    return await sendBrandAssetResponse(res, [
+    const buffer = await buildBrandedIconPng([
       config.pwa_maskable_icon_url,
       config.pwa_icon_512_url,
       config.pwa_icon_192_url,
       config.logo_dark_url,
       config.logo_light_url
-    ], "/icon-512x512-maskable.png");
+    ], "/icon-512x512-maskable.png", 512, 0.12);
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.send(buffer);
   } catch (err: any) {
     console.error("Erro ao obter ícone PWA mascarável:", err);
     return res.sendFile(path.join(process.cwd(), "public", "icon-512x512-maskable.png"));
@@ -1829,13 +1885,17 @@ app.get(["/icon-512x512-maskable.png", "/api/pwa-icon/maskable"], async (_req, r
 app.get(["/apple-touch-icon.png", "/api/apple-touch-icon"], async (_req, res) => {
   try {
     const config = await getBrandConfigSnapshot();
-    return await sendBrandAssetResponse(res, [
+    const buffer = await buildBrandedIconPng([
       config.pwa_icon_192_url,
       config.pwa_icon_512_url,
       config.favicon_url,
       config.logo_dark_url,
       config.logo_light_url
-    ], "/apple-touch-icon.png");
+    ], "/apple-touch-icon.png", 180, 0.16);
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.send(buffer);
   } catch (err: any) {
     console.error("Erro ao obter apple-touch-icon dinâmico:", err);
     return res.sendFile(path.join(process.cwd(), "public", "apple-touch-icon.png"));
