@@ -30,7 +30,7 @@ export default function PrivacyPolicy() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 10 de julho de 2026
+          Última atualização: 12 de julho de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
@@ -40,6 +40,10 @@ export default function PrivacyPolicy() {
               Esta Política descreve como o <strong>{LEGAL_APP_NAME}</strong> coleta,
               usa, compartilha, armazena e protege informações tratadas na plataforma, em conformidade com a LGPD e demais normas aplicáveis.
               Para fins desta política, atuamos como controlador dos dados relacionados à conta e ao funcionamento do serviço.
+            </p>
+            <p>
+              Esta política também descreve, de forma específica, como tratamos dados obtidos por meio das APIs do Google e do Google Workspace
+              quando o usuário decide conectar sua conta Google ao aplicativo.
             </p>
           </section>
 
@@ -55,6 +59,15 @@ export default function PrivacyPolicy() {
               <li><strong>Dados clínicos inseridos por você:</strong> áudios, transcrições, evoluções, documentos e informações de pacientes cadastradas na plataforma.</li>
               <li><strong>Dados de pagamento e assinatura:</strong> informações de plano, status financeiro e eventos de cobrança gerenciados pelos provedores contratados.</li>
             </ul>
+            <p>
+              Quando você conecta sua conta Google, também podemos acessar dados específicos do Google estritamente necessários para as funções que você ativar no produto.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
+              <li><strong>Autenticação Google:</strong> identificadores básicos da conta, nome, e-mail e foto de perfil, conforme disponibilizados no fluxo de login.</li>
+              <li><strong>Google Drive:</strong> arquivos e pastas criados, selecionados, organizados ou manipulados pelo próprio usuário dentro do fluxo clínico da plataforma.</li>
+              <li><strong>Google Docs:</strong> conteúdo dos documentos vinculados ao prontuário clínico, quando o usuário cria, lê, atualiza, exporta ou sincroniza documentos pela plataforma.</li>
+              <li><strong>Google Calendar:</strong> eventos da agenda em modo somente leitura, apenas quando o usuário ativa a integração de agenda.</li>
+            </ul>
           </section>
 
           <section className="space-y-3">
@@ -64,6 +77,14 @@ export default function PrivacyPolicy() {
               do próprio profissional, oferecer suporte, faturamento, prevenção a fraude, aplicar controles de segurança e uso justo, e manter a
               previsibilidade operacional do serviço.
             </p>
+            <p>
+              No caso dos dados obtidos via Google, o tratamento ocorre apenas para fornecer recursos visíveis e solicitados pelo próprio usuário dentro da interface do aplicativo.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
+              <li><strong>Drive:</strong> criar, localizar, organizar, mover e manter pastas e arquivos clínicos vinculados ao fluxo do app.</li>
+              <li><strong>Docs:</strong> criar prontuários, inserir evoluções, atualizar conteúdo, ler documentos vinculados e gerar exportações ou relatórios relacionados ao fluxo clínico.</li>
+              <li><strong>Calendar:</strong> consultar eventos para relacionar compromissos aos pacientes ativos e apoiar a rotina clínica; não criamos, editamos nem excluímos eventos da agenda.</li>
+            </ul>
           </section>
 
           <section className="space-y-3">
@@ -77,10 +98,31 @@ export default function PrivacyPolicy() {
               As permissões do Google Workspace são usadas somente para criar, ler, organizar e gravar documentos e arquivos na conta do próprio
               usuário, conforme as ações solicitadas dentro do aplicativo.
             </p>
+            <p>
+              Não vendemos dados brutos ou derivados obtidos do Google. Também não transferimos esses dados a terceiros para publicidade,
+              corretagem de dados ou finalidades desconectadas das funcionalidades centrais da plataforma.
+            </p>
+            <p>
+              Quando o usuário aciona recursos de IA ou automação, trechos estritamente necessários de áudios, transcrições, evoluções ou documentos
+              podem ser processados por provedores técnicos contratados para executar a funcionalidade solicitada pelo próprio usuário.
+            </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Cookies, sessão e retenção</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">5. Proteção e segurança dos dados</h2>
+            <p>
+              Adotamos medidas técnicas e organizacionais para proteger os dados contra acesso não autorizado, alteração, perda ou divulgação indevida.
+              Isso inclui controles de autenticação, segregação lógica por usuário, uso de tokens autorizados, comunicação segura com APIs e
+              controles operacionais voltados à integridade e à confidencialidade das informações.
+            </p>
+            <p>
+              O acesso humano aos dados é limitado às situações estritamente necessárias para suporte técnico, investigação de falhas, prevenção de abuso,
+              cumprimento de obrigação legal ou solicitação explícita do próprio usuário.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Cookies, sessão, retenção e exclusão</h2>
             <p>
               Usamos cookies e armazenamento local estritamente necessários para manter a sessão, lembrar preferências, registrar o estado de
               autenticação e melhorar a experiência do app. Não utilizamos cookies para publicidade comportamental.
@@ -89,14 +131,20 @@ export default function PrivacyPolicy() {
               Os dados são mantidos enquanto a conta estiver ativa e pelo período necessário para cumprir obrigações legais, resolver disputas,
               preservar a segurança e atender solicitações do próprio usuário.
             </p>
+            <p>
+              O usuário pode solicitar a exclusão da conta e dos dados associados pelo painel da plataforma ou por solicitação de suporte.
+              Quando aplicável, também pode revogar diretamente na própria conta Google as permissões concedidas ao aplicativo.
+            </p>
+            <p>
+              A revogação do acesso Google interrompe as operações futuras dependentes dessa autorização. A exclusão da conta ou dos dados tratados
+              pela plataforma seguirá os prazos técnicos e legais aplicáveis ao ambiente operacional do serviço.
+            </p>
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Segurança e direitos do titular</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">7. Direitos do titular</h2>
             <p>
-              Adotamos medidas técnicas e organizacionais para proteger os dados contra acesso não autorizado, alteração, perda ou divulgação
-              indevida. Você pode solicitar acesso, correção, portabilidade, anonimização, eliminação ou revogação de consentimento,
-              quando aplicável.
+              Você pode solicitar acesso, correção, portabilidade, anonimização, eliminação ou revogação de consentimento, quando aplicável.
             </p>
             <p>
               O profissional pode revogar permissões concedidas ao Google diretamente na conta Google e também solicitar suporte para remoção
@@ -105,7 +153,21 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">7. Contato</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">8. Dados do Google Workspace e uso limitado</h2>
+            <p>
+              O uso de dados brutos ou derivados recebidos das APIs do Google Workspace estará em conformidade com a Política de Dados do Usuário dos
+              Serviços de API do Google, incluindo os requisitos de Uso Limitado (Limited Use).
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
+              <li>Esses dados são usados somente para entregar ou aprimorar recursos voltados ao usuário e claramente apresentados na interface do aplicativo.</li>
+              <li>Esses dados não são vendidos e não são usados para publicidade direcionada.</li>
+              <li>O aplicativo não utiliza dados das APIs do Google Workspace para desenvolver, melhorar ou treinar modelos próprios generalizados de IA ou ML.</li>
+              <li>Se recursos de IA forem acionados pelo usuário, o tratamento ocorrerá apenas na medida necessária para executar a função solicitada dentro da plataforma.</li>
+            </ul>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">9. Contato</h2>
             <p>
               Para dúvidas sobre esta política, solicitações relacionadas à privacidade ou exercício de direitos, entre em contato com
               a equipe do <strong>{LEGAL_APP_NAME}</strong> pelo e-mail{' '}
