@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useEffect, useRef, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import { useAuthStore } from './store/authStore';
@@ -9,31 +9,31 @@ import { Download, X } from 'lucide-react';
 import Layout from './components/Layout';
 
 // Componentes carregados de forma preguiçosa (Lazy Loading / Code Splitting)
-const Login = lazy(() => import('./pages/Login'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Patients = lazy(() => import('./pages/Patients'));
-const PatientForm = lazy(() => import('./pages/PatientForm'));
-const PatientDetail = lazy(() => import('./pages/PatientDetail'));
-const NewEvolution = lazy(() => import('./pages/NewEvolution'));
-const History = lazy(() => import('./pages/History'));
-const ShareTarget = lazy(() => import('./pages/ShareTarget'));
-const Tutorial = lazy(() => import('./pages/Tutorial'));
-const Subscription = lazy(() => import('./pages/Subscription'));
-const Profile = lazy(() => import('./pages/Profile'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const SupportTickets = lazy(() => import('./pages/SupportTickets'));
-const SupportTicketDetail = lazy(() => import('./pages/SupportTicketDetail'));
-const Migration = lazy(() => import('./pages/Migration'));
-const PendingApproval = lazy(() => import('./pages/PendingApproval'));
-const Onboarding = lazy(() => import('./pages/Onboarding'));
-const CheckoutPage = lazy(() => import('./pages/CheckoutPage'));
-const SuccessPage = lazy(() => import('./pages/SuccessPage'));
-const AdminPanel = lazy(() => import('./pages/AdminPanel'));
-const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
-const TermsOfService = lazy(() => import('./pages/TermsOfService'));
-const DeleteAccount = lazy(() => import('./pages/DeleteAccount'));
-const PublicReportView = lazy(() => import('./pages/PublicReportView'));
-const Feedback = lazy(() => import('./pages/Feedback'));
+const Login = lazyWithRetry(() => import('./pages/Login'), 'Login');
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'Dashboard');
+const Patients = lazyWithRetry(() => import('./pages/Patients'), 'Patients');
+const PatientForm = lazyWithRetry(() => import('./pages/PatientForm'), 'PatientForm');
+const PatientDetail = lazyWithRetry(() => import('./pages/PatientDetail'), 'PatientDetail');
+const NewEvolution = lazyWithRetry(() => import('./pages/NewEvolution'), 'NewEvolution');
+const History = lazyWithRetry(() => import('./pages/History'), 'History');
+const ShareTarget = lazyWithRetry(() => import('./pages/ShareTarget'), 'ShareTarget');
+const Tutorial = lazyWithRetry(() => import('./pages/Tutorial'), 'Tutorial');
+const Subscription = lazyWithRetry(() => import('./pages/Subscription'), 'Subscription');
+const Profile = lazyWithRetry(() => import('./pages/Profile'), 'Profile');
+const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'Notifications');
+const SupportTickets = lazyWithRetry(() => import('./pages/SupportTickets'), 'SupportTickets');
+const SupportTicketDetail = lazyWithRetry(() => import('./pages/SupportTicketDetail'), 'SupportTicketDetail');
+const Migration = lazyWithRetry(() => import('./pages/Migration'), 'Migration');
+const PendingApproval = lazyWithRetry(() => import('./pages/PendingApproval'), 'PendingApproval');
+const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'), 'Onboarding');
+const CheckoutPage = lazyWithRetry(() => import('./pages/CheckoutPage'), 'CheckoutPage');
+const SuccessPage = lazyWithRetry(() => import('./pages/SuccessPage'), 'SuccessPage');
+const AdminPanel = lazyWithRetry(() => import('./pages/AdminPanel'), 'AdminPanel');
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'), 'PrivacyPolicy');
+const TermsOfService = lazyWithRetry(() => import('./pages/TermsOfService'), 'TermsOfService');
+const DeleteAccount = lazyWithRetry(() => import('./pages/DeleteAccount'), 'DeleteAccount');
+const PublicReportView = lazyWithRetry(() => import('./pages/PublicReportView'), 'PublicReportView');
+const Feedback = lazyWithRetry(() => import('./pages/Feedback'), 'Feedback');
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
@@ -43,6 +43,7 @@ import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
+import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 
 const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
@@ -182,6 +183,10 @@ export default function App() {
   const professionalChannelRef = useRef<any>(null);
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
+
+  useEffect(() => {
+    clearLazyRetryQueryParam();
+  }, []);
 
   useEffect(() => {
     const updateLink = (selector: string, rel: string, href: string, type?: string, sizes?: string) => {
