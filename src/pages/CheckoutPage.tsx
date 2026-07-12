@@ -10,6 +10,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 import { trackBeginCheckout } from '../services/analytics';
+import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
 
 
 const DEFAULT_PLANS = [
@@ -188,7 +189,13 @@ export default function CheckoutPage() {
         }
       });
 
-      if (functionError) throw functionError;
+      if (functionError) {
+        const functionMessage = await resolveSupabaseFunctionErrorMessage(
+          functionError,
+          "Erro no processamento do pagamento."
+        );
+        throw new Error(functionMessage);
+      }
       if (!data || !data.success) {
         throw new Error(data?.error || "Erro no processamento do pagamento.");
       }

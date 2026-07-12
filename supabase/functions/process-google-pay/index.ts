@@ -130,6 +130,109 @@ function formatCurrencyLabel(amount: number, currency = "BRL") {
   }
 }
 
+const stripeFailureTranslations: Record<string, string> = {
+  incorrect_number: "O numero do cartao vinculado ao Google Pay foi rejeitado. Revise o cartao salvo na carteira e tente novamente.",
+  invalid_number: "O numero do cartao vinculado ao Google Pay foi considerado invalido pela operadora.",
+  expired_card: "O cartao vinculado ao Google Pay esta expirado. Atualize o cartao e tente novamente.",
+  insufficient_funds: "O cartao vinculado ao Google Pay nao possui limite ou saldo suficiente para concluir a cobranca.",
+  do_not_honor: "A operadora recusou a cobranca do cartao vinculado ao Google Pay. Tente outro cartao ou contate o banco.",
+  generic_decline: "A operadora recusou a cobranca do cartao vinculado ao Google Pay.",
+  processing_error: "A operadora nao conseguiu processar a cobranca agora. Tente novamente em alguns minutos.",
+  card_not_supported: "O cartao vinculado ao Google Pay nao oferece suporte para esta cobranca recorrente.",
+};
+
+function buildStripeFailureMessage(code?: string | null, rawMessage?: string | null) {
+  if (code && stripeFailureTranslations[code]) {
+    return stripeFailureTranslations[code];
+  }
+
+  if (rawMessage) {
+    return `A Stripe recusou a cobranca inicial: ${rawMessage}`;
+  }
+
+  return "Ocorreu uma falha na cobranca do cartao. Verifique os dados de pagamento e tente novamente.";
+}
+
+async function getStripeFailureDetails(
+  stripe: Stripe,
+  subscription: any,
+  latestInvoice: any,
+) {
+  const invoiceId = typeof latestInvoice === "string"
+    ? latestInvoice
+    : latestInvoice?.id || null;
+
+  let failureCode: string | null = null;
+  let failureMessage: string | null = null;
+
+  if (invoiceId) {
+    try {
+      const invoice = await stripe.invoices.retrieve(invoiceId, {
+        expand: ["payment_intent.latest_charge"],
+      });
+      const paymentIntent = typeof invoice.payment_intent === "object" && invoice.payment_intent
+        ? invoice.payment_intent as any
+        : null;
+      failureCode =
+        paymentIntent?.last_payment_error?.decline_code ||
+        paymentIntent?.last_payment_error?.code ||
+        paymentIntent?.latest_charge?.failure_code ||
+        null;
+      failureMessage =
+        paymentIntent?.last_payment_error?.message ||
+        paymentIntent?.latest_charge?.failure_message ||
+        null;
+    } catch (invoiceError) {
+      console.error("[process-google-pay] Falha ao consultar invoice para diagnostico:", invoiceError);
+    }
+  }
+
+  if (failureCode || failureMessage) {
+    return { failureCode, failureMessage };
+  }
+
+  try {
+    const events = await stripe.events.list({
+      limit: 25,
+      created: {
+        gte: Math.max((subscription.created || Math.floor(Date.now() / 1000)) - 300, 0),
+      },
+    });
+
+    for (const event of events.data) {
+      const eventObject = event.data?.object as any;
+      const belongsToSubscription =
+        eventObject?.subscription === subscription.id ||
+        eventObject?.id === subscription.id ||
+        eventObject?.invoice === invoiceId ||
+        eventObject?.customer === subscription.customer;
+
+      if (!belongsToSubscription) continue;
+
+      if (event.type === "payment_intent.payment_failed") {
+        failureCode =
+          eventObject?.last_payment_error?.decline_code ||
+          eventObject?.last_payment_error?.code ||
+          failureCode;
+        failureMessage =
+          eventObject?.last_payment_error?.message ||
+          failureMessage;
+        break;
+      }
+
+      if (event.type === "charge.failed") {
+        failureCode = eventObject?.failure_code || failureCode;
+        failureMessage = eventObject?.failure_message || failureMessage;
+        break;
+      }
+    }
+  } catch (eventsError) {
+    console.error("[process-google-pay] Falha ao consultar eventos da Stripe para diagnostico:", eventsError);
+  }
+
+  return { failureCode, failureMessage };
+}
+
 async function recordEmailDelivery(supabaseAdmin: any, payload: {
   userId: string;
   recipientEmail: string;
@@ -386,7 +489,11 @@ serve(async (req) => {
     const amountPaid = latestInvoice?.amount_paid ? latestInvoice.amount_paid / 100 : Number(planData.price || 0);
 
     if (status === "incomplete") {
-      throw new Error("Ocorreu uma falha na cobrança do cartão. Verifique os dados de pagamento e tente novamente.");
+      const { failureCode, failureMessage } = await getStripeFailureDetails(stripe, subscription, latestInvoice);
+      await stripe.subscriptions.cancel(subscription.id).catch((cancelError) => {
+        console.error("[process-google-pay] Falha ao cancelar assinatura incompleta:", cancelError);
+      });
+      throw new Error(buildStripeFailureMessage(failureCode, failureMessage));
     }
 
     // 7. Atualizar as informações da assinatura na tabela 'professionals' do Supabase

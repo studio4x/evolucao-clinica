@@ -7,6 +7,7 @@ import GooglePayButton from '@google-pay/button-react';
 import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
 import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
+import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
 
 const DEFAULT_PLANS = [
   {
@@ -500,7 +501,13 @@ export default function Subscription() {
         }
       });
 
-      if (functionError) throw functionError;
+      if (functionError) {
+        const functionMessage = await resolveSupabaseFunctionErrorMessage(
+          functionError,
+          "Ocorreu um erro no processamento do pagamento."
+        );
+        throw new Error(functionMessage);
+      }
       if (!data || !data.success) {
         throw new Error(data?.error || "Ocorreu um erro no processamento do pagamento.");
       }
