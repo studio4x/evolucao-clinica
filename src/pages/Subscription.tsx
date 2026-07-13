@@ -15,7 +15,9 @@ const DEFAULT_PLANS = [
     name: 'Plano Mensal',
     description: 'Flexibilidade e controle mês a mês',
     price: 39.00,
+    original_price: null,
     equivalent_monthly_price: null,
+    launch_offer_text: null,
     features: [
       'Pacientes ilimitados',
       'Transcrições de áudio com uso justo de até 20 horas por mês',
@@ -38,7 +40,9 @@ const DEFAULT_PLANS = [
     name: 'Plano Anual',
     description: 'Melhor custo-benefício anualizado',
     price: 199.00,
+    original_price: null,
     equivalent_monthly_price: 16.58,
+    launch_offer_text: null,
     features: [
       'Tudo do plano mensal',
       'Economia de 57% em relação ao plano mensal',
@@ -59,10 +63,12 @@ type SubscriptionPlanLike = {
   name?: string;
   description?: string;
   price?: number;
+  original_price?: number | null;
   features?: string[];
   equivalent_monthly_price?: number | null;
   tag_text?: string | null;
   discount_text?: string | null;
+  launch_offer_text?: string | null;
   button_text_simulate?: string | null;
 };
 
@@ -732,6 +738,9 @@ export default function Subscription() {
             const isCurrentPlan = subscriptionPlan === plan.id && !isExpired;
             const isYearly = plan.id === 'yearly';
             const formattedPrice = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plan.price);
+            const formattedOriginalPrice = plan.original_price
+              ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plan.original_price)
+              : null;
             const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
             
             return (
@@ -758,6 +767,9 @@ export default function Subscription() {
                         <span>{plan.name}</span>
                       </h3>
                       {plan.description && <p className="text-xs text-brand-text-muted mt-1">{plan.description}</p>}
+                      {plan.launch_offer_text && (
+                        <p className="text-xs font-medium text-brand-primary mt-2">{plan.launch_offer_text}</p>
+                      )}
                     </div>
                     {plan.tag_text && (
                       <span className={`p-2 rounded-xl font-semibold text-xs border ${
@@ -770,7 +782,14 @@ export default function Subscription() {
                     )}
                   </div>
 
-                  <div className="mt-6 flex items-baseline">
+                  <div className="mt-6">
+                    {formattedOriginalPrice && (
+                      <p className="text-sm text-gray-400 line-through mb-1">
+                        {formattedOriginalPrice}{periodLabel}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-baseline">
                     <span className="text-3xl font-display font-extrabold text-brand-primary">{formattedPrice}</span>
                     <span className="text-brand-text-muted text-sm ml-1">{periodLabel}</span>
                   </div>

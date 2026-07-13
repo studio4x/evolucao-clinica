@@ -1481,9 +1481,11 @@ export default function AdminPanel() {
             name: plan.name,
             description: plan.description || '',
             price: plan.price.toString(),
+            original_price: plan.original_price ? plan.original_price.toString() : '',
             equivalent_monthly_price: plan.equivalent_monthly_price ? plan.equivalent_monthly_price.toString() : '',
             tag_text: plan.tag_text || '',
             discount_text: plan.discount_text || '',
+            launch_offer_text: plan.launch_offer_text || '',
             button_text_simulate: plan.button_text_simulate || '',
             stripe_sandbox_price_id: plan.stripe_sandbox_price_id || '',
             stripe_prod_price_id: plan.stripe_prod_price_id || '',
@@ -1517,6 +1519,11 @@ export default function AdminPanel() {
     try {
       const priceVal = parseFloat(updatedPlanData.price);
       if (isNaN(priceVal)) throw new Error("Preço inválido.");
+
+      const originalPriceVal = updatedPlanData.original_price ? parseFloat(updatedPlanData.original_price) : null;
+      if (updatedPlanData.original_price && isNaN(originalPriceVal as number)) {
+        throw new Error("Preço original inválido.");
+      }
       
       const equivPriceVal = updatedPlanData.equivalent_monthly_price ? parseFloat(updatedPlanData.equivalent_monthly_price) : null;
       if (updatedPlanData.equivalent_monthly_price && isNaN(equivPriceVal as number)) {
@@ -1534,9 +1541,11 @@ export default function AdminPanel() {
           name: updatedPlanData.name,
           description: updatedPlanData.description || null,
           price: priceVal,
+          original_price: originalPriceVal,
           equivalent_monthly_price: equivPriceVal,
           tag_text: updatedPlanData.tag_text || null,
           discount_text: updatedPlanData.discount_text || null,
+          launch_offer_text: updatedPlanData.launch_offer_text || null,
           button_text_simulate: updatedPlanData.button_text_simulate,
           stripe_sandbox_price_id: updatedPlanData.stripe_sandbox_price_id || null,
           stripe_prod_price_id: updatedPlanData.stripe_prod_price_id || null,
@@ -4058,7 +4067,7 @@ export default function AdminPanel() {
                                 />
                               </div>
 
-                              <div className="grid grid-cols-3 gap-3">
+                              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-bold text-brand-text uppercase block">Preço (R$)</label>
                                   <input
@@ -4066,6 +4075,16 @@ export default function AdminPanel() {
                                     value={editData.price || ''}
                                     placeholder="Ex: 49.90"
                                     onChange={(e) => handlePlanFieldChange(plan.id, 'price', e.target.value)}
+                                    className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium font-mono"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-brand-text uppercase block">Preço Original (R$)</label>
+                                  <input
+                                    type="text"
+                                    value={editData.original_price || ''}
+                                    placeholder="Ex: 59.00"
+                                    onChange={(e) => handlePlanFieldChange(plan.id, 'original_price', e.target.value)}
                                     className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium font-mono"
                                   />
                                 </div>
@@ -4089,6 +4108,17 @@ export default function AdminPanel() {
                                     className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
                                   />
                                 </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-brand-text uppercase block">Texto Promocional / Lançamento</label>
+                                <input
+                                  type="text"
+                                  value={editData.launch_offer_text || ''}
+                                  placeholder="Ex: Condição especial de lançamento por tempo limitado."
+                                  onChange={(e) => handlePlanFieldChange(plan.id, 'launch_offer_text', e.target.value)}
+                                  className="w-full px-3 py-2 border border-brand-border rounded-xl text-xs outline-none focus:border-brand-primary bg-white font-medium"
+                                />
                               </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -59,8 +59,10 @@ const DEFAULT_PLANS = [
     id: 'monthly',
     name: 'Plano Mensal',
     price: 39.00,
+    original_price: null,
     equivalent_monthly_price: null,
     discount_text: null,
+    launch_offer_text: null,
     tag_text: 'Mês a Mês',
     description: 'Flexibilidade para experimentar sem amarras contratuais.',
     features: [
@@ -81,8 +83,10 @@ const DEFAULT_PLANS = [
     id: 'yearly',
     name: 'Plano Anual',
     price: 199.00,
+    original_price: null,
     equivalent_monthly_price: 16.58,
     discount_text: '57% OFF',
+    launch_offer_text: null,
     tag_text: 'Popular',
     description: 'A alternativa perfeita para consolidar sua economia anual.',
     features: [
@@ -1031,6 +1035,9 @@ export default function LandingPage() {
             {(plans.length > 0 ? plans : DEFAULT_PLANS).map((plan) => {
               const isYearly = plan.id === 'yearly';
               const formattedPrice = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.price);
+              const formattedOriginalPrice = plan.original_price
+                ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.original_price)
+                : null;
               const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
               
               return (
@@ -1062,7 +1069,19 @@ export default function LandingPage() {
                       <p className="text-brand-text-muted text-sm mb-6">
                         {plan.description || (isYearly ? 'A alternativa perfeita para consolidar sua economia anual.' : 'Flexibilidade para experimentar sem amarras contratuais.')}
                       </p>
+
+                      {plan.launch_offer_text && (
+                        <p className="text-xs font-medium text-brand-primary/85 mb-4">
+                          {plan.launch_offer_text}
+                        </p>
+                      )}
                       
+                      {formattedOriginalPrice && (
+                        <p className="text-sm text-gray-400 line-through mb-1">
+                          R$ {formattedOriginalPrice}{periodLabel}
+                        </p>
+                      )}
+
                       <div className={`flex items-baseline ${isYearly && plan.equivalent_monthly_price ? 'mb-1' : 'mb-6'}`}>
                         <span className="text-sm font-bold text-brand-text-muted mr-1">R$</span>
                         <span className="text-4xl font-extrabold font-display text-brand-primary">{formattedPrice}</span>
@@ -1071,7 +1090,7 @@ export default function LandingPage() {
                       
                       {isYearly && plan.equivalent_monthly_price && (
                         <p className="text-xs text-brand-accent-hover font-bold mb-6">
-                          Equivalente a R$ {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.equivalent_monthly_price)} por mês pago anualmente
+                          Equivale a apenas R$ {new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.equivalent_monthly_price)} por mês
                         </p>
                       )}
 
