@@ -1,7 +1,7 @@
 import React from 'react';
 import { ArrowLeft, Shield } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { LEGAL_APP_NAME, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
+import { LEGAL_APP_NAME, LEGAL_SITE_URL, LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ export default function PrivacyPolicy() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 12 de julho de 2026
+          Última atualização: 13 de julho de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
@@ -134,6 +134,18 @@ export default function PrivacyPolicy() {
             <p>
               O usuário pode solicitar a exclusão da conta e dos dados associados pelo painel da plataforma ou por solicitação de suporte.
               Quando aplicável, também pode revogar diretamente na própria conta Google as permissões concedidas ao aplicativo.
+            </p>
+            <p>
+              A página pública de exclusão de dados também está disponível em{' '}
+              <a
+                href={`${LEGAL_SITE_URL}/delete-account`}
+                className="text-brand-primary hover:underline font-semibold break-all"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {LEGAL_SITE_URL}/delete-account
+              </a>
+              .
             </p>
             <p>
               A revogação do acesso Google interrompe as operações futuras dependentes dessa autorização. A exclusão da conta ou dos dados tratados
