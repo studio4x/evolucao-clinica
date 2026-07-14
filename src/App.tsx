@@ -572,6 +572,7 @@ export default function App() {
           <Route path="/public/reports/:reportId" element={<PublicReportView />} />
           <Route path="/jornada" element={<PublicJourneyIndex />} />
           <Route path="/jornada/:slug" element={<PublicJourneyIndex />} />
+          <Route path="/jornada-15-dias" element={<PublicJourneyIndex />} />
           
           {/* Admin Panel Routes */}
           <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
