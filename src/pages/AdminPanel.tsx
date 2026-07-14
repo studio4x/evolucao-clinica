@@ -16,6 +16,7 @@ import { completeOnboarding } from '../utils/onboarding';
 import AdminFaqCrud from '../components/support/AdminFaqCrud';
 import MigrationRequestsAdmin from '../components/admin/MigrationRequestsAdmin';
 import FeedbackAdmin from '../components/admin/FeedbackAdmin';
+import JourneyAdmin from '../components/admin/JourneyAdmin';
 
 interface Professional {
   id: string;
@@ -156,6 +157,7 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/tracking')) return 'tracking';
     if (normalizedPath.endsWith('/faq')) return 'faq';
     if (normalizedPath.endsWith('/feedback')) return 'feedback';
+    if (normalizedPath.endsWith('/jornada')) return 'jornada';
     return 'professionals'; // default
   };
 
@@ -177,10 +179,11 @@ export default function AdminPanel() {
     { key: 'tracking', label: 'Rastreamento', icon: Code },
     { key: 'faq', label: 'Gerenciar FAQ', icon: HelpCircle },
     { key: 'feedback', label: 'Sugestões & Avaliações', icon: MessageSquare },
+    { key: 'jornada', label: 'Jornada 15 dias', icon: Calendar },
     { key: 'profile', label: 'Meu Perfil', icon: User }
   ] as const;
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate(tokenUsageGeneralPath);
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -198,6 +201,7 @@ export default function AdminPanel() {
     else if (tab === 'tracking') navigate('/admin/tracking');
     else if (tab === 'faq') navigate('/admin/faq');
     else if (tab === 'feedback') navigate('/admin/feedback');
+    else if (tab === 'jornada') navigate('/admin/jornada');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -5464,6 +5468,10 @@ export default function AdminPanel() {
                   </div>
                   <AdminFaqCrud />
                 </div>
+              </div>
+            ) : activeTab === 'jornada' ? (
+              <div className="space-y-6 animate-fadeIn">
+                <JourneyAdmin />
               </div>
             ) : activeTab === 'feedback' ? (
               <div className="space-y-6">

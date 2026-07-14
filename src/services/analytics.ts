@@ -86,3 +86,26 @@ export const trackBeginCheckout = (planId: string, planName: string, price: numb
     });
   }
 };
+
+/**
+ * Dispara eventos de analytics customizados para o módulo Jornada de Conteúdos.
+ */
+export const trackJourneyEvent = (eventName: string, params?: Record<string, any>) => {
+  if (typeof window === 'undefined') return;
+
+  // 1. Google Analytics (via window.gtag se disponível)
+  if (typeof window.gtag === 'function') {
+    window.gtag('event', eventName, params);
+  }
+
+  // 2. dataLayer (para Google Tag Manager)
+  const dl = (window.dataLayer = window.dataLayer || []);
+  dl.push({
+    event: eventName,
+    ...params
+  });
+
+  if (import.meta.env.DEV) {
+    console.log(`[Analytics] Evento da Jornada '${eventName}' disparado:`, params);
+  }
+};

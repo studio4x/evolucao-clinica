@@ -25,7 +25,7 @@ def twaManifest = [
     hostName: 'evolucaoclinica.app.br', // The domain being opened in the TWA.
     launchUrl: '/?utm_source=pwa', // The start path for the TWA. Must be relative to the domain.
     name: 'Evolução Clínica', // The application name.
-    launcherName: 'Evolucao', // The name shown on the Android Launcher.
+    launcherName: 'Evolução Clínica', // The name shown on the Android Launcher.
     themeColor: '#005C13', // The color used for the status bar.
     themeColorDark: '#000000', // The color used for the dark status bar.
     navigationColor: '#000000', // The color used for the navigation bar.
@@ -51,14 +51,14 @@ def twaManifest = [
 ]
 
 android {
-    compileSdkVersion 35
+    compileSdkVersion 36
     namespace "com.evolucaoclinica.app"
     defaultConfig {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 13
-        versionName "13"
+        versionCode 15
+        versionName "15"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -213,10 +213,4 @@ dependencies {
     
         implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.6.2'
     
-}
-
-configurations.all {
-    resolutionStrategy {
-        force 'androidx.browser:browser:1.8.0'
-    }
 }

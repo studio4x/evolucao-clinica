@@ -341,6 +341,10 @@ BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-trial-expiration-notices-job') THEN
     PERFORM cron.unschedule('send-trial-expiration-notices-job');
   END IF;
+
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'publish-journey-contents-job') THEN
+    PERFORM cron.unschedule('publish-journey-contents-job');
+  END IF;
 END $$;
 
 SELECT cron.schedule(
@@ -359,6 +363,16 @@ SELECT cron.schedule(
   $$
   SELECT net.http_get(
     url := '${PRODUCTION_ORIGIN}/api/cron/send-trial-expiration-notices?secret=${cronSecretParam}'
+  );
+  $$
+);
+
+SELECT cron.schedule(
+  'publish-journey-contents-job',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_get(
+    url := '${PRODUCTION_ORIGIN}/api/cron/publish-journey-contents?secret=${cronSecretParam}'
   );
   $$
 );
@@ -3583,6 +3597,84 @@ app.get("/api/cron/send-trial-expiration-notices", async (req: any, res) => {
     res.status(500).json({ error: err.message || "Erro ao processar expiração do trial." });
   }
 });
+
+// 4.3. Cron para Publicar Conteúdos Agendados da Jornada (America/Sao_Paulo)
+app.get("/api/cron/publish-journey-contents", async (req: any, res) => {
+  const authHeader = req.headers.authorization;
+  const cronSecret = CRON_SECRET;
+
+  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+    return res.status(401).json({ error: "Nao autorizado" });
+  }
+
+  try {
+    const tzOffset = -3;
+    const now = new Date();
+    const brazilTime = new Date(now.getTime() + (tzOffset * 60 * 60 * 1000));
+    const currentDateStr = brazilTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentHour = brazilTime.getUTCHours();
+    const currentMinute = brazilTime.getUTCMinutes();
+    const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}:00`;
+
+    console.log(`[Cron Jornada] Iniciando publicação automática. Horário Brasil: ${currentDateStr} ${currentTimeStr}`);
+
+    // Buscar conteúdos da jornada que estão agendados (scheduled)
+    const { data: contentsToPublish, error: selectError } = await supabaseAdmin
+      .from("journey_contents")
+      .select("id, title, day_number, publication_date, publication_time")
+      .eq("publication_status", "scheduled")
+      .lte("publication_date", currentDateStr);
+
+    if (selectError) {
+      throw selectError;
+    }
+
+    if (!contentsToPublish || contentsToPublish.length === 0) {
+      console.log("[Cron Jornada] Nenhum conteúdo agendado encontrado para a data atual ou anterior.");
+      return res.json({ publishedCount: 0 });
+    }
+
+    // Filtrar os que realmente passaram do horário atual
+    const toPublish = contentsToPublish.filter(c => {
+      if (c.publication_date < currentDateStr) return true;
+      if (c.publication_date === currentDateStr) {
+        return c.publication_time <= currentTimeStr;
+      }
+      return false;
+    });
+
+    if (toPublish.length === 0) {
+      console.log("[Cron Jornada] Nenhum conteúdo agendado passou do horário de publicação ainda.");
+      return res.json({ publishedCount: 0 });
+    }
+
+    console.log(`[Cron Jornada] Publicando ${toPublish.length} conteúdos...`);
+
+    let publishedCount = 0;
+    for (const item of toPublish) {
+      const { error: updateError } = await supabaseAdmin
+        .from("journey_contents")
+        .update({
+          publication_status: "published",
+          published_at: new Date().toISOString()
+        })
+        .eq("id", item.id);
+
+      if (updateError) {
+        console.error(`[Cron Jornada] Erro ao publicar item ${item.title} (Dia ${item.day_number}):`, updateError);
+      } else {
+        console.log(`[Cron Jornada] Publicado com sucesso: ${item.title} (Dia ${item.day_number})`);
+        publishedCount++;
+      }
+    }
+
+    return res.json({ publishedCount });
+  } catch (error: any) {
+    console.error("[Cron Jornada] Erro no job de publicação:", error);
+    return res.status(500).json({ error: error.message || "Erro interno" });
+  }
+});
+
 
 // 5. Testar Servidor SMTP (Apenas Admin)
 app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => {
