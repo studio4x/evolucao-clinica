@@ -31,7 +31,7 @@ import {
   AlertCircle,
   ChevronUp
 } from 'lucide-react';
-import { APP_VERSION } from '../components/layout/AppVersion';
+import { APP_VERSION, PLAY_STORE_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
@@ -1274,7 +1274,7 @@ export default function LandingPage() {
           </div>
           
           <div className="inline-block px-3 py-1 bg-white rounded-full border border-brand-border shadow-sm">
-            <span className="text-[10px]">Build {APP_VERSION}</span>
+            <span className="text-[10px]">Build {APP_VERSION} (App v{PLAY_STORE_VERSION})</span>
           </div>
         </div>
       </footer>
