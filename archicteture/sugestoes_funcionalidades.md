@@ -172,10 +172,18 @@ graph TD
 ## 👥 Fase 6: Colaboração Multidisciplinar e Farmacologia (Visão de Ecossistema)
 *Foco: Interação com outros profissionais e acompanhamento clínico médico.*
 
+### 6.0 Plataforma Empresarial para Clínicas — Macrofuncionalidade
+* **Status:** Planejado. Não implementado.
+* **Descrição:** Criar um contexto empresarial com plano de assinatura baseado em preço fixo + licenças, papel de usuário `empresarial`, gestão centralizada da equipe e um diretório de pacientes compartilhados dentro da clínica.
+* **Regra essencial:** O mesmo paciente poderá ser atribuído a vários profissionais, mas cada profissional terá sua própria evolução, com autoria, assinatura, permissões e histórico isolados.
+* **Especificação detalhada:** Consulte [`docs/roadmap-empresarial.md`](../docs/roadmap-empresarial.md), que define modelo de dados, permissões, cobrança, RLS, fluxos, telas, auditoria, fases e critérios de aceite.
+* **Valor:** Transforma a plataforma individual em um ecossistema operacional para clínicas sem abrir indiscriminadamente o conteúdo clínico dos profissionais.
+
 ### 6.1 Compartilhamento Seguro Multidisciplinar (Equipe de Cuidados)
+* **Status:** Fase posterior ao workspace empresarial. O primeiro ciclo cobre profissionais da mesma clínica; compartilhamento entre clínicas exige consentimento e governança adicionais.
 *   **Descrição:** Casos complexos de pacientes (como no autismo ou reabilitação) costumam ser atendidos por equipes multidisciplinares (Psicólogo, TO, Fonoaudiólogo, Psiquiatra).
 *   **Funcionamento:**
-    *   Permitir que terapeutas de diferentes clínicas que atendem o mesmo paciente compartilhem (com autorização expressa dos pais/paciente) metas específicas do PDI e resumos de evolução.
+    *   Em uma evolução futura, permitir que profissionais de organizações diferentes compartilhem, com autorização expressa dos responsáveis/paciente, apenas metas específicas do PDI e resumos de evolução previamente definidos.
 *   **Valor:** Integração real do tratamento, permitindo que o fonoaudiólogo saiba o que o psicólogo trabalhou naquela semana e vice-versa.
 
 ### 6.2 Separação de Vozes na Transcrição (Diariação de Oradores)
