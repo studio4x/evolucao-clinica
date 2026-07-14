@@ -1260,13 +1260,13 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                   <thead>
                     <tr className="border-b border-brand-border bg-brand-bg text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
                       <th className="w-[7%] px-2 py-4 text-center">Dia</th>
-                      <th className="w-[18%] px-2 py-4">Título / Slug</th>
+                      <th className="w-[20%] px-2 py-4">Título / Slug</th>
                       <th className="w-[10%] px-2 py-4">Status</th>
-                      <th className="w-[17%] px-2 py-4">Agendamento</th>
+                      <th className="w-[14%] px-2 py-4">Agendamento</th>
                       <th className="w-[8%] px-2 py-4">Formato</th>
-                      <th className="w-[14%] px-2 py-4">CTA</th>
-                      <th className="w-[10%] px-2 py-4 text-right whitespace-nowrap">Reordenar</th>
-                      <th className="w-[16%] px-2 py-4 text-right whitespace-nowrap">Ações</th>
+                      <th className="w-[15%] px-2 py-4">CTA</th>
+                      <th className="w-[8%] px-2 py-4 text-right whitespace-nowrap">Reordenar</th>
+                      <th className="w-[18%] px-2 py-4 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
@@ -1302,7 +1302,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                               </span>
                             </div>
                           ) : item.published_at ? (
-                            <span className="text-[10px] block">Publicado em: {new Date(item.published_at).toLocaleDateString()} às {new Date(item.published_at).toLocaleTimeString().slice(0,5)}</span>
+                            <span className="text-[10px] block">Publicado em:<br />{new Date(item.published_at).toLocaleDateString()} às {new Date(item.published_at).toLocaleTimeString().slice(0,5)}</span>
                           ) : (
                             <span className="text-gray-400 font-normal">Sem agendamento</span>
                           )}
