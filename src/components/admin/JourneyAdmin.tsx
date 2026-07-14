@@ -1256,7 +1256,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full min-w-[1180px] text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-brand-border bg-brand-bg text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
                       <th className="px-6 py-4 text-center">Dia</th>
@@ -1265,8 +1265,8 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                       <th className="px-6 py-4">Agendamento</th>
                       <th className="px-6 py-4">Formato</th>
                       <th className="px-6 py-4">CTA</th>
-                      <th className="px-6 py-4 text-right">Reordenar</th>
-                      <th className="px-6 py-4 text-right">Ações</th>
+                      <th className="px-6 py-4 text-right whitespace-nowrap">Reordenar</th>
+                      <th className="px-6 py-4 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
@@ -1319,7 +1319,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                             <span className="text-gray-400">Nenhum</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
                           <div className="flex justify-end gap-1">
                             <button
                               disabled={index === 0}
@@ -1337,7 +1337,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                             </button>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
                           <div className="flex justify-end gap-1">
                             <button
                               onClick={() => handleEditContent(item)}
