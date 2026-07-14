@@ -20,8 +20,8 @@
     "path": "c:\\PLATAFORMAS VS CODE\\EVOLUÇÃO CLINICA\\evolucao-clinica\\android.keystore",
     "alias": "android"
   },
-  "appVersionName": "10",
-  "appVersionCode": 10,
+  "appVersionName": "13",
+  "appVersionCode": 13,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://evolucaoclinica.app.br/manifest.webmanifest",
@@ -50,12 +50,6 @@
             "audio/*",
             "video/*",
             "application/ogg",
-            ".opus",
-            ".ogg",
-            ".mp3",
-            ".wav",
-            ".m4a",
-            ".weba",
             "*/*"
           ]
         }
@@ -70,5 +64,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "10"
+  "appVersion": "13"
 }

@@ -158,18 +158,6 @@
                     
                         <data android:mimeType="application/ogg" />
                     
-                        <data android:mimeType=".opus" />
-                    
-                        <data android:mimeType=".ogg" />
-                    
-                        <data android:mimeType=".mp3" />
-                    
-                        <data android:mimeType=".wav" />
-                    
-                        <data android:mimeType=".m4a" />
-                    
-                        <data android:mimeType=".weba" />
-                    
                         <data android:mimeType="*/*" />
                     
                 </intent-filter>
