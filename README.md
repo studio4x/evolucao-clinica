@@ -81,6 +81,10 @@ Dependendo dos recursos habilitados no ambiente, o backend também pode usar:
 - Quando a política do repositório exigir, os commits finais devem ir para `main`.
 - Não encerre a tarefa com mudanças apenas locais.
 
+## Aplicativo Móvel (Android / Google Play)
+
+Para detalhes sobre como atualizar as versões do aplicativo móvel, baixar os novos ícones, gerar novos arquivos `.apk` ou `.aab` e enviá-los para a Google Play Store, consulte o guia passo a passo em [PLAY_STORE_RUNBOOK.md](file:///c:/PLATAFORMAS%20VS%20CODE/EVOLUÇÃO%20CLINICA/evolucao-clinica/PLAY_STORE_RUNBOOK.md).
+
 ## Deploy
 
 O repositório já inclui configuração compatível com ambientes de deploy baseados em Vercel.
