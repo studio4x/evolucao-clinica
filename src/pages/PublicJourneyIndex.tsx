@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { trackJourneyEvent } from '../services/analytics';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 import { 
   Calendar, Clock, CheckCircle2, ChevronRight, MessageSquare, 
-  ExternalLink, ArrowRight, BookOpen, AlertCircle, Award, Loader2 
+  ExternalLink, ArrowUp, BookOpen, AlertCircle, Award, Loader2,
+  Lock, PlayCircle, Eye, HelpCircle, ArrowRight
 } from 'lucide-react';
 
 interface Journey {
@@ -35,14 +39,24 @@ interface JourneyContent {
   title: string;
   slug: string;
   short_description: string | null;
+  content: string | null;
   image_url: string | null;
+  image_alt: string | null;
+  video_url: string | null;
+  video_embed_url: string | null;
   content_type: 'text' | 'image' | 'video' | 'mixed';
+  cta_text: string | null;
+  cta_url: string | null;
+  secondary_cta_text: string | null;
+  secondary_cta_url: string | null;
+  whatsapp_message: string | null;
   publication_status: 'draft' | 'scheduled' | 'published' | 'archived';
   publication_date: string | null;
   publication_time: string | null;
 }
 
 export default function PublicJourneyIndex() {
+  const { slug } = useParams<{ slug?: string }>();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
 
@@ -53,9 +67,10 @@ export default function PublicJourneyIndex() {
 
   // Rastreamento de UTMs
   const [utmQueryString, setUtmQueryString] = useState('');
+  const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
 
+  // Capturar e reter parâmetros UTM em sessionStorage
   useEffect(() => {
-    // 1. Capturar e persistir parâmetros UTM
     const params = new URLSearchParams(window.location.search);
     const utmSource = params.get('utm_source');
     const utmMedium = params.get('utm_medium');
@@ -88,45 +103,20 @@ export default function PublicJourneyIndex() {
     }
   }, []);
 
+  // Monitorar rolagem para exibir o botão Voltar ao Topo
   useEffect(() => {
-    if (!journey) return;
-
-    // Atualiza title e meta-tags
-    document.title = journey.seo_title || `${journey.title} | Evolução Clínica`;
-
-    const updateMeta = (selector: string, attr: 'name' | 'property', value: string, content: string) => {
-      let meta = document.querySelector<HTMLMetaElement>(selector);
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute(attr, value);
-        document.head.appendChild(meta);
+    const handleScroll = () => {
+      if (window.scrollY > 400) {
+        setShowScrollTopBtn(true);
+      } else {
+        setShowScrollTopBtn(false);
       }
-      meta.content = content;
     };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
-    updateMeta("meta[name='description']", 'name', 'description', journey.seo_description || journey.description || '');
-    updateMeta("meta[property='og:title']", 'property', 'og:title', journey.seo_title || `${journey.title} | Evolução Clínica`);
-    updateMeta("meta[property='og:description']", 'property', 'og:description', journey.seo_description || journey.description || '');
-    updateMeta("meta[property='og:type']", 'property', 'og:type', 'website');
-    updateMeta("meta[name='twitter:card']", 'name', 'twitter:card', 'summary_large_image');
-    updateMeta("meta[name='twitter:title']", 'name', 'twitter:title', journey.seo_title || `${journey.title} | Evolução Clínica`);
-    updateMeta("meta[name='twitter:description']", 'name', 'twitter:description', journey.seo_description || journey.description || '');
-    
-    if (journey.cover_image_url) {
-      updateMeta("meta[property='og:image']", 'property', 'og:image', journey.cover_image_url);
-      updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', journey.cover_image_url);
-    }
-
-    // Canonical link
-    let canonical = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
-    if (!canonical) {
-      canonical = document.createElement('link');
-      canonical.rel = 'canonical';
-      document.head.appendChild(canonical);
-    }
-    canonical.href = window.location.origin + window.location.pathname;
-  }, [journey]);
-
+  // Carregar dados
   useEffect(() => {
     fetchJourneyData();
   }, []);
@@ -135,7 +125,7 @@ export default function PublicJourneyIndex() {
     setLoading(true);
     setErrorMsg('');
     try {
-      // 1. Busca a jornada ativa de 15 dias
+      // 1. Busca a jornada ativa
       const { data: journeyData, error: jError } = await supabase
         .from('journeys')
         .select('*')
@@ -151,24 +141,24 @@ export default function PublicJourneyIndex() {
 
       setJourney(journeyData);
 
-      // Dispara evento analytics de visualização da jornada
+      // Dispara evento analytics de visualização da central
       trackJourneyEvent('journey_view', {
         journey_id: journeyData.id,
         campaign: 'jornada_15_dias',
       });
 
-      // 2. Busca os conteúdos associados
+      // 2. Busca todos os conteúdos da jornada
       const { data: contentData, error: cError } = await supabase
         .from('journey_contents')
-        .select('id, journey_id, day_number, title, slug, short_description, image_url, content_type, publication_status, publication_date, publication_time')
+        .select('*')
         .eq('journey_id', journeyData.id)
         .order('day_number', { ascending: true });
 
       if (cError) throw cError;
       setContents(contentData || []);
     } catch (err: any) {
-      console.error('Erro ao carregar dados da jornada pública:', err);
-      setErrorMsg('Ocorreu um erro ao carregar os conteúdos da jornada.');
+      console.error('Erro ao carregar dados da jornada:', err);
+      setErrorMsg('Ocorreu um erro ao carregar a Central da Jornada.');
     } finally {
       setLoading(false);
     }
@@ -180,25 +170,32 @@ export default function PublicJourneyIndex() {
     return new Date() >= publishDateTime;
   };
 
-  // Filtra e resolve status de cada dia
+  // Processamento e classificação de cada dia (Publicado, Recente, Em breve)
   const getProcessedDays = () => {
     if (!journey) return [];
 
     const processedList: {
       dayNumber: number;
       title: string;
-      slug?: string;
-      description?: string;
+      slug: string;
+      description: string;
       imageUrl?: string;
+      videoEmbedUrl?: string;
+      contentMarkdown?: string;
+      ctaText?: string;
+      ctaUrl?: string;
+      secondaryCtaText?: string;
+      secondaryCtaUrl?: string;
       status: 'published' | 'current' | 'coming_soon';
+      publicationDate?: string;
+      publicationTime?: string;
       rawContent?: JourneyContent;
     }[] = [];
 
-    // Mapear os conteúdos carregados por número do dia
     const contentsMap = new Map<number, JourneyContent>();
     contents.forEach(c => contentsMap.set(c.day_number, c));
 
-    // Determinar o último dia publicado para marcar o "Conteúdo atual"
+    // Determina o dia publicado mais recente para destacar como "Recente/Atual"
     let maxPublishedDay = 0;
     contents.forEach(c => {
       const isPub = c.publication_status === 'published' || 
@@ -220,8 +217,14 @@ export default function PublicJourneyIndex() {
             dayNumber: d,
             title: contentItem.title,
             slug: contentItem.slug,
-            description: contentItem.short_description || 'Clique para conferir os detalhes desse dia.',
+            description: contentItem.short_description || '',
             imageUrl: contentItem.image_url || undefined,
+            videoEmbedUrl: contentItem.video_embed_url || undefined,
+            contentMarkdown: contentItem.content || '',
+            ctaText: contentItem.cta_text || undefined,
+            ctaUrl: contentItem.cta_url || undefined,
+            secondaryCtaText: contentItem.secondary_cta_text || undefined,
+            secondaryCtaUrl: contentItem.secondary_cta_url || undefined,
             status: d === maxPublishedDay ? 'current' : 'published',
             rawContent: contentItem
           });
@@ -229,19 +232,21 @@ export default function PublicJourneyIndex() {
           processedList.push({
             dayNumber: d,
             title: contentItem.title,
-            description: 'Este conteúdo estará disponível em breve no grupo de WhatsApp!',
-            imageUrl: undefined,
+            slug: contentItem.slug,
+            description: 'Este conteúdo será liberado de acordo com o cronograma da jornada.',
             status: 'coming_soon',
+            publicationDate: contentItem.publication_date || undefined,
+            publicationTime: contentItem.publication_time || undefined,
             rawContent: contentItem
           });
         }
-        // Draft ou Archived são completamente ignorados
       } else {
-        // Se não houver registro para o dia mas desejarmos mostrar como vago
+        // Sem registro cadastrado para este slot de dia
         if (journey.show_scheduled_as_coming_soon) {
           processedList.push({
             dayNumber: d,
             title: `Dia ${String(d).padStart(2, '0')}`,
+            slug: `dia-${d}`,
             description: 'Próxima etapa da nossa jornada de conteúdos.',
             status: 'coming_soon'
           });
@@ -257,49 +262,128 @@ export default function PublicJourneyIndex() {
   const progressPercent = journey ? Math.round((publishedDays.length / journey.total_days) * 100) : 0;
   const firstDay = days.find(d => d.status === 'published' || d.status === 'current');
 
-  // Rastreamento cliques CTA
-  const handleStartJourneyClick = () => {
-    trackJourneyEvent('journey_start', {
-      journey_id: journey?.id,
-      campaign: 'jornada_15_dias',
-    });
+  // Rolar suavemente até o elemento pelo ID
+  const scrollToElement = (elementId: string) => {
+    const el = document.getElementById(elementId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
-  const handleTrialClick = () => {
-    trackJourneyEvent('journey_trial_click', {
-      journey_id: journey?.id,
-      campaign: 'jornada_15_dias',
-    });
+  // Efeito de rolagem automática se houver slug paramétrico na URL ou hash
+  useEffect(() => {
+    if (loading || days.length === 0) return;
+
+    // 1. Tentar rolar pelo slug passado na rota /jornada/:slug
+    if (slug) {
+      const match = days.find(d => d.slug === slug && d.status !== 'coming_soon');
+      if (match) {
+        setTimeout(() => {
+          scrollToElement(`dia-${match.dayNumber}`);
+          // Dispara analytics de abertura direta pelo link
+          trackJourneyEvent('journey_direct_link_view', {
+            journey_id: journey?.id,
+            day_number: match.dayNumber,
+            day_slug: match.slug,
+          });
+        }, 300);
+        return;
+      }
+    }
+
+    // 2. Tentar rolar pelo hash da URL legada
+    const hash = window.location.hash;
+    if (hash) {
+      const targetId = hash.replace('#', '');
+      const match = days.find(d => d.slug === targetId && d.status !== 'coming_soon');
+      if (match) {
+        setTimeout(() => {
+          scrollToElement(`dia-${match.dayNumber}`);
+        }, 300);
+      }
+    }
+  }, [loading, slug, days]);
+
+  // Atualizar SEO dinâmico
+  useEffect(() => {
+    if (!journey) return;
+
+    document.title = journey.seo_title || `${journey.title} | Evolução Clínica`;
+
+    const updateMeta = (selector: string, attr: 'name' | 'property', value: string, text: string) => {
+      let meta = document.querySelector<HTMLMetaElement>(selector);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute(attr, value);
+        document.head.appendChild(meta);
+      }
+      meta.content = text;
+    };
+
+    const desc = journey.seo_description || journey.description || '';
+    updateMeta("meta[name='description']", 'name', 'description', desc);
+    updateMeta("meta[property='og:title']", 'property', 'og:title', journey.seo_title || `${journey.title} | Evolução Clínica`);
+    updateMeta("meta[property='og:description']", 'property', 'og:description', desc);
+    updateMeta("meta[property='og:type']", 'property', 'og:type', 'website');
+    updateMeta("meta[name='twitter:card']", 'name', 'twitter:card', 'summary_large_image');
+    updateMeta("meta[name='twitter:title']", 'name', 'twitter:title', journey.seo_title || `${journey.title} | Evolução Clínica`);
+    updateMeta("meta[name='twitter:description']", 'name', 'twitter:description', desc);
+
+    if (journey.cover_image_url) {
+      updateMeta("meta[property='og:image']", 'property', 'og:image', journey.cover_image_url);
+      updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', journey.cover_image_url);
+    }
+
+    // Canonical link
+    let canonical = document.querySelector<HTMLLinkElement>("link[rel='canonical']");
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = `${window.location.origin}/jornada`;
+  }, [journey]);
+
+  // Auxiliares para URLs e UTMs
+  const getTrialUrlForDay = (dayNum: number, customCtaUrl?: string) => {
+    const baseUrl = customCtaUrl || journey?.trial_url || 'https://evolucaoclinica.app.br/login';
+    const params = new URLSearchParams(utmQueryString);
+    params.set('utm_content', `dia_${String(dayNum).padStart(2, '0')}`);
+    return `${baseUrl.split('?')[0]}?${params.toString()}`;
   };
 
-  const handleSupportGroupClick = () => {
-    trackJourneyEvent('journey_support_group_click', {
-      journey_id: journey?.id,
-      campaign: 'jornada_15_dias',
-    });
+  const getSupportGroupUrlForDay = (dayNum: number, customCtaUrl?: string) => {
+    const baseUrl = customCtaUrl || journey?.whatsapp_support_group_url || '#';
+    if (baseUrl === '#') return '#';
+    const params = new URLSearchParams(utmQueryString);
+    params.set('utm_content', `dia_${String(dayNum).padStart(2, '0')}`);
+    return `${baseUrl.split('?')[0]}?${params.toString()}`;
   };
 
-  // Se a url do trial tiver UTMs, concatena
-  const getTrialUrl = () => {
+  const getGlobalTrialUrl = () => {
     const baseUrl = journey?.trial_url || 'https://evolucaoclinica.app.br/login';
     if (!utmQueryString) return baseUrl;
-    const connector = baseUrl.includes('?') ? '&' : '?';
-    return `${baseUrl}${connector}${utmQueryString.slice(1)}`;
+    return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${utmQueryString.slice(1)}`;
   };
 
-  // Se a url do grupo tiver UTMs, concatena
-  const getSupportGroupUrl = () => {
-    const baseUrl = journey?.whatsapp_support_group_url || '#';
-    if (!utmQueryString) return baseUrl;
-    const connector = baseUrl.includes('?') ? '&' : '?';
-    return `${baseUrl}${connector}${utmQueryString.slice(1)}`;
+  const renderMarkdown = (text?: string) => {
+    if (!text) return '';
+    const html = marked.parse(text, { breaks: true }) as string;
+    return DOMPurify.sanitize(html);
+  };
+
+  const formatPublishDateTime = (dateStr?: string, timeStr?: string) => {
+    if (!dateStr) return '';
+    const dateParts = dateStr.split('-');
+    const formattedDate = `${dateParts[2]}/${dateParts[1]}/${dateParts[0]}`;
+    return `${formattedDate} às ${timeStr?.slice(0, 5) || '08:00'}`;
   };
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-4">
         <Loader2 className="w-10 h-10 animate-spin text-[#105576] mb-2" />
-        <p className="text-sm font-semibold text-gray-600">Preparando a jornada...</p>
+        <p className="text-sm font-semibold text-gray-600">Carregando Central da Jornada...</p>
       </div>
     );
   }
@@ -308,8 +392,8 @@ export default function PublicJourneyIndex() {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
         <AlertCircle className="w-12 h-12 text-[#719EB9] mb-3" />
-        <h3 className="text-lg font-bold text-gray-800">Ops! Algo deu errado</h3>
-        <p className="text-xs text-gray-500 mt-1.5">{errorMsg || 'Jornada indisponível.'}</p>
+        <h3 className="text-lg font-bold text-gray-800">Jornada Indisponível</h3>
+        <p className="text-xs text-gray-500 mt-2">{errorMsg || 'A central de conteúdos está sendo preparada.'}</p>
         <a 
           href="/" 
           className="mt-6 px-5 py-2.5 bg-[#105576] text-white rounded-xl text-xs font-semibold shadow-sm hover:bg-[#376F8D] transition-colors"
@@ -322,58 +406,56 @@ export default function PublicJourneyIndex() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex flex-col antialiased">
-      {/* Cabeçalho da Página */}
-      <header className="bg-white border-b border-gray-150 py-5 px-6 sticky top-0 z-40 shadow-xs">
-        <div className="max-w-4xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+      {/* HEADER FIXO */}
+      <header className="bg-white border-b border-gray-150 py-4 px-6 sticky top-0 z-40 shadow-xs">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
           <a href="/" className="flex items-center gap-2.5">
             {siteConfig.logo_light_url ? (
               <img
                 src={appendBrandAssetVersion(siteConfig.logo_light_url, assetSignature)}
                 alt="Logo Oficial"
-                className="h-10 w-auto object-contain"
+                className="h-9 w-auto object-contain"
               />
             ) : (
-              <span className="text-base font-bold text-[#105576] tracking-tight">Evolução Clínica</span>
+              <span className="text-sm font-bold text-[#105576] tracking-tight">Evolução Clínica</span>
             )}
           </a>
-          <div className="flex items-center gap-3">
-            <a
-              href={getTrialUrl()}
-              onClick={handleTrialClick}
-              className="px-4 py-2 bg-[#105576] hover:bg-[#376F8D] text-white text-xs font-bold rounded-xl transition-colors shadow-xs cursor-pointer"
-            >
-              Iniciar Teste Gratuito
-            </a>
-          </div>
+          <a
+            href={getGlobalTrialUrl()}
+            onClick={() => trackJourneyEvent('journey_header_trial_click')}
+            className="px-4 py-2 bg-[#105576] hover:bg-[#376F8D] text-white text-xs font-bold rounded-xl transition-colors shadow-xs"
+          >
+            Experimentar Grátis
+          </a>
         </div>
       </header>
 
-      {/* Hero Section */}
+      {/* HERO SECTION */}
       <section className="bg-white py-12 px-6 border-b border-gray-150 text-center">
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#719EB9]/10 text-[#105576] rounded-full text-[10px] font-bold uppercase tracking-wider">
             <Award size={12} />
-            Campanha Especial de Lançamento
+            Central da Jornada de Conteúdos
           </div>
           
           <h1 className="text-3xl sm:text-4xl font-extrabold text-[#105576] leading-tight tracking-tight">
             {journey.title}
           </h1>
-          <p className="text-sm text-gray-600 max-w-xl mx-auto font-medium">
-            {journey.description || 'Conheça, em 15 dias, uma forma mais prática de transformar sua fala em registros clínicos organizados.'}
+          <p className="text-sm text-gray-600 max-w-2xl mx-auto leading-relaxed">
+            {journey.description || 'Acompanhe as demonstrações diárias, dicas práticas de registros clínicos e guias de uso de IA compartilhados em nosso grupo oficial.'}
           </p>
 
           {/* Aviso Responsabilidade IA */}
           <div className="bg-[#719EB9]/5 border border-[#719EB9]/15 rounded-2xl p-4 max-w-xl mx-auto">
             <p className="text-[11px] text-[#376F8D] leading-relaxed font-semibold">
-              💡 <strong>Atenção profissional:</strong> A inteligência artificial apoia a organização e a redação. A revisão final e a responsabilidade clínica continuam sendo do profissional responsável.
+              💡 <strong>Nota sobre IA:</strong> O Evolução Clínica atua como apoio à transcrição, padronização e redação de relatórios. Toda e qualquer decisão de diagnóstico, conduta clínica e revisão final permanecem exclusivamente de responsabilidade do profissional de saúde assistente.
             </p>
           </div>
 
-          {/* Progresso Geral */}
-          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 max-w-lg mx-auto space-y-2">
+          {/* Barra de Progresso Geral */}
+          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 max-w-md mx-auto space-y-2">
             <div className="flex justify-between items-center text-xs text-gray-500 font-semibold">
-              <span>Mensagens Publicadas</span>
+              <span>Conteúdos Liberados</span>
               <span className="text-[#105576] font-bold">{publishedDays.length} de {journey.total_days} dias</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
@@ -384,159 +466,263 @@ export default function PublicJourneyIndex() {
             </div>
           </div>
 
-          {/* CTAs Iniciais */}
+          {/* Botoes de Acao do Topo */}
           <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-2">
             {firstDay && (
-              <a
-                href={`/jornada/${firstDay.slug}${utmQueryString}`}
-                onClick={handleStartJourneyClick}
-                className="w-full sm:w-auto px-6 py-3 bg-[#105576] hover:bg-[#376F8D] text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              <button
+                onClick={() => {
+                  scrollToElement(`dia-${firstDay.dayNumber}`);
+                  trackJourneyEvent('journey_start_click');
+                }}
+                className="w-full sm:w-auto px-6 py-3 bg-[#105576] hover:bg-[#376F8D] text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border-none"
               >
                 Começar pelo Dia 1
-                <ArrowRight size={14} />
-              </a>
+                <ChevronRight size={14} />
+              </button>
             )}
             <a
-              href={getTrialUrl()}
-              onClick={handleTrialClick}
+              href={getGlobalTrialUrl()}
+              onClick={() => trackJourneyEvent('journey_hero_trial_click')}
               className="w-full sm:w-auto px-6 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              Testar Plataforma Grátis
+              Iniciar Teste Gratuito de 7 Dias
             </a>
           </div>
         </div>
       </section>
 
-      {/* Seção "Comece por aqui" */}
-      <section className="max-w-4xl mx-auto px-6 py-8 w-full">
-        <div className="bg-gradient-to-r from-[#105576] to-[#376F8D] text-white rounded-3xl p-6 sm:p-8 shadow-md space-y-4">
-          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-            <BookOpen size={24} className="text-[#719EB9]" />
+      {/* SEÇÃO "COMECE POR AQUI" */}
+      <section className="max-w-5xl mx-auto px-6 py-8 w-full">
+        <div className="bg-gradient-to-r from-[#105576] to-[#376F8D] text-white rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <BookOpen size={22} className="text-[#719EB9]" />
             Comece por aqui
           </h2>
-          <p className="text-xs sm:text-sm text-gray-100 leading-relaxed font-medium">
-            Entrou agora na Jornada Evolução Clínica? Você pode começar pelo primeiro conteúdo e acompanhar todas as publicações anteriores no seu próprio ritmo. Todos os dias anteriores ficam arquivados permanentemente nesta central.
+          <p className="text-xs sm:text-sm text-gray-100 leading-relaxed max-w-3xl">
+            Entrou no meio da Jornada ou quer rever as mensagens anteriores enviadas no WhatsApp? 
+            Esta página serve como nosso arquivo oficial permanente. Leia os posts anteriores no seu próprio ritmo a partir do primeiro dia.
           </p>
           {firstDay && (
-            <a
-              href={`/jornada/${firstDay.slug}${utmQueryString}`}
-              onClick={handleStartJourneyClick}
-              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-white text-[#105576] font-bold text-xs rounded-xl shadow-sm hover:bg-gray-50 transition-all cursor-pointer"
+            <button
+              onClick={() => {
+                scrollToElement(`dia-${firstDay.dayNumber}`);
+                trackJourneyEvent('journey_start_box_click');
+              }}
+              className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-white text-[#105576] font-bold text-xs rounded-xl shadow-sm hover:bg-gray-50 transition-all cursor-pointer border-none"
             >
               Acessar Conteúdo do Dia 1
               <ChevronRight size={14} />
-            </a>
+            </button>
           )}
         </div>
       </section>
 
-      {/* Linha do Tempo dos Dias (Índice) */}
-      <section className="max-w-4xl mx-auto px-6 py-6 w-full flex-1 space-y-6">
-        <h3 className="text-lg font-bold text-[#105576] border-b border-gray-150 pb-2">
-          Índice das Mensagens e Aulas
+      {/* ÍNDICE DOS 15 DIAS (Cards de Atalho) */}
+      <section className="max-w-5xl mx-auto px-6 py-6 w-full space-y-4">
+        <h3 className="text-base font-bold text-[#105576] border-b border-gray-150 pb-2 flex items-center gap-2">
+          <Calendar size={18} />
+          Índice e Atalhos da Jornada
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
           {days.map((d) => {
             const isComingSoon = d.status === 'coming_soon';
             const isCurrent = d.status === 'current';
-            const slugPath = d.slug ? `/jornada/${d.slug}${utmQueryString}` : '#';
 
             return (
-              <div 
+              <button
                 key={d.dayNumber}
-                className={`flex flex-col bg-white border rounded-2xl shadow-xs overflow-hidden transition-all duration-200 ${
-                  isComingSoon 
-                    ? 'border-gray-150 opacity-70' 
-                    : isCurrent 
-                      ? 'border-[#105576] ring-2 ring-[#105576]/10 scale-102' 
-                      : 'border-gray-150 hover:border-gray-300 hover:shadow-sm'
+                disabled={isComingSoon}
+                onClick={() => {
+                  scrollToElement(`dia-${d.dayNumber}`);
+                  trackJourneyEvent('journey_index_shortcut_click', { day: d.dayNumber });
+                }}
+                className={`p-3 rounded-2xl border text-left flex flex-col justify-between h-20 transition-all ${
+                  isComingSoon
+                    ? 'bg-gray-50 border-gray-150 opacity-60 cursor-not-allowed'
+                    : isCurrent
+                      ? 'bg-white border-[#105576] ring-2 ring-[#105576]/10 hover:bg-gray-50 cursor-pointer'
+                      : 'bg-white border-gray-150 hover:border-gray-300 hover:shadow-xs cursor-pointer'
                 }`}
               >
-                {/* Imagem / Card Cover */}
-                <div className="aspect-video w-full bg-gray-100 relative overflow-hidden flex items-center justify-center shrink-0">
-                  {d.imageUrl && !isComingSoon ? (
-                    <img 
-                      src={d.imageUrl} 
-                      alt={d.title} 
-                      className="w-full h-full object-cover" 
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center p-4 text-center">
-                      <span className="text-xs font-bold text-[#105576] uppercase">Dia</span>
-                      <span className="text-3xl font-extrabold text-[#105576]">{String(d.dayNumber).padStart(2, '0')}</span>
-                    </div>
-                  )}
-                  {/* Badge de status */}
-                  <div className="absolute top-3 right-3">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                      isComingSoon 
-                        ? 'bg-gray-100 text-gray-500' 
-                        : isCurrent 
-                          ? 'bg-[#105576] text-white' 
-                          : 'bg-green-50 text-green-700'
-                    }`}>
-                      {isComingSoon ? 'Em breve' : isCurrent ? 'Recente' : 'Publicado'}
-                    </span>
-                  </div>
+                <div className="flex justify-between items-start w-full">
+                  <span className={`text-[10px] font-bold ${isComingSoon ? 'text-gray-400' : 'text-[#376F8D]'}`}>
+                    Dia {String(d.dayNumber).padStart(2, '0')}
+                  </span>
+                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                    isComingSoon
+                      ? 'bg-gray-100 text-gray-400'
+                      : isCurrent
+                        ? 'bg-[#105576] text-white'
+                        : 'bg-green-50 text-green-700'
+                  }`}>
+                    {isComingSoon ? 'Em breve' : isCurrent ? 'Recente' : 'Ok'}
+                  </span>
                 </div>
-
-                {/* Conteúdo do Card */}
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-bold text-[#376F8D]">Dia {d.dayNumber} de {journey.total_days}</span>
-                    <h4 className="text-sm font-bold text-gray-800 line-clamp-1 leading-tight">{d.title}</h4>
-                    <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
-                      {d.description}
-                    </p>
-                  </div>
-
-                  <div>
-                    {isComingSoon ? (
-                      <button
-                        disabled
-                        className="w-full py-2.5 bg-gray-100 text-gray-400 font-bold text-xs rounded-xl text-center cursor-not-allowed"
-                      >
-                        Ainda Indisponível
-                      </button>
-                    ) : (
-                      <a
-                        href={slugPath}
-                        className={`w-full py-2.5 text-center font-bold text-xs rounded-xl block transition-all ${
-                          isCurrent 
-                            ? 'bg-[#105576] hover:bg-[#376F8D] text-white shadow-xs' 
-                            : 'bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700'
-                        }`}
-                      >
-                        Acessar Conteúdo
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </div>
+                <p className={`text-[10px] font-bold line-clamp-1 mt-1 ${isComingSoon ? 'text-gray-400' : 'text-gray-700'}`}>
+                  {d.title}
+                </p>
+              </button>
             );
           })}
         </div>
       </section>
 
-      {/* Suporte & Grupo de Dúvidas */}
-      <section className="bg-white border-t border-gray-150 py-10 px-6 mt-10">
+      {/* FEED VERTICAL DE POSTAGENS COMPLETAS */}
+      <section className="max-w-3xl mx-auto px-6 py-8 w-full flex-1 space-y-12">
+        <h3 className="text-lg font-bold text-[#105576] border-b border-gray-150 pb-2">
+          Publicações da Jornada
+        </h3>
+
+        <div className="space-y-12">
+          {days.map((d) => {
+            const isComingSoon = d.status === 'coming_soon';
+            const isCurrent = d.status === 'current';
+
+            if (isComingSoon) {
+              return (
+                <div 
+                  key={d.dayNumber}
+                  id={`dia-${d.dayNumber}`}
+                  className="bg-gray-50/50 border border-dashed border-gray-200 rounded-3xl p-6 sm:p-8 flex flex-col items-center justify-center text-center space-y-3 opacity-80"
+                >
+                  <div className="p-3 bg-gray-100 rounded-full text-gray-400">
+                    <Lock size={20} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dia {d.dayNumber} de {journey.total_days}</span>
+                    <h4 className="text-sm font-bold text-gray-600 mt-0.5">{d.title}</h4>
+                    <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                      {d.publicationDate 
+                        ? `Disponível em ${formatPublishDateTime(d.publicationDate, d.publicationTime)}`
+                        : 'Este conteúdo será liberado em breve!'
+                      }
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <article
+                key={d.dayNumber}
+                id={`dia-${d.dayNumber}`}
+                className={`bg-white border rounded-3xl overflow-hidden transition-all shadow-xs ${
+                  isCurrent 
+                    ? 'border-[#105576] ring-3 ring-[#105576]/5' 
+                    : 'border-gray-150 hover:border-gray-200'
+                }`}
+              >
+                {/* Cabeçalho do Card */}
+                <div className="p-6 sm:p-8 border-b border-gray-100 bg-[#719EB9]/3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] font-extrabold text-[#376F8D] uppercase tracking-wider">
+                      Dia {String(d.dayNumber).padStart(2, '0')} de {journey.total_days}
+                    </span>
+                    <h2 className="text-lg sm:text-xl font-extrabold text-[#105576] leading-snug">
+                      {d.title}
+                    </h2>
+                  </div>
+                  {isCurrent && (
+                    <span className="self-start sm:self-center px-3 py-1 bg-[#105576] text-white rounded-full text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                      Última Postagem
+                    </span>
+                  )}
+                </div>
+
+                {/* Midia Principal (Video Embed ou Imagem) */}
+                {d.videoEmbedUrl ? (
+                  <div className="aspect-video w-full border-b border-gray-100 bg-black">
+                    <iframe
+                      src={d.videoEmbedUrl}
+                      title={d.title}
+                      className="w-full h-full border-none"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : d.imageUrl ? (
+                  <div className="aspect-video w-full border-b border-gray-100 bg-gray-50 overflow-hidden relative">
+                    <img
+                      src={d.imageUrl}
+                      alt={d.title}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : null}
+
+                {/* Corpo do Conteudo */}
+                <div className="p-6 sm:p-8 space-y-6">
+                  {d.description && (
+                    <p className="text-xs sm:text-sm font-semibold text-gray-500 leading-relaxed italic border-l-3 border-[#719EB9] pl-3">
+                      {d.description}
+                    </p>
+                  )}
+
+                  {/* Renderizacao Markdown */}
+                  <div 
+                    className="prose prose-sm max-w-none text-gray-700 leading-relaxed text-xs sm:text-sm space-y-4 prose-headings:text-[#105576] prose-headings:font-bold prose-a:text-[#105576] prose-a:font-semibold prose-strong:text-gray-900 prose-strong:font-bold"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(d.contentMarkdown) }}
+                  />
+
+                  {/* Chamadas de Ação do Dia */}
+                  <div className="border-t border-gray-100 pt-6 flex flex-col sm:flex-row gap-3">
+                    <a
+                      href={getTrialUrlForDay(d.dayNumber, d.ctaUrl)}
+                      onClick={() => trackJourneyEvent('journey_day_trial_click', { day: d.dayNumber })}
+                      className="flex-1 py-3 px-5 bg-[#105576] hover:bg-[#376F8D] text-white text-center font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                    >
+                      {d.ctaText || 'Iniciar Teste Gratuito de 7 Dias'}
+                    </a>
+                    {journey.whatsapp_support_group_url && (
+                      <a
+                        href={getSupportGroupUrlForDay(d.dayNumber, d.secondaryCtaUrl)}
+                        onClick={() => trackJourneyEvent('journey_day_support_click', { day: d.dayNumber })}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 py-3 px-5 bg-[#158E12] hover:bg-[#69AF44] text-white text-center font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        {d.secondaryCtaText || 'Entrar no Grupo de Dúvidas'}
+                        <ExternalLink size={13} />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Botao de Rolar ao Topo */}
+                  <div className="flex justify-end pt-2">
+                    <button
+                      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                      className="text-[10px] font-bold text-[#376F8D] hover:text-[#105576] flex items-center gap-1 bg-none border-none cursor-pointer"
+                    >
+                      <ArrowUp size={12} />
+                      Voltar ao índice
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* RODAPÉ GERAL DE CONTATOS / SUPORTE */}
+      <section className="bg-white border-t border-gray-150 py-12 px-6 mt-12">
         <div className="max-w-3xl mx-auto text-center space-y-5">
           <MessageSquare className="w-10 h-10 text-[#719EB9] mx-auto" />
-          <h3 className="text-lg font-bold text-[#105576]">Está com dúvidas ou precisa de ajuda?</h3>
+          <h3 className="text-lg font-bold text-[#105576]">Ficou com alguma dúvida sobre o aplicativo?</h3>
           <p className="text-xs text-gray-600 max-w-lg mx-auto leading-relaxed">
-            Está com dúvidas sobre o funcionamento do aplicativo, gravação de áudios clínicos, segurança de dados ou sobre como funciona o período de teste de 7 dias? Participe do nosso grupo especial para suporte e esclarecimentos.
+            Estamos prontos para te apoiar durante toda a sua experiência. Entre em nosso grupo de dúvidas opcional no WhatsApp para falar diretamente conosco e receber dicas rápidas de gravação.
           </p>
           <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-2">
             <a
-              href={getSupportGroupUrl()}
-              onClick={handleSupportGroupClick}
+              href={getSupportGroupUrlForDay(0)}
+              onClick={() => trackJourneyEvent('journey_footer_support_click')}
               target="_blank"
               rel="noreferrer"
-              className="w-full sm:w-auto px-6 py-3 bg-[#158E12] hover:bg-[#69AF44] text-white text-xs font-bold rounded-xl shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full sm:w-auto px-6 py-3 bg-[#158E12] hover:bg-[#69AF44] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              Entrar no grupo de dúvidas
+              Entrar no grupo de suporte
               <ExternalLink size={14} />
             </a>
             {journey.show_whatsapp_main_group && journey.whatsapp_main_group_url && (
@@ -546,22 +732,33 @@ export default function PublicJourneyIndex() {
                 rel="noreferrer"
                 className="w-full sm:w-auto px-6 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                Entrar no grupo oficial da jornada
+                Grupo Principal da Jornada
               </a>
             )}
           </div>
         </div>
       </section>
 
-      {/* Rodapé da Página */}
+      {/* FOOTER GERAL */}
       <footer className="bg-gray-50 border-t border-gray-150 py-8 px-6 text-center text-xs text-gray-500">
         <div className="max-w-4xl mx-auto space-y-2">
           <p className="font-semibold text-gray-600">Evolução Clínica &copy; {new Date().getFullYear()}</p>
-          <p className="max-w-md mx-auto text-[11px] leading-relaxed text-gray-400">
-            A responsabilidade técnica, diagnóstico e conduta clínica permanecem exclusivamente do terapeuta ou profissional assistente. O uso de IA serve unicamente como apoio administrativo para estruturação e transcrição documental.
+          <p className="max-w-lg mx-auto text-[10px] leading-relaxed text-gray-400 font-medium">
+            O Evolução Clínica é uma ferramenta tecnológica de apoio administrativo para organização e redação clínica. O diagnóstico final, conduta e responsabilidade clínica permanecem integralmente do profissional assistente.
           </p>
         </div>
       </footer>
+
+      {/* BOTÃO FLUTUANTE VOLTAR AO TOPO GERAL */}
+      {showScrollTopBtn && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 p-3 bg-[#105576] hover:bg-[#376F8D] text-white rounded-full shadow-lg transition-all animate-fadeIn z-50 cursor-pointer border-none"
+          title="Voltar ao topo"
+        >
+          <ArrowUp size={16} />
+        </button>
+      )}
     </div>
   );
 }

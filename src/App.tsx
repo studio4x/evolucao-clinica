@@ -35,7 +35,6 @@ const DeleteAccount = lazyWithRetry(() => import('./pages/DeleteAccount'), 'Dele
 const PublicReportView = lazyWithRetry(() => import('./pages/PublicReportView'), 'PublicReportView');
 const Feedback = lazyWithRetry(() => import('./pages/Feedback'), 'Feedback');
 const PublicJourneyIndex = lazyWithRetry(() => import('./pages/PublicJourneyIndex'), 'PublicJourneyIndex');
-const PublicJourneyDetail = lazyWithRetry(() => import('./pages/PublicJourneyDetail'), 'PublicJourneyDetail');
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
@@ -572,7 +571,7 @@ export default function App() {
           <Route path="/delete-account" element={<DeleteAccount />} />
           <Route path="/public/reports/:reportId" element={<PublicReportView />} />
           <Route path="/jornada" element={<PublicJourneyIndex />} />
-          <Route path="/jornada/:slug" element={<PublicJourneyDetail />} />
+          <Route path="/jornada/:slug" element={<PublicJourneyIndex />} />
           
           {/* Admin Panel Routes */}
           <Route path="/admin/*" element={<AdminRoute><AdminPanel /></AdminRoute>} />
