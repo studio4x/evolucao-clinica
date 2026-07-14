@@ -1255,31 +1255,31 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                 <p className="text-xs text-brand-text-muted mt-1">Crie as publicações para cada dia da jornada de 15 dias.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[1180px] text-left border-collapse text-xs">
+              <div>
+                <table className="w-full table-fixed text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-brand-border bg-brand-bg text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
-                      <th className="px-6 py-4 text-center">Dia</th>
-                      <th className="px-6 py-4">Título / Slug</th>
-                      <th className="px-6 py-4">Status</th>
-                      <th className="px-6 py-4">Agendamento</th>
-                      <th className="px-6 py-4">Formato</th>
-                      <th className="px-6 py-4">CTA</th>
-                      <th className="px-6 py-4 text-right whitespace-nowrap">Reordenar</th>
-                      <th className="px-6 py-4 text-right whitespace-nowrap">Ações</th>
+                      <th className="w-[7%] px-2 py-4 text-center">Dia</th>
+                      <th className="w-[18%] px-2 py-4">Título / Slug</th>
+                      <th className="w-[10%] px-2 py-4">Status</th>
+                      <th className="w-[17%] px-2 py-4">Agendamento</th>
+                      <th className="w-[8%] px-2 py-4">Formato</th>
+                      <th className="w-[14%] px-2 py-4">CTA</th>
+                      <th className="w-[10%] px-2 py-4 text-right whitespace-nowrap">Reordenar</th>
+                      <th className="w-[16%] px-2 py-4 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
                     {contents.map((item, index) => (
                       <tr key={item.id} className="hover:bg-brand-bg/40 transition-colors">
-                        <td className="px-6 py-4 text-center font-bold text-brand-primary text-sm">
+                        <td className="px-2 py-4 text-center font-bold text-brand-primary text-sm">
                           Dia {String(item.day_number).padStart(2, '0')}
                         </td>
-                        <td className="px-6 py-4 space-y-0.5">
+                        <td className="px-2 py-4 space-y-0.5 break-words">
                           <span className="font-bold text-brand-text text-sm block">{item.title}</span>
-                          <span className="text-[10px] text-brand-text-muted font-mono block">/{item.slug}</span>
+                          <span className="text-[10px] text-brand-text-muted font-mono block break-all">/{item.slug}</span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-2 py-4">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wide uppercase ${
                             item.publication_status === 'published' ? 'bg-green-50 text-green-700' :
                             item.publication_status === 'scheduled' ? 'bg-amber-50 text-amber-700' :
@@ -1291,7 +1291,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                              item.publication_status === 'draft' ? 'Rascunho' : 'Arquivado'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-brand-text-muted">
+                        <td className="px-2 py-4 text-brand-text-muted break-words">
                           {item.publication_status === 'scheduled' ? (
                             <div className="flex flex-col gap-0.5">
                               <span className="flex items-center gap-1 font-semibold text-amber-700">
@@ -1307,20 +1307,20 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                             <span className="text-gray-400 font-normal">Sem agendamento</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 uppercase font-semibold text-[10px] text-brand-text-muted">
+                        <td className="px-2 py-4 uppercase font-semibold text-[10px] text-brand-text-muted break-words">
                           {item.content_type}
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-2 py-4 break-words">
                           {item.cta_text ? (
-                            <span className="px-2 py-0.5 bg-brand-primary/10 text-brand-primary rounded font-bold block w-fit">
+                            <span className="px-2 py-0.5 bg-brand-primary/10 text-brand-primary rounded font-bold block w-fit max-w-full break-words">
                               {item.cta_text}
                             </span>
                           ) : (
                             <span className="text-gray-400">Nenhum</span>
                           )}
                         </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
-                          <div className="flex justify-end gap-1">
+                        <td className="px-2 py-4 text-right whitespace-nowrap">
+                          <div className="flex justify-end gap-0.5">
                             <button
                               disabled={index === 0}
                               onClick={() => handleSwapDays(item, 'up')}
@@ -1337,12 +1337,12 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                             </button>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
-                          <div className="flex justify-end gap-1">
+                        <td className="px-2 py-4 text-right whitespace-nowrap">
+                          <div className="flex justify-end gap-0.5">
                             <button
                               onClick={() => handleEditContent(item)}
                               title="Editar conteúdo"
-                              className="p-2 border border-brand-border hover:bg-brand-bg rounded-xl text-brand-text transition-colors cursor-pointer"
+                              className="p-1.5 border border-brand-border hover:bg-brand-bg rounded-xl text-brand-text transition-colors cursor-pointer"
                             >
                               <Edit size={14} />
                             </button>
@@ -1350,7 +1350,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                               <button
                                 onClick={() => handleDepublish(item)}
                                 title="Voltar para Rascunho"
-                                className="p-2 border border-brand-border hover:bg-brand-bg rounded-xl text-amber-600 transition-colors cursor-pointer"
+                                className="p-1.5 border border-brand-border hover:bg-brand-bg rounded-xl text-amber-600 transition-colors cursor-pointer"
                               >
                                 <X size={14} />
                               </button>
@@ -1358,7 +1358,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                               <button
                                 onClick={() => handlePublishImmediately(item)}
                                 title="Publicar Imediatamente"
-                                className="p-2 border border-brand-border hover:bg-brand-bg rounded-xl text-green-700 transition-colors cursor-pointer"
+                                className="p-1.5 border border-brand-border hover:bg-brand-bg rounded-xl text-green-700 transition-colors cursor-pointer"
                               >
                                 <CheckCircle2 size={14} />
                               </button>
@@ -1366,14 +1366,14 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                             <button
                               onClick={() => handleDuplicateContent(item)}
                               title="Duplicar"
-                              className="p-2 border border-brand-border hover:bg-brand-bg rounded-xl text-blue-600 transition-colors cursor-pointer"
+                              className="p-1.5 border border-brand-border hover:bg-brand-bg rounded-xl text-blue-600 transition-colors cursor-pointer"
                             >
                               <Copy size={14} />
                             </button>
                             <button
                               onClick={() => handleArchiveContent(item)}
                               title="Arquivar"
-                              className="p-2 border border-brand-border hover:bg-brand-bg rounded-xl text-red-600 transition-colors cursor-pointer"
+                              className="p-1.5 border border-brand-border hover:bg-brand-bg rounded-xl text-red-600 transition-colors cursor-pointer"
                             >
                               <Trash2 size={14} />
                             </button>

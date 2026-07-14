@@ -2609,7 +2609,7 @@ export default function AdminPanel() {
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col">
-      <main className="p-4 md:p-8 max-w-[1360px] mx-auto flex-1 w-full space-y-8 animate-fadeIn">
+      <main className="p-4 md:p-8 w-[95%] max-w-none mx-auto flex-1 space-y-8 animate-fadeIn">
         {/* Cabecalho */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-brand-border/60 pb-6">
           <div>
