@@ -6,7 +6,8 @@ import {
   Plus, Edit, Eye, Trash2, Copy, Check, Upload, Calendar, Clock, 
   BarChart3, List, MoveUp, MoveDown, ArrowLeft, ExternalLink, 
   RefreshCw, FileText, Info, AlertTriangle, AlertCircle, Sparkles, 
-  CheckCircle2, X, MessageSquare, ChevronRight, Settings, Image as ImageIcon
+  CheckCircle2, X, MessageSquare, ChevronRight, Settings, Image as ImageIcon,
+  Layout as LayoutIcon
 } from 'lucide-react';
 
 interface Journey {
@@ -802,7 +803,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white border border-brand-border p-6 rounded-2xl shadow-sm">
         <div>
           <h2 className="text-xl font-bold text-brand-primary flex items-center gap-2">
-            <Layout size={24} className="text-brand-secondary" />
+            <LayoutIcon size={24} className="text-brand-secondary" />
             Jornada de 15 dias
           </h2>
           <p className="text-xs text-brand-text-muted mt-1">
@@ -866,7 +867,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
             </div>
           ) : journeys.length === 0 ? (
             <div className="text-center py-20">
-              <Layout className="w-12 h-12 text-brand-border mx-auto mb-2" />
+              <LayoutIcon className="w-12 h-12 text-brand-border mx-auto mb-2" />
               <h3 className="font-semibold text-brand-text">Nenhuma jornada cadastrada</h3>
               <p className="text-xs text-brand-text-muted mt-1">Crie sua primeira jornada de conteúdos para o WhatsApp.</p>
             </div>
