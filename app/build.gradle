@@ -51,14 +51,14 @@ def twaManifest = [
 ]
 
 android {
-    compileSdkVersion 36
+    compileSdkVersion 35
     namespace "com.evolucaoclinica.app"
     defaultConfig {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 8
-        versionName "8"
+        versionCode 10
+        versionName "10"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -213,4 +213,10 @@ dependencies {
     
         implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.6.2'
     
+}
+
+configurations.all {
+    resolutionStrategy {
+        force 'androidx.browser:browser:1.8.0'
+    }
 }
