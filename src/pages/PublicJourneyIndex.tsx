@@ -7,7 +7,7 @@ import { trackJourneyEvent } from '../services/analytics';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { 
-  Calendar, Clock, CheckCircle2, ChevronRight, MessageSquare, 
+  Calendar, Clock, CheckCircle2, ChevronRight, ChevronDown, MessageSquare,
   ExternalLink, ArrowUp, BookOpen, AlertCircle, Award, Loader2,
   Lock, PlayCircle, Eye, HelpCircle, ArrowRight
 } from 'lucide-react';
@@ -64,6 +64,7 @@ export default function PublicJourneyIndex() {
   const [contents, setContents] = useState<JourneyContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isJourneyIndexOpen, setIsJourneyIndexOpen] = useState(false);
 
   // Rastreamento de UTMs
   const [utmQueryString, setUtmQueryString] = useState('');
@@ -494,7 +495,7 @@ export default function PublicJourneyIndex() {
       {/* SEÇÃO "COMECE POR AQUI" */}
       <section className="max-w-5xl mx-auto px-6 py-8 w-full">
         <div className="bg-gradient-to-r from-[#105576] to-[#376F8D] text-white rounded-3xl p-6 sm:p-8 shadow-sm space-y-4">
-          <h2 className="text-xl font-bold flex items-center gap-2">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <BookOpen size={22} className="text-[#719EB9]" />
             Comece por aqui
           </h2>
@@ -519,53 +520,67 @@ export default function PublicJourneyIndex() {
 
       {/* ÍNDICE DOS 15 DIAS (Cards de Atalho) */}
       <section className="max-w-5xl mx-auto px-6 py-6 w-full space-y-4">
-        <h3 className="text-base font-bold text-[#105576] border-b border-gray-150 pb-2 flex items-center gap-2">
-          <Calendar size={18} />
-          Índice e Atalhos da Jornada
-        </h3>
+        <button
+          type="button"
+          onClick={() => setIsJourneyIndexOpen((isOpen) => !isOpen)}
+          aria-expanded={isJourneyIndexOpen}
+          aria-controls="journey-index-grid"
+          className="w-full text-left text-base font-bold text-[#105576] border-b border-gray-150 pb-2 flex items-center justify-between gap-2 cursor-pointer"
+        >
+          <span className="flex items-center gap-2">
+            <Calendar size={18} />
+            Índice e Atalhos da Jornada
+          </span>
+          <ChevronDown
+            size={18}
+            className={`transition-transform duration-200 ${isJourneyIndexOpen ? 'rotate-180' : ''}`}
+          />
+        </button>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-          {days.map((d) => {
-            const isComingSoon = d.status === 'coming_soon';
-            const isCurrent = d.status === 'current';
+        {isJourneyIndexOpen && (
+          <div id="journey-index-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {days.map((d) => {
+              const isComingSoon = d.status === 'coming_soon';
+              const isCurrent = d.status === 'current';
 
-            return (
-              <button
-                key={d.dayNumber}
-                disabled={isComingSoon}
-                onClick={() => {
-                  scrollToElement(`dia-${d.dayNumber}`);
-                  trackJourneyEvent('journey_index_shortcut_click', { day: d.dayNumber });
-                }}
-                className={`p-3 rounded-2xl border text-left flex flex-col justify-between h-20 transition-all ${
-                  isComingSoon
-                    ? 'bg-gray-50 border-gray-150 opacity-60 cursor-not-allowed'
-                    : isCurrent
-                      ? 'bg-white border-[#105576] ring-2 ring-[#105576]/10 hover:bg-gray-50 cursor-pointer'
-                      : 'bg-white border-gray-150 hover:border-gray-300 hover:shadow-xs cursor-pointer'
-                }`}
-              >
-                <div className="flex justify-between items-start w-full">
-                  <span className={`text-[10px] font-bold ${isComingSoon ? 'text-gray-400' : 'text-[#376F8D]'}`}>
-                    Dia {String(d.dayNumber).padStart(2, '0')}
-                  </span>
-                  <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+              return (
+                <button
+                  key={d.dayNumber}
+                  disabled={isComingSoon}
+                  onClick={() => {
+                    scrollToElement(`dia-${d.dayNumber}`);
+                    trackJourneyEvent('journey_index_shortcut_click', { day: d.dayNumber });
+                  }}
+                  className={`p-3 rounded-2xl border text-left flex flex-col justify-between h-20 transition-all ${
                     isComingSoon
-                      ? 'bg-gray-100 text-gray-400'
+                      ? 'bg-gray-50 border-gray-150 opacity-60 cursor-not-allowed'
                       : isCurrent
-                        ? 'bg-[#105576] text-white'
-                        : 'bg-green-50 text-green-700'
-                  }`}>
-                    {isComingSoon ? 'Em breve' : isCurrent ? 'Recente' : 'Ok'}
-                  </span>
-                </div>
-                <p className={`text-[10px] font-bold line-clamp-1 mt-1 ${isComingSoon ? 'text-gray-400' : 'text-gray-700'}`}>
-                  {d.title}
-                </p>
-              </button>
-            );
-          })}
-        </div>
+                        ? 'bg-white border-[#105576] ring-2 ring-[#105576]/10 hover:bg-gray-50 cursor-pointer'
+                        : 'bg-white border-gray-150 hover:border-gray-300 hover:shadow-xs cursor-pointer'
+                  }`}
+                >
+                  <div className="flex justify-between items-start w-full">
+                    <span className={`text-[10px] font-bold ${isComingSoon ? 'text-gray-400' : 'text-[#376F8D]'}`}>
+                      Dia {String(d.dayNumber).padStart(2, '0')}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                      isComingSoon
+                        ? 'bg-gray-100 text-gray-400'
+                        : isCurrent
+                          ? 'bg-[#105576] text-white'
+                          : 'bg-green-50 text-green-700'
+                    }`}>
+                      {isComingSoon ? 'Em breve' : isCurrent ? 'Recente' : 'Ok'}
+                    </span>
+                  </div>
+                  <p className={`text-[10px] font-bold line-clamp-1 mt-1 ${isComingSoon ? 'text-gray-400' : 'text-gray-700'}`}>
+                    {d.title}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* FEED VERTICAL DE POSTAGENS COMPLETAS */}
