@@ -642,7 +642,7 @@ export default function PublicJourneyIndex() {
                     />
                   </div>
                 ) : d.imageUrl ? (
-                  <div className="aspect-video w-full border-b border-gray-100 bg-gray-50 overflow-hidden relative">
+                  <div className="aspect-square w-full border-b border-gray-100 bg-gray-50 overflow-hidden relative">
                     <img
                       src={d.imageUrl}
                       alt={d.title}
