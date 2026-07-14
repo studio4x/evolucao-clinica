@@ -22,7 +22,7 @@ plugins {
 
 def twaManifest = [
     applicationId: 'com.evolucaoclinica.app',
-    hostName: 'evolucaoclinica.app.br', // The domain being opened in the TWA.
+    hostName: 'www.evolucaoclinica.app.br', // The domain being opened in the TWA.
     launchUrl: '/?utm_source=pwa', // The start path for the TWA. Must be relative to the domain.
     name: 'Evolução Clínica', // The application name.
     launcherName: 'Evolução Clínica', // The name shown on the Android Launcher.
@@ -57,8 +57,8 @@ android {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 16
-        versionName "16"
+        versionCode 18
+        versionName "18"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -76,17 +76,17 @@ android {
             // The URL the Web Manifest for the Progressive Web App that the TWA points to. This
             // is used by Chrome OS and Meta Quest to open the Web version of the PWA instead of
             // the TWA, as it will probably give a better user experience for non-mobile devices.
-            resValue "string", "webManifestUrl", 'https://evolucaoclinica.app.br/manifest.webmanifest'
+            resValue "string", "webManifestUrl", 'https://www.evolucaoclinica.app.br/manifest.webmanifest'
         
 
         
             // This is used by Meta Quest.
-            resValue "string", "fullScopeUrl", 'https://evolucaoclinica.app.br/'
+            resValue "string", "fullScopeUrl", 'https://www.evolucaoclinica.app.br/'
         
 
         
             // The data for the app to support web share target.
-            resValue "string", "shareTarget", '{\\"action\\":\\"https://evolucaoclinica.app.br/api/share-target\\",\\"method\\":\\"POST\\",\\"enctype\\":\\"multipart/form-data\\",\\"params\\":{\\"title\\":\\"title\\",\\"text\\":\\"text\\",\\"url\\":\\"url\\",\\"files\\":[{\\"name\\":\\"audio\\",\\"accept\\":[\\"audio/*\\",\\"video/*\\",\\"application/ogg\\",\\"*/*\\"]}]}}'
+            resValue "string", "shareTarget", '{\\"action\\":\\"https://www.evolucaoclinica.app.br/api/share-target\\",\\"method\\":\\"POST\\",\\"enctype\\":\\"multipart/form-data\\",\\"params\\":{\\"title\\":\\"title\\",\\"text\\":\\"text\\",\\"url\\":\\"url\\",\\"files\\":[{\\"name\\":\\"audio\\",\\"accept\\":[\\"audio/*\\",\\"video/*\\",\\"application/ogg\\",\\"*/*\\"]}]}}'
         
 
         // The hostname is used when building the intent-filter, so the TWA is able to

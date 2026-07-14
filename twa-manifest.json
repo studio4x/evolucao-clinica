@@ -1,6 +1,6 @@
 {
   "packageId": "com.evolucaoclinica.app",
-  "host": "evolucaoclinica.app.br",
+  "host": "www.evolucaoclinica.app.br",
   "name": "Evolução Clínica",
   "launcherName": "Evolução Clínica",
   "display": "standalone",
@@ -13,18 +13,18 @@
   "backgroundColor": "#FFFFFF",
   "enableNotifications": true,
   "startUrl": "/?utm_source=pwa",
-  "iconUrl": "https://evolucaoclinica.app.br/api/pwa-icon/512?v=rxc1av",
-  "maskableIconUrl": "https://evolucaoclinica.app.br/api/pwa-icon/maskable?v=rxc1av",
+  "iconUrl": "https://www.evolucaoclinica.app.br/api/pwa-icon/512?v=rxc1av",
+  "maskableIconUrl": "https://www.evolucaoclinica.app.br/api/pwa-icon/maskable?v=rxc1av",
   "splashScreenFadeOutDuration": 300,
   "signingKey": {
     "path": "c:\\PLATAFORMAS VS CODE\\EVOLUÇÃO CLINICA\\evolucao-clinica\\android.keystore",
     "alias": "android"
   },
-  "appVersionName": "16",
-  "appVersionCode": 16,
+  "appVersionName": "18",
+  "appVersionCode": 18,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "https://evolucaoclinica.app.br/manifest.webmanifest",
+  "webManifestUrl": "https://www.evolucaoclinica.app.br/manifest.webmanifest",
   "fallbackType": "customtabs",
   "features": {},
   "alphaDependencies": {
@@ -33,10 +33,10 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "https://evolucaoclinica.app.br/",
+  "fullScopeUrl": "https://www.evolucaoclinica.app.br/",
   "minSdkVersion": 21,
   "shareTarget": {
-    "action": "https://evolucaoclinica.app.br/api/share-target",
+    "action": "https://www.evolucaoclinica.app.br/api/share-target",
     "method": "POST",
     "enctype": "multipart/form-data",
     "params": {
@@ -64,5 +64,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "16"
+  "appVersion": "18"
 }
