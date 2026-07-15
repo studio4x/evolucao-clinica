@@ -2099,15 +2099,16 @@ app.get("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, r
   }
 });
 
-// 5. Atualizar configuração do push diário (Apenas Admin)
-app.post("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req: any, res) => {
   try {
     const config = req.body;
     const { error } = await supabaseAdmin
       .from("settings")
       .upsert({
         id: "daily_push_config",
-        api_key: JSON.stringify(config)
+        api_key: JSON.stringify(config),
+        updated_at: new Date().toISOString(),
+        updated_by: req.user?.id || "system"
       }, {
         onConflict: "id"
       });
@@ -3952,7 +3953,11 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
     config.last_sent_date = currentDateStr;
     await supabaseAdmin
       .from("settings")
-      .update({ api_key: JSON.stringify(config) })
+      .update({
+        api_key: JSON.stringify(config),
+        updated_at: new Date().toISOString(),
+        updated_by: "system"
+      })
       .eq("id", "daily_push_config");
 
     res.json({
