@@ -3,7 +3,8 @@ import { supabase } from '../../supabaseClient';
 import { 
   Bell, Save, Play, Loader2, Check, AlertTriangle, 
   HelpCircle, Calendar, Clock, Upload, Trash2, Smartphone, 
-  ChevronRight, AlignLeft, Link as LinkIcon, Image as ImageIcon
+  ChevronRight, AlignLeft, Link as LinkIcon, Image as ImageIcon,
+  History, RefreshCw
 } from 'lucide-react';
 
 interface DailyPushConfig {
@@ -16,6 +17,21 @@ interface DailyPushConfig {
   icon_url: string;
   destination_url: string;
   last_sent_date?: string;
+}
+
+interface PushLog {
+  id: string;
+  sent_at: string;
+  status: 'success' | 'error';
+  recipients_count: number;
+  error_message?: string;
+  payload: {
+    title?: string;
+    body?: string;
+    link?: string;
+    image?: string;
+    icon?: string;
+  };
 }
 
 const WEEKDAYS = [
@@ -48,9 +64,43 @@ export default function DailyPushNotificationManager() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
 
+  const [history, setHistory] = useState<PushLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   useEffect(() => {
     fetchConfig();
+    fetchHistory();
   }, []);
+
+  const fetchHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) return;
+
+      const res = await fetch('/api/admin/daily-push-history', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setHistory(data);
+        } else {
+          setHistory([]);
+        }
+      } else {
+        setHistory([]);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar histórico de push:', err);
+      setHistory([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
 
   const fetchConfig = async () => {
     setLoading(true);
@@ -485,20 +535,35 @@ export default function DailyPushNotificationManager() {
             ) : (
               <div className="space-y-3">
                 {history.map((log) => {
-                  const date = new Date(log.sent_at);
-                  const formattedDate = date.toLocaleString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  });
-                  
+                  if (!log) return null;
+                  let formattedDate = 'Data desconhecida';
+                  try {
+                    if (log.sent_at) {
+                      const date = new Date(log.sent_at);
+                      if (!isNaN(date.getTime())) {
+                        formattedDate = date.toLocaleString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        });
+                      }
+                    }
+                  } catch (e) {
+                    console.error("Erro ao formatar data do log:", e);
+                  }
+
+                  const status = log.status || 'error';
+                  const recipientsCount = log.recipients_count || 0;
+                  const errorMessage = log.error_message || '';
+                  const payload = log.payload || {};
+
                   return (
                     <div 
-                      key={log.id} 
+                      key={log.id || Math.random().toString()} 
                       className={`p-3.5 rounded-xl border text-xs transition-all ${
-                        log.status === 'success' 
+                        status === 'success' 
                           ? 'bg-emerald-50/20 border-emerald-100/50 hover:bg-emerald-50/30' 
                           : 'bg-red-50/20 border-red-100/50 hover:bg-red-50/30'
                       }`}
@@ -507,32 +572,32 @@ export default function DailyPushNotificationManager() {
                         <div className="w-full">
                           <div className="flex items-center gap-2">
                             <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] tracking-wide uppercase ${
-                              log.status === 'success' 
+                              status === 'success' 
                                 ? 'bg-emerald-100 text-emerald-800' 
-                                : 'bg-red-100 text-red-800'
+                                : 'bg-red-100 text-red-805'
                             }`}>
-                              {log.status === 'success' ? 'Sucesso' : 'Falha'}
+                              {status === 'success' ? 'Sucesso' : 'Falha'}
                             </span>
                             <span className="font-semibold text-brand-text-muted">{formattedDate}</span>
                           </div>
                           
-                          {log.status === 'success' ? (
+                          {status === 'success' ? (
                             <p className="text-brand-text font-medium mt-2">
-                              Enviada com sucesso para <strong className="text-brand-primary">{log.recipients_count}</strong> profissionais ativos.
+                              Enviada com sucesso para <strong className="text-brand-primary">{recipientsCount}</strong> profissionais ativos.
                             </p>
                           ) : (
                             <div className="mt-2 space-y-1">
                               <p className="text-red-800 font-bold">Erro no processamento do disparo:</p>
                               <p className="text-red-750 bg-red-100/10 p-2 rounded-lg font-mono text-[10px] select-all border border-red-100 leading-normal whitespace-pre-wrap">
-                                {log.error_message || 'Erro desconhecido.'}
+                                {errorMessage || 'Erro desconhecido.'}
                               </p>
                             </div>
                           )}
 
-                          {log.payload && log.payload.title && (
+                          {payload && payload.title && (
                             <div className="mt-2 text-stone-500 bg-stone-50 p-2 rounded-lg leading-relaxed border border-stone-100">
                               <span className="font-bold text-[10px] text-stone-400 block mb-0.5 uppercase tracking-wider">Conteúdo enviado:</span>
-                              <strong>{log.payload.title}</strong> - {log.payload.body}
+                              <strong>{payload.title}</strong> - {payload.body || ''}
                             </div>
                           )}
                         </div>
