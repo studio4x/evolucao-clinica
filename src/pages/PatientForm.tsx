@@ -961,17 +961,7 @@ export default function PatientForm() {
                     ) : showLinkFolder ? (
                       <div className="space-y-3 p-4 bg-brand-bg border border-brand-border rounded-xl">
                         <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-brand-text">Vincular pasta pelo link do Drive</p>
-                            <button
-                              type="button"
-                              onClick={() => setShowLinkFolderHelp(true)}
-                              className="p-1 rounded-full text-brand-text-muted hover:text-brand-primary hover:bg-brand-primary/10 transition-colors"
-                              title="Como obter o link da pasta?"
-                            >
-                              <HelpCircle size={15} />
-                            </button>
-                          </div>
+                          <p className="text-sm font-semibold text-brand-text">Vincular pasta pelo link do Drive</p>
                           <button
                             type="button"
                             onClick={() => { setShowLinkFolder(false); setLinkFolderUrl(''); setLinkFolderName(''); }}
@@ -980,6 +970,21 @@ export default function PatientForm() {
                             <X size={16} />
                           </button>
                         </div>
+
+                        {/* Banner de ajuda destacado */}
+                        <button
+                          type="button"
+                          onClick={() => setShowLinkFolderHelp(true)}
+                          className="w-full flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-xl transition-all text-left group"
+                        >
+                          <span className="text-xl flex-shrink-0">🤔</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-amber-800">Não sabe onde encontrar o link?</p>
+                            <p className="text-xs text-amber-700 leading-snug">Clique aqui e veja o passo a passo para copiar o link da pasta do Google Drive.</p>
+                          </div>
+                          <HelpCircle size={16} className="text-amber-500 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                        </button>
+
                         <div>
                           <label className="block text-xs font-medium text-brand-text-muted mb-1">URL da pasta (copie do Google Drive)</label>
                           <input
