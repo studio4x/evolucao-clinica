@@ -150,6 +150,7 @@ export default function PatientForm() {
   const [showLinkFolder, setShowLinkFolder] = useState(false);
   const [linkFolderUrl, setLinkFolderUrl] = useState('');
   const [linkFolderName, setLinkFolderName] = useState('');
+  const [showLinkFolderHelp, setShowLinkFolderHelp] = useState(false);
   const [isGlobalSearch, setIsGlobalSearch] = useState(false);
   
   const [loading, setLoading] = useState(false);
@@ -960,7 +961,17 @@ export default function PatientForm() {
                     ) : showLinkFolder ? (
                       <div className="space-y-3 p-4 bg-brand-bg border border-brand-border rounded-xl">
                         <div className="flex items-center justify-between">
-                          <p className="text-sm font-semibold text-brand-text">Vincular pasta pelo link do Drive</p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-brand-text">Vincular pasta pelo link do Drive</p>
+                            <button
+                              type="button"
+                              onClick={() => setShowLinkFolderHelp(true)}
+                              className="p-1 rounded-full text-brand-text-muted hover:text-brand-primary hover:bg-brand-primary/10 transition-colors"
+                              title="Como obter o link da pasta?"
+                            >
+                              <HelpCircle size={15} />
+                            </button>
+                          </div>
                           <button
                             type="button"
                             onClick={() => { setShowLinkFolder(false); setLinkFolderUrl(''); setLinkFolderName(''); }}
@@ -1337,10 +1348,105 @@ export default function PatientForm() {
         showCloseButton={false}
       />
 
+
       <TemplateExplanationModal
         isOpen={isTemplateHelpOpen}
         onClose={() => setIsTemplateHelpOpen(false)}
       />
+
+      {/* Modal de ajuda: como obter o link da pasta no Google Drive */}
+      {showLinkFolderHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-brand-border animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-5 border-b border-brand-border flex items-center justify-between bg-brand-primary/5">
+              <div className="flex items-center gap-2 text-brand-primary font-bold">
+                <HelpCircle size={20} />
+                <span>Como obter o link da pasta</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowLinkFolderHelp(false)}
+                className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors text-brand-text-muted"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-brand-text-muted leading-relaxed">
+                Siga os passos abaixo para copiar o link da pasta existente no seu Google Drive:
+              </p>
+
+              <ol className="space-y-4">
+                {[
+                  {
+                    step: 1,
+                    title: 'Acesse o Google Drive',
+                    desc: 'Abra o Google Drive no seu navegador (drive.google.com) e faça login com a conta Google vinculada ao app.',
+                  },
+                  {
+                    step: 2,
+                    title: 'Navegue até a pasta',
+                    desc: 'Encontre a pasta que contém os prontuários do paciente. Clique nela para abri-la.',
+                  },
+                  {
+                    step: 3,
+                    title: 'Copie o link da barra de endereço',
+                    desc: 'Com a pasta aberta, clique na barra de endereço do navegador, selecione tudo (Ctrl+A) e copie (Ctrl+C). O link terá o formato:',
+                    extra: 'https://drive.google.com/drive/folders/...',
+                  },
+                  {
+                    step: 4,
+                    title: 'Cole aqui no app',
+                    desc: 'Volte para este formulário, cole o link no campo "URL da pasta" e clique em Confirmar vínculo.',
+                  },
+                ].map(({ step, title, desc, extra }) => (
+                  <li key={step} className="flex gap-3">
+                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                      {step}
+                    </span>
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-brand-text">{title}</p>
+                      <p className="text-xs text-brand-text-muted leading-relaxed">{desc}</p>
+                      {extra && (
+                        <p className="text-xs font-mono bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-brand-primary break-all">
+                          {extra}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ol>
+
+              <div className="pt-2 border-t border-brand-border">
+                <a
+                  href="https://drive.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary font-semibold text-sm rounded-xl transition-colors"
+                >
+                  <FolderOpen size={16} />
+                  Abrir Google Drive em nova aba
+                </a>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 pb-5">
+              <button
+                type="button"
+                onClick={() => setShowLinkFolderHelp(false)}
+                className="w-full btn-primary py-2.5"
+              >
+                Entendi, vou copiar o link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   );
 }
