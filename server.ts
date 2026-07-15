@@ -345,6 +345,10 @@ BEGIN
   IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'publish-journey-contents-job') THEN
     PERFORM cron.unschedule('publish-journey-contents-job');
   END IF;
+
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-daily-push-job') THEN
+    PERFORM cron.unschedule('send-daily-push-job');
+  END IF;
 END $$;
 
 SELECT cron.schedule(
@@ -373,6 +377,16 @@ SELECT cron.schedule(
   $$
   SELECT net.http_get(
     url := '${PRODUCTION_ORIGIN}/api/cron/publish-journey-contents?secret=${cronSecretParam}'
+  );
+  $$
+);
+
+SELECT cron.schedule(
+  'send-daily-push-job',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_get(
+    url := '${PRODUCTION_ORIGIN}/api/cron/send-daily-push?secret=${cronSecretParam}'
   );
   $$
 );
@@ -2049,6 +2063,121 @@ app.post("/api/notifications/unsubscribe", requireAuth, async (req: any, res) =>
   }
 });
 
+// 4. Obter configuração do push diário (Apenas Admin)
+app.get("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "daily_push_config")
+      .maybeSingle();
+
+    if (error) throw error;
+    
+    let config = {
+      enabled: false,
+      days: [1, 2, 3, 4, 5],
+      time: "08:00",
+      title: "⏰ Hora das Evoluções!",
+      body: "Não esqueça de registrar as evoluções clínicas de hoje.",
+      image_url: "",
+      icon_url: "",
+      destination_url: "/painel/patients"
+    };
+
+    if (data && data.api_key) {
+      try {
+        config = { ...config, ...JSON.parse(data.api_key) };
+      } catch (e) {
+        console.error("Erro ao ler JSON de daily_push_config:", e);
+      }
+    }
+
+    res.json(config);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Atualizar configuração do push diário (Apenas Admin)
+app.post("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const config = req.body;
+    const { error } = await supabaseAdmin
+      .from("settings")
+      .upsert({
+        id: "daily_push_config",
+        api_key: JSON.stringify(config)
+      }, {
+        onConflict: "id"
+      });
+
+    if (error) throw error;
+    res.json({ success: true, config });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 6. Testar push diário imediatamente no próprio dispositivo (Apenas Admin)
+app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const config = req.body;
+    const notifSettings = await getNotificationSettings();
+    webpush.setVapidDetails(
+      notifSettings.vapid_subject,
+      notifSettings.vapid_public_key,
+      notifSettings.vapid_private_key
+    );
+
+    const { data: subscriptions, error: subsError } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select("*")
+      .eq("user_id", req.user.id);
+
+    if (subsError) throw subsError;
+
+    if (!subscriptions || subscriptions.length === 0) {
+      return res.status(400).json({ error: "Você não tem nenhuma inscrição push ativa neste navegador/dispositivo para receber o teste." });
+    }
+
+    const payload = JSON.stringify({
+      title: `[Teste] ${config.title || "Hora das Evoluções!"}`,
+      body: config.body || "Mensagem de teste.",
+      link: config.destination_url || "/painel/patients",
+      image: config.image_url || undefined,
+      icon: config.icon_url || undefined
+    });
+
+    let successCount = 0;
+    for (const sub of subscriptions) {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: sub.keys
+          },
+          payload
+        );
+        successCount++;
+      } catch (pushErr: any) {
+        console.warn("Falha no teste de push diário:", pushErr.message);
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+          await supabaseAdmin
+            .from("push_subscriptions")
+            .delete()
+            .eq("id", sub.id);
+        }
+      }
+    }
+
+    res.json({ success: true, message: `Teste enviado para ${successCount} dispositivo(s).` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async (req: any, res) => {
   const targetUserId = req.params.userId;
 
@@ -3674,6 +3803,168 @@ app.get("/api/cron/publish-journey-contents", async (req: any, res) => {
     return res.status(500).json({ error: error.message || "Erro interno" });
   }
 });
+
+
+// 4.4. Cron para Enviar Notificação Push Diária Global
+app.get("/api/cron/send-daily-push", async (req: any, res) => {
+  const authHeader = req.headers.authorization;
+  const cronSecret = CRON_SECRET;
+  
+  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+    return res.status(401).json({ error: "Nao autorizado" });
+  }
+
+  try {
+    // 1. Obter data/hora atual no fuso horário do Brasil (America/Sao_Paulo: UTC-3)
+    const tzOffset = -3;
+    const now = new Date();
+    const brazilTime = new Date(now.getTime() + (tzOffset * 60 * 60 * 1000));
+    
+    const currentDayOfWeek = brazilTime.getUTCDay(); // 0 = Domingo, 1 = Segunda, ...
+    const currentDateStr = brazilTime.toISOString().split('T')[0]; // YYYY-MM-DD
+    const currentHour = brazilTime.getUTCHours();
+    const currentMinute = brazilTime.getUTCMinutes();
+    const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+
+    console.log(`[Cron Daily Push] Verificando envio diário. Horário Brasil: ${currentDateStr} ${currentTimeStr}, Dia: ${currentDayOfWeek}`);
+
+    // 2. Obter configurações da notificação diária
+    const { data: configData, error: configError } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "daily_push_config")
+      .maybeSingle();
+
+    if (configError) throw configError;
+
+    if (!configData || !configData.api_key) {
+      return res.json({ success: true, message: "Configuração daily_push_config não encontrada ou vazia." });
+    }
+
+    let config: any = {};
+    try {
+      config = JSON.parse(configData.api_key);
+    } catch (e) {
+      throw new Error("Erro ao ler JSON de daily_push_config");
+    }
+
+    if (!config.enabled) {
+      return res.json({ success: true, message: "Notificação diária desativada." });
+    }
+
+    // Verifica se o dia da semana atual está configurado
+    const configuredDays = config.days || [];
+    if (!configuredDays.includes(currentDayOfWeek)) {
+      return res.json({ success: true, message: `Hoje (dia ${currentDayOfWeek}) não está na lista de dias configurados.` });
+    }
+
+    // Verifica se há horário configurado e se o horário atual já passou do configurado
+    if (!config.time) {
+      return res.json({ success: true, message: "Horário de envio não configurado." });
+    }
+
+    const configTimeStr = config.time.substring(0, 5); // "HH:MM"
+    if (currentTimeStr < configTimeStr) {
+      return res.json({ success: true, message: `Horário configurado (${configTimeStr}) ainda não chegou hoje (${currentTimeStr}).` });
+    }
+
+    if (config.last_sent_date === currentDateStr && req.query.force !== "true") {
+      return res.json({ success: true, message: "Notificação diária já foi enviada hoje." });
+    }
+
+    // 3. Buscar inscrições de push de profissionais ativos
+    const { data: subscriptions, error: subsError } = await supabaseAdmin
+      .from("push_subscriptions")
+      .select(`
+        *,
+        professionals:user_id!inner(
+          status,
+          role,
+          subscription_status,
+          subscription_ends_at
+        )
+      `);
+
+    if (subsError) throw subsError;
+
+    if (!subscriptions || subscriptions.length === 0) {
+      return res.json({ success: true, message: "Nenhuma inscrição push encontrada." });
+    }
+
+    // Filtrar profissionais ativos e com plano/trial ativo (exceto admin que sempre recebe)
+    const activeSubs = subscriptions.filter((sub: any) => {
+      const prof = sub.professionals;
+      if (!prof) return false;
+      if (prof.status !== "active") return false;
+      if (prof.role === "admin") return true;
+
+      const endsAt = prof.subscription_ends_at ? new Date(prof.subscription_ends_at) : null;
+      const isExpired = endsAt ? endsAt < now : false;
+      const isActive = prof.subscription_status === "active" || prof.subscription_status === "trialing";
+      return isActive && !isExpired;
+    });
+
+    if (activeSubs.length === 0) {
+      return res.json({ success: true, message: "Nenhum profissional com assinatura ativa inscrito para push." });
+    }
+
+    // 4. Preparar payload de push
+    const notifSettings = await getNotificationSettings();
+    webpush.setVapidDetails(
+      notifSettings.vapid_subject,
+      notifSettings.vapid_public_key,
+      notifSettings.vapid_private_key
+    );
+
+    const payload = JSON.stringify({
+      title: config.title || "Hora das Evoluções!",
+      body: config.body || "Não se esqueça de registrar as evoluções clínicas hoje.",
+      link: config.destination_url || "/painel/patients",
+      image: config.image_url || undefined,
+      icon: config.icon_url || undefined
+    });
+
+    console.log(`[Cron Daily Push] Disparando push para ${activeSubs.length} inscrições...`);
+
+    let sentCount = 0;
+    for (const sub of activeSubs) {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: sub.keys
+          },
+          payload
+        );
+        sentCount++;
+      } catch (pushErr: any) {
+        console.warn("Falha no disparo diário de push:", pushErr.message);
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+          await supabaseAdmin
+            .from("push_subscriptions")
+            .delete()
+            .eq("id", sub.id);
+        }
+      }
+    }
+
+    // 5. Atualizar last_sent_date nas configurações
+    config.last_sent_date = currentDateStr;
+    await supabaseAdmin
+      .from("settings")
+      .update({ api_key: JSON.stringify(config) })
+      .eq("id", "daily_push_config");
+
+    res.json({
+      success: true,
+      message: `Envio concluído. Disparado para ${sentCount} de ${activeSubs.length} inscrições ativas.`
+    });
+  } catch (err: any) {
+    console.error("[Cron Daily Push] Erro no job:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 
 // 5. Testar Servidor SMTP (Apenas Admin)

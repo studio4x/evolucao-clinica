@@ -17,6 +17,8 @@ import AdminFaqCrud from '../components/support/AdminFaqCrud';
 import MigrationRequestsAdmin from '../components/admin/MigrationRequestsAdmin';
 import FeedbackAdmin from '../components/admin/FeedbackAdmin';
 import JourneyAdmin from '../components/admin/JourneyAdmin';
+import DailyPushNotificationManager from '../components/admin/DailyPushNotificationManager';
+
 
 interface Professional {
   id: string;
@@ -799,7 +801,7 @@ export default function AdminPanel() {
   const [notifLink, setNotifLink] = useState('');
   const [notifImageUrl, setNotifImageUrl] = useState('');
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [pushNotificationsTab, setPushNotificationsTab] = useState<'manual' | 'platform'>('manual');
+  const [pushNotificationsTab, setPushNotificationsTab] = useState<'manual' | 'platform' | 'daily_reminder'>('manual');
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -4338,6 +4340,17 @@ export default function AdminPanel() {
                   >
                     Automáticas da Plataforma
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setPushNotificationsTab('daily_reminder')}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                      pushNotificationsTab === 'daily_reminder'
+                        ? 'bg-brand-primary text-white border-brand-primary'
+                        : 'bg-white text-brand-text border-brand-border hover:border-brand-primary/40'
+                    }`}
+                  >
+                    Lembrete Diário Global
+                  </button>
                 </div>
 
                 {pushNotificationsTab === 'manual' ? (
@@ -4641,8 +4654,8 @@ export default function AdminPanel() {
                       )}
                     </div>
                   </div>
-                ) : (
-                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                ) : pushNotificationsTab === 'platform' ? (
+                    <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
                       <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
                         <Clock size={18} className="text-brand-primary" />
@@ -4766,6 +4779,8 @@ export default function AdminPanel() {
                       </div>
                     )}
                   </div>
+                ) : (
+                  <DailyPushNotificationManager />
                 )}
               </div>
             ) : activeTab === 'email_notifications' ? (
