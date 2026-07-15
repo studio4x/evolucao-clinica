@@ -151,6 +151,7 @@ export default function PatientForm() {
   const [linkFolderUrl, setLinkFolderUrl] = useState('');
   const [linkFolderName, setLinkFolderName] = useState('');
   const [showLinkFolderHelp, setShowLinkFolderHelp] = useState(false);
+  const [linkFolderHelpTab, setLinkFolderHelpTab] = useState<'browser' | 'mobile'>('browser');
   const [isGlobalSearch, setIsGlobalSearch] = useState(false);
   
   const [loading, setLoading] = useState(false);
@@ -1363,6 +1364,7 @@ export default function PatientForm() {
       {showLinkFolderHelp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden border border-brand-border animate-in zoom-in-95 duration-200">
+
             {/* Header */}
             <div className="p-5 border-b border-brand-border flex items-center justify-between bg-brand-primary/5">
               <div className="flex items-center gap-2 text-brand-primary font-bold">
@@ -1378,64 +1380,163 @@ export default function PatientForm() {
               </button>
             </div>
 
-            {/* Body */}
-            <div className="p-5 space-y-4">
-              <p className="text-sm text-brand-text-muted leading-relaxed">
-                Siga os passos abaixo para copiar o link da pasta existente no seu Google Drive:
-              </p>
-
-              <ol className="space-y-4">
-                {[
-                  {
-                    step: 1,
-                    title: 'Acesse o Google Drive',
-                    desc: 'Abra o Google Drive no seu navegador (drive.google.com) e faça login com a conta Google vinculada ao app.',
-                  },
-                  {
-                    step: 2,
-                    title: 'Navegue até a pasta',
-                    desc: 'Encontre a pasta que contém os prontuários do paciente. Clique nela para abri-la.',
-                  },
-                  {
-                    step: 3,
-                    title: 'Copie o link da barra de endereço',
-                    desc: 'Com a pasta aberta, clique na barra de endereço do navegador, selecione tudo (Ctrl+A) e copie (Ctrl+C). O link terá o formato:',
-                    extra: 'https://drive.google.com/drive/folders/...',
-                  },
-                  {
-                    step: 4,
-                    title: 'Cole aqui no app',
-                    desc: 'Volte para este formulário, cole o link no campo "URL da pasta" e clique em Confirmar vínculo.',
-                  },
-                ].map(({ step, title, desc, extra }) => (
-                  <li key={step} className="flex gap-3">
-                    <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
-                      {step}
-                    </span>
-                    <div className="space-y-1">
-                      <p className="text-sm font-semibold text-brand-text">{title}</p>
-                      <p className="text-xs text-brand-text-muted leading-relaxed">{desc}</p>
-                      {extra && (
-                        <p className="text-xs font-mono bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-brand-primary break-all">
-                          {extra}
-                        </p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ol>
-
-              <div className="pt-2 border-t border-brand-border">
-                <a
-                  href="https://drive.google.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary font-semibold text-sm rounded-xl transition-colors"
+            {/* Seletor de plataforma */}
+            <div className="px-5 pt-4">
+              <p className="text-xs text-brand-text-muted mb-3">Como você vai acessar o Google Drive agora?</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLinkFolderHelpTab('browser')}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all ${
+                    linkFolderHelpTab === 'browser'
+                      ? 'bg-brand-primary text-white border-brand-primary shadow-sm'
+                      : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-primary hover:text-brand-primary'
+                  }`}
                 >
-                  <FolderOpen size={16} />
-                  Abrir Google Drive em nova aba
-                </a>
+                  <span className="text-base">💻</span>
+                  Pelo navegador
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLinkFolderHelpTab('mobile')}
+                  className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-sm font-semibold transition-all ${
+                    linkFolderHelpTab === 'mobile'
+                      ? 'bg-brand-primary text-white border-brand-primary shadow-sm'
+                      : 'bg-white text-brand-text-muted border-brand-border hover:border-brand-primary hover:text-brand-primary'
+                  }`}
+                >
+                  <span className="text-base">📱</span>
+                  Pelo app mobile
+                </button>
               </div>
+            </div>
+
+            {/* Body — instruções por plataforma */}
+            <div className="p-5 space-y-4 max-h-[55vh] overflow-y-auto">
+
+              {linkFolderHelpTab === 'browser' ? (
+                <>
+                  <p className="text-xs text-brand-text-muted leading-relaxed">
+                    Siga os passos no <strong>Google Drive pelo navegador</strong> (computador ou celular):
+                  </p>
+                  <ol className="space-y-4">
+                    {[
+                      {
+                        step: 1,
+                        icon: '🌐',
+                        title: 'Acesse o Google Drive',
+                        desc: 'Abra drive.google.com no navegador e faça login com a conta Google vinculada ao app.',
+                      },
+                      {
+                        step: 2,
+                        icon: '📂',
+                        title: 'Navegue até a pasta',
+                        desc: 'Encontre e clique na pasta que contém os prontuários do paciente para abri-la.',
+                      },
+                      {
+                        step: 3,
+                        icon: '🔗',
+                        title: 'Copie a URL da barra de endereço',
+                        desc: 'Com a pasta aberta, clique na barra de endereço do navegador, selecione tudo (Ctrl+A) e copie (Ctrl+C). O link terá o formato:',
+                        extra: 'https://drive.google.com/drive/folders/...',
+                      },
+                      {
+                        step: 4,
+                        icon: '✅',
+                        title: 'Cole aqui no app',
+                        desc: 'Volte para este formulário, cole o link no campo "URL da pasta" e clique em Confirmar vínculo.',
+                      },
+                    ].map(({ step, icon, title, desc, extra }) => (
+                      <li key={step} className="flex gap-3">
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                          {step}
+                        </span>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-brand-text">{icon} {title}</p>
+                          <p className="text-xs text-brand-text-muted leading-relaxed">{desc}</p>
+                          {extra && (
+                            <p className="text-xs font-mono bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-brand-primary break-all">
+                              {extra}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="pt-2 border-t border-brand-border">
+                    <a
+                      href="https://drive.google.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-brand-primary/10 hover:bg-brand-primary/20 text-brand-primary font-semibold text-sm rounded-xl transition-colors"
+                    >
+                      <FolderOpen size={16} />
+                      Abrir Google Drive em nova aba
+                    </a>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-brand-text-muted leading-relaxed">
+                    Siga os passos no <strong>aplicativo Google Drive</strong> instalado no celular:
+                  </p>
+                  <ol className="space-y-4">
+                    {[
+                      {
+                        step: 1,
+                        icon: '📱',
+                        title: 'Abra o app Google Drive',
+                        desc: 'Abra o aplicativo Google Drive no seu celular. Se não tiver instalado, baixe gratuitamente na App Store ou Google Play.',
+                      },
+                      {
+                        step: 2,
+                        icon: '📂',
+                        title: 'Encontre e abra a pasta',
+                        desc: 'Navegue até a pasta que contém os prontuários do paciente e toque nela para abri-la.',
+                      },
+                      {
+                        step: 3,
+                        icon: '⋮',
+                        title: 'Toque nos três pontos (⋮) da pasta',
+                        desc: 'Com a pasta aberta, toque no ícone de três pontos (⋮) no canto superior direito — ou mantenha o dedo pressionado sobre o nome da pasta na listagem.',
+                      },
+                      {
+                        step: 4,
+                        icon: '🔗',
+                        title: 'Selecione "Copiar link"',
+                        desc: 'No menu que abrir, toque em "Copiar link". O link da pasta será copiado para a área de transferência do celular. Ele terá o formato:',
+                        extra: 'https://drive.google.com/drive/folders/...',
+                      },
+                      {
+                        step: 5,
+                        icon: '✅',
+                        title: 'Cole aqui no app',
+                        desc: 'Volte para este formulário, toque no campo "URL da pasta", cole o link (pressione e segure → Colar) e toque em Confirmar vínculo.',
+                      },
+                    ].map(({ step, icon, title, desc, extra }) => (
+                      <li key={step} className="flex gap-3">
+                        <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-primary text-white text-xs font-bold flex items-center justify-center mt-0.5">
+                          {step}
+                        </span>
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-brand-text">{icon} {title}</p>
+                          <p className="text-xs text-brand-text-muted leading-relaxed">{desc}</p>
+                          {extra && (
+                            <p className="text-xs font-mono bg-brand-bg border border-brand-border rounded-lg px-2.5 py-1.5 text-brand-primary break-all">
+                              {extra}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                  <div className="pt-2 border-t border-brand-border">
+                    <p className="text-xs text-brand-text-muted text-center">
+                      💡 Dica: se o link copiado começar com <span className="font-mono text-brand-primary">https://drive.google.com/drive/folders/</span> está correto!
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Footer */}
