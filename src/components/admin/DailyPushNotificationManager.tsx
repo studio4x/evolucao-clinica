@@ -455,6 +455,94 @@ export default function DailyPushNotificationManager() {
             </div>
 
           </div>
+
+          {/* Histórico de Disparos */}
+          <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-brand-text uppercase tracking-wider flex items-center gap-1.5 border-none p-0 pb-0">
+                <History size={16} className="text-brand-primary" />
+                Histórico de Disparos (Últimas 7 execuções)
+              </h3>
+              <button
+                type="button"
+                onClick={fetchHistory}
+                disabled={historyLoading}
+                className="p-1.5 text-brand-text-muted hover:text-brand-primary hover:bg-brand-primary/5 rounded-lg border border-transparent hover:border-brand-border transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center"
+                title="Atualizar histórico"
+              >
+                <RefreshCw size={14} className={historyLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+
+            {historyLoading ? (
+              <div className="py-8 flex items-center justify-center text-xs text-brand-text-muted">
+                <Loader2 size={16} className="animate-spin mr-2" /> Carregando histórico...
+              </div>
+            ) : history.length === 0 ? (
+              <div className="py-8 text-center text-xs text-brand-text-muted border border-dashed border-brand-border rounded-xl">
+                Nenhuma notificação enviada recentemente.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {history.map((log) => {
+                  const date = new Date(log.sent_at);
+                  const formattedDate = date.toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  
+                  return (
+                    <div 
+                      key={log.id} 
+                      className={`p-3.5 rounded-xl border text-xs transition-all ${
+                        log.status === 'success' 
+                          ? 'bg-emerald-50/20 border-emerald-100/50 hover:bg-emerald-50/30' 
+                          : 'bg-red-50/20 border-red-100/50 hover:bg-red-50/30'
+                      }`}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="w-full">
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] tracking-wide uppercase ${
+                              log.status === 'success' 
+                                ? 'bg-emerald-100 text-emerald-800' 
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {log.status === 'success' ? 'Sucesso' : 'Falha'}
+                            </span>
+                            <span className="font-semibold text-brand-text-muted">{formattedDate}</span>
+                          </div>
+                          
+                          {log.status === 'success' ? (
+                            <p className="text-brand-text font-medium mt-2">
+                              Enviada com sucesso para <strong className="text-brand-primary">{log.recipients_count}</strong> profissionais ativos.
+                            </p>
+                          ) : (
+                            <div className="mt-2 space-y-1">
+                              <p className="text-red-800 font-bold">Erro no processamento do disparo:</p>
+                              <p className="text-red-750 bg-red-100/10 p-2 rounded-lg font-mono text-[10px] select-all border border-red-100 leading-normal whitespace-pre-wrap">
+                                {log.error_message || 'Erro desconhecido.'}
+                              </p>
+                            </div>
+                          )}
+
+                          {log.payload && log.payload.title && (
+                            <div className="mt-2 text-stone-500 bg-stone-50 p-2 rounded-lg leading-relaxed border border-stone-100">
+                              <span className="font-bold text-[10px] text-stone-400 block mb-0.5 uppercase tracking-wider">Conteúdo enviado:</span>
+                              <strong>{log.payload.title}</strong> - {log.payload.body}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Coluna Preview Mobile (Right) */}

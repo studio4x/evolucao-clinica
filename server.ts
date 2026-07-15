@@ -2258,6 +2258,22 @@ app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: an
   }
 });
 
+// 7. Obter histórico das últimas 7 notificações diárias (Apenas Admin)
+app.get("/api/admin/daily-push-history", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("daily_push_logs")
+      .select("*")
+      .order("sent_at", { ascending: false })
+      .limit(7);
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async (req: any, res) => {
   const targetUserId = req.params.userId;
@@ -4040,12 +4056,44 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
       })
       .eq("id", "daily_push_config");
 
+    // 6. Gravar log de sucesso no histórico
+    try {
+      await supabaseAdmin
+        .from("daily_push_logs")
+        .insert({
+          status: "success",
+          recipients_count: sentCount,
+          payload: {
+            title: config.title || "Hora das Evoluções!",
+            body: config.body || "Não se esqueça de registrar as evoluções clínicas hoje.",
+            link: config.destination_url || "/painel/patients",
+            image: config.image_url || undefined,
+            icon: config.icon_url || undefined
+          }
+        });
+    } catch (logError) {
+      console.error("[Cron Daily Push] Erro ao gravar log de sucesso:", logError);
+    }
+
     res.json({
       success: true,
       message: `Envio concluído. Disparado para ${sentCount} de ${activeSubs.length} inscrições ativas.`
     });
   } catch (err: any) {
     console.error("[Cron Daily Push] Erro no job:", err);
+    // Gravar log de erro no histórico
+    try {
+      await supabaseAdmin
+        .from("daily_push_logs")
+        .insert({
+          status: "error",
+          recipients_count: 0,
+          error_message: err.message || "Erro desconhecido",
+          payload: {}
+        });
+    } catch (logError) {
+      console.error("[Cron Daily Push] Erro ao gravar log de falha:", logError);
+    }
     res.status(500).json({ error: err.message });
   }
 });
