@@ -145,6 +145,11 @@ export default function PatientForm() {
   const [explorerFolders, setExplorerFolders] = useState<any[]>([]);
   const [isLoadingExplorer, setIsLoadingExplorer] = useState(false);
   const [explorerSearch, setExplorerSearch] = useState('');
+
+  // Vincular pasta pelo link
+  const [showLinkFolder, setShowLinkFolder] = useState(false);
+  const [linkFolderUrl, setLinkFolderUrl] = useState('');
+  const [linkFolderName, setLinkFolderName] = useState('');
   const [isGlobalSearch, setIsGlobalSearch] = useState(false);
   
   const [loading, setLoading] = useState(false);
@@ -537,6 +542,33 @@ export default function PatientForm() {
     openExplorer('file');
   };
 
+  // Extrai o folderId de uma URL do Google Drive ou aceita o ID diretamente
+  const parseFolderIdFromUrl = (input: string): string | null => {
+    const trimmed = input.trim();
+    // URL padrão: https://drive.google.com/drive/folders/{id}
+    // URL com user: https://drive.google.com/drive/u/0/folders/{id}
+    const urlMatch = trimmed.match(/\/folders\/([a-zA-Z0-9_-]{10,})/);
+    if (urlMatch) return urlMatch[1];
+    // ID direto (string alfanumérica de 10+ chars sem espaços)
+    if (/^[a-zA-Z0-9_-]{10,}$/.test(trimmed)) return trimmed;
+    return null;
+  };
+
+  const handleConfirmLinkFolder = () => {
+    const folderId = parseFolderIdFromUrl(linkFolderUrl);
+    if (!folderId) {
+      alert('URL ou ID de pasta inválido. Copie a URL completa da pasta no Google Drive (ex: https://drive.google.com/drive/folders/...) e cole aqui.');
+      return;
+    }
+    const name = linkFolderName.trim() || 'Pasta vinculada';
+    setFormData(prev => ({ ...prev, target_folder_id: folderId, target_folder_name: name }));
+    localStorage.setItem('last_google_folder_id', folderId);
+    localStorage.setItem('last_google_folder_name', name);
+    setShowLinkFolder(false);
+    setLinkFolderUrl('');
+    setLinkFolderName('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -925,18 +957,76 @@ export default function PatientForm() {
                           <X size={16} />
                         </button>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => openExplorer('folder')}
-                        className="w-full flex items-center justify-center space-x-2 p-4 bg-white border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all group"
-                      >
-                        <FolderOpen size={24} className="group-hover:scale-110 transition-transform" />
-                        <div className="text-left">
-                          <p className="font-bold">Selecionar ou Criar Pasta</p>
-                          <p className="text-xs">Escolha onde o novo arquivo será salvo.</p>
+                    ) : showLinkFolder ? (
+                      <div className="space-y-3 p-4 bg-brand-bg border border-brand-border rounded-xl">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-brand-text">Vincular pasta pelo link do Drive</p>
+                          <button
+                            type="button"
+                            onClick={() => { setShowLinkFolder(false); setLinkFolderUrl(''); setLinkFolderName(''); }}
+                            className="p-1 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors text-brand-text-muted"
+                          >
+                            <X size={16} />
+                          </button>
                         </div>
-                      </button>
+                        <div>
+                          <label className="block text-xs font-medium text-brand-text-muted mb-1">URL da pasta (copie do Google Drive)</label>
+                          <input
+                            type="text"
+                            value={linkFolderUrl}
+                            onChange={e => setLinkFolderUrl(e.target.value)}
+                            placeholder="https://drive.google.com/drive/folders/..."
+                            className="w-full input-field text-sm p-2"
+                            autoFocus
+                          />
+                          <p className="text-xs text-brand-text-muted mt-1">
+                            Abra a pasta no Google Drive, copie a URL da barra de endereço e cole aqui.
+                          </p>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-brand-text-muted mb-1">Nome da pasta (para identificação)</label>
+                          <input
+                            type="text"
+                            value={linkFolderName}
+                            onChange={e => setLinkFolderName(e.target.value)}
+                            placeholder="Ex: Pacientes, Prontuários..."
+                            className="w-full input-field text-sm p-2"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleConfirmLinkFolder}
+                          disabled={!linkFolderUrl.trim()}
+                          className="w-full btn-primary text-sm py-2 disabled:opacity-50"
+                        >
+                          Confirmar vínculo
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openExplorer('folder')}
+                          className="w-full flex items-center justify-center space-x-2 p-4 bg-white border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all group"
+                        >
+                          <FolderOpen size={24} className="group-hover:scale-110 transition-transform" />
+                          <div className="text-left">
+                            <p className="font-bold">Selecionar ou Criar Pasta</p>
+                            <p className="text-xs">Pastas criadas pelo app aparecem aqui.</p>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowLinkFolder(true)}
+                          className="w-full flex items-center justify-center space-x-2 p-3 bg-white border border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all group text-sm"
+                        >
+                          <LinkIcon size={18} className="group-hover:scale-110 transition-transform" />
+                          <div className="text-left">
+                            <p className="font-semibold">Vincular pasta existente pelo link</p>
+                            <p className="text-xs">Já tem uma pasta no Drive? Cole o link aqui.</p>
+                          </div>
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -1143,11 +1233,19 @@ export default function PatientForm() {
                     <div className="max-w-md space-y-1">
                       <p className="font-bold text-brand-text">Nenhuma subpasta encontrada</p>
                       <p className="text-sm leading-relaxed">
-                        Crie uma nova pasta clicando no botão <strong>"Criar Pasta"</strong> acima para organizar seus prontuários de forma segura.
+                        O explorador mostra apenas pastas criadas por este app. Crie uma nova pasta ou use a opção <strong>"Vincular pelo link"</strong> para conectar uma pasta já existente no seu Drive.
                       </p>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => { setShowExplorer(false); setShowLinkFolder(true); }}
+                      className="flex items-center space-x-2 px-4 py-2.5 bg-brand-primary/10 border border-brand-primary/30 rounded-xl text-brand-primary hover:bg-brand-primary/20 transition-all text-sm font-semibold"
+                    >
+                      <LinkIcon size={16} />
+                      <span>Vincular pasta existente pelo link</span>
+                    </button>
                     <div className="pt-4 border-t border-brand-border w-full max-w-xs">
-                      <p className="text-xs mb-2">Não está vendo suas pastas de prontuários?</p>
+                      <p className="text-xs mb-2">Ou crie uma nova pasta neste local:</p>
                       <button
                         type="button"
                         onClick={handleExplorerReauthenticate}
