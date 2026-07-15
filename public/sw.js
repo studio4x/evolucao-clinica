@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.10.431";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.10.433";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -29,7 +29,10 @@ const isBrandAssetPath = (pathname) => {
 };
 
 const isApiNoCachePath = (pathname) => {
-  return pathname.startsWith("/api/notifications/") || pathname.startsWith("/api/pwa-install-icon") || pathname.startsWith("/api/pwa-notification-icon");
+  return pathname.startsWith("/api/notifications/") || 
+         pathname.startsWith("/api/pwa-install-icon") || 
+         pathname.startsWith("/api/pwa-notification-icon") ||
+         pathname.startsWith("/api/pwa-notification-badge");
 };
 
 const offlineResponse = async () => {

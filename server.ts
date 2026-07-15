@@ -2006,11 +2006,32 @@ app.get("/api/pwa-notification-badge", async (_req, res) => {
       const width = metadata.width || 128;
       const height = metadata.height || 128;
 
-      // Extrai o canal alpha (transparência)
-      const alphaBuffer = await image
-        .ensureAlpha()
-        .extractChannel("alpha")
-        .toBuffer();
+      // Detecção inteligente de canal alpha
+      let hasAlpha = false;
+      if (metadata.hasAlpha) {
+        const stats = await image.stats();
+        const alphaChannel = stats.channels[stats.channels.length - 1];
+        if (alphaChannel && alphaChannel.min < 255) {
+          hasAlpha = true;
+        }
+      }
+
+      let alphaMask: Buffer;
+      if (hasAlpha) {
+        // Extrai o canal alpha original
+        alphaMask = await image
+          .ensureAlpha()
+          .extractChannel("alpha")
+          .toBuffer();
+      } else {
+        // Imagem opaca (como JPEG): remove o fundo branco usando thresholding
+        alphaMask = await image
+          .ensureAlpha()
+          .greyscale()
+          .threshold(240) // pixels >= 240 (fundo branco) viram 255, outros 0
+          .negate()       // inverte: 255 -> 0 (fundo transparente), 0 -> 255 (logo opaco)
+          .toBuffer();
+      }
 
       // Cria imagem sólida branca de mesmo tamanho
       const whiteImage = sharp({
@@ -2022,9 +2043,9 @@ app.get("/api/pwa-notification-badge", async (_req, res) => {
         }
       });
 
-      // Junta o canal alpha original para aplicar o recorte
+      // Junta o canal alpha original ou gerado para aplicar o recorte
       monochromeBuffer = await whiteImage
-        .joinChannel(alphaBuffer)
+        .joinChannel(alphaMask)
         .png()
         .toBuffer();
     } catch (sharpError) {
