@@ -1982,6 +1982,65 @@ app.get("/api/pwa-notification-icon", async (_req, res) => {
   }
 });
 
+// Rota dinâmica para o badge monocromático usado no status bar e header no Android
+app.get("/api/pwa-notification-badge", async (_req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    const asset = await resolveBrandAssetPayload([
+      config.pwa_push_notification_icon_url,
+      config.pwa_icon_192_url,
+      config.favicon_url,
+      config.logo_dark_url,
+      config.logo_light_url
+    ], "/favicon.png");
+
+    if (!asset) {
+      return res.status(404).end();
+    }
+
+    // Converter o buffer em silhueta monocromática usando sharp
+    let monochromeBuffer: Buffer;
+    try {
+      const image = sharp(asset.buffer);
+      const metadata = await image.metadata();
+      const width = metadata.width || 128;
+      const height = metadata.height || 128;
+
+      // Extrai o canal alpha (transparência)
+      const alphaBuffer = await image
+        .ensureAlpha()
+        .extractChannel("alpha")
+        .toBuffer();
+
+      // Cria imagem sólida branca de mesmo tamanho
+      const whiteImage = sharp({
+        create: {
+          width,
+          height,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 }
+        }
+      });
+
+      // Junta o canal alpha original para aplicar o recorte
+      monochromeBuffer = await whiteImage
+        .joinChannel(alphaBuffer)
+        .png()
+        .toBuffer();
+    } catch (sharpError) {
+      console.error("Erro ao gerar silhueta monocromática com sharp:", sharpError);
+      monochromeBuffer = asset.buffer; // fallback caso falhe
+    }
+
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+    return res.send(monochromeBuffer);
+  } catch (err: any) {
+    console.error("Erro ao obter badge de notificações do PWA:", err);
+    return res.sendFile(path.join(process.cwd(), "public", "favicon.png"));
+  }
+});
+
 // Rota dinâmica para o favicon do site/PWA
 app.get(["/favicon.png", "/favicon.ico", "/api/favicon"], async (req, res) => {
   try {

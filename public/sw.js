@@ -1,4 +1,4 @@
-const CACHE_VERSION = "evolucao-clinica-pwa-v1.10.429";
+const CACHE_VERSION = "evolucao-clinica-pwa-v1.10.431";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 
@@ -228,7 +228,7 @@ self.addEventListener("push", (event) => {
   const options = {
     body: data.body || data.message || "Nova notificação recebida.",
     icon: data.icon || new URL("/api/pwa-notification-icon", self.location.origin).href,
-    badge: new URL("/favicon.png", self.location.origin).href,
+    badge: new URL("/api/pwa-notification-badge", self.location.origin).href,
     image: data.image || undefined,
     data: data.link || "/",
     vibrate: [100, 50, 100],
