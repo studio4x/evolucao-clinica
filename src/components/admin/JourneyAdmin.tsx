@@ -590,7 +590,7 @@ export default function JourneyAdmin() {
         start_date: journeyForm.start_date || null,
         end_date: journeyForm.end_date || null,
         timezone: journeyForm.timezone || 'America/Sao_Paulo',
-        public_url: `/jornada`,
+        public_url: `/jornada/${journeyForm.slug}`,
         whatsapp_main_group_url: journeyForm.whatsapp_main_group_url || null,
         whatsapp_support_group_url: journeyForm.whatsapp_support_group_url || null,
         show_whatsapp_main_group: journeyForm.show_whatsapp_main_group || false,
@@ -783,7 +783,9 @@ export default function JourneyAdmin() {
   // WhatsApp Message "Comece por Aqui" preenchida automaticamente
   const getWhatsappFixedMessage = () => {
     const origin = window.location.origin;
-    const urlJornada = `${origin}/jornada`;
+    const urlJornada = selectedJourney?.slug 
+      ? `${origin}/jornada/${selectedJourney.slug}`
+      : `${origin}/jornada`;
     
     return `👋 Entrou agora na Jornada Evolução Clínica?
 
@@ -876,6 +878,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-brand-border bg-brand-bg text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
+                    <th className="px-6 py-4 w-[80px]">Capa</th>
                     <th className="px-6 py-4">Título</th>
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4 text-center">Dias</th>
@@ -890,6 +893,15 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                     const count = journeyCounts[j.id] || { published: 0, scheduled: 0 };
                     return (
                       <tr key={j.id} className="hover:bg-brand-bg/40 transition-colors">
+                        <td className="px-6 py-4">
+                          {j.cover_image_url ? (
+                            <img src={j.cover_image_url} alt={j.title} className="w-10 h-10 rounded-lg object-cover border border-brand-border" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-brand-bg flex items-center justify-center border border-brand-border text-brand-text-muted">
+                              <ImageIcon size={16} />
+                            </div>
+                          )}
+                        </td>
                         <td className="px-6 py-4 font-semibold text-brand-text">
                           <span className="block text-sm font-bold text-brand-primary">{j.title}</span>
                           <span className="text-[10px] text-brand-text-muted font-normal block">{j.slug}</span>
@@ -951,7 +963,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                             </button>
                             {j.status === 'active' && (
                               <a
-                                href="/jornada"
+                                href={`/jornada/${j.slug}`}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="p-2 border border-brand-border hover:bg-brand-bg rounded-xl text-brand-primary transition-colors flex items-center justify-center"
@@ -1242,7 +1254,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
             </div>
           </div>
 
-          <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-x-auto">
             {loadingContents ? (
               <div className="flex flex-col items-center justify-center py-20">
                 <RefreshCw className="w-10 h-10 animate-spin text-brand-primary" />
@@ -1256,24 +1268,34 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
               </div>
             ) : (
               <div>
-                <table className="w-full table-fixed text-left border-collapse text-xs">
+                <table className="min-w-[900px] w-full table-fixed text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-brand-border bg-brand-bg text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
-                      <th className="w-[7%] px-2 py-4 text-center">Dia</th>
-                      <th className="w-[20%] px-2 py-4">Título / Slug</th>
+                      <th className="w-[6%] px-1 py-4 text-center">Dia</th>
+                      <th className="w-[8%] px-1 py-4 text-center">Capa</th>
+                      <th className="w-[22%] px-2 py-4">Título / Slug</th>
                       <th className="w-[10%] px-2 py-4">Status</th>
                       <th className="w-[14%] px-2 py-4">Agendamento</th>
                       <th className="w-[8%] px-2 py-4">Formato</th>
-                      <th className="w-[15%] px-2 py-4">CTA</th>
-                      <th className="w-[8%] px-2 py-4 text-right whitespace-nowrap">Reordenar</th>
-                      <th className="w-[18%] px-2 py-4 text-right whitespace-nowrap">Ações</th>
+                      <th className="w-[12%] px-2 py-4">CTA</th>
+                      <th className="w-[7%] px-2 py-4 text-right whitespace-nowrap">Reordenar</th>
+                      <th className="w-[13%] px-2 py-4 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
                     {contents.map((item, index) => (
                       <tr key={item.id} className="hover:bg-brand-bg/40 transition-colors">
-                        <td className="px-2 py-4 text-center font-bold text-brand-primary text-sm">
+                        <td className="px-1 py-4 text-center font-bold text-brand-primary text-sm">
                           Dia {String(item.day_number).padStart(2, '0')}
+                        </td>
+                        <td className="px-1 py-4 text-center">
+                          {item.image_url ? (
+                            <img src={item.image_url} alt={item.title} className="w-10 h-10 rounded-lg object-cover border border-brand-border mx-auto" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-brand-bg flex items-center justify-center border border-brand-border text-brand-text-muted mx-auto">
+                              <ImageIcon size={14} />
+                            </div>
+                          )}
                         </td>
                         <td className="px-2 py-4 space-y-0.5 break-words">
                           <span className="font-bold text-brand-text text-sm block">{item.title}</span>

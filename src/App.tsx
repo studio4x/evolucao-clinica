@@ -571,7 +571,8 @@ export default function App() {
           <Route path="/delete-account" element={<DeleteAccount />} />
           <Route path="/public/reports/:reportId" element={<PublicReportView />} />
           <Route path="/jornada" element={<PublicJourneyIndex />} />
-          <Route path="/jornada/:slug" element={<PublicJourneyIndex />} />
+          <Route path="/jornada/:journeySlug" element={<PublicJourneyIndex />} />
+          <Route path="/jornada/:journeySlug/:contentSlug" element={<PublicJourneyIndex />} />
           <Route path="/jornada-15-dias" element={<PublicJourneyIndex />} />
           
           {/* Admin Panel Routes */}

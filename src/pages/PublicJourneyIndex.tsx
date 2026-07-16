@@ -56,7 +56,7 @@ interface JourneyContent {
 }
 
 export default function PublicJourneyIndex() {
-  const { slug } = useParams<{ slug?: string }>();
+  const { journeySlug, contentSlug, slug } = useParams<{ journeySlug?: string; contentSlug?: string; slug?: string }>();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
 
@@ -125,16 +125,63 @@ export default function PublicJourneyIndex() {
     setLoading(true);
     setErrorMsg('');
     try {
-      // 1. Busca a jornada ativa
-      const { data: journeyData, error: jError } = await supabase
+      let targetJourneySlug = 'jornada-15-dias';
+      let resolvedContentSlug = contentSlug;
+
+      if (journeySlug) {
+        targetJourneySlug = journeySlug;
+      } else if (slug && slug !== 'jornada-15-dias') {
+        // Verifica se existe alguma jornada com este slug
+        const { data: checkJourney } = await supabase
+          .from('journeys')
+          .select('id')
+          .eq('slug', slug)
+          .maybeSingle();
+
+        if (checkJourney) {
+          targetJourneySlug = slug;
+        } else {
+          // Se não for uma jornada, assume que é o slug de um conteúdo da jornada padrão
+          targetJourneySlug = 'jornada-15-dias';
+          resolvedContentSlug = slug;
+        }
+      }
+
+      // Busca a jornada pelo slug resolvido
+      let { data: journeyData, error: jError } = await supabase
         .from('journeys')
         .select('*')
-        .eq('slug', 'jornada-15-dias')
+        .eq('slug', targetJourneySlug)
         .maybeSingle();
 
       if (jError) throw jError;
+
+      // Se journeySlug foi informado mas a jornada não foi encontrada,
+      // verifica se na verdade é o slug de um conteúdo da jornada padrão (compatibilidade legado)
+      if (!journeyData && journeySlug) {
+        const { data: defaultJourney } = await supabase
+          .from('journeys')
+          .select('*')
+          .eq('slug', 'jornada-15-dias')
+          .maybeSingle();
+
+        if (defaultJourney) {
+          const { data: checkContent } = await supabase
+            .from('journey_contents')
+            .select('slug')
+            .eq('journey_id', defaultJourney.id)
+            .eq('slug', journeySlug)
+            .maybeSingle();
+
+          if (checkContent) {
+            journeyData = defaultJourney;
+            resolvedContentSlug = journeySlug;
+          }
+        }
+      }
+
       if (!journeyData) {
-        setErrorMsg('Nenhuma jornada ativa encontrada no momento. Por favor, volte mais tarde.');
+        setErrorMsg('Jornada não encontrada ou indisponível.');
         setLoading(false);
         return;
       }
@@ -144,10 +191,10 @@ export default function PublicJourneyIndex() {
       // Dispara evento analytics de visualização da central
       trackJourneyEvent('journey_view', {
         journey_id: journeyData.id,
-        campaign: 'jornada_15_dias',
+        campaign: journeyData.slug,
       });
 
-      // 2. Busca todos os conteúdos da jornada
+      // Busca todos os conteúdos da jornada selecionada
       const { data: contentData, error: cError } = await supabase
         .from('journey_contents')
         .select('*')
@@ -274,9 +321,17 @@ export default function PublicJourneyIndex() {
   useEffect(() => {
     if (loading || days.length === 0) return;
 
-    // 1. Tentar rolar pelo slug passado na rota /jornada/:slug
-    if (slug) {
-      const match = days.find(d => d.slug === slug && d.status !== 'coming_soon');
+    // Determina o slug do conteúdo a ser focado
+    let activeContentSlug = contentSlug;
+    if (!activeContentSlug && slug && slug !== journey?.slug) {
+      activeContentSlug = slug;
+    } else if (!activeContentSlug && journeySlug && journeySlug !== journey?.slug) {
+      activeContentSlug = journeySlug;
+    }
+
+    // 1. Tentar rolar pelo slug do conteúdo
+    if (activeContentSlug) {
+      const match = days.find(d => d.slug === activeContentSlug && d.status !== 'coming_soon');
       if (match) {
         setTimeout(() => {
           scrollToElement(`dia-${match.dayNumber}`);
@@ -302,7 +357,7 @@ export default function PublicJourneyIndex() {
         }, 300);
       }
     }
-  }, [loading, slug, days]);
+  }, [loading, slug, journeySlug, contentSlug, journey, days]);
 
   // Atualizar SEO dinâmico
   useEffect(() => {
@@ -341,7 +396,7 @@ export default function PublicJourneyIndex() {
       canonical.rel = 'canonical';
       document.head.appendChild(canonical);
     }
-    canonical.href = `${window.location.origin}/jornada`;
+    canonical.href = `${window.location.origin}/jornada/${journey.slug}`;
   }, [journey]);
 
   // Auxiliares para URLs e UTMs
