@@ -4,9 +4,13 @@ import App from './App.tsx';
 import './index.css';
 import { APP_VERSION } from './components/layout/AppVersion';
 import { initAnalytics } from './services/analytics';
+import { injectSpeedInsights } from '@vercel/speed-insights';
 
 // Inicializa o Google Analytics
 initAnalytics();
+
+// Inicializa o Vercel Speed Insights
+injectSpeedInsights();
 
 
 // Registro do Service Worker
