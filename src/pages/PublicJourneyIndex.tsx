@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { trackJourneyEvent } from '../services/analytics';
+import { useAuthStore } from '../store/authStore';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { 
@@ -59,6 +60,8 @@ export default function PublicJourneyIndex() {
   const { journeySlug, contentSlug, slug } = useParams<{ journeySlug?: string; contentSlug?: string; slug?: string }>();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
+  const { user, profileRole } = useAuthStore();
+  const isAdmin = user && profileRole === 'admin';
 
   const [journey, setJourney] = useState<Journey | null>(null);
   const [contents, setContents] = useState<JourneyContent[]>([]);
@@ -186,6 +189,21 @@ export default function PublicJourneyIndex() {
         return;
       }
 
+      const currentUser = useAuthStore.getState().user;
+      const currentRole = useAuthStore.getState().profileRole;
+      const currentIsAdmin = currentUser && currentRole === 'admin';
+
+      if (journeyData.status === 'draft' && !currentIsAdmin) {
+        setErrorMsg('Esta jornada está em rascunho e só pode ser visualizada por administradores.');
+        setLoading(false);
+        return;
+      }
+      if (journeyData.status === 'archived' && !currentIsAdmin) {
+        setErrorMsg('Esta jornada foi arquivada e não está mais disponível.');
+        setLoading(false);
+        return;
+      }
+
       setJourney(journeyData);
 
       // Dispara evento analytics de visualização da central
@@ -245,7 +263,8 @@ export default function PublicJourneyIndex() {
     // Determina o dia publicado mais recente para destacar como "Recente/Atual"
     let maxPublishedDay = 0;
     contents.forEach(c => {
-      const isPub = c.publication_status === 'published' || 
+      const isPub = isAdmin ||
+                    c.publication_status === 'published' || 
                     (c.publication_status === 'scheduled' && isPastPublishTime(c.publication_date, c.publication_time));
       if (isPub && c.day_number > maxPublishedDay) {
         maxPublishedDay = c.day_number;
@@ -256,7 +275,8 @@ export default function PublicJourneyIndex() {
       const contentItem = contentsMap.get(d);
 
       if (contentItem) {
-        const isPublished = contentItem.publication_status === 'published' || 
+        const isPublished = isAdmin ||
+                            contentItem.publication_status === 'published' || 
                             (contentItem.publication_status === 'scheduled' && isPastPublishTime(contentItem.publication_date, contentItem.publication_time));
 
         if (isPublished) {
@@ -646,11 +666,23 @@ export default function PublicJourneyIndex() {
                       {d.title}
                     </h2>
                   </div>
-                  {isCurrent && (
-                    <span className="self-start sm:self-center px-3 py-1 bg-[#105576] text-white rounded-full text-[9px] font-bold uppercase tracking-wider animate-pulse">
-                      Última Postagem
-                    </span>
-                  )}
+                  <div className="flex gap-1.5 flex-wrap self-start sm:self-center">
+                    {d.rawContent?.publication_status === 'draft' && (
+                      <span className="px-2.5 py-1 bg-amber-500 text-white rounded-full text-[9px] font-bold uppercase tracking-wider shadow-xs">
+                        Rascunho (Admin Preview)
+                      </span>
+                    )}
+                    {d.rawContent?.publication_status === 'scheduled' && !isPastPublishTime(d.rawContent.publication_date, d.rawContent.publication_time) && (
+                      <span className="px-2.5 py-1 bg-[#105576] text-white rounded-full text-[9px] font-bold uppercase tracking-wider shadow-xs">
+                        Agendado (Admin Preview)
+                      </span>
+                    )}
+                    {isCurrent && (
+                      <span className="px-3 py-1 bg-[#105576] text-white rounded-full text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                        Última Postagem
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Midia Principal (Video Embed ou Imagem) */}
