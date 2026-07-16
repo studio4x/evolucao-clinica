@@ -3980,27 +3980,27 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
     }
 
     // 3. Buscar inscrições de push de profissionais ativos
-    const { data: subscriptions, error: subsError } = await supabaseAdmin
+    const { data: allSubscriptions, error: subsError } = await supabaseAdmin
       .from("push_subscriptions")
-      .select(`
-        *,
-        professionals:user_id!inner(
-          status,
-          role,
-          subscription_status,
-          subscription_ends_at
-        )
-      `);
+      .select("*");
 
     if (subsError) throw subsError;
 
-    if (!subscriptions || subscriptions.length === 0) {
+    if (!allSubscriptions || allSubscriptions.length === 0) {
       return res.json({ success: true, message: "Nenhuma inscrição push encontrada." });
     }
 
+    const { data: professionals, error: profsError } = await supabaseAdmin
+      .from("professionals")
+      .select("id, status, role, subscription_status, subscription_ends_at");
+
+    if (profsError) throw profsError;
+
+    const profsMap = new Map((professionals || []).map((p: any) => [p.id, p]));
+
     // Filtrar profissionais ativos e com plano/trial ativo (exceto admin que sempre recebe)
-    const activeSubs = subscriptions.filter((sub: any) => {
-      const prof = sub.professionals;
+    const activeSubs = allSubscriptions.filter((sub: any) => {
+      const prof = profsMap.get(sub.user_id);
       if (!prof) return false;
       if (prof.status !== "active") return false;
       if (prof.role === "admin") return true;
