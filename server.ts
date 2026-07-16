@@ -15,6 +15,7 @@ const pdfParse = require("pdf-parse");
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
 import { getBrandAssetSignature } from "./src/utils/brandAssets.js";
 import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js";
+import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -997,8 +998,9 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 }
 
 type EmailProvider = "smtp" | "brevo";
-type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test";
 type NotificationOrigin = "platform" | "manual";
+type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean };
 
 type EmailDeliveryInput = {
   userId?: string | null;
@@ -1017,6 +1019,7 @@ type EmailDeliveryInput = {
 type EmailDeliveryResult = {
   provider: EmailProvider;
   messageId: string | null;
+  emailDeliveryId: string | null;
 };
 
 function normalizeEmailProvider(value: any): EmailProvider {
@@ -1072,9 +1075,9 @@ async function recordEmailDelivery(data: {
   errorMessage?: string | null;
   providerMessageId?: string | null;
   relatedNotificationId?: string | null;
-}) {
+}): Promise<{ id: string | null }> {
   try {
-    await supabaseAdmin.from("email_deliveries").insert({
+    const { data: record, error } = await supabaseAdmin.from("email_deliveries").insert({
       user_id: data.userId || null,
       recipient_email: data.recipientEmail,
       recipient_name: data.recipientName || null,
@@ -1086,9 +1089,15 @@ async function recordEmailDelivery(data: {
       error_message: data.errorMessage || null,
       provider_message_id: data.providerMessageId || null,
       related_notification_id: data.relatedNotificationId || null
-    });
+    }).select("id").maybeSingle();
+    if (error) {
+      console.error("[EmailHistory] Falha ao registrar envio de e-mail:", error.message);
+      return { id: null };
+    }
+    return { id: record?.id || null };
   } catch (err) {
     console.error("[EmailHistory] Falha ao registrar envio de e-mail:", err);
+    return { id: null };
   }
 }
 
@@ -1211,7 +1220,7 @@ async function sendTransactionalEmail(
         }
 
         const result = await sendEmailViaBrevo(settings, input);
-        await recordEmailDelivery({
+        const delivery = await recordEmailDelivery({
           userId: input.userId,
           recipientEmail: input.recipientEmail,
           recipientName: input.recipientName,
@@ -1223,7 +1232,7 @@ async function sendTransactionalEmail(
           providerMessageId: result.messageId,
           relatedNotificationId: input.relatedNotificationId
         });
-        return { provider, messageId: result.messageId };
+        return { provider, messageId: result.messageId, emailDeliveryId: delivery.id };
       }
 
       if (!hasSmtpEmailSettings(settings)) {
@@ -1231,7 +1240,7 @@ async function sendTransactionalEmail(
       }
 
       const result = await sendEmailViaSmtp(settings, input);
-      await recordEmailDelivery({
+      const delivery = await recordEmailDelivery({
         userId: input.userId,
         recipientEmail: input.recipientEmail,
         recipientName: input.recipientName,
@@ -1243,7 +1252,7 @@ async function sendTransactionalEmail(
         providerMessageId: result.messageId,
         relatedNotificationId: input.relatedNotificationId
       });
-      return { provider, messageId: result.messageId };
+      return { provider, messageId: result.messageId, emailDeliveryId: delivery.id };
     } catch (err: any) {
       lastError = err instanceof Error ? err : new Error(err?.message || "Erro desconhecido ao enviar e-mail.");
       console.warn(`[Email] Falha ao enviar via ${provider}:`, lastError.message);
@@ -2314,6 +2323,13 @@ app.post("/api/account/delete", requireAuth, async (req: any, res) => {
     const { googleAccessToken } = req.body || {};
 
     const googleRevokeResult = await revokeGoogleGrant(googleAccessToken);
+    await lifecycleService.recordEvent({
+      userId: req.user.id,
+      eventName: "account_deleted",
+      source: "backend",
+      metadata: {},
+      idempotencyKey: "account_deleted:" + req.user.id + ":" + new Date().toISOString()
+    }).catch((error) => console.warn("[Lifecycle] Falha ao registrar exclusão da conta:", error instanceof Error ? error.message : error));
     const targetProf = await deleteProfessionalAccount(req.user.id);
 
     return res.json({
@@ -2732,6 +2748,32 @@ async function sendOnboardingApprovalNotice(targetUserId: string) {
   });
 }
 
+const lifecycleService = createLifecycleService({
+  supabaseAdmin,
+  productionOrigin: PRODUCTION_ORIGIN,
+  cronSecret: process.env.CRON_SECRET || undefined,
+  getNotificationSettings,
+  getEmailTheme,
+  buildEmailShell,
+  buildEmailButton,
+  sendTransactionalEmail
+});
+
+async function registerLifecycleLogin(userId: string) {
+  try {
+    await lifecycleService.recordEvent({
+      userId,
+      eventName: "user_logged_in",
+      source: "backend",
+      metadata: {},
+      idempotencyKey: "user_logged_in:" + userId + ":" + new Date().toISOString().slice(0, 10)
+    });
+    await lifecycleService.ensureEnrollment(userId);
+  } catch (error) {
+    console.warn("[Lifecycle] Telemetria/matrícula indisponível; acesso principal preservado:", error instanceof Error ? error.message : error);
+  }
+}
+
 async function bootstrapOnboardingAccess(user: any) {
   const accessControlSettings = await getAccessControlSettings();
   const requireApproval = accessControlSettings.require_approval !== false;
@@ -2763,6 +2805,7 @@ async function bootstrapOnboardingAccess(user: any) {
       .maybeSingle();
 
     if (fetchError) throw fetchError;
+    await registerLifecycleLogin(user.id);
     return {
       success: true,
       requireApproval,
@@ -2801,6 +2844,7 @@ async function bootstrapOnboardingAccess(user: any) {
     .maybeSingle();
 
   if (refreshError) throw refreshError;
+  await registerLifecycleLogin(user.id);
 
   return {
     success: true,
@@ -2853,7 +2897,8 @@ async function sendNotificationInternal(
   type: string = "info",
   link?: string,
   imageUrl?: string,
-  source: NotificationOrigin = "platform"
+  source: NotificationOrigin = "platform",
+  channels: NotificationChannels = {}
 ) {
   const notificationRecord = {
     user_id: targetUserId,
@@ -2878,7 +2923,7 @@ async function sendNotificationInternal(
   const settings = await getNotificationSettings();
 
   // B. Enviar Push Notification (se houver inscricoes)
-  try {
+  if (channels.push !== false) try {
     webpush.setVapidDetails(
       settings.vapid_subject,
       settings.vapid_public_key,
@@ -2927,7 +2972,7 @@ async function sendNotificationInternal(
   let emailError: string | null = null;
   let emailTo: string | null = null;
 
-  if (hasSmtpEmailSettings(settings) || hasBrevoEmailSettings(settings)) {
+  if (channels.email !== false && (hasSmtpEmailSettings(settings) || hasBrevoEmailSettings(settings))) {
     try {
       // Busca o e-mail do profissional diretamente da tabela professionals (mais confiável que auth.admin)
       const { data: profData } = await supabaseAdmin
@@ -3074,6 +3119,11 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
 // 4. Enviar Notificação (In-App, Push e E-mail)
 app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   const { userId, title, content, type = "info", link, imageUrl } = req.body;
+  const channels: NotificationChannels = {
+    inApp: req.body?.channels?.inApp !== false,
+    push: req.body?.channels?.push !== false,
+    email: req.body?.channels?.email !== false
+  };
   const notificationSource: NotificationOrigin = req.body.source === "platform" ? "platform" : "manual";
   
   if (!title || !content) {
@@ -3101,7 +3151,7 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   }
 
   try {
-    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl, notificationSource);
+    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl, notificationSource, channels);
     res.json({
       success: true,
       notification: result.notification,
@@ -5149,6 +5199,8 @@ app.get("/api/public/reports/:reportId", async (req, res) => {
     res.status(500).json({ error: err.message || "Erro ao obter relatório." });
   }
 });
+
+lifecycleService.registerRoutes(app, { requireAuth, requireAdmin });
 
 // API 404 Catch-all
 app.all(/^\/api\/.*$/, (req, res) => {

@@ -18,6 +18,7 @@ import MigrationRequestsAdmin from '../components/admin/MigrationRequestsAdmin';
 import FeedbackAdmin from '../components/admin/FeedbackAdmin';
 import JourneyAdmin from '../components/admin/JourneyAdmin';
 import DailyPushNotificationManager from '../components/admin/DailyPushNotificationManager';
+import LifecycleAdmin from '../components/admin/LifecycleAdmin';
 
 
 interface Professional {
@@ -160,6 +161,7 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/faq')) return 'faq';
     if (normalizedPath.endsWith('/feedback')) return 'feedback';
     if (normalizedPath.endsWith('/jornada') || normalizedPath.includes('/jornada/')) return 'jornada';
+    if (normalizedPath.endsWith('/lifecycle') || normalizedPath.includes('/lifecycle/')) return 'lifecycle';
     return 'professionals'; // default
   };
 
@@ -182,10 +184,11 @@ export default function AdminPanel() {
     { key: 'faq', label: 'Gerenciar FAQ', icon: HelpCircle },
     { key: 'feedback', label: 'Sugestões & Avaliações', icon: MessageSquare },
     { key: 'jornada', label: 'Jornada 15 dias', icon: Calendar },
+    { key: 'lifecycle', label: 'Jornada de Usuários', icon: Activity },
     { key: 'profile', label: 'Meu Perfil', icon: User }
   ] as const;
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate(tokenUsageGeneralPath);
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -204,6 +207,7 @@ export default function AdminPanel() {
     else if (tab === 'faq') navigate('/admin/faq');
     else if (tab === 'feedback') navigate('/admin/feedback');
     else if (tab === 'jornada') navigate('/admin/jornada');
+    else if (tab === 'lifecycle') navigate('/admin/lifecycle');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -5487,6 +5491,10 @@ export default function AdminPanel() {
             ) : activeTab === 'jornada' ? (
               <div className="space-y-6 animate-fadeIn">
                 <JourneyAdmin />
+              </div>
+            ) : activeTab === 'lifecycle' ? (
+              <div className="space-y-6 animate-fadeIn">
+                <LifecycleAdmin />
               </div>
             ) : activeTab === 'feedback' ? (
               <div className="space-y-6">

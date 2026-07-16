@@ -7,6 +7,11 @@ export interface NotificationPayload {
   type?: 'info' | 'success' | 'warning' | 'error';
   link?: string;
   source?: 'manual' | 'platform';
+  channels?: {
+    inApp?: boolean;
+    push?: boolean;
+    email?: boolean;
+  };
 }
 
 /**
@@ -29,7 +34,8 @@ export async function sendNotification(payload: NotificationPayload) {
       },
       body: JSON.stringify({
         ...payload,
-        source: payload.source || 'manual'
+        source: payload.source || 'manual',
+        channels: payload.channels || { inApp: true, push: true, email: false }
       })
     });
 

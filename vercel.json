@@ -5,6 +5,11 @@
       "memory": 1024
     }
   },
+  "crons": [
+    { "path": "/api/cron/process-lifecycle", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/schedule-lifecycle", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/recalculate-lifecycle", "schedule": "17 3 * * *" }
+  ],
   "rewrites": [
     { "source": "/sw.js", "destination": "/sw.js" },
     { "source": "/.well-known/assetlinks.json", "destination": "/.well-known/assetlinks.json" },

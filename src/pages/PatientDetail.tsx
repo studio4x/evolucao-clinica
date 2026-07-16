@@ -13,6 +13,7 @@ import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogl
 import DOMPurify from 'dompurify';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { generateReportPDF } from '../utils/reportPdf';
+import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 
 // Converte Markdown para HTML e remove conteúdo potencialmente perigoso antes da renderização
 const parseMarkdown = (md: string): string => {
@@ -85,6 +86,11 @@ export default function PatientDetail() {
     subscriptionPlan
   } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+
+  useEffect(() => {
+    if (!patient?.id || !user?.id) return;
+    void trackLifecycleEvent('patient_history_viewed', { entityType: 'patient', entityId: patient.id, dedupeKey: 'patient_history_viewed:' + patient.id + ':' + new Date().toISOString().slice(0, 10) });
+  }, [patient?.id, user?.id]);
 
   const isPlanActive = () => {
     if (profileRole === 'admin') return true;
