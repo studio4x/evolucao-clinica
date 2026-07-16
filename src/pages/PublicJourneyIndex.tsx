@@ -490,7 +490,7 @@ export default function PublicJourneyIndex() {
         <div className={`max-w-5xl mx-auto ${journey.cover_image_url ? 'grid grid-cols-1 md:grid-cols-12 gap-8 items-center text-left' : 'text-center'}`}>
           
           {/* Coluna de Texto & Conteúdo */}
-          <div className={`${journey.cover_image_url ? 'md:col-span-7 space-y-6' : 'max-w-4xl mx-auto space-y-6'}`}>
+          <div className={`${journey.cover_image_url ? 'md:col-span-7 space-y-6 order-2 md:order-1' : 'max-w-4xl mx-auto space-y-6'}`}>
             <div className={`inline-flex items-center gap-1.5 px-3 py-1 bg-[#719EB9]/10 text-[#105576] rounded-full text-[10px] font-bold uppercase tracking-wider ${journey.cover_image_url ? '' : 'mx-auto'}`}>
               <Award size={12} />
               Central da Jornada de Conteúdos
@@ -550,8 +550,8 @@ export default function PublicJourneyIndex() {
 
           {/* Coluna da Imagem de Capa */}
           {journey.cover_image_url && (
-            <div className="md:col-span-5 w-full flex justify-center mt-6 md:mt-0 animate-fadeIn">
-              <div className="w-full max-w-sm md:max-w-none rounded-3xl overflow-hidden shadow-lg border border-gray-150/50 bg-gray-50 aspect-[4/3] relative">
+            <div className="md:col-span-5 w-full flex justify-center animate-fadeIn order-1 md:order-2">
+              <div className="w-full max-w-sm md:max-w-none rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(16,85,118,0.16)] aspect-square relative">
                 <img 
                   src={journey.cover_image_url} 
                   alt={journey.title} 
