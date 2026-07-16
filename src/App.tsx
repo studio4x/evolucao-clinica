@@ -45,6 +45,7 @@ import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } fr
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
@@ -555,6 +556,7 @@ export default function App() {
 
   return (
     <Router>
+      <SpeedInsights />
       <CookieConsent />
       <InstallPrompt />
       
