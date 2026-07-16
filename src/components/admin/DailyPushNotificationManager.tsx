@@ -79,7 +79,7 @@ export default function DailyPushNotificationManager() {
       const token = session.data.session?.access_token;
       if (!token) return;
 
-      const res = await fetch('/api/admin/daily-push-history', {
+      const res = await fetch(`/api/admin/daily-push-history?t=${Date.now()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -109,7 +109,7 @@ export default function DailyPushNotificationManager() {
       const token = session.data.session?.access_token;
       if (!token) return;
 
-      const res = await fetch('/api/admin/daily-push-config', {
+      const res = await fetch(`/api/admin/daily-push-config?t=${Date.now()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
