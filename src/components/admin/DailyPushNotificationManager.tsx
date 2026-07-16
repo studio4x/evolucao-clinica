@@ -350,7 +350,7 @@ export default function DailyPushNotificationManager() {
                 className="input-field p-2.5 max-w-[200px]"
               />
               {config.server_time_br && (
-                <div className="text-[11px] text-brand-text-muted mt-2 space-y-1 bg-stone-50 p-2.5 rounded-xl border border-brand-border/40 max-w-[400px]">
+                <div className="text-[11px] text-brand-text-muted mt-2 space-y-1.5 bg-stone-50 p-2.5 rounded-xl border border-brand-border/40 max-w-[400px]">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></span>
                     <span>
@@ -372,6 +372,18 @@ export default function DailyPushNotificationManager() {
                       Server UTC: {new Date(config.server_time_utc).toISOString()}
                     </div>
                   )}
+                  <div className="flex items-center gap-1.5 pt-1.5 border-t border-brand-border/40 mt-1 pl-3.5">
+                    <span className="text-[10px] text-brand-text-muted">Status de hoje:</span>
+                    {config.last_sent_date === config.server_time_br.split('T')[0] ? (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 font-bold text-[9px] uppercase tracking-wide">
+                        <Check size={10} /> Já disparada hoje ({config.last_sent_date})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100 font-bold text-[9px] uppercase tracking-wide">
+                        <Clock size={10} /> Pendente / Não disparada hoje
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
