@@ -486,63 +486,82 @@ export default function PublicJourneyIndex() {
       </header>
 
       {/* HERO SECTION */}
-      <section className="bg-white py-12 px-6 border-b border-gray-150 text-center">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#719EB9]/10 text-[#105576] rounded-full text-[10px] font-bold uppercase tracking-wider">
-            <Award size={12} />
-            Central da Jornada de Conteúdos
-          </div>
+      <section className="bg-white py-12 px-6 border-b border-gray-150">
+        <div className={`max-w-5xl mx-auto ${journey.cover_image_url ? 'grid grid-cols-1 md:grid-cols-12 gap-8 items-center text-left' : 'text-center'}`}>
           
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-[#105576] leading-tight tracking-tight">
-            {journey.title}
-          </h1>
-          <p className="text-sm text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            {journey.description || 'Acompanhe as demonstrações diárias, dicas práticas de registros clínicos e guias de uso de IA compartilhados em nosso grupo oficial.'}
-          </p>
-
-          {/* Aviso Responsabilidade IA */}
-          <div className="bg-[#719EB9]/5 border border-[#719EB9]/15 rounded-2xl p-4 max-w-xl mx-auto">
-            <p className="text-[11px] text-[#376F8D] leading-relaxed font-semibold">
-              💡 <strong>Nota sobre IA:</strong> O Evolução Clínica atua como apoio à transcrição, padronização e redação de relatórios. Toda e qualquer decisão de diagnóstico, conduta clínica e revisão final permanecem exclusivamente de responsabilidade do profissional de saúde assistente.
+          {/* Coluna de Texto & Conteúdo */}
+          <div className={`${journey.cover_image_url ? 'md:col-span-7 space-y-6' : 'max-w-4xl mx-auto space-y-6'}`}>
+            <div className={`inline-flex items-center gap-1.5 px-3 py-1 bg-[#719EB9]/10 text-[#105576] rounded-full text-[10px] font-bold uppercase tracking-wider ${journey.cover_image_url ? '' : 'mx-auto'}`}>
+              <Award size={12} />
+              Central da Jornada de Conteúdos
+            </div>
+            
+            <h1 className="text-3xl sm:text-4xl font-extrabold text-[#105576] leading-tight tracking-tight">
+              {journey.title}
+            </h1>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              {journey.description || 'Acompanhe as demonstrações diárias, dicas práticas de registros clínicos e guias de uso de IA compartilhados em nosso grupo oficial.'}
             </p>
-          </div>
 
-          {/* Barra de Progresso Geral */}
-          <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 max-w-md mx-auto space-y-2">
-            <div className="flex justify-between items-center text-xs text-gray-500 font-semibold">
-              <span>Conteúdos Liberados</span>
-              <span className="text-[#105576] font-bold">{publishedDays.length} de {journey.total_days} dias</span>
+            {/* Aviso Responsabilidade IA */}
+            <div className={`bg-[#719EB9]/5 border border-[#719EB9]/15 rounded-2xl p-4 ${journey.cover_image_url ? 'w-full' : 'max-w-xl mx-auto'}`}>
+              <p className="text-[11px] text-[#376F8D] leading-relaxed font-semibold">
+                💡 <strong>Nota sobre IA:</strong> O Evolução Clínica atua como apoio à transcrição, padronização e redação de relatórios. Toda e qualquer decisão de diagnóstico, conduta clínica e revisão final permanecem exclusivamente de responsabilidade do profissional de saúde assistente.
+              </p>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-              <div 
-                className="bg-[#158E12] h-2.5 rounded-full transition-all duration-500" 
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-          </div>
 
-          {/* Botoes de Acao do Topo */}
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-2">
-            {firstDay && (
-              <button
-                onClick={() => {
-                  scrollToElement(`dia-${firstDay.dayNumber}`);
-                  trackJourneyEvent('journey_start_click');
-                }}
-                className="w-full sm:w-auto px-6 py-3 bg-[#105576] hover:bg-[#376F8D] text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border-none"
+            {/* Barra de Progresso Geral */}
+            <div className={`bg-gray-50 border border-gray-100 rounded-2xl p-5 space-y-2 ${journey.cover_image_url ? 'w-full' : 'max-w-md mx-auto'}`}>
+              <div className="flex justify-between items-center text-xs text-gray-500 font-semibold">
+                <span>Conteúdos Liberados</span>
+                <span className="text-[#105576] font-bold">{publishedDays.length} de {journey.total_days} dias</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                <div 
+                  className="bg-[#158E12] h-2.5 rounded-full transition-all duration-500" 
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Botoes de Acao do Topo */}
+            <div className={`flex flex-col sm:flex-row gap-3 pt-2 ${journey.cover_image_url ? 'justify-start' : 'justify-center items-center'}`}>
+              {firstDay && (
+                <button
+                  onClick={() => {
+                    scrollToElement(`dia-${firstDay.dayNumber}`);
+                    trackJourneyEvent('journey_start_click');
+                  }}
+                  className="w-full sm:w-auto px-6 py-3 bg-[#105576] hover:bg-[#376F8D] text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer border-none"
+                >
+                  Começar pelo Dia 1
+                  <ChevronRight size={14} />
+                </button>
+              )}
+              <a
+                href={getGlobalTrialUrl()}
+                onClick={() => trackJourneyEvent('journey_hero_trial_click')}
+                className="w-full sm:w-auto px-6 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer text-center"
               >
-                Começar pelo Dia 1
-                <ChevronRight size={14} />
-              </button>
-            )}
-            <a
-              href={getGlobalTrialUrl()}
-              onClick={() => trackJourneyEvent('journey_hero_trial_click')}
-              className="w-full sm:w-auto px-6 py-3 border border-gray-200 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              Iniciar Teste Gratuito de 7 Dias
-            </a>
+                Iniciar Teste Gratuito de 7 Dias
+              </a>
+            </div>
           </div>
+
+          {/* Coluna da Imagem de Capa */}
+          {journey.cover_image_url && (
+            <div className="md:col-span-5 w-full flex justify-center mt-6 md:mt-0 animate-fadeIn">
+              <div className="w-full max-w-sm md:max-w-none rounded-3xl overflow-hidden shadow-lg border border-gray-150/50 bg-gray-50 aspect-[4/3] relative">
+                <img 
+                  src={journey.cover_image_url} 
+                  alt={journey.title} 
+                  className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-500"
+                  loading="eager"
+                />
+              </div>
+            </div>
+          )}
+
         </div>
       </section>
 

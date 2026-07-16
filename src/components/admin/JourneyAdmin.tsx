@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
@@ -68,6 +69,8 @@ interface JourneyContent {
 type ViewMode = 'list_journeys' | 'edit_journey' | 'list_contents' | 'edit_content' | 'whatsapp_fixed';
 
 export default function JourneyAdmin() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [viewMode, setViewMode] = useState<ViewMode>('list_journeys');
   
   // Lista de jornadas
@@ -141,10 +144,10 @@ export default function JourneyAdmin() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Inicialização
+  // Sincroniza estado com a URL em caso de navegação direta ou troca de rota
   useEffect(() => {
-    fetchJourneys();
-  }, []);
+    syncStateWithUrl(location.pathname);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (contentForm.content) {
@@ -154,6 +157,182 @@ export default function JourneyAdmin() {
       setMarkdownPreview('');
     }
   }, [contentForm.content]);
+
+  // Função para sincronizar a rota do navegador com o estado local do painel
+  const syncStateWithUrl = async (path: string) => {
+    const parts = path.split('/').filter(Boolean); // ex: ['admin', 'jornada', ...]
+    
+    // Garante que a listagem de jornadas esteja carregada
+    let currentJourneys = journeys;
+    if (currentJourneys.length === 0) {
+      currentJourneys = await fetchJourneys();
+    }
+
+    // Casos de rotas:
+    // 1. Listar jornadas: /admin/jornada
+    if (parts.length === 2 && parts[1] === 'jornada') {
+      setViewMode('list_journeys');
+      setSelectedJourney(null);
+      setSelectedContent(null);
+      return;
+    }
+
+    // 2. Nova jornada: /admin/jornada/novo
+    if (parts.length === 3 && parts[1] === 'jornada' && parts[2] === 'novo') {
+      setViewMode('edit_journey');
+      setSelectedJourney(null);
+      setJourneyForm({
+        title: '',
+        subtitle: '',
+        description: '',
+        slug: '',
+        cover_image_url: '',
+        total_days: 15,
+        status: 'draft',
+        start_date: '',
+        end_date: '',
+        timezone: 'America/Sao_Paulo',
+        whatsapp_main_group_url: '',
+        whatsapp_support_group_url: '',
+        show_whatsapp_main_group: false,
+        show_scheduled_as_coming_soon: true,
+        trial_url: '',
+        website_url: '',
+        seo_title: '',
+        seo_description: '',
+      });
+      return;
+    }
+
+    // 3. Editar jornada: /admin/jornada/editar/:journeySlug
+    if (parts.length === 4 && parts[1] === 'jornada' && parts[2] === 'editar') {
+      const slug = parts[3];
+      const foundJourney = currentJourneys.find(j => j.slug === slug);
+      if (foundJourney) {
+        setSelectedJourney(foundJourney);
+        setJourneyForm({ ...foundJourney });
+        setViewMode('edit_journey');
+      } else {
+        navigate('/admin/jornada');
+      }
+      return;
+    }
+
+    // 4. WhatsApp fixado: /admin/jornada/:journeySlug/conteudos/whatsapp-fixado
+    if (parts.length === 5 && parts[1] === 'jornada' && parts[3] === 'conteudos' && parts[4] === 'whatsapp-fixado') {
+      const jSlug = parts[2];
+      const foundJourney = currentJourneys.find(j => j.slug === jSlug);
+      if (foundJourney) {
+        setSelectedJourney(foundJourney);
+        setViewMode('whatsapp_fixed');
+        await fetchContents(foundJourney.id);
+      } else {
+        navigate('/admin/jornada');
+      }
+      return;
+    }
+
+    // 5. Novo conteúdo: /admin/jornada/:journeySlug/conteudos/novo
+    if (parts.length === 5 && parts[1] === 'jornada' && parts[3] === 'conteudos' && parts[4] === 'novo') {
+      const jSlug = parts[2];
+      const foundJourney = currentJourneys.find(j => j.slug === jSlug);
+      if (foundJourney) {
+        setSelectedJourney(foundJourney);
+        
+        let currentContents = contents;
+        if (currentContents.length === 0 || currentContents[0]?.journey_id !== foundJourney.id) {
+          const { data: contentData, error } = await supabase
+            .from('journey_contents')
+            .select('*')
+            .eq('journey_id', foundJourney.id)
+            .order('day_number', { ascending: true });
+          if (!error && contentData) {
+            setContents(contentData);
+            currentContents = contentData;
+          }
+        }
+
+        const nextDay = currentContents.length > 0 ? Math.max(...currentContents.map(c => c.day_number)) + 1 : 1;
+        setSelectedContent(null);
+        setContentForm({
+          day_number: nextDay <= foundJourney.total_days ? nextDay : 1,
+          title: '',
+          slug: '',
+          short_description: '',
+          content: '',
+          image_url: '',
+          image_alt: '',
+          video_url: '',
+          video_embed_url: '',
+          content_type: 'text',
+          cta_text: '',
+          cta_url: '',
+          secondary_cta_text: '',
+          secondary_cta_url: '',
+          whatsapp_message: '',
+          image_prompt: '',
+          publication_status: 'draft',
+          publication_date: new Date().toISOString().split('T')[0],
+          publication_time: '08:00',
+          is_featured: false,
+          allow_indexing: true,
+        });
+        setViewMode('edit_content');
+      } else {
+        navigate('/admin/jornada');
+      }
+      return;
+    }
+
+    // 6. Listar conteúdos: /admin/jornada/:journeySlug/conteudos
+    if (parts.length === 4 && parts[1] === 'jornada' && parts[3] === 'conteudos') {
+      const jSlug = parts[2];
+      const foundJourney = currentJourneys.find(j => j.slug === jSlug);
+      if (foundJourney) {
+        setSelectedJourney(foundJourney);
+        setViewMode('list_contents');
+        await fetchContents(foundJourney.id);
+      } else {
+        navigate('/admin/jornada');
+      }
+      return;
+    }
+
+    // 7. Editar conteúdo: /admin/jornada/:journeySlug/conteudos/:contentSlug
+    if (parts.length === 5 && parts[1] === 'jornada' && parts[3] === 'conteudos') {
+      const jSlug = parts[2];
+      const cSlug = parts[4];
+      const foundJourney = currentJourneys.find(j => j.slug === jSlug);
+      if (foundJourney) {
+        setSelectedJourney(foundJourney);
+        
+        let currentContents = contents;
+        if (currentContents.length === 0 || currentContents[0]?.journey_id !== foundJourney.id) {
+          const { data: contentData, error } = await supabase
+            .from('journey_contents')
+            .select('*')
+            .eq('journey_id', foundJourney.id)
+            .order('day_number', { ascending: true });
+          if (!error && contentData) {
+            setContents(contentData);
+            currentContents = contentData;
+          }
+        }
+
+        const foundContent = currentContents.find(c => c.slug === cSlug);
+        if (foundContent) {
+          setSelectedContent(foundContent);
+          setContentForm({ ...foundContent });
+          setViewMode('edit_content');
+        } else {
+          navigate(`/admin/jornada/${foundJourney.slug}/conteudos`);
+        }
+      } else {
+        navigate('/admin/jornada');
+      }
+      return;
+    }
+  };
 
   // Carrega lista de jornadas
   const fetchJourneys = async () => {
@@ -184,8 +363,10 @@ export default function JourneyAdmin() {
         }
       }
       setJourneyCounts(counts);
+      return loadedJourneys;
     } catch (err) {
       console.error('Erro ao buscar jornadas:', err);
+      return [];
     } finally {
       setLoadingJourneys(false);
     }
@@ -619,7 +800,7 @@ export default function JourneyAdmin() {
 
       if (error) throw error;
       alert('Jornada salva com sucesso!');
-      setViewMode('list_journeys');
+      navigate('/admin/jornada');
       fetchJourneys();
     } catch (err: any) {
       console.error(err);
@@ -684,7 +865,7 @@ export default function JourneyAdmin() {
 
       if (error) throw error;
       alert('Conteúdo salvo com sucesso!');
-      setViewMode('list_contents');
+      navigate(`/admin/jornada/${selectedJourney!.slug}/conteudos`);
       fetchContents(selectedJourney!.id);
     } catch (err: any) {
       console.error(err);
@@ -704,80 +885,29 @@ export default function JourneyAdmin() {
 
   // Abre form de nova jornada
   const handleNewJourney = () => {
-    setSelectedJourney(null);
-    setJourneyForm({
-      title: '',
-      subtitle: '',
-      description: '',
-      slug: '',
-      cover_image_url: '',
-      total_days: 15,
-      status: 'draft',
-      start_date: '',
-      end_date: '',
-      timezone: 'America/Sao_Paulo',
-      whatsapp_main_group_url: '',
-      whatsapp_support_group_url: '',
-      show_whatsapp_main_group: false,
-      show_scheduled_as_coming_soon: true,
-      trial_url: '',
-      website_url: '',
-      seo_title: '',
-      seo_description: '',
-    });
-    setViewMode('edit_journey');
+    navigate('/admin/jornada/novo');
   };
 
   // Abre form de editar jornada
   const handleEditJourney = (journey: Journey) => {
-    setSelectedJourney(journey);
-    setJourneyForm({ ...journey });
-    setViewMode('edit_journey');
+    navigate(`/admin/jornada/editar/${journey.slug}`);
   };
 
   // Abre listagem de conteúdos da jornada
   const handleManageContents = (journey: Journey) => {
-    setSelectedJourney(journey);
-    setViewMode('list_contents');
-    fetchContents(journey.id);
+    navigate(`/admin/jornada/${journey.slug}/conteudos`);
   };
 
   // Abre form de novo conteúdo
   const handleNewContent = () => {
-    setSelectedContent(null);
-    const nextDay = contents.length > 0 ? Math.max(...contents.map(c => c.day_number)) + 1 : 1;
-    
-    setContentForm({
-      day_number: nextDay <= selectedJourney!.total_days ? nextDay : 1,
-      title: '',
-      slug: '',
-      short_description: '',
-      content: '',
-      image_url: '',
-      image_alt: '',
-      video_url: '',
-      video_embed_url: '',
-      content_type: 'text',
-      cta_text: '',
-      cta_url: '',
-      secondary_cta_text: '',
-      secondary_cta_url: '',
-      whatsapp_message: '',
-      image_prompt: '',
-      publication_status: 'draft',
-      publication_date: new Date().toISOString().split('T')[0],
-      publication_time: '08:00',
-      is_featured: false,
-      allow_indexing: true,
-    });
-    setViewMode('edit_content');
+    if (selectedJourney) {
+      navigate(`/admin/jornada/${selectedJourney.slug}/conteudos/novo`);
+    }
   };
 
   // Abre form de editar conteúdo
   const handleEditContent = (content: JourneyContent) => {
-    setSelectedContent(content);
-    setContentForm({ ...content });
-    setViewMode('edit_content');
+    navigate(`/admin/jornada/${selectedJourney?.slug}/conteudos/${content.slug}`);
   };
 
   // WhatsApp Message "Comece por Aqui" preenchida automaticamente
@@ -826,13 +956,17 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
         {viewMode === 'list_contents' && (
           <div className="flex gap-2">
             <button
-              onClick={() => setViewMode('list_journeys')}
+              onClick={() => navigate('/admin/jornada')}
               className="px-4 py-2.5 border border-brand-border text-brand-text hover:bg-brand-bg rounded-xl transition-colors text-sm font-semibold cursor-pointer"
             >
               Voltar para Jornadas
             </button>
             <button
-              onClick={() => setViewMode('whatsapp_fixed')}
+              onClick={() => {
+                if (selectedJourney) {
+                  navigate(`/admin/jornada/${selectedJourney.slug}/conteudos/whatsapp-fixado`);
+                }
+              }}
               className="flex items-center gap-2 px-4 py-2.5 border border-brand-border text-green-700 hover:bg-green-50 rounded-xl transition-colors text-sm font-semibold cursor-pointer"
             >
               <MessageSquare size={16} />
@@ -850,7 +984,13 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
 
         {(viewMode === 'edit_journey' || viewMode === 'edit_content' || viewMode === 'whatsapp_fixed') && (
           <button
-            onClick={() => setViewMode(viewMode === 'edit_journey' ? 'list_journeys' : 'list_contents')}
+            onClick={() => {
+              if (viewMode === 'edit_journey') {
+                navigate('/admin/jornada');
+              } else if (viewMode === 'edit_content' || viewMode === 'whatsapp_fixed') {
+                navigate(`/admin/jornada/${selectedJourney?.slug}/conteudos`);
+              }
+            }}
             className="flex items-center gap-2 px-4 py-2.5 border border-brand-border text-brand-text hover:bg-brand-bg rounded-xl transition-colors text-sm font-semibold cursor-pointer"
           >
             <ArrowLeft size={16} />

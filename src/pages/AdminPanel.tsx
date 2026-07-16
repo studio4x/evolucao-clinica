@@ -159,7 +159,7 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/tracking')) return 'tracking';
     if (normalizedPath.endsWith('/faq')) return 'faq';
     if (normalizedPath.endsWith('/feedback')) return 'feedback';
-    if (normalizedPath.endsWith('/jornada')) return 'jornada';
+    if (normalizedPath.endsWith('/jornada') || normalizedPath.includes('/jornada/')) return 'jornada';
     return 'professionals'; // default
   };
 
