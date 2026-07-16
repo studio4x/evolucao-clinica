@@ -24,6 +24,109 @@ export default function Profile() {
   const [email, setEmail] = useState('');
   const [professionalTitle, setProfessionalTitle] = useState('');
   const [professionalRegister, setProfessionalRegister] = useState('');
+
+  // Lista pré-definida de rótulos profissionais / especialidades médicas e terapêuticas
+  const professionalOptions = [
+    "Psicólogo(a)",
+    "Neuropsicólogo(a)",
+    "Psicoterapeuta",
+    "Psicanalista",
+    "Psiquiatra",
+    "Fonoaudiólogo(a)",
+    "Terapeuta Ocupacional",
+    "Fisioterapeuta",
+    "Fisioterapeuta Neurofuncional",
+    "Psicopedagogo(a)",
+    "Neuropsicopedagogo(a)",
+    "Nutricionista",
+    "Enfermeiro(a)",
+    "Médico(a) Generalista",
+    "Médico(a) Pediatra",
+    "Médico(a) Neurologista",
+    "Médico(a) Neuropediatra",
+    "Médico(a) Fisiatra",
+    "Médico(a) Geriatra",
+    "Médico(a) Ortopedista",
+    "Médico(a) Cardiologista",
+    "Médico(a) Dermatologista",
+    "Médico(a) Ginecologista e Obstetra",
+    "Dentista / Odontólogo(a)",
+    "Assistente Social",
+    "Musicoterapeuta",
+    "Arteterapeuta",
+    "Equoterapeuta",
+    "Educador(a) Físico(a)",
+    "Psicomotricista",
+    "Veterinário(a)"
+  ];
+
+  const [selectValue, setSelectValue] = useState('');
+  const [customValue, setCustomValue] = useState('');
+
+  const handleSelectChange = (val: string) => {
+    setSelectValue(val);
+    if (val === 'Outro') {
+      setProfessionalTitle(customValue);
+    } else {
+      setProfessionalTitle(val);
+    }
+  };
+
+  const handleCustomValueChange = (val: string) => {
+    setCustomValue(val);
+    setProfessionalTitle(val);
+  };
+
+  // Mapeamento dos Conselhos de Classe do Brasil por Profissão
+  const prefixMap: Record<string, string> = {
+    "Psicólogo(a)": "CRP",
+    "Neuropsicólogo(a)": "CRP",
+    "Psicoterapeuta": "CRP",
+    "Psicanalista": "Registro",
+    "Psiquiatra": "CRM",
+    "Fonoaudiólogo(a)": "CRFa",
+    "Terapeuta Ocupacional": "CREFITO",
+    "Fisioterapeuta": "CREFITO",
+    "Fisioterapeuta Neurofuncional": "CREFITO",
+    "Psicopedagogo(a)": "CBO",
+    "Neuropsicopedagogo(a)": "CBO",
+    "Nutricionista": "CRN",
+    "Enfermeiro(a)": "COREN",
+    "Médico(a) Generalista": "CRM",
+    "Médico(a) Pediatra": "CRM",
+    "Médico(a) Neurologista": "CRM",
+    "Médico(a) Neuropediatra": "CRM",
+    "Médico(a) Fisiatra": "CRM",
+    "Médico(a) Geriatra": "CRM",
+    "Médico(a) Ortopedista": "CRM",
+    "Médico(a) Cardiologista": "CRM",
+    "Médico(a) Dermatologista": "CRM",
+    "Médico(a) Ginecologista e Obstetra": "CRM",
+    "Dentista / Odontólogo(a)": "CRO",
+    "Assistente Social": "CRESS",
+    "Musicoterapeuta": "AMT",
+    "Arteterapeuta": "AATER",
+    "Equoterapeuta": "ANDE",
+    "Educador(a) Físico(a)": "CREF",
+    "Psicomotricista": "ABP",
+    "Veterinário(a)": "CRMV"
+  };
+
+  const activePrefix = prefixMap[selectValue] || '';
+
+  const parseRegister = (dbValue: string, prefix: string) => {
+    if (!dbValue) return '';
+    if (!prefix) return dbValue;
+    
+    const lowerDb = dbValue.toLowerCase().trim();
+    const lowerPrefix = prefix.toLowerCase().trim();
+    
+    if (lowerDb.startsWith(lowerPrefix)) {
+      return dbValue.substring(prefix.length).trim();
+    }
+    return dbValue;
+  };
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [resettingOnboarding, setResettingOnboarding] = useState(false);
@@ -73,8 +176,21 @@ export default function Profile() {
             setFirstName(nameParts[0] || '');
             setLastName(nameParts.slice(1).join(' ') || '');
           }
-          setProfessionalTitle(data.professional_title || 'Terapeuta');
-          setProfessionalRegister(data.professional_register || '');
+          const dbTitle = data.professional_title || 'Terapeuta';
+          setProfessionalTitle(dbTitle);
+          
+          let initialSelect = 'Outro';
+          let initialCustom = dbTitle;
+          if (professionalOptions.includes(dbTitle)) {
+            initialSelect = dbTitle;
+            initialCustom = '';
+          }
+          setSelectValue(initialSelect);
+          setCustomValue(initialCustom);
+
+          const initialPrefix = prefixMap[initialSelect] || '';
+          setProfessionalRegister(parseRegister(data.professional_register || '', initialPrefix));
+          
           setOnboardingCompleted(data.onboarding_completed === true);
           setCustomLogoUrl(data.custom_logo_url || '');
           setDbSubscriptionPlan(data.subscription_plan || null);
@@ -87,7 +203,21 @@ export default function Profile() {
           const nameParts = fullName.trim().split(' ');
           setFirstName(nameParts[0] || '');
           setLastName(nameParts.slice(1).join(' ') || '');
-          setProfessionalTitle(user.user_metadata?.professional_title || 'Terapeuta');
+          
+          const metaTitle = user.user_metadata?.professional_title || 'Terapeuta';
+          setProfessionalTitle(metaTitle);
+          
+          let initialSelect = 'Outro';
+          let initialCustom = metaTitle;
+          if (professionalOptions.includes(metaTitle)) {
+            initialSelect = metaTitle;
+            initialCustom = '';
+          }
+          setSelectValue(initialSelect);
+          setCustomValue(initialCustom);
+
+          const initialPrefix = prefixMap[initialSelect] || '';
+          setProfessionalRegister(parseRegister(user.user_metadata?.professional_register || '', initialPrefix));
         }
       } catch (err: any) {
         console.error("Erro ao carregar perfil:", err);
@@ -96,7 +226,21 @@ export default function Profile() {
         const nameParts = fullName.trim().split(' ');
         setFirstName(nameParts[0] || '');
         setLastName(nameParts.slice(1).join(' ') || '');
-        setProfessionalTitle(user.user_metadata?.professional_title || 'Terapeuta');
+        
+        const metaTitle = user.user_metadata?.professional_title || 'Terapeuta';
+        setProfessionalTitle(metaTitle);
+        
+        let initialSelect = 'Outro';
+        let initialCustom = metaTitle;
+        if (professionalOptions.includes(metaTitle)) {
+          initialSelect = metaTitle;
+          initialCustom = '';
+        }
+        setSelectValue(initialSelect);
+        setCustomValue(initialCustom);
+
+        const initialPrefix = prefixMap[initialSelect] || '';
+        setProfessionalRegister(parseRegister(user.user_metadata?.professional_register || '', initialPrefix));
         setOnboardingCompleted(isOnboardingComplete(user.id));
       } finally {
         setLoading(false);
@@ -138,6 +282,9 @@ export default function Profile() {
     setErrorMessage('');
 
     const fullName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    const finalRegister = activePrefix 
+      ? `${activePrefix} ${professionalRegister.trim()}`.trim()
+      : professionalRegister.trim();
 
     try {
       // 1. Atualiza a tabela public.professionals
@@ -146,7 +293,7 @@ export default function Profile() {
         .update({
           full_name: fullName,
           professional_title: professionalTitle.trim(),
-          professional_register: professionalRegister.trim() || null,
+          professional_register: finalRegister || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -159,7 +306,8 @@ export default function Profile() {
           full_name: fullName,
           name: firstName.trim(),
           family_name: lastName.trim(),
-          professional_title: professionalTitle.trim()
+          professional_title: professionalTitle.trim(),
+          professional_register: finalRegister || null
         }
       });
 
@@ -604,17 +752,39 @@ export default function Profile() {
                 Rótulo Profissional
               </label>
               <div className="relative">
-                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
-                <input
-                  type="text"
-                  required
-                  value={professionalTitle}
-                  onChange={(e) => setProfessionalTitle(e.target.value)}
-                  className="input-field pl-10 pr-4 py-3"
-                  placeholder="Ex: Terapeuta Ocupacional, Fonoaudióloga, Psicóloga"
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted z-10" />
+                <select
+                  value={selectValue}
+                  onChange={(e) => handleSelectChange(e.target.value)}
+                  className="input-field pl-10 pr-10 py-3 appearance-none bg-white cursor-pointer"
                   disabled={saving}
-                />
+                >
+                  <option value="" disabled>Selecione sua profissão...</option>
+                  {professionalOptions.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                  <option value="Outro">Outro...</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-text-muted">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
               </div>
+              
+              {selectValue === 'Outro' && (
+                <div className="relative mt-2 animate-fadeIn">
+                  <input
+                    type="text"
+                    required
+                    value={customValue}
+                    onChange={(e) => handleCustomValueChange(e.target.value)}
+                    className="input-field p-3"
+                    placeholder="Digite seu rótulo profissional personalizado"
+                    disabled={saving}
+                  />
+                </div>
+              )}
               <p className="text-[10px] text-brand-text-muted">
                 Este rótulo será exibido no seu perfil, nos relatórios e define a especialidade usada pela IA.
               </p>
@@ -624,17 +794,33 @@ export default function Profile() {
               <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
                 Nº de Registro de Classe
               </label>
-              <div className="relative">
-                <ShieldAlert className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
-                <input
-                  type="text"
-                  value={professionalRegister}
-                  onChange={(e) => setProfessionalRegister(e.target.value)}
-                  className="input-field pl-10 pr-4 py-3"
-                  placeholder="Ex: CREFITO-3 123456-F, CRP 06/12345"
-                  disabled={saving}
-                />
-              </div>
+              {activePrefix ? (
+                <div className="flex rounded-xl overflow-hidden border border-brand-border shadow-xs">
+                  <span className="bg-brand-bg px-4 flex items-center justify-center text-xs font-bold text-[#105576] border-r border-brand-border select-none min-w-[70px]">
+                    {activePrefix}
+                  </span>
+                  <input
+                    type="text"
+                    value={professionalRegister}
+                    onChange={(e) => setProfessionalRegister(e.target.value)}
+                    className="flex-1 p-3 text-sm text-brand-text bg-white outline-none border-none"
+                    placeholder="Digite apenas o número (Ex: 06/12345 ou 123456/SP)"
+                    disabled={saving}
+                  />
+                </div>
+              ) : (
+                <div className="relative">
+                  <ShieldAlert className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                  <input
+                    type="text"
+                    value={professionalRegister}
+                    onChange={(e) => setProfessionalRegister(e.target.value)}
+                    className="input-field pl-10 pr-4 py-3"
+                    placeholder="Ex: CREFITO-3 123456-F, CRP 06/12345"
+                    disabled={saving}
+                  />
+                </div>
+              )}
               <p className="text-[10px] text-brand-text-muted">
                 Número do seu conselho de classe. Será exibido nos relatórios gerados pela IA.
               </p>
