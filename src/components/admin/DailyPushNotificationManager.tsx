@@ -17,6 +17,8 @@ interface DailyPushConfig {
   icon_url: string;
   destination_url: string;
   last_sent_date?: string;
+  server_time_utc?: string;
+  server_time_br?: string;
 }
 
 interface PushLog {
@@ -347,6 +349,31 @@ export default function DailyPushNotificationManager() {
                 onChange={e => setConfig({ ...config, time: e.target.value })}
                 className="input-field p-2.5 max-w-[200px]"
               />
+              {config.server_time_br && (
+                <div className="text-[11px] text-brand-text-muted mt-2 space-y-1 bg-stone-50 p-2.5 rounded-xl border border-brand-border/40 max-w-[400px]">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></span>
+                    <span>
+                      Hora do Servidor (Brasília): <strong>{
+                        new Date(config.server_time_br).toLocaleString('pt-BR', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          timeZone: 'UTC'
+                        })
+                      }</strong>
+                    </span>
+                  </div>
+                  {config.server_time_utc && (
+                    <div className="text-[9px] text-brand-text-muted/70 pl-3.5">
+                      Server UTC: {new Date(config.server_time_utc).toISOString()}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <hr className="border-brand-border/40" />

@@ -2174,7 +2174,15 @@ app.get("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, r
       }
     }
 
-    res.json(config);
+    const tzOffset = -3;
+    const now = new Date();
+    const brazilTime = new Date(now.getTime() + (tzOffset * 60 * 60 * 1000));
+
+    res.json({
+      ...config,
+      server_time_utc: now.toISOString(),
+      server_time_br: brazilTime.toISOString()
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
