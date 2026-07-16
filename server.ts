@@ -2146,6 +2146,7 @@ app.post("/api/notifications/unsubscribe", requireAuth, async (req: any, res) =>
 // 4. Obter configuração do push diário (Apenas Admin)
 app.get("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     const { data, error } = await supabaseAdmin
       .from("settings")
       .select("api_key")
@@ -2261,6 +2262,7 @@ app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: an
 // 7. Obter histórico das últimas 7 notificações diárias (Apenas Admin)
 app.get("/api/admin/daily-push-history", requireAuth, requireAdmin, async (req, res) => {
   try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     const { data, error } = await supabaseAdmin
       .from("daily_push_logs")
       .select("*")
