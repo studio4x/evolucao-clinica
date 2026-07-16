@@ -507,28 +507,35 @@ export default function PublicJourneyIndex() {
 
       {/* HERO SECTION */}
       <section className="bg-white py-12 px-6 border-b border-gray-150">
-        <div className={`max-w-5xl mx-auto ${journey.cover_image_url ? 'grid grid-cols-1 md:grid-cols-12 gap-8 items-center text-left' : 'text-center'}`}>
-          
-          {/* Coluna de Texto & Conteúdo */}
-          <div className={`${journey.cover_image_url ? 'md:col-span-7 space-y-6 order-2 md:order-1' : 'max-w-4xl mx-auto space-y-6'}`}>
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1 bg-[#719EB9]/10 text-[#105576] rounded-full text-[10px] font-bold uppercase tracking-wider ${journey.cover_image_url ? '' : 'mx-auto'}`}>
-              <Award size={12} />
-              Central da Jornada de Conteúdos
+        <div className="max-w-5xl mx-auto">
+          {/* Badge Mobile: Exibido apenas no mobile no topo centralizado */}
+          {journey.cover_image_url && (
+            <div className="flex justify-center md:hidden mb-6 animate-fadeIn">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#719EB9]/10 text-[#105576] rounded-full text-[10px] font-bold uppercase tracking-wider">
+                <Award size={12} />
+                Central da Jornada de Conteúdos
+              </div>
             </div>
-            
-            <h1 className="text-3xl sm:text-4xl font-extrabold text-[#105576] leading-tight tracking-tight">
-              {journey.title}
-            </h1>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              {journey.description || 'Acompanhe as demonstrações diárias, dicas práticas de registros clínicos e guias de uso de IA compartilhados em nosso grupo oficial.'}
-            </p>
+          )}
 
-            {/* Aviso Responsabilidade IA */}
-            <div className={`bg-[#719EB9]/5 border border-[#719EB9]/15 rounded-2xl p-4 ${journey.cover_image_url ? 'w-full' : 'max-w-xl mx-auto'}`}>
-              <p className="text-[11px] text-[#376F8D] leading-relaxed font-semibold">
-                💡 <strong>Nota sobre IA:</strong> O Evolução Clínica atua como apoio à transcrição, padronização e redação de relatórios. Toda e qualquer decisão de diagnóstico, conduta clínica e revisão final permanecem exclusivamente de responsabilidade do profissional de saúde assistente.
+          <div className={`grid grid-cols-1 ${journey.cover_image_url ? 'md:grid-cols-12 gap-8 items-center text-left' : 'text-center'}`}>
+            
+            {/* Coluna de Texto & Conteúdo */}
+            <div className={`${journey.cover_image_url ? 'md:col-span-7 space-y-6 order-2 md:order-1' : 'max-w-4xl mx-auto space-y-6'}`}>
+              {/* Badge Desktop: Exibido no desktop ou se não houver imagem de capa (onde tudo é centralizado) */}
+              <div className={journey.cover_image_url ? 'hidden md:flex' : 'flex justify-center'}>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#719EB9]/10 text-[#105576] rounded-full text-[10px] font-bold uppercase tracking-wider">
+                  <Award size={12} />
+                  Central da Jornada de Conteúdos
+                </div>
+              </div>
+              
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-[#105576] leading-tight tracking-tight">
+                {journey.title}
+              </h1>
+              <p className="text-sm text-gray-600 leading-relaxed">
+                {journey.description || 'Acompanhe as demonstrações diárias, dicas práticas de registros clínicos e guias de uso de IA compartilhados em nosso grupo oficial.'}
               </p>
-            </div>
 
             {/* Barra de Progresso Geral */}
             <div className={`bg-gray-50 border border-gray-100 rounded-2xl p-5 space-y-2 ${journey.cover_image_url ? 'w-full' : 'max-w-md mx-auto'}`}>
@@ -582,6 +589,7 @@ export default function PublicJourneyIndex() {
             </div>
           )}
 
+          </div>
         </div>
       </section>
 
