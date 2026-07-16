@@ -176,7 +176,6 @@ export default function PrivacyPolicy() {
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
               <li><strong>`https://www.googleapis.com/auth/drive.file`</strong>: criar, abrir, editar, organizar e manter somente os arquivos e pastas que o usuário utiliza com o aplicativo.</li>
-              <li><strong>`https://www.googleapis.com/auth/documents`</strong>: ler e atualizar o conteúdo dos Google Docs vinculados ao prontuário e aos documentos clínicos operados pela plataforma.</li>
               <li><strong>`https://www.googleapis.com/auth/calendar.events.readonly`</strong>: consultar eventos do Google Calendar em modo somente leitura quando o usuário ativa a sincronização opcional de agenda.</li>
             </ul>
             <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">

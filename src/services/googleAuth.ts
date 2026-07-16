@@ -2,7 +2,6 @@ import { supabase } from '../supabaseClient';
 
 export const GOOGLE_SCOPES = {
   driveFile: 'https://www.googleapis.com/auth/drive.file',
-  documents: 'https://www.googleapis.com/auth/documents',
   calendarEventsReadonly: 'https://www.googleapis.com/auth/calendar.events.readonly',
 } as const;
 
@@ -10,7 +9,6 @@ export const GOOGLE_SCOPE_SETS = {
   login: [GOOGLE_SCOPES.driveFile],
   clinicalDocs: [
     GOOGLE_SCOPES.driveFile,
-    GOOGLE_SCOPES.documents,
   ],
   calendarReadOnly: [GOOGLE_SCOPES.calendarEventsReadonly],
 } as const;
