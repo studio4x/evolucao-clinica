@@ -39,6 +39,7 @@ const PublicJourneyIndex = lazyWithRetry(() => import('./pages/PublicJourneyInde
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
 
+import { Analytics } from '@vercel/analytics/react';
 import { CookieConsent } from './components/CookieConsent';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
@@ -555,6 +556,7 @@ export default function App() {
 
   return (
     <Router>
+      <Analytics />
       <CookieConsent />
       <InstallPrompt />
       
