@@ -296,6 +296,22 @@ async function validateLinkedRecordWithoutEvolution(deps: LifecycleDependencies,
   return null;
 }
 
+async function validateTrialExpiringOneDay(deps: LifecycleDependencies, userId: string) {
+  const { data: professional, error } = await deps.supabaseAdmin
+    .from("professionals")
+    .select("subscription_status, trial_ends_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message || "Falha ao confirmar o status do trial.");
+  if (professional?.subscription_status === "active") return "trial_already_subscribed";
+
+  const trialEndsAt = professional?.trial_ends_at ? new Date(professional.trial_ends_at).getTime() : 0;
+  const remainingHours = (trialEndsAt - Date.now()) / 3600000;
+  if (!Number.isFinite(trialEndsAt) || remainingHours <= 0) return "trial_expired_or_no_longer_valid";
+  if (remainingHours > 24) return "trial_was_extended_or_not_within_24_hours";
+  return null;
+}
+
 async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, runtime: LifecycleRuntimeConfig) {
   if (!runtime.send_enabled || runtime.dry_run) {
     await markSuppressed(deps, dispatch, "dry_run_or_sending_disabled");
@@ -341,6 +357,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "linked_record_without_evolution") {
     const skipReason = await validateLinkedRecordWithoutEvolution(deps, dispatch.user_id);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "trial_expiring_1d") {
+    const skipReason = await validateTrialExpiringOneDay(deps, dispatch.user_id);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };
