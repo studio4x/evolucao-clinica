@@ -296,6 +296,18 @@ async function validateLinkedRecordWithoutEvolution(deps: LifecycleDependencies,
   return null;
 }
 
+async function validatePatientWithoutLinkedRecord(deps: LifecycleDependencies, userId: string) {
+  const [{ count: patients, error: patientsError }, { count: linkedRecords, error: linkedRecordsError }] = await Promise.all([
+    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId),
+    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId).not("google_doc_id", "is", null).neq("google_doc_id", "")
+  ]);
+  if (patientsError) throw new Error(patientsError.message || "Falha ao confirmar pacientes cadastrados.");
+  if (linkedRecordsError) throw new Error(linkedRecordsError.message || "Falha ao confirmar prontuários vinculados.");
+  if (Number(patients || 0) <= 0) return "no_patient_registered";
+  if (Number(linkedRecords || 0) > 0) return "record_already_linked";
+  return null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -387,6 +399,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "linked_record_without_evolution") {
     const skipReason = await validateLinkedRecordWithoutEvolution(deps, dispatch.user_id);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "patient_without_linked_record") {
+    const skipReason = await validatePatientWithoutLinkedRecord(deps, dispatch.user_id);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };
