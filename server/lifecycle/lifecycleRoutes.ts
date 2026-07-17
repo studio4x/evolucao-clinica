@@ -305,7 +305,35 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
         const { data, error } = await deps.supabaseAdmin.from("lifecycle_dispatches").select("*").order("created_at", { ascending: false }).limit(limit);
         if (error) throw new Error(error.message);
-        return res.json({ deliveries: data || [] });
+
+        const dispatches = data || [];
+        const userIds = Array.from(new Set(dispatches.map((item: any) => item.user_id).filter(Boolean)));
+        const stepIds = Array.from(new Set(dispatches.map((item: any) => item.step_id).filter(Boolean)));
+        const ruleIds = Array.from(new Set(dispatches.map((item: any) => item.rule_id).filter(Boolean)));
+        const campaignIds = Array.from(new Set(dispatches.map((item: any) => item.campaign_id).filter(Boolean)));
+        const emptyId = "00000000-0000-0000-0000-000000000000";
+        const [{ data: professionals, error: professionalsError }, { data: steps, error: stepsError }, { data: rules, error: rulesError }, { data: campaigns, error: campaignsError }] = await Promise.all([
+          deps.supabaseAdmin.from("professionals").select("id, full_name, google_email").in("id", userIds.length ? userIds : [emptyId]),
+          deps.supabaseAdmin.from("lifecycle_steps").select("id, step_key, position, subject_template, campaign_id").in("id", stepIds.length ? stepIds : [emptyId]),
+          deps.supabaseAdmin.from("lifecycle_rules").select("id, name, rule_key").in("id", ruleIds.length ? ruleIds : [emptyId]),
+          deps.supabaseAdmin.from("lifecycle_campaigns").select("id, name, key").in("id", campaignIds.length ? campaignIds : [emptyId])
+        ]);
+        if (professionalsError || stepsError || rulesError || campaignsError) throw new Error(professionalsError?.message || stepsError?.message || rulesError?.message || campaignsError?.message || "Falha ao enriquecer os registros de envio.");
+
+        return res.json({ deliveries: dispatches.map((item: any) => {
+          const professional = (professionals || []).find((entry: any) => entry.id === item.user_id);
+          const step = (steps || []).find((entry: any) => entry.id === item.step_id);
+          const rule = (rules || []).find((entry: any) => entry.id === item.rule_id);
+          const campaign = (campaigns || []).find((entry: any) => entry.id === item.campaign_id);
+          return {
+            ...item,
+            recipient_name: professional?.full_name || "Usuário não identificado",
+            recipient_email: professional?.google_email || "E-mail não identificado",
+            template_name: step?.subject_template || rule?.name || item.rendered_subject || item.message_key,
+            template_reference: step ? `Passo ${step.position}${campaign?.name ? ` · ${campaign.name}` : ""}` : rule?.name || item.message_key,
+            template_key: step?.step_key || rule?.rule_key || item.message_key
+          };
+        }) });
       }));
       app.post("/api/admin/lifecycle/dispatches/:id/cancel", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => { const { error } = await deps.supabaseAdmin.from("lifecycle_dispatches").update({ status: "cancelled", skip_reason: String(req.body?.reason || "cancelled_by_admin"), skipped_at: new Date().toISOString() }).eq("id", req.params.id).in("status", ["queued", "retry", "processing"]); if (error) throw new Error(error.message); return res.json({ success: true }); }));
       app.get("/api/admin/lifecycle/preferences", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => { const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500); const { data, error } = await deps.supabaseAdmin.from("communication_preferences").select("*").order("updated_at", { ascending: false }).limit(limit); if (error) throw new Error(error.message); return res.json({ preferences: data || [] }); }));
