@@ -35,7 +35,7 @@ export async function sendNotification(payload: NotificationPayload) {
       body: JSON.stringify({
         ...payload,
         source: payload.source || 'manual',
-        channels: payload.channels || { inApp: true, push: true, email: false }
+        channels: payload.channels || { inApp: true, push: true, email: true }
       })
     });
 
