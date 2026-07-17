@@ -413,6 +413,14 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     }
   }
 
+  const channelDelivery = {
+    email: emailEnabled ? (emailSent ? "sent" : "failed") : "disabled",
+    push: pushEnabled ? (pushSent ? "sent" : "failed") : "disabled",
+    whatsapp: whatsappEnabled
+      ? (whatsappNumber ? (whatsappSent ? "sent" : "failed") : "not_configured")
+      : "disabled"
+  };
+
   await deps.supabaseAdmin.from("lifecycle_dispatches").update({
     status: "sent",
     sent_at: new Date().toISOString(),
@@ -420,6 +428,11 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     rendered_subject: rendered.subject,
     rendered_preheader: rendered.preheader,
     rendered_text: rendered.text,
+    metadata: {
+      ...(dispatch.metadata || {}),
+      channel_delivery: channelDelivery,
+      channel_delivery_updated_at: new Date().toISOString()
+    },
     updated_at: new Date().toISOString()
   }).eq("id", dispatch.id);
   try {
