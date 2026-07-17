@@ -241,7 +241,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     .limit(1)
     .maybeSingle();
 
-  if (!checkError && existingDelivery) {
+  if (!checkError && existingDelivery && dispatch.metadata?.force_resend !== true) {
     console.warn(`[Lifecycle Worker] Email já enviado anteriormente para o dispatch ${dispatch.id} (mitigação de duplicidade). Atualizando banco.`);
     await deps.supabaseAdmin.from("lifecycle_dispatches").update({
       status: "sent",
@@ -260,10 +260,16 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   const unsubscribeUrl = `${deps.productionOrigin}/descadastro?token=${encodeURIComponent(unsubscribeToken)}`;
   const actionUrl = resolveLifecycleUrl(deps.productionOrigin, rendered.ctaRoute);
 
+  const forceEmailOnly = dispatch.metadata?.force_email_only === true;
   const emailEnabled = preferences.email_enabled !== false;
-  const pushEnabled = preferences.push_enabled !== false;
-  const whatsappEnabled = preferences.whatsapp_enabled !== false;
+  const pushEnabled = !forceEmailOnly && preferences.push_enabled !== false;
+  const whatsappEnabled = !forceEmailOnly && preferences.whatsapp_enabled !== false;
   const whatsappNumber = String(preferences.whatsapp_number || "").trim();
+
+  if (forceEmailOnly && !emailEnabled) {
+    await markSuppressed(deps, dispatch, "email_disabled");
+    return { status: "suppressed" };
+  }
 
   if (!emailEnabled && !pushEnabled && (!whatsappEnabled || !whatsappNumber)) {
     await markSuppressed(deps, dispatch, "no_active_channels");
@@ -366,6 +372,64 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     }).eq("user_id", dispatch.user_id);
   }
   return { status: "sent", provider: emailSent ? emailProvider : "other", deliveryFailure: emailFailureReason };
+}
+
+export async function processLifecycleDispatchById(deps: LifecycleDependencies, dispatchId: string) {
+  const runtime = await getLifecycleRuntimeConfig(deps);
+  const workerId = `lifecycle-manual:${randomUUID()}`;
+  const { data: dispatch, error: dispatchError } = await deps.supabaseAdmin
+    .from("lifecycle_dispatches")
+    .select("*")
+    .eq("id", dispatchId)
+    .in("status", ["queued", "retry"])
+    .maybeSingle();
+  if (dispatchError) throw new Error(dispatchError.message || "Falha ao consultar o disparo lifecycle.");
+  if (!dispatch) return { status: "unavailable" };
+
+  const { data: claimed, error: claimError } = await deps.supabaseAdmin
+    .from("lifecycle_dispatches")
+    .update({
+      status: "processing",
+      claimed_at: new Date().toISOString(),
+      claimed_by: workerId,
+      attempt_count: Number(dispatch.attempt_count || 0) + 1,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", dispatchId)
+    .in("status", ["queued", "retry"])
+    .select("*")
+    .maybeSingle();
+  if (claimError) throw new Error(claimError.message || "Falha ao iniciar o envio lifecycle.");
+  if (!claimed) return { status: "unavailable" };
+
+  try {
+    const result = await processOneDispatch(deps, claimed, runtime);
+    if (runtime.send_enabled && !runtime.dry_run) {
+      if (result.deliveryFailure) {
+        await registerLifecycleFailure(deps, { dispatchId: claimed.id, reason: result.deliveryFailure });
+      } else {
+        await registerLifecycleSuccess(deps);
+      }
+    }
+    const { data: updated } = await deps.supabaseAdmin
+      .from("lifecycle_dispatches")
+      .select("status, skip_reason, failure_reason, email_delivery_id")
+      .eq("id", claimed.id)
+      .maybeSingle();
+    return { ...result, ...(updated || {}) };
+  } catch (error) {
+    await markFailure(deps, claimed, error);
+    const reason = String(error instanceof Error ? error.message : error || "Falha desconhecida").slice(0, 500);
+    if (runtime.send_enabled && !runtime.dry_run) {
+      await registerLifecycleFailure(deps, { dispatchId: claimed.id, reason });
+    }
+    const { data: updated } = await deps.supabaseAdmin
+      .from("lifecycle_dispatches")
+      .select("status, skip_reason, failure_reason, email_delivery_id")
+      .eq("id", claimed.id)
+      .maybeSingle();
+    return { status: updated?.status || "failed", failure_reason: updated?.failure_reason || reason, ...(updated || {}) };
+  }
 }
 
 export async function processLifecycleDispatches(deps: LifecycleDependencies, batchSize?: number) {

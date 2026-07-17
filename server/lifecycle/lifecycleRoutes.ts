@@ -1,7 +1,8 @@
+import { randomUUID } from "node:crypto";
 import { getNextBestAction, chooseHighestPriority, evaluateKnownRule } from "./lifecycleRules.js";
 import { getLifecyclePreferences, getLifecycleRuntimeConfig, ensureLifecycleEnrollment, getUserProfile, findCampaign, recordLifecycleEvent, suppressLifecycleDispatches, updateLifecyclePreferences, hashCommunicationToken } from "./lifecycleRepository.js";
 import { recalculateLifecycleUserState } from "./lifecycleStateService.js";
-import { processLifecycleDispatches } from "./lifecycleQueue.js";
+import { processLifecycleDispatchById, processLifecycleDispatches } from "./lifecycleQueue.js";
 import { scheduleLifecycleMessages } from "./lifecycleScheduler.js";
 import { renderLifecycleMessage, resolveLifecycleUrl } from "./lifecycleRenderer.js";
 import { LIFECYCLE_EVENT_NAMES, type LifecycleDependencies, type LifecycleEventName } from "./lifecycleTypes.js";
@@ -244,6 +245,61 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ success: true });
       }));
       app.post("/api/admin/lifecycle/users/:userId/recalculate", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => res.json({ state: await recalculateLifecycleUserState(deps, req.params.userId) })));
+      app.post("/api/admin/lifecycle/users/:userId/force-send", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
+        const userId = req.params.userId;
+        const campaignKey = String(req.body?.campaignKey || "new_user_activation_15d").trim();
+        const stepId = String(req.body?.stepId || "").trim();
+        if (!stepId) return res.status(400).json({ error: "stepId é obrigatório para o envio manual." });
+
+        const campaign = await findCampaign(deps, campaignKey);
+        if (!campaign) return res.status(404).json({ error: "Campanha lifecycle não encontrada." });
+        const [{ data: enrollment, error: enrollmentError }, { data: step, error: stepError }] = await Promise.all([
+          deps.supabaseAdmin.from("lifecycle_enrollments").select("*").eq("user_id", userId).eq("campaign_id", campaign.id).maybeSingle(),
+          deps.supabaseAdmin.from("lifecycle_steps").select("*").eq("id", stepId).eq("campaign_id", campaign.id).maybeSingle()
+        ]);
+        if (enrollmentError) throw new Error(enrollmentError.message);
+        if (stepError) throw new Error(stepError.message);
+        if (!enrollment) return res.status(404).json({ error: "Usuário não está matriculado nesta jornada." });
+        if (["cancelled", "suppressed", "expired"].includes(enrollment.status)) return res.status(400).json({ error: "A jornada deste usuário não permite envio manual no momento." });
+        if (!step) return res.status(404).json({ error: "Passo lifecycle não encontrado nesta campanha." });
+        if (step.status !== "active" || step.enabled !== true) return res.status(400).json({ error: "O passo atual não está ativo para envio." });
+
+        const expectedPosition = Number(enrollment.current_position || 0) || 1;
+        if (Number(step.position) !== expectedPosition) return res.status(400).json({ error: "O passo informado não é o passo atual deste usuário." });
+
+        const runtime = await getLifecycleRuntimeConfig(deps);
+        if (!runtime.send_enabled || runtime.dry_run) return res.status(400).json({ error: "O envio real está desativado nas configurações da Jornada de Usuários." });
+
+        const now = new Date().toISOString();
+        const { data: dispatch, error: insertError } = await deps.supabaseAdmin.from("lifecycle_dispatches").insert({
+          user_id: userId,
+          enrollment_id: enrollment.id,
+          campaign_id: campaign.id,
+          step_id: step.id,
+          rule_id: null,
+          message_key: `sequence:${step.step_key}`,
+          dispatch_type: "sequence",
+          priority: Number(step.priority || 50) + 10000,
+          status: "queued",
+          scheduled_for: now,
+          dedupe_key: `manual:sequence:${userId}:${step.id}:${randomUUID()}`,
+          metadata: {
+            manual: true,
+            force_email_only: true,
+            force_resend: true,
+            commercial: step.category === "commercial",
+            forced_by: req.user.id,
+            forced_at: now
+          }
+        }).select("id").single();
+        if (insertError) throw new Error(insertError.message);
+
+        const result = await processLifecycleDispatchById(deps, dispatch.id);
+        if (result.status === "sent") return res.json({ success: true, status: result.status, message: "E-mail do passo atual enviado com sucesso." });
+        if (result.status === "suppressed") return res.status(400).json({ error: "O envio foi suprimido pelas preferências de comunicação do usuário.", status: result.status, reason: result.skip_reason });
+        if (result.status === "failed" || result.status === "retry") return res.status(502).json({ error: "Não foi possível enviar o e-mail do passo atual.", status: result.status, reason: result.failure_reason });
+        return res.status(409).json({ error: "O disparo manual não pôde ser processado.", status: result.status });
+      }));
 
       app.get("/api/admin/lifecycle/deliveries", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
         const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
