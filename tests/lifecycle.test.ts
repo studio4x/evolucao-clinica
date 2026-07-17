@@ -19,6 +19,8 @@ assert.equal(renderLifecycleTemplate('Olá, {{primeiro_nome}}. Você tem {{quant
 assert.equal(renderLifecycleTemplate('{{primeiro_nome}} {{plano_atual}}', {}), 'Profissional seu plano atual');
 assert.equal(renderLifecycleTemplate('{{resumo_progresso}}', { quantidade_pacientes: 0, quantidade_prontuarios: 2, quantidade_evolucoes: 0 }), 'vinculou 2 prontuários;');
 assert.match(renderLifecycleTemplate('{{resumo_progresso}}', { quantidade_pacientes: 0, quantidade_prontuarios: 0, quantidade_evolucoes: 0 }), /Você já deu o primeiro passo/);
+assert.equal(renderLifecycleTemplate('{{bloco_progresso_teste}}', { quantidade_pacientes: 2, quantidade_prontuarios: 0, quantidade_evolucoes: 3 }), 'Durante esse período, você já começou a organizar sua rotina na plataforma:\ncadastrou 2 pacientes;\nconcluiu 3 evoluções.');
+assert.equal(renderLifecycleTemplate('{{bloco_progresso_teste}}', { quantidade_pacientes: 0, quantidade_prontuarios: 0, quantidade_evolucoes: 0 }), 'Você ainda tem alguns dias para experimentar o fluxo completo. Acesse sua conta e continue pela próxima etapa recomendada.');
 assert.match(renderSafeLifecycleMarkdown('<script>alert(1)</script>\n\n**seguro**'), /&lt;script&gt;alert/);
 assert.match(renderSafeLifecycleMarkdown('<script>alert(1)</script>\n\n**seguro**'), /<strong>seguro<\/strong>/);
 
