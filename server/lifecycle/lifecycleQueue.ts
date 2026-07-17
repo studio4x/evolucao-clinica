@@ -7,7 +7,7 @@ import { escapeLifecycleHtml, renderLifecycleMessage, renderSafeLifecycleMarkdow
 import { renderLifecycleTemplate } from "./templates/tokenRegistry.js";
 import type { LifecycleDependencies, LifecycleState } from "./lifecycleTypes.js";
 
-function buildContext(state: LifecycleState, origin: string, now: Date, useSubscriberAction = false) {
+function buildContext(state: LifecycleState, origin: string, now: Date, useSubscriberAction = false, recoveryTrial = false) {
   const action = useSubscriberAction ? getSubscriberNextBestAction(state, now) : getNextBestAction(state, now);
   return {
     primeiro_nome: state.fullName.trim().split(/\s+/)[0] || "Profissional",
@@ -17,6 +17,7 @@ function buildContext(state: LifecycleState, origin: string, now: Date, useSubsc
     quantidade_prontuarios: state.linkedRecordsCount,
     quantidade_evolucoes: state.evolutionsCount,
     resumo_progresso: "",
+    bloco_progresso_teste_fallback: recoveryTrial ? "Mesmo que você não tenha conseguido experimentar todo o fluxo durante o teste, ainda pode escolher um plano e começar no seu ritmo. Caso precise de ajuda para configurar a conta, nossa equipe está disponível." : "",
     quantidade_audios: state.audioEvolutionsCount,
     quantidade_documentos: state.reportsCount,
     quantidade_recursos: state.resourcesCount,
@@ -365,6 +366,32 @@ async function validateSubscriberLowUsage(deps: LifecycleDependencies, userId: s
   return null;
 }
 
+async function validateTrialRecovery(deps: LifecycleDependencies, userId: string, rule: any) {
+  const [{ data: professional, error: professionalError }, { data: preferences, error: preferencesError }, { data: previousEnding, error: endingError }, { data: accountEvents, error: eventsError }] = await Promise.all([
+    deps.supabaseAdmin.from("professionals").select("status, subscription_status, trial_ends_at").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("communication_preferences").select("lifecycle_enabled, commercial_enabled, unsubscribed_at").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_dispatches").select("sent_at").eq("user_id", userId).eq("message_key", "conditional:trial_expired").eq("status", "sent").order("sent_at", { ascending: false }).limit(1).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_events").select("event_name, occurred_at").eq("user_id", userId).in("event_name", ["account_deleted", "email_unsubscribed"]).order("occurred_at", { ascending: false }).limit(1).maybeSingle()
+  ]);
+  if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar o encerramento do trial.");
+  if (preferencesError) throw new Error(preferencesError.message || "Falha ao confirmar as preferências de comunicação.");
+  if (endingError) throw new Error(endingError.message || "Falha ao confirmar a mensagem de encerramento enviada.");
+  if (eventsError) throw new Error(eventsError.message || "Falha ao confirmar exclusão ou descadastro.");
+  if (professional?.status !== "active") return "account_not_recoverable";
+  if (professional?.subscription_status === "active") return "subscription_already_active";
+
+  const trialEndsAt = professional?.trial_ends_at ? new Date(professional.trial_ends_at).getTime() : 0;
+  if (!Number.isFinite(trialEndsAt) || trialEndsAt > Date.now()) return "trial_not_finished";
+  if (!preferences?.lifecycle_enabled || !preferences?.commercial_enabled || preferences?.unsubscribed_at) return "commercial_messages_unsubscribed";
+  if (accountEvents?.event_name) return accountEvents.event_name === "account_deleted" ? "account_deletion_requested" : "email_unsubscribed";
+  if (!previousEnding?.sent_at) return "trial_ending_message_not_sent";
+
+  const recoveryDays = Number(rule?.condition_config?.days_after || 2);
+  const elapsedDays = (Date.now() - new Date(previousEnding.sent_at).getTime()) / 86400000;
+  if (!Number.isFinite(elapsedDays) || elapsedDays < recoveryDays) return "recovery_interval_not_elapsed";
+  return null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -489,6 +516,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       return { status: "skipped" };
     }
   }
+  if (ruleResult.data?.rule_key === "trial_recovery_2d") {
+    const skipReason = await validateTrialRecovery(deps, dispatch.user_id, ruleResult.data);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
   if (ruleResult.data?.rule_key === "first_evolution_completed") {
     const skipReason = await validateFirstEvolutionCompleted(deps, dispatch.user_id);
     if (skipReason) {
@@ -521,7 +555,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
 
   const now = new Date();
-  const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage");
+  const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage", ruleResult.data?.rule_key === "trial_recovery_2d");
   const config = messageFromConfig(dispatch, stepResult.data, ruleResult.data);
   const rendered = renderLifecycleMessage({
     subjectTemplate: config.subject_template,

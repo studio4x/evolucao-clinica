@@ -20,7 +20,7 @@ export const LIFECYCLE_TOKEN_REGISTRY = {
     if (evolutions > 0) lines.push(`concluiu ${formatQuantity(evolutions, "evolução", "evoluções")}.`);
     return lines.length
       ? `Durante esse período, você já começou a organizar sua rotina na plataforma:\n${lines.join("\n")}`
-      : "Você ainda tem alguns dias para experimentar o fluxo completo. Acesse sua conta e continue pela próxima etapa recomendada.";
+      : context.bloco_progresso_teste_fallback || "Você ainda tem alguns dias para experimentar o fluxo completo. Acesse sua conta e continue pela próxima etapa recomendada.";
   },
   resumo_progresso: (context: LifecycleTemplateContext) => {
     const lines: string[] = [];
