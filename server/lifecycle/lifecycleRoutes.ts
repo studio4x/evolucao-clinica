@@ -5,6 +5,7 @@ import { recalculateLifecycleUserState } from "./lifecycleStateService.js";
 import { processLifecycleDispatchById, processLifecycleDispatches } from "./lifecycleQueue.js";
 import { scheduleLifecycleMessages } from "./lifecycleScheduler.js";
 import { renderLifecycleMessage, resolveLifecycleUrl } from "./lifecycleRenderer.js";
+import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY } from "./lifecycleConstants.js";
 import { LIFECYCLE_EVENT_NAMES, type LifecycleDependencies, type LifecycleEventName } from "./lifecycleTypes.js";
 
 function asyncRoute(handler: (req: any, res: any) => Promise<unknown>) {
@@ -260,7 +261,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         if (enrollmentError) throw new Error(enrollmentError.message);
         if (stepError) throw new Error(stepError.message);
         if (!enrollment) return res.status(404).json({ error: "Usuário não está matriculado nesta jornada." });
-        if (["cancelled", "suppressed", "expired"].includes(enrollment.status)) return res.status(400).json({ error: "A jornada deste usuário não permite envio manual no momento." });
+        if (enrollment.status !== "active") return res.status(400).json({ error: "A jornada deste usuário precisa estar ativa para permitir envio manual." });
         if (!step) return res.status(404).json({ error: "Passo lifecycle não encontrado nesta campanha." });
         if (step.status !== "active" || step.enabled !== true) return res.status(400).json({ error: "O passo atual não está ativo para envio." });
 
@@ -306,7 +307,16 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         const { data, error } = await deps.supabaseAdmin.from("lifecycle_dispatches").select("*").order("created_at", { ascending: false }).limit(limit);
         if (error) throw new Error(error.message);
 
-        const dispatches = data || [];
+        const allDispatches = data || [];
+        const activationCampaign = await findCampaign(deps, LIFECYCLE_ACTIVATION_CAMPAIGN_KEY);
+        const enrollmentIds = Array.from(new Set(allDispatches.map((item: any) => item.enrollment_id).filter(Boolean)));
+        const { data: enrollments, error: enrollmentsError } = await deps.supabaseAdmin
+          .from("lifecycle_enrollments")
+          .select("id, status, campaign_id")
+          .in("id", enrollmentIds.length ? enrollmentIds : ["00000000-0000-0000-0000-000000000000"]);
+        if (enrollmentsError) throw new Error(enrollmentsError.message);
+        const activeEnrollmentIds = new Set((enrollments || []).filter((enrollment: any) => enrollment.status === "active" && enrollment.campaign_id === activationCampaign?.id).map((enrollment: any) => enrollment.id));
+        const dispatches = allDispatches.filter((item: any) => item.enrollment_id && activeEnrollmentIds.has(item.enrollment_id));
         const userIds = Array.from(new Set(dispatches.map((item: any) => item.user_id).filter(Boolean)));
         const stepIds = Array.from(new Set(dispatches.map((item: any) => item.step_id).filter(Boolean)));
         const ruleIds = Array.from(new Set(dispatches.map((item: any) => item.rule_id).filter(Boolean)));

@@ -240,11 +240,7 @@ export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now
   const runtime = await getLifecycleRuntimeConfig(deps);
   const activationCampaign = await findCampaign(deps, "new_user_activation_15d");
   const conditionalCampaign = await findCampaign(deps, "conditional_lifecycle_messages");
-  const campaign = activationCampaign?.status === "active"
-    ? activationCampaign
-    : conditionalCampaign?.status === "active"
-      ? conditionalCampaign
-      : null;
+  const campaign = activationCampaign?.status === "active" ? activationCampaign : null;
   if (!campaign) return { scheduled: 0, dryRun: runtime.dry_run || !runtime.send_enabled, reason: "campaign_not_active" };
   const [{ data: steps, error: stepsError }, { data: rules, error: rulesError }, { data: professionals, error: professionalsError }, { data: conditionalSteps, error: conditionalStepsError }] = await Promise.all([
     activationCampaign?.status === "active"

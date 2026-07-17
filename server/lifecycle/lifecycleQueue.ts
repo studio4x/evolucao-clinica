@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
+import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { getNextBestAction } from "./lifecycleRules.js";
 import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
@@ -195,6 +195,31 @@ function messageFromConfig(dispatch: any, step: any, rule: any) {
 async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, runtime: LifecycleRuntimeConfig) {
   if (!runtime.send_enabled || runtime.dry_run) {
     await markSuppressed(deps, dispatch, "dry_run_or_sending_disabled");
+    return { status: "suppressed" };
+  }
+
+  if (!dispatch.enrollment_id) {
+    await markSuppressed(deps, dispatch, "enrollment_inactive");
+    return { status: "suppressed" };
+  }
+  const { data: enrollment, error: enrollmentError } = await deps.supabaseAdmin
+    .from("lifecycle_enrollments")
+    .select("status, campaign_id")
+    .eq("id", dispatch.enrollment_id)
+    .maybeSingle();
+  if (enrollmentError) throw new Error(enrollmentError.message || "Falha ao consultar matrícula lifecycle.");
+  if (enrollment?.status !== "active") {
+    await markSuppressed(deps, dispatch, "enrollment_inactive");
+    return { status: "suppressed" };
+  }
+  const { data: enrollmentCampaign, error: enrollmentCampaignError } = await deps.supabaseAdmin
+    .from("lifecycle_campaigns")
+    .select("key")
+    .eq("id", enrollment.campaign_id)
+    .maybeSingle();
+  if (enrollmentCampaignError) throw new Error(enrollmentCampaignError.message || "Falha ao consultar campanha lifecycle.");
+  if (enrollmentCampaign?.key !== LIFECYCLE_ACTIVATION_CAMPAIGN_KEY) {
+    await markSuppressed(deps, dispatch, "activation_enrollment_inactive");
     return { status: "suppressed" };
   }
 
