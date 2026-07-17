@@ -286,7 +286,6 @@ export function createLifecycleService(deps: LifecycleDependencies) {
           dedupe_key: `manual:sequence:${userId}:${step.id}:${randomUUID()}`,
           metadata: {
             manual: true,
-            force_email_only: true,
             force_resend: true,
             commercial: step.category === "commercial",
             forced_by: req.user.id,
@@ -296,7 +295,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         if (insertError) throw new Error(insertError.message);
 
         const result = await processLifecycleDispatchById(deps, dispatch.id);
-        if (result.status === "sent") return res.json({ success: true, status: result.status, message: "E-mail do passo atual enviado com sucesso." });
+        if (result.status === "sent") return res.json({ success: true, status: result.status, message: "Mensagem do passo atual enviada pelos canais habilitados." });
         if (result.status === "suppressed") return res.status(400).json({ error: "O envio foi suprimido pelas preferências de comunicação do usuário.", status: result.status, reason: result.skip_reason });
         if (result.status === "failed" || result.status === "retry") return res.status(502).json({ error: "Não foi possível enviar o e-mail do passo atual.", status: result.status, reason: result.failure_reason });
         return res.status(409).json({ error: "O disparo manual não pôde ser processado.", status: result.status });
@@ -370,7 +369,6 @@ export function createLifecycleService(deps: LifecycleDependencies) {
           metadata: {
             ...originalMetadata,
             manual: true,
-            force_email_only: true,
             force_resend: true,
             manual_resend_of: original.id,
             forced_by: req.user.id,
@@ -380,7 +378,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         if (insertError) throw new Error(insertError.message);
 
         const result = await processLifecycleDispatchById(deps, dispatch.id);
-        if (result.status === "sent") return res.json({ success: true, status: result.status, message: "E-mail lifecycle reenviado com sucesso." });
+        if (result.status === "sent") return res.json({ success: true, status: result.status, message: "Mensagem lifecycle reenviada pelos canais habilitados." });
         if (result.status === "suppressed") return res.status(400).json({ error: "O reenvio foi suprimido pelas preferências de comunicação do usuário.", status: result.status, reason: result.skip_reason });
         if (result.status === "failed" || result.status === "retry") return res.status(502).json({ error: "Não foi possível reenviar o e-mail lifecycle.", status: result.status, reason: result.failure_reason });
         return res.status(409).json({ error: "O reenvio não pôde ser processado.", status: result.status });
