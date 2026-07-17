@@ -218,7 +218,7 @@ export function mapState(row: any): LifecycleState {
   };
 }
 
-export async function ensureCommunicationToken(deps: LifecycleDependencies, userId: string): Promise<string> {
+export async function ensureCommunicationToken(deps: Pick<LifecycleDependencies, "supabaseAdmin">, userId: string): Promise<string> {
   const token = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(token).digest("hex");
   const { error } = await deps.supabaseAdmin.from("communication_preferences").upsert({
