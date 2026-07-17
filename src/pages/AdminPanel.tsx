@@ -803,7 +803,9 @@ export default function AdminPanel() {
   // Estados de Configuração da API do WhatsApp Cloud
   const [adminWhatsappAccessToken, setAdminWhatsappAccessToken] = useState('');
   const [adminWhatsappPhoneNumberId, setAdminWhatsappPhoneNumberId] = useState('');
+  const [adminWhatsappWebhookVerifyToken, setAdminWhatsappWebhookVerifyToken] = useState('');
   const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('');
+  const [adminWhatsappWebhookCopied, setAdminWhatsappWebhookCopied] = useState(false);
   const [adminWhatsappSaving, setAdminWhatsappSaving] = useState(false);
   const [adminWhatsappSuccess, setAdminWhatsappSuccess] = useState(false);
   const [adminWhatsappError, setAdminWhatsappError] = useState('');
@@ -1009,6 +1011,7 @@ export default function AdminPanel() {
           setAdminVapidPrivate(parsed.vapid_private_key || '');
           setAdminWhatsappAccessToken(parsed.whatsapp_access_token || '');
           setAdminWhatsappPhoneNumberId(parsed.whatsapp_phone_number_id || '');
+          setAdminWhatsappWebhookVerifyToken(parsed.whatsapp_webhook_verify_token || '');
           setAdminWhatsappTestNumber(parsed.whatsapp_test_number || '');
         }
       } catch (err) {
@@ -1157,6 +1160,7 @@ export default function AdminPanel() {
             ...currentSettingsJson,
             whatsapp_access_token: adminWhatsappAccessToken,
             whatsapp_phone_number_id: adminWhatsappPhoneNumberId,
+            whatsapp_webhook_verify_token: adminWhatsappWebhookVerifyToken,
             whatsapp_test_number: adminWhatsappTestNumber
           }),
           updated_at: new Date().toISOString(),
@@ -6262,6 +6266,62 @@ export default function AdminPanel() {
                         <span>Configurações do WhatsApp salvas com sucesso!</span>
                       </div>
                     )}
+
+                    <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 md:p-5 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-blue-100 rounded-lg text-blue-700 shrink-0">
+                          <Link2Off className="w-5 h-5 rotate-45" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-blue-900">Webhook para vincular com a Meta</h3>
+                          <p className="text-xs text-blue-800/80 mt-1">
+                            Cadastre esta URL em Meta Developers &gt; Webhooks. A rota é pública, usa HTTPS e já está preparada para a verificação da Meta.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="block">
+                        <span className="text-sm font-semibold text-brand-text">URL do Webhook</span>
+                        <div className="mt-1 flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="url"
+                            readOnly
+                            value="https://www.evolucaoclinica.app.br/api/webhooks/whatsapp"
+                            className="w-full rounded-xl border border-blue-200 bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText('https://www.evolucaoclinica.app.br/api/webhooks/whatsapp');
+                                setAdminWhatsappWebhookCopied(true);
+                                setTimeout(() => setAdminWhatsappWebhookCopied(false), 2500);
+                              } catch {
+                                setAdminWhatsappWebhookCopied(false);
+                              }
+                            }}
+                            className="btn-outline px-4 py-2.5 flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+                          >
+                            {adminWhatsappWebhookCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                            <span>{adminWhatsappWebhookCopied ? 'Copiada' : 'Copiar URL'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="block">
+                        <span className="text-sm font-semibold text-brand-text">Token de verificação</span>
+                        <input
+                          type="password"
+                          value={adminWhatsappWebhookVerifyToken}
+                          onChange={(e) => setAdminWhatsappWebhookVerifyToken(e.target.value)}
+                          placeholder="Crie um token e use o mesmo no Meta Developers"
+                          className="mt-1 w-full rounded-xl border border-blue-200 bg-white px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
+                        />
+                        <p className="text-xs text-brand-text-muted mt-1.5">
+                          Salve este token e informe exatamente o mesmo valor no campo Verify Token da Meta.
+                        </p>
+                      </div>
+                    </div>
 
                     <div className="grid grid-cols-1 gap-6">
                       <div className="block">

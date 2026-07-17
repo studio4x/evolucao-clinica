@@ -9,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { createRequire } from "module";
+import { createHmac, timingSafeEqual } from "crypto";
 const require = createRequire(import.meta.url);
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
@@ -911,6 +912,29 @@ async function getNotificationSettings() {
   }
 }
 
+async function getWhatsAppWebhookConfig() {
+  const settings = await getNotificationSettings().catch(() => ({} as any));
+
+  return {
+    verifyToken: String(settings.whatsapp_webhook_verify_token || process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").trim(),
+    appSecret: String(settings.whatsapp_app_secret || process.env.WHATSAPP_APP_SECRET || "").trim()
+  };
+}
+
+function isValidWhatsAppWebhookSignature(req: express.Request, appSecret: string) {
+  if (!appSecret) return true;
+
+  const signature = String(req.headers["x-hub-signature-256"] || "");
+  if (!signature.startsWith("sha256=")) return false;
+
+  const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody || Buffer.from(JSON.stringify(req.body || {}));
+  const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
+  const receivedBuffer = Buffer.from(signature.slice("sha256=".length), "hex");
+  const expectedBuffer = Buffer.from(expected, "hex");
+
+  return receivedBuffer.length === expectedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer);
+}
+
 async function appendManualPushNotificationId(notificationId: string) {
   if (!notificationId) return;
 
@@ -1462,12 +1486,55 @@ async function deleteProfessionalAccount(targetUserId: string) {
 }
 
 // Middleware
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, _res, buf) => {
+    const request = req as express.Request;
+    if (request.originalUrl.split("?")[0] === "/api/webhooks/whatsapp") {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+    }
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // API Routes
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Webhook público da WhatsApp Cloud API (Meta)
+app.get("/api/webhooks/whatsapp", async (req, res) => {
+  try {
+    const mode = String(req.query["hub.mode"] || "");
+    const verifyToken = String(req.query["hub.verify_token"] || "");
+    const challenge = String(req.query["hub.challenge"] || "");
+    const webhookConfig = await getWhatsAppWebhookConfig();
+
+    if (mode === "subscribe" && challenge && webhookConfig.verifyToken && verifyToken === webhookConfig.verifyToken) {
+      return res.status(200).send(challenge);
+    }
+
+    return res.status(403).send("Forbidden");
+  } catch (err: any) {
+    console.error("Erro ao validar webhook do WhatsApp:", err.message || err);
+    return res.status(500).send("Internal Server Error");
+  }
+});
+
+app.post("/api/webhooks/whatsapp", async (req: any, res) => {
+  try {
+    const webhookConfig = await getWhatsAppWebhookConfig();
+    if (!isValidWhatsAppWebhookSignature(req, webhookConfig.appSecret)) {
+      return res.status(401).json({ error: "Assinatura do webhook inválida." });
+    }
+
+    const entries = Array.isArray(req.body?.entry) ? req.body.entry.length : 0;
+    console.info(`[WhatsApp Webhook] Evento recebido (${entries} entrada(s)).`);
+    return res.status(200).json({ received: true });
+  } catch (err: any) {
+    console.error("Erro ao receber webhook do WhatsApp:", err.message || err);
+    return res.status(500).json({ error: "Erro interno ao receber webhook." });
+  }
 });
 
 app.get("/api/debug-env", (req, res) => {
