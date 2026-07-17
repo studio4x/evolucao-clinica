@@ -168,26 +168,46 @@ export default function AdminPanel() {
 
   const activeTab = getActiveTab();
   const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
-  const adminNavItems = [
-    { key: 'professionals', label: 'Profissionais', icon: Users },
-    { key: 'token_usage', label: 'Consumo & Chaves IA', icon: BarChart3 },
-    { key: 'plans', label: 'Planos SaaS', icon: Coins },
-    { key: 'google_pay_config', label: 'Google Pay & Stripe', icon: CreditCard },
-    { key: 'transactions', label: 'Transações', icon: Clock },
-    { key: 'migrations', label: 'Migrações VIP', icon: Database },
-    { key: 'support', label: 'Suporte / Tickets', icon: LifeBuoy },
-    { key: 'push_notifications', label: 'Notificações Push', icon: Bell },
-    { key: 'email_notifications', label: 'E-mails do Sistema', icon: Mail },
-    { key: 'email_history', label: 'Histórico de E-mails', icon: Clock },
-    { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
-    { key: 'brand', label: 'Identidade Visual', icon: Globe },
-    { key: 'tracking', label: 'Rastreamento', icon: Code },
-    { key: 'faq', label: 'Gerenciar FAQ', icon: HelpCircle },
-    { key: 'feedback', label: 'Sugestões & Avaliações', icon: MessageSquare },
-    { key: 'jornada', label: 'Jornada 15 dias', icon: Calendar },
-    { key: 'lifecycle', label: 'Jornada de Usuários', icon: Activity },
-    { key: 'whatsapp_config', label: 'API do WhatsApp', icon: MessageCircle },
-    { key: 'profile', label: 'Meu Perfil', icon: User }
+  const adminNavGroups = [
+    {
+      title: 'Atendimento & Usuários',
+      items: [
+        { key: 'professionals', label: 'Profissionais', icon: Users },
+        { key: 'migrations', label: 'Migrações VIP', icon: Database },
+        { key: 'support', label: 'Suporte / Tickets', icon: LifeBuoy },
+        { key: 'feedback', label: 'Sugestões & Avaliações', icon: MessageSquare },
+        { key: 'faq', label: 'Gerenciar FAQ', icon: HelpCircle }
+      ]
+    },
+    {
+      title: 'Financeiro & SaaS',
+      items: [
+        { key: 'plans', label: 'Planos SaaS', icon: Coins },
+        { key: 'google_pay_config', label: 'Google Pay & Stripe', icon: CreditCard },
+        { key: 'transactions', label: 'Transações', icon: Clock }
+      ]
+    },
+    {
+      title: 'Comunicação & Jornada',
+      items: [
+        { key: 'jornada', label: 'Jornada 15 dias', icon: Calendar },
+        { key: 'lifecycle', label: 'Jornada de Usuários', icon: Activity },
+        { key: 'push_notifications', label: 'Notificações Push', icon: Bell },
+        { key: 'email_notifications', label: 'E-mails do Sistema', icon: Mail },
+        { key: 'email_history', label: 'Histórico de E-mails', icon: Clock }
+      ]
+    },
+    {
+      title: 'Configurações do Sistema',
+      items: [
+        { key: 'token_usage', label: 'Consumo & Chaves IA', icon: BarChart3 },
+        { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
+        { key: 'whatsapp_config', label: 'API do WhatsApp', icon: MessageCircle },
+        { key: 'brand', label: 'Identidade Visual', icon: Globe },
+        { key: 'tracking', label: 'Rastreamento', icon: Code },
+        { key: 'profile', label: 'Meu Perfil', icon: User }
+      ]
+    }
   ] as const;
 
   const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config') => {
@@ -2774,26 +2794,35 @@ export default function AdminPanel() {
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Menu Lateral do Admin */}
           <div className="w-full lg:w-64 flex-shrink-0">
-            <nav className="grid grid-cols-1 gap-2 p-2 bg-white rounded-2xl border border-brand-border shadow-sm sm:grid-cols-2 lg:flex lg:flex-col">
-              {adminNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.key;
+            <nav className="flex flex-col gap-5 p-4 bg-white rounded-2xl border border-brand-border shadow-sm w-full">
+              {adminNavGroups.map((group) => (
+                <div key={group.title} className="flex flex-col gap-1.5">
+                  <h3 className="px-3 text-[10px] font-bold tracking-wider text-brand-text-muted/60 uppercase select-none">
+                    {group.title}
+                  </h3>
+                  <div className="flex flex-col gap-0.5 mt-1">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const isActive = activeTab === item.key;
 
-                return (
-                  <button
-                    key={item.key}
-                    onClick={() => setActiveTab(item.key)}
-                    className={`flex w-full min-w-0 items-center justify-start gap-3 rounded-xl px-4 py-3 text-left text-sm font-medium transition-all duration-200 cursor-pointer ${
-                      isActive
-                        ? 'bg-brand-primary text-white shadow-sm'
-                        : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                    }`}
-                  >
-                    <Icon size={18} className="shrink-0" />
-                    <span className="min-w-0 leading-tight">{item.label}</span>
-                  </button>
-                );
-              })}
+                      return (
+                        <button
+                          key={item.key}
+                          onClick={() => setActiveTab(item.key)}
+                          className={`flex w-full min-w-0 items-center justify-start gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium transition-all duration-200 cursor-pointer ${
+                            isActive
+                              ? 'bg-brand-primary text-white shadow-sm font-semibold'
+                              : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary font-medium'
+                          }`}
+                        >
+                          <Icon size={16} className="shrink-0 text-current opacity-85" />
+                          <span className="min-w-0 leading-tight truncate">{item.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </nav>
           </div>
 
