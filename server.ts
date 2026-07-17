@@ -1057,7 +1057,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 }
 
 type EmailProvider = "smtp" | "brevo";
-type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend";
 type NotificationOrigin = "platform" | "manual";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean };
 
@@ -4391,6 +4391,47 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
   } catch (err: any) {
     console.error("Erro ao enviar e-mail de teste:", err);
     res.status(500).json({ error: err.message || "Erro desconhecido ao disparar e-mail de teste." });
+  }
+});
+
+app.post("/api/admin/email-deliveries/:id/resend", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const { data: delivery, error } = await supabaseAdmin
+      .from("email_deliveries")
+      .select("id, user_id, recipient_email, recipient_name, subject, message")
+      .eq("id", req.params.id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!delivery) return res.status(404).json({ error: "Registro de e-mail não encontrado." });
+
+    const recipientEmail = String(delivery.recipient_email || "").trim();
+    if (!recipientEmail || !recipientEmail.includes("@")) return res.status(400).json({ error: "O registro não possui um destinatário válido." });
+
+    const subject = String(delivery.subject || "Mensagem da Evolução Clínica").trim();
+    const textContent = String(delivery.message || "").trim() || "Esta mensagem foi reenviada pela plataforma Evolução Clínica.";
+    const bodyHtml = textContent.split(/\r?\n/).map((line) => line.trim() ? `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.7;">${escapeHtml(line)}</p>` : "").join("");
+    const theme = await getEmailTheme();
+    const result = await sendTransactionalEmail(await getNotificationSettings(), {
+      userId: delivery.user_id || null,
+      recipientEmail,
+      recipientName: delivery.recipient_name || null,
+      subject,
+      textContent,
+      htmlContent: buildEmailShell(theme, {
+        title: escapeHtml(subject),
+        subtitle: "Reenvio manual da mensagem",
+        eyebrow: "E-mail reenviado",
+        bodyHtml: bodyHtml || `<p style="margin:0; font-size:15px; line-height:1.7;">${escapeHtml(textContent)}</p>`,
+        footerHtml: "Mensagem reenviada manualmente por um administrador."
+      }),
+      source: "manual-resend",
+      allowFallback: true
+    });
+
+    return res.json({ success: true, provider: result.provider, emailDeliveryId: result.emailDeliveryId, message: "E-mail reenviado com sucesso." });
+  } catch (err: any) {
+    console.error("[EmailHistory] Erro ao reenviar e-mail:", err);
+    return res.status(500).json({ error: err.message || "Não foi possível reenviar o e-mail." });
   }
 });
 

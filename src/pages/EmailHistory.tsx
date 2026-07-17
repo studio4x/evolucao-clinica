@@ -13,6 +13,7 @@ import {
   ChevronLeft,
   Inbox,
   ShieldAlert,
+  Send,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -49,6 +50,7 @@ export default function EmailHistory() {
 
   const [search, setSearch] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
 
@@ -93,6 +95,29 @@ export default function EmailHistory() {
       alert('Erro ao excluir: ' + err.message);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const handleResend = async (notification: NotificationRecord) => {
+    if (!confirm(`Deseja reenviar este e-mail para ${notification.recipient_name || notification.recipient_email}?`)) return;
+    setResendingId(notification.id);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch(`/api/admin/email-deliveries/${notification.id}/resend`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionData.session?.access_token || ''}`
+        }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível reenviar o e-mail.');
+      alert(payload.message || 'E-mail reenviado com sucesso.');
+      await fetchHistory();
+    } catch (err: any) {
+      alert('Erro ao reenviar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setResendingId(null);
     }
   };
 
@@ -360,6 +385,17 @@ export default function EmailHistory() {
 
                     {/* Ação */}
                     <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => handleResend(n)}
+                        disabled={resendingId === n.id}
+                        title="Reenviar este e-mail"
+                        className="p-1.5 text-brand-primary hover:text-brand-primary-hover hover:bg-brand-primary/10 rounded-lg transition-colors disabled:opacity-50 cursor-pointer opacity-0 group-hover:opacity-100"
+                      >
+                        {resendingId === n.id
+                          ? <Loader2 size={15} className="animate-spin" />
+                          : <Send size={15} />
+                        }
+                      </button>
                       <button
                         onClick={() => handleDelete(n.id)}
                         disabled={deletingId === n.id}

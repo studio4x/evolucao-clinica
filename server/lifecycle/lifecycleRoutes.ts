@@ -335,6 +335,46 @@ export function createLifecycleService(deps: LifecycleDependencies) {
           };
         }) });
       }));
+      app.post("/api/admin/lifecycle/dispatches/:id/resend", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
+        const { data: original, error: originalError } = await deps.supabaseAdmin.from("lifecycle_dispatches").select("*").eq("id", req.params.id).maybeSingle();
+        if (originalError) throw new Error(originalError.message);
+        if (!original) return res.status(404).json({ error: "Registro lifecycle não encontrado." });
+
+        const runtime = await getLifecycleRuntimeConfig(deps);
+        if (!runtime.send_enabled || runtime.dry_run) return res.status(400).json({ error: "O envio real está desativado nas configurações da Jornada de Usuários." });
+
+        const now = new Date().toISOString();
+        const originalMetadata = original.metadata && typeof original.metadata === "object" ? original.metadata : {};
+        const { data: dispatch, error: insertError } = await deps.supabaseAdmin.from("lifecycle_dispatches").insert({
+          user_id: original.user_id,
+          enrollment_id: original.enrollment_id,
+          campaign_id: original.campaign_id,
+          step_id: original.step_id,
+          rule_id: original.rule_id,
+          message_key: original.message_key,
+          dispatch_type: original.dispatch_type,
+          priority: Number(original.priority || 50) + 10000,
+          status: "queued",
+          scheduled_for: now,
+          dedupe_key: `manual-resend:${original.id}:${randomUUID()}`,
+          metadata: {
+            ...originalMetadata,
+            manual: true,
+            force_email_only: true,
+            force_resend: true,
+            manual_resend_of: original.id,
+            forced_by: req.user.id,
+            forced_at: now
+          }
+        }).select("id").single();
+        if (insertError) throw new Error(insertError.message);
+
+        const result = await processLifecycleDispatchById(deps, dispatch.id);
+        if (result.status === "sent") return res.json({ success: true, status: result.status, message: "E-mail lifecycle reenviado com sucesso." });
+        if (result.status === "suppressed") return res.status(400).json({ error: "O reenvio foi suprimido pelas preferências de comunicação do usuário.", status: result.status, reason: result.skip_reason });
+        if (result.status === "failed" || result.status === "retry") return res.status(502).json({ error: "Não foi possível reenviar o e-mail lifecycle.", status: result.status, reason: result.failure_reason });
+        return res.status(409).json({ error: "O reenvio não pôde ser processado.", status: result.status });
+      }));
       app.post("/api/admin/lifecycle/dispatches/:id/cancel", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => { const { error } = await deps.supabaseAdmin.from("lifecycle_dispatches").update({ status: "cancelled", skip_reason: String(req.body?.reason || "cancelled_by_admin"), skipped_at: new Date().toISOString() }).eq("id", req.params.id).in("status", ["queued", "retry", "processing"]); if (error) throw new Error(error.message); return res.json({ success: true }); }));
       app.get("/api/admin/lifecycle/preferences", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => { const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500); const { data, error } = await deps.supabaseAdmin.from("communication_preferences").select("*").order("updated_at", { ascending: false }).limit(limit); if (error) throw new Error(error.message); return res.json({ preferences: data || [] }); }));
 
