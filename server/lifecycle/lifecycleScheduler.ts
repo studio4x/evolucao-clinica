@@ -106,6 +106,7 @@ function applyConditionalStepTemplate(candidate: LifecycleCandidate, step: Lifec
 
 function isRelationshipCooldownBlocked(state: LifecycleState, now: Date, candidate: LifecycleCandidate): boolean {
   if (candidate.dispatchType === "transactional_bridge") return false;
+  if (candidate.dispatchType === "sequence") return false;
   return Boolean(state.nextRelationshipEmailEligibleAt && new Date(state.nextRelationshipEmailEligibleAt).getTime() > now.getTime());
 }
 
@@ -165,7 +166,10 @@ async function scheduleForEnrollment(
     await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: campaign.id, step_id: currentStep!.id, decision_key: decisionKey, selected_message_key: sequence.messageKey, selected_priority: sequence.priority, outcome: runtime.dry_run || !runtime.send_enabled ? "dry_run" : "skipped", reason: skipReason });
     if (!runtime.dry_run && runtime.send_enabled) {
       await insertSkippedDispatch(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: campaign.id, step_id: currentStep!.id, message_key: sequence.messageKey, dispatch_type: "sequence", priority: sequence.priority, status: "skipped", scheduled_for: now.toISOString(), dedupe_key: `sequence:${enrollment.id}:${currentStep!.id}`, skip_reason: skipReason, skipped_at: now.toISOString() });
-      await deps.supabaseAdmin.from("lifecycle_enrollments").update({ current_position: currentStep!.position, next_step_at: steps.find((s) => s.position === currentStep!.position + 1) ? new Date(now.getTime() + 86400000).toISOString() : null }).eq("id", enrollment.id);
+      const nextStep = steps.find((s) => s.position === currentStep!.position + 1);
+      const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
+      const nextStepAt = nextStep ? new Date(startedAt + Number(nextStep.day_offset || 0) * 86400000).toISOString() : null;
+      await deps.supabaseAdmin.from("lifecycle_enrollments").update({ current_position: currentStep!.position, next_step_at: nextStepAt }).eq("id", enrollment.id);
     }
     sequence = null;
   }
@@ -229,9 +233,18 @@ async function scheduleForEnrollment(
   if (dispatchError && dispatchError.code !== "23505") throw new Error(dispatchError.message || "Falha ao criar dispatch lifecycle.");
 
   const nextStep = chosen.dispatchType === "sequence" ? steps.find((step) => step.position === chosen.step!.position + 1) : currentStep;
+  const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
+  let nextStepAt: string | null = null;
+  if (nextStep) {
+    if (chosen.dispatchType === "sequence") {
+      nextStepAt = new Date(startedAt + Number(nextStep.day_offset || 0) * 86400000).toISOString();
+    } else {
+      nextStepAt = new Date(now.getTime() + 86400000).toISOString();
+    }
+  }
   await deps.supabaseAdmin.from("lifecycle_enrollments").update({
     current_position: chosen.dispatchType === "sequence" ? chosen.step!.position : enrollment.current_position,
-    next_step_at: nextStep ? new Date(now.getTime() + (chosen.dispatchType === "sequence" ? 86400000 : 86400000)).toISOString() : null
+    next_step_at: nextStepAt
   }).eq("id", enrollment.id);
   return "scheduled";
 }

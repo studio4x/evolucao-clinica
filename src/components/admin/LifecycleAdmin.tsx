@@ -148,14 +148,14 @@ function dispatchTypeLabel(type?: string | null) {
 }
 
 function waitHours(step: any) {
-  return `${Number(step.day_offset || 0) * 24}h`;
+  return `${Math.round(Number(step.day_offset || 0) * 24)}h`;
 }
 
 function templateDraftFromStep(step: any): TemplateDraft {
   return {
     subject_template: step.subject_template || '',
     preheader_template: step.preheader_template || '',
-    wait_hours: String(Number(step.day_offset || 0) * 24),
+    wait_hours: String(Math.round(Number(step.day_offset || 0) * 24)),
     body_markdown: step.body_markdown || '',
     cta_label_template: step.cta_label_template || '',
     cta_route_template: step.cta_route_template || '',
@@ -392,8 +392,8 @@ export default function LifecycleAdmin() {
     }
 
     const waitHoursValue = Number(templateDraft.wait_hours);
-    if (!Number.isInteger(waitHoursValue) || waitHoursValue < 0 || waitHoursValue % 24 !== 0) {
-      setError('O tempo de espera deve ser um número inteiro igual ou maior que zero, em múltiplos de 24 horas.');
+    if (!Number.isInteger(waitHoursValue) || waitHoursValue < 0) {
+      setError('O tempo de espera deve ser um número inteiro igual ou maior que zero.');
       return;
     }
 
@@ -568,7 +568,7 @@ export default function LifecycleAdmin() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Assunto</span><input required value={templateDraft.subject_template} onChange={(event) => setTemplateDraft({ ...templateDraft, subject_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Preheader</span><input value={templateDraft.preheader_template} onChange={(event) => setTemplateDraft({ ...templateDraft, preheader_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-                <label className="block"><span className="text-sm font-semibold text-brand-text">Tempo de espera (h)</span><input required type="number" min={0} step={24} value={templateDraft.wait_hours} onChange={(event) => setTemplateDraft({ ...templateDraft, wait_hours: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /><small className="mt-1 block text-xs text-brand-text-muted">Use múltiplos de 24 horas.</small></label>
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Tempo de espera (h)</span><input required type="number" min={0} value={templateDraft.wait_hours} onChange={(event) => setTemplateDraft({ ...templateDraft, wait_hours: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /><small className="mt-1 block text-xs text-brand-text-muted">Tempo de espera antes do envio deste passo, em horas.</small></label>
               </div>
 
               <div>

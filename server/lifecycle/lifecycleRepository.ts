@@ -254,13 +254,26 @@ export async function ensureLifecycleEnrollment(deps: LifecycleDependencies, use
   const preferences = await getLifecyclePreferences(deps, userId);
   if (!options.force && preferences.lifecycle_enabled !== true) return null;
   const enrolledAt = new Date().toISOString();
+  const { data: firstStep } = await deps.supabaseAdmin
+    .from("lifecycle_steps")
+    .select("day_offset")
+    .eq("campaign_id", campaign.id)
+    .eq("status", "active")
+    .eq("enabled", true)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const nextStepDelayMs = firstStep ? Number(firstStep.day_offset || 0) * 86400000 : 0;
+  const nextStepAt = new Date(Date.now() + nextStepDelayMs).toISOString();
+
   const { data, error } = await deps.supabaseAdmin.from("lifecycle_enrollments").upsert({
     user_id: userId,
     campaign_id: campaign.id,
     status: "active",
     enrolled_at: enrolledAt,
     started_at: enrolledAt,
-    next_step_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    next_step_at: nextStepAt,
     completion_deadline_at: new Date(Date.now() + LIFECYCLE_COMPLETION_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString()
   }, { onConflict: "user_id,campaign_id", ignoreDuplicates: true }).select("*").maybeSingle();
   if (error && error.code !== "23505") throw new Error(error.message || "Falha ao matricular usuário lifecycle.");
