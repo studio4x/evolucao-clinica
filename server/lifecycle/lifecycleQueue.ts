@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
+import { LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { getNextBestAction } from "./lifecycleRules.js";
-import { ensureCommunicationToken, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile } from "./lifecycleRepository.js";
+import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
 import { escapeLifecycleHtml, renderLifecycleMessage, renderSafeLifecycleMarkdown, resolveLifecycleUrl } from "./lifecycleRenderer.js";
 import { renderLifecycleTemplate } from "./templates/tokenRegistry.js";
@@ -44,6 +44,128 @@ async function markFailure(deps: LifecycleDependencies, dispatch: any, error: un
     failure_reason: message,
     updated_at: new Date().toISOString()
   }).eq("id", dispatch.id);
+}
+
+function getFailureAlertThreshold() {
+  const configured = Number(process.env.LIFECYCLE_FAILURE_ALERT_THRESHOLD);
+  return Number.isFinite(configured) && configured >= 1 ? Math.min(Math.floor(configured), 100) : LIFECYCLE_FAILURE_ALERT_THRESHOLD;
+}
+
+function getFailureAlertCooldownMinutes() {
+  const configured = Number(process.env.LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES);
+  return Number.isFinite(configured) && configured >= 1 ? Math.min(Math.floor(configured), 1440) : LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES;
+}
+
+async function sendLifecycleFailureAlert(
+  deps: LifecycleDependencies,
+  details: { consecutiveFailures: number; dispatchId: string; reason: string }
+) {
+  if (!deps.getAdminRecipients) {
+    console.warn("[Lifecycle Alert] Lista de administradores não configurada; alerta não enviado.");
+    return false;
+  }
+
+  const recipients = (await deps.getAdminRecipients()).filter((recipient) => String(recipient.google_email || "").trim());
+  if (!recipients.length) {
+    console.warn("[Lifecycle Alert] Nenhum administrador com e-mail cadastrado.");
+    return false;
+  }
+
+  const now = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const safeReason = escapeLifecycleHtml(details.reason || "Falha não informada");
+  const lifecycleUrl = `${deps.productionOrigin.replace(/\/$/, "")}/admin/lifecycle`;
+  const subject = "[Evolução Clínica] Alerta: falhas consecutivas na fila de e-mails";
+  const textContent = [
+    "A fila de comunicações da Jornada de Usuários registrou falhas consecutivas de disparo.",
+    `Falhas consecutivas: ${details.consecutiveFailures}`,
+    `Última falha: ${details.reason || "Falha não informada"}`,
+    `Dispatch afetado: ${details.dispatchId}`,
+    `Horário: ${now}`,
+    `Painel de monitoramento: ${lifecycleUrl}`
+  ].join("\n");
+
+  const theme = await deps.getEmailTheme();
+  const htmlContent = deps.buildEmailShell(theme, {
+    title: "Falhas consecutivas na fila de e-mails",
+    subtitle: "A Jornada de Usuários precisa de atenção.",
+    eyebrow: "Alerta operacional",
+    bodyHtml: `<p style="font-size:15px;line-height:1.6;margin:0 0 16px 0;">A fila de comunicações registrou <strong>${details.consecutiveFailures} falhas consecutivas</strong> de disparo.</p><p style="font-size:14px;line-height:1.6;margin:0 0 8px 0;"><strong>Última falha:</strong> ${safeReason}</p><p style="font-size:14px;line-height:1.6;margin:0 0 20px 0;"><strong>Dispatch:</strong> ${escapeLifecycleHtml(details.dispatchId)}<br><strong>Horário:</strong> ${escapeLifecycleHtml(now)}</p><div style="text-align:center">${deps.buildEmailButton(theme, lifecycleUrl, "Abrir monitoramento")}</div>`,
+    footerHtml: "Este alerta é enviado automaticamente pelo worker da Jornada de Usuários."
+  });
+
+  const settings = await deps.getNotificationSettings();
+  const results = await Promise.all(recipients.map(async (recipient) => {
+    try {
+      await deps.sendTransactionalEmail(settings, {
+        userId: null,
+        recipientEmail: String(recipient.google_email).trim(),
+        recipientName: recipient.full_name || "Administrador",
+        subject,
+        textContent,
+        htmlContent,
+        source: "lifecycle-alert",
+        allowFallback: true
+      });
+      return true;
+    } catch (error) {
+      console.error(`[Lifecycle Alert] Falha ao notificar ${recipient.google_email}:`, error instanceof Error ? error.message : error);
+      return false;
+    }
+  }));
+
+  return results.some(Boolean);
+}
+
+async function registerLifecycleFailure(
+  deps: LifecycleDependencies,
+  details: { dispatchId: string; reason: string }
+) {
+  try {
+    const state = await getLifecycleFailureAlertState(deps);
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const consecutiveFailures = state.consecutive_failures + 1;
+    const lastAttemptAt = state.last_alert_attempt_at ? new Date(state.last_alert_attempt_at).getTime() : 0;
+    const cooldownElapsed = !lastAttemptAt || now.getTime() - lastAttemptAt >= getFailureAlertCooldownMinutes() * 60 * 1000;
+    const shouldAttemptAlert = consecutiveFailures >= getFailureAlertThreshold() && !state.last_alert_sent_at && cooldownElapsed;
+    const nextState: LifecycleFailureAlertState = {
+      ...state,
+      consecutive_failures: consecutiveFailures,
+      last_failure_at: nowIso,
+      last_failure_reason: details.reason.slice(0, 500),
+      last_failure_dispatch_id: details.dispatchId,
+      last_alert_attempt_at: shouldAttemptAlert ? nowIso : state.last_alert_attempt_at
+    };
+
+    await saveLifecycleFailureAlertState(deps, nextState);
+    if (!shouldAttemptAlert) return;
+
+    const sent = await sendLifecycleFailureAlert(deps, {
+      consecutiveFailures,
+      dispatchId: details.dispatchId,
+      reason: details.reason
+    });
+    if (sent) await saveLifecycleFailureAlertState(deps, { ...nextState, last_alert_sent_at: nowIso });
+  } catch (error) {
+    console.error("[Lifecycle Alert] Falha ao atualizar/enviar alerta operacional:", error instanceof Error ? error.message : error);
+  }
+}
+
+async function registerLifecycleSuccess(deps: LifecycleDependencies) {
+  try {
+    const state = await getLifecycleFailureAlertState(deps);
+    if (state.consecutive_failures === 0 && !state.last_alert_sent_at && !state.last_failure_at) return;
+    await saveLifecycleFailureAlertState(deps, {
+      consecutive_failures: 0,
+      last_failure_at: null,
+      last_failure_reason: null,
+      last_failure_dispatch_id: null,
+      last_alert_attempt_at: null,
+      last_alert_sent_at: null
+    });
+  } catch (error) {
+    console.error("[Lifecycle Alert] Falha ao resetar sequência de falhas:", error instanceof Error ? error.message : error);
+  }
 }
 
 function messageFromConfig(dispatch: any, step: any, rule: any) {
@@ -151,6 +273,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   let emailDeliveryId: string | null = null;
   let emailProvider = "smtp";
   let emailSent = false;
+  let emailFailureReason: string | null = null;
   let pushSent = false;
   let whatsappSent = false;
 
@@ -180,6 +303,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       emailProvider = result.provider;
       emailSent = true;
     } catch (emailErr) {
+      emailFailureReason = String(emailErr instanceof Error ? emailErr.message : emailErr || "Falha desconhecida ao enviar e-mail.").slice(0, 500);
       console.error(`[Lifecycle Queue] Falha ao enviar e-mail para usuário ${dispatch.user_id}:`, emailErr);
       if (!pushEnabled && !whatsappEnabled) {
         throw emailErr;
@@ -241,7 +365,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       updated_at: new Date().toISOString()
     }).eq("user_id", dispatch.user_id);
   }
-  return { status: "sent", provider: emailSent ? emailProvider : "other" };
+  return { status: "sent", provider: emailSent ? emailProvider : "other", deliveryFailure: emailFailureReason };
 }
 
 export async function processLifecycleDispatches(deps: LifecycleDependencies, batchSize?: number) {
@@ -254,10 +378,23 @@ export async function processLifecycleDispatches(deps: LifecycleDependencies, ba
     try {
       const result = await processOneDispatch(deps, dispatch, runtime);
       results[result.status] = (results[result.status] || 0) + 1;
+      if (runtime.send_enabled && !runtime.dry_run) {
+        if (result.deliveryFailure) {
+          await registerLifecycleFailure(deps, { dispatchId: dispatch.id, reason: result.deliveryFailure });
+        } else {
+          await registerLifecycleSuccess(deps);
+        }
+      }
     } catch (error) {
       results.failed += 1;
       await markFailure(deps, dispatch, error);
       console.error(`[Lifecycle Worker] Falha no dispatch ${dispatch.id}:`, error instanceof Error ? error.message : error);
+      if (runtime.send_enabled && !runtime.dry_run) {
+        await registerLifecycleFailure(deps, {
+          dispatchId: dispatch.id,
+          reason: String(error instanceof Error ? error.message : error || "Falha desconhecida").slice(0, 500)
+        });
+      }
     }
   }
   return { workerId, claimed: claimed?.length || 0, ...results, dryRun: runtime.dry_run || !runtime.send_enabled };

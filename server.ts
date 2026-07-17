@@ -1062,7 +1062,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 }
 
 type EmailProvider = "smtp" | "brevo";
-type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert";
 type NotificationOrigin = "platform" | "manual";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean };
 
@@ -2913,6 +2913,7 @@ const lifecycleService = createLifecycleService({
   buildEmailShell,
   buildEmailButton,
   sendTransactionalEmail,
+  getAdminRecipients,
   sendPushNotification: async (userId, title, content, link, imageUrl) => {
     try {
       await sendNotificationInternal(userId, title, content, "info", link, imageUrl, "platform", { push: true, email: false });

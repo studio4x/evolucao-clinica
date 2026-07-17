@@ -2,6 +2,67 @@ import { createHash, randomBytes } from "node:crypto";
 import { DEFAULT_RUNTIME_CONFIG, LIFECYCLE_COMPLETION_WINDOW_DAYS, LIFECYCLE_TIMEZONE, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { LIFECYCLE_EVENT_NAMES, type LifecycleDependencies, type LifecycleEventName, type LifecycleEventSource, type LifecycleState } from "./lifecycleTypes.js";
 
+const LIFECYCLE_FAILURE_ALERT_STATE_ID = "lifecycle_failure_alert_state";
+
+export type LifecycleFailureAlertState = {
+  consecutive_failures: number;
+  last_failure_at: string | null;
+  last_failure_reason: string | null;
+  last_failure_dispatch_id: string | null;
+  last_alert_attempt_at: string | null;
+  last_alert_sent_at: string | null;
+};
+
+const DEFAULT_FAILURE_ALERT_STATE: LifecycleFailureAlertState = {
+  consecutive_failures: 0,
+  last_failure_at: null,
+  last_failure_reason: null,
+  last_failure_dispatch_id: null,
+  last_alert_attempt_at: null,
+  last_alert_sent_at: null
+};
+
+export async function getLifecycleFailureAlertState(deps: LifecycleDependencies): Promise<LifecycleFailureAlertState> {
+  const { data, error } = await deps.supabaseAdmin
+    .from("settings")
+    .select("api_key")
+    .eq("id", LIFECYCLE_FAILURE_ALERT_STATE_ID)
+    .maybeSingle();
+
+  if (error || !data?.api_key) {
+    if (error) console.warn("[Lifecycle Alert] Não foi possível ler o estado de falhas:", error.message || error);
+    return { ...DEFAULT_FAILURE_ALERT_STATE };
+  }
+
+  try {
+    const parsed = JSON.parse(data.api_key);
+    return {
+      consecutive_failures: Math.max(0, Number(parsed.consecutive_failures) || 0),
+      last_failure_at: parsed.last_failure_at || null,
+      last_failure_reason: parsed.last_failure_reason || null,
+      last_failure_dispatch_id: parsed.last_failure_dispatch_id || null,
+      last_alert_attempt_at: parsed.last_alert_attempt_at || null,
+      last_alert_sent_at: parsed.last_alert_sent_at || null
+    };
+  } catch {
+    console.warn("[Lifecycle Alert] Estado de falhas inválido; usando estado inicial.");
+    return { ...DEFAULT_FAILURE_ALERT_STATE };
+  }
+}
+
+export async function saveLifecycleFailureAlertState(deps: LifecycleDependencies, state: LifecycleFailureAlertState) {
+  const { error } = await deps.supabaseAdmin
+    .from("settings")
+    .upsert({
+      id: LIFECYCLE_FAILURE_ALERT_STATE_ID,
+      api_key: JSON.stringify(state),
+      updated_at: new Date().toISOString(),
+      updated_by: "lifecycle-worker"
+    }, { onConflict: "id" });
+
+  if (error) throw new Error(error.message || "Falha ao persistir o estado de alertas lifecycle.");
+}
+
 export function sanitizeLifecycleMetadata(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) return {};
   const allowedKeys = new Set(["status", "source", "feature", "duration_seconds", "count", "result", "route", "days", "has_google_doc"]);

@@ -91,3 +91,9 @@ limit 20;
 ```
 
 Antes de ativar o envio real, mantenha `dry_run = true` e `send_enabled = false` em `/admin/lifecycle`. Depois valide uma coorte interna, preferências, links e entregas.
+
+## Alertas de falha
+
+Quando o envio real estiver ativo, o worker mantém a sequência de falhas em `settings` (`lifecycle_failure_alert_state`). Após 3 falhas consecutivas, envia um alerta por e-mail para todos os administradores com e-mail cadastrado. Uma entrega bem-sucedida zera a sequência e permite um novo alerta em um incidente futuro.
+
+Os limites podem ser ajustados opcionalmente nas variáveis de ambiente `LIFECYCLE_FAILURE_ALERT_THRESHOLD` e `LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES`. O intervalo padrão entre tentativas de alerta é de 60 minutos.

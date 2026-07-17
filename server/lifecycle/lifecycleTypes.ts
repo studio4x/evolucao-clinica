@@ -143,6 +143,7 @@ export type LifecycleDependencies = {
   buildEmailShell: (theme: any, options: any) => string;
   buildEmailButton: (theme: any, href: string, label: string) => string;
   sendTransactionalEmail: (settings: any, input: any) => Promise<{ provider: "smtp" | "brevo"; messageId: string | null; emailDeliveryId: string | null }>;
+  getAdminRecipients?: () => Promise<Array<{ id?: string; full_name?: string | null; google_email?: string | null }>>;
   sendPushNotification?: (userId: string, title: string, content: string, link?: string, imageUrl?: string) => Promise<boolean>;
   sendWhatsAppNotification?: (userId: string, phone: string, text: string) => Promise<boolean>;
 };
