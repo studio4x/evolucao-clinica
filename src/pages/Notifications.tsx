@@ -394,7 +394,7 @@ export default function Notifications() {
               Gerencie quais e-mails, alertas e mensagens de WhatsApp você deseja receber da plataforma, além de configurar notificações push nativas no seu navegador.
             </p>
             <Link
-              to="/preferencias-de-comunicacao"
+              to="/painel/preferencias-de-comunicacao"
               className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white hover:bg-brand-primary-dark font-semibold text-sm transition-all"
             >
               <span>Gerenciar Preferências</span>

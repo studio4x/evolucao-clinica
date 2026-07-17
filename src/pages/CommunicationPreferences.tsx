@@ -220,11 +220,17 @@ export default function CommunicationPreferences() {
     }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-primary" /></div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[300px]">
+        <Loader2 className="h-8 w-8 text-brand-primary animate-spin" />
+        <span className="ml-2 text-brand-text-muted text-sm">Carregando preferências...</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-brand-bg px-4 py-10">
-      <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in pb-12">
         
         {/* Card 1: Preferências de comunicação */}
         <div className="bg-white rounded-2xl border border-brand-border shadow-sm p-6 md:p-8">
@@ -427,6 +433,5 @@ export default function CommunicationPreferences() {
         </div>
 
       </div>
-    </div>
   );
 }

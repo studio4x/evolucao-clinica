@@ -571,7 +571,7 @@ export default function App() {
           <Route path="/privacy" element={<PrivacyPolicy />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/delete-account" element={<DeleteAccount />} />
-          <Route path="/preferencias-de-comunicacao" element={<ProtectedRoute><CommunicationPreferences /></ProtectedRoute>} />
+          <Route path="/preferencias-de-comunicacao" element={<Navigate to="/painel/preferencias-de-comunicacao" replace />} />
           <Route path="/descadastro" element={<Unsubscribe />} />
           <Route path="/public/reports/:reportId" element={<PublicReportView />} />
           <Route path="/jornada" element={<PublicJourneyIndex />} />
@@ -598,6 +598,7 @@ export default function App() {
             <Route path="migration" element={<Migration />} />
             <Route path="profile" element={<Profile />} />
             <Route path="notifications" element={<Notifications />} />
+            <Route path="preferencias-de-comunicacao" element={<CommunicationPreferences />} />
             <Route path="support" element={<SupportTickets />} />
             <Route path="support/:ticketId" element={<SupportTicketDetail />} />
             <Route path="sugestoes" element={<Feedback />} />
