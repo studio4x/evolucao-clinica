@@ -19,3 +19,6 @@ WHERE eligibility_rule_key IN (
 ) AND campaign_id IN (
   SELECT id FROM public.lifecycle_campaigns WHERE key = 'conditional_lifecycle_messages'
 );
+
+-- Recarrega o cache de schema do PostgREST (Supabase)
+NOTIFY pgrst, 'reload schema';

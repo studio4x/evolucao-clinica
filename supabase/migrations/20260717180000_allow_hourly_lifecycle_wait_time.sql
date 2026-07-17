@@ -9,3 +9,6 @@ UPDATE public.lifecycle_steps SET wait_minutes = wait_minutes * 1440;
 -- Corrige a check constraint de validação
 ALTER TABLE public.lifecycle_steps DROP CONSTRAINT IF EXISTS lifecycle_steps_day_offset_check;
 ALTER TABLE public.lifecycle_steps ADD CONSTRAINT lifecycle_steps_wait_minutes_check CHECK (wait_minutes >= 0);
+
+-- Recarrega o cache de schema do PostgREST (Supabase)
+NOTIFY pgrst, 'reload schema';
