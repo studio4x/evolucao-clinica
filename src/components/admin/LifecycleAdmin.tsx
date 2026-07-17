@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Bold, Check, CirclePause, CirclePlay, Eraser, FileText, Heading2, Italic, List, ListChecks, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Save, ScrollText, Send, Settings, Users, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
-type Tab = 'overview' | 'campaigns' | 'rules' | 'preferences' | 'settings';
-type CampaignTab = 'flows' | 'templates' | 'instances' | 'logs';
+type Tab = 'overview' | 'campaigns' | 'preferences' | 'settings';
+type CampaignTab = 'flows' | 'instances' | 'logs';
 type TemplateDraft = {
   subject_template: string;
   preheader_template: string;
@@ -37,13 +37,11 @@ const LIFECYCLE_BASE_PATH = '/admin/lifecycle';
 const LIFECYCLE_TAB_SLUGS: Record<Tab, string> = {
   overview: 'visao-geral',
   campaigns: 'campanhas-e-passos',
-  rules: 'regras-condicionais',
   preferences: 'preferencias-de-comunicacao',
   settings: 'configuracoes'
 };
 const CAMPAIGN_TAB_SLUGS: Record<CampaignTab, string> = {
   flows: 'fluxos-e-passos',
-  templates: 'modelos',
   instances: 'usuarios-no-fluxo',
   logs: 'registros-de-envio'
 };
@@ -120,6 +118,9 @@ function lifecycleViewFromPath(pathname: string): { tab: Tab; campaignTab: Campa
   if (suffix[0] === LIFECYCLE_TAB_SLUGS.campaigns) {
     const campaignTab = (Object.entries(CAMPAIGN_TAB_SLUGS).find(([, slug]) => slug === suffix[1])?.[0] || 'flows') as CampaignTab;
     return { tab: 'campaigns', campaignTab };
+  }
+  if (suffix[0] === 'regras-condicionais') {
+    return { tab: 'campaigns', campaignTab: 'flows' };
   }
   const tab = (Object.entries(LIFECYCLE_TAB_SLUGS).find(([, slug]) => slug === suffix[0])?.[0] || 'overview') as Tab;
   return { tab, campaignTab: 'flows' };
@@ -480,15 +481,6 @@ export default function LifecycleAdmin() {
     }
   };
 
-  const updateRule = async (rule: any) => {
-    try {
-      await api('/api/admin/lifecycle/rules/' + rule.id, { method: 'PUT', body: JSON.stringify({ enabled: !rule.enabled }) });
-      setRules(rules.map((item) => item.id === rule.id ? { ...item, enabled: !item.enabled } : item));
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
-
   const userAction = async (user: any, action: 'pause' | 'resume' | 'recalculate' | 'enroll') => {
     try {
       await api('/api/admin/lifecycle/users/' + user.id + '/' + action, { method: 'POST', body: JSON.stringify({ campaignKey: 'new_user_activation_15d' }) });
@@ -547,13 +539,11 @@ export default function LifecycleAdmin() {
   const tabs: Array<[Tab, string]> = [
     ['overview', 'Visão geral'],
     ['campaigns', 'Campanhas e passos'],
-    ['rules', 'Regras condicionais'],
     ['preferences', 'Preferências'],
     ['settings', 'Configurações']
   ];
   const campaignTabs: Array<[CampaignTab, string, typeof ListChecks]> = [
     ['flows', 'Fluxos e Passos', ListChecks],
-    ['templates', 'Modelos', FileText],
     ['instances', 'Usuários no Fluxo', Users],
     ['logs', 'Registros de Envio', ScrollText]
   ];
@@ -611,9 +601,7 @@ export default function LifecycleAdmin() {
         </section>)}
       </div>}
 
-      {(campaignTab === 'templates' || campaignTab === 'flows') && <div className="space-y-4">
-        {campaignTab === 'templates' && (templateRows.length === 0 ? <EmptyState icon={FileText} title="Nenhum modelo disponível" description="Os modelos dos passos aparecerão aqui quando houver campanhas cadastradas." /> : <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[780px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Modelo</th><th className="p-3">Campanha</th><th className="p-3">Categoria</th><th className="p-3">Estado</th><th className="p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{templateRows.map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-[360px] truncate text-brand-text">{step.subject_template}</strong><span className="block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || 'Sem preheader cadastrado'}</span></td><td className="p-3">{step.campaign.name}<span className="block text-xs text-brand-text-muted">Passo {step.position}</span></td><td className="p-3"><span className="rounded-full border border-brand-border px-2 py-1 text-xs">{categoryLabel(step.category)}</span></td><td className="p-3">{step.status === 'active' ? <span className="text-emerald-700">Ativo</span> : <span className="text-brand-text-muted">Rascunho</span>}</td><td className="p-3 text-right"><div className="inline-flex gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline text-xs">{step.status === 'active' ? 'Desativar' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>)}
-
+      {campaignTab === 'flows' && <div className="space-y-4">
         {editingTemplate && templateDraft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !templateSaving) cancelTemplateEdit(); }}>
           <form onSubmit={(event) => { event.preventDefault(); void saveTemplate(); }} role="dialog" aria-modal="true" aria-labelledby="lifecycle-template-editor-title" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-brand-border bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-brand-border bg-slate-50/80 p-5 md:p-6">
@@ -660,8 +648,6 @@ export default function LifecycleAdmin() {
 
       {campaignTab === 'logs' && <div className="overflow-hidden rounded-xl border border-brand-border bg-white">{deliveries.length === 0 ? <EmptyState icon={ScrollText} title="Nenhum registro de envio" description="Os disparos processados pela fila aparecerão aqui." /> : <table className="w-full min-w-[1120px] table-fixed text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="w-[18%] p-3">Destinatário</th><th className="w-[19%] p-3">Modelo enviado</th><th className="w-[8%] p-3">Status</th><th className="w-[14%] p-3">Canais</th><th className="w-[16%] p-3">Enviada/agendada</th><th className="w-[8%] p-3">Tentativas</th><th className="w-[12%] p-3">Motivo</th><th className="w-[5%] p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{deliveries.map((item) => <tr key={item.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-full truncate">{item.recipient_name}</strong><span className="block max-w-full truncate text-xs text-brand-text-muted">{item.recipient_email}</span></td><td className="p-3"><strong className="block max-w-full truncate" title={item.template_name}>{item.template_name}</strong><span className="block max-w-full truncate text-xs text-brand-text-muted" title={item.template_key}>{item.template_reference}</span></td><td className="p-3"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (item.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')}>{deliveryStatusLabel(item.status)}</span></td><td className="p-3"><div className="flex items-center gap-1.5"><ChannelDeliveryIcon channel="email" status={channelDeliveryStatus(item, 'email')} /><ChannelDeliveryIcon channel="push" status={channelDeliveryStatus(item, 'push')} /><ChannelDeliveryIcon channel="whatsapp" status={channelDeliveryStatus(item, 'whatsapp')} /></div></td><td className="p-3 whitespace-nowrap">{(item.sent_at || item.scheduled_for) ? new Date(item.sent_at || item.scheduled_for).toLocaleString('pt-BR') : '—'}</td><td className="p-3">{item.attempt_count}/{item.max_attempts}</td><td className="p-3 max-w-full truncate" title={item.skip_reason || item.failure_reason || ''}>{item.skip_reason || item.failure_reason || '—'}</td><td className="p-3 text-right"><button onClick={() => void resendLifecycleDelivery(item)} disabled={resendingDispatchId === item.id} title="Reenviar mensagem pelos canais habilitados" className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{resendingDispatchId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}<span className="sr-only">Reenviar</span></button></td></tr>)}</tbody></table>}</div>}
     </div>}
-
-    {tab === 'rules' && <div className="bg-white border border-brand-border rounded-xl divide-y">{rules.map((rule) => <div key={rule.id} className="p-4 flex items-center justify-between gap-4"><div><strong className="text-sm text-brand-text">{rule.name}</strong><span className="block text-xs text-brand-text-muted">Identificador: {rule.rule_key} · prioridade {rule.priority} · intervalo mínimo {rule.cooldown_hours}h</span></div><button onClick={() => void updateRule(rule)} className={'text-xs px-3 py-1.5 rounded-lg ' + (rule.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600')}>{rule.enabled ? 'Ativa' : 'Desativada'}</button></div>)}</div>}
 
     {tab === 'preferences' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Jornada</th><th className="p-3">Educativo</th><th className="p-3">Comercial</th><th className="p-3">Atualizado</th></tr></thead><tbody className="divide-y divide-brand-border">{preferences.map((item) => <tr key={item.user_id}><td className="p-3">{item.user_id}</td><td className="p-3">{item.lifecycle_enabled ? 'Ativo' : 'Descadastrado'}</td><td className="p-3">{item.product_education_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.commercial_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.updated_at ? new Date(item.updated_at).toLocaleString('pt-BR') : '—'}</td></tr>)}</tbody></table></div>}
 
