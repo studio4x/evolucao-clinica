@@ -77,7 +77,7 @@ export async function getLifecyclePreferences(deps: LifecycleDependencies, userI
 }
 
 export async function updateLifecyclePreferences(deps: LifecycleDependencies, userId: string, values: Record<string, unknown>) {
-  const allowed = ["product_education_enabled", "lifecycle_enabled", "commercial_enabled", "preferred_send_time", "timezone"];
+  const allowed = ["product_education_enabled", "lifecycle_enabled", "commercial_enabled", "preferred_send_time", "timezone", "email_enabled", "push_enabled", "whatsapp_enabled", "whatsapp_number"];
   const update: Record<string, unknown> = {};
   for (const key of allowed) if (key in values) update[key] = values[key];
   if (update.timezone && typeof update.timezone !== "string") throw new Error("Fuso horário inválido.");

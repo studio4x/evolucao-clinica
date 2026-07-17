@@ -2788,6 +2788,54 @@ async function sendOnboardingApprovalNotice(targetUserId: string) {
   });
 }
 
+async function sendWhatsAppNotificationInternal(userId: string, phone: string, text: string): Promise<boolean> {
+  const phoneClean = phone.replace(/\D/g, "");
+  if (!phoneClean) {
+    console.warn(`[WhatsApp] Falha ao enviar: número de telefone vazio para usuário ${userId}`);
+    return false;
+  }
+
+  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+  if (accessToken && phoneNumberId) {
+    try {
+      const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to: phoneClean,
+          type: "text",
+          text: {
+            preview_url: true,
+            body: text
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        console.error(`[WhatsApp API Error] Falha ao enviar para ${phoneClean}:`, data);
+        return false;
+      }
+
+      console.log(`[WhatsApp API] Mensagem enviada com sucesso para ${phoneClean}:`, data);
+      return true;
+    } catch (err: any) {
+      console.error(`[WhatsApp API Connection Error] Falha de conexão para ${phoneClean}:`, err.message);
+      return false;
+    }
+  } else {
+    console.log(`[WhatsApp Mock] SIMULAÇÃO de envio de mensagem para ${phoneClean} (usuário ${userId}): "${text}"`);
+    return true;
+  }
+}
+
 const lifecycleService = createLifecycleService({
   supabaseAdmin,
   productionOrigin: PRODUCTION_ORIGIN,
@@ -2796,7 +2844,17 @@ const lifecycleService = createLifecycleService({
   getEmailTheme,
   buildEmailShell,
   buildEmailButton,
-  sendTransactionalEmail
+  sendTransactionalEmail,
+  sendPushNotification: async (userId, title, content, link, imageUrl) => {
+    try {
+      await sendNotificationInternal(userId, title, content, "info", link, imageUrl, "platform", { push: true, email: false });
+      return true;
+    } catch (err) {
+      console.error("[Lifecycle Push] Erro ao disparar push:", err);
+      return false;
+    }
+  },
+  sendWhatsAppNotification: sendWhatsAppNotificationInternal
 });
 
 async function registerLifecycleLogin(userId: string) {

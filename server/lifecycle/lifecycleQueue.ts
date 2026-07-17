@@ -137,34 +137,103 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   const preferencesUrl = `${deps.productionOrigin}/preferencias-de-comunicacao`;
   const unsubscribeUrl = `${deps.productionOrigin}/descadastro?token=${encodeURIComponent(unsubscribeToken)}`;
   const actionUrl = resolveLifecycleUrl(deps.productionOrigin, rendered.ctaRoute);
-  const theme = await deps.getEmailTheme();
-  const htmlContent = deps.buildEmailShell(theme, {
-    title: escapeLifecycleHtml(rendered.subject),
-    subtitle: escapeLifecycleHtml(rendered.preheader),
-    eyebrow: "Jornada de Usuários",
-    bodyHtml: `${rendered.bodyHtml}<div style="text-align:center;margin:28px 0 8px 0;">${deps.buildEmailButton(theme, actionUrl, escapeLifecycleHtml(rendered.ctaLabel))}</div>`,
-    footerHtml: `Esta mensagem foi enviada pelo Evolução Clínica.<br/><a href="${escapeLifecycleHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeLifecycleHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeLifecycleHtml(resolveLifecycleUrl(deps.productionOrigin, "/painel/support"))}">Suporte</a>`
-  });
-  const settings = await deps.getNotificationSettings();
-  const result = await deps.sendTransactionalEmail(settings, {
-    userId: dispatch.user_id,
-    recipientEmail: profile.google_email,
-    recipientName: profile.full_name || "Profissional",
-    subject: rendered.subject,
-    textContent: `${rendered.text}\n\n${rendered.ctaLabel}: ${actionUrl}\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}`,
-    htmlContent,
-    source: dispatch.dispatch_type === "conditional" ? "lifecycle-conditional" : "lifecycle",
-    allowFallback: true
-  });
+
+  const emailEnabled = preferences.email_enabled !== false;
+  const pushEnabled = preferences.push_enabled !== false;
+  const whatsappEnabled = preferences.whatsapp_enabled !== false;
+  const whatsappNumber = String(preferences.whatsapp_number || "").trim();
+
+  if (!emailEnabled && !pushEnabled && (!whatsappEnabled || !whatsappNumber)) {
+    await markSuppressed(deps, dispatch, "no_active_channels");
+    return { status: "suppressed" };
+  }
+
+  let emailDeliveryId: string | null = null;
+  let emailProvider = "smtp";
+  let emailSent = false;
+  let pushSent = false;
+  let whatsappSent = false;
+
+  // A. Enviar E-mail
+  if (emailEnabled) {
+    try {
+      const theme = await deps.getEmailTheme();
+      const htmlContent = deps.buildEmailShell(theme, {
+        title: escapeLifecycleHtml(rendered.subject),
+        subtitle: escapeLifecycleHtml(rendered.preheader),
+        eyebrow: "Jornada de Usuários",
+        bodyHtml: `${rendered.bodyHtml}<div style="text-align:center;margin:28px 0 8px 0;">${deps.buildEmailButton(theme, actionUrl, escapeLifecycleHtml(rendered.ctaLabel))}</div>`,
+        footerHtml: `Esta mensagem foi enviada pelo Evolução Clínica.<br/><a href="${escapeLifecycleHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeLifecycleHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeLifecycleHtml(resolveLifecycleUrl(deps.productionOrigin, "/painel/support"))}">Suporte</a>`
+      });
+      const settings = await deps.getNotificationSettings();
+      const result = await deps.sendTransactionalEmail(settings, {
+        userId: dispatch.user_id,
+        recipientEmail: profile.google_email,
+        recipientName: profile.full_name || "Profissional",
+        subject: rendered.subject,
+        textContent: `${rendered.text}\n\n${rendered.ctaLabel}: ${actionUrl}\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}`,
+        htmlContent,
+        source: dispatch.dispatch_type === "conditional" ? "lifecycle-conditional" : "lifecycle",
+        allowFallback: true
+      });
+      emailDeliveryId = result.emailDeliveryId || null;
+      emailProvider = result.provider;
+      emailSent = true;
+    } catch (emailErr) {
+      console.error(`[Lifecycle Queue] Falha ao enviar e-mail para usuário ${dispatch.user_id}:`, emailErr);
+      if (!pushEnabled && !whatsappEnabled) {
+        throw emailErr;
+      }
+    }
+  }
+
+  // B. Enviar Push Notification
+  if (pushEnabled && deps.sendPushNotification) {
+    try {
+      const pushText = rendered.preheader || rendered.text.slice(0, 120);
+      const pushSuccess = await deps.sendPushNotification(
+        dispatch.user_id,
+        rendered.subject,
+        pushText,
+        actionUrl
+      );
+      pushSent = pushSuccess;
+      if (pushSuccess) {
+        console.log(`[Lifecycle Queue] Push enviado com sucesso para o usuário ${dispatch.user_id}`);
+      }
+    } catch (pushErr) {
+      console.warn(`[Lifecycle Queue] Falha ao enviar Push para usuário ${dispatch.user_id}:`, pushErr);
+    }
+  }
+
+  // C. Enviar WhatsApp
+  if (whatsappEnabled && whatsappNumber && deps.sendWhatsAppNotification) {
+    try {
+      const waText = `*${rendered.subject}*\n\n${rendered.text}\n\n👉 *Acesse aqui:* ${actionUrl}`;
+      const waSuccess = await deps.sendWhatsAppNotification(
+        dispatch.user_id,
+        whatsappNumber,
+        waText
+      );
+      whatsappSent = waSuccess;
+      if (waSuccess) {
+        console.log(`[Lifecycle Queue] WhatsApp enviado com sucesso para o número ${whatsappNumber}`);
+      }
+    } catch (waErr) {
+      console.warn(`[Lifecycle Queue] Falha ao enviar WhatsApp para o número ${whatsappNumber}:`, waErr);
+    }
+  }
+
   await deps.supabaseAdmin.from("lifecycle_dispatches").update({
     status: "sent",
     sent_at: new Date().toISOString(),
-    email_delivery_id: result.emailDeliveryId || null,
+    email_delivery_id: emailDeliveryId,
     rendered_subject: rendered.subject,
     rendered_preheader: rendered.preheader,
     rendered_text: rendered.text,
     updated_at: new Date().toISOString()
   }).eq("id", dispatch.id);
+
   if (dispatch.dispatch_type !== "transactional_bridge") {
     await deps.supabaseAdmin.from("lifecycle_user_state").update({
       last_relationship_email_at: new Date().toISOString(),
@@ -172,7 +241,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       updated_at: new Date().toISOString()
     }).eq("user_id", dispatch.user_id);
   }
-  return { status: "sent", provider: result.provider };
+  return { status: "sent", provider: emailSent ? emailProvider : "other" };
 }
 
 export async function processLifecycleDispatches(deps: LifecycleDependencies, batchSize?: number) {
