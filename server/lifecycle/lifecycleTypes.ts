@@ -68,6 +68,8 @@ export type LifecycleStep = {
   id: string;
   campaign_id: string;
   step_key: string;
+  eligibility_rule_key?: string | null;
+  skip_rule_key?: string | null;
   position: number;
   day_offset: number;
   send_time?: string | null;

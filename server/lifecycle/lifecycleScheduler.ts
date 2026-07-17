@@ -90,6 +90,20 @@ function sequenceCandidate(step: LifecycleStep, campaignKey: string, periodKey: 
   };
 }
 
+function applyConditionalStepTemplate(candidate: LifecycleCandidate, step: LifecycleStep): LifecycleCandidate {
+  return {
+    ...candidate,
+    step,
+    category: step.category || candidate.category,
+    commercial: step.category === "commercial" || candidate.commercial,
+    subjectTemplate: step.subject_template,
+    preheaderTemplate: step.preheader_template || candidate.preheaderTemplate,
+    bodyTemplate: step.body_markdown,
+    ctaLabelTemplate: step.cta_label_template || candidate.ctaLabelTemplate,
+    ctaRouteTemplate: step.cta_route_template || step.fallback_cta_route || candidate.ctaRouteTemplate
+  };
+}
+
 function isRelationshipCooldownBlocked(state: LifecycleState, now: Date, candidate: LifecycleCandidate): boolean {
   if (candidate.dispatchType === "transactional_bridge") return false;
   return Boolean(state.nextRelationshipEmailEligibleAt && new Date(state.nextRelationshipEmailEligibleAt).getTime() > now.getTime());
@@ -117,6 +131,8 @@ async function scheduleForEnrollment(
   campaign: any,
   enrollment: any,
   steps: LifecycleStep[],
+  conditionalCampaign: any | null,
+  conditionalSteps: LifecycleStep[],
   rules: LifecycleRule[],
   state: LifecycleState,
   runtime: LifecycleRuntimeConfig,
@@ -136,7 +152,12 @@ async function scheduleForEnrollment(
   }
 
   const currentStep = steps.find((step) => step.position === enrollment.current_position + 1);
-  const candidates = rules.map((rule) => evaluateKnownRule(rule, state, now)).filter(Boolean) as LifecycleCandidate[];
+  const candidates = rules.map((rule) => {
+    const candidate = evaluateKnownRule(rule, state, now);
+    if (!candidate || conditionalCampaign?.status !== "active") return candidate;
+    const templateStep = conditionalSteps.find((step) => step.eligibility_rule_key === rule.rule_key && step.status === "active" && step.enabled);
+    return templateStep ? applyConditionalStepTemplate(candidate, templateStep) : candidate;
+  }).filter(Boolean) as LifecycleCandidate[];
   let sequence = sequenceDue(currentStep, enrollment, now) && currentStep ? sequenceCandidate(currentStep, campaign.key, now.toISOString().slice(0, 10)) : null;
   if (sequence && shouldSkipSequenceStep(currentStep!, state)) {
     const skipReason = shouldSkipSequenceStep(currentStep!, state) || "passo obsoleto";
@@ -172,15 +193,16 @@ async function scheduleForEnrollment(
   const chosen = chooseHighestPriority(eligibleCandidates);
   if (!chosen) return "nothing_due";
   if (isRelationshipCooldownBlocked(state, now, chosen)) {
-    await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: campaign.id, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: `deferred:${enrollment.id}:${chosen.messageKey}:${now.toISOString().slice(0, 10)}`, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: "deferred", reason: "cooldown de 24 horas" });
+    await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: chosen.step?.campaign_id || campaign.id, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: `deferred:${enrollment.id}:${chosen.messageKey}:${now.toISOString().slice(0, 10)}`, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: "deferred", reason: "cooldown de 24 horas" });
     await deps.supabaseAdmin.from("lifecycle_enrollments").update({ next_step_at: state.nextRelationshipEmailEligibleAt }).eq("id", enrollment.id);
     return "deferred";
   }
 
   const context = buildTemplateContext(state, deps.productionOrigin, now);
+  const chosenCampaignId = chosen.step?.campaign_id || campaign.id;
   const decisionKey = `${chosen.dispatchType}:${enrollment.id}:${chosen.messageKey}:${chosen.dedupePeriodKey}`;
   const dryRun = runtime.dry_run || !runtime.send_enabled;
-  await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: campaign.id, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: decisionKey, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: dryRun ? "dry_run" : "scheduled", reason: chosen.reason, metadata: { cta_route: chosen.ctaRouteTemplate, category: chosen.category, context_keys: Object.keys(context) } });
+  await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: chosenCampaignId, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: decisionKey, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: dryRun ? "dry_run" : "scheduled", reason: chosen.reason, metadata: { cta_route: chosen.ctaRouteTemplate, category: chosen.category, context_keys: Object.keys(context) } });
   if (dryRun) return "dry_run";
 
   const delayMinutes = Number(chosen.rule?.delay_minutes || 0);
@@ -193,7 +215,7 @@ async function scheduleForEnrollment(
   const { error: dispatchError } = await deps.supabaseAdmin.from("lifecycle_dispatches").insert({
     user_id: state.userId,
     enrollment_id: enrollment.id,
-    campaign_id: campaign.id,
+    campaign_id: chosenCampaignId,
     step_id: chosen.step?.id || null,
     rule_id: chosen.rule?.id || null,
     message_key: chosen.messageKey,
@@ -216,22 +238,33 @@ async function scheduleForEnrollment(
 
 export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now = new Date()) {
   const runtime = await getLifecycleRuntimeConfig(deps);
-  const campaign = await findCampaign(deps, "new_user_activation_15d");
-  if (!campaign || campaign.status !== "active") return { scheduled: 0, dryRun: runtime.dry_run || !runtime.send_enabled, reason: "campaign_not_active" };
-  const [{ data: steps, error: stepsError }, { data: rules, error: rulesError }, { data: professionals, error: professionalsError }] = await Promise.all([
-    deps.supabaseAdmin.from("lifecycle_steps").select("*").eq("campaign_id", campaign.id).eq("enabled", true).order("position"),
+  const activationCampaign = await findCampaign(deps, "new_user_activation_15d");
+  const conditionalCampaign = await findCampaign(deps, "conditional_lifecycle_messages");
+  const campaign = activationCampaign?.status === "active"
+    ? activationCampaign
+    : conditionalCampaign?.status === "active"
+      ? conditionalCampaign
+      : null;
+  if (!campaign) return { scheduled: 0, dryRun: runtime.dry_run || !runtime.send_enabled, reason: "campaign_not_active" };
+  const [{ data: steps, error: stepsError }, { data: rules, error: rulesError }, { data: professionals, error: professionalsError }, { data: conditionalSteps, error: conditionalStepsError }] = await Promise.all([
+    activationCampaign?.status === "active"
+      ? deps.supabaseAdmin.from("lifecycle_steps").select("*").eq("campaign_id", activationCampaign.id).eq("enabled", true).order("position")
+      : Promise.resolve({ data: [] as any[], error: null }),
     deps.supabaseAdmin.from("lifecycle_rules").select("*").eq("enabled", true),
-    deps.supabaseAdmin.from("professionals").select("id, status, role, created_at").eq("status", "active").neq("role", "admin").limit(500)
+    deps.supabaseAdmin.from("professionals").select("id, status, role, created_at").eq("status", "active").neq("role", "admin").limit(500),
+    conditionalCampaign
+      ? deps.supabaseAdmin.from("lifecycle_steps").select("*").eq("campaign_id", conditionalCampaign.id).eq("enabled", true).order("position")
+      : Promise.resolve({ data: [] as any[], error: null })
   ]);
-  if (stepsError || rulesError || professionalsError) throw new Error(stepsError?.message || rulesError?.message || professionalsError?.message || "Falha ao buscar dados do scheduler lifecycle.");
+  if (stepsError || rulesError || professionalsError || conditionalStepsError) throw new Error(stepsError?.message || rulesError?.message || professionalsError?.message || conditionalStepsError?.message || "Falha ao buscar dados do scheduler lifecycle.");
   let scheduled = 0;
   for (const professional of professionals || []) {
-    if (new Date(professional.created_at).getTime() < new Date(campaign.eligible_from).getTime()) continue;
+    if (campaign.enrollment_mode === "new_users_only" && new Date(professional.created_at).getTime() < new Date(campaign.eligible_from).getTime()) continue;
     try {
-      const enrollment = await ensureLifecycleEnrollment(deps, professional.id);
+      const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
       if (!enrollment) continue;
       const state = await getOrRecalculateLifecycleState(deps, professional.id);
-      const result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], rules || [], state, runtime, now);
+      const result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], conditionalCampaign, conditionalSteps || [], rules || [], state, runtime, now);
       if (result === "scheduled") scheduled += 1;
       if (state.subscriptionStatus === "trialing" && state.trialEndsAt) {
         const trialDays = Math.ceil((new Date(state.trialEndsAt).getTime() - now.getTime()) / 86400000);
