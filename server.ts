@@ -2927,8 +2927,7 @@ const lifecycleService = createLifecycleService({
   getAdminRecipients,
   sendPushNotification: async (userId, title, content, link, imageUrl) => {
     try {
-      await sendNotificationInternal(userId, title, content, "info", link, imageUrl, "platform", { push: true, email: false });
-      return true;
+      return await sendPushNotificationInternal(userId, title, content, link, imageUrl);
     } catch (err) {
       console.error("[Lifecycle Push] Erro ao disparar push:", err);
       return false;
@@ -3067,6 +3066,57 @@ app.post("/api/onboarding/approved", requireAuth, requireAdmin, async (req: any,
   }
 });
 
+async function sendPushNotificationInternal(
+  targetUserId: string,
+  title: string,
+  content: string,
+  link?: string,
+  imageUrl?: string
+): Promise<boolean> {
+  const settings = await getNotificationSettings();
+  webpush.setVapidDetails(
+    settings.vapid_subject,
+    settings.vapid_public_key,
+    settings.vapid_private_key
+  );
+
+  const { data: subscriptions, error } = await supabaseAdmin
+    .from("push_subscriptions")
+    .select("id, endpoint, keys")
+    .eq("user_id", targetUserId);
+
+  if (error) throw new Error(error.message || "Falha ao consultar inscrições push.");
+  if (!subscriptions?.length) {
+    console.warn(`[Push] Usuário ${targetUserId} não possui inscrição push ativa.`);
+    return false;
+  }
+
+  const payload = JSON.stringify({
+    title,
+    body: content,
+    link: link || "/painel/notifications",
+    image: imageUrl
+  });
+  let sentCount = 0;
+
+  for (const sub of subscriptions) {
+    try {
+      await webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: sub.keys },
+        payload
+      );
+      sentCount += 1;
+    } catch (pushErr: any) {
+      console.warn("Falha no envio do push para endpoint:", sub.endpoint, pushErr.message);
+      if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+        await supabaseAdmin.from("push_subscriptions").delete().eq("id", sub.id);
+      }
+    }
+  }
+
+  return sentCount > 0;
+}
+
 // Helper para enviar notificação (In-App, Push e E-mail)
 async function sendNotificationInternal(
   targetUserId: string,
@@ -3100,47 +3150,10 @@ async function sendNotificationInternal(
 
   const settings = await getNotificationSettings();
 
-  // B. Enviar Push Notification (se houver inscricoes)
+  // B. Enviar Push Notification (se houver inscrições)
+  let pushSent = false;
   if (channels.push !== false) try {
-    webpush.setVapidDetails(
-      settings.vapid_subject,
-      settings.vapid_public_key,
-      settings.vapid_private_key
-    );
-
-    const { data: subscriptions } = await supabaseAdmin
-      .from("push_subscriptions")
-      .select("*")
-      .eq("user_id", targetUserId);
-
-    if (subscriptions && subscriptions.length > 0) {
-      const payload = JSON.stringify({
-        title,
-        body: content,
-        link: link || "/painel/notifications",
-        image: imageUrl
-      });
-
-      for (const sub of subscriptions) {
-        try {
-          await webpush.sendNotification(
-            {
-              endpoint: sub.endpoint,
-              keys: sub.keys
-            },
-            payload
-          );
-        } catch (pushErr: any) {
-          console.warn("Falha no envio do push para endpoint:", sub.endpoint, pushErr.message);
-          if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
-            await supabaseAdmin
-              .from("push_subscriptions")
-              .delete()
-              .eq("id", sub.id);
-          }
-        }
-      }
-    }
+    pushSent = await sendPushNotificationInternal(targetUserId, title, content, link, imageUrl);
   } catch (pushGeneralError: any) {
     console.error("Erro geral no disparo de Push:", pushGeneralError.message);
   }
@@ -3244,7 +3257,7 @@ async function sendNotificationInternal(
     console.log(`[Notifications] Nenhum provedor configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
   }
 
-  return { notification, emailSent, emailTo, emailError };
+  return { notification, emailSent, emailTo, emailError, pushSent };
 }
 
 async function sendTrialExpirationEmail(prof: { id: string; full_name: string | null; google_email: string | null; trial_ends_at: string | null }) {

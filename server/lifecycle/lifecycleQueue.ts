@@ -307,23 +307,11 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     .limit(1)
     .maybeSingle();
 
-  if (!checkError && existingDelivery && dispatch.metadata?.force_resend !== true) {
-    console.warn(`[Lifecycle Worker] Email já enviado anteriormente para o dispatch ${dispatch.id} (mitigação de duplicidade). Atualizando banco.`);
-    await deps.supabaseAdmin.from("lifecycle_dispatches").update({
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      email_delivery_id: existingDelivery.id,
-      rendered_subject: rendered.subject,
-      rendered_preheader: rendered.preheader,
-      rendered_text: rendered.text,
-      updated_at: new Date().toISOString()
-    }).eq("id", dispatch.id);
-    try {
-      await advanceSequenceEnrollment(deps, dispatch, stepResult.data);
-    } catch (advanceError) {
-      console.error(`[Lifecycle Queue] E-mail enviado, mas não foi possível avançar a matrícula ${dispatch.enrollment_id}:`, advanceError);
-    }
-    return { status: "sent", provider: "smtp" };
+  const existingEmailDelivery = !checkError && existingDelivery && dispatch.metadata?.force_resend !== true
+    ? existingDelivery
+    : null;
+  if (existingEmailDelivery) {
+    console.warn(`[Lifecycle Worker] E-mail já enviado anteriormente para o dispatch ${dispatch.id}; continuando para garantir o push.`);
   }
 
   const unsubscribeToken = await ensureCommunicationToken(deps, dispatch.user_id);
@@ -347,15 +335,15 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     return { status: "suppressed" };
   }
 
-  let emailDeliveryId: string | null = null;
+  let emailDeliveryId: string | null = existingEmailDelivery?.id || null;
   let emailProvider = "smtp";
-  let emailSent = false;
+  let emailSent = Boolean(existingEmailDelivery);
   let emailFailureReason: string | null = null;
   let pushSent = false;
   let whatsappSent = false;
 
   // A. Enviar E-mail
-  if (emailEnabled) {
+  if (emailEnabled && !existingEmailDelivery) {
     try {
       const theme = await deps.getEmailTheme();
       const htmlContent = deps.buildEmailShell(theme, {
