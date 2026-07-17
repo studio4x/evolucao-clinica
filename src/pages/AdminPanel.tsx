@@ -5787,7 +5787,7 @@ export default function AdminPanel() {
                         <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4">
                           <div>
                             <h3 className="text-sm font-semibold text-brand-primary">Logotipo Light (Fundo Claro)</h3>
-                            <p className="text-xs text-brand-text-muted mt-1">Exibido na barra lateral principal, login e áreas com fundo claro.</p>
+                            <p className="text-xs text-brand-text-muted mt-1">Exibido na barra lateral principal, login, áreas com fundo claro e no cabeçalho dos e-mails.</p>
                           </div>
                           
                           <div className="flex items-center justify-center p-6 bg-white border border-dashed border-brand-border rounded-xl h-40">
@@ -6157,7 +6157,7 @@ export default function AdminPanel() {
                         <div className="card p-5 border border-brand-border/60 bg-brand-bg/10 flex flex-col space-y-4 md:col-span-2">
                           <div>
                             <h3 className="text-sm font-semibold text-brand-primary">Cores Personalizadas do Tema</h3>
-                            <p className="text-xs text-brand-text-muted mt-1">Configure a paleta de cores do sistema. Cada cor possui um seletor visual e um campo de digitação HEX.</p>
+                            <p className="text-xs text-brand-text-muted mt-1">Configure a paleta de cores do sistema e dos templates de e-mail. Cada cor possui um seletor visual e um campo de digitação HEX.</p>
                           </div>
                           
                           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 pt-2">

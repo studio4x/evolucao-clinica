@@ -422,6 +422,7 @@ async function getBrandConfigSnapshot() {
 
 type EmailTheme = {
   brandName: string;
+  logoUrl: string;
   primary: string;
   primaryHover: string;
   secondary: string;
@@ -459,6 +460,7 @@ function buildEmailTheme(config = defaultSiteConfig): EmailTheme {
 
   return {
     brandName: config.pwa_app_name || defaultSiteConfig.pwa_app_name,
+    logoUrl: config.logo_light_url ? appendBrandVersion(config.logo_light_url, config.version) : "",
     primary: normalizeHexColor(colors.primary, defaultColors.primary),
     primaryHover: normalizeHexColor(colors.primary_hover, defaultColors.primary_hover),
     secondary: normalizeHexColor(colors.secondary, defaultColors.secondary),
@@ -523,16 +525,9 @@ function buildEmailShell(theme: EmailTheme, options: {
           <table border="0" cellpadding="0" cellspacing="0" width="100%">
             <tr>
               <td align="left" style="vertical-align: middle;">
-                <table border="0" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td style="padding-right: 12px; vertical-align: middle;">
-                      <div style="width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); box-shadow: 0 4px 10px ${hexToRgba(theme.primary, 0.3)}; display: inline-block;"></div>
-                    </td>
-                    <td style="vertical-align: middle;">
-                      <span style="font-size: 16px; font-weight: 800; letter-spacing: -0.3px; color: ${theme.text}; font-family: 'Outfit', sans-serif;">${theme.brandName}</span>
-                    </td>
-                  </tr>
-                </table>
+                ${theme.logoUrl
+                  ? `<img src="${escapeHtml(theme.logoUrl)}" alt="${escapeHtml(theme.brandName)}" style="display: block; width: auto; max-width: 260px; height: auto; max-height: 42px; object-fit: contain;" />`
+                  : `<table border="0" cellpadding="0" cellspacing="0"><tr><td style="padding-right: 12px; vertical-align: middle;"><div style="width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); box-shadow: 0 4px 10px ${hexToRgba(theme.primary, 0.3)}; display: inline-block;"></div></td><td style="vertical-align: middle;"><span style="font-size: 16px; font-weight: 800; letter-spacing: -0.3px; color: ${theme.text}; font-family: 'Outfit', sans-serif;">${escapeHtml(theme.brandName)}</span></td></tr></table>`}
               </td>
             </tr>
           </table>
