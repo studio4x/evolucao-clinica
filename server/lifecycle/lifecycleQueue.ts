@@ -7,7 +7,7 @@ import { escapeLifecycleHtml, renderLifecycleMessage, renderSafeLifecycleMarkdow
 import { renderLifecycleTemplate } from "./templates/tokenRegistry.js";
 import type { LifecycleDependencies, LifecycleState } from "./lifecycleTypes.js";
 
-function buildContext(state: LifecycleState, origin: string, now: Date, useSubscriberAction = false, recoveryTrial = false) {
+function buildContext(state: LifecycleState, origin: string, now: Date, useSubscriberAction = false, recoveryTrial = false, feedbackUrl = "") {
   const action = useSubscriberAction ? getSubscriberNextBestAction(state, now) : getNextBestAction(state, now);
   return {
     primeiro_nome: state.fullName.trim().split(/\s+/)[0] || "Profissional",
@@ -18,6 +18,7 @@ function buildContext(state: LifecycleState, origin: string, now: Date, useSubsc
     quantidade_evolucoes: state.evolutionsCount,
     resumo_progresso: "",
     bloco_progresso_teste_fallback: recoveryTrial ? "Mesmo que você não tenha conseguido experimentar todo o fluxo durante o teste, ainda pode escolher um plano e começar no seu ritmo. Caso precise de ajuda para configurar a conta, nossa equipe está disponível." : "",
+    link_feedback: feedbackUrl,
     quantidade_audios: state.audioEvolutionsCount,
     quantidade_documentos: state.reportsCount,
     quantidade_recursos: state.resourcesCount,
@@ -516,7 +517,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       return { status: "skipped" };
     }
   }
-  if (ruleResult.data?.rule_key === "trial_recovery_2d") {
+  if (ruleResult.data?.rule_key === "trial_recovery_2d" || ruleResult.data?.rule_key === "trial_recovery_7d") {
     const skipReason = await validateTrialRecovery(deps, dispatch.user_id, ruleResult.data);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
@@ -555,7 +556,10 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
 
   const now = new Date();
-  const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage", ruleResult.data?.rule_key === "trial_recovery_2d");
+  const communicationToken = await ensureCommunicationToken(deps, dispatch.user_id);
+  const feedbackUrl = `${deps.productionOrigin}/feedback/continuidade?token=${encodeURIComponent(communicationToken)}`;
+  const isTrialRecovery = ruleResult.data?.rule_key === "trial_recovery_2d" || ruleResult.data?.rule_key === "trial_recovery_7d";
+  const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage", isTrialRecovery, feedbackUrl);
   const config = messageFromConfig(dispatch, stepResult.data, ruleResult.data);
   const rendered = renderLifecycleMessage({
     subjectTemplate: config.subject_template,
@@ -587,7 +591,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     console.warn(`[Lifecycle Worker] E-mail já enviado anteriormente para o dispatch ${dispatch.id}; continuando para garantir o push.`);
   }
 
-  const unsubscribeToken = await ensureCommunicationToken(deps, dispatch.user_id);
+  const unsubscribeToken = communicationToken;
   const preferencesUrl = `${deps.productionOrigin}/preferencias-de-comunicacao`;
   const unsubscribeUrl = `${deps.productionOrigin}/descadastro?token=${encodeURIComponent(unsubscribeToken)}`;
   const actionUrl = resolveLifecycleUrl(deps.productionOrigin, rendered.ctaRoute);

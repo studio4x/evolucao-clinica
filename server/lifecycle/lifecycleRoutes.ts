@@ -53,11 +53,56 @@ function mapContext(state: any, origin: string) {
   };
 }
 
+const CONTINUITY_FEEDBACK_OPTIONS = [
+  "Não tive tempo suficiente para testar",
+  "Tive dificuldade para conectar minha conta Google",
+  "Não consegui criar a primeira evolução",
+  "Tive dificuldade para entender como a plataforma funciona",
+  "O valor dos planos não se encaixa no momento",
+  "Senti falta de alguma funcionalidade",
+  "A plataforma não se adaptou à minha rotina",
+  "Encontrei um problema técnico",
+  "Decidi utilizar outra solução",
+  "Outro motivo"
+] as const;
+
 export function createLifecycleService(deps: LifecycleDependencies) {
   return {
     recordEvent: (input: Parameters<typeof recordLifecycleEvent>[1]) => recordLifecycleEvent(deps, input),
     ensureEnrollment: (userId: string, options?: { campaignKey?: string; force?: boolean }) => ensureLifecycleEnrollment(deps, userId, options),
     registerRoutes(app: any, middleware: { requireAuth: any; requireAdmin: any }) {
+      app.post("/api/lifecycle/continuity-feedback", asyncRoute(async (req, res) => {
+        const token = String(req.body?.token || "").trim();
+        const reason = String(req.body?.reason || "").trim();
+        const comment = String(req.body?.comment || "").trim().slice(0, 2000);
+        if (token.length < 32 || !CONTINUITY_FEEDBACK_OPTIONS.includes(reason as typeof CONTINUITY_FEEDBACK_OPTIONS[number])) {
+          return res.status(400).json({ error: "Link ou motivo inválido." });
+        }
+        const tokenHash = hashCommunicationToken(token);
+        const { data: preferences, error: preferencesError } = await deps.supabaseAdmin
+          .from("communication_preferences")
+          .select("user_id")
+          .eq("unsubscribe_token_hash", tokenHash)
+          .maybeSingle();
+        if (preferencesError) throw new Error(preferencesError.message);
+        if (!preferences?.user_id) return res.status(404).json({ error: "Link de feedback inválido ou expirado." });
+
+        const technicalReasons = new Set(["Tive dificuldade para conectar minha conta Google", "Encontrei um problema técnico"]);
+        const category = technicalReasons.has(reason) ? "technical" : "general";
+        const description = [
+          "Feedback de continuidade após o período de teste.",
+          `Motivo principal: ${reason}`,
+          comment ? `Comentário adicional: ${comment}` : "Sem comentário adicional."
+        ].join("\n\n");
+        const { data: ticket, error: ticketError } = await deps.supabaseAdmin
+          .from("support_tickets")
+          .insert({ user_id: preferences.user_id, subject: "Feedback sobre a continuidade após o trial", description, category })
+          .select("id")
+          .single();
+        if (ticketError || !ticket) throw new Error(ticketError?.message || "Não foi possível registrar o feedback.");
+        return res.json({ success: true, ticketId: ticket.id });
+      }));
+
       app.get("/api/lifecycle/me", middleware.requireAuth, asyncRoute(async (req, res) => {
         const state = await recalculateLifecycleUserState(deps, req.user.id);
         const { data: enrollments, error: enrollmentError } = await deps.supabaseAdmin.from("lifecycle_enrollments").select("id, status, current_position, next_step_at, completion_deadline_at, campaign_id, lifecycle_campaigns(key,name,status)").eq("user_id", req.user.id);

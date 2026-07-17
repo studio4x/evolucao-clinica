@@ -43,6 +43,7 @@ export const LIFECYCLE_TOKEN_REGISTRY = {
   proxima_acao: (context: LifecycleTemplateContext) => context.proxima_acao || "continuar na plataforma",
   texto_cta_proxima_acao: (context: LifecycleTemplateContext) => context.texto_cta_proxima_acao || context.proxima_acao || "Acessar a próxima etapa",
   link_acao: (context: LifecycleTemplateContext) => context.link_acao || "/painel/dashboard",
+  link_feedback: (context: LifecycleTemplateContext) => context.link_feedback || "/feedback/continuidade",
   link_suporte: (context: LifecycleTemplateContext) => context.link_suporte || "/painel/support"
 } as const;
 
