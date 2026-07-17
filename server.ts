@@ -508,6 +508,7 @@ function buildEmailCard(theme: EmailTheme, title: string, bodyHtml: string, opti
 
 function buildEmailShell(theme: EmailTheme, options: {
   title: string;
+  secondaryTitle?: string;
   subtitle?: string;
   eyebrow?: string;
   headerEyebrow?: string;
@@ -541,6 +542,7 @@ function buildEmailShell(theme: EmailTheme, options: {
         <div style="padding: 36px 32px; background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); color: #ffffff;">
           ${options.eyebrow ? `<p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.6px; color: rgba(255, 255, 255, 0.85);">${options.eyebrow}</p>` : ""}
           <h1 style="margin: 0; font-size: 25px; font-weight: 800; line-height: 1.3; letter-spacing: -0.4px; font-family: 'Outfit', sans-serif;">${options.title}</h1>
+          ${options.secondaryTitle ? `<h1 style="margin: 10px 0 0 0; font-size: 25px; font-weight: 800; line-height: 1.3; letter-spacing: -0.4px; font-family: 'Outfit', sans-serif;">${options.secondaryTitle}</h1>` : ""}
           ${options.subtitle ? `<p style="margin: 12px 0 0 0; font-size: 15px; line-height: 1.6; color: rgba(255, 255, 255, 0.9); font-weight: 400;">${options.subtitle}</p>` : ""}
         </div>
 
@@ -3166,6 +3168,9 @@ async function sendNotificationInternal(
         const safeTitle = escapeHtml(title);
         const safeContent = escapeHtml(content);
         const safeImageUrl = imageUrl ? escapeHtml(imageUrl) : "";
+        const recipientName = String(profData?.full_name || "").trim();
+        const greetingText = recipientName ? `Olá, ${recipientName}!` : "Olá!";
+        const greetingHtml = escapeHtml(greetingText);
 
         // Paleta de cores e ícones por tipo de notificação
         const typeConfig: Record<string, { color: string; bg: string; border: string; icon: string; label: string }> = {
@@ -3177,11 +3182,12 @@ async function sendNotificationInternal(
         const tc = typeConfig[type] || typeConfig.info;
 
         const htmlContent = buildEmailShell(theme, {
-          title: "Notificação do Sistema",
-          subtitle: `${tc.label} • ${escapeHtml(title)}`,
+          title: tc.label,
+          secondaryTitle: safeTitle,
+          headerEyebrow: "Notificação do Sistema",
           bodyHtml: `
             ${safeImageUrl ? `<div style="margin:0 0 20px 0; border-radius:10px; overflow:hidden; border:1px solid ${theme.border};"><img src="${safeImageUrl}" alt="Imagem" style="display:block; max-width:100%; max-height:240px; object-fit:cover; width:100%;" /></div>` : ""}
-            <h2 style="margin:0 0 12px 0; font-size:18px; font-weight:700; color:${theme.text}; line-height:1.4;">${safeTitle}</h2>
+            <p style="margin:0 0 16px 0; font-size:15px; line-height:1.7; color:${theme.text};">${greetingHtml}</p>
             <p style="margin:0 0 24px 0; font-size:15px; color:${theme.textMuted};">${safeContent}</p>
             <div style="text-align:center; margin:28px 0 8px 0;">
               ${buildEmailButton(theme, viewUrl, "Ver no Aplicativo →")}
@@ -3194,7 +3200,7 @@ async function sendNotificationInternal(
           recipientEmail: targetEmail,
           recipientName: profData?.full_name || null,
           subject: `${tc.icon} ${title}`,
-          textContent: `${title}\n\n${content}\n\nVer detalhes no app: ${viewUrl}`,
+          textContent: `${greetingText}\n\n${content}\n\nVer detalhes no app: ${viewUrl}`,
           htmlContent,
           source: "notification",
           relatedNotificationId: notification.id,
