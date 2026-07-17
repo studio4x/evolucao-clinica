@@ -317,6 +317,32 @@ async function validateLoggedInWithoutPatient(deps: LifecycleDependencies, userI
   return Number(count || 0) > 0 ? "patient_already_registered" : null;
 }
 
+async function validateNoReturnAfterRegistration(deps: LifecycleDependencies, userId: string, rule: any) {
+  const [{ data: professional, error: professionalError }, { data: state, error: stateError }, { data: welcome, error: welcomeError }, { count: patients, error: patientsError }, { count: linkedRecords, error: linkedRecordsError }, { count: evolutions, error: evolutionsError }] = await Promise.all([
+    deps.supabaseAdmin.from("professionals").select("status").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_user_state").select("last_login_at").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("onboarding_notifications").select("welcome_notified_at").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId),
+    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId).not("google_doc_id", "is", null).neq("google_doc_id", ""),
+    deps.supabaseAdmin.from("evolutions").select("id", { count: "exact", head: true }).eq("professional_id", userId)
+  ]);
+  if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar o status da conta.");
+  if (stateError) throw new Error(stateError.message || "Falha ao confirmar o acesso do usuário.");
+  if (welcomeError) throw new Error(welcomeError.message || "Falha ao confirmar o e-mail transacional.");
+  if (patientsError || linkedRecordsError || evolutionsError) throw new Error((patientsError || linkedRecordsError || evolutionsError)?.message || "Falha ao confirmar ações relevantes.");
+  if (professional?.status !== "active") return "account_no_longer_active";
+  if (state?.last_login_at) return "user_already_returned";
+
+  const notifiedAt = welcome?.welcome_notified_at ? new Date(welcome.welcome_notified_at).getTime() : 0;
+  const minimumHours = Number(rule?.condition_config?.minimum_hours || 24);
+  if (!Number.isFinite(notifiedAt) || notifiedAt <= 0) return "transactional_email_not_confirmed";
+  if (Date.now() - notifiedAt < minimumHours * 3600000) return "transactional_email_interval_not_elapsed";
+  if (Number(patients || 0) > 0) return "patient_already_registered";
+  if (Number(linkedRecords || 0) > 0) return "record_already_linked";
+  if (Number(evolutions || 0) > 0) return "evolution_already_started";
+  return null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -422,6 +448,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "logged_in_without_patient") {
     const skipReason = await validateLoggedInWithoutPatient(deps, dispatch.user_id);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "no_return_after_registration") {
+    const skipReason = await validateNoReturnAfterRegistration(deps, dispatch.user_id, ruleResult.data);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };
