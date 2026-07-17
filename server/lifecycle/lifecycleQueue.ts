@@ -104,6 +104,35 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     ctaRouteTemplate: config.cta_route_template,
     context
   });
+
+  // Duplicate email sending mitigation if a previous run sent the email but database update failed
+  const emailSource = dispatch.dispatch_type === "conditional" ? "lifecycle-conditional" : "lifecycle";
+  const { data: existingDelivery, error: checkError } = await deps.supabaseAdmin
+    .from("email_deliveries")
+    .select("id")
+    .eq("user_id", dispatch.user_id)
+    .eq("subject", rendered.subject)
+    .eq("source", emailSource)
+    .eq("status", "sent")
+    .gt("created_at", new Date(Date.now() - 30 * 60 * 1000).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!checkError && existingDelivery) {
+    console.warn(`[Lifecycle Worker] Email já enviado anteriormente para o dispatch ${dispatch.id} (mitigação de duplicidade). Atualizando banco.`);
+    await deps.supabaseAdmin.from("lifecycle_dispatches").update({
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      email_delivery_id: existingDelivery.id,
+      rendered_subject: rendered.subject,
+      rendered_preheader: rendered.preheader,
+      rendered_text: rendered.text,
+      updated_at: new Date().toISOString()
+    }).eq("id", dispatch.id);
+    return { status: "sent", provider: "smtp" };
+  }
+
   const unsubscribeToken = await ensureCommunicationToken(deps, dispatch.user_id);
   const preferencesUrl = `${deps.productionOrigin}/preferencias-de-comunicacao`;
   const unsubscribeUrl = `${deps.productionOrigin}/descadastro?token=${encodeURIComponent(unsubscribeToken)}`;

@@ -31,7 +31,10 @@ export async function recalculateLifecycleUserState(deps: LifecycleDependencies,
   const patients = patientsResult.data || [];
   const evolutions = evolutionsResult.data || [];
   const completedEvolutions = evolutions.filter((e: any) => e.transcription_status === "completed" && e.google_doc_append_status === "completed");
-  const processingEvolutions = evolutions.filter((e: any) => e.transcription_status === "processing" || e.google_doc_append_status === "pending");
+  const processingEvolutions = evolutions.filter((e: any) => 
+    (e.transcription_status === "processing" || e.google_doc_append_status === "pending") &&
+    e.created_at && (Date.now() - new Date(e.created_at).getTime()) > 30 * 60 * 1000
+  );
   const failedEvolutions = evolutions.filter((e: any) => e.transcription_status === "failed" || e.google_doc_append_status === "failed");
   const linkedRecordsCount = patients.filter((p: any) => Boolean(String(p.google_doc_id || "").trim())).length;
   const events = eventsResult.data || [];
@@ -137,6 +140,8 @@ export async function recalculateLifecycleUserState(deps: LifecycleDependencies,
     nextRelationshipEmailEligibleAt: existingStateResult.data?.next_relationship_email_eligible_at || null,
     firstEvolutionCompletedAt,
     latestEvolutionAt,
+    firstPatientAt,
+    firstRecordLinkedAt,
     distinctActivityDays: [...activityDates]
   };
 }

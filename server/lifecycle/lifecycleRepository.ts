@@ -130,6 +130,8 @@ export function mapState(row: any): LifecycleState {
     nextRelationshipEmailEligibleAt: row.next_relationship_email_eligible_at || null,
     firstEvolutionCompletedAt: row.first_evolution_completed_at || null,
     latestEvolutionAt: row.latest_evolution_at || null,
+    firstPatientAt: row.first_patient_at || null,
+    firstRecordLinkedAt: row.first_record_linked_at || null,
     distinctActivityDays: Array.isArray(row.distinct_activity_days) ? row.distinct_activity_days : []
   };
 }

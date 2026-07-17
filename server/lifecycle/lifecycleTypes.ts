@@ -44,6 +44,8 @@ export type LifecycleState = {
   nextRelationshipEmailEligibleAt: string | null;
   firstEvolutionCompletedAt: string | null;
   latestEvolutionAt: string | null;
+  firstPatientAt: string | null;
+  firstRecordLinkedAt: string | null;
   distinctActivityDays: string[];
 };
 

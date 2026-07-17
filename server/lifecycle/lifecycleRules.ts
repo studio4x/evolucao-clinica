@@ -89,10 +89,10 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
       return Boolean(state.lastLoginAt) && state.patientsCount === 0 && hoursSince(state.lastLoginAt, now) >= 24
         ? createCandidate(rule, state, now, `logged-in:${period}`, "login sem paciente cadastrado") : null;
     case "patient_without_linked_record":
-      return state.patientsCount > 0 && state.linkedRecordsCount === 0
+      return state.patientsCount > 0 && state.linkedRecordsCount === 0 && hoursSince(state.firstPatientAt, now) >= 24
         ? createCandidate(rule, state, now, `patient:${period}`, "paciente sem prontuário vinculado") : null;
     case "linked_record_without_evolution":
-      return state.linkedRecordsCount > 0 && state.evolutionsCount === 0
+      return state.linkedRecordsCount > 0 && state.evolutionsCount === 0 && hoursSince(state.firstRecordLinkedAt, now) >= 24
         ? createCandidate(rule, state, now, `record:${period}`, "prontuário sem evolução concluída") : null;
     case "evolution_processing_too_long":
       return state.processingEvolutionsCount > 0

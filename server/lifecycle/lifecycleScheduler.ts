@@ -149,7 +149,27 @@ async function scheduleForEnrollment(
     sequence = null;
   }
 
-  const chosen = chooseHighestPriority([...candidates, ...(sequence ? [sequence] : [])]);
+  const allCandidates = [...candidates, ...(sequence ? [sequence] : [])];
+  if (allCandidates.length === 0) return "nothing_due";
+
+  const candidateDedupeKeys = allCandidates.map(c => 
+    `${c.dispatchType}:${state.userId}:${c.messageKey}:${c.dedupePeriodKey}`
+  );
+
+  const { data: existingDispatches, error: dedupeError } = await deps.supabaseAdmin
+    .from("lifecycle_dispatches")
+    .select("dedupe_key")
+    .in("dedupe_key", candidateDedupeKeys);
+
+  if (dedupeError) throw new Error(dedupeError.message);
+
+  const existingDedupeSet = new Set((existingDispatches || []).map((d: any) => d.dedupe_key));
+  const eligibleCandidates = allCandidates.filter(c => {
+    const key = `${c.dispatchType}:${state.userId}:${c.messageKey}:${c.dedupePeriodKey}`;
+    return !existingDedupeSet.has(key);
+  });
+
+  const chosen = chooseHighestPriority(eligibleCandidates);
   if (!chosen) return "nothing_due";
   if (isRelationshipCooldownBlocked(state, now, chosen)) {
     await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: campaign.id, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: `deferred:${enrollment.id}:${chosen.messageKey}:${now.toISOString().slice(0, 10)}`, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: "deferred", reason: "cooldown de 24 horas" });
