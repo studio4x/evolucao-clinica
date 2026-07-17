@@ -478,22 +478,27 @@ async function getEmailTheme() {
 }
 
 function buildEmailButton(theme: EmailTheme, href: string, label: string, backgroundColor = theme.primary) {
+  const bgStyle = backgroundColor === theme.primary 
+    ? `background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%);`
+    : `background: ${backgroundColor};`;
   return `
-    <a href="${href}" style="display:inline-block;background:${backgroundColor};color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:999px;font-size:15px;font-weight:700;letter-spacing:0.2px;">
+    <a href="${href}" style="${bgStyle} color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-size: 15px; font-weight: 700; letter-spacing: -0.1px; box-shadow: 0 6px 18px ${hexToRgba(backgroundColor, 0.35)}; font-family: 'Outfit', sans-serif; display: inline-block;">
       ${label}
     </a>
   `;
 }
 
 function buildEmailCard(theme: EmailTheme, title: string, bodyHtml: string, options: { titleColor?: string; background?: string; border?: string } = {}) {
-  const background = options.background || hexToRgba(theme.primary, 0.06);
+  const background = options.background || hexToRgba(theme.primary, 0.05);
   const border = options.border || theme.border;
   const titleColor = options.titleColor || theme.primary;
 
   return `
-    <div style="background:${background}; border:1px solid ${border}; border-radius:16px; padding:20px; margin:0 0 20px 0;">
-      <p style="margin:0 0 10px 0; font-size:14px; font-weight:700; color:${titleColor};">${title}</p>
-      ${bodyHtml}
+    <div style="background: ${background}; border: 1px solid ${border}; border-radius: 14px; padding: 24px; margin: 0 0 24px 0; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.02); font-family: 'Outfit', sans-serif;">
+      <p style="margin: 0 0 12px 0; font-size: 15px; font-weight: 800; color: ${titleColor}; letter-spacing: -0.2px; font-family: 'Outfit', sans-serif;">${title}</p>
+      <div style="color: ${theme.text}; font-size: 15px; line-height: 1.7;">
+        ${bodyHtml}
+      </div>
     </div>
   `;
 }
@@ -506,21 +511,56 @@ function buildEmailShell(theme: EmailTheme, options: {
   footerHtml?: string;
 }) {
   return `
-    <div style="font-family:'Segoe UI', Arial, sans-serif; max-width:680px; margin:0 auto; background:${theme.bg}; padding:24px;">
-      <div style="background:${theme.surface}; border:1px solid ${theme.border}; border-radius:18px; overflow:hidden; box-shadow:0 12px 32px rgba(15, 23, 42, 0.08);">
-        <div style="padding:28px; background:linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); color:#ffffff;">
-          <p style="margin:0 0 8px 0; font-size:12px; text-transform:uppercase; letter-spacing:1.4px; opacity:0.82;">${options.eyebrow || theme.brandName}</p>
-          <h1 style="margin:0; font-size:26px; line-height:1.2;">${options.title}</h1>
-          ${options.subtitle ? `<p style="margin:10px 0 0 0; font-size:15px; line-height:1.6; opacity:0.95;">${options.subtitle}</p>` : ""}
+    <div style="background-color: ${theme.bg}; padding: 32px 16px; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center;">
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800&display=swap');
+      </style>
+      <div style="max-width: 600px; margin: 0 auto; background-color: ${theme.surface}; border-radius: 20px; overflow: hidden; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.04); text-align: left; border: 1px solid ${theme.border};">
+        
+        <!-- Brand Header with Logo -->
+        <div style="padding: 24px 32px 20px 32px; border-bottom: 1px solid ${theme.border};">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td align="left" style="vertical-align: middle;">
+                <table border="0" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding-right: 12px; vertical-align: middle;">
+                      <div style="width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); box-shadow: 0 4px 10px ${hexToRgba(theme.primary, 0.3)}; display: inline-block;"></div>
+                    </td>
+                    <td style="vertical-align: middle;">
+                      <span style="font-size: 16px; font-weight: 800; letter-spacing: -0.3px; color: ${theme.text}; font-family: 'Outfit', sans-serif;">${theme.brandName}</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
         </div>
-        <div style="padding:28px; color:${theme.text}; line-height:1.7;">
-          ${options.bodyHtml}
+
+        <!-- Banner Content -->
+        <div style="padding: 36px 32px; background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); color: #ffffff;">
+          ${options.eyebrow ? `<p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.6px; color: rgba(255, 255, 255, 0.85);">${options.eyebrow}</p>` : ""}
+          <h1 style="margin: 0; font-size: 25px; font-weight: 800; line-height: 1.3; letter-spacing: -0.4px; font-family: 'Outfit', sans-serif;">${options.title}</h1>
+          ${options.subtitle ? `<p style="margin: 12px 0 0 0; font-size: 15px; line-height: 1.6; color: rgba(255, 255, 255, 0.9); font-weight: 400;">${options.subtitle}</p>` : ""}
         </div>
+
+        <!-- Body Content -->
+        <div style="padding: 36px 32px; background-color: ${theme.surface}; color: ${theme.text};">
+          <div style="color: ${theme.text}; font-size: 15px; line-height: 1.8;">
+            ${options.bodyHtml}
+          </div>
+        </div>
+
+        <!-- Footer -->
         ${options.footerHtml ? `
-          <div style="padding:16px 28px 24px; border-top:1px solid ${theme.border}; background:${hexToRgba(theme.bg, 0.92)}; color:${theme.textMuted}; font-size:12px; line-height:1.6;">
-            ${options.footerHtml}
+          <div style="padding: 24px 32px 32px 32px; background-color: ${hexToRgba(theme.bg, 0.4)}; border-top: 1px solid ${theme.border}; text-align: center; font-size: 12px; color: ${theme.textMuted}; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <p style="margin: 0 0 10px 0; font-weight: 700; color: ${theme.text}; font-size: 13px;">${theme.brandName}</p>
+            <div style="color: ${theme.textMuted};">
+              ${options.footerHtml}
+            </div>
           </div>
         ` : ""}
+
       </div>
     </div>
   `;

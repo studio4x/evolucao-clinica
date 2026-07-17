@@ -21,15 +21,23 @@ export function renderSafeLifecycleMarkdown(markdown: string): string {
     if (!trimmed) { closeList(); continue; }
     const listItem = trimmed.match(/^[-*]\s+(.+)$/);
     if (listItem) {
-      if (!listOpen) { html.push("<ul style=\"padding-left:20px;\">"); listOpen = true; }
-      html.push(`<li>${safeInlineMarkdown(listItem[1])}</li>`);
+      if (!listOpen) {
+        html.push("<ul style=\"margin:0 0 20px 0;padding-left:20px;color:#334155;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">");
+        listOpen = true;
+      }
+      html.push(`<li style=\"margin-bottom:8px;font-size:15px;line-height:1.7;\">${safeInlineMarkdown(listItem[1])}</li>`);
       continue;
     }
     closeList();
-    if (trimmed.startsWith("### ")) html.push(`<h3>${safeInlineMarkdown(trimmed.slice(4))}</h3>`);
-    else if (trimmed.startsWith("## ")) html.push(`<h2>${safeInlineMarkdown(trimmed.slice(3))}</h2>`);
-    else if (trimmed.startsWith("# ")) html.push(`<h1>${safeInlineMarkdown(trimmed.slice(2))}</h1>`);
-    else html.push(`<p>${safeInlineMarkdown(trimmed)}</p>`);
+    if (trimmed.startsWith("### ")) {
+      html.push(`<h3 style=\"margin:24px 0 12px 0;font-size:17px;font-weight:800;color:#0f172a;font-family:'Outfit',sans-serif;letter-spacing:-0.2px;\">${safeInlineMarkdown(trimmed.slice(4))}</h3>`);
+    } else if (trimmed.startsWith("## ")) {
+      html.push(`<h2 style=\"margin:28px 0 14px 0;font-size:19px;font-weight:800;color:#0f172a;font-family:'Outfit',sans-serif;letter-spacing:-0.3px;\">${safeInlineMarkdown(trimmed.slice(3))}</h2>`);
+    } else if (trimmed.startsWith("# ")) {
+      html.push(`<h1 style=\"margin:32px 0 16px 0;font-size:22px;font-weight:800;color:#0f172a;font-family:'Outfit',sans-serif;letter-spacing:-0.4px;\">${safeInlineMarkdown(trimmed.slice(2))}</h1>`);
+    } else {
+      html.push(`<p style=\"margin:0 0 16px 0;font-size:15px;line-height:1.7;color:#334155;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;\">${safeInlineMarkdown(trimmed)}</p>`);
+    }
   }
   closeList();
   return html.join("\n");
