@@ -6376,6 +6376,69 @@ export default function AdminPanel() {
                 </div>
 
                 <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-start gap-3 mb-6">
+                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-700">
+                      <MessageCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Templates para a Jornada de Ativação
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Crie este template no WhatsApp Manager para permitir o envio proativo da jornada fora da janela de 24 horas.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 mb-5 text-sm text-emerald-900">
+                    <strong>Template recomendado: um único modelo reutilizável</strong>
+                    <p className="mt-1 text-xs leading-relaxed">
+                      O conteúdo de cada passo será preenchido na variável <code className="font-mono font-bold">{'{{2}}'}</code>. Assim, não é necessário criar 15 templates diferentes.
+                    </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-brand-border overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-bg/60 px-4 py-3 border-b border-brand-border">
+                      <div>
+                        <p className="font-bold text-brand-text">ec_jornada_ativacao</p>
+                        <p className="text-xs text-brand-text-muted">Categoria: Utility · Idioma: Português (Brasil) · pt_BR</p>
+                      </div>
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Enviar para aprovação</span>
+                    </div>
+                    <div className="space-y-4 p-4 text-sm">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Nome do template</span>
+                        <code className="mt-1 block rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">ec_jornada_ativacao</code>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Corpo da mensagem</span>
+                        <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-900 px-3 py-3 font-sans text-xs leading-relaxed text-slate-100">{`Olá, {{1}}! 👋
+
+{{2}}
+
+Continue sua jornada no Evolução Clínica pelo botão abaixo.
+
+Para não receber mais mensagens de ativação, responda SAIR.`}</pre>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Botão</span>
+                        <div className="mt-1 rounded-lg border border-brand-border bg-white px-3 py-2 text-xs text-brand-text">
+                          <strong>Visitar site</strong> · Acessar a plataforma · URL: <code className="font-mono">https://www.evolucaoclinica.app.br/painel/dashboard</code>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 px-3 py-3 text-xs leading-relaxed text-blue-900">
+                        <strong>Variáveis para informar no Meta:</strong><br />
+                        <code className="font-mono">{'{{1}}'}</code> = primeiro nome do profissional · <code className="font-mono">{'{{2}}'}</code> = texto personalizado do passo da jornada.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-xl border border-brand-border bg-brand-bg/40 p-4 text-xs leading-relaxed text-brand-text-muted">
+                    <strong className="text-brand-text">No WhatsApp Manager:</strong> WhatsApp Manager → Contas → Conta do WhatsApp → Modelos de mensagem → Criar modelo. Selecione <strong>Utility</strong>, o idioma <strong>Português (Brasil)</strong>, adicione o corpo acima e um botão de URL estático. Aguarde a aprovação antes de ativar os envios da jornada.
+                  </div>
+                </div>
+
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
                       <Send className="w-6 h-6" />
