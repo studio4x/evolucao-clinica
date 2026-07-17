@@ -63,13 +63,28 @@ export async function saveLifecycleFailureAlertState(deps: LifecycleDependencies
   if (error) throw new Error(error.message || "Falha ao persistir o estado de alertas lifecycle.");
 }
 
+export function scrubSensitivePatterns(text: string): string {
+  let scrubbed = text;
+  // CPF format: XXX.XXX.XXX-XX
+  scrubbed = scrubbed.replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, "[CPF_REDACTED]");
+  // CID-10 (ICD-10 classification): e.g. F32.9, M54.5, Z00.0
+  scrubbed = scrubbed.replace(/\b[A-Z]\d{2}(?:\.\d)?\b/g, "[CID_REDACTED]");
+  // Email addresses
+  scrubbed = scrubbed.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, "[EMAIL_REDACTED]");
+  return scrubbed;
+}
+
 export function sanitizeLifecycleMetadata(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) return {};
   const allowedKeys = new Set(["status", "source", "feature", "duration_seconds", "count", "result", "route", "days", "has_google_doc"]);
   const output: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (!allowedKeys.has(key)) continue;
-    if (["string", "number", "boolean"].includes(typeof value)) output[key] = value;
+    if (typeof value === "string") {
+      output[key] = scrubSensitivePatterns(value);
+    } else if (["number", "boolean"].includes(typeof value)) {
+      output[key] = value;
+    }
   }
   return output;
 }

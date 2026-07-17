@@ -4,6 +4,7 @@ import { calculateActivationLevel, calculateTrialDaysRemaining, normalizeProfess
 import { chooseHighestPriority, evaluateKnownRule, shouldSkipSequenceStep } from '../server/lifecycle/lifecycleRules.js';
 import { renderLifecycleTemplate } from '../server/lifecycle/templates/tokenRegistry.js';
 import { renderSafeLifecycleMarkdown } from '../server/lifecycle/lifecycleRenderer.js';
+import { sanitizeLifecycleMetadata } from '../server/lifecycle/lifecycleRepository.js';
 
 const now = new Date('2026-07-16T12:00:00.000Z');
 const baseState: any = {
@@ -46,5 +47,36 @@ const claimSql = readFileSync('supabase/migrations/20260716101000_create_lifecyc
 assert.match(claimSql, /FOR UPDATE SKIP LOCKED/);
 assert.match(readFileSync('supabase/migrations/20260716100000_create_lifecycle_core.sql', 'utf8'), /dedupe_key text NOT NULL UNIQUE/);
 assert.match(readFileSync('supabase/migrations/20260716100500_create_lifecycle_event_triggers.sql', 'utf8'), /CREATE TRIGGER lifecycle_evolutions_events/);
+
+// Testes de Auditoria de Segurança / Sanitização (HIPAA/LGPD)
+const badPayload = {
+  // Chaves proibidas que devem ser completamente excluídas
+  patient_name: 'João da Silva',
+  cpf: '123.456.789-00',
+  evolution_text: 'Paciente queixando-se de dor lombar crônica sob CID-10 M54.5',
+  clinical_notes: 'Encaminhado para neurologista.',
+  
+  // Chaves permitidas (whitelist), mas contendo dados sensíveis que devem ser limpos
+  status: 'active with CPF 999.999.999-99 and ICD F32.9',
+  result: 'email send to test@example.com success',
+  count: 5,
+  has_google_doc: true
+};
+
+const sanitized = sanitizeLifecycleMetadata(badPayload);
+
+// 1. Chaves não autorizadas devem ter sido removidas
+assert.equal(sanitized.patient_name, undefined);
+assert.equal(sanitized.cpf, undefined);
+assert.equal(sanitized.evolution_text, undefined);
+assert.equal(sanitized.clinical_notes, undefined);
+
+// 2. Chaves autorizadas devem permanecer
+assert.equal(sanitized.count, 5);
+assert.equal(sanitized.has_google_doc, true);
+
+// 3. Padrões sensíveis (CPF, CID, Email) dentro de chaves autorizadas devem ter sido substituídos
+assert.equal(sanitized.status, 'active with CPF [CPF_REDACTED] and ICD [CID_REDACTED]');
+assert.equal(sanitized.result, 'email send to [EMAIL_REDACTED] success');
 
 console.log('Lifecycle unit tests passed.');

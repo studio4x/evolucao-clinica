@@ -6286,14 +6286,14 @@ export default function AdminPanel() {
                           <input
                             type="url"
                             readOnly
-                            value="https://www.evolucaoclinica.app.br/api/webhooks/whatsapp"
+                            value={`${window.location.origin}/api/webhooks/whatsapp`}
                             className="w-full rounded-xl border border-blue-200 bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none"
                           />
                           <button
                             type="button"
                             onClick={async () => {
                               try {
-                                await navigator.clipboard.writeText('https://www.evolucaoclinica.app.br/api/webhooks/whatsapp');
+                                await navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/whatsapp`);
                                 setAdminWhatsappWebhookCopied(true);
                                 setTimeout(() => setAdminWhatsappWebhookCopied(false), 2500);
                               } catch {
