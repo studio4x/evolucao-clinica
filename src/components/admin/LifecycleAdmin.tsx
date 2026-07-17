@@ -334,6 +334,7 @@ export default function LifecycleAdmin() {
   const [richTextHtml, setRichTextHtml] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
   const [sendingTestStepId, setSendingTestStepId] = useState<string | null>(null);
+  const [testStepMessage, setTestStepMessage] = useState('');
   const [sendingUserId, setSendingUserId] = useState<string | null>(null);
   const [resendingDispatchId, setResendingDispatchId] = useState<string | null>(null);
   const richTextEditorRef = useRef<HTMLDivElement | null>(null);
@@ -419,6 +420,7 @@ export default function LifecycleAdmin() {
     setEditingTemplateId(step.id);
     setTemplateDraft(templateDraftFromStep(step));
     setRichTextHtml(markdownToEditorHtml(step.body_markdown || ''));
+    setTestStepMessage('');
     setError('');
     setMessage('');
   };
@@ -427,6 +429,7 @@ export default function LifecycleAdmin() {
     setEditingTemplateId(null);
     setTemplateDraft(null);
     setRichTextHtml('');
+    setTestStepMessage('');
   };
 
   const syncRichTextDraft = () => {
@@ -492,6 +495,7 @@ export default function LifecycleAdmin() {
     }
     if (!window.confirm(`Enviar um teste deste passo para ${adminEmail}?`)) return;
     setSendingTestStepId(editingTemplate.id);
+    setTestStepMessage('');
     setError('');
     setMessage('');
     try {
@@ -507,9 +511,9 @@ export default function LifecycleAdmin() {
           ctaRoute: templateDraft.cta_route_template.trim() || templateDraft.fallback_cta_route.trim()
         })
       });
-      setMessage(result.message || `E-mail de teste enviado para ${adminEmail}.`);
+      setTestStepMessage(result.message || `E-mail de teste enviado para ${adminEmail}.`);
     } catch (err: any) {
-      setError(err.message || 'Falha ao enviar o e-mail de teste.');
+      setTestStepMessage(err.message || 'Falha ao enviar o e-mail de teste.');
     } finally {
       setSendingTestStepId(null);
     }
@@ -688,7 +692,7 @@ export default function LifecycleAdmin() {
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-brand-border bg-slate-50/50 p-4 md:p-5">{editingConditions.length > 0 && <button type="button" onClick={() => void sendTestStep()} disabled={templateSaving || sendingTestStepId === editingTemplate.id} className="btn-outline inline-flex items-center gap-2 text-sm">{sendingTestStepId === editingTemplate.id ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}{sendingTestStepId === editingTemplate.id ? 'Enviando teste...' : 'Enviar teste ao admin'}</button>}<button type="button" onClick={cancelTemplateEdit} disabled={templateSaving || Boolean(sendingTestStepId)} className="btn-outline text-sm">Cancelar</button><button type="submit" disabled={templateSaving || Boolean(sendingTestStepId)} className="btn-primary inline-flex items-center gap-2 text-sm">{templateSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}{templateSaving ? 'Salvando...' : 'Salvar modelo'}</button></div>
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-brand-border bg-slate-50/50 p-4 md:p-5">{editingConditions.length > 0 && <>{testStepMessage && <span role="status" className={'mr-auto text-xs ' + (testStepMessage.startsWith('Falha') || testStepMessage.startsWith('Não') ? 'text-red-700' : 'text-emerald-700')}>{testStepMessage}</span>}<button type="button" onClick={() => void sendTestStep()} disabled={templateSaving || sendingTestStepId === editingTemplate.id} className="btn-outline inline-flex items-center gap-2 text-sm">{sendingTestStepId === editingTemplate.id ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}{sendingTestStepId === editingTemplate.id ? 'Enviando teste...' : 'Enviar teste ao admin'}</button></>}<button type="button" onClick={cancelTemplateEdit} disabled={templateSaving || Boolean(sendingTestStepId)} className="btn-outline text-sm">Cancelar</button><button type="submit" disabled={templateSaving || Boolean(sendingTestStepId)} className="btn-primary inline-flex items-center gap-2 text-sm">{templateSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}{templateSaving ? 'Salvando...' : 'Salvar modelo'}</button></div>
           </form>
         </div>}
       </div>}
