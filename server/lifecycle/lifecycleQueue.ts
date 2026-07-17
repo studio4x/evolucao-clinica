@@ -308,6 +308,15 @@ async function validatePatientWithoutLinkedRecord(deps: LifecycleDependencies, u
   return null;
 }
 
+async function validateLoggedInWithoutPatient(deps: LifecycleDependencies, userId: string) {
+  const { count, error } = await deps.supabaseAdmin
+    .from("patients")
+    .select("id", { count: "exact", head: true })
+    .eq("professional_id", userId);
+  if (error) throw new Error(error.message || "Falha ao confirmar pacientes cadastrados.");
+  return Number(count || 0) > 0 ? "patient_already_registered" : null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -406,6 +415,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "patient_without_linked_record") {
     const skipReason = await validatePatientWithoutLinkedRecord(deps, dispatch.user_id);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "logged_in_without_patient") {
+    const skipReason = await validateLoggedInWithoutPatient(deps, dispatch.user_id);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };
