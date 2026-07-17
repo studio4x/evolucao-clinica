@@ -25,7 +25,7 @@ export default function TrialBanner() {
   }
 
   return (
-    <div className="bg-gradient-to-r from-brand-primary/95 to-brand-primary bg-brand-primary text-white py-2 px-4 shadow-md flex items-center justify-between text-xs md:text-sm font-medium z-40 relative">
+    <div className="bg-gradient-to-r from-brand-primary/95 to-brand-primary bg-brand-primary text-white py-2 px-4 shadow-md flex items-center justify-between text-xs md:text-sm font-medium z-30 relative">
       <div className="flex items-center space-x-2 mx-auto md:mx-0">
         <Sparkles className="w-4 h-4 text-amber-300 animate-pulse flex-shrink-0" />
         <span>

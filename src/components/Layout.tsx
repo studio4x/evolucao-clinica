@@ -180,7 +180,7 @@ export default function Layout() {
       <div className={`
         ${isMobileMenuOpen ? 'flex' : 'hidden'} 
         md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
-        fixed md:sticky top-[73px] md:top-0 z-50 md:z-0 h-[calc(100vh-133px)] md:h-screen shadow-sm
+        fixed md:sticky top-[73px] md:top-0 z-50 md:z-40 h-[calc(100vh-133px)] md:h-screen shadow-sm
         transition-all duration-300 md:relative overflow-y-auto md:overflow-y-visible
         ${isCollapsed ? 'w-full md:w-20' : 'w-full md:w-64'}
       `}>
