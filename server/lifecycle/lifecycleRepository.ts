@@ -142,7 +142,6 @@ export async function recordLifecycleEvent(
   if (error) throw new Error(error.message || "Falha ao registrar evento lifecycle.");
   return null;
 }
-
 export async function getLifecyclePreferences(deps: LifecycleDependencies, userId: string) {
   const { data, error } = await deps.supabaseAdmin.from("communication_preferences").select("*").eq("user_id", userId).maybeSingle();
   if (error) throw new Error(error.message || "Falha ao consultar preferências de comunicação.");
@@ -153,7 +152,7 @@ export async function getLifecyclePreferences(deps: LifecycleDependencies, userI
 }
 
 export async function updateLifecyclePreferences(deps: LifecycleDependencies, userId: string, values: Record<string, unknown>) {
-  const allowed = ["product_education_enabled", "lifecycle_enabled", "commercial_enabled", "preferred_send_time", "timezone", "email_enabled", "push_enabled", "whatsapp_enabled", "whatsapp_number"];
+  const allowed = ["product_education_enabled", "lifecycle_enabled", "commercial_enabled", "preferred_send_time", "timezone", "email_enabled", "push_enabled", "whatsapp_enabled", "whatsapp_number", "unsubscribed_at", "unsubscribe_reason"];
   const update: Record<string, unknown> = {};
   for (const key of allowed) if (key in values) update[key] = values[key];
   if (update.timezone && typeof update.timezone !== "string") throw new Error("Fuso horário inválido.");
@@ -162,6 +161,13 @@ export async function updateLifecyclePreferences(deps: LifecycleDependencies, us
     catch { throw new Error("Fuso horário inválido."); }
   }
   if (update.preferred_send_time && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(update.preferred_send_time))) throw new Error("Horário preferido inválido.");
+
+  // Se o usuário ativar alguma preferência de comunicação, limpamos o status de descadastrado
+  if (update.lifecycle_enabled === true || update.product_education_enabled === true || update.commercial_enabled === true) {
+    update.unsubscribed_at = null;
+    update.unsubscribe_reason = null;
+  }
+
   const { data, error } = await deps.supabaseAdmin.from("communication_preferences").upsert({ user_id: userId, ...update }, { onConflict: "user_id" }).select("*").single();
   if (error) throw new Error(error.message || "Falha ao atualizar preferências.");
   return data;

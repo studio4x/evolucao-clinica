@@ -14,6 +14,8 @@ type Preferences = {
   push_enabled: boolean;
   whatsapp_enabled: boolean;
   whatsapp_number: string | null;
+  unsubscribed_at: string | null;
+  unsubscribe_reason: string | null;
 };
 
 export default function CommunicationPreferences() {
@@ -27,7 +29,9 @@ export default function CommunicationPreferences() {
     email_enabled: true, 
     push_enabled: true, 
     whatsapp_enabled: true, 
-    whatsapp_number: '' 
+    whatsapp_number: '',
+    unsubscribed_at: null,
+    unsubscribe_reason: null
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -233,6 +237,32 @@ export default function CommunicationPreferences() {
               <p className="text-sm text-brand-text-muted mt-1">Escolha quais mensagens de relacionamento deseja receber.</p>
             </div>
           </div>
+
+          {preferences.unsubscribed_at ? (
+            <div className="bg-amber-50 border border-amber-200/80 p-4 rounded-xl flex gap-3 text-amber-800 mb-6 animate-fade-in">
+              <AlertTriangle className="flex-shrink-0 mt-0.5 text-amber-600" size={18} />
+              <div className="text-sm space-y-1">
+                <p className="font-semibold text-amber-900">E-mails de Relacionamento Desativados</p>
+                <p>
+                  Você solicitou o descadastro em{' '}
+                  <span className="font-medium">
+                    {new Date(preferences.unsubscribed_at).toLocaleDateString('pt-BR')}
+                  </span>.
+                </p>
+                <p className="text-xs text-amber-700/80 mt-1">
+                  Para voltar a receber novidades e orientações de ativação, basta marcar os canais desejados abaixo e salvar as preferências.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex gap-3 text-emerald-800 mb-6">
+              <Check className="flex-shrink-0 mt-0.5 text-emerald-600" size={18} />
+              <div className="text-sm space-y-1">
+                <p className="font-semibold text-emerald-900">Cadastro de E-mail Ativo</p>
+                <p className="text-xs text-emerald-700">Seu e-mail está habilitado para receber mensagens de relacionamento e novidades.</p>
+              </div>
+            </div>
+          )}
           
           {error && <p className="mb-4 rounded-lg bg-red-50 text-red-700 px-3 py-2 text-sm">{error}</p>}
           
