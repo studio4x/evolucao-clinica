@@ -39,9 +39,12 @@ export async function sendNotification(payload: NotificationPayload) {
       })
     });
 
+    const responseData = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
+      const errData = responseData;
       console.error('[NotificationHelper] Erro do servidor ao enviar notificação:', errData.error || res.statusText);
+    } else if (responseData?.email && responseData.email.sent === false) {
+      console.error('[NotificationHelper] Notificação criada, mas o e-mail não foi enviado:', responseData.email.error || 'erro não informado');
     } else {
       console.log('[NotificationHelper] Notificação disparada com sucesso.');
     }

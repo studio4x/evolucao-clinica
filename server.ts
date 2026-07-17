@@ -3285,12 +3285,15 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
 // 4. Enviar Notificação (In-App, Push e E-mail)
 app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   const { userId, title, content, type = "info", link, imageUrl } = req.body;
-  const channels: NotificationChannels = {
-    inApp: req.body?.channels?.inApp !== false,
-    push: req.body?.channels?.push !== false,
-    email: req.body?.channels?.email !== false
-  };
   const notificationSource: NotificationOrigin = req.body.source === "platform" ? "platform" : "manual";
+  const requestedChannels = req.body?.channels || {};
+  const channels: NotificationChannels = {
+    inApp: requestedChannels.inApp !== false,
+    push: requestedChannels.push !== false,
+    // Notificações manuais do sistema sempre devem acompanhar o push por e-mail.
+    // Isso também protege clientes/PWAs antigos que ainda enviam email: false.
+    email: notificationSource === "manual" || requestedChannels.email !== false
+  };
   
   if (!title || !content) {
     return res.status(400).json({ error: "Titulo e mensagem sao obrigatorios" });
