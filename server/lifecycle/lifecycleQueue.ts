@@ -46,6 +46,44 @@ async function markFailure(deps: LifecycleDependencies, dispatch: any, error: un
   }).eq("id", dispatch.id);
 }
 
+async function advanceSequenceEnrollment(deps: LifecycleDependencies, dispatch: any, step: any) {
+  if (dispatch.dispatch_type !== "sequence" || !dispatch.enrollment_id || !step?.position) return;
+
+  const { data: enrollment, error: enrollmentError } = await deps.supabaseAdmin
+    .from("lifecycle_enrollments")
+    .select("id, current_position, status")
+    .eq("id", dispatch.enrollment_id)
+    .maybeSingle();
+  if (enrollmentError) throw new Error(enrollmentError.message || "Falha ao consultar matrícula após envio lifecycle.");
+  if (!enrollment || enrollment.status !== "active") return;
+
+  const sentPosition = Number(step.position);
+  if (Number(enrollment.current_position || 0) >= sentPosition) return;
+
+  const { data: nextStep, error: nextStepError } = await deps.supabaseAdmin
+    .from("lifecycle_steps")
+    .select("position")
+    .eq("campaign_id", dispatch.campaign_id)
+    .eq("status", "active")
+    .eq("enabled", true)
+    .gt("position", sentPosition)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (nextStepError) throw new Error(nextStepError.message || "Falha ao consultar próximo passo lifecycle.");
+
+  const { error: updateError } = await deps.supabaseAdmin
+    .from("lifecycle_enrollments")
+    .update({
+      current_position: sentPosition,
+      next_step_at: nextStep ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() : null,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", enrollment.id)
+    .lt("current_position", sentPosition);
+  if (updateError) throw new Error(updateError.message || "Falha ao avançar matrícula lifecycle.");
+}
+
 function getFailureAlertThreshold() {
   const configured = Number(process.env.LIFECYCLE_FAILURE_ALERT_THRESHOLD);
   return Number.isFinite(configured) && configured >= 1 ? Math.min(Math.floor(configured), 100) : LIFECYCLE_FAILURE_ALERT_THRESHOLD;
@@ -277,6 +315,11 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       rendered_text: rendered.text,
       updated_at: new Date().toISOString()
     }).eq("id", dispatch.id);
+    try {
+      await advanceSequenceEnrollment(deps, dispatch, stepResult.data);
+    } catch (advanceError) {
+      console.error(`[Lifecycle Queue] E-mail enviado, mas não foi possível avançar a matrícula ${dispatch.enrollment_id}:`, advanceError);
+    }
     return { status: "sent", provider: "smtp" };
   }
 
@@ -388,6 +431,11 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     rendered_text: rendered.text,
     updated_at: new Date().toISOString()
   }).eq("id", dispatch.id);
+  try {
+    await advanceSequenceEnrollment(deps, dispatch, stepResult.data);
+  } catch (advanceError) {
+    console.error(`[Lifecycle Queue] E-mail enviado, mas não foi possível avançar a matrícula ${dispatch.enrollment_id}:`, advanceError);
+  }
 
   if (dispatch.dispatch_type !== "transactional_bridge") {
     await deps.supabaseAdmin.from("lifecycle_user_state").update({

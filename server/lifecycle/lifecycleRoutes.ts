@@ -265,7 +265,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         if (!step) return res.status(404).json({ error: "Passo lifecycle não encontrado nesta campanha." });
         if (step.status !== "active" || step.enabled !== true) return res.status(400).json({ error: "O passo atual não está ativo para envio." });
 
-        const expectedPosition = Number(enrollment.current_position || 0) || 1;
+        const expectedPosition = Number(enrollment.current_position || 0) + 1;
         if (Number(step.position) !== expectedPosition) return res.status(400).json({ error: "O passo informado não é o passo atual deste usuário." });
 
         const runtime = await getLifecycleRuntimeConfig(deps);
