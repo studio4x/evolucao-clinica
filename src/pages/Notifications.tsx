@@ -23,6 +23,12 @@ export default function Notifications() {
   const { user, profileRole } = useAuthStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Push states
+  const [isPushSupported, setIsPushSupported] = useState(false);
+  const [isPushSubscribed, setIsPushSubscribed] = useState(false);
+  const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
+  const [pushLoading, setPushLoading] = useState(false);
   
   // SMTP settings states (for admin)
   const [smtpHost, setSmtpHost] = useState('');
@@ -128,9 +134,28 @@ export default function Notifications() {
     }
   };
 
+  // Checar suporte e estado de Push
+  const checkPushSubscription = async () => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setIsPushSupported(false);
+      return;
+    }
+    setIsPushSupported(true);
+    setPushPermission(Notification.permission);
+    
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setIsPushSubscribed(!!sub);
+    } catch (err) {
+      console.error('Erro ao verificar inscricao de push:', err);
+    }
+  };
+
   useEffect(() => {
     if (user) {
       fetchNotifications();
+      checkPushSubscription();
       fetchSmtpSettings();
 
       // Realtime subscription para receber novas notificacoes instantaneamente
@@ -151,7 +176,121 @@ export default function Notifications() {
     }
   }, [user, profileRole]);
 
-  // A lógica de Notificações Push foi migrada para a página de preferências.
+  // Converter string VAPID para Uint8Array
+  const urlBase64ToUint8Array = (base64String: string) => {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  };
+
+  // Habilitar Notificações Push
+  const subscribePush = async () => {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      // Solicitar permissao
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      
+      if (permission !== 'granted') {
+        throw new Error('Permissao de notificacao nao concedida.');
+      }
+
+      // Buscar VAPID public key da API do Express
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      
+      const keyRes = await fetch('/api/notifications/vapid-public-key', {
+        cache: 'no-store'
+      });
+      const { publicKey } = await keyRes.json();
+      if (!publicKey) throw new Error('Falha ao obter chave publica VAPID do servidor.');
+
+      const reg = await navigator.serviceWorker.ready;
+      let applicationServerKey: Uint8Array;
+      try {
+        applicationServerKey = urlBase64ToUint8Array(String(publicKey).trim());
+      } catch {
+        throw new Error('Chave VAPID inválida recebida do servidor. Regrave as chaves Web Push no painel administrativo.');
+      }
+      
+      // Inscrever no push manager
+      let subscription;
+      try {
+        subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey
+        });
+      } catch (subscribeErr: any) {
+        if (subscribeErr?.name === 'AbortError') {
+          throw new Error('Falha ao registrar no serviço push do navegador. Verifique as chaves Web Push/VAPID configuradas no painel administrativo.');
+        }
+        throw subscribeErr;
+      }
+
+      // Salvar inscricao no backend Express
+      const res = await fetch('/api/notifications/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ subscription })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Erro ao registrar inscricao no servidor.');
+      }
+
+      setIsPushSubscribed(true);
+    } catch (err: any) {
+      console.error('Erro ao ativar push:', err);
+      alert(err.message || 'Erro ao ativar notificações push.');
+    } finally {
+      setPushLoading(false);
+    }
+  };
+
+  // Desativar Notificações Push
+  const unsubscribePush = async () => {
+    if (!user) return;
+    setPushLoading(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      
+      if (sub) {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+
+        // Remover no servidor Express
+        await fetch('/api/notifications/unsubscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ endpoint: sub.endpoint })
+        });
+
+        // Cancelar inscricao no navegador
+        await sub.unsubscribe();
+      }
+      
+      setIsPushSubscribed(false);
+    } catch (err: any) {
+      console.error('Erro ao desativar push:', err);
+      alert('Erro ao desativar notificações push.');
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   // 6. Marcar Notificação específica como lida
   const markAsRead = async (id: string) => {
@@ -384,6 +523,66 @@ export default function Notifications() {
         {/* Lado Direito: Controles Push & SMTP Admin (1/3 de largura) */}
         <div className="space-y-6">
           
+          {/* Caixa de Configurações Push do Usuário */}
+          <div className="bg-white rounded-2xl border border-brand-border/60 shadow-sm p-6 space-y-5">
+            <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+              <Bell className="text-brand-primary w-5 h-5" />
+              <span>Notificações no Navegador</span>
+            </h3>
+            
+            {!isPushSupported ? (
+              <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex gap-3 text-amber-800">
+                <AlertTriangle className="flex-shrink-0 mt-0.5" size={18} />
+                <div className="text-xs space-y-1">
+                  <p className="font-semibold">Navegador não suportado</p>
+                  <p>Seu navegador atual ou modo de navegação privada não possui suporte a notificações push nativas.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between bg-brand-bg/50 p-4 rounded-xl border border-brand-border/40">
+                  <div>
+                    <p className="text-xs font-semibold text-brand-text">Status do Browser</p>
+                    <p className="text-xs text-brand-text-muted mt-0.5">
+                      {pushPermission === 'granted' ? 'Permitido ✅' :
+                       pushPermission === 'denied' ? 'Bloqueado ❌' : 'Não Solicitado 🔔'}
+                    </p>
+                  </div>
+                  
+                  {pushPermission === 'denied' && (
+                    <span className="text-[10px] text-red-600 bg-red-50 px-2 py-1 rounded font-medium border border-red-100">Desbloqueie no cadeado</span>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  {isPushSubscribed ? (
+                    <button
+                      onClick={unsubscribePush}
+                      disabled={pushLoading}
+                      className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 font-medium transition-colors text-sm disabled:opacity-50"
+                    >
+                      {pushLoading ? <Loader2 className="animate-spin" size={18} /> : <BellOff size={18} />}
+                      <span>Desativar Notificações Push</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={subscribePush}
+                      disabled={pushLoading || pushPermission === 'denied'}
+                      className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary text-white hover:bg-brand-primary-dark font-medium transition-colors text-sm disabled:opacity-50"
+                    >
+                      {pushLoading ? <Loader2 className="animate-spin" size={18} /> : <Bell size={18} />}
+                      <span>Ativar Notificações Push</span>
+                    </button>
+                  )}
+                  
+                  <p className="text-[10px] text-brand-text-muted leading-relaxed text-center">
+                    Permite receber notificações do app diretamente na área de trabalho ou tela de bloqueio do celular, mesmo que o navegador esteja fechado.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Caixa de Preferências de Comunicação */}
           <div className="bg-white rounded-2xl border border-brand-border/60 shadow-sm p-6 space-y-4">
             <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
