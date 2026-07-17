@@ -134,9 +134,11 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
     case "inactive_7d":
       return !isSubscriber(state) && activityAge >= 7 && activityAge < 14
         ? createCandidate(rule, state, now, `inactive-7d:${period}`, "sete dias sem acesso") : null;
-    case "inactive_14d":
-      return !isSubscriber(state) && activityAge >= 14
+    case "inactive_14d": {
+      const trialEndedWithoutSubscription = Boolean(state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active");
+      return !trialEndedWithoutSubscription && activityAge >= Number(rule.condition_config?.days || 14)
         ? createCandidate(rule, state, now, `inactive-14d:${period}`, "quatorze dias sem acesso") : null;
+    }
     case "subscription_started":
       return isSubscriber(state) && state.subscriptionStartedAt && hoursSince(state.subscriptionStartedAt, now) <= 48
         ? createCandidate(rule, state, now, `subscription-started:${state.subscriptionStartedAt}`, "assinatura ativa") : null;

@@ -393,6 +393,31 @@ async function validateTrialRecovery(deps: LifecycleDependencies, userId: string
   return null;
 }
 
+async function validateInactiveFourteenDays(deps: LifecycleDependencies, userId: string, rule: any) {
+  const [{ data: professional, error: professionalError }, { data: state, error: stateError }, { data: subscriptionEvents, error: eventsError }, { data: technicalDispatch, error: technicalDispatchError }] = await Promise.all([
+    deps.supabaseAdmin.from("professionals").select("status, subscription_status, trial_ends_at").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_user_state").select("last_activity_at, failed_evolutions_count, processing_evolutions_count").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_events").select("event_name, occurred_at").eq("user_id", userId).in("event_name", ["subscription_cancel_requested", "subscription_started", "subscription_renewed", "subscription_cancelled"]).order("occurred_at", { ascending: false }).limit(1).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_dispatches").select("id").eq("user_id", userId).eq("message_key", "conditional:evolution_processing_too_long").eq("status", "sent").limit(1).maybeSingle()
+  ]);
+  if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar a disponibilidade da conta.");
+  if (stateError) throw new Error(stateError.message || "Falha ao confirmar a última atividade.");
+  if (eventsError) throw new Error(eventsError.message || "Falha ao confirmar o cancelamento da assinatura.");
+  if (technicalDispatchError) throw new Error(technicalDispatchError.message || "Falha ao verificar alerta técnico anterior.");
+  if (professional?.status !== "active") return "account_no_longer_available";
+
+  const trialEndsAt = professional?.trial_ends_at ? new Date(professional.trial_ends_at).getTime() : 0;
+  if (trialEndsAt > 0 && trialEndsAt <= Date.now() && professional?.subscription_status !== "active") return "trial_recovery_message_required";
+  if (subscriptionEvents?.event_name === "subscription_cancel_requested") return "subscription_cancellation_requested";
+  if (technicalDispatch?.id && (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0)) return "technical_issue_already_notified";
+
+  const minimumDays = Number(rule?.condition_config?.days || 14);
+  const lastActivityAt = state?.last_activity_at ? new Date(state.last_activity_at).getTime() : 0;
+  const inactiveDays = lastActivityAt > 0 ? (Date.now() - lastActivityAt) / 86400000 : Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays) return "user_already_returned_or_interval_not_elapsed";
+  return null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -519,6 +544,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "trial_recovery_2d" || ruleResult.data?.rule_key === "trial_recovery_7d") {
     const skipReason = await validateTrialRecovery(deps, dispatch.user_id, ruleResult.data);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "inactive_14d") {
+    const skipReason = await validateInactiveFourteenDays(deps, dispatch.user_id, ruleResult.data);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };
