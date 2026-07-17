@@ -8,6 +8,7 @@ type CampaignTab = 'flows' | 'templates' | 'instances' | 'logs';
 type TemplateDraft = {
   subject_template: string;
   preheader_template: string;
+  wait_hours: string;
   body_markdown: string;
   cta_label_template: string;
   cta_route_template: string;
@@ -154,6 +155,7 @@ function templateDraftFromStep(step: any): TemplateDraft {
   return {
     subject_template: step.subject_template || '',
     preheader_template: step.preheader_template || '',
+    wait_hours: String(Number(step.day_offset || 0) * 24),
     body_markdown: step.body_markdown || '',
     cta_label_template: step.cta_label_template || '',
     cta_route_template: step.cta_route_template || '',
@@ -387,20 +389,26 @@ export default function LifecycleAdmin() {
       return;
     }
 
+    const waitHoursValue = Number(templateDraft.wait_hours);
+    if (!Number.isInteger(waitHoursValue) || waitHoursValue < 0 || waitHoursValue % 24 !== 0) {
+      setError('O tempo de espera deve ser um número inteiro igual ou maior que zero, em múltiplos de 24 horas.');
+      return;
+    }
+
     setTemplateSaving(true);
     setError('');
     try {
       await api('/api/admin/lifecycle/steps/' + editingTemplateId, {
         method: 'PUT',
         body: JSON.stringify({
-          ...templateDraft,
           subject_template: templateDraft.subject_template.trim(),
           preheader_template: templateDraft.preheader_template.trim() || null,
           body_markdown: templateDraft.body_markdown.trim(),
           cta_label_template: templateDraft.cta_label_template.trim() || null,
           cta_route_template: templateDraft.cta_route_template.trim() || null,
           fallback_cta_route: templateDraft.fallback_cta_route.trim() || null,
-          category: templateDraft.category.trim() || 'education'
+          category: templateDraft.category.trim() || 'education',
+          day_offset: waitHoursValue / 24
         })
       });
       setMessage('Modelo atualizado com sucesso.');
@@ -505,7 +513,7 @@ export default function LifecycleAdmin() {
               {campaign.status === 'active' ? <button onClick={() => void updateCampaign(campaign, 'paused')} className="btn-outline inline-flex items-center gap-1.5 text-xs"><CirclePause size={14} /> Pausar</button> : campaign.status !== 'archived' && <button onClick={() => void updateCampaign(campaign, 'active')} className="btn-primary inline-flex items-center gap-1.5 text-xs"><CirclePlay size={14} /> Ativar</button>}
             </div>
           </header>
-          {(steps[campaign.id] || []).length === 0 ? <div className="p-6 text-sm text-brand-text-muted">Nenhum passo encontrado nesta campanha.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="border-b border-brand-border text-brand-text-muted"><tr><th className="w-16 px-4 py-3 text-center font-medium">Ordem</th><th className="px-4 py-3 text-left font-medium">Modelo</th><th className="px-4 py-3 text-left font-medium">Espera (h)</th><th className="px-4 py-3 text-left font-medium">Tipo</th><th className="px-4 py-3 text-left font-medium">Condição</th><th className="px-4 py-3 text-left font-medium">Estado</th><th className="px-4 py-3 text-right font-medium">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{[...(steps[campaign.id] || [])].sort((a, b) => a.position - b.position).map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="bg-slate-50/60 px-4 py-4 text-center font-bold text-brand-text">{step.position}</td><td className="px-4 py-4"><strong className="block max-w-[360px] truncate font-medium text-brand-text">{step.subject_template}</strong><span className="mt-0.5 block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || step.step_key}</span></td><td className="px-4 py-4 whitespace-nowrap">{waitHours(step)}</td><td className="px-4 py-4"><span className="rounded-full border border-brand-border px-2.5 py-1 text-xs font-medium">{stepType(step)}</span></td><td className="px-4 py-4"><span className={stepCondition(step, rules) === '—' ? 'text-brand-text-muted' : 'font-mono text-xs text-brand-text-muted'}>{stepCondition(step, rules)}</span></td><td className="px-4 py-4"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (step.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>{step.status === 'active' ? 'Ativo' : 'Rascunho'}</span></td><td className="px-4 py-4 text-right"><button onClick={() => void updateStep(step)} className="btn-outline whitespace-nowrap text-xs">{step.status === 'active' ? 'Voltar para rascunho' : 'Validar e ativar'}</button></td></tr>)}</tbody></table></div>}
+          {(steps[campaign.id] || []).length === 0 ? <div className="p-6 text-sm text-brand-text-muted">Nenhum passo encontrado nesta campanha.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead className="border-b border-brand-border text-brand-text-muted"><tr><th className="w-16 px-4 py-3 text-center font-medium">Ordem</th><th className="px-4 py-3 text-left font-medium">Modelo</th><th className="px-4 py-3 text-left font-medium">Espera (h)</th><th className="px-4 py-3 text-left font-medium">Tipo</th><th className="px-4 py-3 text-left font-medium">Condição</th><th className="px-4 py-3 text-left font-medium">Estado</th><th className="px-4 py-3 text-right font-medium">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{[...(steps[campaign.id] || [])].sort((a, b) => a.position - b.position).map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="bg-slate-50/60 px-4 py-4 text-center font-bold text-brand-text">{step.position}</td><td className="px-4 py-4"><strong className="block max-w-[360px] truncate font-medium text-brand-text">{step.subject_template}</strong><span className="mt-0.5 block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || step.step_key}</span></td><td className="px-4 py-4 whitespace-nowrap">{waitHours(step)}</td><td className="px-4 py-4"><span className="rounded-full border border-brand-border px-2.5 py-1 text-xs font-medium">{stepType(step)}</span></td><td className="px-4 py-4"><span className={stepCondition(step, rules) === '—' ? 'text-brand-text-muted' : 'font-mono text-xs text-brand-text-muted'}>{stepCondition(step, rules)}</span></td><td className="px-4 py-4"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (step.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>{step.status === 'active' ? 'Ativo' : 'Rascunho'}</span></td><td className="px-4 py-4 text-right"><div className="inline-flex flex-wrap justify-end gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 whitespace-nowrap text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline whitespace-nowrap text-xs">{step.status === 'active' ? 'Voltar para rascunho' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>}
         </section>)}
       </div>}
 
@@ -520,9 +528,10 @@ export default function LifecycleAdmin() {
             </div>
 
             <div className="overflow-y-auto p-5 md:p-6 space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Assunto</span><input required value={templateDraft.subject_template} onChange={(event) => setTemplateDraft({ ...templateDraft, subject_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Preheader</span><input value={templateDraft.preheader_template} onChange={(event) => setTemplateDraft({ ...templateDraft, preheader_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Tempo de espera (h)</span><input required type="number" min={0} step={24} value={templateDraft.wait_hours} onChange={(event) => setTemplateDraft({ ...templateDraft, wait_hours: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /><small className="mt-1 block text-xs text-brand-text-muted">Use múltiplos de 24 horas.</small></label>
               </div>
 
               <div>
