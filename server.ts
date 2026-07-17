@@ -511,6 +511,7 @@ function buildEmailShell(theme: EmailTheme, options: {
   title: string;
   secondaryTitle?: string;
   compactTitle?: boolean;
+  hideTitle?: boolean;
   subtitle?: string;
   eyebrow?: string;
   headerEyebrow?: string;
@@ -520,6 +521,9 @@ function buildEmailShell(theme: EmailTheme, options: {
   const titleStyle = options.compactTitle
     ? "margin: 0; font-size: 18px; font-weight: 700; line-height: 1.3; letter-spacing: 0; color: rgba(255, 255, 255, 0.86); font-family: 'Outfit', sans-serif;"
     : "margin: 0; font-size: 25px; font-weight: 800; line-height: 1.3; letter-spacing: -0.4px; font-family: 'Outfit', sans-serif;";
+  const secondaryTitleStyle = options.hideTitle
+    ? "margin: 0; font-size: 25px; font-weight: 800; line-height: 1.3; letter-spacing: -0.4px; font-family: 'Outfit', sans-serif;"
+    : "margin: 10px 0 0 0; font-size: 25px; font-weight: 800; line-height: 1.3; letter-spacing: -0.4px; font-family: 'Outfit', sans-serif;";
 
   return `
     <div style="background-color: ${theme.bg}; padding: 32px 16px; font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; text-align: center;">
@@ -547,8 +551,8 @@ function buildEmailShell(theme: EmailTheme, options: {
         <!-- Banner Content -->
         <div style="padding: 36px 32px; background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); color: #ffffff;">
           ${options.eyebrow ? `<p style="margin: 0 0 10px 0; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.6px; color: rgba(255, 255, 255, 0.85);">${options.eyebrow}</p>` : ""}
-          <h1 style="${titleStyle}">${options.title}</h1>
-          ${options.secondaryTitle ? `<h1 style="margin: 10px 0 0 0; font-size: 25px; font-weight: 800; line-height: 1.3; letter-spacing: -0.4px; font-family: 'Outfit', sans-serif;">${options.secondaryTitle}</h1>` : ""}
+          ${options.hideTitle ? "" : `<h1 style="${titleStyle}">${options.title}</h1>`}
+          ${options.secondaryTitle ? `<h1 style="${secondaryTitleStyle}">${options.secondaryTitle}</h1>` : ""}
           ${options.subtitle ? `<p style="margin: 12px 0 0 0; font-size: 15px; line-height: 1.6; color: rgba(255, 255, 255, 0.9); font-weight: 400;">${options.subtitle}</p>` : ""}
         </div>
 
@@ -3201,6 +3205,7 @@ async function sendNotificationInternal(
           title: tc.label,
           secondaryTitle: safeTitle,
           compactTitle: true,
+          hideTitle: true,
           headerEyebrow: "Notificação do Sistema",
           bodyHtml: `
             ${safeImageUrl ? `<div style="margin:0 0 20px 0; border-radius:10px; overflow:hidden; border:1px solid ${theme.border};"><img src="${safeImageUrl}" alt="Imagem" style="display:block; max-width:100%; max-height:240px; object-fit:cover; width:100%;" /></div>` : ""}
@@ -3210,14 +3215,14 @@ async function sendNotificationInternal(
               ${buildEmailButton(theme, viewUrl, "Ver no Aplicativo →")}
             </div>
           `,
-          footerHtml: `Esta mensagem foi enviada automaticamente pela plataforma <strong>Evolução Clínica</strong>.<br/>Por favor, não responda a este e-mail.<br/><a href="${escapeHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeHtml(supportUrl)}">Suporte</a>`
+          footerHtml: `Esta mensagem foi enviada automaticamente pela nossa plataforma.<br/>Por favor, não responda a este e-mail.<br/><a href="${escapeHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeHtml(supportUrl)}">Suporte</a>`
         });
         const emailResult = await sendTransactionalEmail(settings, {
           userId: targetUserId,
           recipientEmail: targetEmail,
           recipientName: profData?.full_name || null,
           subject: `${tc.icon} ${title}`,
-          textContent: `${greetingText}\n\n${content}\n\nVer detalhes no app: ${viewUrl}\n\nEsta mensagem foi enviada automaticamente pela plataforma Evolução Clínica.\nPor favor, não responda a este e-mail.\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}\nSuporte: ${supportUrl}`,
+          textContent: `${greetingText}\n\n${content}\n\nVer detalhes no app: ${viewUrl}\n\nEsta mensagem foi enviada automaticamente pela nossa plataforma.\nPor favor, não responda a este e-mail.\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}\nSuporte: ${supportUrl}`,
           htmlContent,
           source: "notification",
           relatedNotificationId: notification.id,

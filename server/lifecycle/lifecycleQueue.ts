@@ -360,7 +360,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
         subtitle: escapeLifecycleHtml(rendered.preheader),
         headerEyebrow: "Jornada de Usuários",
         bodyHtml: `${rendered.bodyHtml}<div style="text-align:center;margin:28px 0 8px 0;">${deps.buildEmailButton(theme, actionUrl, escapeLifecycleHtml(rendered.ctaLabel))}</div>`,
-        footerHtml: `Esta mensagem foi enviada automaticamente pela plataforma <strong>Evolução Clínica</strong>.<br/>Por favor, não responda a este e-mail.<br/><a href="${escapeLifecycleHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeLifecycleHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeLifecycleHtml(resolveLifecycleUrl(deps.productionOrigin, "/painel/support"))}">Suporte</a>`
+        footerHtml: `Esta mensagem foi enviada automaticamente pela nossa plataforma.<br/>Por favor, não responda a este e-mail.<br/><a href="${escapeLifecycleHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeLifecycleHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeLifecycleHtml(resolveLifecycleUrl(deps.productionOrigin, "/painel/support"))}">Suporte</a>`
       });
       const settings = await deps.getNotificationSettings();
       const result = await deps.sendTransactionalEmail(settings, {
@@ -368,7 +368,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
         recipientEmail: profile.google_email,
         recipientName: profile.full_name || "Profissional",
         subject: rendered.subject,
-        textContent: `${rendered.text}\n\n${rendered.ctaLabel}: ${actionUrl}\n\nEsta mensagem foi enviada automaticamente pela plataforma Evolução Clínica.\nPor favor, não responda a este e-mail.\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}`,
+        textContent: `${rendered.text}\n\n${rendered.ctaLabel}: ${actionUrl}\n\nEsta mensagem foi enviada automaticamente pela nossa plataforma.\nPor favor, não responda a este e-mail.\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}`,
         htmlContent,
         source: dispatch.dispatch_type === "conditional" ? "lifecycle-conditional" : "lifecycle",
         allowFallback: true
