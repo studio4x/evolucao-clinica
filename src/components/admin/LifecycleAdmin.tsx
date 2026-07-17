@@ -40,6 +40,24 @@ function campaignStatusClass(status: string) {
   return 'bg-blue-50 text-blue-700 border-blue-200';
 }
 
+function enrollmentStatusLabel(status?: string | null) {
+  return ({ active: 'Ativo', paused: 'Pausado', completed: 'Concluído', cancelled: 'Cancelado', suppressed: 'Suprimido', expired: 'Expirado' } as Record<string, string>)[status || ''] || 'Não matriculado';
+}
+
+function enrollmentStatusClass(status?: string | null) {
+  if (status === 'active') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'paused') return 'bg-amber-100 text-amber-700';
+  if (status === 'completed') return 'bg-blue-100 text-blue-700';
+  if (status === 'cancelled' || status === 'expired' || status === 'suppressed') return 'bg-slate-100 text-slate-600';
+  return 'bg-slate-100 text-slate-600';
+}
+
+function formatNextExecution(value?: string | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 function stepType(step: any) {
   return step.eligibility_rule_key || step.skip_rule_key ? 'conditional' : 'always';
 }
@@ -312,7 +330,7 @@ export default function LifecycleAdmin() {
 
   const userAction = async (user: any, action: 'pause' | 'resume' | 'recalculate' | 'enroll') => {
     try {
-      await api('/api/admin/lifecycle/users/' + user.id + '/' + action, { method: 'POST', body: JSON.stringify({}) });
+      await api('/api/admin/lifecycle/users/' + user.id + '/' + action, { method: 'POST', body: JSON.stringify({ campaignKey: 'new_user_activation_15d' }) });
       setMessage('Usuário atualizado.');
       await load();
     } catch (err: any) {
@@ -344,6 +362,8 @@ export default function LifecycleAdmin() {
     ['logs', 'Logs de Envio', ScrollText]
   ];
   const templateRows = campaigns.flatMap((campaign) => (steps[campaign.id] || []).map((step) => ({ ...step, campaign })));
+  const activationCampaign = campaigns.find((campaign) => campaign.key === 'new_user_activation_15d');
+  const activationSteps = activationCampaign ? steps[activationCampaign.id] || [] : [];
   const editingTemplate = templateRows.find((step) => step.id === editingTemplateId);
 
   if (loading && !overview) return <div className="flex items-center justify-center p-12"><Loader2 className="animate-spin text-brand-primary" /></div>;
@@ -439,7 +459,7 @@ export default function LifecycleAdmin() {
         </div>}
       </div>}
 
-      {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Plano</th><th className="p-3">Jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = user.enrollments?.[0]; return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{user.state?.activation_status || '—'}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{user.subscription_plan || '—'} / {user.subscription_status || '—'}</td><td className="p-3">{enrollment?.status || 'não matriculado'}<span className="block text-xs text-brand-text-muted">{enrollment?.current_position ? `Passo ${enrollment.current_position}` : 'Sem passo iniciado'}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} className="btn-outline p-1.5"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} className="btn-outline p-1.5"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} className="btn-outline p-1.5"><CirclePlay size={14} /></button>}</div></td></tr>; })}</tbody></table>}</div>}
+      {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Passo atual</th><th className="p-3">Próxima execução</th><th className="p-3">Status da jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = activationCampaign ? user.enrollments?.find((item: any) => item.campaign_id === activationCampaign.id) : null; const currentPosition = Number(enrollment?.current_position || 0); const currentStep = activationSteps.find((step) => step.position === currentPosition) || (currentPosition === 0 ? activationSteps.find((step) => step.position === 1) : null); const nextStep = activationSteps.find((step) => step.position === currentPosition + 1); return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{user.state?.activation_status || '—'}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{enrollment ? <><strong className="block">{currentStep ? `Passo ${currentStep.position}` : 'Jornada concluída'}</strong><span className="block max-w-[260px] truncate text-xs text-brand-text-muted">{currentStep?.subject_template || 'Nenhum passo configurado'}</span></> : <span className="text-brand-text-muted">Não matriculado</span>}</td><td className="p-3 whitespace-nowrap">{enrollment ? <><strong className="block">{formatNextExecution(enrollment.next_step_at)}</strong><span className="block text-xs text-brand-text-muted">{nextStep ? `Próximo: passo ${nextStep.position}` : 'Sem próximo passo'}</span></> : '—'}</td><td className="p-3"><span className={'inline-flex rounded-full px-2.5 py-1 text-xs font-medium ' + enrollmentStatusClass(enrollment?.status)}>{enrollmentStatusLabel(enrollment?.status)}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} className="btn-outline p-1.5"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} className="btn-outline p-1.5"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} className="btn-outline p-1.5"><CirclePlay size={14} /></button>}</div></td></tr>; })}</tbody></table>}</div>}
 
       {campaignTab === 'logs' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{deliveries.length === 0 ? <EmptyState icon={ScrollText} title="Nenhum log de envio" description="Os disparos processados pela fila aparecerão aqui." /> : <table className="w-full min-w-[820px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Mensagem</th><th className="p-3">Status</th><th className="p-3">Agendada</th><th className="p-3">Tentativas</th><th className="p-3">Motivo</th></tr></thead><tbody className="divide-y divide-brand-border">{deliveries.map((item) => <tr key={item.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{item.message_key}</strong><span className="block text-xs text-brand-text-muted">{item.dispatch_type}</span></td><td className="p-3"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (item.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')}>{item.status}</span></td><td className="p-3 whitespace-nowrap">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleString('pt-BR') : '—'}</td><td className="p-3">{item.attempt_count}/{item.max_attempts}</td><td className="p-3 max-w-xs truncate">{item.skip_reason || item.failure_reason || '—'}</td></tr>)}</tbody></table>}</div>}
     </div>}

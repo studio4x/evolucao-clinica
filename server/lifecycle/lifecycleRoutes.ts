@@ -1,5 +1,5 @@
 import { getNextBestAction, chooseHighestPriority, evaluateKnownRule } from "./lifecycleRules.js";
-import { getLifecyclePreferences, getLifecycleRuntimeConfig, ensureLifecycleEnrollment, getUserProfile, recordLifecycleEvent, suppressLifecycleDispatches, updateLifecyclePreferences, hashCommunicationToken } from "./lifecycleRepository.js";
+import { getLifecyclePreferences, getLifecycleRuntimeConfig, ensureLifecycleEnrollment, getUserProfile, findCampaign, recordLifecycleEvent, suppressLifecycleDispatches, updateLifecyclePreferences, hashCommunicationToken } from "./lifecycleRepository.js";
 import { recalculateLifecycleUserState } from "./lifecycleStateService.js";
 import { processLifecycleDispatches } from "./lifecycleQueue.js";
 import { scheduleLifecycleMessages } from "./lifecycleScheduler.js";
@@ -223,8 +223,26 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ profile, state, preferences, enrollments: enrollments || [], dispatches: dispatches || [], events: events || [] });
       }));
       app.post("/api/admin/lifecycle/users/:userId/enroll", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => res.json({ enrollment: await ensureLifecycleEnrollment(deps, req.params.userId, { campaignKey: req.body?.campaignKey || "new_user_activation_15d", force: true }) })));
-      app.post("/api/admin/lifecycle/users/:userId/pause", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => { const { error } = await deps.supabaseAdmin.from("lifecycle_enrollments").update({ status: "paused", paused_at: new Date().toISOString(), pause_reason: String(req.body?.reason || "paused_by_admin") }).eq("user_id", req.params.userId).eq("status", "active"); if (error) throw new Error(error.message); return res.json({ success: true }); }));
-      app.post("/api/admin/lifecycle/users/:userId/resume", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => { const { error } = await deps.supabaseAdmin.from("lifecycle_enrollments").update({ status: "active", paused_at: null, pause_reason: null, next_step_at: new Date().toISOString() }).eq("user_id", req.params.userId).eq("status", "paused"); if (error) throw new Error(error.message); return res.json({ success: true }); }));
+      app.post("/api/admin/lifecycle/users/:userId/pause", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
+        const campaignKey = String(req.body?.campaignKey || "").trim();
+        const campaign = campaignKey ? await findCampaign(deps, campaignKey) : null;
+        if (campaignKey && !campaign) return res.status(404).json({ error: "Campanha lifecycle não encontrada." });
+        let query = deps.supabaseAdmin.from("lifecycle_enrollments").update({ status: "paused", paused_at: new Date().toISOString(), pause_reason: String(req.body?.reason || "paused_by_admin") }).eq("user_id", req.params.userId).eq("status", "active");
+        if (campaign) query = query.eq("campaign_id", campaign.id);
+        const { error } = await query;
+        if (error) throw new Error(error.message);
+        return res.json({ success: true });
+      }));
+      app.post("/api/admin/lifecycle/users/:userId/resume", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
+        const campaignKey = String(req.body?.campaignKey || "").trim();
+        const campaign = campaignKey ? await findCampaign(deps, campaignKey) : null;
+        if (campaignKey && !campaign) return res.status(404).json({ error: "Campanha lifecycle não encontrada." });
+        let query = deps.supabaseAdmin.from("lifecycle_enrollments").update({ status: "active", paused_at: null, pause_reason: null, next_step_at: new Date().toISOString() }).eq("user_id", req.params.userId).eq("status", "paused");
+        if (campaign) query = query.eq("campaign_id", campaign.id);
+        const { error } = await query;
+        if (error) throw new Error(error.message);
+        return res.json({ success: true });
+      }));
       app.post("/api/admin/lifecycle/users/:userId/recalculate", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => res.json({ state: await recalculateLifecycleUserState(deps, req.params.userId) })));
 
       app.get("/api/admin/lifecycle/deliveries", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
