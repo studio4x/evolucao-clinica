@@ -256,7 +256,7 @@ export async function ensureLifecycleEnrollment(deps: LifecycleDependencies, use
   const enrolledAt = new Date().toISOString();
   const { data: firstStep } = await deps.supabaseAdmin
     .from("lifecycle_steps")
-    .select("day_offset")
+    .select("wait_minutes")
     .eq("campaign_id", campaign.id)
     .eq("status", "active")
     .eq("enabled", true)
@@ -264,7 +264,7 @@ export async function ensureLifecycleEnrollment(deps: LifecycleDependencies, use
     .limit(1)
     .maybeSingle();
 
-  const nextStepDelayMs = firstStep ? Number(firstStep.day_offset || 0) * 86400000 : 0;
+  const nextStepDelayMs = firstStep ? Number(firstStep.wait_minutes || 0) * 60000 : 0;
   const nextStepAt = new Date(Date.now() + nextStepDelayMs).toISOString();
 
   const { data, error } = await deps.supabaseAdmin.from("lifecycle_enrollments").upsert({

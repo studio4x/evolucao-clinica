@@ -123,7 +123,7 @@ async function insertSkippedDispatch(deps: LifecycleDependencies, row: Record<st
 function sequenceDue(step: LifecycleStep | undefined, enrollment: any, now: Date): boolean {
   if (!step || enrollment.current_position >= step.position) return false;
   const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
-  const dueAt = startedAt + Number(step.day_offset || 0) * 86400000;
+  const dueAt = startedAt + Number(step.wait_minutes || 0) * 60000;
   return now.getTime() >= dueAt && (!enrollment.next_step_at || now.getTime() >= new Date(enrollment.next_step_at).getTime());
 }
 
@@ -168,7 +168,7 @@ async function scheduleForEnrollment(
       await insertSkippedDispatch(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: campaign.id, step_id: currentStep!.id, message_key: sequence.messageKey, dispatch_type: "sequence", priority: sequence.priority, status: "skipped", scheduled_for: now.toISOString(), dedupe_key: `sequence:${enrollment.id}:${currentStep!.id}`, skip_reason: skipReason, skipped_at: now.toISOString() });
       const nextStep = steps.find((s) => s.position === currentStep!.position + 1);
       const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
-      const nextStepAt = nextStep ? new Date(startedAt + Number(nextStep.day_offset || 0) * 86400000).toISOString() : null;
+      const nextStepAt = nextStep ? new Date(startedAt + Number(nextStep.wait_minutes || 0) * 60000).toISOString() : null;
       await deps.supabaseAdmin.from("lifecycle_enrollments").update({ current_position: currentStep!.position, next_step_at: nextStepAt }).eq("id", enrollment.id);
     }
     sequence = null;
@@ -237,7 +237,7 @@ async function scheduleForEnrollment(
   let nextStepAt: string | null = null;
   if (nextStep) {
     if (chosen.dispatchType === "sequence") {
-      nextStepAt = new Date(startedAt + Number(nextStep.day_offset || 0) * 86400000).toISOString();
+      nextStepAt = new Date(startedAt + Number(nextStep.wait_minutes || 0) * 60000).toISOString();
     } else {
       nextStepAt = new Date(now.getTime() + 86400000).toISOString();
     }

@@ -180,7 +180,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ steps: data || [] });
       }));
       app.put("/api/admin/lifecycle/steps/:id", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
-        const allowedKeys = ["subject_template", "preheader_template", "body_markdown", "cta_label_template", "cta_route_template", "fallback_cta_route", "priority", "category", "status", "enabled", "day_offset"];
+        const allowedKeys = ["subject_template", "preheader_template", "body_markdown", "cta_label_template", "cta_route_template", "fallback_cta_route", "priority", "category", "status", "enabled", "wait_minutes"];
         const update: Record<string, unknown> = { updated_at: new Date().toISOString() };
         for (const key of allowedKeys) if (key in (req.body || {})) update[key] = req.body[key];
         const { data, error } = await deps.supabaseAdmin.from("lifecycle_steps").update(update).eq("id", req.params.id).select("*").single();

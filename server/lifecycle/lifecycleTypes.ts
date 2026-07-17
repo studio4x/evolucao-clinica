@@ -71,7 +71,7 @@ export type LifecycleStep = {
   eligibility_rule_key?: string | null;
   skip_rule_key?: string | null;
   position: number;
-  day_offset: number;
+  wait_minutes: number;
   send_time?: string | null;
   category: string;
   priority: number;

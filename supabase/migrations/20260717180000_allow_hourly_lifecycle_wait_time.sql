@@ -1,6 +1,11 @@
--- Permite configurar tempos de espera fracionários (horas) na jornada de usuários.
--- Altera a coluna day_offset de integer para numeric.
+-- Permite configurar tempos de espera arbitrários em minutos na jornada de usuários.
+-- Renomeia a coluna day_offset para wait_minutes e converte os dados multiplicando por 1440.
 
+ALTER TABLE public.lifecycle_steps RENAME COLUMN day_offset TO wait_minutes;
+
+-- Converte dias para minutos (1 dia = 1440 minutos)
+UPDATE public.lifecycle_steps SET wait_minutes = wait_minutes * 1440;
+
+-- Corrige a check constraint de validação
 ALTER TABLE public.lifecycle_steps DROP CONSTRAINT IF EXISTS lifecycle_steps_day_offset_check;
-ALTER TABLE public.lifecycle_steps ALTER COLUMN day_offset TYPE numeric;
-ALTER TABLE public.lifecycle_steps ADD CONSTRAINT lifecycle_steps_day_offset_check CHECK (day_offset >= 0);
+ALTER TABLE public.lifecycle_steps ADD CONSTRAINT lifecycle_steps_wait_minutes_check CHECK (wait_minutes >= 0);

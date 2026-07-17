@@ -62,7 +62,7 @@ async function advanceSequenceEnrollment(deps: LifecycleDependencies, dispatch: 
 
   const { data: nextStep, error: nextStepError } = await deps.supabaseAdmin
     .from("lifecycle_steps")
-    .select("position, day_offset")
+    .select("position, wait_minutes")
     .eq("campaign_id", dispatch.campaign_id)
     .eq("status", "active")
     .eq("enabled", true)
@@ -73,7 +73,7 @@ async function advanceSequenceEnrollment(deps: LifecycleDependencies, dispatch: 
   if (nextStepError) throw new Error(nextStepError.message || "Falha ao consultar próximo passo lifecycle.");
 
   const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
-  const nextStepAt = nextStep ? new Date(startedAt + Number(nextStep.day_offset || 0) * 86400000).toISOString() : null;
+  const nextStepAt = nextStep ? new Date(startedAt + Number(nextStep.wait_minutes || 0) * 60000).toISOString() : null;
 
   const { error: updateError } = await deps.supabaseAdmin
     .from("lifecycle_enrollments")
