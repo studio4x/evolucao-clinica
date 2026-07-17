@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
-import { getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
+import { getNextActionCopy, getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
 import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
 import { escapeLifecycleHtml, renderLifecycleMessage, renderSafeLifecycleMarkdown, resolveLifecycleUrl } from "./lifecycleRenderer.js";
 import { renderLifecycleTemplate } from "./templates/tokenRegistry.js";
 import type { LifecycleDependencies, LifecycleState } from "./lifecycleTypes.js";
 
-function buildContext(state: LifecycleState, origin: string, now: Date, useSubscriberAction = false, recoveryTrial = false, feedbackUrl = "") {
+function buildContext(state: LifecycleState, origin: string, now: Date, useSubscriberAction = false, recoveryTrial = false, feedbackUrl = "", detailedAction = false) {
   const action = useSubscriberAction ? getSubscriberNextBestAction(state, now) : getNextBestAction(state, now);
+  const actionCopy = detailedAction ? getNextActionCopy(state, now) : { title: action.label, description: "Acesse a plataforma para continuar pela próxima etapa recomendada." };
   return {
     primeiro_nome: state.fullName.trim().split(/\s+/)[0] || "Profissional",
     nome_completo: state.fullName,
@@ -26,6 +27,8 @@ function buildContext(state: LifecycleState, origin: string, now: Date, useSubsc
     data_fim_teste: state.trialEndsAt ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(state.trialEndsAt)) : "",
     dias_restantes_teste: state.trialEndsAt ? Math.max(0, Math.ceil((new Date(state.trialEndsAt).getTime() - now.getTime()) / 86400000)) : 0,
     proxima_acao: action.label,
+    titulo_proxima_acao: actionCopy.title,
+    descricao_proxima_acao: actionCopy.description,
     texto_cta_proxima_acao: action.ctaLabel,
     link_acao: action.route,
     link_suporte: `${origin.replace(/\/$/, "")}/painel/support`
@@ -441,6 +444,29 @@ async function validateInactiveSevenDays(deps: LifecycleDependencies, userId: st
   return null;
 }
 
+async function validateInactiveThreeDays(deps: LifecycleDependencies, userId: string, rule: any) {
+  const [{ data: professional, error: professionalError }, { data: state, error: stateError }, { data: higherPriorityDispatch, error: higherPriorityError }] = await Promise.all([
+    deps.supabaseAdmin.from("professionals").select("status, subscription_status, trial_ends_at").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_user_state").select("last_activity_at, failed_evolutions_count, processing_evolutions_count").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_dispatches").select("id").eq("user_id", userId).in("status", ["queued", "processing", "retry"]).gt("priority", Number(rule?.priority || 0)).limit(1).maybeSingle()
+  ]);
+  if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar a disponibilidade da conta.");
+  if (stateError) throw new Error(stateError.message || "Falha ao confirmar a última atividade.");
+  if (higherPriorityError) throw new Error(higherPriorityError.message || "Falha ao verificar mensagens condicionais prioritárias.");
+  if (professional?.status !== "active") return "account_no_longer_available";
+
+  const trialEndsAt = professional?.trial_ends_at ? new Date(professional.trial_ends_at).getTime() : 0;
+  if (trialEndsAt > 0 && trialEndsAt <= Date.now() && professional?.subscription_status !== "active") return "trial_recovery_message_required";
+  if (higherPriorityDispatch?.id) return "more_specific_message_pending";
+  if (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0) return "technical_issue_requires_attention";
+
+  const minimumDays = Number(rule?.condition_config?.days || 3);
+  const lastActivityAt = state?.last_activity_at ? new Date(state.last_activity_at).getTime() : 0;
+  const inactiveDays = lastActivityAt > 0 ? (Date.now() - lastActivityAt) / 86400000 : Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays || inactiveDays >= 7) return "user_already_returned_or_interval_not_elapsed";
+  return null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -586,6 +612,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       return { status: "skipped" };
     }
   }
+  if (ruleResult.data?.rule_key === "inactive_3d") {
+    const skipReason = await validateInactiveThreeDays(deps, dispatch.user_id, ruleResult.data);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
   if (ruleResult.data?.rule_key === "first_evolution_completed") {
     const skipReason = await validateFirstEvolutionCompleted(deps, dispatch.user_id);
     if (skipReason) {
@@ -621,7 +654,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   const communicationToken = await ensureCommunicationToken(deps, dispatch.user_id);
   const feedbackUrl = `${deps.productionOrigin}/feedback/continuidade?token=${encodeURIComponent(communicationToken)}`;
   const isTrialRecovery = ruleResult.data?.rule_key === "trial_recovery_2d" || ruleResult.data?.rule_key === "trial_recovery_7d";
-  const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage", isTrialRecovery, feedbackUrl);
+  const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage", isTrialRecovery, feedbackUrl, ruleResult.data?.rule_key === "inactive_3d");
   const config = messageFromConfig(dispatch, stepResult.data, ruleResult.data);
   const rendered = renderLifecycleMessage({
     subjectTemplate: config.subject_template,

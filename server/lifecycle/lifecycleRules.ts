@@ -129,7 +129,7 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
       return !isSubscriber(state) && state.subscriptionStatus !== "active" && trialDays !== null && trialDays <= -7 && trialDays > -14
         ? createCandidate(rule, state, now, `trial-recovery-7d:${state.trialEndsAt}`, "recuperação sete dias após o teste") : null;
     case "inactive_3d":
-      return !isSubscriber(state) && activityAge >= 3 && activityAge < 7
+      return !((state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active")) && activityAge >= Number(rule.condition_config?.days || 3) && activityAge < 7
         ? createCandidate(rule, state, now, `inactive-3d:${period}`, "três dias sem acesso") : null;
     case "inactive_7d":
       return !((state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active")) && activityAge >= Number(rule.condition_config?.days || 7) && activityAge < 14
@@ -148,6 +148,14 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
     default:
       return null;
   }
+}
+
+export function getNextActionCopy(state: LifecycleState, now = new Date()): { title: string; description: string } {
+  if (state.patientsCount === 0) return { title: "Cadastre seu primeiro paciente", description: "Comece com apenas um paciente para conhecer o fluxo de organização da plataforma." };
+  if (state.linkedRecordsCount === 0) return { title: "Prepare o prontuário", description: "Crie ou vincule um documento do Google Docs ao cadastro do paciente." };
+  if (state.evolutionsCount === 0) return { title: "Crie sua primeira evolução", description: "Grave ou envie um resumo em áudio para experimentar a transcrição e a organização do registro." };
+  if (state.evolutionsCount === 1) return { title: "Confira o histórico do paciente", description: "Acesse o prontuário, confira o conteúdo registrado e faça os ajustes necessários." };
+  return { title: "Registre um atendimento recente", description: "Escolha um atendimento e retome seus registros, um de cada vez." };
 }
 
 export function shouldSkipSequenceStep(step: LifecycleStep, state: LifecycleState): string | null {
