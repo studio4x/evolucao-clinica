@@ -447,10 +447,27 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ state, candidates, selected: chooseHighestPriority(candidates as any[]), nextAction: getNextBestAction(state) });
       }));
       app.post("/api/admin/lifecycle/test-email", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
-        const recipientEmail = String(req.body?.recipientEmail || "");
-        if (!recipientEmail || !recipientEmail.includes("@")) return res.status(400).json({ error: "recipientEmail inválido." });
+        const recipientEmail = String(req.body?.recipientEmail || req.user.email || "");
+        if (!recipientEmail || !recipientEmail.includes("@")) return res.status(400).json({ error: "Não foi possível identificar o e-mail do administrador." });
+        const stepId = String(req.body?.stepId || "").trim();
+        let step: any = null;
+        if (stepId) {
+          const { data, error } = await deps.supabaseAdmin.from("lifecycle_steps").select("id, step_key, eligibility_rule_key, skip_rule_key, subject_template, preheader_template, body_markdown, cta_label_template, cta_route_template, fallback_cta_route").eq("id", stepId).maybeSingle();
+          if (error) throw new Error(error.message);
+          if (!data) return res.status(404).json({ error: "Passo lifecycle não encontrado." });
+          step = data;
+        }
+        const ruleKeys = [step?.eligibility_rule_key, step?.skip_rule_key].filter(Boolean);
+        const { data: configuredRules, error: rulesError } = ruleKeys.length
+          ? await deps.supabaseAdmin.from("lifecycle_rules").select("rule_key, name, description").in("rule_key", ruleKeys)
+          : { data: [], error: null };
+        if (rulesError) throw new Error(rulesError.message);
+        const configuredRule = (configuredRules || [])[0];
+        const fallbackSubject = configuredRule?.name ? `Orientação: ${configuredRule.name}` : "Uma nova orientação da sua jornada";
+        const fallbackPreheader = configuredRule?.description || "Uma orientação personalizada para continuar sua jornada.";
+        const fallbackBody = `Olá {{primeiro_nome}},\n\n${configuredRule?.description || "Identificamos uma próxima ação importante para você na plataforma."}\n\nAcesse sua conta para continuar pela próxima etapa recomendada.`;
         const state = await recalculateLifecycleUserState(deps, req.body?.userId || req.user.id);
-        const rendered = renderLifecycleMessage({ subjectTemplate: String(req.body?.subject || "Prévia da Jornada de Usuários"), preheaderTemplate: "Mensagem de teste", bodyTemplate: String(req.body?.body || "Esta é uma mensagem de teste do lifecycle."), ctaLabelTemplate: "Abrir plataforma", ctaRouteTemplate: "/painel/dashboard", context: mapContext(state, deps.productionOrigin) });
+        const rendered = renderLifecycleMessage({ subjectTemplate: String(req.body?.subject || step?.subject_template || fallbackSubject), preheaderTemplate: String(req.body?.preheader || step?.preheader_template || fallbackPreheader), bodyTemplate: String(req.body?.body || step?.body_markdown || fallbackBody), ctaLabelTemplate: String(req.body?.ctaLabel || step?.cta_label_template || "Acessar a plataforma"), ctaRouteTemplate: String(req.body?.ctaRoute || step?.cta_route_template || step?.fallback_cta_route || "/painel/dashboard"), context: mapContext(state, deps.productionOrigin) });
         const theme = await deps.getEmailTheme();
         const actionUrl = resolveLifecycleUrl(deps.productionOrigin, rendered.ctaRoute);
         const htmlContent = deps.buildEmailShell(theme, { title: rendered.subject, subtitle: rendered.preheader, eyebrow: "Teste administrativo", bodyHtml: rendered.bodyHtml + "<div style=\"text-align:center\">" + deps.buildEmailButton(theme, actionUrl, rendered.ctaLabel) + "</div>", footerHtml: "Mensagem de teste enviada por um administrador." });
