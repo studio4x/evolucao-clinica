@@ -551,6 +551,10 @@ export default function LifecycleAdmin() {
   const activationCampaign = campaigns.find((campaign) => campaign.key === 'new_user_activation_15d');
   const activationSteps = activationCampaign ? steps[activationCampaign.id] || [] : [];
   const editingTemplate = templateRows.find((step) => step.id === editingTemplateId);
+  const editingConditions = editingTemplate ? [
+    { label: 'Elegibilidade', key: editingTemplate.eligibility_rule_key },
+    { label: 'Salto do passo', key: editingTemplate.skip_rule_key }
+  ].filter((condition) => condition.key) : [];
 
   if (loading && !overview) return <div className="flex items-center justify-center p-12"><Loader2 className="animate-spin text-brand-primary" /></div>;
 
@@ -615,6 +619,17 @@ export default function LifecycleAdmin() {
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Preheader</span><input value={templateDraft.preheader_template} onChange={(event) => setTemplateDraft({ ...templateDraft, preheader_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Tempo de espera (minutos)</span><input required type="number" min={0} value={templateDraft.wait_minutes} onChange={(event) => setTemplateDraft({ ...templateDraft, wait_minutes: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /><small className="mt-1 block text-xs text-brand-text-muted">{formatMinutesToReadable(templateDraft.wait_minutes)}</small></label>
               </div>
+
+              <section className="rounded-xl border border-brand-border bg-brand-bg/40 p-4" aria-labelledby="lifecycle-conditional-messages-title">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 rounded-lg bg-white p-2 text-brand-primary shadow-sm"><ListChecks size={17} /></span>
+                  <div className="min-w-0 flex-1">
+                    <h4 id="lifecycle-conditional-messages-title" className="font-semibold text-brand-text">Mensagens Condicionais</h4>
+                    <p className="mt-1 text-xs text-brand-text-muted">Condições configuradas para este passo antes do envio da mensagem.</p>
+                    {editingConditions.length === 0 ? <p className="mt-3 rounded-lg border border-dashed border-brand-border bg-white p-3 text-sm text-brand-text-muted">Nenhuma condição configurada. Este passo será avaliado para todos os usuários elegíveis do fluxo.</p> : <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">{editingConditions.map((condition) => { const rule = rules.find((item) => item.rule_key === condition.key); return <div key={`${condition.label}-${condition.key}`} className="rounded-lg border border-brand-border bg-white p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold uppercase tracking-wide text-brand-text-muted">{condition.label}</span><span className={'rounded-full px-2 py-0.5 text-[11px] font-medium ' + (rule?.enabled === false ? 'bg-slate-100 text-slate-600' : 'bg-emerald-100 text-emerald-700')}>{rule?.enabled === false ? 'Desativada' : 'Ativa'}</span></div><strong className="mt-2 block text-sm text-brand-text">{rule?.name || condition.key}</strong><span className="mt-1 block break-words font-mono text-[11px] text-brand-text-muted">{condition.key}</span>{rule?.description && <p className="mt-2 text-xs leading-5 text-brand-text-muted">{rule.description}</p>}<div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-brand-text-muted"><span>Prioridade: {rule?.priority ?? '—'}</span><span>Cooldown: {rule?.cooldown_hours ?? '—'}h</span></div></div>; })}</div>}
+                  </div>
+                </div>
+              </section>
 
               <div>
                 <span className="text-sm font-semibold text-brand-text">Conteúdo do e-mail</span>
