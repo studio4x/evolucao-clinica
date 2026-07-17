@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Bold, Check, CirclePause, CirclePlay, Eraser, FileText, Heading2, Italic, List, ListChecks, Loader2, Pencil, RefreshCw, Save, ScrollText, Settings, Users, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
@@ -14,6 +15,68 @@ type TemplateDraft = {
   category: string;
 };
 
+const LIFECYCLE_BASE_PATH = '/admin/lifecycle';
+const LIFECYCLE_TAB_SLUGS: Record<Tab, string> = {
+  overview: 'visao-geral',
+  campaigns: 'campanhas-e-passos',
+  rules: 'regras-condicionais',
+  preferences: 'preferencias-de-comunicacao',
+  settings: 'configuracoes'
+};
+const CAMPAIGN_TAB_SLUGS: Record<CampaignTab, string> = {
+  flows: 'fluxos-e-passos',
+  templates: 'modelos',
+  instances: 'usuarios-no-fluxo',
+  logs: 'registros-de-envio'
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  activation: 'Ativação',
+  adoption: 'Adoção',
+  commercial: 'Comercial',
+  discovery: 'Descoberta',
+  education: 'Educação',
+  habit: 'Hábito',
+  reactivation: 'Reativação',
+  retention: 'Retenção',
+  technical: 'Técnico',
+  transactional: 'Transacional'
+};
+
+const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  queued: 'Na fila',
+  processing: 'Processando',
+  sent: 'Enviado',
+  failed: 'Falhou',
+  retry: 'Aguardando nova tentativa',
+  skipped: 'Ignorado',
+  cancelled: 'Cancelado',
+  suppressed: 'Suprimido',
+  replaced: 'Substituído'
+};
+
+const DISPATCH_TYPE_LABELS: Record<string, string> = {
+  sequence: 'Sequencial',
+  conditional: 'Condicional',
+  transactional_bridge: 'Transacional'
+};
+
+function lifecyclePathFor(tab: Tab, campaignTab: CampaignTab = 'flows') {
+  if (tab === 'campaigns') return `${LIFECYCLE_BASE_PATH}/${LIFECYCLE_TAB_SLUGS.campaigns}/${CAMPAIGN_TAB_SLUGS[campaignTab]}`;
+  return `${LIFECYCLE_BASE_PATH}/${LIFECYCLE_TAB_SLUGS[tab]}`;
+}
+
+function lifecycleViewFromPath(pathname: string): { tab: Tab; campaignTab: CampaignTab } {
+  const normalizedPath = pathname.replace(/\/+$/, '') || '/';
+  const suffix = normalizedPath.startsWith(LIFECYCLE_BASE_PATH) ? normalizedPath.slice(LIFECYCLE_BASE_PATH.length).split('/').filter(Boolean) : [];
+  if (suffix[0] === LIFECYCLE_TAB_SLUGS.campaigns) {
+    const campaignTab = (Object.entries(CAMPAIGN_TAB_SLUGS).find(([, slug]) => slug === suffix[1])?.[0] || 'flows') as CampaignTab;
+    return { tab: 'campaigns', campaignTab };
+  }
+  const tab = (Object.entries(LIFECYCLE_TAB_SLUGS).find(([, slug]) => slug === suffix[0])?.[0] || 'overview') as Tab;
+  return { tab, campaignTab: 'flows' };
+}
+
 async function api(path: string, init: RequestInit = {}) {
   const { data } = await supabase.auth.getSession();
   const response = await fetch(path, {
@@ -25,7 +88,7 @@ async function api(path: string, init: RequestInit = {}) {
     }
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Falha ao consultar o lifecycle.');
+  if (!response.ok) throw new Error(payload.error || 'Falha ao consultar a jornada de usuários.');
   return payload;
 }
 
@@ -59,11 +122,28 @@ function formatNextExecution(value?: string | null) {
 }
 
 function stepType(step: any) {
-  return step.eligibility_rule_key || step.skip_rule_key ? 'conditional' : 'always';
+  return step.eligibility_rule_key || step.skip_rule_key ? 'Condicional' : 'Sempre';
 }
 
-function stepCondition(step: any) {
-  return step.eligibility_rule_key || step.skip_rule_key || '—';
+function stepCondition(step: any, rules: any[]) {
+  const ruleKey = step.eligibility_rule_key || step.skip_rule_key;
+  return rules.find((rule) => rule.rule_key === ruleKey)?.name || ruleKey || '—';
+}
+
+function enrollmentModeLabel(mode?: string | null) {
+  return ({ new_users_only: 'Novos usuários', selected_users: 'Usuários selecionados', all_eligible_users: 'Todos os elegíveis' } as Record<string, string>)[mode || ''] || mode || 'Profissionais';
+}
+
+function categoryLabel(category?: string | null) {
+  return CATEGORY_LABELS[category || ''] || category || 'Educação';
+}
+
+function deliveryStatusLabel(status?: string | null) {
+  return DELIVERY_STATUS_LABELS[status || ''] || status || '—';
+}
+
+function dispatchTypeLabel(type?: string | null) {
+  return DISPATCH_TYPE_LABELS[type || ''] || type || '—';
 }
 
 function waitHours(step: any) {
@@ -173,8 +253,11 @@ function EmptyState({ icon: Icon, title, description }: { icon: typeof FileText;
 }
 
 export default function LifecycleAdmin() {
-  const [tab, setTab] = useState<Tab>('overview');
-  const [campaignTab, setCampaignTab] = useState<CampaignTab>('flows');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const lifecycleView = lifecycleViewFromPath(location.pathname);
+  const [tab, setTab] = useState<Tab>(lifecycleView.tab);
+  const [campaignTab, setCampaignTab] = useState<CampaignTab>(lifecycleView.campaignTab);
   const [overview, setOverview] = useState<any>(null);
   const [campaigns, setCampaigns] = useState<any[]>([]);
   const [rules, setRules] = useState<any[]>([]);
@@ -191,6 +274,17 @@ export default function LifecycleAdmin() {
   const [richTextHtml, setRichTextHtml] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
   const richTextEditorRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
+    const canonicalPath = lifecyclePathFor(lifecycleView.tab, lifecycleView.campaignTab);
+    if (normalizedPath !== canonicalPath) {
+      navigate(canonicalPath, { replace: true });
+      return;
+    }
+    setTab(lifecycleView.tab);
+    setCampaignTab(lifecycleView.campaignTab);
+  }, [lifecycleView.campaignTab, lifecycleView.tab, location.pathname, navigate]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -289,7 +383,7 @@ export default function LifecycleAdmin() {
   const saveTemplate = async () => {
     if (!editingTemplateId || !templateDraft) return;
     if (!templateDraft.subject_template.trim() || !templateDraft.body_markdown.trim()) {
-      setError('O assunto e o conteúdo do template são obrigatórios.');
+      setError('O assunto e o conteúdo do modelo são obrigatórios.');
       return;
     }
 
@@ -309,11 +403,11 @@ export default function LifecycleAdmin() {
           category: templateDraft.category.trim() || 'education'
         })
       });
-      setMessage('Template atualizado com sucesso.');
+      setMessage('Modelo atualizado com sucesso.');
       cancelTemplateEdit();
       await load();
     } catch (err: any) {
-      setError(err.message || 'Falha ao salvar o template.');
+      setError(err.message || 'Falha ao salvar o modelo.');
     } finally {
       setTemplateSaving(false);
     }
@@ -357,9 +451,9 @@ export default function LifecycleAdmin() {
   ];
   const campaignTabs: Array<[CampaignTab, string, typeof ListChecks]> = [
     ['flows', 'Fluxos e Passos', ListChecks],
-    ['templates', 'Templates', FileText],
+    ['templates', 'Modelos', FileText],
     ['instances', 'Usuários no Fluxo', Users],
-    ['logs', 'Logs de Envio', ScrollText]
+    ['logs', 'Registros de Envio', ScrollText]
   ];
   const templateRows = campaigns.flatMap((campaign) => (steps[campaign.id] || []).map((step) => ({ ...step, campaign })));
   const activationCampaign = campaigns.find((campaign) => campaign.key === 'new_user_activation_15d');
@@ -372,7 +466,7 @@ export default function LifecycleAdmin() {
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h2 className="text-2xl font-bold text-brand-text">Jornada de Usuários</h2>
-        <p className="text-sm text-brand-text-muted mt-1">Automação individual, dry-run, fila e métricas de relacionamento.</p>
+        <p className="text-sm text-brand-text-muted mt-1">Automação individual, simulação, fila e métricas de relacionamento.</p>
       </div>
       <button onClick={() => void load()} className="btn-outline inline-flex items-center gap-2 self-start"><RefreshCw size={16} /> Atualizar</button>
     </div>
@@ -381,7 +475,7 @@ export default function LifecycleAdmin() {
     {message && <div className="rounded-lg bg-emerald-50 text-emerald-700 p-3 text-sm flex items-center gap-2"><Check size={16} />{message}</div>}
 
     <div className="flex gap-2 overflow-x-auto border-b border-brand-border pb-2">
-      {tabs.map(([key, label]) => <button key={key} onClick={() => setTab(key)} className={'px-3 py-2 rounded-lg text-sm whitespace-nowrap ' + (tab === key ? 'bg-brand-primary text-white' : 'text-brand-text-muted hover:bg-brand-bg')}>{label}</button>)}
+      {tabs.map(([key, label]) => <button key={key} onClick={() => navigate(lifecyclePathFor(key, key === 'campaigns' ? campaignTab : 'flows'))} className={'px-3 py-2 rounded-lg text-sm whitespace-nowrap ' + (tab === key ? 'bg-brand-primary text-white' : 'text-brand-text-muted hover:bg-brand-bg')}>{label}</button>)}
     </div>
 
     {tab === 'overview' && <div className="space-y-6">
@@ -391,12 +485,12 @@ export default function LifecycleAdmin() {
           ['Concluídos', overview?.metrics?.completed], ['Falhas', overview?.metrics?.failed], ['Suprimidos', overview?.metrics?.suppressed], ['Cooldown', '24h']
         ].map(([label, value]) => <div key={String(label)} className="bg-white border border-brand-border rounded-xl p-4"><span className="text-xs text-brand-text-muted block">{label}</span><strong className="text-2xl text-brand-text">{value ?? '—'}</strong></div>)}
       </div>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Modo atual:</strong> {runtime.dry_run ? 'dry-run / observação' : runtime.send_enabled ? 'envio habilitado' : 'envio desabilitado'} — campanha e passos começam em draft.</div>
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Modo atual:</strong> {runtime.dry_run ? 'simulação / observação' : runtime.send_enabled ? 'envio habilitado' : 'envio desabilitado'} — campanhas e passos começam em rascunho.</div>
     </div>}
 
     {tab === 'campaigns' && <div className="space-y-6">
       <div role="tablist" aria-label="Seções de campanhas e passos" className="grid grid-cols-2 md:grid-cols-4 gap-1 rounded-xl bg-brand-bg p-1 max-w-3xl">
-        {campaignTabs.map(([key, label, Icon]) => <button key={key} type="button" role="tab" aria-selected={campaignTab === key} onClick={() => setCampaignTab(key)} className={'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ' + (campaignTab === key ? 'bg-white text-brand-primary shadow-sm' : 'text-brand-text-muted hover:text-brand-text')}><Icon size={15} />{label}</button>)}
+        {campaignTabs.map(([key, label, Icon]) => <button key={key} type="button" role="tab" aria-selected={campaignTab === key} onClick={() => navigate(lifecyclePathFor('campaigns', key))} className={'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-all ' + (campaignTab === key ? 'bg-white text-brand-primary shadow-sm' : 'text-brand-text-muted hover:text-brand-text')}><Icon size={15} />{label}</button>)}
       </div>
 
       {campaignTab === 'flows' && <div className="space-y-6">
@@ -405,23 +499,23 @@ export default function LifecycleAdmin() {
           <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-brand-border bg-slate-50/70 p-5 md:p-6">
             <div>
               <div className="flex flex-wrap items-center gap-2"><h3 className="text-lg font-semibold text-brand-text">{campaign.name}</h3><span className={'rounded-full border px-2.5 py-1 text-xs font-semibold ' + campaignStatusClass(campaign.status)}>{campaignStatusLabel(campaign.status)}</span></div>
-              <p className="mt-1 text-sm text-brand-text-muted">Público-alvo: {campaign.enrollment_mode || 'profissionais'} · {campaign.description || campaign.key}</p>
+              <p className="mt-1 text-sm text-brand-text-muted">Público-alvo: {enrollmentModeLabel(campaign.enrollment_mode)} · {campaign.description || 'Sem descrição cadastrada'}</p>
             </div>
             <div className="flex gap-2">
               {campaign.status === 'active' ? <button onClick={() => void updateCampaign(campaign, 'paused')} className="btn-outline inline-flex items-center gap-1.5 text-xs"><CirclePause size={14} /> Pausar</button> : campaign.status !== 'archived' && <button onClick={() => void updateCampaign(campaign, 'active')} className="btn-primary inline-flex items-center gap-1.5 text-xs"><CirclePlay size={14} /> Ativar</button>}
             </div>
           </header>
-          {(steps[campaign.id] || []).length === 0 ? <div className="p-6 text-sm text-brand-text-muted">Nenhum passo encontrado nesta campanha.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="border-b border-brand-border text-brand-text-muted"><tr><th className="w-16 px-4 py-3 text-center font-medium">Ordem</th><th className="px-4 py-3 text-left font-medium">Template</th><th className="px-4 py-3 text-left font-medium">Espera (h)</th><th className="px-4 py-3 text-left font-medium">Tipo</th><th className="px-4 py-3 text-left font-medium">Condição</th><th className="px-4 py-3 text-left font-medium">Estado</th><th className="px-4 py-3 text-right font-medium">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{[...(steps[campaign.id] || [])].sort((a, b) => a.position - b.position).map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="bg-slate-50/60 px-4 py-4 text-center font-bold text-brand-text">{step.position}</td><td className="px-4 py-4"><strong className="block max-w-[360px] truncate font-medium text-brand-text">{step.subject_template}</strong><span className="mt-0.5 block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || step.step_key}</span></td><td className="px-4 py-4 whitespace-nowrap">{waitHours(step)}</td><td className="px-4 py-4"><span className="rounded-full border border-brand-border px-2.5 py-1 text-xs font-medium">{stepType(step)}</span></td><td className="px-4 py-4"><span className={stepCondition(step) === '—' ? 'text-brand-text-muted' : 'font-mono text-xs text-brand-text-muted'}>{stepCondition(step)}</span></td><td className="px-4 py-4"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (step.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>{step.status === 'active' ? 'Ativo' : 'Rascunho'}</span></td><td className="px-4 py-4 text-right"><button onClick={() => void updateStep(step)} className="btn-outline whitespace-nowrap text-xs">{step.status === 'active' ? 'Voltar para draft' : 'Validar e ativar'}</button></td></tr>)}</tbody></table></div>}
+          {(steps[campaign.id] || []).length === 0 ? <div className="p-6 text-sm text-brand-text-muted">Nenhum passo encontrado nesta campanha.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="border-b border-brand-border text-brand-text-muted"><tr><th className="w-16 px-4 py-3 text-center font-medium">Ordem</th><th className="px-4 py-3 text-left font-medium">Modelo</th><th className="px-4 py-3 text-left font-medium">Espera (h)</th><th className="px-4 py-3 text-left font-medium">Tipo</th><th className="px-4 py-3 text-left font-medium">Condição</th><th className="px-4 py-3 text-left font-medium">Estado</th><th className="px-4 py-3 text-right font-medium">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{[...(steps[campaign.id] || [])].sort((a, b) => a.position - b.position).map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="bg-slate-50/60 px-4 py-4 text-center font-bold text-brand-text">{step.position}</td><td className="px-4 py-4"><strong className="block max-w-[360px] truncate font-medium text-brand-text">{step.subject_template}</strong><span className="mt-0.5 block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || step.step_key}</span></td><td className="px-4 py-4 whitespace-nowrap">{waitHours(step)}</td><td className="px-4 py-4"><span className="rounded-full border border-brand-border px-2.5 py-1 text-xs font-medium">{stepType(step)}</span></td><td className="px-4 py-4"><span className={stepCondition(step, rules) === '—' ? 'text-brand-text-muted' : 'font-mono text-xs text-brand-text-muted'}>{stepCondition(step, rules)}</span></td><td className="px-4 py-4"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (step.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>{step.status === 'active' ? 'Ativo' : 'Rascunho'}</span></td><td className="px-4 py-4 text-right"><button onClick={() => void updateStep(step)} className="btn-outline whitespace-nowrap text-xs">{step.status === 'active' ? 'Voltar para rascunho' : 'Validar e ativar'}</button></td></tr>)}</tbody></table></div>}
         </section>)}
       </div>}
 
       {campaignTab === 'templates' && <div className="space-y-4">
-        {templateRows.length === 0 ? <EmptyState icon={FileText} title="Nenhum template disponível" description="Os templates dos passos aparecerão aqui quando houver campanhas cadastradas." /> : <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[780px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Template</th><th className="p-3">Campanha</th><th className="p-3">Categoria</th><th className="p-3">Estado</th><th className="p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{templateRows.map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-[360px] truncate text-brand-text">{step.subject_template}</strong><span className="block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || 'Sem preheader cadastrado'}</span></td><td className="p-3">{step.campaign.name}<span className="block text-xs text-brand-text-muted">Passo {step.position}</span></td><td className="p-3"><span className="rounded-full border border-brand-border px-2 py-1 text-xs">{step.category || 'education'}</span></td><td className="p-3">{step.status === 'active' ? <span className="text-emerald-700">Ativo</span> : <span className="text-brand-text-muted">Rascunho</span>}</td><td className="p-3 text-right"><div className="inline-flex gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline text-xs">{step.status === 'active' ? 'Desativar' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>}
+        {templateRows.length === 0 ? <EmptyState icon={FileText} title="Nenhum modelo disponível" description="Os modelos dos passos aparecerão aqui quando houver campanhas cadastradas." /> : <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[780px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Modelo</th><th className="p-3">Campanha</th><th className="p-3">Categoria</th><th className="p-3">Estado</th><th className="p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{templateRows.map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-[360px] truncate text-brand-text">{step.subject_template}</strong><span className="block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || 'Sem preheader cadastrado'}</span></td><td className="p-3">{step.campaign.name}<span className="block text-xs text-brand-text-muted">Passo {step.position}</span></td><td className="p-3"><span className="rounded-full border border-brand-border px-2 py-1 text-xs">{categoryLabel(step.category)}</span></td><td className="p-3">{step.status === 'active' ? <span className="text-emerald-700">Ativo</span> : <span className="text-brand-text-muted">Rascunho</span>}</td><td className="p-3 text-right"><div className="inline-flex gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline text-xs">{step.status === 'active' ? 'Desativar' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>}
 
         {editingTemplate && templateDraft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !templateSaving) cancelTemplateEdit(); }}>
           <form onSubmit={(event) => { event.preventDefault(); void saveTemplate(); }} role="dialog" aria-modal="true" aria-labelledby="lifecycle-template-editor-title" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-brand-border bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-brand-border bg-slate-50/80 p-5 md:p-6">
-              <div><span className="text-xs font-semibold uppercase tracking-wide text-brand-primary">Editor de template</span><h3 id="lifecycle-template-editor-title" className="mt-1 text-lg font-semibold text-brand-text">Passo {editingTemplate.position} · {editingTemplate.campaign.name}</h3><p className="mt-1 text-xs text-brand-text-muted">As alterações serão aplicadas ao próximo processamento deste passo.</p></div>
+              <div><span className="text-xs font-semibold uppercase tracking-wide text-brand-primary">Editor de modelo</span><h3 id="lifecycle-template-editor-title" className="mt-1 text-lg font-semibold text-brand-text">Passo {editingTemplate.position} · {editingTemplate.campaign.name}</h3><p className="mt-1 text-xs text-brand-text-muted">As alterações serão aplicadas ao próximo processamento deste passo.</p></div>
               <button type="button" onClick={cancelTemplateEdit} disabled={templateSaving} className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg hover:text-brand-text disabled:opacity-50" aria-label="Fechar editor"><X size={18} /></button>
             </div>
 
@@ -443,31 +537,31 @@ export default function LifecycleAdmin() {
                   </div>
                   <div ref={richTextEditorRef} contentEditable suppressContentEditableWarning onInput={syncRichTextDraft} className="min-h-[280px] max-h-[48vh] overflow-y-auto px-4 py-3 text-sm leading-7 text-brand-text focus:outline-none [&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:mb-2 [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3" />
                 </div>
-                <p className="mt-1.5 text-xs text-brand-text-muted">Use a barra acima para formatar. Variáveis do lifecycle, como <code>{'{{primeiro_nome}}'}</code>, continuam disponíveis.</p>
+                <p className="mt-1.5 text-xs text-brand-text-muted">Use a barra acima para formatar. Variáveis da jornada, como <code>{'{{primeiro_nome}}'}</code>, continuam disponíveis.</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Texto do botão</span><input value={templateDraft.cta_label_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_label_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-                <label className="block"><span className="text-sm font-semibold text-brand-text">Categoria</span><input value={templateDraft.category} onChange={(event) => setTemplateDraft({ ...templateDraft, category: event.target.value })} placeholder="activation" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Categoria</span><select value={templateDraft.category} onChange={(event) => setTemplateDraft({ ...templateDraft, category: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border bg-white px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none">{templateDraft.category && !CATEGORY_LABELS[templateDraft.category] && <option value={templateDraft.category}>{templateDraft.category}</option>}{Object.entries(CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Rota principal do botão</span><input value={templateDraft.cta_route_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_route_template: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
                 <label className="block"><span className="text-sm font-semibold text-brand-text">Rota alternativa</span><input value={templateDraft.fallback_cta_route} onChange={(event) => setTemplateDraft({ ...templateDraft, fallback_cta_route: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 border-t border-brand-border bg-slate-50/50 p-4 md:p-5"><button type="button" onClick={cancelTemplateEdit} disabled={templateSaving} className="btn-outline text-sm">Cancelar</button><button type="submit" disabled={templateSaving} className="btn-primary inline-flex items-center gap-2 text-sm">{templateSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}{templateSaving ? 'Salvando...' : 'Salvar template'}</button></div>
+            <div className="flex justify-end gap-2 border-t border-brand-border bg-slate-50/50 p-4 md:p-5"><button type="button" onClick={cancelTemplateEdit} disabled={templateSaving} className="btn-outline text-sm">Cancelar</button><button type="submit" disabled={templateSaving} className="btn-primary inline-flex items-center gap-2 text-sm">{templateSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}{templateSaving ? 'Salvando...' : 'Salvar modelo'}</button></div>
           </form>
         </div>}
       </div>}
 
       {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Passo atual</th><th className="p-3">Próxima execução</th><th className="p-3">Status da jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = activationCampaign ? user.enrollments?.find((item: any) => item.campaign_id === activationCampaign.id) : null; const currentPosition = Number(enrollment?.current_position || 0); const currentStep = activationSteps.find((step) => step.position === currentPosition) || (currentPosition === 0 ? activationSteps.find((step) => step.position === 1) : null); const nextStep = activationSteps.find((step) => step.position === currentPosition + 1); return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{user.state?.activation_status || '—'}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{enrollment ? <><strong className="block">{currentStep ? `Passo ${currentStep.position}` : 'Jornada concluída'}</strong><span className="block max-w-[260px] truncate text-xs text-brand-text-muted">{currentStep?.subject_template || 'Nenhum passo configurado'}</span></> : <span className="text-brand-text-muted">Não matriculado</span>}</td><td className="p-3 whitespace-nowrap">{enrollment ? <><strong className="block">{formatNextExecution(enrollment.next_step_at)}</strong><span className="block text-xs text-brand-text-muted">{nextStep ? `Próximo: passo ${nextStep.position}` : 'Sem próximo passo'}</span></> : '—'}</td><td className="p-3"><span className={'inline-flex rounded-full px-2.5 py-1 text-xs font-medium ' + enrollmentStatusClass(enrollment?.status)}>{enrollmentStatusLabel(enrollment?.status)}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} className="btn-outline p-1.5"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} className="btn-outline p-1.5"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} className="btn-outline p-1.5"><CirclePlay size={14} /></button>}</div></td></tr>; })}</tbody></table>}</div>}
 
-      {campaignTab === 'logs' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{deliveries.length === 0 ? <EmptyState icon={ScrollText} title="Nenhum log de envio" description="Os disparos processados pela fila aparecerão aqui." /> : <table className="w-full min-w-[820px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Mensagem</th><th className="p-3">Status</th><th className="p-3">Agendada</th><th className="p-3">Tentativas</th><th className="p-3">Motivo</th></tr></thead><tbody className="divide-y divide-brand-border">{deliveries.map((item) => <tr key={item.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{item.message_key}</strong><span className="block text-xs text-brand-text-muted">{item.dispatch_type}</span></td><td className="p-3"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (item.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')}>{item.status}</span></td><td className="p-3 whitespace-nowrap">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleString('pt-BR') : '—'}</td><td className="p-3">{item.attempt_count}/{item.max_attempts}</td><td className="p-3 max-w-xs truncate">{item.skip_reason || item.failure_reason || '—'}</td></tr>)}</tbody></table>}</div>}
+      {campaignTab === 'logs' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{deliveries.length === 0 ? <EmptyState icon={ScrollText} title="Nenhum registro de envio" description="Os disparos processados pela fila aparecerão aqui." /> : <table className="w-full min-w-[820px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Mensagem</th><th className="p-3">Status</th><th className="p-3">Agendada</th><th className="p-3">Tentativas</th><th className="p-3">Motivo</th></tr></thead><tbody className="divide-y divide-brand-border">{deliveries.map((item) => <tr key={item.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{item.message_key}</strong><span className="block text-xs text-brand-text-muted">{dispatchTypeLabel(item.dispatch_type)}</span></td><td className="p-3"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (item.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')}>{deliveryStatusLabel(item.status)}</span></td><td className="p-3 whitespace-nowrap">{item.scheduled_for ? new Date(item.scheduled_for).toLocaleString('pt-BR') : '—'}</td><td className="p-3">{item.attempt_count}/{item.max_attempts}</td><td className="p-3 max-w-xs truncate">{item.skip_reason || item.failure_reason || '—'}</td></tr>)}</tbody></table>}</div>}
     </div>}
 
-    {tab === 'rules' && <div className="bg-white border border-brand-border rounded-xl divide-y">{rules.map((rule) => <div key={rule.id} className="p-4 flex items-center justify-between gap-4"><div><strong className="text-sm text-brand-text">{rule.name}</strong><span className="block text-xs text-brand-text-muted">{rule.rule_key} · prioridade {rule.priority} · cooldown {rule.cooldown_hours}h</span></div><button onClick={() => void updateRule(rule)} className={'text-xs px-3 py-1.5 rounded-lg ' + (rule.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600')}>{rule.enabled ? 'Ativa' : 'Desativada'}</button></div>)}</div>}
+    {tab === 'rules' && <div className="bg-white border border-brand-border rounded-xl divide-y">{rules.map((rule) => <div key={rule.id} className="p-4 flex items-center justify-between gap-4"><div><strong className="text-sm text-brand-text">{rule.name}</strong><span className="block text-xs text-brand-text-muted">Identificador: {rule.rule_key} · prioridade {rule.priority} · intervalo mínimo {rule.cooldown_hours}h</span></div><button onClick={() => void updateRule(rule)} className={'text-xs px-3 py-1.5 rounded-lg ' + (rule.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600')}>{rule.enabled ? 'Ativa' : 'Desativada'}</button></div>)}</div>}
 
-    {tab === 'preferences' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Lifecycle</th><th className="p-3">Educativo</th><th className="p-3">Comercial</th><th className="p-3">Atualizado</th></tr></thead><tbody className="divide-y divide-brand-border">{preferences.map((item) => <tr key={item.user_id}><td className="p-3">{item.user_id}</td><td className="p-3">{item.lifecycle_enabled ? 'Ativo' : 'Descadastrado'}</td><td className="p-3">{item.product_education_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.commercial_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.updated_at ? new Date(item.updated_at).toLocaleString('pt-BR') : '—'}</td></tr>)}</tbody></table></div>}
+    {tab === 'preferences' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Jornada</th><th className="p-3">Educativo</th><th className="p-3">Comercial</th><th className="p-3">Atualizado</th></tr></thead><tbody className="divide-y divide-brand-border">{preferences.map((item) => <tr key={item.user_id}><td className="p-3">{item.user_id}</td><td className="p-3">{item.lifecycle_enabled ? 'Ativo' : 'Descadastrado'}</td><td className="p-3">{item.product_education_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.commercial_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.updated_at ? new Date(item.updated_at).toLocaleString('pt-BR') : '—'}</td></tr>)}</tbody></table></div>}
 
-    {tab === 'settings' && <div className="max-w-xl bg-white border border-brand-border rounded-xl p-5 space-y-5"><div className="flex items-center gap-2"><Settings size={18} className="text-brand-primary" /><h3 className="font-semibold">Configurações de rollout</h3></div><label className="flex items-center justify-between gap-4"><span><strong className="block">Dry-run / observação</strong><small className="text-brand-text-muted">Calcula decisões, mas não entrega e-mails.</small></span><input type="checkbox" className="h-5 w-5 accent-brand-primary" checked={runtime.dry_run} onChange={(event) => setRuntime({ ...runtime, dry_run: event.target.checked })} /></label><label className="flex items-center justify-between gap-4"><span><strong className="block">Permitir envio real</strong><small className="text-brand-text-muted">Exige campanha e passos ativos.</small></span><input type="checkbox" className="h-5 w-5 accent-brand-primary" checked={runtime.send_enabled} onChange={(event) => setRuntime({ ...runtime, send_enabled: event.target.checked })} /></label><label className="block"><span className="text-sm font-semibold">Batch do worker</span><input type="number" min={1} max={100} value={runtime.max_batch_size} onChange={(event) => setRuntime({ ...runtime, max_batch_size: Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2" /></label><button onClick={() => void saveRuntime()} className="btn-primary inline-flex items-center gap-2"><Save size={16} /> Salvar configuração</button><p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3">Ative o envio somente após validar links, planos, templates, preferências e uma coorte interna.</p></div>}
+    {tab === 'settings' && <div className="max-w-xl bg-white border border-brand-border rounded-xl p-5 space-y-5"><div className="flex items-center gap-2"><Settings size={18} className="text-brand-primary" /><h3 className="font-semibold">Configurações de publicação</h3></div><label className="flex items-center justify-between gap-4"><span><strong className="block">Simulação / observação</strong><small className="text-brand-text-muted">Calcula decisões, mas não entrega e-mails.</small></span><input type="checkbox" className="h-5 w-5 accent-brand-primary" checked={runtime.dry_run} onChange={(event) => setRuntime({ ...runtime, dry_run: event.target.checked })} /></label><label className="flex items-center justify-between gap-4"><span><strong className="block">Permitir envio real</strong><small className="text-brand-text-muted">Exige campanhas e passos ativos.</small></span><input type="checkbox" className="h-5 w-5 accent-brand-primary" checked={runtime.send_enabled} onChange={(event) => setRuntime({ ...runtime, send_enabled: event.target.checked })} /></label><label className="block"><span className="text-sm font-semibold">Tamanho do lote</span><input type="number" min={1} max={100} value={runtime.max_batch_size} onChange={(event) => setRuntime({ ...runtime, max_batch_size: Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2" /></label><button onClick={() => void saveRuntime()} className="btn-primary inline-flex items-center gap-2"><Save size={16} /> Salvar configuração</button><p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3">Ative o envio somente após validar links, planos, modelos, preferências e uma coorte interna.</p></div>}
   </div>;
 }
