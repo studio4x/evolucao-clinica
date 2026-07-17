@@ -2795,8 +2795,9 @@ async function sendWhatsAppNotificationInternal(userId: string, phone: string, t
     return false;
   }
 
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const settings = await getNotificationSettings().catch(() => ({} as any));
+  const accessToken = settings.whatsapp_access_token || process.env.WHATSAPP_ACCESS_TOKEN;
+  const phoneNumberId = settings.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (accessToken && phoneNumberId) {
     try {
@@ -4327,6 +4328,68 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
   } catch (err: any) {
     console.error("Erro ao enviar e-mail de teste:", err);
     res.status(500).json({ error: err.message || "Erro desconhecido ao disparar e-mail de teste." });
+  }
+});
+
+// Testar Envio de WhatsApp (Apenas Admin)
+app.post("/api/notifications/test-whatsapp", requireAuth, async (req: any, res) => {
+  try {
+    const { data: prof, error: profError } = await supabaseAdmin
+      .from("professionals")
+      .select("role")
+      .eq("id", req.user.id)
+      .single();
+      
+    if (profError || !prof || prof.role !== "admin") {
+      return res.status(403).json({ error: "Nao autorizado. Apenas administradores podem testar o envio do WhatsApp." });
+    }
+
+    const { toPhone, accessToken, phoneNumberId } = req.body;
+    
+    if (!toPhone) {
+      return res.status(400).json({ error: "Número de telefone de destino é obrigatório." });
+    }
+    if (!accessToken || !phoneNumberId) {
+      return res.status(400).json({ error: "Token de acesso e ID do número são obrigatórios." });
+    }
+
+    const phoneClean = toPhone.replace(/\D/g, "");
+    if (!phoneClean) {
+      return res.status(400).json({ error: "Número de telefone inválido." });
+    }
+
+    const testMessage = `Olá! Este é um teste de envio da API do WhatsApp Cloud configurada na plataforma Evolução Clínica. Se você recebeu esta mensagem, a integração está funcionando perfeitamente!`;
+
+    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: phoneClean,
+        type: "text",
+        text: {
+          preview_url: true,
+          body: testMessage
+        }
+      })
+    });
+
+    const responseData = await response.json();
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: `Falha ao enviar mensagem de teste via WhatsApp Cloud API.`,
+        details: responseData
+      });
+    }
+
+    return res.json({ success: true, details: responseData });
+  } catch (err: any) {
+    console.error("Erro no teste de WhatsApp:", err);
+    return res.status(500).json({ error: err.message || "Erro interno do servidor ao enviar teste de WhatsApp." });
   }
 });
 

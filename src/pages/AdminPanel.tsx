@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -162,6 +162,7 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/feedback')) return 'feedback';
     if (normalizedPath.endsWith('/jornada') || normalizedPath.includes('/jornada/')) return 'jornada';
     if (normalizedPath.endsWith('/lifecycle') || normalizedPath.includes('/lifecycle/')) return 'lifecycle';
+    if (normalizedPath.endsWith('/whatsapp')) return 'whatsapp_config';
     return 'professionals'; // default
   };
 
@@ -185,10 +186,11 @@ export default function AdminPanel() {
     { key: 'feedback', label: 'Sugestões & Avaliações', icon: MessageSquare },
     { key: 'jornada', label: 'Jornada 15 dias', icon: Calendar },
     { key: 'lifecycle', label: 'Jornada de Usuários', icon: Activity },
+    { key: 'whatsapp_config', label: 'API do WhatsApp', icon: MessageCircle },
     { key: 'profile', label: 'Meu Perfil', icon: User }
   ] as const;
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle') => {
+  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config') => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate(tokenUsageGeneralPath);
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -208,6 +210,7 @@ export default function AdminPanel() {
     else if (tab === 'feedback') navigate('/admin/feedback');
     else if (tab === 'jornada') navigate('/admin/jornada');
     else if (tab === 'lifecycle') navigate('/admin/lifecycle');
+    else if (tab === 'whatsapp_config') navigate('/admin/whatsapp');
   };
 
   // Estados de Configuração de Pagamento (Google Pay & Stripe)
@@ -797,6 +800,17 @@ export default function AdminPanel() {
   const [adminSmtpSaving, setAdminSmtpSaving] = useState(false);
   const [adminSmtpSuccess, setAdminSmtpSuccess] = useState(false);
 
+  // Estados de Configuração da API do WhatsApp Cloud
+  const [adminWhatsappAccessToken, setAdminWhatsappAccessToken] = useState('');
+  const [adminWhatsappPhoneNumberId, setAdminWhatsappPhoneNumberId] = useState('');
+  const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('');
+  const [adminWhatsappSaving, setAdminWhatsappSaving] = useState(false);
+  const [adminWhatsappSuccess, setAdminWhatsappSuccess] = useState(false);
+  const [adminWhatsappError, setAdminWhatsappError] = useState('');
+  const [adminWhatsappTestLoading, setAdminWhatsappTestLoading] = useState(false);
+  const [adminWhatsappTestSuccess, setAdminWhatsappTestSuccess] = useState(false);
+  const [adminWhatsappTestError, setAdminWhatsappTestError] = useState('');
+
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
   const [selectedProfessionalId, setSelectedProfessionalId] = useState('');
   const [notifTitle, setNotifTitle] = useState('');
@@ -993,6 +1007,9 @@ export default function AdminPanel() {
           setAdminBrevoSenderEmail(parsed.brevo_sender_email || '');
           setAdminVapidPublic(parsed.vapid_public_key || '');
           setAdminVapidPrivate(parsed.vapid_private_key || '');
+          setAdminWhatsappAccessToken(parsed.whatsapp_access_token || '');
+          setAdminWhatsappPhoneNumberId(parsed.whatsapp_phone_number_id || '');
+          setAdminWhatsappTestNumber(parsed.whatsapp_test_number || '');
         }
       } catch (err) {
         console.error('Erro ao buscar configuracoes SMTP:', err);
@@ -1001,7 +1018,7 @@ export default function AdminPanel() {
       await refreshPushNotificationLogs();
     };
 
-    if (user && profileRole === 'admin' && (activeTab === 'push_notifications' || activeTab === 'email_notifications' || activeTab === 'vapid_keys')) {
+    if (user && profileRole === 'admin' && (activeTab === 'push_notifications' || activeTab === 'email_notifications' || activeTab === 'vapid_keys' || activeTab === 'whatsapp_config')) {
       fetchSmtpAndLogs();
     }
   }, [user, profileRole, activeTab]);
@@ -1106,6 +1123,100 @@ export default function AdminPanel() {
       alert('Erro ao salvar configurações: ' + err.message);
     } finally {
       setAdminSmtpSaving(false);
+    }
+  };
+
+  // Salvar Configurações do WhatsApp Cloud API
+  const handleSaveWhatsappSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminWhatsappSaving(true);
+    setAdminWhatsappSuccess(false);
+    setAdminWhatsappError('');
+
+    try {
+      const { data: currentSettings } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'notification_settings')
+        .maybeSingle();
+
+      let currentSettingsJson: Record<string, any> = {};
+      if (currentSettings?.api_key) {
+        try {
+          currentSettingsJson = JSON.parse(currentSettings.api_key);
+        } catch (parseErr) {
+          console.error('Erro ao ler configurações atuais de notificações:', parseErr);
+        }
+      }
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'notification_settings',
+          api_key: JSON.stringify({
+            ...currentSettingsJson,
+            whatsapp_access_token: adminWhatsappAccessToken,
+            whatsapp_phone_number_id: adminWhatsappPhoneNumberId,
+            whatsapp_test_number: adminWhatsappTestNumber
+          }),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
+        });
+
+      if (error) throw error;
+      setAdminWhatsappSuccess(true);
+      setTimeout(() => setAdminWhatsappSuccess(false), 5000);
+    } catch (err: any) {
+      console.error('Erro ao salvar WhatsApp settings:', err);
+      setAdminWhatsappError(err.message || 'Erro ao salvar configurações do WhatsApp.');
+    } finally {
+      setAdminWhatsappSaving(false);
+    }
+  };
+
+  // Disparar Mensagem de Teste do WhatsApp Cloud API
+  const handleTestWhatsapp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adminWhatsappTestNumber) {
+      setAdminWhatsappTestError('Por favor, informe o número de telefone de destino para o teste.');
+      return;
+    }
+    if (!adminWhatsappAccessToken || !adminWhatsappPhoneNumberId) {
+      setAdminWhatsappTestError('Por favor, configure o token de acesso e o ID do número antes de testar.');
+      return;
+    }
+
+    setAdminWhatsappTestLoading(true);
+    setAdminWhatsappTestSuccess(false);
+    setAdminWhatsappTestError('');
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch('/api/notifications/test-whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionData.session?.access_token || ''}`
+        },
+        body: JSON.stringify({
+          toPhone: adminWhatsappTestNumber,
+          accessToken: adminWhatsappAccessToken,
+          phoneNumberId: adminWhatsappPhoneNumberId
+        })
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.error || 'Falha ao enviar mensagem de teste via API do WhatsApp Cloud.');
+      }
+
+      setAdminWhatsappTestSuccess(true);
+      setTimeout(() => setAdminWhatsappTestSuccess(false), 5000);
+    } catch (err: any) {
+      console.error('Erro ao testar WhatsApp:', err);
+      setAdminWhatsappTestError(err.message || 'Erro ao disparar mensagem de teste de WhatsApp.');
+    } finally {
+      setAdminWhatsappTestLoading(false);
     }
   };
 
@@ -6117,6 +6228,157 @@ export default function AdminPanel() {
                       )}
                     </form>
                   )}
+                </div>
+              </div>
+            ) : activeTab === 'whatsapp_config' ? (
+              /* Aba de Configuração do WhatsApp Cloud API [NEW] */
+              <div className="space-y-6 max-w-4xl">
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <MessageCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Configurações do WhatsApp Cloud API
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Integre a plataforma com a API oficial da Meta (WhatsApp Cloud API) para envio automatizado de mensagens e notificações.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleSaveWhatsappSettings} className="space-y-6">
+                    {adminWhatsappError && (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>{adminWhatsappError}</span>
+                      </div>
+                    )}
+
+                    {adminWhatsappSuccess && (
+                      <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-xl text-sm flex items-center gap-2 animate-fadeIn">
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                        <span>Configurações do WhatsApp salvas com sucesso!</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 gap-6">
+                      <div className="block">
+                        <span className="text-sm font-semibold text-brand-text">Access Token (Token de Acesso Permanente da Meta)</span>
+                        <input
+                          type="password"
+                          value={adminWhatsappAccessToken}
+                          onChange={(e) => setAdminWhatsappAccessToken(e.target.value)}
+                          placeholder="E.g. EAAG..."
+                          className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
+                        />
+                        <p className="text-xs text-brand-text-muted mt-1.5">
+                          Insira o Token de Acesso da Meta for WhatsApp. Recomendamos utilizar um token permanente (System User Access Token) para evitar interrupções.
+                        </p>
+                      </div>
+
+                      <div className="block">
+                        <span className="text-sm font-semibold text-brand-text">Phone Number ID (ID do Número de Telefone no WhatsApp Business)</span>
+                        <input
+                          type="text"
+                          value={adminWhatsappPhoneNumberId}
+                          onChange={(e) => setAdminWhatsappPhoneNumberId(e.target.value)}
+                          placeholder="E.g. 109283746..."
+                          className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
+                        />
+                        <p className="text-xs text-brand-text-muted mt-1.5">
+                          O ID numérico fornecido no painel de desenvolvedor da Meta correspondente ao número que fará os envios.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                      <button
+                        type="submit"
+                        disabled={adminWhatsappSaving}
+                        className="btn-primary px-6 py-2.5 flex items-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                      >
+                        {adminWhatsappSaving ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Salvando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Save className="w-4 h-4" />
+                            <span>Salvar Configurações do WhatsApp</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Send className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        Testar Conexão do WhatsApp
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Envie uma mensagem de teste para verificar se as credenciais configuradas estão corretas e válidas na Meta.
+                      </p>
+                    </div>
+                  </div>
+
+                  <form onSubmit={handleTestWhatsapp} className="space-y-6">
+                    {adminWhatsappTestError && (
+                      <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span>{adminWhatsappTestError}</span>
+                      </div>
+                    )}
+
+                    {adminWhatsappTestSuccess && (
+                      <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-xl text-sm flex items-center gap-2 animate-fadeIn">
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                        <span>Mensagem de teste enviada com sucesso! Verifique seu WhatsApp.</span>
+                      </div>
+                    )}
+
+                    <div className="block">
+                      <span className="text-sm font-semibold text-brand-text">Número de Telefone de Destino</span>
+                      <input
+                        type="text"
+                        value={adminWhatsappTestNumber}
+                        onChange={(e) => setAdminWhatsappTestNumber(e.target.value)}
+                        placeholder="E.g. +55 (11) 99999-9999"
+                        className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
+                      />
+                      <p className="text-xs text-brand-text-muted mt-1.5">
+                        Insira o número com DDI (55) e DDD para o recebimento do teste (apenas números serão considerados).
+                      </p>
+                    </div>
+
+                    <div className="flex justify-end pt-4">
+                      <button
+                        type="submit"
+                        disabled={adminWhatsappTestLoading}
+                        className="btn-outline px-6 py-2.5 flex items-center space-x-2 cursor-pointer"
+                      >
+                        {adminWhatsappTestLoading ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            <span>Enviando Teste...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="w-4 h-4" />
+                            <span>Enviar Mensagem de Teste</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </form>
                 </div>
               </div>
             ) : (
