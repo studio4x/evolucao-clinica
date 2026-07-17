@@ -47,7 +47,7 @@ function mapContext(state: any, origin: string) {
     data_fim_teste: state.trialEndsAt || "",
     dias_restantes_teste: state.trialEndsAt ? Math.max(0, Math.ceil((new Date(state.trialEndsAt).getTime() - Date.now()) / 86400000)) : 0,
     proxima_acao: action.label,
-    texto_cta_proxima_acao: action.label,
+    texto_cta_proxima_acao: action.ctaLabel,
     link_acao: action.route,
     link_suporte: origin + "/painel/support"
   };

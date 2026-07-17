@@ -2,18 +2,28 @@ import { LIFECYCLE_PRIORITY } from "./lifecycleConstants.js";
 import { calculateTrialDaysRemaining } from "./lifecycleState.js";
 import type { LifecycleCandidate, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
 
-export function getNextBestAction(state: LifecycleState, now = new Date()): { label: string; route: string } {
-  if (state.failedEvolutionsCount > 0) return { label: "Verificar evolução", route: "/painel/history" };
+export function getNextBestAction(state: LifecycleState, now = new Date()): { label: string; ctaLabel: string; route: string } {
+  if (state.failedEvolutionsCount > 0) return { label: "Verificar evolução", ctaLabel: "Verificar evolução", route: "/painel/history" };
   const trialExpired = Boolean(state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active");
-  if (state.subscriptionStatus === "canceled" || trialExpired) return { label: "Conhecer os planos disponíveis", route: "/painel/subscription" };
-  if (state.patientsCount === 0) return { label: "Cadastrar primeiro paciente", route: "/painel/patients/new" };
-  if (state.linkedRecordsCount === 0) return { label: "Criar ou vincular um prontuário", route: "/painel/patients" };
-  if (state.evolutionsCount === 0) return { label: "Criar sua primeira evolução", route: "/painel/patients" };
-  if (state.evolutionsCount === 1) return { label: "Consultar o histórico do paciente", route: "/painel/history" };
-  if (state.subscriptionStatus === "active" && state.subscriptionPlan !== "trial") return { label: "Aproveitar mais recursos do seu plano", route: "/painel/profile" };
-  if (state.evolutionsCount >= 3 || state.usageDaysCount >= 2) return { label: "Explorar outros recursos da plataforma", route: "/painel/profile" };
-  if (state.subscriptionStatus === "trialing") return { label: "Continuar usando", route: "/painel/dashboard" };
-  return { label: "Explorar outros recursos da plataforma", route: "/painel/profile" };
+  if (state.subscriptionStatus === "canceled" || trialExpired) return { label: "Conhecer os planos disponíveis", ctaLabel: "Conhecer planos", route: "/painel/subscription" };
+  if (state.patientsCount === 0) return { label: "Cadastrar primeiro paciente", ctaLabel: "Cadastrar paciente", route: "/painel/patients/new" };
+  if (state.linkedRecordsCount === 0) return { label: "Criar ou vincular um prontuário", ctaLabel: "Configurar prontuário", route: "/painel/patients" };
+  if (state.evolutionsCount === 0) return { label: "Criar sua primeira evolução", ctaLabel: "Criar evolução", route: "/painel/patients" };
+  if (state.evolutionsCount === 1) return { label: "Consultar o histórico do paciente", ctaLabel: "Consultar histórico", route: "/painel/history" };
+  if (state.subscriptionStatus === "active" && state.subscriptionPlan !== "trial") return { label: "Aproveitar mais recursos do seu plano", ctaLabel: "Explorar recursos", route: "/painel/profile" };
+  if (state.evolutionsCount >= 3 || state.usageDaysCount >= 2) return { label: "Explorar outros recursos da plataforma", ctaLabel: "Explorar recursos", route: "/painel/profile" };
+  if (state.subscriptionStatus === "trialing") return { label: "Continuar usando", ctaLabel: "Continuar usando", route: "/painel/dashboard" };
+  return { label: "Explorar outros recursos da plataforma", ctaLabel: "Explorar recursos", route: "/painel/profile" };
+}
+
+export function getSubscriberNextBestAction(state: LifecycleState, now = new Date()): { label: string; ctaLabel: string; route: string } {
+  if (state.failedEvolutionsCount > 0) return { label: "Retome o processo com o apoio da nossa equipe", ctaLabel: "Falar com o suporte", route: "/painel/support" };
+  if (state.patientsCount === 0) return { label: "Cadastre seu primeiro paciente", ctaLabel: "Cadastrar paciente", route: "/painel/patients/new" };
+  if (state.linkedRecordsCount === 0) return { label: "Crie ou vincule o prontuário no Google Docs", ctaLabel: "Configurar prontuário", route: "/painel/patients" };
+  if (state.evolutionsCount === 0) return { label: "Grave ou envie seu primeiro resumo em áudio", ctaLabel: "Criar evolução", route: "/painel/patients" };
+  const daysSinceActivity = state.lastActivityAt ? (now.getTime() - new Date(state.lastActivityAt).getTime()) / 86400000 : Number.POSITIVE_INFINITY;
+  if (state.evolutionsCount < 3 || daysSinceActivity >= 3) return { label: "Registre um dos próximos atendimentos", ctaLabel: "Registrar atendimento", route: "/painel/patients" };
+  return { label: "Conheça outros recursos disponíveis no seu plano", ctaLabel: "Explorar recursos", route: "/painel/profile" };
 }
 
 function hoursSince(value: string | null | undefined, now: Date): number {
@@ -131,7 +141,7 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
       return isSubscriber(state) && state.subscriptionStartedAt && hoursSince(state.subscriptionStartedAt, now) <= 48
         ? createCandidate(rule, state, now, `subscription-started:${state.subscriptionStartedAt}`, "assinatura ativa") : null;
     case "subscriber_low_usage":
-      return isSubscriber(state) && daysSince(state.subscriptionStartedAt || state.lastActivityAt, now) >= 7 && state.evolutionsCount < 1
+      return isSubscriber(state) && daysSince(state.lastActivityAt || state.subscriptionStartedAt, now) >= Number(rule.condition_config?.days || 7)
         ? createCandidate(rule, state, now, `subscriber-low-usage:${period}`, "assinante com baixo uso") : null;
     default:
       return null;

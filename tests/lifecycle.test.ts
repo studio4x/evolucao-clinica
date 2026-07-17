@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calculateActivationLevel, calculateTrialDaysRemaining, normalizeProfessionSegment } from '../server/lifecycle/lifecycleState.js';
-import { chooseHighestPriority, evaluateKnownRule, getNextBestAction, shouldSkipSequenceStep } from '../server/lifecycle/lifecycleRules.js';
+import { chooseHighestPriority, evaluateKnownRule, getNextBestAction, getSubscriberNextBestAction, shouldSkipSequenceStep } from '../server/lifecycle/lifecycleRules.js';
 import { renderLifecycleTemplate } from '../server/lifecycle/templates/tokenRegistry.js';
 import { renderSafeLifecycleMarkdown } from '../server/lifecycle/lifecycleRenderer.js';
 import { sanitizeLifecycleMetadata } from '../server/lifecycle/lifecycleRepository.js';
@@ -37,8 +37,11 @@ assert.equal(evaluateKnownRule(noPatientRule, baseState, now)?.messageKey, 'cond
 const withPatient = { ...baseState, patientsCount: 1 };
 assert.equal(evaluateKnownRule(noPatientRule, withPatient, now), null);
 assert.equal(getNextBestAction(baseState).label, 'Cadastrar primeiro paciente');
+assert.equal(getNextBestAction(baseState).ctaLabel, 'Cadastrar paciente');
 assert.equal(getNextBestAction({ ...baseState, patientsCount: 1 }).label, 'Criar ou vincular um prontuário');
 assert.equal(getNextBestAction({ ...baseState, patientsCount: 1, linkedRecordsCount: 1, evolutionsCount: 1 }).label, 'Consultar o histórico do paciente');
+assert.equal(getSubscriberNextBestAction(baseState).label, 'Cadastre seu primeiro paciente');
+assert.equal(getSubscriberNextBestAction({ ...baseState, patientsCount: 1, linkedRecordsCount: 1, evolutionsCount: 1 }).ctaLabel, 'Registrar atendimento');
 assert.equal(getNextBestAction({ ...baseState, subscriptionStatus: 'canceled', trialEndsAt: '2026-07-15T12:00:00.000Z' }, now).label, 'Conhecer os planos disponíveis');
 const trialRule: any = { id: 'rule-2', rule_key: 'trial_expiring_3d', name: 'Trial', rule_type: 'deadline', priority: 90, cooldown_hours: 24, delay_minutes: 0, enabled: true, message_config: {} };
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, trialEndsAt: '2026-07-17T12:00:00.000Z' }, now), null);

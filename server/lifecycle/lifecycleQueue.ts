@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
-import { getNextBestAction } from "./lifecycleRules.js";
+import { getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
 import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
 import { escapeLifecycleHtml, renderLifecycleMessage, renderSafeLifecycleMarkdown, resolveLifecycleUrl } from "./lifecycleRenderer.js";
 import { renderLifecycleTemplate } from "./templates/tokenRegistry.js";
 import type { LifecycleDependencies, LifecycleState } from "./lifecycleTypes.js";
 
-function buildContext(state: LifecycleState, origin: string, now: Date) {
-  const action = getNextBestAction(state);
+function buildContext(state: LifecycleState, origin: string, now: Date, useSubscriberAction = false) {
+  const action = useSubscriberAction ? getSubscriberNextBestAction(state, now) : getNextBestAction(state, now);
   return {
     primeiro_nome: state.fullName.trim().split(/\s+/)[0] || "Profissional",
     nome_completo: state.fullName,
@@ -24,7 +24,7 @@ function buildContext(state: LifecycleState, origin: string, now: Date) {
     data_fim_teste: state.trialEndsAt ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(state.trialEndsAt)) : "",
     dias_restantes_teste: state.trialEndsAt ? Math.max(0, Math.ceil((new Date(state.trialEndsAt).getTime() - now.getTime()) / 86400000)) : 0,
     proxima_acao: action.label,
-    texto_cta_proxima_acao: action.label,
+    texto_cta_proxima_acao: action.ctaLabel,
     link_acao: action.route,
     link_suporte: `${origin.replace(/\/$/, "")}/painel/support`
   };
@@ -343,6 +343,28 @@ async function validateNoReturnAfterRegistration(deps: LifecycleDependencies, us
   return null;
 }
 
+async function validateSubscriberLowUsage(deps: LifecycleDependencies, userId: string, rule: any) {
+  const [{ data: professional, error: professionalError }, { data: state, error: stateError }, { data: subscriptionEvents, error: eventsError }] = await Promise.all([
+    deps.supabaseAdmin.from("professionals").select("status, subscription_status, subscription_plan").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_user_state").select("last_activity_at, subscription_started_at, failed_evolutions_count, processing_evolutions_count").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_events").select("event_name, occurred_at").eq("user_id", userId).in("event_name", ["subscription_cancel_requested", "subscription_started", "subscription_renewed", "subscription_cancelled"]).order("occurred_at", { ascending: false }).limit(10)
+  ]);
+  if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar a assinatura.");
+  if (stateError) throw new Error(stateError.message || "Falha ao confirmar o uso da plataforma.");
+  if (eventsError) throw new Error(eventsError.message || "Falha ao confirmar o status de cancelamento.");
+  if (professional?.status !== "active" || professional?.subscription_status !== "active" || professional?.subscription_plan === "trial") return "subscription_no_longer_active";
+
+  const latestEvent = subscriptionEvents?.[0];
+  if (latestEvent?.event_name === "subscription_cancel_requested") return "subscription_cancellation_requested";
+  if (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0) return "technical_issue_requires_attention";
+
+  const reference = state?.last_activity_at || state?.subscription_started_at;
+  const minimumDays = Number(rule?.condition_config?.days || 7);
+  const inactiveDays = reference ? (Date.now() - new Date(reference).getTime()) / 86400000 : Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays) return "user_already_returned_or_low_usage_interval_not_elapsed";
+  return null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -460,6 +482,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       return { status: "skipped" };
     }
   }
+  if (ruleResult.data?.rule_key === "subscriber_low_usage") {
+    const skipReason = await validateSubscriberLowUsage(deps, dispatch.user_id, ruleResult.data);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
   if (ruleResult.data?.rule_key === "first_evolution_completed") {
     const skipReason = await validateFirstEvolutionCompleted(deps, dispatch.user_id);
     if (skipReason) {
@@ -492,7 +521,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
 
   const now = new Date();
-  const context = buildContext(stateResult, deps.productionOrigin, now);
+  const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage");
   const config = messageFromConfig(dispatch, stepResult.data, ruleResult.data);
   const rendered = renderLifecycleMessage({
     subjectTemplate: config.subject_template,
