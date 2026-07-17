@@ -60,6 +60,7 @@ function buildTemplateContext(state: LifecycleState, origin: string, now: Date):
     quantidade_pacientes: state.patientsCount,
     quantidade_prontuarios: state.linkedRecordsCount,
     quantidade_evolucoes: state.evolutionsCount,
+    resumo_progresso: "",
     quantidade_audios: state.audioEvolutionsCount,
     quantidade_documentos: state.reportsCount,
     quantidade_recursos: state.resourcesCount,
@@ -67,6 +68,7 @@ function buildTemplateContext(state: LifecycleState, origin: string, now: Date):
     data_fim_teste: state.trialEndsAt ? new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(state.trialEndsAt)) : "",
     dias_restantes_teste: Math.max(daysRemaining, 0),
     proxima_acao: nextAction.label,
+    texto_cta_proxima_acao: nextAction.label,
     link_acao: nextAction.route,
     link_suporte: `${origin.replace(/\/$/, "")}/painel/support`
   };

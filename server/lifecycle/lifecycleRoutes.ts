@@ -39,6 +39,7 @@ function mapContext(state: any, origin: string) {
     quantidade_pacientes: state.patientsCount,
     quantidade_prontuarios: state.linkedRecordsCount,
     quantidade_evolucoes: state.evolutionsCount,
+    resumo_progresso: "",
     quantidade_audios: state.audioEvolutionsCount,
     quantidade_documentos: state.reportsCount,
     quantidade_recursos: state.resourcesCount,
@@ -46,6 +47,7 @@ function mapContext(state: any, origin: string) {
     data_fim_teste: state.trialEndsAt || "",
     dias_restantes_teste: state.trialEndsAt ? Math.max(0, Math.ceil((new Date(state.trialEndsAt).getTime() - Date.now()) / 86400000)) : 0,
     proxima_acao: action.label,
+    texto_cta_proxima_acao: action.label,
     link_acao: action.route,
     link_suporte: origin + "/painel/support"
   };

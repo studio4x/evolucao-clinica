@@ -2,15 +2,18 @@ import { LIFECYCLE_PRIORITY } from "./lifecycleConstants.js";
 import { calculateTrialDaysRemaining } from "./lifecycleState.js";
 import type { LifecycleCandidate, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
 
-export function getNextBestAction(state: LifecycleState): { label: string; route: string } {
+export function getNextBestAction(state: LifecycleState, now = new Date()): { label: string; route: string } {
   if (state.failedEvolutionsCount > 0) return { label: "Verificar evolução", route: "/painel/history" };
+  const trialExpired = Boolean(state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active");
+  if (state.subscriptionStatus === "canceled" || trialExpired) return { label: "Conhecer os planos disponíveis", route: "/painel/subscription" };
   if (state.patientsCount === 0) return { label: "Cadastrar primeiro paciente", route: "/painel/patients/new" };
-  if (state.linkedRecordsCount === 0) return { label: "Configurar prontuário", route: "/painel/patients" };
-  if (state.evolutionsCount === 0) return { label: "Criar primeira evolução", route: "/painel/patients" };
-  if (state.evolutionsCount < 3) return { label: "Continuar organizando", route: "/painel/patients" };
+  if (state.linkedRecordsCount === 0) return { label: "Criar ou vincular um prontuário", route: "/painel/patients" };
+  if (state.evolutionsCount === 0) return { label: "Criar sua primeira evolução", route: "/painel/patients" };
+  if (state.evolutionsCount === 1) return { label: "Consultar o histórico do paciente", route: "/painel/history" };
+  if (state.subscriptionStatus === "active" && state.subscriptionPlan !== "trial") return { label: "Aproveitar mais recursos do seu plano", route: "/painel/profile" };
+  if (state.evolutionsCount >= 3 || state.usageDaysCount >= 2) return { label: "Explorar outros recursos da plataforma", route: "/painel/profile" };
   if (state.subscriptionStatus === "trialing") return { label: "Continuar usando", route: "/painel/dashboard" };
-  if (state.subscriptionStatus === "canceled") return { label: "Conhecer os planos", route: "/painel/subscription" };
-  return { label: "Explorar mais recursos", route: "/painel/profile" };
+  return { label: "Explorar outros recursos da plataforma", route: "/painel/profile" };
 }
 
 function hoursSince(value: string | null | undefined, now: Date): number {
