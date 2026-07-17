@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, CirclePause, CirclePlay, FileText, ListChecks, Loader2, RefreshCw, Save, ScrollText, Settings, Users } from 'lucide-react';
+import { Check, CirclePause, CirclePlay, FileText, ListChecks, Loader2, Pencil, RefreshCw, Save, ScrollText, Settings, Users, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 type Tab = 'overview' | 'campaigns' | 'rules' | 'preferences' | 'settings';
 type CampaignTab = 'flows' | 'templates' | 'instances' | 'logs';
+type TemplateDraft = {
+  subject_template: string;
+  preheader_template: string;
+  body_markdown: string;
+  cta_label_template: string;
+  cta_route_template: string;
+  fallback_cta_route: string;
+  category: string;
+};
 
 async function api(path: string, init: RequestInit = {}) {
   const { data } = await supabase.auth.getSession();
@@ -43,6 +52,18 @@ function waitHours(step: any) {
   return `${Number(step.day_offset || 0) * 24}h`;
 }
 
+function templateDraftFromStep(step: any): TemplateDraft {
+  return {
+    subject_template: step.subject_template || '',
+    preheader_template: step.preheader_template || '',
+    body_markdown: step.body_markdown || '',
+    cta_label_template: step.cta_label_template || '',
+    cta_route_template: step.cta_route_template || '',
+    fallback_cta_route: step.fallback_cta_route || '',
+    category: step.category || 'education'
+  };
+}
+
 function EmptyState({ icon: Icon, title, description }: { icon: typeof FileText; title: string; description: string }) {
   return <div className="rounded-xl border border-dashed border-brand-border bg-white p-10 text-center">
     <Icon className="mx-auto mb-3 text-brand-primary" size={28} />
@@ -65,6 +86,9 @@ export default function LifecycleAdmin() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
+  const [templateSaving, setTemplateSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -126,6 +150,51 @@ export default function LifecycleAdmin() {
     }
   };
 
+  const startTemplateEdit = (step: any) => {
+    setEditingTemplateId(step.id);
+    setTemplateDraft(templateDraftFromStep(step));
+    setError('');
+    setMessage('');
+  };
+
+  const cancelTemplateEdit = () => {
+    setEditingTemplateId(null);
+    setTemplateDraft(null);
+  };
+
+  const saveTemplate = async () => {
+    if (!editingTemplateId || !templateDraft) return;
+    if (!templateDraft.subject_template.trim() || !templateDraft.body_markdown.trim()) {
+      setError('O assunto e o conteúdo do template são obrigatórios.');
+      return;
+    }
+
+    setTemplateSaving(true);
+    setError('');
+    try {
+      await api('/api/admin/lifecycle/steps/' + editingTemplateId, {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...templateDraft,
+          subject_template: templateDraft.subject_template.trim(),
+          preheader_template: templateDraft.preheader_template.trim() || null,
+          body_markdown: templateDraft.body_markdown.trim(),
+          cta_label_template: templateDraft.cta_label_template.trim() || null,
+          cta_route_template: templateDraft.cta_route_template.trim() || null,
+          fallback_cta_route: templateDraft.fallback_cta_route.trim() || null,
+          category: templateDraft.category.trim() || 'education'
+        })
+      });
+      setMessage('Template atualizado com sucesso.');
+      cancelTemplateEdit();
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Falha ao salvar o template.');
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
   const updateRule = async (rule: any) => {
     try {
       await api('/api/admin/lifecycle/rules/' + rule.id, { method: 'PUT', body: JSON.stringify({ enabled: !rule.enabled }) });
@@ -169,6 +238,7 @@ export default function LifecycleAdmin() {
     ['logs', 'Logs de Envio', ScrollText]
   ];
   const templateRows = campaigns.flatMap((campaign) => (steps[campaign.id] || []).map((step) => ({ ...step, campaign })));
+  const editingTemplate = templateRows.find((step) => step.id === editingTemplateId);
 
   if (loading && !overview) return <div className="flex items-center justify-center p-12"><Loader2 className="animate-spin text-brand-primary" /></div>;
 
@@ -219,8 +289,31 @@ export default function LifecycleAdmin() {
         </section>)}
       </div>}
 
-      {campaignTab === 'templates' && <div className="space-y-3">
-        {templateRows.length === 0 ? <EmptyState icon={FileText} title="Nenhum template disponível" description="Os templates dos passos aparecerão aqui quando houver campanhas cadastradas." /> : <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[780px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Template</th><th className="p-3">Campanha</th><th className="p-3">Categoria</th><th className="p-3">Estado</th><th className="p-3">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{templateRows.map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-[360px] truncate text-brand-text">{step.subject_template}</strong><span className="block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || 'Sem preheader cadastrado'}</span></td><td className="p-3">{step.campaign.name}<span className="block text-xs text-brand-text-muted">Passo {step.position}</span></td><td className="p-3"><span className="rounded-full border border-brand-border px-2 py-1 text-xs">{step.category || 'education'}</span></td><td className="p-3">{step.status === 'active' ? <span className="text-emerald-700">Ativo</span> : <span className="text-brand-text-muted">Rascunho</span>}</td><td className="p-3"><button onClick={() => void updateStep(step)} className="btn-outline text-xs">{step.status === 'active' ? 'Desativar' : 'Validar e ativar'}</button></td></tr>)}</tbody></table></div>}
+      {campaignTab === 'templates' && <div className="space-y-4">
+        {templateRows.length === 0 ? <EmptyState icon={FileText} title="Nenhum template disponível" description="Os templates dos passos aparecerão aqui quando houver campanhas cadastradas." /> : <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[780px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Template</th><th className="p-3">Campanha</th><th className="p-3">Categoria</th><th className="p-3">Estado</th><th className="p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{templateRows.map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-[360px] truncate text-brand-text">{step.subject_template}</strong><span className="block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || 'Sem preheader cadastrado'}</span></td><td className="p-3">{step.campaign.name}<span className="block text-xs text-brand-text-muted">Passo {step.position}</span></td><td className="p-3"><span className="rounded-full border border-brand-border px-2 py-1 text-xs">{step.category || 'education'}</span></td><td className="p-3">{step.status === 'active' ? <span className="text-emerald-700">Ativo</span> : <span className="text-brand-text-muted">Rascunho</span>}</td><td className="p-3 text-right"><div className="inline-flex gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline text-xs">{step.status === 'active' ? 'Desativar' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>}
+
+        {editingTemplate && templateDraft && <form onSubmit={(event) => { event.preventDefault(); void saveTemplate(); }} className="rounded-xl border border-brand-primary/30 bg-white p-5 md:p-6 shadow-sm space-y-5">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 border-b border-brand-border pb-4">
+            <div><span className="text-xs font-semibold uppercase tracking-wide text-brand-primary">Editando template</span><h3 className="mt-1 text-lg font-semibold text-brand-text">Passo {editingTemplate.position} · {editingTemplate.campaign.name}</h3><p className="mt-1 text-xs text-brand-text-muted">As alterações serão aplicadas ao próximo processamento deste passo.</p></div>
+            <button type="button" onClick={cancelTemplateEdit} className="btn-outline inline-flex items-center gap-1.5 self-start text-xs"><X size={14} /> Cancelar</button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block"><span className="text-sm font-semibold text-brand-text">Assunto</span><input required value={templateDraft.subject_template} onChange={(event) => setTemplateDraft({ ...templateDraft, subject_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+            <label className="block"><span className="text-sm font-semibold text-brand-text">Preheader</span><input value={templateDraft.preheader_template} onChange={(event) => setTemplateDraft({ ...templateDraft, preheader_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+          </div>
+
+          <label className="block"><span className="text-sm font-semibold text-brand-text">Conteúdo da mensagem</span><textarea required rows={12} value={templateDraft.body_markdown} onChange={(event) => setTemplateDraft({ ...templateDraft, body_markdown: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm leading-6 focus:border-brand-primary focus:outline-none" /><span className="mt-1 block text-xs text-brand-text-muted">Markdown e variáveis do lifecycle, como <code>{'{{primeiro_nome}}'}</code>, são aceitos.</span></label>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <label className="block"><span className="text-sm font-semibold text-brand-text">Texto do botão</span><input value={templateDraft.cta_label_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_label_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+            <label className="block"><span className="text-sm font-semibold text-brand-text">Categoria</span><input value={templateDraft.category} onChange={(event) => setTemplateDraft({ ...templateDraft, category: event.target.value })} placeholder="activation" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+            <label className="block"><span className="text-sm font-semibold text-brand-text">Rota principal do botão</span><input value={templateDraft.cta_route_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_route_template: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+            <label className="block"><span className="text-sm font-semibold text-brand-text">Rota alternativa</span><input value={templateDraft.fallback_cta_route} onChange={(event) => setTemplateDraft({ ...templateDraft, fallback_cta_route: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-brand-border pt-4"><button type="button" onClick={cancelTemplateEdit} className="btn-outline text-sm">Cancelar</button><button type="submit" disabled={templateSaving} className="btn-primary inline-flex items-center gap-2 text-sm">{templateSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}{templateSaving ? 'Salvando...' : 'Salvar template'}</button></div>
+        </form>}
       </div>}
 
       {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Plano</th><th className="p-3">Jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = user.enrollments?.[0]; return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{user.state?.activation_status || '—'}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{user.subscription_plan || '—'} / {user.subscription_status || '—'}</td><td className="p-3">{enrollment?.status || 'não matriculado'}<span className="block text-xs text-brand-text-muted">{enrollment?.current_position ? `Passo ${enrollment.current_position}` : 'Sem passo iniciado'}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} className="btn-outline p-1.5"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} className="btn-outline p-1.5"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} className="btn-outline p-1.5"><CirclePlay size={14} /></button>}</div></td></tr>; })}</tbody></table>}</div>}
