@@ -34,6 +34,10 @@ async function markSuppressed(deps: LifecycleDependencies, dispatch: any, reason
   await deps.supabaseAdmin.from("lifecycle_dispatches").update({ status: "suppressed", skip_reason: reason, skipped_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", dispatch.id);
 }
 
+async function markSkipped(deps: LifecycleDependencies, dispatch: any, reason: string) {
+  await deps.supabaseAdmin.from("lifecycle_dispatches").update({ status: "skipped", skip_reason: reason, skipped_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", dispatch.id);
+}
+
 async function markFailure(deps: LifecycleDependencies, dispatch: any, error: unknown) {
   const message = String(error instanceof Error ? error.message : error || "Falha desconhecida").slice(0, 500);
   const attempt = Number(dispatch.attempt_count || 1);
@@ -280,6 +284,18 @@ async function validateProcessingAlert(
   return null;
 }
 
+async function validateLinkedRecordWithoutEvolution(deps: LifecycleDependencies, userId: string) {
+  const [{ count: linkedRecords, error: linkedRecordsError }, { count: completedEvolutions, error: completedEvolutionsError }] = await Promise.all([
+    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId).not("google_doc_id", "is", null).neq("google_doc_id", ""),
+    deps.supabaseAdmin.from("evolutions").select("id", { count: "exact", head: true }).eq("professional_id", userId).eq("transcription_status", "completed").eq("google_doc_append_status", "completed")
+  ]);
+  if (linkedRecordsError) throw new Error(linkedRecordsError.message || "Falha ao confirmar prontuários vinculados.");
+  if (completedEvolutionsError) throw new Error(completedEvolutionsError.message || "Falha ao confirmar evoluções concluídas.");
+  if (!Number(linkedRecords || 0)) return "no_linked_record";
+  if (Number(completedEvolutions || 0) > 0) return "evolution_already_completed";
+  return null;
+}
+
 async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, runtime: LifecycleRuntimeConfig) {
   if (!runtime.send_enabled || runtime.dry_run) {
     await markSuppressed(deps, dispatch, "dry_run_or_sending_disabled");
@@ -322,6 +338,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   if (processingValidationReason) {
     await markSuppressed(deps, dispatch, processingValidationReason);
     return { status: "suppressed" };
+  }
+  if (ruleResult.data?.rule_key === "linked_record_without_evolution") {
+    const skipReason = await validateLinkedRecordWithoutEvolution(deps, dispatch.user_id);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
   }
   if (!profile?.google_email) throw new Error("destinatário sem e-mail cadastrado");
   if (!preferences.lifecycle_enabled || (dispatch.metadata?.commercial && !preferences.commercial_enabled)) {
