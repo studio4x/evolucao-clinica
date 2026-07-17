@@ -510,6 +510,7 @@ function buildEmailShell(theme: EmailTheme, options: {
   title: string;
   subtitle?: string;
   eyebrow?: string;
+  headerEyebrow?: string;
   bodyHtml: string;
   footerHtml?: string;
 }) {
@@ -528,6 +529,9 @@ function buildEmailShell(theme: EmailTheme, options: {
                 ${theme.logoUrl
                   ? `<img src="${escapeHtml(theme.logoUrl)}" alt="${escapeHtml(theme.brandName)}" style="display: block; width: auto; max-width: 260px; height: auto; max-height: 42px; object-fit: contain;" />`
                   : `<table border="0" cellpadding="0" cellspacing="0"><tr><td style="padding-right: 12px; vertical-align: middle;"><div style="width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, ${theme.primary} 0%, ${theme.secondary} 100%); box-shadow: 0 4px 10px ${hexToRgba(theme.primary, 0.3)}; display: inline-block;"></div></td><td style="vertical-align: middle;"><span style="font-size: 16px; font-weight: 800; letter-spacing: -0.3px; color: ${theme.text}; font-family: 'Outfit', sans-serif;">${escapeHtml(theme.brandName)}</span></td></tr></table>`}
+              </td>
+              <td align="right" style="vertical-align: middle; padding-left: 16px;">
+                ${options.headerEyebrow ? `<span style="display: inline-block; color: ${theme.primary}; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.4px; line-height: 1.3; text-align: right; white-space: nowrap; font-family: 'Outfit', sans-serif;">${escapeHtml(options.headerEyebrow)}</span>` : ""}
               </td>
             </tr>
           </table>

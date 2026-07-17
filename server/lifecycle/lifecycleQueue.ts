@@ -358,7 +358,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       const htmlContent = deps.buildEmailShell(theme, {
         title: escapeLifecycleHtml(rendered.subject),
         subtitle: escapeLifecycleHtml(rendered.preheader),
-        eyebrow: "Jornada de Usuários",
+        headerEyebrow: "Jornada de Usuários",
         bodyHtml: `${rendered.bodyHtml}<div style="text-align:center;margin:28px 0 8px 0;">${deps.buildEmailButton(theme, actionUrl, escapeLifecycleHtml(rendered.ctaLabel))}</div>`,
         footerHtml: `Esta mensagem foi enviada pelo Evolução Clínica.<br/><a href="${escapeLifecycleHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeLifecycleHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeLifecycleHtml(resolveLifecycleUrl(deps.productionOrigin, "/painel/support"))}">Suporte</a>`
       });
