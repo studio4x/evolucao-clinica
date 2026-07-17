@@ -418,6 +418,29 @@ async function validateInactiveFourteenDays(deps: LifecycleDependencies, userId:
   return null;
 }
 
+async function validateInactiveSevenDays(deps: LifecycleDependencies, userId: string, rule: any) {
+  const [{ data: professional, error: professionalError }, { data: state, error: stateError }, { data: higherPriorityDispatch, error: higherPriorityError }] = await Promise.all([
+    deps.supabaseAdmin.from("professionals").select("status, subscription_status, trial_ends_at").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_user_state").select("last_activity_at, failed_evolutions_count, processing_evolutions_count").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_dispatches").select("id").eq("user_id", userId).in("status", ["queued", "processing", "retry"]).gt("priority", Number(rule?.priority || 0)).limit(1).maybeSingle()
+  ]);
+  if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar a disponibilidade da conta.");
+  if (stateError) throw new Error(stateError.message || "Falha ao confirmar a última atividade.");
+  if (higherPriorityError) throw new Error(higherPriorityError.message || "Falha ao verificar mensagens prioritárias pendentes.");
+  if (professional?.status !== "active") return "account_no_longer_available";
+
+  const trialEndsAt = professional?.trial_ends_at ? new Date(professional.trial_ends_at).getTime() : 0;
+  if (trialEndsAt > 0 && trialEndsAt <= Date.now() && professional?.subscription_status !== "active") return "trial_recovery_message_required";
+  if (higherPriorityDispatch?.id) return "higher_priority_message_pending";
+  if (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0) return "technical_issue_requires_attention";
+
+  const minimumDays = Number(rule?.condition_config?.days || 7);
+  const lastActivityAt = state?.last_activity_at ? new Date(state.last_activity_at).getTime() : 0;
+  const inactiveDays = lastActivityAt > 0 ? (Date.now() - lastActivityAt) / 86400000 : Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays || inactiveDays >= 14) return "user_already_returned_or_interval_not_elapsed";
+  return null;
+}
+
 async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
   const { count, error } = await deps.supabaseAdmin
     .from("evolutions")
@@ -551,6 +574,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "inactive_14d") {
     const skipReason = await validateInactiveFourteenDays(deps, dispatch.user_id, ruleResult.data);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "inactive_7d") {
+    const skipReason = await validateInactiveSevenDays(deps, dispatch.user_id, ruleResult.data);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };

@@ -132,7 +132,7 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
       return !isSubscriber(state) && activityAge >= 3 && activityAge < 7
         ? createCandidate(rule, state, now, `inactive-3d:${period}`, "três dias sem acesso") : null;
     case "inactive_7d":
-      return !isSubscriber(state) && activityAge >= 7 && activityAge < 14
+      return !((state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active")) && activityAge >= Number(rule.condition_config?.days || 7) && activityAge < 14
         ? createCandidate(rule, state, now, `inactive-7d:${period}`, "sete dias sem acesso") : null;
     case "inactive_14d": {
       const trialEndedWithoutSubscription = Boolean(state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active");
