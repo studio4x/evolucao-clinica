@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Check, CirclePause, CirclePlay, FileText, ListChecks, Loader2, Pencil, RefreshCw, Save, ScrollText, Settings, Users, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Bold, Check, CirclePause, CirclePlay, Eraser, FileText, Heading2, Italic, List, ListChecks, Loader2, Pencil, RefreshCw, Save, ScrollText, Settings, Users, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 type Tab = 'overview' | 'campaigns' | 'rules' | 'preferences' | 'settings';
@@ -64,6 +64,88 @@ function templateDraftFromStep(step: any): TemplateDraft {
   };
 }
 
+function escapeEditorHtml(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function markdownInlineToEditorHtml(value: string) {
+  return escapeEditorHtml(value)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+}
+
+function markdownToEditorHtml(markdown: string) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  const html: string[] = [];
+  let listOpen = false;
+  const closeList = () => {
+    if (listOpen) {
+      html.push('</ul>');
+      listOpen = false;
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const listItem = trimmed.match(/^[-*]\s+(.+)$/);
+    if (listItem) {
+      if (!listOpen) {
+        html.push('<ul>');
+        listOpen = true;
+      }
+      html.push(`<li>${markdownInlineToEditorHtml(listItem[1])}</li>`);
+      continue;
+    }
+    closeList();
+    if (!trimmed) continue;
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      html.push(`<h${heading[1].length}>${markdownInlineToEditorHtml(heading[2])}</h${heading[1].length}>`);
+    } else {
+      html.push(`<p>${markdownInlineToEditorHtml(trimmed)}</p>`);
+    }
+  }
+  closeList();
+  return html.join('') || '<p><br></p>';
+}
+
+function richTextNodeToMarkdown(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return (node.textContent || '').replace(/\u00a0/g, ' ');
+  if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+  const element = node as HTMLElement;
+  const content = Array.from(element.childNodes).map(richTextNodeToMarkdown).join('');
+  switch (element.tagName.toLowerCase()) {
+    case 'br': return '\n';
+    case 'strong':
+    case 'b': return content.trim() ? `**${content.trim()}**` : '';
+    case 'em':
+    case 'i': return content.trim() ? `*${content.trim()}*` : '';
+    case 'code': return content.trim() ? `\`${content.trim()}\`` : '';
+    case 'h1': return `# ${content.trim()}\n\n`;
+    case 'h2': return `## ${content.trim()}\n\n`;
+    case 'h3': return `### ${content.trim()}\n\n`;
+    case 'li': return `- ${content.trim()}\n`;
+    case 'ul':
+    case 'ol': return `${content}\n`;
+    case 'p':
+    case 'div': return `${content.trim()}\n\n`;
+    default: return content;
+  }
+}
+
+function richTextHtmlToMarkdown(html: string) {
+  const documentRoot = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html').body.firstElementChild;
+  if (!documentRoot) return '';
+  return Array.from(documentRoot.childNodes)
+    .map(richTextNodeToMarkdown)
+    .join('')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function EmptyState({ icon: Icon, title, description }: { icon: typeof FileText; title: string; description: string }) {
   return <div className="rounded-xl border border-dashed border-brand-border bg-white p-10 text-center">
     <Icon className="mx-auto mb-3 text-brand-primary" size={28} />
@@ -88,7 +170,9 @@ export default function LifecycleAdmin() {
   const [error, setError] = useState('');
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateDraft, setTemplateDraft] = useState<TemplateDraft | null>(null);
+  const [richTextHtml, setRichTextHtml] = useState('');
   const [templateSaving, setTemplateSaving] = useState(false);
+  const richTextEditorRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,6 +214,12 @@ export default function LifecycleAdmin() {
 
   useEffect(() => { void load(); }, [load]);
 
+  useEffect(() => {
+    if (editingTemplateId && richTextEditorRef.current && richTextEditorRef.current.innerHTML !== richTextHtml) {
+      richTextEditorRef.current.innerHTML = richTextHtml;
+    }
+  }, [editingTemplateId, richTextHtml]);
+
   const updateCampaign = async (campaign: any, status: string) => {
     try {
       await api('/api/admin/lifecycle/campaigns/' + campaign.id, { method: 'PUT', body: JSON.stringify({ status }) });
@@ -153,6 +243,7 @@ export default function LifecycleAdmin() {
   const startTemplateEdit = (step: any) => {
     setEditingTemplateId(step.id);
     setTemplateDraft(templateDraftFromStep(step));
+    setRichTextHtml(markdownToEditorHtml(step.body_markdown || ''));
     setError('');
     setMessage('');
   };
@@ -160,6 +251,21 @@ export default function LifecycleAdmin() {
   const cancelTemplateEdit = () => {
     setEditingTemplateId(null);
     setTemplateDraft(null);
+    setRichTextHtml('');
+  };
+
+  const syncRichTextDraft = () => {
+    const html = richTextEditorRef.current?.innerHTML || '';
+    setRichTextHtml(html);
+    setTemplateDraft((current) => current ? { ...current, body_markdown: richTextHtmlToMarkdown(html) } : current);
+  };
+
+  const applyRichTextCommand = (command: string, value?: string) => {
+    const editor = richTextEditorRef.current;
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(command, false, value);
+    syncRichTextDraft();
   };
 
   const saveTemplate = async () => {
@@ -292,28 +398,45 @@ export default function LifecycleAdmin() {
       {campaignTab === 'templates' && <div className="space-y-4">
         {templateRows.length === 0 ? <EmptyState icon={FileText} title="Nenhum template disponível" description="Os templates dos passos aparecerão aqui quando houver campanhas cadastradas." /> : <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[780px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Template</th><th className="p-3">Campanha</th><th className="p-3">Categoria</th><th className="p-3">Estado</th><th className="p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{templateRows.map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-[360px] truncate text-brand-text">{step.subject_template}</strong><span className="block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || 'Sem preheader cadastrado'}</span></td><td className="p-3">{step.campaign.name}<span className="block text-xs text-brand-text-muted">Passo {step.position}</span></td><td className="p-3"><span className="rounded-full border border-brand-border px-2 py-1 text-xs">{step.category || 'education'}</span></td><td className="p-3">{step.status === 'active' ? <span className="text-emerald-700">Ativo</span> : <span className="text-brand-text-muted">Rascunho</span>}</td><td className="p-3 text-right"><div className="inline-flex gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline text-xs">{step.status === 'active' ? 'Desativar' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>}
 
-        {editingTemplate && templateDraft && <form onSubmit={(event) => { event.preventDefault(); void saveTemplate(); }} className="rounded-xl border border-brand-primary/30 bg-white p-5 md:p-6 shadow-sm space-y-5">
-          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 border-b border-brand-border pb-4">
-            <div><span className="text-xs font-semibold uppercase tracking-wide text-brand-primary">Editando template</span><h3 className="mt-1 text-lg font-semibold text-brand-text">Passo {editingTemplate.position} · {editingTemplate.campaign.name}</h3><p className="mt-1 text-xs text-brand-text-muted">As alterações serão aplicadas ao próximo processamento deste passo.</p></div>
-            <button type="button" onClick={cancelTemplateEdit} className="btn-outline inline-flex items-center gap-1.5 self-start text-xs"><X size={14} /> Cancelar</button>
-          </div>
+        {editingTemplate && templateDraft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !templateSaving) cancelTemplateEdit(); }}>
+          <form onSubmit={(event) => { event.preventDefault(); void saveTemplate(); }} role="dialog" aria-modal="true" aria-labelledby="lifecycle-template-editor-title" className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-brand-border bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-brand-border bg-slate-50/80 p-5 md:p-6">
+              <div><span className="text-xs font-semibold uppercase tracking-wide text-brand-primary">Editor de template</span><h3 id="lifecycle-template-editor-title" className="mt-1 text-lg font-semibold text-brand-text">Passo {editingTemplate.position} · {editingTemplate.campaign.name}</h3><p className="mt-1 text-xs text-brand-text-muted">As alterações serão aplicadas ao próximo processamento deste passo.</p></div>
+              <button type="button" onClick={cancelTemplateEdit} disabled={templateSaving} className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg hover:text-brand-text disabled:opacity-50" aria-label="Fechar editor"><X size={18} /></button>
+            </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="block"><span className="text-sm font-semibold text-brand-text">Assunto</span><input required value={templateDraft.subject_template} onChange={(event) => setTemplateDraft({ ...templateDraft, subject_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-            <label className="block"><span className="text-sm font-semibold text-brand-text">Preheader</span><input value={templateDraft.preheader_template} onChange={(event) => setTemplateDraft({ ...templateDraft, preheader_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-          </div>
+            <div className="overflow-y-auto p-5 md:p-6 space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Assunto</span><input required value={templateDraft.subject_template} onChange={(event) => setTemplateDraft({ ...templateDraft, subject_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Preheader</span><input value={templateDraft.preheader_template} onChange={(event) => setTemplateDraft({ ...templateDraft, preheader_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+              </div>
 
-          <label className="block"><span className="text-sm font-semibold text-brand-text">Conteúdo da mensagem</span><textarea required rows={12} value={templateDraft.body_markdown} onChange={(event) => setTemplateDraft({ ...templateDraft, body_markdown: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm leading-6 focus:border-brand-primary focus:outline-none" /><span className="mt-1 block text-xs text-brand-text-muted">Markdown e variáveis do lifecycle, como <code>{'{{primeiro_nome}}'}</code>, são aceitos.</span></label>
+              <div>
+                <span className="text-sm font-semibold text-brand-text">Conteúdo do e-mail</span>
+                <div className="mt-1 overflow-hidden rounded-lg border border-brand-border focus-within:border-brand-primary">
+                  <div className="flex flex-wrap items-center gap-1 border-b border-brand-border bg-brand-bg/60 p-2" role="toolbar" aria-label="Formatação do conteúdo">
+                    <button type="button" onMouseDown={(event) => { event.preventDefault(); applyRichTextCommand('bold'); }} className="rounded p-2 text-brand-text-muted hover:bg-white hover:text-brand-primary" title="Negrito"><Bold size={16} /></button>
+                    <button type="button" onMouseDown={(event) => { event.preventDefault(); applyRichTextCommand('italic'); }} className="rounded p-2 text-brand-text-muted hover:bg-white hover:text-brand-primary" title="Itálico"><Italic size={16} /></button>
+                    <button type="button" onMouseDown={(event) => { event.preventDefault(); applyRichTextCommand('formatBlock', 'h2'); }} className="rounded p-2 text-brand-text-muted hover:bg-white hover:text-brand-primary" title="Título"><Heading2 size={16} /></button>
+                    <button type="button" onMouseDown={(event) => { event.preventDefault(); applyRichTextCommand('insertUnorderedList'); }} className="rounded p-2 text-brand-text-muted hover:bg-white hover:text-brand-primary" title="Lista"><List size={16} /></button>
+                    <button type="button" onMouseDown={(event) => { event.preventDefault(); applyRichTextCommand('removeFormat'); }} className="rounded p-2 text-brand-text-muted hover:bg-white hover:text-brand-primary" title="Limpar formatação"><Eraser size={16} /></button>
+                  </div>
+                  <div ref={richTextEditorRef} contentEditable suppressContentEditableWarning onInput={syncRichTextDraft} className="min-h-[280px] max-h-[48vh] overflow-y-auto px-4 py-3 text-sm leading-7 text-brand-text focus:outline-none [&_h1]:mb-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-3 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:mb-2 [&_h3]:font-bold [&_li]:ml-5 [&_li]:list-disc [&_p]:mb-3" />
+                </div>
+                <p className="mt-1.5 text-xs text-brand-text-muted">Use a barra acima para formatar. Variáveis do lifecycle, como <code>{'{{primeiro_nome}}'}</code>, continuam disponíveis.</p>
+              </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <label className="block"><span className="text-sm font-semibold text-brand-text">Texto do botão</span><input value={templateDraft.cta_label_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_label_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-            <label className="block"><span className="text-sm font-semibold text-brand-text">Categoria</span><input value={templateDraft.category} onChange={(event) => setTemplateDraft({ ...templateDraft, category: event.target.value })} placeholder="activation" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-            <label className="block"><span className="text-sm font-semibold text-brand-text">Rota principal do botão</span><input value={templateDraft.cta_route_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_route_template: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-            <label className="block"><span className="text-sm font-semibold text-brand-text">Rota alternativa</span><input value={templateDraft.fallback_cta_route} onChange={(event) => setTemplateDraft({ ...templateDraft, fallback_cta_route: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
-          </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Texto do botão</span><input value={templateDraft.cta_label_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_label_template: event.target.value })} className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Categoria</span><input value={templateDraft.category} onChange={(event) => setTemplateDraft({ ...templateDraft, category: event.target.value })} placeholder="activation" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Rota principal do botão</span><input value={templateDraft.cta_route_template} onChange={(event) => setTemplateDraft({ ...templateDraft, cta_route_template: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+                <label className="block"><span className="text-sm font-semibold text-brand-text">Rota alternativa</span><input value={templateDraft.fallback_cta_route} onChange={(event) => setTemplateDraft({ ...templateDraft, fallback_cta_route: event.target.value })} placeholder="/painel/dashboard" className="mt-1 w-full rounded-lg border border-brand-border px-3 py-2.5 text-sm focus:border-brand-primary focus:outline-none" /></label>
+              </div>
+            </div>
 
-          <div className="flex justify-end gap-2 border-t border-brand-border pt-4"><button type="button" onClick={cancelTemplateEdit} className="btn-outline text-sm">Cancelar</button><button type="submit" disabled={templateSaving} className="btn-primary inline-flex items-center gap-2 text-sm">{templateSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}{templateSaving ? 'Salvando...' : 'Salvar template'}</button></div>
-        </form>}
+            <div className="flex justify-end gap-2 border-t border-brand-border bg-slate-50/50 p-4 md:p-5"><button type="button" onClick={cancelTemplateEdit} disabled={templateSaving} className="btn-outline text-sm">Cancelar</button><button type="submit" disabled={templateSaving} className="btn-primary inline-flex items-center gap-2 text-sm">{templateSaving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}{templateSaving ? 'Salvando...' : 'Salvar template'}</button></div>
+          </form>
+        </div>}
       </div>}
 
       {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Plano</th><th className="p-3">Jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = user.enrollments?.[0]; return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{user.state?.activation_status || '—'}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{user.subscription_plan || '—'} / {user.subscription_status || '—'}</td><td className="p-3">{enrollment?.status || 'não matriculado'}<span className="block text-xs text-brand-text-muted">{enrollment?.current_position ? `Passo ${enrollment.current_position}` : 'Sem passo iniciado'}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} className="btn-outline p-1.5"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} className="btn-outline p-1.5"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} className="btn-outline p-1.5"><CirclePlay size={14} /></button>}</div></td></tr>; })}</tbody></table>}</div>}
