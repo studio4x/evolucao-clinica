@@ -296,6 +296,19 @@ async function validateLinkedRecordWithoutEvolution(deps: LifecycleDependencies,
   return null;
 }
 
+async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
+  const { count, error } = await deps.supabaseAdmin
+    .from("evolutions")
+    .select("id", { count: "exact", head: true })
+    .eq("professional_id", userId)
+    .eq("transcription_status", "completed")
+    .eq("google_doc_append_status", "completed");
+  if (error) throw new Error(error.message || "Falha ao confirmar a primeira evolução concluída.");
+  if (Number(count || 0) === 0) return "evolution_not_completed_in_patient_record";
+  if (Number(count || 0) !== 1) return "not_first_completed_evolution";
+  return null;
+}
+
 async function validateTrialExpiringOneDay(deps: LifecycleDependencies, userId: string) {
   const { data: professional, error } = await deps.supabaseAdmin
     .from("professionals")
@@ -374,6 +387,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "linked_record_without_evolution") {
     const skipReason = await validateLinkedRecordWithoutEvolution(deps, dispatch.user_id);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "first_evolution_completed") {
+    const skipReason = await validateFirstEvolutionCompleted(deps, dispatch.user_id);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };
