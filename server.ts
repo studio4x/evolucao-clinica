@@ -562,8 +562,7 @@ function buildEmailShell(theme: EmailTheme, options: {
         <!-- Footer -->
         ${options.footerHtml ? `
           <div style="padding: 24px 32px 32px 32px; background-color: ${hexToRgba(theme.bg, 0.4)}; border-top: 1px solid ${theme.border}; text-align: center; font-size: 12px; color: ${theme.textMuted}; line-height: 1.7; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-            <p style="margin: 0 0 10px 0; font-weight: 700; color: ${theme.text}; font-size: 13px;">${theme.brandName}</p>
-            <p style="margin: -4px 0 10px 0; color: ${theme.textMuted}; font-size: 11px; line-height: 1.5;">Sua prática clínica automatizada com Inteligência Artificial</p>
+            <p style="margin: 0 0 10px 0; color: ${theme.textMuted}; font-size: 11px; line-height: 1.5; white-space: nowrap;"><strong style="color: ${theme.text}; font-size: 13px;">${theme.brandName}</strong> - Sua prática clínica automatizada com Inteligência Artificial</p>
             <div style="color: ${theme.textMuted};">
               ${options.footerHtml}
             </div>
