@@ -102,7 +102,8 @@ export async function getLifecycleRuntimeConfig(deps: LifecycleDependencies): Pr
     return {
       send_enabled: parsed.send_enabled === true,
       dry_run: parsed.dry_run !== false,
-      max_batch_size: Math.min(Math.max(Number(parsed.max_batch_size) || fallback.max_batch_size, 1), 100)
+      max_batch_size: Math.min(Math.max(Number(parsed.max_batch_size) || fallback.max_batch_size, 1), 100),
+      global_outage: parsed.global_outage === true
     };
   } catch {
     return fallback;

@@ -129,6 +129,22 @@ function sequenceDue(step: LifecycleStep | undefined, enrollment: any, now: Date
   return now.getTime() >= dueAt && (!enrollment.next_step_at || now.getTime() >= new Date(enrollment.next_step_at).getTime());
 }
 
+async function findLongPendingEvolution(deps: LifecycleDependencies, userId: string, minimumAgeMinutes: number, now: Date) {
+  const { data, error } = await deps.supabaseAdmin
+    .from("evolutions")
+    .select("id, transcription_status, google_doc_append_status, created_at, updated_at")
+    .eq("professional_id", userId)
+    .or("transcription_status.eq.processing,google_doc_append_status.eq.pending")
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message || "Falha ao consultar evoluções pendentes.");
+  const threshold = now.getTime() - Math.max(0, minimumAgeMinutes) * 60000;
+  return (data || []).find((evolution: any) => {
+    const isPending = evolution.transcription_status === "processing" || evolution.google_doc_append_status === "pending";
+    const referenceTime = new Date(evolution.updated_at || evolution.created_at || 0).getTime();
+    return isPending && Number.isFinite(referenceTime) && referenceTime <= threshold;
+  }) || null;
+}
+
 async function scheduleForEnrollment(
   deps: LifecycleDependencies,
   campaign: any,
@@ -198,6 +214,24 @@ async function scheduleForEnrollment(
 
   const chosen = chooseHighestPriority(eligibleCandidates);
   if (!chosen) return "nothing_due";
+
+  let processingEvolutionId: string | null = null;
+  let processingDedupeKey = chosen.dedupePeriodKey;
+  if (chosen.rule?.rule_key === "evolution_processing_too_long") {
+    const pendingEvolution = await findLongPendingEvolution(deps, state.userId, Number(chosen.rule.delay_minutes || 120), now);
+    if (!pendingEvolution) return "nothing_due";
+    processingEvolutionId = pendingEvolution.id;
+    processingDedupeKey = `processing:${pendingEvolution.id}`;
+
+    const { data: previousAlerts, error: previousAlertsError } = await deps.supabaseAdmin
+      .from("lifecycle_dispatches")
+      .select("metadata, status")
+      .eq("user_id", state.userId)
+      .eq("rule_id", chosen.rule.id)
+      .in("status", ["queued", "processing", "retry", "sent", "failed"]);
+    if (previousAlertsError) throw new Error(previousAlertsError.message || "Falha ao verificar alertas de processamento anteriores.");
+    if ((previousAlerts || []).some((item: any) => item.metadata?.processing_evolution_id === processingEvolutionId)) return "nothing_due";
+  }
   if (isRelationshipCooldownBlocked(state, now, chosen)) {
     await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: chosen.step?.campaign_id || campaign.id, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: `deferred:${enrollment.id}:${chosen.messageKey}:${now.toISOString().slice(0, 10)}`, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: "deferred", reason: "cooldown de 24 horas" });
     await deps.supabaseAdmin.from("lifecycle_enrollments").update({ next_step_at: state.nextRelationshipEmailEligibleAt }).eq("id", enrollment.id);
@@ -206,7 +240,7 @@ async function scheduleForEnrollment(
 
   const context = buildTemplateContext(state, deps.productionOrigin, now);
   const chosenCampaignId = chosen.step?.campaign_id || campaign.id;
-  const decisionKey = `${chosen.dispatchType}:${enrollment.id}:${chosen.messageKey}:${chosen.dedupePeriodKey}`;
+  const decisionKey = `${chosen.dispatchType}:${enrollment.id}:${chosen.messageKey}:${processingDedupeKey}`;
   const dryRun = runtime.dry_run || !runtime.send_enabled;
   await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: chosenCampaignId, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: decisionKey, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: dryRun ? "dry_run" : "scheduled", reason: chosen.reason, metadata: { cta_route: chosen.ctaRouteTemplate, category: chosen.category, context_keys: Object.keys(context) } });
   if (dryRun) return "dry_run";
@@ -229,8 +263,8 @@ async function scheduleForEnrollment(
     priority: chosen.priority,
     status: "queued",
     scheduled_for: scheduledFor.toISOString(),
-    dedupe_key: `${chosen.dispatchType}:${state.userId}:${chosen.messageKey}:${chosen.dedupePeriodKey}`,
-    metadata: { ...context, cta_label_template: chosen.ctaLabelTemplate, cta_route_template: chosen.ctaRouteTemplate, category: chosen.category, commercial: chosen.commercial }
+    dedupe_key: `${chosen.dispatchType}:${state.userId}:${chosen.messageKey}:${processingDedupeKey}`,
+    metadata: { ...context, ...(processingEvolutionId ? { processing_evolution_id: processingEvolutionId } : {}), cta_label_template: chosen.ctaLabelTemplate, cta_route_template: chosen.ctaRouteTemplate, category: chosen.category, commercial: chosen.commercial }
   });
   if (dispatchError && dispatchError.code !== "23505") throw new Error(dispatchError.message || "Falha ao criar dispatch lifecycle.");
 

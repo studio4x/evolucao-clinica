@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calculateActivationLevel, calculateTrialDaysRemaining, normalizeProfessionSegment } from '../server/lifecycle/lifecycleState.js';
-import { chooseHighestPriority, evaluateKnownRule, shouldSkipSequenceStep } from '../server/lifecycle/lifecycleRules.js';
+import { chooseHighestPriority, evaluateKnownRule, getNextBestAction, shouldSkipSequenceStep } from '../server/lifecycle/lifecycleRules.js';
 import { renderLifecycleTemplate } from '../server/lifecycle/templates/tokenRegistry.js';
 import { renderSafeLifecycleMarkdown } from '../server/lifecycle/lifecycleRenderer.js';
 import { sanitizeLifecycleMetadata } from '../server/lifecycle/lifecycleRepository.js';
@@ -17,6 +17,8 @@ const baseState: any = {
 
 assert.equal(renderLifecycleTemplate('Olá, {{primeiro_nome}}. Você tem {{quantidade_pacientes}} paciente(s). {{nao_permitido}}', { primeiro_nome: 'Ana', quantidade_pacientes: 2 }), 'Olá, Ana. Você tem 2 paciente(s). ');
 assert.equal(renderLifecycleTemplate('{{primeiro_nome}} {{plano_atual}}', {}), 'Profissional seu plano atual');
+assert.equal(renderLifecycleTemplate('{{resumo_progresso}}', { quantidade_pacientes: 0, quantidade_prontuarios: 2, quantidade_evolucoes: 0 }), 'vinculou 2 prontuários;');
+assert.match(renderLifecycleTemplate('{{resumo_progresso}}', { quantidade_pacientes: 0, quantidade_prontuarios: 0, quantidade_evolucoes: 0 }), /Você já deu o primeiro passo/);
 assert.match(renderSafeLifecycleMarkdown('<script>alert(1)</script>\n\n**seguro**'), /&lt;script&gt;alert/);
 assert.match(renderSafeLifecycleMarkdown('<script>alert(1)</script>\n\n**seguro**'), /<strong>seguro<\/strong>/);
 
@@ -32,6 +34,10 @@ const noPatientRule: any = { id: 'rule-1', rule_key: 'logged_in_without_patient'
 assert.equal(evaluateKnownRule(noPatientRule, baseState, now)?.messageKey, 'conditional:logged_in_without_patient');
 const withPatient = { ...baseState, patientsCount: 1 };
 assert.equal(evaluateKnownRule(noPatientRule, withPatient, now), null);
+assert.equal(getNextBestAction(baseState).label, 'Cadastrar primeiro paciente');
+assert.equal(getNextBestAction({ ...baseState, patientsCount: 1 }).label, 'Criar ou vincular um prontuário');
+assert.equal(getNextBestAction({ ...baseState, patientsCount: 1, linkedRecordsCount: 1, evolutionsCount: 1 }).label, 'Consultar o histórico do paciente');
+assert.equal(getNextBestAction({ ...baseState, subscriptionStatus: 'canceled', trialEndsAt: '2026-07-15T12:00:00.000Z' }, now).label, 'Conhecer os planos disponíveis');
 const trialRule: any = { id: 'rule-2', rule_key: 'trial_expiring_3d', name: 'Trial', rule_type: 'deadline', priority: 90, cooldown_hours: 24, delay_minutes: 0, enabled: true, message_config: {} };
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, trialEndsAt: '2026-07-17T12:00:00.000Z' }, now), null);
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, trialEndsAt: '2026-07-19T12:00:00.000Z' }, now)?.commercial, true);

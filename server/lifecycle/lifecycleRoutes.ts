@@ -414,7 +414,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
       }));
       app.get("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (_req, res) => res.json({ runtime: await getLifecycleRuntimeConfig(deps) })));
       app.put("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
-        const runtime = { send_enabled: req.body?.send_enabled === true, dry_run: req.body?.dry_run !== false, max_batch_size: Math.min(Math.max(Number(req.body?.max_batch_size) || 25, 1), 100) };
+        const runtime = { send_enabled: req.body?.send_enabled === true, dry_run: req.body?.dry_run !== false, max_batch_size: Math.min(Math.max(Number(req.body?.max_batch_size) || 25, 1), 100), global_outage: req.body?.global_outage === true };
         const { error } = await deps.supabaseAdmin.from("settings").upsert({ id: "lifecycle_config", api_key: JSON.stringify(runtime), updated_at: new Date().toISOString(), updated_by: req.user.email || req.user.id });
         if (error) throw new Error(error.message);
         return res.json({ runtime });

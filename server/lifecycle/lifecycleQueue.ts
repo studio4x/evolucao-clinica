@@ -235,6 +235,51 @@ function messageFromConfig(dispatch: any, step: any, rule: any) {
   };
 }
 
+async function validateProcessingAlert(
+  deps: LifecycleDependencies,
+  dispatch: any,
+  rule: any,
+  runtime: LifecycleRuntimeConfig
+) {
+  if (rule?.rule_key !== "evolution_processing_too_long") return null;
+
+  if (runtime.global_outage === true || process.env.LIFECYCLE_GLOBAL_OUTAGE === "true") {
+    return "known_global_outage";
+  }
+
+  const evolutionId = dispatch.metadata?.processing_evolution_id;
+  const query = deps.supabaseAdmin
+    .from("evolutions")
+    .select("id, transcription_status, google_doc_append_status, created_at, updated_at")
+    .eq("professional_id", dispatch.user_id);
+  const { data: evolutions, error } = evolutionId
+    ? await query.eq("id", evolutionId).limit(1)
+    : await query.or("transcription_status.eq.processing,google_doc_append_status.eq.pending").order("created_at", { ascending: true });
+  if (error) throw new Error(error.message || "Falha ao confirmar o status da evolução pendente.");
+
+  const threshold = Date.now() - Number(rule.delay_minutes || 120) * 60000;
+  const pending = (evolutions || []).find((evolution: any) => {
+    const isPending = evolution.transcription_status === "processing" || evolution.google_doc_append_status === "pending";
+    const referenceTime = new Date(evolution.updated_at || evolution.created_at || 0).getTime();
+    return isPending && Number.isFinite(referenceTime) && referenceTime <= threshold;
+  });
+  if (!pending) return "processing_resolved_or_below_threshold";
+
+  const { data: previousAlerts, error: previousAlertsError } = await deps.supabaseAdmin
+    .from("lifecycle_dispatches")
+    .select("id, metadata")
+    .eq("user_id", dispatch.user_id)
+    .eq("rule_id", rule.id)
+    .eq("status", "sent")
+    .neq("id", dispatch.id);
+  if (previousAlertsError) throw new Error(previousAlertsError.message || "Falha ao verificar alerta duplicado.");
+  if ((previousAlerts || []).some((item: any) => item.metadata?.processing_evolution_id === pending.id)) {
+    return "processing_already_notified";
+  }
+
+  return null;
+}
+
 async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, runtime: LifecycleRuntimeConfig) {
   if (!runtime.send_enabled || runtime.dry_run) {
     await markSuppressed(deps, dispatch, "dry_run_or_sending_disabled");
@@ -273,6 +318,11 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     dispatch.step_id ? deps.supabaseAdmin.from("lifecycle_steps").select("*").eq("id", dispatch.step_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     dispatch.rule_id ? deps.supabaseAdmin.from("lifecycle_rules").select("*").eq("id", dispatch.rule_id).maybeSingle() : Promise.resolve({ data: null, error: null })
   ]);
+  const processingValidationReason = await validateProcessingAlert(deps, dispatch, ruleResult.data, runtime);
+  if (processingValidationReason) {
+    await markSuppressed(deps, dispatch, processingValidationReason);
+    return { status: "suppressed" };
+  }
   if (!profile?.google_email) throw new Error("destinatário sem e-mail cadastrado");
   if (!preferences.lifecycle_enabled || (dispatch.metadata?.commercial && !preferences.commercial_enabled)) {
     await markSuppressed(deps, dispatch, !preferences.lifecycle_enabled ? "lifecycle_unsubscribed" : "commercial_unsubscribed");

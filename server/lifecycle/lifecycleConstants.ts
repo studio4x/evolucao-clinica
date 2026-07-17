@@ -23,6 +23,7 @@ export type LifecycleRuntimeConfig = {
   send_enabled: boolean;
   dry_run: boolean;
   max_batch_size: number;
+  global_outage?: boolean;
 };
 
 export const DEFAULT_RUNTIME_CONFIG: LifecycleRuntimeConfig = {
