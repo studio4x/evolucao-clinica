@@ -487,8 +487,10 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         const theme = await deps.getEmailTheme();
         const actionUrl = resolveLifecycleUrl(deps.productionOrigin, rendered.ctaRoute);
         const htmlContent = deps.buildEmailShell(theme, { title: rendered.subject, subtitle: rendered.preheader, eyebrow: "Teste administrativo", bodyHtml: rendered.bodyHtml + "<div style=\"text-align:center\">" + deps.buildEmailButton(theme, actionUrl, rendered.ctaLabel) + "</div>", footerHtml: "Mensagem de teste enviada por um administrador." });
-        const result = await deps.sendTransactionalEmail(await deps.getNotificationSettings(), { userId: req.user.id, recipientEmail, recipientName: "Administrador", subject: "[Teste] " + rendered.subject, textContent: rendered.text, htmlContent, source: "lifecycle-test", allowFallback: true });
-        return res.json({ success: true, provider: result.provider, emailDeliveryId: result.emailDeliveryId });
+        // O teste administrativo é um envio direto: não passa pelo scheduler,
+        // não avalia regras condicionais e não deve trocar silenciosamente de provedor.
+        const result = await deps.sendTransactionalEmail(await deps.getNotificationSettings(), { userId: req.user.id, recipientEmail, recipientName: "Administrador", subject: "[Teste] " + rendered.subject, textContent: rendered.text, htmlContent, source: "lifecycle-test", allowFallback: false });
+        return res.json({ success: true, provider: result.provider, emailDeliveryId: result.emailDeliveryId, message: `E-mail de teste enviado via ${result.provider === "brevo" ? "Brevo" : "SMTP"} para ${recipientEmail}.` });
       }));
       app.get("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (_req, res) => res.json({ runtime: await getLifecycleRuntimeConfig(deps) })));
       app.put("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
