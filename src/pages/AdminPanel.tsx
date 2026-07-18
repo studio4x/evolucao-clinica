@@ -35,6 +35,10 @@ interface Professional {
   trial_ends_at?: string;
 }
 
+type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config';
+type AdminNavItem = { key: AdminTab; label: string; icon: typeof Users };
+type AdminNavGroup = { title: string; items: AdminNavItem[] };
+
 interface UsageLog {
   id: string;
   professional_id: string;
@@ -143,7 +147,7 @@ export default function AdminPanel() {
     }
   }, [navigate, normalizedPath]);
 
-  const getActiveTab = () => {
+  const getActiveTab = (): AdminTab => {
     if (normalizedPath.endsWith('/gemini-config')) return 'token_usage';
     if (normalizedPath.endsWith('/google-pay-config')) return 'google_pay_config';
     if (isTokenUsagePath) return 'token_usage';
@@ -169,7 +173,7 @@ export default function AdminPanel() {
 
   const activeTab = getActiveTab();
   const isAdminSupportDetail = /^\/admin\/support\/[^/]+$/.test(location.pathname);
-  const adminNavGroups = [
+  const adminNavGroups: AdminNavGroup[] = [
     {
       title: 'Atendimento & Usuários',
       items: [
@@ -211,7 +215,7 @@ export default function AdminPanel() {
     }
   ] as const;
 
-  const setActiveTab = (tab: 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config') => {
+  const setActiveTab = (tab: AdminTab) => {
     if (tab === 'professionals') navigate('/admin/professionals');
     else if (tab === 'gemini_config') navigate(tokenUsageGeneralPath);
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
