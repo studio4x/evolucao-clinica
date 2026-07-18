@@ -499,7 +499,9 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         const testSettings = smtpConfigured ? { ...notificationSettings, email_provider: "smtp" } : notificationSettings;
         const result = await deps.sendTransactionalEmail(testSettings, { userId: req.user.id, recipientEmail, recipientName: "Administrador", subject: "[Teste interno] " + rendered.subject, textContent: `${rendered.text}\n\nAcesse: ${actionUrl}\n\nTeste interno da jornada do Evolução Clínica.`, htmlContent, source: "lifecycle-test", allowFallback: true });
         const providerName = result.provider === "brevo" ? "Brevo" : "SMTP";
-        return res.json({ success: true, provider: result.provider, emailDeliveryId: result.emailDeliveryId, message: `E-mail de teste aceito pelo ${providerName} para ${recipientEmail}. A entrega final pode ser recusada pelo servidor do destinatário.` });
+        console.info(`[Lifecycle Test Email] provider=${providerName} recipient=${recipientEmail} messageId=${result.messageId || "not-returned"} deliveryId=${result.emailDeliveryId || "not-recorded"}`);
+        const providerReference = result.messageId ? ` Referência do provedor: ${result.messageId}.` : " O provedor não retornou uma referência de mensagem.";
+        return res.json({ success: true, provider: result.provider, messageId: result.messageId, emailDeliveryId: result.emailDeliveryId, message: `E-mail de teste aceito pelo ${providerName} para ${recipientEmail}.${providerReference} A entrega final pode ser recusada pelo servidor do destinatário.` });
       }));
       app.get("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (_req, res) => res.json({ runtime: await getLifecycleRuntimeConfig(deps) })));
       app.put("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
