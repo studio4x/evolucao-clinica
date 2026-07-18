@@ -131,7 +131,7 @@ async function sendLifecycleFailureAlert(
   const lifecycleUrl = `${deps.productionOrigin.replace(/\/$/, "")}/admin/lifecycle`;
   const subject = "[Evolução Clínica] Alerta: falhas consecutivas na fila de e-mails";
   const textContent = [
-    "A fila de comunicações da Jornada de Usuários registrou falhas consecutivas de disparo.",
+    "A fila de comunicações do Onboarding dos Usuários registrou falhas consecutivas de disparo.",
     `Falhas consecutivas: ${details.consecutiveFailures}`,
     `Última falha: ${details.reason || "Falha não informada"}`,
     `Dispatch afetado: ${details.dispatchId}`,
@@ -142,10 +142,10 @@ async function sendLifecycleFailureAlert(
   const theme = await deps.getEmailTheme();
   const htmlContent = deps.buildEmailShell(theme, {
     title: "Falhas consecutivas na fila de e-mails",
-    subtitle: "A Jornada de Usuários precisa de atenção.",
+    subtitle: "O Onboarding dos Usuários precisa de atenção.",
     eyebrow: "Alerta operacional",
     bodyHtml: `<p style="font-size:15px;line-height:1.6;margin:0 0 16px 0;">A fila de comunicações registrou <strong>${details.consecutiveFailures} falhas consecutivas</strong> de disparo.</p><p style="font-size:14px;line-height:1.6;margin:0 0 8px 0;"><strong>Última falha:</strong> ${safeReason}</p><p style="font-size:14px;line-height:1.6;margin:0 0 20px 0;"><strong>Dispatch:</strong> ${escapeLifecycleHtml(details.dispatchId)}<br><strong>Horário:</strong> ${escapeLifecycleHtml(now)}</p><div style="text-align:center">${deps.buildEmailButton(theme, lifecycleUrl, "Abrir monitoramento")}</div>`,
-    footerHtml: "Este alerta é enviado automaticamente pelo worker da Jornada de Usuários."
+    footerHtml: "Este alerta é enviado automaticamente pelo worker do Onboarding dos Usuários."
   });
 
   const settings = await deps.getNotificationSettings();
@@ -758,7 +758,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       const htmlContent = deps.buildEmailShell(theme, {
         title: escapeLifecycleHtml(rendered.subject),
         subtitle: escapeLifecycleHtml(rendered.preheader),
-        headerEyebrow: "Jornada de Usuários",
+        headerEyebrow: "Onboarding dos Usuários",
         bodyHtml: `${rendered.bodyHtml}<div style="text-align:center;margin:28px 0 8px 0;">${deps.buildEmailButton(theme, actionUrl, escapeLifecycleHtml(rendered.ctaLabel))}</div>`,
         footerHtml: `Esta mensagem foi enviada automaticamente pela nossa plataforma.<br/>Por favor, não responda a este e-mail.<br/><a href="${escapeLifecycleHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeLifecycleHtml(unsubscribeUrl)}">Descadastrar e-mails de relacionamento</a> · <a href="${escapeLifecycleHtml(resolveLifecycleUrl(deps.productionOrigin, "/painel/support"))}">Suporte</a>`
       });

@@ -292,7 +292,7 @@ O painel atual deverá continuar sendo identificado como a jornada pública/comu
 
 O novo módulo deve ter nome administrativo distinto:
 
-> Jornada de Usuários
+> Onboarding dos Usuários
 
 ou:
 
@@ -566,7 +566,7 @@ lifecycle
 ## Nome no painel
 
 ```text
-Jornada de Usuários
+Onboarding dos Usuários
 ```
 
 ## Responsabilidades
@@ -2025,7 +2025,7 @@ A página pública deve ser simples e não expor dados clínicos.
 Adicionar item no menu:
 
 ```text
-Jornada de Usuários
+Onboarding dos Usuários
 ```
 
 Manter o item existente:
@@ -2248,7 +2248,7 @@ export async function trackLifecycleEvent(
 
 - adicionar navegação;
 - renderizar `LifecycleAdmin`;
-- diferenciar jornada pública de jornada de usuários.
+- diferenciar a jornada pública do onboarding dos usuários.
 
 ## `src/pages/PatientForm.tsx`
 

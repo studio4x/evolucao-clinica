@@ -153,7 +153,7 @@ async function api(path: string, init: RequestInit = {}) {
     }
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Falha ao consultar a jornada de usuários.');
+  if (!response.ok) throw new Error(payload.error || 'Falha ao consultar o onboarding dos usuários.');
   return payload;
 }
 
@@ -399,7 +399,7 @@ export default function LifecycleAdmin() {
       setPreferences(preferencesData.preferences || []);
       setRuntime((current) => settingsData.runtime || current);
     } catch (err: any) {
-      setError(err.message || 'Falha ao carregar Jornada de Usuários.');
+      setError(err.message || 'Falha ao carregar Onboarding dos Usuários.');
     } finally {
       setLoading(false);
     }
@@ -632,7 +632,7 @@ export default function LifecycleAdmin() {
   return <div className="space-y-6">
     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
-        <h2 className="text-2xl font-bold text-brand-text">Jornada de Usuários</h2>
+        <h2 className="text-2xl font-bold text-brand-text">Onboarding dos Usuários</h2>
         <p className="text-sm text-brand-text-muted mt-1">Automação individual, simulação, fila e métricas de relacionamento.</p>
       </div>
       <button onClick={() => void load()} className="btn-outline inline-flex items-center gap-2 self-start"><RefreshCw size={16} /> Atualizar</button>

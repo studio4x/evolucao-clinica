@@ -1,4 +1,4 @@
-# Scheduler externo da Jornada de Usuários
+# Scheduler externo do Onboarding dos Usuários
 
 O projeto Vercel está no plano Hobby, que não aceita cron jobs com execução a cada 5 ou 15 minutos. Os endpoints continuam disponíveis e protegidos por `CRON_SECRET`; a execução recorrente deve ser feita pelo Supabase usando `pg_cron`, `pg_net` e Vault.
 

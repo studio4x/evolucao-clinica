@@ -192,7 +192,7 @@ export default function AdminPanel() {
       title: 'Comunicação & Jornada',
       items: [
         { key: 'jornada', label: 'Jornada 15 dias', icon: Calendar },
-        { key: 'lifecycle', label: 'Jornada de Usuários', icon: Activity },
+        { key: 'lifecycle', label: 'Onboarding dos Usuários', icon: Activity },
         { key: 'push_notifications', label: 'Notificações Push', icon: Bell },
         { key: 'email_notifications', label: 'E-mails do Sistema', icon: Mail },
         { key: 'email_history', label: 'Histórico de E-mails', icon: Clock }

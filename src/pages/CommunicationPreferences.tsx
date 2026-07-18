@@ -136,7 +136,7 @@ export default function CommunicationPreferences() {
           
           <div className="space-y-4">
             {([
-              ['lifecycle_enabled', 'Jornada de Usuários', 'Orientações de ativação e próximos passos.'], 
+              ['lifecycle_enabled', 'Onboarding dos Usuários', 'Orientações de ativação e próximos passos.'],
               ['product_education_enabled', 'Conteúdo educativo', 'Dicas para conhecer os recursos da plataforma.'], 
               ['commercial_enabled', 'Mensagens comerciais', 'Avisos sobre teste, planos e continuidade.']
             ] as const).map(([key, label, description]) => (

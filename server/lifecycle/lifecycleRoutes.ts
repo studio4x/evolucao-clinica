@@ -332,7 +332,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         if (Number(step.position) !== expectedPosition) return res.status(400).json({ error: "O passo informado não é o passo atual deste usuário." });
 
         const runtime = await getLifecycleRuntimeConfig(deps);
-        if (!runtime.send_enabled || runtime.dry_run) return res.status(400).json({ error: "O envio real está desativado nas configurações da Jornada de Usuários." });
+        if (!runtime.send_enabled || runtime.dry_run) return res.status(400).json({ error: "O envio real está desativado nas configurações do Onboarding dos Usuários." });
 
         const now = new Date().toISOString();
         const { data: dispatch, error: insertError } = await deps.supabaseAdmin.from("lifecycle_dispatches").insert({
@@ -413,7 +413,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         if (!original) return res.status(404).json({ error: "Registro lifecycle não encontrado." });
 
         const runtime = await getLifecycleRuntimeConfig(deps);
-        if (!runtime.send_enabled || runtime.dry_run) return res.status(400).json({ error: "O envio real está desativado nas configurações da Jornada de Usuários." });
+        if (!runtime.send_enabled || runtime.dry_run) return res.status(400).json({ error: "O envio real está desativado nas configurações do Onboarding dos Usuários." });
 
         const now = new Date().toISOString();
         const originalMetadata = original.metadata && typeof original.metadata === "object" ? original.metadata : {};

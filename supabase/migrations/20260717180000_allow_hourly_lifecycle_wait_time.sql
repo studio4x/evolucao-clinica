@@ -1,4 +1,4 @@
--- Permite configurar tempos de espera arbitrários em minutos na jornada de usuários.
+-- Permite configurar tempos de espera arbitrários em minutos no onboarding dos usuários.
 -- Renomeia a coluna day_offset para wait_minutes e converte os dados multiplicando por 1440.
 
 ALTER TABLE public.lifecycle_steps RENAME COLUMN day_offset TO wait_minutes;
