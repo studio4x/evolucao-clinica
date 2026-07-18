@@ -349,9 +349,6 @@ BEGIN
     PERFORM cron.unschedule('publish-journey-contents-job');
   END IF;
 
-  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'send-daily-push-job') THEN
-    PERFORM cron.unschedule('send-daily-push-job');
-  END IF;
 END $$;
 
 SELECT cron.schedule(
@@ -384,15 +381,6 @@ SELECT cron.schedule(
   $$
 );
 
-SELECT cron.schedule(
-  'send-daily-push-job',
-  '*/5 * * * *',
-  $$
-  SELECT net.http_get(
-    url := '${PRODUCTION_ORIGIN}/api/cron/send-daily-push?secret=${cronSecretParam}'
-  );
-  $$
-);
 `;
 }
 
@@ -4176,8 +4164,24 @@ app.get("/api/cron/publish-journey-contents", async (req: any, res) => {
 app.get("/api/cron/send-daily-push", async (req: any, res) => {
   const authHeader = req.headers.authorization;
   const cronSecret = CRON_SECRET;
-  
-  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+
+  let authorized = authHeader === `Bearer ${cronSecret}` || req.query.secret === cronSecret;
+  if (!authorized && typeof req.query.secret === "string") {
+    const { data: cronConfig } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "daily_push_cron_secret")
+      .maybeSingle();
+
+    try {
+      const configuredSecret = cronConfig?.api_key ? JSON.parse(cronConfig.api_key)?.secret : undefined;
+      authorized = configuredSecret === req.query.secret;
+    } catch {
+      authorized = false;
+    }
+  }
+
+  if (!authorized) {
     return res.status(401).json({ error: "Nao autorizado" });
   }
 
