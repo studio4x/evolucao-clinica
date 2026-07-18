@@ -272,6 +272,22 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ profile, state, preferences, enrollments: enrollments || [], dispatches: dispatches || [], events: events || [] });
       }));
       app.post("/api/admin/lifecycle/users/:userId/enroll", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => res.json({ enrollment: await ensureLifecycleEnrollment(deps, req.params.userId, { campaignKey: req.body?.campaignKey || "new_user_activation_15d", force: true }) })));
+      app.post("/api/admin/lifecycle/users/:userId/restart", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
+        const campaignKey = String(req.body?.campaignKey || "new_user_activation_15d").trim();
+        const campaign = await findCampaign(deps, campaignKey);
+        if (!campaign) return res.status(404).json({ error: "Campanha lifecycle não encontrada." });
+        const enrollment = await ensureLifecycleEnrollment(deps, req.params.userId, { campaignKey, force: true });
+        if (!enrollment) return res.status(404).json({ error: "Não foi possível matricular este usuário na jornada." });
+        const { data: firstStep, error: firstStepError } = await deps.supabaseAdmin.from("lifecycle_steps").select("wait_minutes").eq("campaign_id", campaign.id).eq("status", "active").eq("enabled", true).order("position", { ascending: true }).limit(1).maybeSingle();
+        if (firstStepError) throw new Error(firstStepError.message);
+        const now = new Date();
+        const nextStepAt = new Date(now.getTime() + Number(firstStep?.wait_minutes || 0) * 60000).toISOString();
+        const { error: dispatchError } = await deps.supabaseAdmin.from("lifecycle_dispatches").update({ status: "cancelled", skip_reason: "restart_by_admin", skipped_at: now.toISOString() }).eq("enrollment_id", enrollment.id).in("status", ["queued", "retry", "processing"]);
+        if (dispatchError) throw new Error(dispatchError.message);
+        const { data: restarted, error } = await deps.supabaseAdmin.from("lifecycle_enrollments").update({ status: "active", current_position: 0, enrolled_at: now.toISOString(), started_at: now.toISOString(), next_step_at: nextStepAt, completion_deadline_at: new Date(now.getTime() + Number(campaign.completion_window_days || 25) * 86400000).toISOString(), paused_at: null, pause_reason: null }).eq("id", enrollment.id).select("*").single();
+        if (error) throw new Error(error.message);
+        return res.json({ enrollment: restarted, message: "Jornada reiniciada com sucesso." });
+      }));
       app.post("/api/admin/lifecycle/users/:userId/pause", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
         const campaignKey = String(req.body?.campaignKey || "").trim();
         const campaign = campaignKey ? await findCampaign(deps, campaignKey) : null;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Bold, Check, CirclePause, CirclePlay, Eraser, FileText, Heading2, Italic, List, ListChecks, Loader2, Mail, MessageCircle, Pencil, RefreshCw, Save, ScrollText, Send, Settings, Users, X } from 'lucide-react';
+import { Bell, Bold, Check, CirclePause, CirclePlay, Eraser, FileText, Heading2, Italic, List, ListChecks, Loader2, Mail, MessageCircle, Pencil, RefreshCw, RotateCcw, Save, ScrollText, Send, Settings, Users, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 type Tab = 'overview' | 'campaigns' | 'preferences' | 'settings';
@@ -86,6 +86,22 @@ const CHANNEL_STATUS_LABELS: Record<ChannelDeliveryStatus, string> = {
   not_configured: 'Não configurado',
   unknown: 'Sem registro'
 };
+
+const ACTIVATION_STATUS_LABELS: Record<string, string> = {
+  registered: 'Registrado',
+  profile_started: 'Perfil iniciado',
+  patient_created: 'Paciente cadastrado',
+  record_linked: 'Prontuário vinculado',
+  activated: 'Ativado',
+  recurring: 'Uso recorrente',
+  advanced: 'Avançado',
+  churned: 'Cancelado'
+};
+
+function activationStatusLabel(status?: string | null) {
+  if (!status) return '—';
+  return ACTIVATION_STATUS_LABELS[status] || status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 function channelDeliveryStatus(item: any, channel: 'email' | 'push' | 'whatsapp'): ChannelDeliveryStatus {
   const recorded = item.metadata?.channel_delivery?.[channel];
@@ -336,6 +352,7 @@ export default function LifecycleAdmin() {
   const [sendingTestStepId, setSendingTestStepId] = useState<string | null>(null);
   const [testStepMessage, setTestStepMessage] = useState('');
   const [sendingUserId, setSendingUserId] = useState<string | null>(null);
+  const [restartingUserId, setRestartingUserId] = useState<string | null>(null);
   const [resendingDispatchId, setResendingDispatchId] = useState<string | null>(null);
   const richTextEditorRef = useRef<HTMLDivElement | null>(null);
 
@@ -548,6 +565,22 @@ export default function LifecycleAdmin() {
     }
   };
 
+  const restartJourney = async (user: any) => {
+    if (!window.confirm(`Reiniciar a jornada de ${user.full_name || user.google_email || 'este usuário'} desde o primeiro passo?`)) return;
+    setRestartingUserId(user.id);
+    setError('');
+    setMessage('');
+    try {
+      const result = await api('/api/admin/lifecycle/users/' + user.id + '/restart', { method: 'POST', body: JSON.stringify({ campaignKey: 'new_user_activation_15d' }) });
+      setMessage(result.message || 'Jornada reiniciada com sucesso.');
+      await load();
+    } catch (err: any) {
+      setError(err.message || 'Falha ao reiniciar a jornada.');
+    } finally {
+      setRestartingUserId(null);
+    }
+  };
+
   const resendLifecycleDelivery = async (delivery: any) => {
     if (!window.confirm(`Reenviar este e-mail para ${delivery.recipient_name || delivery.recipient_email || 'o destinatário'}?`)) return;
     setResendingDispatchId(delivery.id);
@@ -697,7 +730,7 @@ export default function LifecycleAdmin() {
         </div>}
       </div>}
 
-      {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Passo atual</th><th className="p-3">Próxima execução</th><th className="p-3">Status da jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = activationCampaign ? user.enrollments?.find((item: any) => item.campaign_id === activationCampaign.id) : null; const currentPosition = Number(enrollment?.current_position || 0); const currentStep = activationSteps.find((step) => step.position === currentPosition + 1); const nextStep = activationSteps.find((step) => step.position === currentPosition + 2); const canForceSend = Boolean(enrollment?.status === 'active' && currentStep); const isSending = sendingUserId === user.id; return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{user.state?.activation_status || '—'}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{enrollment ? <><strong className="block">{currentStep ? `Passo ${currentStep.position}` : 'Jornada concluída'}</strong><span className="block max-w-[260px] truncate text-xs text-brand-text-muted">{currentStep?.subject_template || 'Nenhum passo configurado'}</span></> : <span className="text-brand-text-muted">Não matriculado</span>}</td><td className="p-3 whitespace-nowrap">{enrollment ? <><strong className="block">{formatNextExecution(enrollment.next_step_at)}</strong><span className="block text-xs text-brand-text-muted">{nextStep ? `Próximo: passo ${nextStep.position}` : 'Sem próximo passo'}</span></> : '—'}</td><td className="p-3"><span className={'inline-flex rounded-full px-2.5 py-1 text-xs font-medium ' + enrollmentStatusClass(enrollment?.status)}>{enrollmentStatusLabel(enrollment?.status)}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Enviar mensagem do passo atual pelos canais habilitados" aria-label="Enviar mensagem do passo atual pelos canais habilitados" disabled={!canForceSend || isSending} onClick={() => void forceSendCurrentStep(user, currentStep)} className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}<span className="sr-only">Enviar agora</span></button><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} className="btn-outline p-1.5"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} className="btn-outline p-1.5"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} className="btn-outline p-1.5"><CirclePlay size={14} /></button>}</div></td></tr>; })}</tbody></table>}</div>}
+      {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Passo atual</th><th className="p-3">Próxima execução</th><th className="p-3">Status da jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = activationCampaign ? user.enrollments?.find((item: any) => item.campaign_id === activationCampaign.id) : null; const currentPosition = Number(enrollment?.current_position || 0); const currentStep = activationSteps.find((step) => step.position === currentPosition + 1); const nextStep = activationSteps.find((step) => step.position === currentPosition + 2); const canForceSend = Boolean(enrollment?.status === 'active' && currentStep); const isSending = sendingUserId === user.id; const isRestarting = restartingUserId === user.id; return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{activationStatusLabel(user.state?.activation_status)}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{enrollment ? <><strong className="block">{currentStep ? `Passo ${currentStep.position}` : 'Jornada concluída'}</strong><span className="block max-w-[260px] truncate text-xs text-brand-text-muted">{currentStep?.subject_template || 'Nenhum passo configurado'}</span></> : <span className="text-brand-text-muted">Não matriculado</span>}</td><td className="p-3 whitespace-nowrap">{enrollment ? <><strong className="block">{formatNextExecution(enrollment.next_step_at)}</strong><span className="block text-xs text-brand-text-muted">{nextStep ? `Próximo: passo ${nextStep.position}` : 'Sem próximo passo'}</span></> : '—'}</td><td className="p-3"><span className={'inline-flex rounded-full px-2.5 py-1 text-xs font-medium ' + enrollmentStatusClass(enrollment?.status)}>{enrollmentStatusLabel(enrollment?.status)}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Enviar mensagem do passo atual pelos canais habilitados" aria-label="Enviar mensagem do passo atual pelos canais habilitados" disabled={!canForceSend || isSending || isRestarting} onClick={() => void forceSendCurrentStep(user, currentStep)} className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}<span className="sr-only">Enviar agora</span></button><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} disabled={isRestarting} className="btn-outline p-1.5 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} disabled={isRestarting} className="btn-outline p-1.5 disabled:cursor-not-allowed disabled:opacity-50"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} disabled={isRestarting} className="btn-outline p-1.5 disabled:cursor-not-allowed disabled:opacity-50"><CirclePlay size={14} /></button>}<button title="Reiniciar jornada desde o primeiro passo" aria-label="Reiniciar jornada desde o primeiro passo" onClick={() => void restartJourney(user)} disabled={isRestarting} className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{isRestarting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}<span className="sr-only">Reiniciar jornada</span></button></div></td></tr>; })}</tbody></table>}</div>}
 
       {campaignTab === 'logs' && <div className="overflow-hidden rounded-xl border border-brand-border bg-white">{deliveries.length === 0 ? <EmptyState icon={ScrollText} title="Nenhum registro de envio" description="Os disparos processados pela fila aparecerão aqui." /> : <table className="w-full min-w-[1120px] table-fixed text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="w-[18%] p-3">Destinatário</th><th className="w-[19%] p-3">Modelo enviado</th><th className="w-[8%] p-3">Status</th><th className="w-[14%] p-3">Canais</th><th className="w-[16%] p-3">Enviada/agendada</th><th className="w-[8%] p-3">Tentativas</th><th className="w-[12%] p-3">Motivo</th><th className="w-[5%] p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{deliveries.map((item) => <tr key={item.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-full truncate">{item.recipient_name}</strong><span className="block max-w-full truncate text-xs text-brand-text-muted">{item.recipient_email}</span></td><td className="p-3"><strong className="block max-w-full truncate" title={item.template_name}>{item.template_name}</strong><span className="block max-w-full truncate text-xs text-brand-text-muted" title={item.template_key}>{item.template_reference}</span></td><td className="p-3"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (item.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')}>{deliveryStatusLabel(item.status)}</span></td><td className="p-3"><div className="flex items-center gap-1.5"><ChannelDeliveryIcon channel="email" status={channelDeliveryStatus(item, 'email')} /><ChannelDeliveryIcon channel="push" status={channelDeliveryStatus(item, 'push')} /><ChannelDeliveryIcon channel="whatsapp" status={channelDeliveryStatus(item, 'whatsapp')} /></div></td><td className="p-3 whitespace-nowrap">{(item.sent_at || item.scheduled_for) ? new Date(item.sent_at || item.scheduled_for).toLocaleString('pt-BR') : '—'}</td><td className="p-3">{item.attempt_count}/{item.max_attempts}</td><td className="p-3 max-w-full truncate" title={item.skip_reason || item.failure_reason || ''}>{item.skip_reason || item.failure_reason || '—'}</td><td className="p-3 text-right"><button onClick={() => void resendLifecycleDelivery(item)} disabled={resendingDispatchId === item.id} title="Reenviar mensagem pelos canais habilitados" className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{resendingDispatchId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}<span className="sr-only">Reenviar</span></button></td></tr>)}</tbody></table>}</div>}
     </div>}
