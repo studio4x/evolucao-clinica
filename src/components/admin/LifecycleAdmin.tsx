@@ -19,7 +19,7 @@ type TemplateDraft = {
 function formatMinutesToReadable(minutesStr: string): string {
   const minutes = parseInt(minutesStr, 10);
   if (isNaN(minutes) || minutes < 0) return 'Tempo inválido';
-  if (minutes === 0) return 'Envio imediato';
+  if (minutes === 0) return 'Sem espera adicional; próximo horário permitido';
   
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
@@ -213,7 +213,7 @@ function dispatchTypeLabel(type?: string | null) {
 
 function formatWaitTime(step: any) {
   const waitMinutes = Number(step.wait_minutes || 0);
-  if (waitMinutes === 0) return 'Imediato';
+  if (waitMinutes === 0) return 'Sem espera adicional';
   const days = Math.floor(waitMinutes / 1440);
   const hours = Math.floor((waitMinutes % 1440) / 60);
   const mins = waitMinutes % 60;
@@ -618,7 +618,8 @@ export default function LifecycleAdmin() {
     ['instances', 'Usuários no Fluxo', Users],
     ['logs', 'Registros de Envio', ScrollText]
   ];
-  const templateRows = campaigns.flatMap((campaign) => (steps[campaign.id] || []).map((step) => ({ ...step, campaign })));
+  const isVisibleStep = (campaign: any, step: any) => campaign.key !== 'conditional_lifecycle_messages' || (step.status === 'active' && step.enabled !== false);
+  const templateRows = campaigns.flatMap((campaign) => (steps[campaign.id] || []).filter((step) => isVisibleStep(campaign, step)).map((step) => ({ ...step, campaign })));
   const activationCampaign = campaigns.find((campaign) => campaign.key === 'new_user_activation_15d');
   const activationSteps = activationCampaign ? steps[activationCampaign.id] || [] : [];
   const editingTemplate = templateRows.find((step) => step.id === editingTemplateId);
@@ -649,7 +650,7 @@ export default function LifecycleAdmin() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           ['Matriculados', overview?.metrics?.enrolled], ['Ativos', overview?.metrics?.active], ['Na fila', overview?.metrics?.queued], ['Enviados', overview?.metrics?.sent],
-          ['Concluídos', overview?.metrics?.completed], ['Falhas', overview?.metrics?.failed], ['Suprimidos', overview?.metrics?.suppressed], ['Cooldown', '24h']
+          ['Concluídos', overview?.metrics?.completed], ['Falhas', overview?.metrics?.failed], ['Suprimidos', overview?.metrics?.suppressed], ['Cooldown', '96h']
         ].map(([label, value]) => <div key={String(label)} className="bg-white border border-brand-border rounded-xl p-4"><span className="text-xs text-brand-text-muted block">{label}</span><strong className="text-2xl text-brand-text">{value ?? '—'}</strong></div>)}
       </div>
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Modo atual:</strong> {runtime.dry_run ? 'simulação / observação' : runtime.send_enabled ? 'envio habilitado' : 'envio desabilitado'} — campanhas e passos começam em rascunho.</div>
@@ -672,7 +673,7 @@ export default function LifecycleAdmin() {
               {campaign.status === 'active' ? <button onClick={() => void updateCampaign(campaign, 'paused')} className="btn-outline inline-flex items-center gap-1.5 text-xs"><CirclePause size={14} /> Pausar</button> : campaign.status !== 'archived' && <button onClick={() => void updateCampaign(campaign, 'active')} className="btn-primary inline-flex items-center gap-1.5 text-xs"><CirclePlay size={14} /> Ativar</button>}
             </div>
           </header>
-          {(steps[campaign.id] || []).length === 0 ? <div className="p-6 text-sm text-brand-text-muted">Nenhum passo encontrado nesta campanha.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead className="border-b border-brand-border text-brand-text-muted"><tr><th className="w-16 px-4 py-3 text-center font-medium">Ordem</th><th className="px-4 py-3 text-left font-medium">Modelo</th><th className="px-4 py-3 text-left font-medium">Espera</th><th className="px-4 py-3 text-left font-medium">Tipo</th><th className="px-4 py-3 text-left font-medium">Condição</th><th className="px-4 py-3 text-left font-medium">Estado</th><th className="px-4 py-3 text-right font-medium">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{[...(steps[campaign.id] || [])].sort((a, b) => a.position - b.position).map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="bg-slate-50/60 px-4 py-4 text-center font-bold text-brand-text">{step.position}</td><td className="px-4 py-4"><strong className="block max-w-[360px] truncate font-medium text-brand-text">{step.subject_template}</strong><span className="mt-0.5 block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || step.step_key}</span></td><td className="px-4 py-4 whitespace-nowrap">{formatWaitTime(step)}</td><td className="px-4 py-4"><span className="rounded-full border border-brand-border px-2.5 py-1 text-xs font-medium">{stepType(step)}</span></td><td className="px-4 py-4"><span className={stepCondition(step, rules) === '—' ? 'text-brand-text-muted' : 'font-mono text-xs text-brand-text-muted'}>{stepCondition(step, rules)}</span></td><td className="px-4 py-4"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (step.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>{step.status === 'active' ? 'Ativo' : 'Rascunho'}</span></td><td className="px-4 py-4 text-right"><div className="inline-flex flex-wrap justify-end gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 whitespace-nowrap text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline whitespace-nowrap text-xs">{step.status === 'active' ? 'Voltar para rascunho' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>}
+          {(() => { const visibleSteps = (steps[campaign.id] || []).filter((step) => isVisibleStep(campaign, step)); return visibleSteps.length === 0 ? <div className="p-6 text-sm text-brand-text-muted">Nenhum passo encontrado nesta campanha.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[820px] text-sm"><thead className="border-b border-brand-border text-brand-text-muted"><tr><th className="w-16 px-4 py-3 text-center font-medium">Ordem</th><th className="px-4 py-3 text-left font-medium">Modelo</th><th className="px-4 py-3 text-left font-medium">Espera adicional</th><th className="px-4 py-3 text-left font-medium">Tipo</th><th className="px-4 py-3 text-left font-medium">Condição</th><th className="px-4 py-3 text-left font-medium">Estado</th><th className="px-4 py-3 text-right font-medium">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{[...visibleSteps].sort((a, b) => a.position - b.position).map((step) => <tr key={step.id} className="hover:bg-brand-bg/40"><td className="bg-slate-50/60 px-4 py-4 text-center font-bold text-brand-text">{step.position}</td><td className="px-4 py-4"><strong className="block max-w-[360px] truncate font-medium text-brand-text">{step.subject_template}</strong><span className="mt-0.5 block max-w-[360px] truncate text-xs text-brand-text-muted">{step.preheader_template || step.step_key}</span></td><td className="px-4 py-4 whitespace-nowrap">{formatWaitTime(step)}</td><td className="px-4 py-4"><span className="rounded-full border border-brand-border px-2.5 py-1 text-xs font-medium">{stepType(step)}</span></td><td className="px-4 py-4"><span className={stepCondition(step, rules) === '—' ? 'text-brand-text-muted' : 'font-mono text-xs text-brand-text-muted'}>{stepCondition(step, rules)}</span></td><td className="px-4 py-4"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (step.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600')}>{step.status === 'active' ? 'Ativo' : 'Rascunho'}</span></td><td className="px-4 py-4 text-right"><div className="inline-flex flex-wrap justify-end gap-2"><button onClick={() => startTemplateEdit(step)} className="btn-outline inline-flex items-center gap-1.5 whitespace-nowrap text-xs"><Pencil size={13} /> Editar</button><button onClick={() => void updateStep(step)} className="btn-outline whitespace-nowrap text-xs">{step.status === 'active' ? 'Voltar para rascunho' : 'Validar e ativar'}</button></div></td></tr>)}</tbody></table></div>; })()}
         </section>)}
       </div>}
 

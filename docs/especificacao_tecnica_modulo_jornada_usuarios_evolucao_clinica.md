@@ -15,6 +15,7 @@
 Este documento descreve como implementar, dentro do código atual do Evolução Clínica, um módulo completo de:
 
 - jornada principal de ativação de 15 mensagens;
+- ciclo condicional ativo separado, com 14 mensagens e sem duplicar etapas transacionais;
 - e-mails condicionais conforme o comportamento do usuário;
 - segmentação por profissão, plano e estágio de ativação;
 - priorização e substituição de mensagens;
@@ -1478,7 +1479,7 @@ Agendar para:
 
 ## 13.4. Prazo máximo
 
-A sequência de 15 mensagens pode ser concluída em até 25 dias.
+A sequência de 15 mensagens pode ser concluída em até 25 dias. O ciclo condicional ativo possui 14 posições próprias; as mensagens transacionais não duplicam etapas de ativação.
 
 Isso permite:
 
@@ -1584,10 +1585,19 @@ condition:
 priority: 80
 ```
 
-## 15.2. Acessou, mas não cadastrou paciente
+## 15.2. Regras condicionais transacionais removidas
+
+As quatro regras abaixo foram desativadas e não fazem parte do ciclo condicional ativo. Os estados continuam disponíveis para contextualizar a próxima ação, mas não geram mensagens duplicadas:
+
+- `logged_in_without_patient`;
+- `patient_without_linked_record`;
+- `linked_record_without_evolution`;
+- `first_evolution_completed`.
+
+## 15.2.1. Referência histórica: acessou, mas não cadastrou paciente
 
 ```text
-rule_key: logged_in_without_patient
+rule_key: logged_in_without_patient (legado; não enviar)
 delay: 24 horas
 condition:
   last_login_at is not null
@@ -1595,10 +1605,10 @@ condition:
 priority: 80
 ```
 
-## 15.3. Paciente sem prontuário
+## 15.2.2. Referência histórica: paciente sem prontuário
 
 ```text
-rule_key: patient_without_linked_record
+rule_key: patient_without_linked_record (legado; não enviar)
 delay: 24 horas
 condition:
   patients_count > 0
@@ -1606,10 +1616,10 @@ condition:
 priority: 85
 ```
 
-## 15.4. Prontuário vinculado, sem evolução
+## 15.2.3. Referência histórica: prontuário vinculado, sem evolução
 
 ```text
-rule_key: linked_record_without_evolution
+rule_key: linked_record_without_evolution (legado; não enviar)
 delay: 24 horas
 condition:
   linked_records_count > 0
@@ -1617,7 +1627,7 @@ condition:
 priority: 90
 ```
 
-## 15.5. Evolução iniciada, mas não concluída
+## 15.3. Evolução iniciada, mas não concluída
 
 ```text
 rule_key: evolution_processing_too_long
@@ -1634,10 +1644,10 @@ Não enviar automaticamente se o erro for técnico global.
 
 ---
 
-## 15.6. Primeira evolução concluída
+## 15.4. Referência histórica: primeira evolução concluída
 
 ```text
-rule_key: first_evolution_completed
+rule_key: first_evolution_completed (legado; não enviar)
 trigger: evolution_completed
 priority: 85
 cooldown: 0

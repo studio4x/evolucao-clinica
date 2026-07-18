@@ -44,6 +44,7 @@ export const LIFECYCLE_TOKEN_REGISTRY = {
   titulo_proxima_acao: (context: LifecycleTemplateContext) => context.titulo_proxima_acao || context.proxima_acao || "continuar na plataforma",
   descricao_proxima_acao: (context: LifecycleTemplateContext) => context.descricao_proxima_acao || "Acesse a plataforma para continuar pela próxima etapa recomendada.",
   texto_cta_proxima_acao: (context: LifecycleTemplateContext) => context.texto_cta_proxima_acao || context.proxima_acao || "Acessar a próxima etapa",
+  url_proxima_acao: (context: LifecycleTemplateContext) => context.url_proxima_acao || context.link_acao || "/painel/dashboard",
   link_acao: (context: LifecycleTemplateContext) => context.link_acao || "/painel/dashboard",
   link_feedback: (context: LifecycleTemplateContext) => context.link_feedback || "/feedback/continuidade",
   link_suporte: (context: LifecycleTemplateContext) => context.link_suporte || "/painel/support"

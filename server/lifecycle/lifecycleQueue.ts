@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
-import { getNextActionCopy, getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
+import { getContextualActionPendingAt, getNextActionCopy, getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
 import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
 import { escapeLifecycleHtml, renderLifecycleMessage, renderSafeLifecycleMarkdown, resolveLifecycleUrl } from "./lifecycleRenderer.js";
@@ -31,6 +31,7 @@ function buildContext(state: LifecycleState, origin: string, now: Date, useSubsc
     descricao_proxima_acao: actionCopy.description,
     texto_cta_proxima_acao: action.ctaLabel,
     link_acao: action.route,
+    url_proxima_acao: action.route,
     link_suporte: `${origin.replace(/\/$/, "")}/painel/support`
     ,bloco_status_acesso: state.subscriptionStatus === "past_due" || state.subscriptionStatus === "unpaid"
       ? "O acesso pode ser limitado até que a situação seja regularizada."
@@ -269,7 +270,8 @@ async function validateProcessingAlert(
     : await query.or("transcription_status.eq.processing,google_doc_append_status.eq.pending").order("created_at", { ascending: true });
   if (error) throw new Error(error.message || "Falha ao confirmar o status da evolução pendente.");
 
-  const threshold = Date.now() - Number(rule.delay_minutes || 120) * 60000;
+  const thresholdMinutes = Number(rule.condition_config?.processing_threshold_minutes || 120) + Math.max(0, Number(rule.delay_minutes || 0));
+  const threshold = Date.now() - thresholdMinutes * 60000;
   const pending = (evolutions || []).find((evolution: any) => {
     const isPending = evolution.transcription_status === "processing" || evolution.google_doc_append_status === "pending";
     const referenceTime = new Date(evolution.updated_at || evolution.created_at || 0).getTime();
@@ -316,39 +318,6 @@ async function validateOperationalMessage(deps: LifecycleDependencies, dispatch:
     if (!data || data.status !== "failed") return "payment_recovered";
   }
   return null;
-}
-
-async function validateLinkedRecordWithoutEvolution(deps: LifecycleDependencies, userId: string) {
-  const [{ count: linkedRecords, error: linkedRecordsError }, { count: completedEvolutions, error: completedEvolutionsError }] = await Promise.all([
-    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId).not("google_doc_id", "is", null).neq("google_doc_id", ""),
-    deps.supabaseAdmin.from("evolutions").select("id", { count: "exact", head: true }).eq("professional_id", userId).eq("transcription_status", "completed").eq("google_doc_append_status", "completed")
-  ]);
-  if (linkedRecordsError) throw new Error(linkedRecordsError.message || "Falha ao confirmar prontuários vinculados.");
-  if (completedEvolutionsError) throw new Error(completedEvolutionsError.message || "Falha ao confirmar evoluções concluídas.");
-  if (!Number(linkedRecords || 0)) return "no_linked_record";
-  if (Number(completedEvolutions || 0) > 0) return "evolution_already_completed";
-  return null;
-}
-
-async function validatePatientWithoutLinkedRecord(deps: LifecycleDependencies, userId: string) {
-  const [{ count: patients, error: patientsError }, { count: linkedRecords, error: linkedRecordsError }] = await Promise.all([
-    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId),
-    deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId).not("google_doc_id", "is", null).neq("google_doc_id", "")
-  ]);
-  if (patientsError) throw new Error(patientsError.message || "Falha ao confirmar pacientes cadastrados.");
-  if (linkedRecordsError) throw new Error(linkedRecordsError.message || "Falha ao confirmar prontuários vinculados.");
-  if (Number(patients || 0) <= 0) return "no_patient_registered";
-  if (Number(linkedRecords || 0) > 0) return "record_already_linked";
-  return null;
-}
-
-async function validateLoggedInWithoutPatient(deps: LifecycleDependencies, userId: string) {
-  const { count, error } = await deps.supabaseAdmin
-    .from("patients")
-    .select("id", { count: "exact", head: true })
-    .eq("professional_id", userId);
-  if (error) throw new Error(error.message || "Falha ao confirmar pacientes cadastrados.");
-  return Number(count || 0) > 0 ? "patient_already_registered" : null;
 }
 
 async function validateNoReturnAfterRegistration(deps: LifecycleDependencies, userId: string, rule: any) {
@@ -479,7 +448,7 @@ async function validateInactiveSevenDays(deps: LifecycleDependencies, userId: st
 async function validateInactiveThreeDays(deps: LifecycleDependencies, userId: string, rule: any) {
   const [{ data: professional, error: professionalError }, { data: state, error: stateError }, { data: higherPriorityDispatch, error: higherPriorityError }] = await Promise.all([
     deps.supabaseAdmin.from("professionals").select("status, subscription_status, trial_ends_at").eq("id", userId).maybeSingle(),
-    deps.supabaseAdmin.from("lifecycle_user_state").select("last_activity_at, failed_evolutions_count, processing_evolutions_count").eq("user_id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_user_state").select("last_activity_at, first_login_at, onboarding_completed_at, first_patient_at, first_record_linked_at, first_evolution_completed_at, latest_evolution_at, patients_count, linked_records_count, evolutions_count, failed_evolutions_count, processing_evolutions_count").eq("user_id", userId).maybeSingle(),
     deps.supabaseAdmin.from("lifecycle_dispatches").select("id").eq("user_id", userId).in("status", ["queued", "processing", "retry"]).gt("priority", Number(rule?.priority || 0)).limit(1).maybeSingle()
   ]);
   if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar a disponibilidade da conta.");
@@ -493,22 +462,56 @@ async function validateInactiveThreeDays(deps: LifecycleDependencies, userId: st
   if (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0) return "technical_issue_requires_attention";
 
   const minimumDays = Number(rule?.condition_config?.days || 3);
+  const pendingHours = Number(rule?.condition_config?.pending_hours || 72);
   const lastActivityAt = state?.last_activity_at ? new Date(state.last_activity_at).getTime() : 0;
   const inactiveDays = lastActivityAt > 0 ? (Date.now() - lastActivityAt) / 86400000 : Number.POSITIVE_INFINITY;
-  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays || inactiveDays >= 7) return "user_already_returned_or_interval_not_elapsed";
+  const actionPendingAt = getContextualActionPendingAt({
+    ...state,
+    userId,
+    fullName: "",
+    email: "",
+    profession: "",
+    professionSegment: "",
+    activationLevel: 0,
+    activationStatus: "",
+    usageDaysCount: 0,
+    audioEvolutionsCount: 0,
+    reportsCount: 0,
+    migrationsCount: 0,
+    resourcesCount: 0,
+    subscriptionPlan: null,
+    subscriptionStartedAt: null,
+    subscriptionCancelledAt: null,
+    lastRelationshipEmailAt: null,
+    nextRelationshipEmailEligibleAt: null,
+    distinctActivityDays: []
+  } as any);
+  const pendingAgeHours = actionPendingAt ? (Date.now() - new Date(actionPendingAt).getTime()) / 3600000 : 0;
+  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays || inactiveDays >= 7 || !actionPendingAt || pendingAgeHours < pendingHours) return "contextual_action_not_pending_long_enough";
   return null;
 }
 
-async function validateFirstEvolutionCompleted(deps: LifecycleDependencies, userId: string) {
-  const { count, error } = await deps.supabaseAdmin
-    .from("evolutions")
-    .select("id", { count: "exact", head: true })
-    .eq("professional_id", userId)
-    .eq("transcription_status", "completed")
-    .eq("google_doc_append_status", "completed");
-  if (error) throw new Error(error.message || "Falha ao confirmar a primeira evolução concluída.");
-  if (Number(count || 0) === 0) return "evolution_not_completed_in_patient_record";
-  if (Number(count || 0) !== 1) return "not_first_completed_evolution";
+async function validatePriorityAndFrequency(deps: LifecycleDependencies, dispatch: any, state: LifecycleState, now: Date) {
+  if (dispatch.metadata?.force_resend === true || dispatch.dispatch_type !== "conditional") return null;
+  const category = String(dispatch.metadata?.category || "");
+  const operational = ["operational", "billing", "technical"].includes(category);
+  const { data, error } = await deps.supabaseAdmin
+    .from("lifecycle_dispatches")
+    .select("id, dispatch_type, priority, metadata, status, created_at, sent_at, scheduled_for")
+    .eq("user_id", dispatch.user_id)
+    .in("status", ["queued", "processing", "retry", "sent"])
+    .neq("id", dispatch.id)
+    .limit(100);
+  if (error) throw new Error(error.message || "Falha ao revalidar prioridade e frequência.");
+  const dispatches = data || [];
+  if (!operational && dispatches.some((item: any) => ["queued", "processing", "retry"].includes(item.status) && ["operational", "billing", "technical"].includes(String(item.metadata?.category || "")))) return "operational_dispatch_pending";
+  if (dispatches.some((item: any) => ["queued", "processing", "retry"].includes(item.status) && Number(item.priority || 0) > Number(dispatch.priority || 0))) return "higher_priority_dispatch_pending";
+  if (operational) return null;
+  const nowMs = now.getTime();
+  const timestamps = dispatches.filter((item: any) => item.dispatch_type === "conditional" && !["operational", "billing", "technical"].includes(String(item.metadata?.category || ""))).map((item: any) => new Date(item.sent_at || item.created_at || item.scheduled_for || "").getTime()).filter(Number.isFinite);
+  if (timestamps.some((timestamp: number) => nowMs - timestamp <= 24 * 60 * 60 * 1000)) return "conditional_frequency_24h_limit";
+  if (timestamps.filter((timestamp: number) => nowMs - timestamp <= 7 * 24 * 60 * 60 * 1000).length >= 2) return "conditional_frequency_7d_limit";
+  if (state.nextRelationshipEmailEligibleAt && new Date(state.nextRelationshipEmailEligibleAt).getTime() > nowMs) return "relationship_cooldown_active";
   return null;
 }
 
@@ -593,27 +596,6 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     await markSuppressed(deps, dispatch, operationalValidationReason);
     return { status: "suppressed" };
   }
-  if (ruleResult.data?.rule_key === "linked_record_without_evolution") {
-    const skipReason = await validateLinkedRecordWithoutEvolution(deps, dispatch.user_id);
-    if (skipReason) {
-      await markSkipped(deps, dispatch, skipReason);
-      return { status: "skipped" };
-    }
-  }
-  if (ruleResult.data?.rule_key === "patient_without_linked_record") {
-    const skipReason = await validatePatientWithoutLinkedRecord(deps, dispatch.user_id);
-    if (skipReason) {
-      await markSkipped(deps, dispatch, skipReason);
-      return { status: "skipped" };
-    }
-  }
-  if (ruleResult.data?.rule_key === "logged_in_without_patient") {
-    const skipReason = await validateLoggedInWithoutPatient(deps, dispatch.user_id);
-    if (skipReason) {
-      await markSkipped(deps, dispatch, skipReason);
-      return { status: "skipped" };
-    }
-  }
   if (ruleResult.data?.rule_key === "no_return_after_registration") {
     const skipReason = await validateNoReturnAfterRegistration(deps, dispatch.user_id, ruleResult.data);
     if (skipReason) {
@@ -656,12 +638,10 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
       return { status: "skipped" };
     }
   }
-  if (ruleResult.data?.rule_key === "first_evolution_completed") {
-    const skipReason = await validateFirstEvolutionCompleted(deps, dispatch.user_id);
-    if (skipReason) {
-      await markSkipped(deps, dispatch, skipReason);
-      return { status: "skipped" };
-    }
+  const priorityFrequencyReason = await validatePriorityAndFrequency(deps, dispatch, stateResult, new Date());
+  if (priorityFrequencyReason) {
+    await markSuppressed(deps, dispatch, priorityFrequencyReason);
+    return { status: "suppressed" };
   }
   if (ruleResult.data?.rule_key === "trial_expiring_1d") {
     const skipReason = await validateTrialExpiringOneDay(deps, dispatch.user_id);

@@ -70,6 +70,7 @@ function buildTemplateContext(state: LifecycleState, origin: string, now: Date):
     proxima_acao: nextAction.label,
     texto_cta_proxima_acao: nextAction.ctaLabel,
     link_acao: nextAction.route,
+    url_proxima_acao: nextAction.route,
     link_suporte: `${origin.replace(/\/$/, "")}/painel/support`
   };
 }
@@ -110,6 +111,54 @@ function isRelationshipCooldownBlocked(state: LifecycleState, now: Date, candida
   if (candidate.dispatchType === "transactional_bridge") return false;
   if (candidate.dispatchType === "sequence") return false;
   return Boolean(state.nextRelationshipEmailEligibleAt && new Date(state.nextRelationshipEmailEligibleAt).getTime() > now.getTime());
+}
+
+function isOperationalCandidate(candidate: LifecycleCandidate): boolean {
+  return candidate.category === "operational" || candidate.category === "billing" || candidate.category === "technical";
+}
+
+function processingEligibilityMinutes(rule: LifecycleRule): number {
+  const technicalThreshold = Number(rule.condition_config?.processing_threshold_minutes || 120);
+  return technicalThreshold + Math.max(0, Number(rule.delay_minutes || 0));
+}
+
+async function getCandidateLimitReason(deps: LifecycleDependencies, userId: string, candidate: LifecycleCandidate, now: Date): Promise<string | null> {
+  const activeStatuses = ["queued", "processing", "retry", "sent"];
+  const { data, error } = await deps.supabaseAdmin
+    .from("lifecycle_dispatches")
+    .select("message_key, dispatch_type, metadata, priority, status, created_at, sent_at, scheduled_for")
+    .eq("user_id", userId)
+    .in("status", activeStatuses)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw new Error(error.message || "Falha ao verificar limites de frequência lifecycle.");
+
+  const dispatches = (data || []) as Array<Record<string, unknown>>;
+  const operationalPending = dispatches.some((item) =>
+    ["queued", "processing", "retry"].includes(String(item.status)) &&
+    ["operational", "billing", "technical"].includes(String((item.metadata as any)?.category || ""))
+  );
+  if (!isOperationalCandidate(candidate) && operationalPending) return "operational_dispatch_pending";
+
+  const higherPriorityPending = dispatches.some((item) =>
+    ["queued", "processing", "retry"].includes(String(item.status)) &&
+    Number(item.priority || 0) > candidate.priority
+  );
+  if (higherPriorityPending) return "higher_priority_dispatch_pending";
+
+  if (isOperationalCandidate(candidate)) return null;
+
+  const nowMs = now.getTime();
+  const recent = dispatches.filter((item) => {
+    const timestamp = new Date(String(item.sent_at || item.created_at || item.scheduled_for || "")).getTime();
+    return Number.isFinite(timestamp) && nowMs - timestamp >= 0;
+  });
+  const conditionalRecent = recent.filter((item) => item.dispatch_type === "conditional" && !["operational", "billing", "technical"].includes(String((item.metadata as any)?.category || "")));
+  const last24h = conditionalRecent.filter((item) => nowMs - new Date(String(item.sent_at || item.created_at || item.scheduled_for)).getTime() <= 24 * 60 * 60 * 1000);
+  const last7d = conditionalRecent.filter((item) => nowMs - new Date(String(item.sent_at || item.created_at || item.scheduled_for)).getTime() <= 7 * 24 * 60 * 60 * 1000);
+  if (last24h.length >= 1) return "conditional_frequency_24h_limit";
+  if (last7d.length >= 2) return "conditional_frequency_7d_limit";
+  return null;
 }
 
 async function insertDecision(deps: LifecycleDependencies, row: Record<string, unknown>) {
@@ -234,7 +283,7 @@ async function scheduleForEnrollment(
   let processingEvolutionId: string | null = null;
   let processingDedupeKey = chosen.resourceId && chosen.occurrenceId ? `${chosen.resourceId}:${chosen.occurrenceId}` : chosen.dedupePeriodKey;
   if (chosen.rule?.rule_key === "evolution_processing_too_long") {
-    const pendingEvolution = await findLongPendingEvolution(deps, state.userId, Number(chosen.rule.delay_minutes || 120), now);
+    const pendingEvolution = await findLongPendingEvolution(deps, state.userId, processingEligibilityMinutes(chosen.rule), now);
     if (!pendingEvolution) return "nothing_due";
     processingEvolutionId = pendingEvolution.id;
     processingDedupeKey = `processing:${pendingEvolution.id}`;
@@ -254,6 +303,13 @@ async function scheduleForEnrollment(
     return "deferred";
   }
 
+  const limitReason = await getCandidateLimitReason(deps, state.userId, chosen, now);
+  if (limitReason) {
+    await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: chosen.step?.campaign_id || campaign.id, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: `deferred:${enrollment.id}:${chosen.messageKey}:${now.toISOString().slice(0, 10)}:${limitReason}`, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: "deferred", reason: limitReason });
+    await deps.supabaseAdmin.from("lifecycle_enrollments").update({ next_step_at: new Date(now.getTime() + 60 * 60000).toISOString() }).eq("id", enrollment.id);
+    return "deferred";
+  }
+
   const context = buildTemplateContext(state, deps.productionOrigin, now);
   const chosenCampaignId = chosen.step?.campaign_id || campaign.id;
   const decisionKey = `${chosen.dispatchType}:${enrollment.id}:${chosen.messageKey}:${processingDedupeKey}`;
@@ -261,7 +317,7 @@ async function scheduleForEnrollment(
   await insertDecision(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: chosenCampaignId, step_id: chosen.step?.id || null, rule_id: chosen.rule?.id || null, decision_key: decisionKey, selected_message_key: chosen.messageKey, selected_priority: chosen.priority, outcome: dryRun ? "dry_run" : "scheduled", reason: chosen.reason, metadata: { cta_route: chosen.ctaRouteTemplate, category: chosen.category, context_keys: Object.keys(context) } });
   if (dryRun) return "dry_run";
 
-  const delayMinutes = Number(chosen.rule?.delay_minutes || 0);
+  const delayMinutes = chosen.rule?.rule_key === "evolution_processing_too_long" ? 0 : Number(chosen.rule?.delay_minutes || 0);
   const scheduledFor = nextPreferredSendAt(
     now,
     safeTimeZone(preferences.timezone || campaign.timezone),

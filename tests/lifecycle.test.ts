@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { calculateActivationLevel, calculateTrialDaysRemaining, normalizeProfessionSegment } from '../server/lifecycle/lifecycleState.js';
-import { chooseHighestPriority, evaluateKnownRule, getNextBestAction, getSubscriberNextBestAction, shouldSkipSequenceStep } from '../server/lifecycle/lifecycleRules.js';
+import { chooseHighestPriority, evaluateKnownRule, getContextualActionPendingAt, getNextBestAction, getSubscriberNextBestAction, shouldSkipSequenceStep } from '../server/lifecycle/lifecycleRules.js';
 import { renderLifecycleTemplate } from '../server/lifecycle/templates/tokenRegistry.js';
 import { renderSafeLifecycleMarkdown } from '../server/lifecycle/lifecycleRenderer.js';
 import { sanitizeLifecycleMetadata } from '../server/lifecycle/lifecycleRepository.js';
@@ -32,10 +32,11 @@ assert.equal(calculateActivationLevel({ loggedIn: true, patientsCount: 1, linked
 assert.equal(calculateTrialDaysRemaining('2026-07-20T12:00:00.000Z', now), 4);
 assert.equal(calculateTrialDaysRemaining('2026-07-15T12:00:00.000Z', now), -1);
 
-const noPatientRule: any = { id: 'rule-1', rule_key: 'logged_in_without_patient', name: 'Sem paciente', rule_type: 'state', priority: 80, cooldown_hours: 24, delay_minutes: 0, enabled: true, message_config: {} };
-assert.equal(evaluateKnownRule(noPatientRule, baseState, now)?.messageKey, 'conditional:logged_in_without_patient');
-const withPatient = { ...baseState, patientsCount: 1 };
-assert.equal(evaluateKnownRule(noPatientRule, withPatient, now), null);
+const withPatient = { ...baseState, patientsCount: 1, firstPatientAt: '2026-07-14T12:00:00.000Z' };
+for (const removedRuleKey of ['logged_in_without_patient', 'patient_without_linked_record', 'linked_record_without_evolution', 'first_evolution_completed']) {
+  assert.equal(evaluateKnownRule({ id: removedRuleKey, rule_key: removedRuleKey, name: removedRuleKey, rule_type: 'state', priority: 80, cooldown_hours: 96, delay_minutes: 0, enabled: true, message_config: {} }, baseState, now), null);
+}
+assert.equal(getContextualActionPendingAt(baseState), baseState.firstLoginAt);
 assert.equal(getNextBestAction(baseState).label, 'Cadastrar primeiro paciente');
 assert.equal(getNextBestAction(baseState).ctaLabel, 'Cadastrar paciente');
 assert.equal(getNextBestAction({ ...baseState, patientsCount: 1 }).label, 'Criar ou vincular um prontuário');
@@ -47,6 +48,9 @@ const trialRule: any = { id: 'rule-2', rule_key: 'trial_expiring_3d', name: 'Tri
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, trialEndsAt: '2026-07-17T12:00:00.000Z' }, now), null);
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, trialEndsAt: '2026-07-19T12:00:00.000Z' }, now)?.commercial, true);
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, subscriptionStatus: 'active', subscriptionPlan: 'monthly', trialEndsAt: '2026-07-19T12:00:00.000Z' }, now), null);
+const contextualRule: any = { id: 'rule-context', rule_key: 'inactive_3d', name: 'Próxima ação', rule_type: 'inactivity', priority: 80, cooldown_hours: 96, delay_minutes: 0, condition_config: { days: 3, pending_hours: 72 }, enabled: true, message_config: {} };
+assert.equal(evaluateKnownRule(contextualRule, { ...baseState, lastActivityAt: '2026-07-13T12:00:00.000Z', firstLoginAt: '2026-07-12T12:00:00.000Z' }, now)?.messageKey, 'conditional:inactive_3d');
+assert.equal(evaluateKnownRule(contextualRule, { ...baseState, lastActivityAt: '2026-07-14T12:00:00.000Z', firstLoginAt: '2026-07-15T12:00:00.000Z' }, now), null);
 
 const operationalContext: any = {
   failedEvolution: { id: 'evolution-1', updatedAt: '2026-07-16T11:00:00.000Z' },
@@ -76,6 +80,10 @@ const claimSql = readFileSync('supabase/migrations/20260716101000_create_lifecyc
 assert.match(claimSql, /FOR UPDATE SKIP LOCKED/);
 assert.match(readFileSync('supabase/migrations/20260716100000_create_lifecycle_core.sql', 'utf8'), /dedupe_key text NOT NULL UNIQUE/);
 assert.match(readFileSync('supabase/migrations/20260716100500_create_lifecycle_event_triggers.sql', 'utf8'), /CREATE TRIGGER lifecycle_evolutions_events/);
+const finalConditionalMigration = readFileSync('supabase/migrations/20260718110000_finalize_conditional_message_lifecycle.sql', 'utf8');
+assert.match(finalConditionalMigration, /conditional_message_removed_as_transactional_duplicate/);
+assert.match(finalConditionalMigration, /'subscription_payment_failed', 14, 15/);
+assert.match(finalConditionalMigration, /'inactive_3d', 10, 0/);
 
 // Testes de Auditoria de Segurança / Sanitização (HIPAA/LGPD)
 const badPayload = {
