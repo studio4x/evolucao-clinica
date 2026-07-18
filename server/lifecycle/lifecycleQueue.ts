@@ -408,11 +408,13 @@ async function validateInactiveFourteenDays(deps: LifecycleDependencies, userId:
   if (eventsError) throw new Error(eventsError.message || "Falha ao confirmar o cancelamento da assinatura.");
   if (technicalDispatchError) throw new Error(technicalDispatchError.message || "Falha ao verificar alerta técnico anterior.");
   if (professional?.status !== "active") return "account_no_longer_available";
+  if (professional?.subscription_status !== "active") return "subscription_not_active";
 
   const trialEndsAt = professional?.trial_ends_at ? new Date(professional.trial_ends_at).getTime() : 0;
   if (trialEndsAt > 0 && trialEndsAt <= Date.now() && professional?.subscription_status !== "active") return "trial_recovery_message_required";
   if (subscriptionEvents?.event_name === "subscription_cancel_requested") return "subscription_cancellation_requested";
-  if (technicalDispatch?.id && (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0)) return "technical_issue_already_notified";
+  if (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0) return "technical_issue_requires_attention";
+  if (technicalDispatch?.id) return "technical_issue_already_notified";
 
   const minimumDays = Number(rule?.condition_config?.days || 14);
   const lastActivityAt = state?.last_activity_at ? new Date(state.last_activity_at).getTime() : 0;
@@ -438,9 +440,10 @@ async function validateInactiveSevenDays(deps: LifecycleDependencies, userId: st
   if (Number(state?.failed_evolutions_count || 0) > 0 || Number(state?.processing_evolutions_count || 0) > 0) return "technical_issue_requires_attention";
 
   const minimumDays = Number(rule?.condition_config?.days || 7);
+  const maximumDays = Number(rule?.condition_config?.max_days || 14);
   const lastActivityAt = state?.last_activity_at ? new Date(state.last_activity_at).getTime() : 0;
   const inactiveDays = lastActivityAt > 0 ? (Date.now() - lastActivityAt) / 86400000 : Number.POSITIVE_INFINITY;
-  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays || inactiveDays >= 14) return "user_already_returned_or_interval_not_elapsed";
+  if (!Number.isFinite(inactiveDays) || inactiveDays < minimumDays || inactiveDays >= maximumDays) return "user_already_returned_or_interval_not_elapsed";
   return null;
 }
 
@@ -814,9 +817,10 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
 
   if (dispatch.dispatch_type !== "transactional_bridge") {
+    const relationshipCooldownHours = dispatch.dispatch_type === "conditional" ? 96 : 24;
     await deps.supabaseAdmin.from("lifecycle_user_state").update({
       last_relationship_email_at: new Date().toISOString(),
-      next_relationship_email_eligible_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      next_relationship_email_eligible_at: new Date(Date.now() + relationshipCooldownHours * 60 * 60 * 1000).toISOString(),
       updated_at: new Date().toISOString()
     }).eq("user_id", dispatch.user_id);
   }
