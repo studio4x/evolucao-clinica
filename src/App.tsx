@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { supabase } from './supabaseClient';
 import { useAuthStore } from './store/authStore';
 import { usePWAStore } from './store/pwaStore';
@@ -560,6 +561,7 @@ export default function App() {
     <Router>
       <CookieConsent />
       <InstallPrompt />
+      <SpeedInsights />
       
       <Suspense fallback={<SplashScreen message="Carregando..." />}>
         <Routes>
