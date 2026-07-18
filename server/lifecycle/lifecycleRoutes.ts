@@ -463,7 +463,8 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ state, candidates, selected: chooseHighestPriority(candidates as any[]), nextAction: getNextBestAction(state) });
       }));
       app.post("/api/admin/lifecycle/test-email", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
-        const recipientEmail = String(req.body?.recipientEmail || req.user.email || "");
+        const runtime = await getLifecycleRuntimeConfig(deps);
+        const recipientEmail = String(runtime.test_recipient_email || req.body?.recipientEmail || req.user.email || "").trim();
         if (!recipientEmail || !recipientEmail.includes("@")) return res.status(400).json({ error: "Não foi possível identificar o e-mail do administrador." });
         const stepId = String(req.body?.stepId || "").trim();
         let step: any = null;
@@ -502,7 +503,9 @@ export function createLifecycleService(deps: LifecycleDependencies) {
       }));
       app.get("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (_req, res) => res.json({ runtime: await getLifecycleRuntimeConfig(deps) })));
       app.put("/api/admin/lifecycle/settings", middleware.requireAuth, middleware.requireAdmin, asyncRoute(async (req, res) => {
-        const runtime = { send_enabled: req.body?.send_enabled === true, dry_run: req.body?.dry_run !== false, max_batch_size: Math.min(Math.max(Number(req.body?.max_batch_size) || 25, 1), 100), global_outage: req.body?.global_outage === true };
+        const testRecipientEmail = String(req.body?.test_recipient_email || "").trim();
+        if (testRecipientEmail && !/^\S+@\S+\.\S+$/.test(testRecipientEmail)) return res.status(400).json({ error: "Informe um e-mail válido para os testes." });
+        const runtime = { send_enabled: req.body?.send_enabled === true, dry_run: req.body?.dry_run !== false, max_batch_size: Math.min(Math.max(Number(req.body?.max_batch_size) || 25, 1), 100), global_outage: req.body?.global_outage === true, test_recipient_email: testRecipientEmail };
         const { error } = await deps.supabaseAdmin.from("settings").upsert({ id: "lifecycle_config", api_key: JSON.stringify(runtime), updated_at: new Date().toISOString(), updated_by: req.user.email || req.user.id });
         if (error) throw new Error(error.message);
         return res.json({ runtime });
