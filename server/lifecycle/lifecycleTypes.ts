@@ -115,6 +115,15 @@ export type LifecycleCandidate = {
   ctaRouteTemplate: string;
   dedupePeriodKey: string;
   reason: string;
+  resourceId?: string;
+  occurrenceId?: string;
+};
+
+export type LifecycleOperationalContext = {
+  failedEvolution?: { id: string; updatedAt: string | null } | null;
+  notAddedEvolution?: { id: string; updatedAt: string | null } | null;
+  googleConnection?: { updatedAt: string | null } | null;
+  failedPayment?: { id: string; updatedAt: string | null } | null;
 };
 
 export type LifecycleDecision = {

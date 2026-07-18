@@ -2,7 +2,7 @@ import { LIFECYCLE_COOLDOWN_HOURS, LIFECYCLE_PRIORITY, type LifecycleRuntimeConf
 import { chooseHighestPriority, evaluateKnownRule, getNextBestAction, shouldSkipSequenceStep } from "./lifecycleRules.js";
 import { ensureLifecycleEnrollment, getLifecyclePreferences, getLifecycleRuntimeConfig, findCampaign, recordLifecycleEvent } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
-import type { LifecycleCandidate, LifecycleDependencies, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
+import type { LifecycleCandidate, LifecycleDependencies, LifecycleOperationalContext, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
 
 function firstName(value: string) { return value.trim().split(/\s+/)[0] || "Profissional"; }
 
@@ -145,6 +145,23 @@ async function findLongPendingEvolution(deps: LifecycleDependencies, userId: str
   }) || null;
 }
 
+async function loadOperationalContext(deps: LifecycleDependencies, userId: string): Promise<LifecycleOperationalContext> {
+  const [failedEvolution, notAddedEvolution, professional, failedPayment] = await Promise.all([
+    deps.supabaseAdmin.from("evolutions").select("id, updated_at").eq("professional_id", userId).eq("transcription_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    deps.supabaseAdmin.from("evolutions").select("id, updated_at").eq("professional_id", userId).eq("transcription_status", "completed").eq("google_doc_append_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    deps.supabaseAdmin.from("professionals").select("force_google_disconnect, updated_at").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("transactions").select("id, updated_at").eq("professional_id", userId).eq("status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle()
+  ]);
+  const error = failedEvolution.error || notAddedEvolution.error || professional.error || failedPayment.error;
+  if (error) throw new Error(error.message || "Falha ao carregar sinais operacionais do lifecycle.");
+  return {
+    failedEvolution: failedEvolution.data ? { id: failedEvolution.data.id, updatedAt: failedEvolution.data.updated_at || null } : null,
+    notAddedEvolution: notAddedEvolution.data ? { id: notAddedEvolution.data.id, updatedAt: notAddedEvolution.data.updated_at || null } : null,
+    googleConnection: professional.data?.force_google_disconnect ? { updatedAt: professional.data.updated_at || null } : null,
+    failedPayment: failedPayment.data ? { id: failedPayment.data.id, updatedAt: failedPayment.data.updated_at || null } : null
+  };
+}
+
 async function scheduleForEnrollment(
   deps: LifecycleDependencies,
   campaign: any,
@@ -154,6 +171,7 @@ async function scheduleForEnrollment(
   conditionalSteps: LifecycleStep[],
   rules: LifecycleRule[],
   state: LifecycleState,
+  operational: LifecycleOperationalContext,
   runtime: LifecycleRuntimeConfig,
   now: Date
 ) {
@@ -172,7 +190,7 @@ async function scheduleForEnrollment(
 
   const currentStep = steps.find((step) => step.position === enrollment.current_position + 1);
   const candidates = rules.map((rule) => {
-    const candidate = evaluateKnownRule(rule, state, now);
+    const candidate = evaluateKnownRule(rule, state, now, operational);
     if (!candidate || conditionalCampaign?.status !== "active") return candidate;
     const templateStep = conditionalSteps.find((step) => step.eligibility_rule_key === rule.rule_key && step.status === "active" && step.enabled);
     return templateStep ? applyConditionalStepTemplate(candidate, templateStep) : candidate;
@@ -195,9 +213,7 @@ async function scheduleForEnrollment(
   const allCandidates = [...candidates, ...(sequence ? [sequence] : [])];
   if (allCandidates.length === 0) return "nothing_due";
 
-  const candidateDedupeKeys = allCandidates.map(c => 
-    `${c.dispatchType}:${state.userId}:${c.messageKey}:${c.dedupePeriodKey}`
-  );
+  const candidateDedupeKeys = allCandidates.map(c => `${c.dispatchType}:${state.userId}:${c.messageKey}:${c.resourceId && c.occurrenceId ? `${c.resourceId}:${c.occurrenceId}` : c.dedupePeriodKey}`);
 
   const { data: existingDispatches, error: dedupeError } = await deps.supabaseAdmin
     .from("lifecycle_dispatches")
@@ -208,7 +224,7 @@ async function scheduleForEnrollment(
 
   const existingDedupeSet = new Set((existingDispatches || []).map((d: any) => d.dedupe_key));
   const eligibleCandidates = allCandidates.filter(c => {
-    const key = `${c.dispatchType}:${state.userId}:${c.messageKey}:${c.dedupePeriodKey}`;
+    const key = `${c.dispatchType}:${state.userId}:${c.messageKey}:${c.resourceId && c.occurrenceId ? `${c.resourceId}:${c.occurrenceId}` : c.dedupePeriodKey}`;
     return !existingDedupeSet.has(key);
   });
 
@@ -216,7 +232,7 @@ async function scheduleForEnrollment(
   if (!chosen) return "nothing_due";
 
   let processingEvolutionId: string | null = null;
-  let processingDedupeKey = chosen.dedupePeriodKey;
+  let processingDedupeKey = chosen.resourceId && chosen.occurrenceId ? `${chosen.resourceId}:${chosen.occurrenceId}` : chosen.dedupePeriodKey;
   if (chosen.rule?.rule_key === "evolution_processing_too_long") {
     const pendingEvolution = await findLongPendingEvolution(deps, state.userId, Number(chosen.rule.delay_minutes || 120), now);
     if (!pendingEvolution) return "nothing_due";
@@ -264,7 +280,7 @@ async function scheduleForEnrollment(
     status: "queued",
     scheduled_for: scheduledFor.toISOString(),
     dedupe_key: `${chosen.dispatchType}:${state.userId}:${chosen.messageKey}:${processingDedupeKey}`,
-    metadata: { ...context, ...(processingEvolutionId ? { processing_evolution_id: processingEvolutionId } : {}), cta_label_template: chosen.ctaLabelTemplate, cta_route_template: chosen.ctaRouteTemplate, category: chosen.category, commercial: chosen.commercial }
+    metadata: { ...context, ...(processingEvolutionId ? { processing_evolution_id: processingEvolutionId } : {}), ...(chosen.resourceId ? { resource_id: chosen.resourceId } : {}), ...(chosen.occurrenceId ? { occurrence_id: chosen.occurrenceId } : {}), cta_label_template: chosen.ctaLabelTemplate, cta_route_template: chosen.ctaRouteTemplate, category: chosen.category, commercial: chosen.commercial }
   });
   if (dispatchError && dispatchError.code !== "23505") throw new Error(dispatchError.message || "Falha ao criar dispatch lifecycle.");
 
@@ -309,7 +325,8 @@ export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now
       const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
       if (!enrollment) continue;
       const state = await getOrRecalculateLifecycleState(deps, professional.id);
-      const result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], conditionalCampaign, conditionalSteps || [], rules || [], state, runtime, now);
+      const operational = await loadOperationalContext(deps, professional.id);
+      const result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], conditionalCampaign, conditionalSteps || [], rules || [], state, operational, runtime, now);
       if (result === "scheduled") scheduled += 1;
       if (state.subscriptionStatus === "trialing" && state.trialEndsAt) {
         const trialDays = Math.ceil((new Date(state.trialEndsAt).getTime() - now.getTime()) / 86400000);

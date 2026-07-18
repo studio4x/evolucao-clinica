@@ -1,6 +1,6 @@
 import { LIFECYCLE_PRIORITY } from "./lifecycleConstants.js";
 import { calculateTrialDaysRemaining } from "./lifecycleState.js";
-import type { LifecycleCandidate, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
+import type { LifecycleCandidate, LifecycleOperationalContext, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
 
 export function getNextBestAction(state: LifecycleState, now = new Date()): { label: string; ctaLabel: string; route: string } {
   if (state.failedEvolutionsCount > 0) return { label: "Verificar evolução", ctaLabel: "Verificar evolução", route: "/painel/history" };
@@ -64,6 +64,10 @@ const FALLBACK_RULE_MESSAGES: Record<string, Record<string, unknown>> = {
   inactive_14d: { subject: "Algo dificultou o uso da plataforma?", preheader: "Estamos disponíveis para ajudar.", body: "Gostaríamos de saber se você encontrou alguma dificuldade durante o uso.", cta_label: "Preciso de ajuda", cta_route: "/painel/support", category: "reactivation" },
   subscription_started: { subject: "Sua assinatura do Evolução Clínica está ativa", preheader: "As próximas mensagens ajudarão na adoção da sua conta.", body: "Sua assinatura foi confirmada. Você pode continuar utilizando os recursos disponíveis no seu plano.", cta_label: "Acessar minha conta", cta_route: "/painel/dashboard", category: "transactional" },
   subscriber_low_usage: { subject: "Vamos aproveitar melhor sua assinatura?", preheader: "Escolha uma ação simples para retomar.", body: "Sua assinatura está ativa. Escolha uma ação simples para retomar o uso.", cta_label: "Continuar usando", cta_route: "/painel/dashboard", category: "retention" }
+  ,evolution_processing_failed: { subject: "Não foi possível concluir sua evolução", preheader: "Confira a evolução e veja como continuar.", body: "Não foi possível concluir o processamento de uma evolução. Acesse a plataforma para verificar o status e, se necessário, fale com o suporte.", cta_label: "Verificar evolução", cta_route: "/painel/history", category: "operational" }
+  ,evolution_not_added_to_record: { subject: "Sua evolução precisa ser adicionada ao prontuário", preheader: "Uma ação ficou pendente para concluir o registro.", body: "A evolução foi processada, mas não foi adicionada ao prontuário. Acesse a plataforma para concluir esse registro ou falar com o suporte.", cta_label: "Adicionar ao prontuário", cta_route: "/painel/history", category: "operational" }
+  ,google_connection_interrupted: { subject: "Sua conexão com o Google precisa ser reconectada", preheader: "Reconecte o Google para continuar usando seus prontuários.", body: "A conexão com o Google foi interrompida. Reconecte sua conta para continuar acessando e atualizando seus prontuários.", cta_label: "Reconectar Google", cta_route: "/painel/dashboard", category: "operational" }
+  ,subscription_payment_failed: { subject: "Não foi possível processar seu pagamento", preheader: "Atualize sua forma de pagamento para manter o acesso.", body: "Não foi possível processar o pagamento da sua assinatura. {{bloco_status_acesso}} Atualize sua forma de pagamento ou fale com o suporte.", cta_label: "Atualizar pagamento", cta_route: "/painel/subscription", category: "billing" }
 };
 
 function createCandidate(rule: LifecycleRule, state: LifecycleState, now: Date, periodKey: string, reason: string): LifecycleCandidate {
@@ -87,7 +91,7 @@ function createCandidate(rule: LifecycleRule, state: LifecycleState, now: Date, 
   };
 }
 
-export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, now = new Date()): LifecycleCandidate | null {
+export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, now = new Date(), operational?: LifecycleOperationalContext): LifecycleCandidate | null {
   if (!rule.enabled) return null;
   const trialDays = calculateTrialDaysRemaining(state.trialEndsAt, now);
   const loginAge = daysSince(state.lastLoginAt, now);
@@ -95,6 +99,22 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
   const period = now.toISOString().slice(0, 10);
 
   switch (rule.rule_key) {
+    case "evolution_processing_failed": {
+      const occurrence = operational?.failedEvolution;
+      return occurrence ? { ...createCandidate(rule, state, now, `failed:${occurrence.id}:${occurrence.updatedAt || "unknown"}`, "falha terminal no processamento da evolução"), resourceId: occurrence.id, occurrenceId: occurrence.updatedAt || occurrence.id } : null;
+    }
+    case "evolution_not_added_to_record": {
+      const occurrence = operational?.notAddedEvolution;
+      return occurrence ? { ...createCandidate(rule, state, now, `append-failed:${occurrence.id}:${occurrence.updatedAt || "unknown"}`, "evolução concluída, mas não adicionada ao prontuário"), resourceId: occurrence.id, occurrenceId: occurrence.updatedAt || occurrence.id } : null;
+    }
+    case "google_connection_interrupted": {
+      const occurrence = operational?.googleConnection;
+      return occurrence ? { ...createCandidate(rule, state, now, `google:${occurrence.updatedAt || period}`, "conexão do Google interrompida"), resourceId: state.userId, occurrenceId: occurrence.updatedAt || period } : null;
+    }
+    case "subscription_payment_failed": {
+      const occurrence = operational?.failedPayment;
+      return occurrence ? { ...createCandidate(rule, state, now, `payment:${occurrence.id}:${occurrence.updatedAt || "unknown"}`, "falha no pagamento da assinatura"), resourceId: occurrence.id, occurrenceId: occurrence.updatedAt || occurrence.id } : null;
+    }
     case "no_return_after_registration":
       return !state.lastLoginAt && hoursSince(state.onboardingCompletedAt || state.lastActivityAt, now) >= 24
         ? createCandidate(rule, state, now, `registration:${period}`, "sem novo acesso após 24 horas") : null;

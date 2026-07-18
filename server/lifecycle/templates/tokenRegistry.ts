@@ -47,6 +47,7 @@ export const LIFECYCLE_TOKEN_REGISTRY = {
   link_acao: (context: LifecycleTemplateContext) => context.link_acao || "/painel/dashboard",
   link_feedback: (context: LifecycleTemplateContext) => context.link_feedback || "/feedback/continuidade",
   link_suporte: (context: LifecycleTemplateContext) => context.link_suporte || "/painel/support"
+  ,bloco_status_acesso: (context: LifecycleTemplateContext) => context.bloco_status_acesso || "Consulte a área de assinatura para verificar a situação atual da sua conta."
 } as const;
 
 function formatQuantity(value: unknown, singular: string, plural: string): string {

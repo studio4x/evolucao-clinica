@@ -48,6 +48,24 @@ assert.equal(evaluateKnownRule(trialRule, { ...baseState, trialEndsAt: '2026-07-
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, trialEndsAt: '2026-07-19T12:00:00.000Z' }, now)?.commercial, true);
 assert.equal(evaluateKnownRule(trialRule, { ...baseState, subscriptionStatus: 'active', subscriptionPlan: 'monthly', trialEndsAt: '2026-07-19T12:00:00.000Z' }, now), null);
 
+const operationalContext: any = {
+  failedEvolution: { id: 'evolution-1', updatedAt: '2026-07-16T11:00:00.000Z' },
+  notAddedEvolution: { id: 'evolution-2', updatedAt: '2026-07-16T11:30:00.000Z' },
+  googleConnection: { updatedAt: '2026-07-16T10:00:00.000Z' },
+  failedPayment: { id: 'transaction-1', updatedAt: '2026-07-16T09:00:00.000Z' }
+};
+for (const [ruleKey, messageKey, resourceId] of [
+  ['evolution_processing_failed', 'conditional:evolution_processing_failed', 'evolution-1'],
+  ['evolution_not_added_to_record', 'conditional:evolution_not_added_to_record', 'evolution-2'],
+  ['google_connection_interrupted', 'conditional:google_connection_interrupted', 'user-1'],
+  ['subscription_payment_failed', 'conditional:subscription_payment_failed', 'transaction-1']
+] as const) {
+  const candidate = evaluateKnownRule({ id: ruleKey, rule_key: ruleKey, name: ruleKey, rule_type: 'state', priority: 80, cooldown_hours: 96, delay_minutes: 0, enabled: true, message_config: {} }, baseState, now, operationalContext);
+  assert.equal(candidate?.messageKey, messageKey);
+  assert.equal(candidate?.resourceId, resourceId);
+  assert.ok(candidate?.occurrenceId);
+}
+
 const sequenceStep: any = { id: 'step-2', campaign_id: 'campaign', step_key: 'day_02', position: 2, wait_minutes: 2880, category: 'activation', priority: 50, status: 'active', enabled: true, subject_template: 'x', body_markdown: 'x' };
 assert.equal(shouldSkipSequenceStep(sequenceStep, withPatient), 'ação já concluída: paciente existente');
 const low: any = { messageKey: 'low', priority: 50 };

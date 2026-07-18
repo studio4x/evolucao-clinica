@@ -32,6 +32,9 @@ function buildContext(state: LifecycleState, origin: string, now: Date, useSubsc
     texto_cta_proxima_acao: action.ctaLabel,
     link_acao: action.route,
     link_suporte: `${origin.replace(/\/$/, "")}/painel/support`
+    ,bloco_status_acesso: state.subscriptionStatus === "past_due" || state.subscriptionStatus === "unpaid"
+      ? "O acesso pode ser limitado até que a situação seja regularizada."
+      : "Consulte a área de assinatura para verificar a situação atual da sua conta."
   };
 }
 
@@ -286,6 +289,32 @@ async function validateProcessingAlert(
     return "processing_already_notified";
   }
 
+  return null;
+}
+
+async function validateOperationalMessage(deps: LifecycleDependencies, dispatch: any, rule: any) {
+  const key = rule?.rule_key;
+  if (!["evolution_processing_failed", "evolution_not_added_to_record", "google_connection_interrupted", "subscription_payment_failed"].includes(key)) return null;
+  const resourceId = dispatch.metadata?.resource_id;
+  if (key === "evolution_processing_failed" || key === "evolution_not_added_to_record") {
+    if (!resourceId) return "operational_resource_missing";
+    const { data, error } = await deps.supabaseAdmin.from("evolutions").select("transcription_status, google_doc_append_status").eq("id", resourceId).eq("professional_id", dispatch.user_id).maybeSingle();
+    if (error) throw new Error(error.message || "Falha ao revalidar a evolução operacional.");
+    if (!data) return "operational_evolution_missing";
+    if (key === "evolution_processing_failed" && data.transcription_status !== "failed") return "processing_failure_resolved";
+    if (key === "evolution_not_added_to_record" && !(data.transcription_status === "completed" && data.google_doc_append_status === "failed")) return "append_failure_resolved";
+  }
+  if (key === "google_connection_interrupted") {
+    const { data, error } = await deps.supabaseAdmin.from("professionals").select("force_google_disconnect, status").eq("id", dispatch.user_id).maybeSingle();
+    if (error) throw new Error(error.message || "Falha ao revalidar a conexão Google.");
+    if (!data?.force_google_disconnect || data.status !== "active") return "google_connection_recovered";
+  }
+  if (key === "subscription_payment_failed") {
+    if (!resourceId) return "payment_resource_missing";
+    const { data, error } = await deps.supabaseAdmin.from("transactions").select("status").eq("id", resourceId).eq("professional_id", dispatch.user_id).maybeSingle();
+    if (error) throw new Error(error.message || "Falha ao revalidar o pagamento.");
+    if (!data || data.status !== "failed") return "payment_recovered";
+  }
   return null;
 }
 
@@ -557,6 +586,11 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   const processingValidationReason = await validateProcessingAlert(deps, dispatch, ruleResult.data, runtime);
   if (processingValidationReason) {
     await markSuppressed(deps, dispatch, processingValidationReason);
+    return { status: "suppressed" };
+  }
+  const operationalValidationReason = await validateOperationalMessage(deps, dispatch, ruleResult.data);
+  if (operationalValidationReason) {
+    await markSuppressed(deps, dispatch, operationalValidationReason);
     return { status: "suppressed" };
   }
   if (ruleResult.data?.rule_key === "linked_record_without_evolution") {
