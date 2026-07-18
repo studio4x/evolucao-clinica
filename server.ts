@@ -23,6 +23,7 @@ dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
 export const app = express();
+app.disable("x-powered-by");
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
 const DEFAULT_PRODUCTION_ORIGIN = "https://evolucaoclinica.app.br";
