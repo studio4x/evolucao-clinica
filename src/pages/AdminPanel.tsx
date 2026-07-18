@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -122,6 +122,7 @@ const addStoredManualPushNotificationId = (notificationId?: string | null) => {
 export default function AdminPanel() {
   const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 
   const location = useLocation();
   const normalizedPath = location.pathname.replace(/\/+$/, '') || '/';
@@ -2792,9 +2793,64 @@ export default function AdminPanel() {
 
         {/* Layout com Menu Lateral */}
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Menu Lateral do Admin */}
-          <div className="w-full lg:w-64 flex-shrink-0">
-            <nav className="flex flex-col gap-5 p-4 bg-white rounded-2xl border border-brand-border shadow-sm w-full">
+          {/* Botão de Toggle do Menu Admin em Mobile */}
+          <div className="relative lg:hidden w-full">
+            <button
+              onClick={() => setIsMobileNavOpen(!isMobileNavOpen)}
+              className="flex items-center justify-between w-full p-4 bg-white border border-brand-border rounded-2xl shadow-sm text-brand-primary font-semibold text-sm cursor-pointer hover:bg-brand-bg transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                {isMobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                <span>Menu de Administração</span>
+              </div>
+              <span className="text-xs bg-brand-bg px-2.5 py-1 rounded-lg border border-brand-border text-brand-text font-medium">
+                {adminNavGroups.flatMap((g) => g.items).find((i) => i.key === activeTab)?.label || 'Selecionar...'}
+              </span>
+            </button>
+
+            {/* Dropdown do Menu Admin Mobile */}
+            {isMobileNavOpen && (
+              <div className="absolute left-0 right-0 z-40 mt-2 p-4 bg-white border border-brand-border rounded-2xl shadow-xl max-h-[70vh] overflow-y-auto">
+                <nav className="flex flex-col gap-5">
+                  {adminNavGroups.map((group) => (
+                    <div key={group.title} className="flex flex-col gap-1.5">
+                      <h3 className="px-3 text-[10px] font-bold tracking-wider text-brand-text-muted/60 uppercase select-none">
+                        {group.title}
+                      </h3>
+                      <div className="flex flex-col gap-0.5 mt-1">
+                        {group.items.map((item) => {
+                          const Icon = item.icon;
+                          const isActive = activeTab === item.key;
+
+                          return (
+                            <button
+                              key={item.key}
+                              onClick={() => {
+                                setActiveTab(item.key);
+                                setIsMobileNavOpen(false);
+                              }}
+                              className={`flex w-full min-w-0 items-center justify-start gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium transition-all duration-200 cursor-pointer ${
+                                isActive
+                                  ? 'bg-brand-primary text-white shadow-sm font-semibold'
+                                  : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary font-medium'
+                              }`}
+                            >
+                              <Icon size={16} className="shrink-0 text-current opacity-85" />
+                              <span className="min-w-0 leading-tight truncate">{item.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </nav>
+              </div>
+            )}
+          </div>
+
+          {/* Menu Lateral do Admin (Desktop) */}
+          <div className="hidden lg:block w-64 flex-shrink-0">
+            <nav className="flex flex-col gap-5 p-4 bg-white rounded-2xl border border-brand-border shadow-sm w-full sticky top-8">
               {adminNavGroups.map((group) => (
                 <div key={group.title} className="flex flex-col gap-1.5">
                   <h3 className="px-3 text-[10px] font-bold tracking-wider text-brand-text-muted/60 uppercase select-none">
