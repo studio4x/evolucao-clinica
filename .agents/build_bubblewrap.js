@@ -1,6 +1,6 @@
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 const projectDir = process.cwd();
 
@@ -99,6 +99,29 @@ function applyFixes() {
   
   fs.writeFileSync(buildGradlePath, buildGradleContent);
   console.log('- app/build.gradle configured.');
+
+  // 5. Ensure RECORD_AUDIO and MODIFY_AUDIO_SETTINGS permissions are in AndroidManifest.xml
+  const manifestPath = path.join(projectDir, 'app', 'src', 'main', 'AndroidManifest.xml');
+  if (fs.existsSync(manifestPath)) {
+    let manifestContent = fs.readFileSync(manifestPath, 'utf8');
+    let modified = false;
+    
+    if (!manifestContent.includes('android.permission.RECORD_AUDIO')) {
+      manifestContent = manifestContent.replace(
+        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
+        '<uses-permission android:name="android.permission.INTERNET" />\n        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n        <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n        <uses-permission android:name="android.permission.RECORD_AUDIO" />\n        <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
+      );
+      modified = true;
+      console.log('- RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, INTERNET & ACCESS_NETWORK_STATE permissions added to AndroidManifest.xml');
+    }
+    
+    if (modified) {
+      fs.writeFileSync(manifestPath, manifestContent, 'utf8');
+    }
+  } else {
+    console.log('WARNING: AndroidManifest.xml not found at ' + manifestPath);
+  }
+
   console.log('All fixes applied successfully!\n');
 }
 
