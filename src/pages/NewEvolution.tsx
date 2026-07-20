@@ -111,6 +111,7 @@ export default function NewEvolution() {
   const timerRef = useRef<number | null>(null);
   const isDiscardingRef = useRef(false);
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const recordingStreamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const waveformFrameRef = useRef<number | null>(null);
@@ -153,6 +154,10 @@ export default function NewEvolution() {
 
   const startWaveform = (stream: MediaStream) => {
     try {
+      if (analyserRef.current) {
+        if (waveformFrameRef.current === null) drawWaveform();
+        return;
+      }
       const AudioContextConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioContextConstructor) return;
       if (!audioContextRef.current) audioContextRef.current = new AudioContextConstructor();
@@ -186,6 +191,14 @@ export default function NewEvolution() {
   };
 
   useEffect(() => () => stopWaveform(), []);
+
+  useEffect(() => {
+    if (isRecording && !isPaused && recordingStreamRef.current) {
+      startWaveform(recordingStreamRef.current);
+    } else {
+      pauseWaveform();
+    }
+  }, [isRecording, isPaused]);
 
   useEffect(() => {
     audioItemsRef.current = audioItems;
@@ -592,7 +605,8 @@ export default function NewEvolution() {
       }
       const mimeType = getSupportedRecordingMimeType();
       const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      startWaveform(stream);
+      recordingStreamRef.current = stream;
+      console.info('[Audio] Gravador iniciado', { requestedMimeType: mimeType || 'padrão', mimeType: mediaRecorder.mimeType });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
       recordingTimeRef.current = 0;
@@ -600,6 +614,7 @@ export default function NewEvolution() {
 
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
+          console.info('[Audio] Fragmento capturado', { bytes: e.data.size, mimeType: e.data.type || mediaRecorder.mimeType });
           chunksRef.current.push(e.data);
           // Salva rascunho periodicamente
           if (!isDiscardingRef.current) {
@@ -613,6 +628,7 @@ export default function NewEvolution() {
         if (!isDiscardingRef.current) {
           if (chunksRef.current.length > 0) {
             const newBlob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+            console.info('[Audio] Gravação finalizada', { bytes: newBlob.size, mimeType: newBlob.type, chunks: chunksRef.current.length });
             void (async () => {
               const nextItem = await createAudioItem(
                 newBlob,
@@ -630,6 +646,7 @@ export default function NewEvolution() {
           }
         }
         stopWaveform();
+        recordingStreamRef.current = null;
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -682,6 +699,7 @@ export default function NewEvolution() {
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
       stopWaveform();
+      recordingStreamRef.current = null;
       if (timerRef.current) clearInterval(timerRef.current);
       
       // Reset dos estados da gravação atual
@@ -1262,7 +1280,11 @@ export default function NewEvolution() {
                       controls
                       preload="metadata"
                       className="w-full"
-                      onError={() => setErrorMessage('O áudio foi gerado, mas este dispositivo não conseguiu reproduzir o formato. Tente gravar novamente.')}
+                      onError={(event) => {
+                        const mediaError = event.currentTarget.error;
+                        console.error('[Audio] Falha na reprodução', { code: mediaError?.code, message: mediaError?.message, mimeType: item.blob.type, bytes: item.blob.size });
+                        setErrorMessage('O áudio foi gerado, mas este dispositivo não conseguiu reproduzir o formato. Tente gravar novamente.');
+                      }}
                     />
                   </div>
                 ))}
