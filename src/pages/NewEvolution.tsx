@@ -15,7 +15,7 @@ import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, remov
 import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
-import { getAudioDurationFromUrl } from '../utils/audioDuration';
+import { getAudioDurationFromBlob } from '../utils/audioDuration';
 
 type AudioEvolutionItem = {
   id: string;
@@ -375,7 +375,7 @@ export default function NewEvolution() {
 
   const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string, fallbackDuration = 0) => {
     const url = URL.createObjectURL(blob);
-    const detectedDuration = await getAudioDurationFromUrl(url);
+    const detectedDuration = await getAudioDurationFromBlob(blob);
     const duration = detectedDuration > 0 ? detectedDuration : fallbackDuration;
 
     return {
