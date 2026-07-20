@@ -60,6 +60,11 @@ const stripMarkdown = (md: string): string => {
     .trim();
 };
 
+const isGoogleAuthenticationError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /UNAUTHENTICATED|invalid authentication credentials|401/i.test(message);
+};
+
 
 
 export default function PatientDetail() {
@@ -610,9 +615,30 @@ export default function PatientDetail() {
         alert('Prontuário gerado com sucesso.');
       } catch (err: any) {
         console.error("Erro ao carregar prontuário do Google Docs:", err);
-        alert("Erro ao ler prontuário do Google Docs: " + (err.message || err));
         document.title = originalTitle;
         setPrintingProntuario(false);
+
+        if (isGoogleAuthenticationError(err)) {
+          setGoogleAccessToken(null);
+          try {
+            const { error: reauthenticationError } = await requestGoogleOAuth({
+              requiredScopes: 'clinicalDocs',
+              currentGrantedScopes: googleGrantedScopes,
+              redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+              prompt: 'consent',
+              loginHint: user?.email || undefined
+            });
+
+            if (reauthenticationError) throw reauthenticationError;
+            return;
+          } catch (reauthenticationError: any) {
+            console.error('Erro ao renovar autenticação do Google:', reauthenticationError);
+            alert('Sua sessão do Google expirou. Não foi possível renová-la automaticamente. Tente novamente.');
+          }
+          return;
+        }
+
+        alert("Erro ao ler prontuário do Google Docs: " + (err.message || err));
       }
     } else {
       // Platform Database Evolutions
