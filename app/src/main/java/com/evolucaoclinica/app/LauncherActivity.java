@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.graphics.Color;
 import android.util.Log;
 import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
@@ -20,6 +21,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
 public class LauncherActivity extends Activity {
     private static final String LOG_TAG = "EvolucaoAudio";
     private static final int REQUEST_PERMISSIONS = 1001;
@@ -28,6 +31,7 @@ public class LauncherActivity extends Activity {
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
     private static final String SUPABASE_HOST = "kvxboovgrrhhttaqinld.supabase.co";
     private WebView webView;
+    private SwipeRefreshLayout swipeRefreshLayout;
     private ValueCallback<Uri[]> filePathCallback;
 
     @Override
@@ -37,9 +41,15 @@ public class LauncherActivity extends Activity {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         }
         requestRequiredPermissions();
+        swipeRefreshLayout = new SwipeRefreshLayout(this);
+        swipeRefreshLayout.setColorSchemeColors(Color.rgb(0, 92, 19));
+        swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) -> webView != null && webView.getScrollY() > 0);
+        swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
+
         webView = new WebView(this);
         configureWebView(webView);
-        setContentView(webView);
+        swipeRefreshLayout.addView(webView);
+        setContentView(swipeRefreshLayout);
         Uri launchUri = getIntent() == null ? null : getIntent().getData();
         webView.loadUrl(isTrustedUrl(launchUri) ? launchUri.toString() : APP_URL);
     }
@@ -68,6 +78,12 @@ public class LauncherActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(view, true);
 
         view.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView webView, String url) {
+                super.onPageFinished(webView, url);
+                if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView webView, WebResourceRequest request) {
                 Uri url = request.getUrl();
