@@ -8,6 +8,7 @@ import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
+import { rememberMicrophonePermission } from '../utils/microphonePermission';
 
 import { transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
@@ -599,6 +600,7 @@ export default function NewEvolution() {
     try {
       isDiscardingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      rememberMicrophonePermission();
       if (typeof MediaRecorder === 'undefined') {
         stream.getTracks().forEach((track) => track.stop());
         throw new Error('Este dispositivo não oferece suporte à gravação de áudio.');

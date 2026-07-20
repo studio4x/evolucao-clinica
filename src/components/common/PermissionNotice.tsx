@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Mic, ShieldCheck, X } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
+import { hasRememberedMicrophonePermission, rememberMicrophonePermission } from '../../utils/microphonePermission';
 
 type MicrophonePermissionState = PermissionState | 'unavailable';
 
@@ -28,11 +29,18 @@ export const PermissionNotice = () => {
       return;
     }
 
+    if (hasRememberedMicrophonePermission()) {
+      setPermission('granted');
+      setIsOpen(false);
+      return;
+    }
+
     let isMounted = true;
     void getMicrophonePermission().then((nextPermission) => {
       if (!isMounted) return;
       setPermission(nextPermission);
       setIsOpen(nextPermission !== 'granted' && nextPermission !== 'unavailable');
+      if (nextPermission === 'granted') rememberMicrophonePermission();
     });
 
     return () => {
@@ -52,6 +60,7 @@ export const PermissionNotice = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
+      rememberMicrophonePermission();
       setPermission('granted');
       setIsOpen(false);
     } catch (error) {
