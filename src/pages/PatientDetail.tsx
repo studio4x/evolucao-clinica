@@ -65,6 +65,17 @@ const isGoogleAuthenticationError = (error: unknown) => {
   return /UNAUTHENTICATED|invalid authentication credentials|401/i.test(message);
 };
 
+type ConfirmationDialogState = {
+  title: string;
+  message: string;
+  warning?: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  icon: 'shield' | 'download' | 'copy';
+  variant: 'danger' | 'info';
+  resolve: (confirmed: boolean) => void;
+};
+
 
 
 export default function PatientDetail() {
@@ -168,6 +179,7 @@ export default function PatientDetail() {
     isOpen: boolean;
     reportId: string;
   } | null>(null);
+  const [confirmationDialog, setConfirmationDialog] = useState<ConfirmationDialogState | null>(null);
   const [originalReportContent, setOriginalReportContent] = useState('');
 
   // Estados do Mural de Notas Rápidas
@@ -203,6 +215,32 @@ export default function PatientDetail() {
   const [signingEvolutionId, setSigningEvolutionId] = useState<string | null>(null);
   const [expandedEvoIds, setExpandedEvoIds] = useState<Record<string, boolean>>({});
   const [printSignatureInfo, setPrintSignatureInfo] = useState<any>(null);
+
+  const requestConfirmation = (options: Omit<ConfirmationDialogState, 'resolve'>) => {
+    return new Promise<boolean>((resolve) => {
+      setConfirmationDialog({ ...options, resolve });
+    });
+  };
+
+  const resolveConfirmation = (confirmed: boolean) => {
+    if (!confirmationDialog) return;
+    const { resolve } = confirmationDialog;
+    setConfirmationDialog(null);
+    resolve(confirmed);
+  };
+
+  useEffect(() => {
+    if (!confirmationDialog) return;
+
+    const handleConfirmationKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        resolveConfirmation(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleConfirmationKeyDown);
+    return () => window.removeEventListener('keydown', handleConfirmationKeyDown);
+  }, [confirmationDialog]);
 
   // Estados para a busca semântica (RAG Clínico)
   const [semanticQuery, setSemanticQuery] = useState('');
@@ -416,7 +454,16 @@ export default function PatientDetail() {
     if (!checkPlanActiveAndAlert("Assinatura Digital")) {
       return;
     }
-    if (!window.confirm("Deseja assinar e fechar esta evolução? Após assinar, ela se tornará imutável para fins de conformidade legal e não poderá mais ser alterada ou excluída.")) {
+    const shouldSign = await requestConfirmation({
+      title: 'Assinar e fechar evolução',
+      message: 'A assinatura digital confirma a autoria e encerra esta evolução clínica.',
+      warning: 'Após a confirmação, o conteúdo ficará imutável e não poderá mais ser alterado ou excluído.',
+      confirmLabel: 'Assinar e fechar',
+      cancelLabel: 'Voltar',
+      icon: 'shield',
+      variant: 'danger'
+    });
+    if (!shouldSign) {
       return;
     }
     setSigningEvolutionId(evoId);
@@ -433,7 +480,14 @@ export default function PatientDetail() {
 
       // Oferecer salvar o PDF na pasta do Google Drive do paciente
       if (hasClinicalAccess && googleAccessToken && patient?.target_folder_id) {
-        const savePdf = window.confirm("Deseja salvar automaticamente o PDF desta evolução assinada na pasta do prontuário no Google Drive?");
+        const savePdf = await requestConfirmation({
+          title: 'Salvar uma cópia no Google Drive?',
+          message: 'A evolução assinada também pode ser salva como PDF na pasta do prontuário deste paciente.',
+          confirmLabel: 'Salvar PDF',
+          cancelLabel: 'Agora não',
+          icon: 'download',
+          variant: 'info'
+        });
         if (savePdf) {
           let logoBase64 = null;
           const currentLogoUrl = getLogoUrl();
@@ -1430,7 +1484,15 @@ export default function PatientDetail() {
   };
 
   const handleDuplicateReport = async (rep: any) => {
-    if (!window.confirm("Deseja duplicar este relatório assinado? Isso criará uma nova cópia em rascunho (editável) a partir deste documento.")) {
+    const shouldDuplicate = await requestConfirmation({
+      title: 'Duplicar relatório assinado?',
+      message: 'Será criada uma nova cópia em rascunho, que poderá ser editada com segurança.',
+      confirmLabel: 'Duplicar relatório',
+      cancelLabel: 'Cancelar',
+      icon: 'copy',
+      variant: 'info'
+    });
+    if (!shouldDuplicate) {
       return;
     }
     try {
@@ -3714,6 +3776,76 @@ export default function PatientDetail() {
                 className="bg-brand-primary text-white hover:bg-brand-primary-hover font-medium text-xs px-4 py-2 rounded-xl transition-all duration-200 cursor-pointer"
               >
                 Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmationDialog && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 sm:p-6 animate-fadeIn"
+          onClick={() => resolveConfirmation(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="patient-confirmation-title"
+            className="w-full max-w-lg overflow-hidden rounded-3xl border border-brand-border bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-4 border-b border-brand-border bg-brand-bg/50 px-5 py-5 sm:px-6">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${confirmationDialog.variant === 'danger' ? 'bg-amber-100 text-amber-700' : 'bg-brand-primary/10 text-brand-primary'}`}>
+                {confirmationDialog.icon === 'shield' ? <Shield size={22} /> : confirmationDialog.icon === 'download' ? <Download size={22} /> : <Copy size={22} />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.16em] text-brand-primary">
+                  Confirmação necessária
+                </p>
+                <h3 id="patient-confirmation-title" className="text-lg font-display font-bold leading-tight text-brand-text sm:text-xl">
+                  {confirmationDialog.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                aria-label="Fechar confirmação"
+                onClick={() => resolveConfirmation(false)}
+                className="shrink-0 rounded-xl p-2 text-stone-400 transition-colors hover:bg-white hover:text-stone-700 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-5 py-5 sm:px-6 sm:py-6">
+              <p className="text-sm leading-relaxed text-brand-text-muted sm:text-[15px]">
+                {confirmationDialog.message}
+              </p>
+
+              {confirmationDialog.warning && (
+                <div className="flex gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                  <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+                  <p className="text-xs font-medium leading-relaxed sm:text-sm">
+                    {confirmationDialog.warning}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-brand-border bg-brand-bg/30 px-5 py-4 sm:flex-row sm:justify-end sm:gap-3 sm:px-6">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => resolveConfirmation(false)}
+                className="min-h-11 rounded-xl border border-brand-border bg-white px-5 py-2.5 text-sm font-semibold text-brand-text-muted transition-colors hover:bg-brand-bg cursor-pointer"
+              >
+                {confirmationDialog.cancelLabel}
+              </button>
+              <button
+                type="button"
+                onClick={() => resolveConfirmation(true)}
+                className="min-h-11 rounded-xl bg-brand-primary px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-primary-hover cursor-pointer"
+              >
+                {confirmationDialog.confirmLabel}
               </button>
             </div>
           </div>
