@@ -110,6 +110,82 @@ export default function NewEvolution() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const isDiscardingRef = useRef(false);
+  const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const waveformFrameRef = useRef<number | null>(null);
+
+  const drawWaveform = () => {
+    const canvas = waveformCanvasRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return;
+
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    const pixelRatio = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth || 320;
+    const height = canvas.clientHeight || 72;
+    if (canvas.width !== width * pixelRatio || canvas.height !== height * pixelRatio) {
+      canvas.width = width * pixelRatio;
+      canvas.height = height * pixelRatio;
+      context.scale(pixelRatio, pixelRatio);
+    }
+
+    const values = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(values);
+    context.clearRect(0, 0, width, height);
+    context.fillStyle = '#eff8f1';
+    context.fillRect(0, 0, width, height);
+    context.lineWidth = 2;
+    context.strokeStyle = '#087f3f';
+    context.beginPath();
+
+    for (let index = 0; index < values.length; index += 1) {
+      const x = (index / (values.length - 1)) * width;
+      const y = (values[index] / 255) * height;
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    }
+    context.stroke();
+    waveformFrameRef.current = window.requestAnimationFrame(drawWaveform);
+  };
+
+  const startWaveform = (stream: MediaStream) => {
+    try {
+      const AudioContextConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextConstructor) return;
+      if (!audioContextRef.current) audioContextRef.current = new AudioContextConstructor();
+      const audioContext = audioContextRef.current;
+      if (audioContext.state === 'suspended') void audioContext.resume();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.82;
+      audioContext.createMediaStreamSource(stream).connect(analyser);
+      analyserRef.current = analyser;
+      if (waveformFrameRef.current === null) drawWaveform();
+    } catch (error) {
+      console.warn('Não foi possível iniciar o visualizador de áudio:', error);
+    }
+  };
+
+  const pauseWaveform = () => {
+    if (waveformFrameRef.current !== null) {
+      window.cancelAnimationFrame(waveformFrameRef.current);
+      waveformFrameRef.current = null;
+    }
+  };
+
+  const stopWaveform = () => {
+    pauseWaveform();
+    analyserRef.current = null;
+    if (audioContextRef.current) {
+      void audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+  };
+
+  useEffect(() => () => stopWaveform(), []);
 
   useEffect(() => {
     audioItemsRef.current = audioItems;
@@ -516,6 +592,7 @@ export default function NewEvolution() {
       }
       const mimeType = getSupportedRecordingMimeType();
       const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      startWaveform(stream);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
       recordingTimeRef.current = 0;
@@ -552,6 +629,7 @@ export default function NewEvolution() {
             })();
           }
         }
+        stopWaveform();
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -575,6 +653,7 @@ export default function NewEvolution() {
   const pauseRecording = () => {
     if (mediaRecorderRef.current && isRecording && !isPaused) {
       mediaRecorderRef.current.pause();
+      pauseWaveform();
       setIsPaused(true);
       if (timerRef.current) clearInterval(timerRef.current);
     }
@@ -583,6 +662,7 @@ export default function NewEvolution() {
   const resumeRecording = () => {
     if (mediaRecorderRef.current && isRecording && isPaused) {
       mediaRecorderRef.current.resume();
+      startWaveform(mediaRecorderRef.current.stream);
       setIsPaused(false);
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => {
@@ -601,6 +681,7 @@ export default function NewEvolution() {
         mediaRecorderRef.current.stop();
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
+      stopWaveform();
       if (timerRef.current) clearInterval(timerRef.current);
       
       // Reset dos estados da gravação atual
@@ -1014,6 +1095,13 @@ export default function NewEvolution() {
                   <div className="text-2xl font-mono text-brand-text flex items-center">
                     {formatTime(recordingTime)}
                     {isPaused && <span className="text-xs ml-2 bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded uppercase font-bold tracking-tighter">Pausado</span>}
+                  </div>
+                  <div className="w-full rounded-2xl border border-brand-primary/20 bg-brand-surface p-3 text-left">
+                    <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-brand-primary">
+                      <span className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${isPaused ? 'bg-yellow-500' : 'animate-pulse bg-red-500'}`} />{isPaused ? 'Gravação pausada' : 'Gravando agora'}</span>
+                      <span className="font-normal normal-case text-brand-text-muted">Onda do microfone</span>
+                    </div>
+                    <canvas ref={waveformCanvasRef} className="h-[72px] w-full rounded-xl" aria-label="Visualização do áudio capturado" />
                   </div>
                   
                   <div className="flex flex-wrap justify-center gap-3">
