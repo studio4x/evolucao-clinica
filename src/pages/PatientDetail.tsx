@@ -666,7 +666,7 @@ export default function PatientDetail() {
         await downloadProntuarioPdf(content, 'Prontuário de Evoluções Clínicas (Google Docs)');
         document.title = originalTitle;
         setPrintingProntuario(false);
-        alert('Prontuário gerado com sucesso.');
+        alert('Prontuário gerado com sucesso. O download do arquivo PDF será iniciado automaticamente. No Android, o arquivo ficará em Downloads > Evolução Clínica.');
       } catch (err: any) {
         console.error("Erro ao carregar prontuário do Google Docs:", err);
         document.title = originalTitle;
@@ -745,7 +745,7 @@ export default function PatientDetail() {
         await downloadProntuarioPdf(contentText, 'Prontuário de Evoluções Clínicas (Plataforma)', periodLabel);
         document.title = originalTitle;
         setPrintingProntuario(false);
-        alert('Prontuário gerado com sucesso.');
+        alert('Prontuário gerado com sucesso. O download do arquivo PDF será iniciado automaticamente. No Android, o arquivo ficará em Downloads > Evolução Clínica.');
       } catch (err: any) {
         console.error('Erro ao gerar PDF do prontuário:', err);
         document.title = originalTitle;

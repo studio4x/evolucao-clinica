@@ -205,6 +205,7 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 
 export const downloadPdfFile = async (doc: jsPDF, fileName: string): Promise<boolean> => {
   const blob = doc.output('blob');
+  const isAndroidWebView = /Android/i.test(navigator.userAgent) && (/\bwv\b/i.test(navigator.userAgent) || !('chrome' in window));
   const nativeDownload = (window as Window & {
     NativeFileDownload?: {
       saveFile?: (name: string, mimeType: string, base64Data: string) => boolean;
@@ -212,8 +213,18 @@ export const downloadPdfFile = async (doc: jsPDF, fileName: string): Promise<boo
   }).NativeFileDownload;
 
   if (typeof nativeDownload?.saveFile === 'function') {
-    const saved = nativeDownload.saveFile(fileName, 'application/pdf', await blobToBase64(blob));
-    if (saved) return true;
+    try {
+      const saved = nativeDownload.saveFile(fileName, 'application/pdf', await blobToBase64(blob));
+      if (saved) return true;
+    } catch (error) {
+      console.error('[PDF] Falha no salvamento nativo:', error);
+    }
+  }
+
+  // A WebView Android não garante o download de URLs blob pelo clique em um <a>.
+  // Retornar falha aqui evita mostrar sucesso quando o arquivo não foi salvo.
+  if (isAndroidWebView) {
+    return false;
   }
 
   const objectUrl = URL.createObjectURL(blob);
