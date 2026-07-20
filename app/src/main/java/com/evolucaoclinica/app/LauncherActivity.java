@@ -23,6 +23,7 @@ public class LauncherActivity extends Activity {
     private static final int REQUEST_FILE_CHOOSER = 1002;
     private static final String APP_URL = "https://www.evolucaoclinica.app.br/?utm_source=pwa";
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
+    private static final String SUPABASE_HOST = "kvxboovgrrhhttaqinld.supabase.co";
     private WebView webView;
     private ValueCallback<Uri[]> filePathCallback;
 
@@ -38,6 +39,16 @@ public class LauncherActivity extends Activity {
         setContentView(webView);
         Uri launchUri = getIntent() == null ? null : getIntent().getData();
         webView.loadUrl(isTrustedUrl(launchUri) ? launchUri.toString() : APP_URL);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        Uri callbackUri = intent == null ? null : intent.getData();
+        if (webView != null && isTrustedUrl(callbackUri)) {
+            webView.loadUrl(callbackUri.toString());
+        }
     }
 
     private void configureWebView(WebView view) {
@@ -57,6 +68,14 @@ public class LauncherActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView webView, WebResourceRequest request) {
                 Uri url = request.getUrl();
+                if (isOAuthUrl(url)) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, url));
+                    } catch (Exception ignored) {
+                        Toast.makeText(LauncherActivity.this, "Não foi possível abrir o login do Google.", Toast.LENGTH_SHORT).show();
+                    }
+                    return true;
+                }
                 if ("http".equalsIgnoreCase(url.getScheme()) || "https".equalsIgnoreCase(url.getScheme())) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, url));
@@ -119,6 +138,13 @@ public class LauncherActivity extends Activity {
         } catch (Exception exception) {
             return false;
         }
+    }
+
+    private boolean isOAuthUrl(Uri uri) {
+        if (uri == null) return false;
+        String host = uri.getHost();
+        return "accounts.google.com".equalsIgnoreCase(host)
+                || (SUPABASE_HOST.equalsIgnoreCase(host) && uri.getPath() != null && uri.getPath().startsWith("/auth/v1/authorize"));
     }
 
     @Override
