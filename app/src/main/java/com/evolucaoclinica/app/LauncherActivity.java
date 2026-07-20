@@ -5,11 +5,13 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -26,6 +28,12 @@ import android.widget.Toast;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
+import org.json.JSONObject;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.util.ArrayList;
+
 public class LauncherActivity extends Activity {
     private static final String LOG_TAG = "EvolucaoAudio";
     private static final int REQUEST_PERMISSIONS = 1001;
@@ -36,6 +44,9 @@ public class LauncherActivity extends Activity {
     private WebView webView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ValueCallback<Uri[]> filePathCallback;
+    private Uri sharedFileUri;
+    private String sharedFileMimeType;
+    private String sharedFileName;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,6 +64,7 @@ public class LauncherActivity extends Activity {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         }
 
+        captureShareIntent(getIntent());
         requestRequiredPermissions();
 
         swipeRefreshLayout = new SwipeRefreshLayout(this);
@@ -72,22 +84,114 @@ public class LauncherActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
+        webView.addJavascriptInterface(new NativeShareBridge(), "NativeShare");
         configureWebView(webView);
 
         swipeRefreshLayout.addView(webView);
         setContentView(swipeRefreshLayout);
 
         Uri launchUri = getIntent() == null ? null : getIntent().getData();
-        webView.loadUrl(isTrustedUrl(launchUri) ? launchUri.toString() : APP_URL);
+        webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(launchUri) ? launchUri.toString() : APP_URL));
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        captureShareIntent(intent);
         Uri callbackUri = intent == null ? null : intent.getData();
-        if (webView != null && isTrustedUrl(callbackUri)) {
-            webView.loadUrl(callbackUri.toString());
+        if (webView != null) {
+            webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(callbackUri) ? callbackUri.toString() : APP_URL));
+        }
+    }
+
+    private String shareTargetUrl() {
+        return "https://" + TRUSTED_HOST + "/painel/share-target?nativeShare=1";
+    }
+
+    private boolean hasSharedFile() {
+        return sharedFileUri != null;
+    }
+
+    private void captureShareIntent(Intent intent) {
+        if (intent == null) return;
+
+        String action = intent.getAction();
+        Uri fileUri = null;
+        if (Intent.ACTION_SEND.equals(action)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                fileUri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
+            } else {
+                fileUri = (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
+            }
+        } else if (Intent.ACTION_SEND_MULTIPLE.equals(action)) {
+            ArrayList<Uri> uris = intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM);
+            if (uris != null && !uris.isEmpty()) fileUri = uris.get(0);
+        }
+
+        if (fileUri == null) return;
+
+        sharedFileUri = fileUri;
+        sharedFileMimeType = intent.getType();
+        sharedFileName = queryDisplayName(fileUri);
+        Log.d(LOG_TAG, "Áudio compartilhado recebido: " + fileUri + " (" + sharedFileMimeType + ")");
+    }
+
+    private String queryDisplayName(Uri uri) {
+        Cursor cursor = null;
+        try {
+            cursor = getContentResolver().query(uri, new String[]{"_display_name"}, null, null, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                String name = cursor.getString(0);
+                if (name != null && !name.trim().isEmpty()) return name;
+            }
+        } catch (Exception exception) {
+            Log.w(LOG_TAG, "Não foi possível obter o nome do áudio compartilhado", exception);
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+        return "audio-compartilhado.ogg";
+    }
+
+    private final class NativeShareBridge {
+        @android.webkit.JavascriptInterface
+        public synchronized String getSharedFile() {
+            if (sharedFileUri == null) return "";
+
+            try (InputStream input = getContentResolver().openInputStream(sharedFileUri);
+                 ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                if (input == null) return "";
+
+                byte[] buffer = new byte[8192];
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                }
+
+                String mimeType = sharedFileMimeType;
+                if (mimeType == null || mimeType.trim().isEmpty() || "application/octet-stream".equalsIgnoreCase(mimeType)) {
+                    mimeType = getContentResolver().getType(sharedFileUri);
+                }
+                if (mimeType == null || mimeType.trim().isEmpty() || "application/octet-stream".equalsIgnoreCase(mimeType)) {
+                    mimeType = "audio/ogg";
+                }
+
+                JSONObject payload = new JSONObject();
+                payload.put("name", sharedFileName == null ? "audio-compartilhado.ogg" : sharedFileName);
+                payload.put("type", mimeType);
+                payload.put("data", Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
+                return payload.toString();
+            } catch (Exception exception) {
+                Log.e(LOG_TAG, "Não foi possível ler o áudio compartilhado", exception);
+                return "";
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public synchronized void clearSharedFile() {
+            sharedFileUri = null;
+            sharedFileMimeType = null;
+            sharedFileName = null;
         }
     }
 

@@ -49,6 +49,32 @@ const clearSharedFileLocal = (): Promise<void> => {
   });
 };
 
+const getNativeSharedFile = async (): Promise<File | null> => {
+  const nativeShare = (window as any).NativeShare;
+  if (!nativeShare || typeof nativeShare.getSharedFile !== 'function') return null;
+
+  const rawPayload = nativeShare.getSharedFile();
+  if (!rawPayload) return null;
+
+  const payload = JSON.parse(rawPayload) as { name?: string; type?: string; data?: string };
+  if (!payload.data) return null;
+
+  const binary = window.atob(payload.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  const file = new File(
+    [bytes],
+    payload.name || 'audio-compartilhado.ogg',
+    { type: payload.type || 'audio/ogg' }
+  );
+
+  if (typeof nativeShare.clearSharedFile === 'function') nativeShare.clearSharedFile();
+  return file;
+};
+
 const getAudioDurationFromFile = async (file: File): Promise<number> => {
   const objectUrl = URL.createObjectURL(file);
 
@@ -140,7 +166,7 @@ export default function ShareTarget() {
         setPatients(patientsData);
 
         // Load shared file
-        const file = await getSharedFile();
+        const file = (await getSharedFile()) || (await getNativeSharedFile());
         if (file) {
           setAudioFile(file);
           setAudioUrl(URL.createObjectURL(file));
