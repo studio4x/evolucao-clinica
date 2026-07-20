@@ -2,6 +2,10 @@ package com.evolucaoclinica.app;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.ContentValues;
 import android.content.pm.ActivityInfo;
@@ -44,6 +48,7 @@ public class LauncherActivity extends Activity {
     private static final String LOG_TAG = "EvolucaoAudio";
     private static final int REQUEST_PERMISSIONS = 1001;
     private static final int REQUEST_FILE_CHOOSER = 1002;
+    private static final String DOWNLOAD_NOTIFICATION_CHANNEL_ID = "file_downloads";
     private static final String APP_URL = "https://www.evolucaoclinica.app.br/?utm_source=pwa";
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
     private static final String SUPABASE_HOST = "kvxboovgrrhhttaqinld.supabase.co";
@@ -71,6 +76,7 @@ public class LauncherActivity extends Activity {
         }
 
         captureShareIntent(getIntent());
+        createDownloadNotificationChannel();
         requestRequiredPermissions();
 
         swipeRefreshLayout = new SwipeRefreshLayout(this);
@@ -302,7 +308,10 @@ public class LauncherActivity extends Activity {
                     }
                 }
 
-                runOnUiThread(() -> Toast.makeText(LauncherActivity.this, "PDF salvo na pasta Downloads", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> {
+                    Toast.makeText(LauncherActivity.this, "PDF salvo na pasta Downloads", Toast.LENGTH_SHORT).show();
+                    showDownloadNotification(safeName);
+                });
                 return true;
             } catch (Exception exception) {
                 if (pendingUri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -403,14 +412,72 @@ public class LauncherActivity extends Activity {
     }
 
     private void requestRequiredPermissions() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !hasMicrophonePermission()) {
-            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_PERMISSIONS);
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return;
+
+        ArrayList<String> permissions = new ArrayList<>();
+        if (!hasMicrophonePermission()) permissions.add(Manifest.permission.RECORD_AUDIO);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !hasNotificationPermission()) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS);
         }
+
+        if (!permissions.isEmpty()) requestPermissions(permissions.toArray(new String[0]), REQUEST_PERMISSIONS);
     }
 
     private boolean hasMicrophonePermission() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.M
                 || checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasNotificationPermission() {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void createDownloadNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+
+        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (notificationManager == null) return;
+
+        NotificationChannel channel = new NotificationChannel(
+                DOWNLOAD_NOTIFICATION_CHANNEL_ID,
+                "Downloads de arquivos",
+                NotificationManager.IMPORTANCE_DEFAULT
+        );
+        channel.setDescription("Avisos sobre arquivos salvos na pasta Downloads");
+        notificationManager.createNotificationChannel(channel);
+    }
+
+    private void showDownloadNotification(String fileName) {
+        if (!hasNotificationPermission()) return;
+
+        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (notificationManager == null) return;
+
+        Intent openAppIntent = new Intent(this, LauncherActivity.class);
+        openAppIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        int pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pendingIntentFlags |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent openAppPendingIntent = PendingIntent.getActivity(this, 2001, openAppIntent, pendingIntentFlags);
+
+        String message = fileName + " foi salvo na pasta Downloads.";
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(this, DOWNLOAD_NOTIFICATION_CHANNEL_ID)
+                : new Notification.Builder(this);
+
+        Notification notification = builder
+                .setSmallIcon(R.drawable.ic_notification_icon)
+                .setContentTitle("Download concluído")
+                .setContentText(message)
+                .setStyle(new Notification.BigTextStyle().bigText(message))
+                .setContentIntent(openAppPendingIntent)
+                .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
+                .setCategory(Notification.CATEGORY_STATUS)
+                .setPriority(Notification.PRIORITY_DEFAULT)
+                .build();
+
+        notificationManager.notify((int) (System.currentTimeMillis() & 0x7FFFFFFF), notification);
     }
 
     private boolean isTrustedUrl(Uri uri) {
