@@ -650,7 +650,7 @@ export default function PatientDetail() {
       });
 
       setProntuarioDocContent(contentText);
-      const periodLabel = start && end 
+      const periodLabel = start && end
         ? `De ${start.toLocaleDateString('pt-BR')} até ${end.toLocaleDateString('pt-BR')}` 
         : start 
           ? `A partir de ${start.toLocaleDateString('pt-BR')}` 
