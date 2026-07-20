@@ -1540,8 +1540,8 @@ export default function NewEvolution() {
 
       {/* Modal de visualização/edição */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm transition-opacity">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] border border-brand-border animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 p-4 backdrop-blur-sm transition-opacity sm:flex sm:items-center sm:justify-center">
+          <div className="mx-auto my-2 flex min-h-[70vh] max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-2xl border border-brand-border bg-white shadow-xl animate-in fade-in zoom-in-95 duration-200 sm:my-0 sm:max-h-[85vh]">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border">
               <div>
@@ -1562,7 +1562,7 @@ export default function NewEvolution() {
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4">
               {modalLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 space-y-3">
                   <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
@@ -1598,7 +1598,7 @@ export default function NewEvolution() {
                     value={modalText}
                     onChange={(e) => setModalText(e.target.value)}
                     rows={12}
-                    className="w-full input-field p-3 font-mono text-sm leading-relaxed focus:ring-1 focus:ring-brand-primary border border-brand-border outline-none rounded-xl resize-y"
+                    className="min-h-[40vh] w-full input-field resize-y rounded-xl border border-brand-border p-3 font-mono text-sm leading-relaxed outline-none focus:ring-1 focus:ring-brand-primary"
                     placeholder="Conteúdo do prontuário..."
                     disabled={modalSaving}
                   />
@@ -1611,7 +1611,7 @@ export default function NewEvolution() {
 
             {/* Modal Footer */}
             {!modalLoading && !modalError && (
-              <div className="px-6 py-4 border-t border-brand-border flex items-center justify-end space-x-3 bg-stone-50 rounded-b-2xl">
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-brand-border bg-stone-50 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-nowrap sm:space-x-3 sm:pb-4">
                 <button
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 bg-white border border-brand-border rounded-xl text-sm font-medium text-brand-text hover:bg-stone-100 transition-colors"
