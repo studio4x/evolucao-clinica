@@ -176,6 +176,7 @@ export default function NewEvolution() {
   const [processingMessage, setProcessingMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
+  const [isGoogleAccessNoticeOpen, setIsGoogleAccessNoticeOpen] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
@@ -480,6 +481,11 @@ export default function NewEvolution() {
     onboardingGateShownRef.current = true;
     setIsOnboardingGateModalOpen(true);
   }, [hasGoogleSession, isOnboardingMode, patient?.id]);
+
+  useEffect(() => {
+    if (!isAuthReady || isOnboardingMode || !patient?.id || hasClinicalAccess) return;
+    setIsGoogleAccessNoticeOpen(true);
+  }, [hasClinicalAccess, isAuthReady, isOnboardingMode, patient?.id]);
 
   // Efeito para verificar rascunhos não finalizados
   useEffect(() => {
@@ -1646,6 +1652,18 @@ export default function NewEvolution() {
         confirmLabel="Voltar ao cadastro do paciente"
         mode="onboarding"
         showCloseButton={false}
+      />
+
+      <GoogleSecurityModal
+        isOpen={isGoogleAccessNoticeOpen}
+        onClose={() => setIsGoogleAccessNoticeOpen(false)}
+        onConfirm={() => {
+          setIsGoogleAccessNoticeOpen(false);
+          void handleReauthenticate();
+        }}
+        confirmLabel={hasGoogleSession ? 'Renovar autenticação' : 'Conectar com Google'}
+        mode="clinical"
+        showCloseButton
       />
 
       <TemplateExplanationModal
