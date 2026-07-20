@@ -3,6 +3,7 @@ package com.evolucaoclinica.app;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.ContentValues;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -11,6 +12,8 @@ import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 import android.view.View;
@@ -31,7 +34,10 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 
 public class LauncherActivity extends Activity {
@@ -85,6 +91,7 @@ public class LauncherActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
         webView.addJavascriptInterface(new NativeShareBridge(), "NativeShare");
+        webView.addJavascriptInterface(new NativeFileDownloadBridge(), "NativeFileDownload");
         configureWebView(webView);
 
         swipeRefreshLayout.addView(webView);
@@ -192,6 +199,64 @@ public class LauncherActivity extends Activity {
             sharedFileUri = null;
             sharedFileMimeType = null;
             sharedFileName = null;
+        }
+    }
+
+    private final class NativeFileDownloadBridge {
+        @android.webkit.JavascriptInterface
+        public synchronized boolean saveFile(String fileName, String mimeType, String base64Data) {
+            if (base64Data == null || base64Data.trim().isEmpty()) return false;
+
+            String safeName = fileName == null || fileName.trim().isEmpty()
+                    ? "arquivo.pdf"
+                    : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String safeMimeType = mimeType == null || mimeType.trim().isEmpty()
+                    ? "application/octet-stream"
+                    : mimeType;
+            byte[] bytes;
+
+            try {
+                bytes = Base64.decode(base64Data, Base64.DEFAULT);
+            } catch (IllegalArgumentException exception) {
+                Log.e(LOG_TAG, "Base64 inválido ao salvar arquivo", exception);
+                return false;
+            }
+
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Downloads.DISPLAY_NAME, safeName);
+                    values.put(MediaStore.Downloads.MIME_TYPE, safeMimeType);
+                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Evolução Clínica");
+                    values.put(MediaStore.Downloads.IS_PENDING, 1);
+
+                    Uri fileUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (fileUri == null) return false;
+
+                    try (OutputStream output = getContentResolver().openOutputStream(fileUri)) {
+                        if (output == null) throw new IllegalStateException("Não foi possível abrir o arquivo no Downloads.");
+                        output.write(bytes);
+                    }
+
+                    values.clear();
+                    values.put(MediaStore.Downloads.IS_PENDING, 0);
+                    getContentResolver().update(fileUri, values, null, null);
+                } else {
+                    File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
+                    if (downloadsDirectory == null) return false;
+                    if (!downloadsDirectory.exists() && !downloadsDirectory.mkdirs()) return false;
+                    File target = new File(downloadsDirectory, safeName);
+                    try (FileOutputStream output = new FileOutputStream(target)) {
+                        output.write(bytes);
+                    }
+                }
+
+                runOnUiThread(() -> Toast.makeText(LauncherActivity.this, "Arquivo salvo em Downloads", Toast.LENGTH_SHORT).show());
+                return true;
+            } catch (Exception exception) {
+                Log.e(LOG_TAG, "Não foi possível salvar o arquivo", exception);
+                return false;
+            }
         }
     }
 

@@ -571,7 +571,10 @@ export default function PatientDetail() {
       periodLabel,
       logoBase64
     });
-    downloadPdfFile(doc, getProntuarioPdfFileName(patient?.full_name));
+    const saved = await downloadPdfFile(doc, getProntuarioPdfFileName(patient?.full_name));
+    if (!saved) {
+      throw new Error('Não foi possível salvar o arquivo do prontuário.');
+    }
   };
 
   const handleExecutePrintProntuario = async () => {

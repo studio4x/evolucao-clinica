@@ -168,8 +168,31 @@ export const generateProntuarioPDF = ({
   return doc;
 };
 
-export const downloadPdfFile = (doc: jsPDF, fileName: string) => {
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      resolve(dataUrl.split(',')[1] || '');
+    };
+    reader.onerror = () => reject(reader.error || new Error('Não foi possível preparar o arquivo para download.'));
+    reader.readAsDataURL(blob);
+  });
+};
+
+export const downloadPdfFile = async (doc: jsPDF, fileName: string): Promise<boolean> => {
   const blob = doc.output('blob');
+  const nativeDownload = (window as Window & {
+    NativeFileDownload?: {
+      saveFile?: (name: string, mimeType: string, base64Data: string) => boolean;
+    };
+  }).NativeFileDownload;
+
+  if (typeof nativeDownload?.saveFile === 'function') {
+    const saved = nativeDownload.saveFile(fileName, 'application/pdf', await blobToBase64(blob));
+    if (saved) return true;
+  }
+
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
@@ -180,6 +203,7 @@ export const downloadPdfFile = (doc: jsPDF, fileName: string) => {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+  return true;
 };
 
 export const getProntuarioPdfFileName = (patientName?: string) => {
