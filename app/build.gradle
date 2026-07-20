@@ -57,13 +57,13 @@ android {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 36
-        versionName "36"
+        versionCode 37
+        versionName "37"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
 
-        // The name for the application on the Android Launcher
+        // The name on the Android Launcher
         resValue "string", "launcherName", twaManifest.launcherName
 
         // The URL that will be used when launching the TWA from the Android Launcher
@@ -141,7 +141,7 @@ android {
         }
 
         // The splashScreenFadeOutDuration resource is used to set the duration of fade out animation in milliseconds
-        // to be played when removing splash screen. The default is 0 (no animation).
+        // to be played when removing the splash screen. The default is 0 (no animation).
         resValue "integer", "splashScreenFadeOutDuration", twaManifest.splashScreenFadeOutDuration.toString()
 
         resValue "string", "generatorApp", twaManifest.generatorApp
@@ -177,7 +177,6 @@ task generateShorcutsFile {
     }
 
     def shortcutsFile = new File("$projectDir/src/main/res/xml", "shortcuts.xml")
-
     def xmlWriter = new StringWriter()
     def xmlMarkup = new MarkupBuilder(new IndentPrinter(xmlWriter, "    ", true))
 
