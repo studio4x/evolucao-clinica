@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, HelpCircle } from 'lucide-react';
+import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, HelpCircle, Play, Pause } from 'lucide-react';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
@@ -23,6 +23,69 @@ type AudioEvolutionItem = {
   duration: number;
   source: 'recording' | 'upload' | 'draft';
   name: string;
+};
+
+const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackError, setPlaybackError] = useState('');
+
+  const togglePlayback = async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    setPlaybackError('');
+    if (audio.paused) {
+      try {
+        await audio.play();
+        setIsPlaying(true);
+      } catch (error) {
+        console.error('[Audio] Falha ao iniciar reprodução', {
+          error,
+          mimeType: item.blob.type,
+          bytes: item.blob.size,
+        });
+        setIsPlaying(false);
+        setPlaybackError('Este áudio não pôde ser reproduzido neste dispositivo.');
+      }
+    } else {
+      audio.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <audio
+        ref={audioRef}
+        src={item.url}
+        preload="metadata"
+        className="hidden"
+        onEnded={() => setIsPlaying(false)}
+        onError={(event) => {
+          const mediaError = event.currentTarget.error;
+          console.error('[Audio] Falha na reprodução', {
+            code: mediaError?.code,
+            message: mediaError?.message,
+            mimeType: item.blob.type,
+            bytes: item.blob.size,
+          });
+          setIsPlaying(false);
+          setPlaybackError('Este áudio não pôde ser reproduzido neste dispositivo.');
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => void togglePlayback()}
+        className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-primary/90 active:scale-[0.99]"
+        aria-label={isPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}
+      >
+        {isPlaying ? <Pause size={19} /> : <Play size={19} />}
+        <span>{isPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}</span>
+      </button>
+      {playbackError && <p className="text-sm text-red-700" role="alert">{playbackError}</p>}
+    </div>
+  );
 };
 
 const AUTH_REAUTH_RECOVERY_KEY = 'new-evolution:resume-after-auth';
@@ -1277,17 +1340,7 @@ export default function NewEvolution() {
                         </button>
                       </div>
                     </div>
-                    <audio
-                      src={item.url}
-                      controls
-                      preload="metadata"
-                      className="w-full"
-                      onError={(event) => {
-                        const mediaError = event.currentTarget.error;
-                        console.error('[Audio] Falha na reprodução', { code: mediaError?.code, message: mediaError?.message, mimeType: item.blob.type, bytes: item.blob.size });
-                        setErrorMessage('O áudio foi gerado, mas este dispositivo não conseguiu reproduzir o formato. Tente gravar novamente.');
-                      }}
-                    />
+                    <AudioPlaybackButton item={item} />
                   </div>
                 ))}
               </div>
