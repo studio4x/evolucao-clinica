@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
+import { UserAvatar } from './common/UserAvatar';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
@@ -220,11 +221,11 @@ export default function Layout() {
 
           <div className={`${isCollapsed ? 'px-2' : 'px-4'} py-6`}>
             <div className={`flex items-center mb-6 bg-brand-bg rounded-xl border border-brand-border/50 ${isCollapsed ? 'justify-center p-2' : 'space-x-3 px-4 py-3'}`}>
-              <img 
-                src={user?.user_metadata?.avatar_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(user?.user_metadata?.full_name || user?.email || 'Profissional') + '&background=005C13&color=fff'} 
-                alt="Profile" 
-                className="w-10 h-10 rounded-full border border-brand-border object-cover flex-shrink-0"
-                referrerPolicy="no-referrer"
+              <UserAvatar
+                name={user?.user_metadata?.full_name || user?.user_metadata?.name}
+                email={user?.email}
+                src={user?.user_metadata?.avatar_url || user?.user_metadata?.picture || user?.user_metadata?.photo_url}
+                className="h-10 w-10 border border-brand-border"
                 title={isCollapsed ? (user?.user_metadata?.full_name || user?.email || 'Profissional') : undefined}
               />
               {!isCollapsed && (

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
+import { UserAvatar } from '../components/common/UserAvatar';
 import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle, Upload, Lock, Image, Download, Cloud, Database } from 'lucide-react';
 import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
@@ -663,18 +664,12 @@ export default function Profile() {
         {/* Card Lateral do Avatar */}
         <div className="card p-6 bg-white flex flex-col items-center text-center space-y-4 shadow-sm border border-brand-border/60 self-start">
           <div className="relative">
-            {user?.user_metadata?.avatar_url ? (
-              <img
-                src={user?.user_metadata?.avatar_url}
-                alt={displayName}
-                className="w-24 h-24 rounded-full object-cover border-2 border-brand-accent shadow-sm"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-24 h-24 rounded-full bg-brand-primary/10 border-2 border-brand-accent flex items-center justify-center text-2xl font-bold text-brand-primary font-display shadow-sm">
-                {initials}
-              </div>
-            )}
+            <UserAvatar
+              name={displayName}
+              email={user?.email}
+              src={user?.user_metadata?.avatar_url || user?.user_metadata?.picture || user?.user_metadata?.photo_url}
+              className="h-24 w-24 border-2 border-brand-accent text-2xl font-display shadow-sm"
+            />
           </div>
           <div className="space-y-1">
             <h3 className="font-semibold text-brand-text text-lg leading-tight truncate max-w-[220px]">
