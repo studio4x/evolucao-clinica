@@ -340,9 +340,10 @@ export default function NewEvolution() {
     return candidates.find((mimeType) => MediaRecorder.isTypeSupported?.(mimeType)) || '';
   };
 
-  const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string) => {
+  const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string, fallbackDuration = 0) => {
     const url = URL.createObjectURL(blob);
-    const duration = await getAudioDurationFromUrl(url);
+    const detectedDuration = await getAudioDurationFromUrl(url);
+    const duration = detectedDuration > 0 ? detectedDuration : fallbackDuration;
 
     return {
       id: uuidv4(),
@@ -718,12 +719,14 @@ export default function NewEvolution() {
         if (!isDiscardingRef.current) {
           if (chunksRef.current.length > 0) {
             const newBlob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
+            const recordedDuration = Math.max(1, recordingTimeRef.current);
             console.info('[Audio] Gravação finalizada', { bytes: newBlob.size, mimeType: newBlob.type, chunks: chunksRef.current.length });
             void (async () => {
               const nextItem = await createAudioItem(
                 newBlob,
                 'recording',
-                `Gravação ${audioItemsRef.current.length + 1}`
+                `Gravação ${audioItemsRef.current.length + 1}`,
+                recordedDuration
               );
               const nextItems = [...audioItemsRef.current, nextItem];
               updateAudioItems(nextItems);
