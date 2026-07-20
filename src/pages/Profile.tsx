@@ -6,6 +6,7 @@ import { UserAvatar } from '../components/common/UserAvatar';
 import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle, Upload, Lock, Image, Download, Cloud, Database } from 'lucide-react';
 import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
+import { showAlert, showConfirm } from '../store/modalStore';
 import { 
   getBackupPreferences, 
   updateBackupPreferences, 
@@ -334,18 +335,30 @@ export default function Profile() {
     if (!file || !user) return;
 
     if (!isYearly) {
-      alert("A personalização do logotipo é uma funcionalidade exclusiva do Plano Anual.");
+      await showAlert("A personalização do logotipo é uma funcionalidade exclusiva do Plano Anual.", {
+        title: "Funcionalidade Premium",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
     const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
-      alert("Por favor, envie uma imagem nos formatos PNG, JPG ou WEBP.");
+      await showAlert("Por favor, envie uma imagem nos formatos PNG, JPG ou WEBP.", {
+        title: "Formato Inválido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      alert("A imagem deve ter no máximo 2MB.");
+      await showAlert("A imagem deve ter no máximo 2MB.", {
+        title: "Arquivo Muito Grande",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -384,7 +397,11 @@ export default function Profile() {
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao fazer upload do logotipo:", err);
-      alert("Erro ao fazer upload: " + (err.message || err));
+      await showAlert("Erro ao fazer upload: " + (err.message || err), {
+        title: "Erro de Upload",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setUploadingLogo(false);
     }
@@ -410,7 +427,11 @@ export default function Profile() {
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao remover logotipo:", err);
-      alert("Erro ao remover logotipo: " + (err.message || err));
+      await showAlert("Erro ao remover logotipo: " + (err.message || err), {
+        title: "Erro ao Remover",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setUploadingLogo(false);
     }
@@ -419,11 +440,21 @@ export default function Profile() {
   const handleManualBackup = async () => {
     if (!user) return;
     if (!isYearly) {
-      alert("O backup em lote é uma funcionalidade exclusiva do Plano Anual.");
+      await showAlert("O backup em lote é uma funcionalidade exclusiva do Plano Anual.", {
+        title: "Funcionalidade Premium",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
-    const confirmBackup = window.confirm("Deseja gerar e baixar um arquivo de backup completo contendo os seus dados cadastrais, fichas de pacientes e prontuários?");
+    const confirmBackup = await showConfirm("Deseja gerar e baixar um arquivo de backup completo contendo os seus dados cadastrais, fichas de pacientes e prontuários?", {
+      title: "Confirmar Backup",
+      confirmLabel: "Gerar Backup",
+      cancelLabel: "Cancelar",
+      variant: "info",
+      icon: "question"
+    });
     if (!confirmBackup) return;
 
     try {
@@ -433,7 +464,11 @@ export default function Profile() {
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao gerar backup:", err);
-      alert("Erro ao gerar backup: " + (err.message || err));
+      await showAlert("Erro ao gerar backup: " + (err.message || err), {
+        title: "Erro de Backup",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setBackingUp(false);
     }
@@ -442,7 +477,11 @@ export default function Profile() {
   const handleToggleAutoBackup = async () => {
     if (!user) return;
     if (!isYearly) {
-      alert("O backup automático no Google Drive é uma funcionalidade exclusiva do Plano Anual.");
+      await showAlert("O backup automático no Google Drive é uma funcionalidade exclusiva do Plano Anual.", {
+        title: "Funcionalidade Premium",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -454,7 +493,11 @@ export default function Profile() {
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao atualizar backup automático:", err);
-      alert("Erro ao salvar preferência de backup: " + (err.message || err));
+      await showAlert("Erro ao salvar preferência de backup: " + (err.message || err), {
+        title: "Erro ao Salvar",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -467,18 +510,32 @@ export default function Profile() {
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao alterar frequência do backup:", err);
-      alert("Erro ao salvar frequência: " + (err.message || err));
+      await showAlert("Erro ao salvar frequência: " + (err.message || err), {
+        title: "Erro ao Salvar",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
   const handleManualDriveBackup = async () => {
     if (!user) return;
     if (!googleAccessToken) {
-      alert("Você precisa conectar sua conta do Google nas configurações antes de enviar para o Drive.");
+      await showAlert("Você precisa conectar sua conta do Google nas configurações antes de enviar para o Drive.", {
+        title: "Conectar Google",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
-    const confirmBackup = window.confirm("Deseja gerar e enviar uma cópia de segurança completa para a sua conta do Google Drive agora?");
+    const confirmBackup = await showConfirm("Deseja gerar e enviar uma cópia de segurança completa para a sua conta do Google Drive agora?", {
+      title: "Backup no Google Drive",
+      confirmLabel: "Gerar Backup",
+      cancelLabel: "Cancelar",
+      variant: "info",
+      icon: "question"
+    });
     if (!confirmBackup) return;
 
     try {
@@ -504,7 +561,11 @@ export default function Profile() {
       await loadGoogleBackups();
     } catch (err: any) {
       console.error("Erro ao enviar backup para o Drive:", err);
-      alert("Erro ao enviar backup para o Drive: " + (err.message || err));
+      await showAlert("Erro ao enviar backup para o Drive: " + (err.message || err), {
+        title: "Erro no Backup",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setUploadingBackupDrive(false);
     }
@@ -517,13 +578,21 @@ export default function Profile() {
       setRestoringBackupId(backupFile.id);
       const result = await restoreBackupFromDrive(googleAccessToken, backupFile.id, user.id);
       
-      alert(`Restauração concluída com sucesso!\n\nDados importados/atualizados:\n- ${result.patientsCount} Pacientes\n- ${result.evolutionsCount} Evoluções Clínicas\n- ${result.reportsCount} Relatórios/PDIs`);
+      await showAlert(`Restauração concluída com sucesso!\n\nDados importados/atualizados:\n- ${result.patientsCount} Pacientes\n- ${result.evolutionsCount} Evoluções Clínicas\n- ${result.reportsCount} Relatórios/PDIs`, {
+        title: "Restauração Concluída",
+        variant: "success",
+        icon: "success"
+      });
       
       setSuccessMessage('Dados restaurados com sucesso!');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err: any) {
       console.error("Erro ao restaurar backup:", err);
-      alert("Erro na restauração: " + (err.message || err));
+      await showAlert("Erro na restauração: " + (err.message || err), {
+        title: "Erro de Restauração",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setRestoringBackupId(null);
       setShowRestoreConfirmModal(null);
@@ -533,8 +602,15 @@ export default function Profile() {
   const handleRestartOnboarding = async () => {
     if (!user) return;
 
-    const confirmed = window.confirm(
-      'Deseja reiniciar o onboarding? O fluxo será recomeçado do início e você poderá refazer a apresentação, criar um novo paciente e seguir todas as etapas novamente.'
+    const confirmed = await showConfirm(
+      'Deseja reiniciar o onboarding? O fluxo será recomeçado do início e você poderá refazer a apresentação, criar um novo paciente e seguir todas as etapas novamente.',
+      {
+        title: "Reiniciar Apresentação",
+        confirmLabel: "Reiniciar",
+        cancelLabel: "Cancelar",
+        variant: "warning",
+        icon: "question"
+      }
     );
 
     if (!confirmed) return;

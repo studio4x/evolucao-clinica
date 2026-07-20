@@ -16,6 +16,7 @@ import {
   Send,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { showAlert, showConfirm } from '../store/modalStore';
 
 interface NotificationRecord {
   id: string;
@@ -85,21 +86,39 @@ export default function EmailHistory() {
   }, [fetchHistory]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir este registro do histórico?')) return;
+    const confirmed = await showConfirm('Excluir este registro do histórico?', {
+      title: "Excluir Registro",
+      confirmLabel: "Excluir",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
     setDeletingId(id);
     try {
       const { error } = await supabase.from('email_deliveries').delete().eq('id', id);
       if (error) throw error;
       setNotifications(prev => prev.filter(n => n.id !== id));
     } catch (err: any) {
-      alert('Erro ao excluir: ' + err.message);
+      await showAlert('Erro ao excluir: ' + err.message, {
+        title: "Erro ao Excluir",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setDeletingId(null);
     }
   };
 
   const handleResend = async (notification: NotificationRecord) => {
-    if (!confirm(`Deseja reenviar este e-mail para ${notification.recipient_name || notification.recipient_email}?`)) return;
+    const confirmed = await showConfirm(`Deseja reenviar este e-mail para ${notification.recipient_name || notification.recipient_email}?`, {
+      title: "Reenviar E-mail",
+      confirmLabel: "Reenviar",
+      cancelLabel: "Cancelar",
+      variant: "info",
+      icon: "question"
+    });
+    if (!confirmed) return;
     setResendingId(notification.id);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -112,10 +131,18 @@ export default function EmailHistory() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Não foi possível reenviar o e-mail.');
-      alert(payload.message || 'E-mail reenviado com sucesso.');
+      await showAlert(payload.message || 'E-mail reenviado com sucesso.', {
+        title: "E-mail Reenviado",
+        variant: "success",
+        icon: "success"
+      });
       await fetchHistory();
     } catch (err: any) {
-      alert('Erro ao reenviar: ' + (err.message || 'Erro desconhecido'));
+      await showAlert('Erro ao reenviar: ' + (err.message || 'Erro desconhecido'), {
+        title: "Erro ao Reenviar",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setResendingId(null);
     }
@@ -136,7 +163,11 @@ export default function EmailHistory() {
       if (error) throw error;
       setNotifications([]);
     } catch (err: any) {
-      alert('Erro ao limpar histórico: ' + err.message);
+      await showAlert('Erro ao limpar histórico: ' + err.message, {
+        title: "Erro ao Limpar",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setClearingAll(false);
     }

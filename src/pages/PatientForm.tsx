@@ -10,6 +10,7 @@ import { setOnboardingState, completeOnboarding, getOnboardingState } from '../u
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
+import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
 
 declare global {
   interface Window {
@@ -314,7 +315,11 @@ export default function PatientForm() {
       if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
-      alert("Erro ao renovar autenticação. Tente novamente.");
+      await showAlert("Erro ao renovar autenticação. Tente novamente.", {
+        title: "Erro de Autenticação",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setIsReauthenticating(false);
     }
@@ -322,12 +327,20 @@ export default function PatientForm() {
 
   const handleCreateDoc = async () => {
     if (!hasClinicalAccess) {
-      alert('Token do Google não encontrado. Por favor, renove sua autenticação.');
+      await showAlert('Token do Google não encontrado. Por favor, renove sua autenticação.', {
+        title: "Autenticação Necessária",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
     if (!formData.full_name) {
-      alert('Por favor, preencha o nome do paciente antes de criar o prontuário.');
+      await showAlert('Por favor, preencha o nome do paciente antes de criar o prontuário.', {
+        title: "Nome Requerido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -345,12 +358,24 @@ export default function PatientForm() {
       console.error("Erro ao criar documento:", error);
       const msg = error.message || "";
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
-        alert("Sua sessão do Google expirou. Por favor, clique em 'Renovar Autenticação' abaixo para continuar.");
+        await showAlert("Sua sessão do Google expirou. Por favor, clique em 'Renovar Autenticação' abaixo para continuar.", {
+          title: "Sessão Expirada",
+          variant: "warning",
+          icon: "warning"
+        });
         setGoogleAccessToken(null);
       } else if (msg.includes('userRateLimitExceeded') || msg.includes('rateLimitExceeded') || msg.includes('quotaExceeded') || msg.includes('403')) {
-        alert("O Google está limitando temporariamente a criação do documento. Tente novamente em alguns segundos.");
+        await showAlert("O Google está limitando temporariamente a criação do documento. Tente novamente em alguns segundos.", {
+          title: "Limite do Google",
+          variant: "warning",
+          icon: "warning"
+        });
       } else {
-        alert("Erro ao criar prontuário no Google Docs. Verifique sua conexão.");
+        await showAlert("Erro ao criar prontuário no Google Docs. Verifique sua conexão.", {
+          title: "Erro ao Criar Documento",
+          variant: "danger",
+          icon: "warning"
+        });
       }
     } finally {
       setCreatingDoc(false);
@@ -359,7 +384,11 @@ export default function PatientForm() {
 
   const handleSendTestReminder = async () => {
     if (!formData.full_name) {
-      alert('Por favor, preencha o nome do paciente para testar o lembrete.');
+      await showAlert('Por favor, preencha o nome do paciente para testar o lembrete.', {
+        title: "Nome Requerido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -370,10 +399,18 @@ export default function PatientForm() {
         type: 'warning',
         link: id ? `/painel/patients/${id}` : '/painel/patients'
       });
-      alert("Lembrete de teste enviado com sucesso! Verifique a página de notificações, e-mail ou push.");
+      await showAlert("Lembrete de teste enviado com sucesso! Verifique a página de notificações, e-mail ou push.", {
+        title: "Lembrete Enviado",
+        variant: "success",
+        icon: "success"
+      });
     } catch (err: any) {
       console.error("Error sending test reminder:", err);
-      alert("Erro ao enviar lembrete de teste: " + (err.message || err));
+      await showAlert("Erro ao enviar lembrete de teste: " + (err.message || err), {
+        title: "Erro no Envio",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -441,7 +478,11 @@ export default function PatientForm() {
       if (error) throw error;
     } catch (error) {
       console.error("Reauth error:", error);
-      alert("Erro ao reautenticar com o Google. Tente novamente.");
+      await showAlert("Erro ao reautenticar com o Google. Tente novamente.", {
+        title: "Erro de Autenticação",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setIsReauthenticating(false);
     }
@@ -453,7 +494,12 @@ export default function PatientForm() {
     // Pegar o local atual do explorador
     const currentFolder = explorerPath[explorerPath.length - 1];
     
-    const folderName = prompt(`Criar nova pasta dentro de "${currentFolder.name}":`);
+    const folderName = await showPrompt(`Criar nova pasta dentro de "${currentFolder.name}":`, {
+      title: "Nova Pasta",
+      placeholder: "Nome da pasta",
+      variant: "info",
+      icon: "info"
+    });
     if (!folderName) return;
 
     setIsCreatingFolder(true);
@@ -463,10 +509,18 @@ export default function PatientForm() {
       // Entrar automaticamente na pasta criada para facilitar a navegação
       handleNavigateDown(newFolder.id, newFolder.name);
       
-      alert(`Pasta "${folderName}" criada com sucesso!`);
+      await showAlert(`Pasta "${folderName}" criada com sucesso!`, {
+        title: "Pasta Criada",
+        variant: "success",
+        icon: "success"
+      });
     } catch (error: any) {
       console.error("Erro ao criar pasta:", error);
-      alert("Erro ao criar pasta no Google Drive.");
+      await showAlert("Erro ao criar pasta no Google Drive.", {
+        title: "Erro ao Criar Pasta",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setIsCreatingFolder(false);
     }
@@ -475,7 +529,14 @@ export default function PatientForm() {
   const handleDeleteFolder = async (e: React.MouseEvent, folderId: string, folderName: string) => {
     e.stopPropagation(); // Não navegar para a pasta ao clicar no lixo
     
-    if (!confirm(`Tem certeza que deseja excluir a pasta "${folderName}" permanentemente do Google Drive?`)) return;
+    const confirmed = await showConfirm(`Tem certeza que deseja excluir a pasta "${folderName}" permanentemente do Google Drive?`, {
+      title: "Excluir Pasta",
+      confirmLabel: "Excluir",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
 
     try {
       await deleteGoogleFile(googleAccessToken!, folderId);
@@ -491,10 +552,18 @@ export default function PatientForm() {
       const current = explorerPath[explorerPath.length - 1];
       loadExplorerFolders(current.id);
       
-      alert(`Pasta "${folderName}" excluída com sucesso.`);
+      await showAlert(`Pasta "${folderName}" excluída com sucesso.`, {
+        title: "Pasta Excluída",
+        variant: "success",
+        icon: "success"
+      });
     } catch (error) {
       console.error("Delete error:", error);
-      alert("Erro ao excluir pasta.");
+      await showAlert("Erro ao excluir pasta.", {
+        title: "Erro ao Excluir",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -556,10 +625,14 @@ export default function PatientForm() {
     return null;
   };
 
-  const handleConfirmLinkFolder = () => {
+  const handleConfirmLinkFolder = async () => {
     const folderId = parseFolderIdFromUrl(linkFolderUrl);
     if (!folderId) {
-      alert('URL ou ID de pasta inválido. Copie a URL completa da pasta no Google Drive (ex: https://drive.google.com/drive/folders/...) e cole aqui.');
+      await showAlert('URL ou ID de pasta inválido. Copie a URL completa da pasta no Google Drive (ex: https://drive.google.com/drive/folders/...) e cole aqui.', {
+        title: "Link Inválido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
     const name = linkFolderName.trim() || 'Pasta vinculada';
@@ -663,7 +736,11 @@ export default function PatientForm() {
               savedAt: new Date().toISOString(),
             });
           }
-          alert('Antes de seguir para a evolução, crie ou vincule o prontuário do paciente no Google Docs.');
+          await showAlert('Antes de seguir para a evolução, crie ou vincule o prontuário do paciente no Google Docs.', {
+            title: "Vincular Prontuário",
+            variant: "warning",
+            icon: "warning"
+          });
           return;
         }
 
@@ -686,7 +763,11 @@ export default function PatientForm() {
       }
     } catch (error: any) {
       console.error("Error saving patient:", error);
-      alert("Erro ao salvar paciente: " + (error?.message || error));
+      await showAlert("Erro ao salvar paciente: " + (error?.message || error), {
+        title: "Erro ao Salvar",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setLoading(false);
     }
@@ -1302,8 +1383,15 @@ export default function PatientForm() {
           {isOnboardingMode ? (
             <button
               type="button"
-              onClick={() => {
-                if (confirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.")) {
+              onClick={async () => {
+                const confirmed = await showConfirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.", {
+                  title: "Sair do Assistente",
+                  confirmLabel: "Sair",
+                  cancelLabel: "Continuar",
+                  variant: "warning",
+                  icon: "question"
+                });
+                if (confirmed) {
                   if (user?.id) completeOnboarding(user.id);
                   if (user?.id && !id) {
                     clearPatientFormDraft(getPatientFormDraftKey(user.id));

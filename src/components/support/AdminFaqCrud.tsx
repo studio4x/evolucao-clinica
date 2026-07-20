@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supabaseClient';
+import { showAlert, showConfirm } from '../../store/modalStore';
 import {
   Plus,
   Edit,
@@ -165,9 +166,14 @@ export default function AdminFaqCrud() {
   };
 
   const handleDeleteCategory = async (id: string, name: string) => {
-    if (!window.confirm(`Tem certeza que deseja excluir a categoria "${name}"? ATENÇÃO: Todas as perguntas vinculadas a esta categoria serão excluídas permanentemente.`)) {
-      return;
-    }
+    const confirmed = await showConfirm(`Tem certeza que deseja excluir a categoria "${name}"? ATENÇÃO: Todas as perguntas vinculadas a esta categoria serão excluídas permanentemente.`, {
+      title: "Excluir Categoria",
+      confirmLabel: "Excluir Tudo",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "warning"
+    });
+    if (!confirmed) return;
 
     setActionLoading(true);
     try {
@@ -242,9 +248,14 @@ export default function AdminFaqCrud() {
   };
 
   const handleDeleteQuestion = async (id: string) => {
-    if (!window.confirm('Deseja realmente excluir esta pergunta do FAQ?')) {
-      return;
-    }
+    const confirmed = await showConfirm('Deseja realmente excluir esta pergunta do FAQ?', {
+      title: "Excluir Pergunta",
+      confirmLabel: "Excluir",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
 
     setActionLoading(true);
     try {

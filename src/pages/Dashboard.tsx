@@ -7,6 +7,7 @@ import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { getDraftEvolutions, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import { showAlert, showConfirm } from '../store/modalStore';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -91,7 +92,14 @@ export default function Dashboard() {
   }, [fetchDrafts]);
 
   const handleDeleteDraft = async (id: string) => {
-    if (window.confirm("Certeza que deseja excluir permanentemente esta gravação incompleta?")) {
+    const confirmed = await showConfirm("Certeza que deseja excluir permanentemente esta gravação incompleta?", {
+      title: "Excluir Gravação",
+      confirmLabel: "Excluir",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (confirmed) {
       await removePendingEvolution(id);
       fetchDrafts();
     }
@@ -117,14 +125,18 @@ export default function Dashboard() {
   const isSubscriptionExpired = endsAtDate ? endsAtDate < new Date() : false;
   const showSubscriptionCta = profileRole !== 'admin' && (!hasPaidSubscription || !hasActiveSubscription || isSubscriptionExpired);
 
-  const handleWhatsAppClick = (e: React.MouseEvent, fullName: string, phone: string) => {
+  const handleWhatsAppClick = async (e: React.MouseEvent, fullName: string, phone: string) => {
     e.preventDefault();
     e.stopPropagation();
 
     // Limpa caracteres não numéricos do telefone
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone) {
-      alert("Número de telefone inválido.");
+      await showAlert("Número de telefone inválido.", {
+        title: "Telefone Inválido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -159,7 +171,11 @@ export default function Dashboard() {
       if (error) throw error;
     } catch (error) {
       console.error("Erro ao conectar Google Agenda:", error);
-      alert("Erro ao iniciar conexão com o Google.");
+      await showAlert("Erro ao iniciar conexão com o Google.", {
+        title: "Erro de Conexão",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 

@@ -16,6 +16,7 @@ import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
 import { getAudioDurationFromBlob } from '../utils/audioDuration';
+import { showAlert, showConfirm } from '../store/modalStore';
 
 type AudioEvolutionItem = {
   id: string;
@@ -203,9 +204,13 @@ export default function NewEvolution() {
     return isActive && !isExpired;
   };
 
-  const checkPlanActiveAndAlert = (actionName: string): boolean => {
+  const checkPlanActiveAndAlert = async (actionName: string): Promise<boolean> => {
     if (!isPlanActive()) {
-      alert(`Para acessar e utilizar a funcionalidade "${actionName}", você precisa ter um plano de assinatura ativo. Por favor, regularize seu plano.`);
+      await showAlert(`Para acessar e utilizar a funcionalidade "${actionName}", você precisa ter um plano de assinatura ativo. Por favor, regularize seu plano.`, {
+        title: "Plano Necessário",
+        variant: "warning",
+        icon: "warning"
+      });
       navigate('/painel/subscription');
       return false;
     }
@@ -580,7 +585,11 @@ export default function NewEvolution() {
       setRecoveredDraft(null);
     } catch (err) {
       console.error('Erro ao recuperar rascunho para envio:', err);
-      alert('Não foi possível recuperar o rascunho. Tente novamente.');
+      await showAlert('Não foi possível recuperar o rascunho. Tente novamente.', {
+        title: 'Recuperação Falhou',
+        variant: 'danger',
+        icon: 'warning'
+      });
     }
   };
 
@@ -607,13 +616,24 @@ export default function NewEvolution() {
       void startRecording();
     } catch (err) {
       console.error('Erro ao recuperar rascunho para continuar:', err);
-      alert('Não foi possível recuperar o rascunho para continuar. Tente novamente.');
+      await showAlert('Não foi possível recuperar o rascunho para continuar. Tente novamente.', {
+        title: 'Recuperação Falhou',
+        variant: 'danger',
+        icon: 'warning'
+      });
     }
   };
 
   const handleDiscardRecoveredDraft = async () => {
     if (!recoveredDraft) return;
-    if (window.confirm("Certeza que deseja excluir permanentemente esta gravação incompleta?")) {
+    const confirmed = await showConfirm("Certeza que deseja excluir permanentemente esta gravação incompleta?", {
+      title: 'Excluir Gravação Incompleta',
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Voltar',
+      variant: 'danger',
+      icon: 'trash'
+    });
+    if (confirmed) {
       clearAuthRecoveryFlag();
       await removePendingEvolution(recoveredDraft.id);
       setRecoveredDraft(null);
@@ -642,7 +662,11 @@ export default function NewEvolution() {
     } catch (error) {
       console.error("Reauthentication error:", error);
       clearAuthRecoveryFlag();
-      alert("Erro ao renovar autenticação. Tente novamente.");
+      await showAlert("Erro ao renovar autenticação. Tente novamente.", {
+        title: "Falha na Autenticação",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setIsReauthenticating(false);
     }
@@ -721,7 +745,11 @@ export default function NewEvolution() {
     setModalError('');
     try {
       await updateGoogleDocContent(googleAccessToken, patient.google_doc_id, modalText);
-      alert("Texto do prontuário atualizado com sucesso no Google Docs!");
+      await showAlert("Texto do prontuário atualizado com sucesso no Google Docs!", {
+        title: "Prontuário Atualizado",
+        variant: "success",
+        icon: "success"
+      });
       setIsModalOpen(false);
     } catch (err: any) {
       console.error("Erro ao salvar prontuário:", err);
@@ -809,7 +837,11 @@ export default function NewEvolution() {
       }, 1000);
     } catch (err) {
       console.error("Error accessing microphone:", err);
-      alert("Não foi possível acessar o microfone. Verifique as permissões.");
+      await showAlert("Não foi possível acessar o microfone. Verifique as permissões.", {
+        title: "Erro de Microfone",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -838,7 +870,14 @@ export default function NewEvolution() {
   };
 
   const discardRecording = async () => {
-    if (window.confirm("Certeza que deseja descartar esta gravação? Toda a captura atual será perdida.")) {
+    const confirmed = await showConfirm("Certeza que deseja descartar esta gravação? Toda a captura atual será perdida.", {
+      title: "Descartar Gravação",
+      confirmLabel: "Descartar",
+      cancelLabel: "Voltar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (confirmed) {
       isDiscardingRef.current = true;
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
         mediaRecorderRef.current.stop();
@@ -883,7 +922,11 @@ export default function NewEvolution() {
     }
 
     if (isRecording) {
-      alert('Finalize a gravação atual antes de adicionar arquivos.');
+      await showAlert('Finalize a gravação atual antes de adicionar arquivos.', {
+        title: 'Gravação em Andamento',
+        variant: 'warning',
+        icon: 'warning'
+      });
       return;
     }
 
@@ -927,19 +970,31 @@ export default function NewEvolution() {
     if (items.length === 0 || !patient || !user) return;
 
     if (isRecording) {
-      alert('Finalize a gravação atual antes de enviar a evolução.');
+      await showAlert('Finalize a gravação atual antes de enviar a evolução.', {
+        title: 'Gravação em Andamento',
+        variant: 'warning',
+        icon: 'warning'
+      });
       return;
     }
     
     if (!patient.google_doc_id) {
-      alert("Este paciente não possui um prontuário vinculado. Por favor, edite o paciente e vincule um documento do Google Docs primeiro.");
+      await showAlert("Este paciente não possui um prontuário vinculado. Por favor, edite o paciente e vincule um documento do Google Docs primeiro.", {
+        title: "Vincular Google Docs",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
     if (!hasClinicalAccess) {
-      alert(hasGoogleSession
+      await showAlert(hasGoogleSession
         ? "Sua autorização do Google precisa ser renovada antes de continuar."
-        : "Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.");
+        : "Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.", {
+        title: "Autenticação Necessária",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -1085,7 +1140,11 @@ export default function NewEvolution() {
           setStatus('success');
           setProcessingMessage('');
           setErrorMessage(''); 
-          alert("Você está sem internet! A evolução foi salva com segurança na sua Fila Offline. O aplicativo irá mantê-la no seu celular até você sincronizar.");
+          await showAlert("Você está sem internet! A evolução foi salva com segurança na sua Fila Offline. O aplicativo irá mantê-la no seu celular até você sincronizar.", {
+            title: "Modo Offline",
+            variant: "info",
+            icon: "info"
+          });
           
           draftIdRef.current = null;
           await clearAllAudioItems();
@@ -1233,8 +1292,8 @@ export default function NewEvolution() {
             </select>
             <button
               type="button"
-              onClick={() => {
-                if (checkPlanActiveAndAlert("Comparação de Modelos Clínicos")) {
+              onClick={async () => {
+                if (await checkPlanActiveAndAlert("Comparação de Modelos Clínicos")) {
                   setIsTemplateHelpOpen(true);
                 }
               }}
@@ -1572,8 +1631,15 @@ export default function NewEvolution() {
             <div className="flex justify-center pt-4 border-t border-brand-border/40 mt-4">
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.")) {
+                onClick={async () => {
+                  const confirmed = await showConfirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.", {
+                    title: "Sair do Assistente",
+                    confirmLabel: "Sair",
+                    cancelLabel: "Continuar",
+                    variant: "warning",
+                    icon: "question"
+                  });
+                  if (confirmed) {
                     completeOnboarding(user.id);
                     navigate('/painel/dashboard');
                   }

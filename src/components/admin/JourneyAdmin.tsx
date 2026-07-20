@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
+import { showAlert, showConfirm } from '../../store/modalStore';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { 
@@ -426,7 +427,14 @@ export default function JourneyAdmin() {
 
   // Duplicar Jornada
   const handleDuplicateJourney = async (journey: Journey) => {
-    if (!window.confirm(`Deseja duplicar a jornada "${journey.title}"?`)) return;
+    const confirmed = await showConfirm(`Deseja duplicar a jornada "${journey.title}"?`, {
+      title: "Duplicar Jornada",
+      confirmLabel: "Duplicar",
+      cancelLabel: "Cancelar",
+      variant: "info",
+      icon: "question"
+    });
+    if (!confirmed) return;
     try {
       // 1. Duplica registro da jornada
       const newSlug = `${journey.slug}-copia-${Date.now().toString().slice(-4)}`;
@@ -497,16 +505,31 @@ export default function JourneyAdmin() {
         if (batchInsertError) console.error("Erro ao duplicar conteúdos:", batchInsertError);
       }
 
-      alert('Jornada duplicada com sucesso!');
+      await showAlert('Jornada duplicada com sucesso!', {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       fetchJourneys();
     } catch (err: any) {
-      alert(`Erro ao duplicar jornada: ${err.message || 'Erro desconhecido'}`);
+      await showAlert(`Erro ao duplicar jornada: ${err.message || 'Erro desconhecido'}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
   // Arquivar Jornada
   const handleArchiveJourney = async (journey: Journey) => {
-    if (!window.confirm(`Deseja arquivar a jornada "${journey.title}"?`)) return;
+    const confirmed = await showConfirm(`Deseja arquivar a jornada "${journey.title}"?`, {
+      title: "Arquivar Jornada",
+      confirmLabel: "Arquivar",
+      cancelLabel: "Cancelar",
+      variant: "warning",
+      icon: "question"
+    });
+    if (!confirmed) return;
     try {
       const { error } = await supabase
         .from('journeys')
@@ -514,10 +537,18 @@ export default function JourneyAdmin() {
         .eq('id', journey.id);
 
       if (error) throw error;
-      alert('Jornada arquivada com sucesso!');
+      await showAlert('Jornada arquivada com sucesso!', {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       fetchJourneys();
     } catch (err: any) {
-      alert(`Erro ao arquivar: ${err.message}`);
+      await showAlert(`Erro ao arquivar: ${err.message}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -531,7 +562,11 @@ export default function JourneyAdmin() {
     }
 
     if (freeDay > selectedJourney!.total_days) {
-      alert(`Não é possível duplicar. A jornada atingiu o limite de ${selectedJourney!.total_days} dias.`);
+      await showAlert(`Não é possível duplicar. A jornada atingiu o limite de ${selectedJourney!.total_days} dias.`, {
+        title: "Limite Atingido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -565,10 +600,18 @@ export default function JourneyAdmin() {
         });
 
       if (error) throw error;
-      alert(`Conteúdo copiado para o Dia ${freeDay}!`);
+      await showAlert(`Conteúdo copiado para o Dia ${freeDay}!`, {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       fetchContents(selectedJourney!.id);
     } catch (err: any) {
-      alert(`Erro ao duplicar conteúdo: ${err.message}`);
+      await showAlert(`Erro ao duplicar conteúdo: ${err.message}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -581,10 +624,18 @@ export default function JourneyAdmin() {
         .eq('id', content.id);
 
       if (error) throw error;
-      alert('Conteúdo arquivado!');
+      await showAlert('Conteúdo arquivado!', {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       fetchContents(selectedJourney!.id);
     } catch (err: any) {
-      alert(`Erro ao arquivar: ${err.message}`);
+      await showAlert(`Erro ao arquivar: ${err.message}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -600,10 +651,18 @@ export default function JourneyAdmin() {
         .eq('id', content.id);
 
       if (error) throw error;
-      alert('Conteúdo publicado imediatamente com sucesso!');
+      await showAlert('Conteúdo publicado imediatamente com sucesso!', {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       fetchContents(selectedJourney!.id);
     } catch (err: any) {
-      alert(`Erro ao publicar: ${err.message}`);
+      await showAlert(`Erro ao publicar: ${err.message}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -619,10 +678,18 @@ export default function JourneyAdmin() {
         .eq('id', content.id);
 
       if (error) throw error;
-      alert('Conteúdo definido como rascunho!');
+      await showAlert('Conteúdo definido como rascunho!', {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       fetchContents(selectedJourney!.id);
     } catch (err: any) {
-      alert(`Erro ao salvar: ${err.message}`);
+      await showAlert(`Erro ao salvar: ${err.message}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -666,7 +733,11 @@ export default function JourneyAdmin() {
       fetchContents(selectedJourney!.id);
     } catch (err: any) {
       console.error('Erro ao reordenar:', err);
-      alert(`Erro ao reordenar: ${err.message}`);
+      await showAlert(`Erro ao reordenar: ${err.message}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 
@@ -679,20 +750,32 @@ export default function JourneyAdmin() {
     const allowedExtensions = ['png', 'jpg', 'jpeg', 'webp'];
     const fileExt = file.name.split('.').pop()?.toLowerCase();
     if (!fileExt || !allowedExtensions.includes(fileExt)) {
-      alert('Extensão inválida! Permite apenas PNG, JPG, JPEG e WEBP.');
+      await showAlert('Extensão inválida! Permite apenas PNG, JPG, JPEG e WEBP.', {
+        title: "Arquivo Inválido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
     const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
     if (!allowedMimeTypes.includes(file.type)) {
-      alert('MIME type inválido! Permite apenas PNG, JPG, JPEG e WEBP.');
+      await showAlert('MIME type inválido! Permite apenas PNG, JPG, JPEG e WEBP.', {
+        title: "Arquivo Inválido",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
     // 2. Validação de Tamanho Máximo (5MB)
     const maxSize = 5 * 1024 * 1024;
     if (file.size > maxSize) {
-      alert('O arquivo excede o limite máximo de 5MB.');
+      await showAlert('O arquivo excede o limite máximo de 5MB.', {
+        title: "Arquivo Muito Grande",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -740,11 +823,19 @@ export default function JourneyAdmin() {
         } else {
           setContentForm(prev => ({ ...prev, image_url: publicUrlData.publicUrl }));
         }
-        alert('Imagem enviada com sucesso!');
+        await showAlert('Imagem enviada com sucesso!', {
+          title: "Sucesso",
+          variant: "success",
+          icon: "success"
+        });
       }
     } catch (err: any) {
       console.error(err);
-      alert(err.message || 'Erro ao realizar upload da imagem.');
+      await showAlert(err.message || 'Erro ao realizar upload da imagem.', {
+        title: "Erro de Upload",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setUploadingImage(false);
     }
@@ -754,7 +845,11 @@ export default function JourneyAdmin() {
   const handleSaveJourney = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!journeyForm.title?.trim() || !journeyForm.slug?.trim()) {
-      alert('Título e Slug são obrigatórios.');
+      await showAlert('Título e Slug são obrigatórios.', {
+        title: "Campos Obrigatórios",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -799,12 +894,20 @@ export default function JourneyAdmin() {
       }
 
       if (error) throw error;
-      alert('Jornada salva com sucesso!');
+      await showAlert('Jornada salva com sucesso!', {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       navigate('/admin/jornada');
       fetchJourneys();
     } catch (err: any) {
       console.error(err);
-      alert(`Erro ao salvar jornada: ${err.message || 'Erro desconhecido'}`);
+      await showAlert(`Erro ao salvar jornada: ${err.message || 'Erro desconhecido'}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setSaving(false);
     }
@@ -814,7 +917,11 @@ export default function JourneyAdmin() {
   const handleSaveContent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!contentForm.title?.trim() || !contentForm.slug?.trim()) {
-      alert('Título e Slug são obrigatórios.');
+      await showAlert('Título e Slug são obrigatórios.', {
+        title: "Campos Obrigatórios",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -864,12 +971,20 @@ export default function JourneyAdmin() {
       }
 
       if (error) throw error;
-      alert('Conteúdo salvo com sucesso!');
+      await showAlert('Conteúdo salvo com sucesso!', {
+        title: "Sucesso",
+        variant: "success",
+        icon: "success"
+      });
       navigate(`/admin/jornada/${selectedJourney!.slug}/conteudos`);
       fetchContents(selectedJourney!.id);
     } catch (err: any) {
       console.error(err);
-      alert(`Erro ao salvar conteúdo: ${err.message || 'Erro desconhecido. Verifique duplicidade de Slug ou Dia.'}`);
+      await showAlert(`Erro ao salvar conteúdo: ${err.message || 'Erro desconhecido. Verifique duplicidade de Slug ou Dia.'}`, {
+        title: "Erro",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setSaving(false);
     }

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Bold, Check, CirclePause, CirclePlay, Eraser, FileText, Heading2, Italic, List, ListChecks, Loader2, Mail, MessageCircle, Pencil, RefreshCw, RotateCcw, Save, ScrollText, Send, Settings, Users, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { showAlert, showConfirm } from '../../store/modalStore';
 
 type Tab = 'overview' | 'campaigns' | 'preferences' | 'settings';
 type CampaignTab = 'flows' | 'instances' | 'logs';
@@ -510,7 +511,14 @@ export default function LifecycleAdmin() {
       setError('Não foi possível identificar o e-mail do administrador autenticado.');
       return;
     }
-    if (!window.confirm(`Enviar um teste deste passo para ${adminEmail}?`)) return;
+    const confirmed = await showConfirm(`Enviar um teste deste passo para ${adminEmail}?`, {
+      title: "Enviar Teste",
+      confirmLabel: "Enviar",
+      cancelLabel: "Cancelar",
+      variant: "info",
+      icon: "question"
+    });
+    if (!confirmed) return;
     setSendingTestStepId(editingTemplate.id);
     setTestStepMessage('');
     setError('');
@@ -547,7 +555,15 @@ export default function LifecycleAdmin() {
   };
 
   const forceSendCurrentStep = async (user: any, step: any) => {
-    if (!step || !window.confirm(`Enviar agora o e-mail do passo ${step.position} para ${user.full_name || 'este usuário'}?`)) return;
+    if (!step) return;
+    const confirmed = await showConfirm(`Enviar agora o e-mail do passo ${step.position} para ${user.full_name || 'este usuário'}?`, {
+      title: "Forçar Envio",
+      confirmLabel: "Enviar Agora",
+      cancelLabel: "Cancelar",
+      variant: "warning",
+      icon: "question"
+    });
+    if (!confirmed) return;
     setSendingUserId(user.id);
     setError('');
     setMessage('');
@@ -566,7 +582,14 @@ export default function LifecycleAdmin() {
   };
 
   const restartJourney = async (user: any) => {
-    if (!window.confirm(`Reiniciar a jornada de ${user.full_name || user.google_email || 'este usuário'} desde o primeiro passo?`)) return;
+    const confirmed = await showConfirm(`Reiniciar a jornada de ${user.full_name || user.google_email || 'este usuário'} desde o primeiro passo?`, {
+      title: "Reiniciar Jornada",
+      confirmLabel: "Reiniciar",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "warning"
+    });
+    if (!confirmed) return;
     setRestartingUserId(user.id);
     setError('');
     setMessage('');
@@ -582,7 +605,14 @@ export default function LifecycleAdmin() {
   };
 
   const resendLifecycleDelivery = async (delivery: any) => {
-    if (!window.confirm(`Reenviar este e-mail para ${delivery.recipient_name || delivery.recipient_email || 'o destinatário'}?`)) return;
+    const confirmed = await showConfirm(`Reenviar este e-mail para ${delivery.recipient_name || delivery.recipient_email || 'o destinatário'}?`, {
+      title: "Reenviar E-mail",
+      confirmLabel: "Reenviar",
+      cancelLabel: "Cancelar",
+      variant: "info",
+      icon: "question"
+    });
+    if (!confirmed) return;
     setResendingDispatchId(delivery.id);
     setError('');
     setMessage('');

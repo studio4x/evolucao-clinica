@@ -6,6 +6,7 @@ import { getPendingEvolutionAudioBlobs } from '../../services/evolutionAudio';
 import { supabase } from '../../supabaseClient';
 import { useAuthStore } from '../../store/authStore';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes } from '../../services/googleAuth';
+import { showAlert } from '../../store/modalStore';
 import { CloudOff, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
 
 export function OfflineQueueMonitor() {
@@ -58,11 +59,19 @@ export function OfflineQueueMonitor() {
 
   const handleSync = async () => {
     if (!navigator.onLine) {
-      alert("Você ainda está sem conexão com a internet.");
+      await showAlert("Você ainda está sem conexão com a internet.", {
+        title: "Sem Conexão",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
     if (!hasClinicalAccess) {
-      alert("Seu Google Token expirou/não encontrado. Use o aplicativo estando logado para sincronizar.");
+      await showAlert("Seu Google Token expirou/não encontrado. Use o aplicativo estando logado para sincronizar.", {
+        title: "Autenticação Necessária",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 

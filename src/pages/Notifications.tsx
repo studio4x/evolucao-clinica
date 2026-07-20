@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
+import { showAlert, showConfirm } from '../store/modalStore';
 import { 
   Bell, BellOff, CheckCheck, Trash2, Mail, Settings, Shield, 
   Info, AlertTriangle, CheckCircle2, XCircle, Loader2 
@@ -251,7 +252,11 @@ export default function Notifications() {
       setIsPushSubscribed(true);
     } catch (err: any) {
       console.error('Erro ao ativar push:', err);
-      alert(err.message || 'Erro ao ativar notificações push.');
+      await showAlert(err.message || 'Erro ao ativar notificações push.', {
+        title: "Erro no Push",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setPushLoading(false);
     }
@@ -268,7 +273,7 @@ export default function Notifications() {
       if (sub) {
         const session = await supabase.auth.getSession();
         const token = session.data.session?.access_token;
-
+ 
         // Remover no servidor Express
         await fetch('/api/notifications/unsubscribe', {
           method: 'POST',
@@ -278,7 +283,7 @@ export default function Notifications() {
           },
           body: JSON.stringify({ endpoint: sub.endpoint })
         });
-
+ 
         // Cancelar inscricao no navegador
         await sub.unsubscribe();
       }
@@ -286,12 +291,16 @@ export default function Notifications() {
       setIsPushSubscribed(false);
     } catch (err: any) {
       console.error('Erro ao desativar push:', err);
-      alert('Erro ao desativar notificações push.');
+      await showAlert('Erro ao desativar notificações push.', {
+        title: "Erro no Push",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setPushLoading(false);
     }
   };
-
+ 
   // 6. Marcar Notificação específica como lida
   const markAsRead = async (id: string) => {
     try {
@@ -308,7 +317,7 @@ export default function Notifications() {
       console.error('Erro ao marcar como lida:', err);
     }
   };
-
+ 
   // 7. Marcar todas como lidas
   const markAllAsRead = async () => {
     try {
@@ -324,10 +333,17 @@ export default function Notifications() {
       console.error('Erro ao marcar todas como lidas:', err);
     }
   };
-
+ 
   // 8. Limpar todas as notificações
   const clearAllNotifications = async () => {
-    if (!confirm('Deseja realmente excluir todas as suas notificações?')) return;
+    const confirmed = await showConfirm('Deseja realmente excluir todas as suas notificações?', {
+      title: "Excluir Notificações",
+      confirmLabel: "Excluir Tudo",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
     try {
       const { error } = await supabase
         .from('notifications')
@@ -340,13 +356,13 @@ export default function Notifications() {
       console.error('Erro ao excluir notificações:', err);
     }
   };
-
+ 
   // 9. Salvar Configurações SMTP (Admin)
   const saveSmtpSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSmtpSaving(true);
     setSmtpSuccess(false);
-
+ 
     try {
       const settings = {
         smtp_host: smtpHost,
@@ -358,7 +374,7 @@ export default function Notifications() {
         vapid_private_key: vapidPrivate,
         vapid_subject: `mailto:${smtpUser || 'contato@evolucaoclinica.app.br'}`
       };
-
+ 
       const { error } = await supabase
         .from('settings')
         .upsert({
@@ -367,13 +383,17 @@ export default function Notifications() {
           updated_at: new Date().toISOString(),
           updated_by: user?.email || 'admin'
         });
-
+ 
       if (error) throw error;
       setSmtpSuccess(true);
       setTimeout(() => setSmtpSuccess(false), 3000);
     } catch (err) {
       console.error('Erro ao salvar configuracoes SMTP:', err);
-      alert('Erro ao salvar configurações do servidor.');
+      await showAlert('Erro ao salvar configurações do servidor.', {
+        title: "Erro ao Salvar",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setSmtpSaving(false);
     }

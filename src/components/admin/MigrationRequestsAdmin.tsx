@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Database, Search, FileText, Download, CheckCircle2, AlertCircle, Loader2, MessageSquare, HelpCircle, RefreshCw, PlusCircle, Calendar, ShieldAlert, Sparkles, Check, Play, ChevronDown, ChevronUp } from 'lucide-react';
 import { fetchAdminMigrationRequests, updateMigrationRequestStatus, getMigrationAttachmentUrl, MigrationRequest } from '../../services/migration';
 import { supabase } from '../../supabaseClient';
+import { showAlert } from '../../store/modalStore';
 
 interface DetectedSession {
   date: string;
@@ -151,7 +152,11 @@ export default function MigrationRequestsAdmin() {
     e.preventDefault();
     if (!selectedRequest) return;
     if (!transcriptionText.trim()) {
-      alert('Por favor, digite o texto da evolução.');
+      await showAlert('Por favor, digite o texto da evolução.', {
+        title: "Campo Obrigatório",
+        variant: "warning",
+        icon: "warning"
+      });
       return;
     }
 
@@ -453,11 +458,19 @@ export default function MigrationRequestsAdmin() {
       if (url) {
         window.open(url, '_blank');
       } else {
-        alert('Não foi possível gerar a URL do anexo.');
+        await showAlert('Não foi possível gerar a URL do anexo.', {
+          title: "Erro de Download",
+          variant: "danger",
+          icon: "warning"
+        });
       }
     } catch (err) {
       console.error('Error getting attachment url:', err);
-      alert('Erro ao tentar fazer o download.');
+      await showAlert('Erro ao tentar fazer o download.', {
+        title: "Erro de Download",
+        variant: "danger",
+        icon: "warning"
+      });
     }
   };
 

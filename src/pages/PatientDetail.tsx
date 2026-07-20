@@ -15,6 +15,15 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { generateReportPDF } from '../utils/reportPdf';
 import { downloadPdfFile, generateProntuarioPDF, getProntuarioPdfFileName } from '../utils/prontuarioPdf';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
+import { showAlert } from '../store/modalStore';
+
+const alert = (msg: string) => {
+  void showAlert(msg, {
+    title: "Aviso",
+    variant: "info",
+    icon: "info"
+  });
+};
 
 // Converte Markdown para HTML e remove conteúdo potencialmente perigoso antes da renderização
 const parseMarkdown = (md: string): string => {

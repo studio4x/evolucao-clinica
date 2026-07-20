@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Send, Paperclip, X, LifeBuoy, Download, AlertCircle, FileText, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { showAlert, showConfirm } from '../store/modalStore';
 import {
   fetchSupportTicketDetail,
   sendSupportMessage,
@@ -114,7 +115,15 @@ export default function SupportTicketDetail() {
   };
 
   const handleCloseTicket = async () => {
-    if (!ticketId || !window.confirm('Tem certeza de que deseja encerrar este chamado de suporte?')) return;
+    if (!ticketId) return;
+    const confirmed = await showConfirm('Tem certeza de que deseja encerrar este chamado de suporte?', {
+      title: "Encerrar Chamado",
+      confirmLabel: "Encerrar",
+      cancelLabel: "Voltar",
+      variant: "warning",
+      icon: "question"
+    });
+    if (!confirmed) return;
 
     try {
       setActionLoading(true);

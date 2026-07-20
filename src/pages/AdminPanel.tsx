@@ -19,7 +19,15 @@ import FeedbackAdmin from '../components/admin/FeedbackAdmin';
 import JourneyAdmin from '../components/admin/JourneyAdmin';
 import DailyPushNotificationManager from '../components/admin/DailyPushNotificationManager';
 import LifecycleAdmin from '../components/admin/LifecycleAdmin';
+import { showAlert, showConfirm } from '../store/modalStore';
 
+const alert = (msg: string) => {
+  void showAlert(msg, {
+    title: "Aviso",
+    variant: "info",
+    icon: "info"
+  });
+};
 
 interface Professional {
   id: string;
@@ -907,7 +915,14 @@ export default function AdminPanel() {
   };
  
   const handleResendNotification = async (notification: any) => {
-    if (!confirm('Deseja realmente reenviar esta notificação agora?')) return;
+    const confirmed = await showConfirm('Deseja realmente reenviar esta notificação agora?', {
+      title: "Reenviar Notificação",
+      confirmLabel: "Reenviar",
+      cancelLabel: "Cancelar",
+      variant: "info",
+      icon: "question"
+    });
+    if (!confirmed) return;
     setResendingNotifId(notification.id);
     try {
       const session = await supabase.auth.getSession();
@@ -1253,7 +1268,14 @@ export default function AdminPanel() {
 
   // Excluir notificação específica do histórico geral
   const handleDeleteNotification = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir esta notificação?')) return;
+    const confirmed = await showConfirm('Tem certeza que deseja excluir esta notificação?', {
+      title: "Excluir Notificação",
+      confirmLabel: "Excluir",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
     setDeletingNotifId(id);
     try {
       const { error } = await supabase
@@ -1273,7 +1295,14 @@ export default function AdminPanel() {
 
   const handleClearNotificationHistory = async (notifications: any[], label: string, scope: 'manual' | 'platform') => {
     if (notifications.length === 0) return;
-    if (!window.confirm(`Deseja realmente excluir todas as notificações ${label}?`)) return;
+    const confirmed = await showConfirm(`Deseja realmente excluir todas as notificações ${label}?`, {
+      title: "Limpar Histórico",
+      confirmLabel: "Limpar Tudo",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
 
     setLoadingPushNotifications(true);
     try {
@@ -1359,7 +1388,14 @@ export default function AdminPanel() {
   };
 
   const clearAdminInboxNotifications = async () => {
-    if (!window.confirm('Deseja realmente excluir todas as notificações do painel?')) return;
+    const confirmed = await showConfirm('Deseja realmente excluir todas as notificações do painel?', {
+      title: "Limpar Painel",
+      confirmLabel: "Limpar Tudo",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
 
     try {
       const { error } = await supabase
@@ -2107,9 +2143,16 @@ export default function AdminPanel() {
 
   const handleForceGoogleDisconnect = async (prof: Professional) => {
     if (updatingId) return;
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       `Deseja forçar a desconexão do Google para ${prof.full_name} (${prof.google_email})?\n\n` +
-      'O usuário será desconectado e obrigado a selecionar a conta e conceder permissões novamente no próximo login.'
+      'O usuário será desconectado e obrigado a selecionar a conta e conceder permissões novamente no próximo login.',
+      {
+        title: "Forçar Desconexão Google",
+        confirmLabel: "Desconectar",
+        cancelLabel: "Cancelar",
+        variant: "warning",
+        icon: "warning"
+      }
     );
     if (!confirmed) return;
 
@@ -2141,9 +2184,16 @@ export default function AdminPanel() {
       return;
     }
 
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       `Tem certeza que deseja excluir permanentemente ${prof.full_name} (${prof.google_email})?\n\n` +
-      'Esta ação remove o acesso, o perfil e os dados vinculados. Não poderá ser desfeita.'
+      'Esta ação remove o acesso, o perfil e os dados vinculados. Não poderá ser desfeita.',
+      {
+        title: "Excluir Profissional",
+        confirmLabel: "Excluir permanentemente",
+        cancelLabel: "Cancelar",
+        variant: "danger",
+        icon: "warning"
+      }
     );
 
     if (!confirmed) return;
@@ -2699,8 +2749,15 @@ export default function AdminPanel() {
   const handleResetUsageLogs = async () => {
     if (resettingUsageLogs) return;
 
-    const confirmed = window.confirm(
-      'Isso vai apagar permanentemente todo o histórico de consumo de API e zerar as métricas do painel. Deseja continuar?'
+    const confirmed = await showConfirm(
+      'Isso vai apagar permanentemente todo o histórico de consumo de API e zerar as métricas do painel. Deseja continuar?',
+      {
+        title: "Zerar Consumo API",
+        confirmLabel: "Zerar Histórico",
+        cancelLabel: "Cancelar",
+        variant: "danger",
+        icon: "warning"
+      }
     );
 
     if (!confirmed) return;
@@ -5593,7 +5650,14 @@ export default function AdminPanel() {
                     };
 
                     const handleAdminCloseTicket = async (ticketId: string) => {
-                      if (!window.confirm('Marcar este chamado como resolvido/fechado?')) return;
+                      const confirmed = await showConfirm('Marcar este chamado como resolvido/fechado?', {
+                        title: "Fechar Chamado",
+                        confirmLabel: "Resolver/Fechar",
+                        cancelLabel: "Cancelar",
+                        variant: "warning",
+                        icon: "question"
+                      });
+                      if (!confirmed) return;
                       try {
                         await updateSupportTicketStatus(ticketId, 'closed');
                         fetchAdminTickets();

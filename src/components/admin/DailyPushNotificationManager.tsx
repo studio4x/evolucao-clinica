@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { showAlert } from '../../store/modalStore';
 import { 
   Bell, Save, Play, Loader2, Check, AlertTriangle, 
   HelpCircle, Calendar, Clock, Upload, Trash2, Smartphone, 
@@ -224,7 +225,11 @@ export default function DailyPushNotificationManager() {
       }
     } catch (err: any) {
       console.error('Erro ao fazer upload da imagem:', err);
-      alert('Erro ao fazer upload da imagem: ' + (err.message || 'Erro desconhecido'));
+      await showAlert('Erro ao fazer upload da imagem: ' + (err.message || 'Erro desconhecido'), {
+        title: "Erro de Upload",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       if (field === 'image') setUploadingImage(false);
       else setUploadingIcon(false);

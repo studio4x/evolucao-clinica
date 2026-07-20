@@ -44,6 +44,7 @@ const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedbac
 import LandingPage from './pages/LandingPage';
 
 import { CookieConsent } from './components/CookieConsent';
+import { CustomModalContainer } from './components/common/CustomModalContainer';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
@@ -563,6 +564,7 @@ export default function App() {
       <CookieConsent />
       <InstallPrompt />
       <PermissionNotice />
+      <CustomModalContainer />
       <SpeedInsights />
       
       <Suspense fallback={<SplashScreen message="Carregando..." />}>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
+import { showAlert, showConfirm } from '../../store/modalStore';
 import { 
   Search, Star, Trash2, Edit, MessageSquare, AlertTriangle, 
   CheckCircle2, HelpCircle, Loader2, X, RefreshCw, Filter, Calendar
@@ -92,14 +93,25 @@ export default function FeedbackAdmin() {
       setSelectedFeedback(null);
     } catch (err) {
       console.error('Erro ao atualizar feedback:', err);
-      alert('Ocorreu um erro ao salvar as alterações.');
+      await showAlert('Ocorreu um erro ao salvar as alterações.', {
+        title: "Erro ao Atualizar",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteFeedback = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja excluir esta sugestão permanentemente?')) return;
+    const confirmed = await showConfirm('Tem certeza que deseja excluir esta sugestão permanentemente?', {
+      title: "Excluir Sugestão",
+      confirmLabel: "Excluir",
+      cancelLabel: "Cancelar",
+      variant: "danger",
+      icon: "trash"
+    });
+    if (!confirmed) return;
     setDeletingId(id);
 
     try {
@@ -116,7 +128,11 @@ export default function FeedbackAdmin() {
       }
     } catch (err) {
       console.error('Erro ao deletar feedback:', err);
-      alert('Não foi possível excluir o feedback.');
+      await showAlert('Não foi possível excluir o feedback.', {
+        title: "Erro ao Excluir",
+        variant: "danger",
+        icon: "warning"
+      });
     } finally {
       setDeletingId(null);
     }
