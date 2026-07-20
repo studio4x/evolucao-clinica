@@ -910,8 +910,9 @@ export default function NewEvolution() {
   };
 
   const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const s = (seconds % 60).toString().padStart(2, '0');
+    const safeSeconds = Math.max(0, Math.round(Number.isFinite(seconds) ? seconds : 0));
+    const m = Math.floor(safeSeconds / 60).toString().padStart(2, '0');
+    const s = (safeSeconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
   };
 
