@@ -56,6 +56,45 @@ const DEPRECATED_MODEL_FALLBACKS: Record<string, string> = {
   "gemini-1.5-flash-001": "gemini-3.5-flash"
 };
 
+const SEMANTIC_SEARCH_STOP_WORDS = new Set([
+  "a", "as", "ao", "aos", "da", "das", "de", "do", "dos", "e", "em", "na", "nas", "no", "nos",
+  "o", "os", "para", "por", "que", "qual", "quais", "como", "com", "sobre", "foi", "tem", "teve",
+  "uma", "um", "se", "há", "havia", "mais", "última", "último", "últimas", "últimos"
+]);
+
+const normalizeSemanticSearchText = (value: string): string => {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+};
+
+const selectRelevantSemanticMatches = (query: string, matches: any[]): any[] => {
+  const normalizedQuery = normalizeSemanticSearchText(query);
+  const queryTerms = normalizedQuery
+    .split(/\s+/)
+    .filter((term) => term.length >= 3 && !SEMANTIC_SEARCH_STOP_WORDS.has(term));
+
+  const lexicalMatches = queryTerms.length > 0
+    ? matches.filter((match) => {
+        const normalizedText = normalizeSemanticSearchText(String(match.transcription_text || ""));
+        return queryTerms.some((term) => normalizedText.includes(term));
+      })
+    : [];
+
+  if (lexicalMatches.length > 0) {
+    return lexicalMatches;
+  }
+
+  const rankedMatches = [...matches].sort((left, right) => Number(right.similarity || 0) - Number(left.similarity || 0));
+  const bestSimilarity = Number(rankedMatches[0]?.similarity || 0);
+  const minimumSimilarity = Math.max(0.5, bestSimilarity - 0.08);
+
+  return rankedMatches.filter((match) => Number(match.similarity || 0) >= minimumSimilarity);
+};
+
 /**
  * Lê a chave e o modelo do Gemini da tabela settings.
  * O campo api_key pode ser:
@@ -5381,8 +5420,10 @@ app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscrip
       throw matchError;
     }
 
-    // Se nenhum trecho corresponder
-    if (!matchResults || matchResults.length === 0) {
+    const relevantMatches = selectRelevantSemanticMatches(query.trim(), matchResults || []);
+
+    // Se nenhum trecho corresponder de forma suficientemente relevante
+    if (relevantMatches.length === 0) {
       return res.json({
         answer: "Não encontrei nenhuma informação relevante ou menções semelhantes nas evoluções gravadas deste paciente para a pergunta feita.",
         sources: []
@@ -5390,7 +5431,7 @@ app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscrip
     }
 
     // Construir contexto textual para a IA
-    const contextText = matchResults
+    const contextText = relevantMatches
       .map((evo: any, idx: number) => {
         return `[Fonte ${idx + 1}]
 Data da sessão: ${evo.session_date || new Date(evo.created_at).toLocaleDateString("pt-BR")}
@@ -5430,7 +5471,7 @@ ${contextText}`;
 
     res.json({
       answer,
-      sources: matchResults.map((evo: any) => ({
+      sources: relevantMatches.map((evo: any) => ({
         id: evo.id,
         session_date: evo.session_date,
         created_at: evo.created_at,
