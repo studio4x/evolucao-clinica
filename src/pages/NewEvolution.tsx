@@ -122,21 +122,44 @@ export default function NewEvolution() {
   const getAudioDurationFromUrl = (url: string) => {
     return new Promise<number>((resolve) => {
       const audio = new Audio(url);
+      audio.preload = 'metadata';
+      const timeoutId = window.setTimeout(() => resolve(0), 2500);
+      const finish = (duration: number) => {
+        window.clearTimeout(timeoutId);
+        resolve(Number.isFinite(duration) && duration > 0 ? duration : 0);
+      };
       audio.addEventListener('loadedmetadata', () => {
         if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
-          resolve(audio.duration);
+          finish(audio.duration);
           return;
         }
 
-        audio.currentTime = 1e101;
+        try {
+          audio.currentTime = 1e101;
+        } catch {
+          finish(0);
+        }
         audio.ontimeupdate = function() {
           this.ontimeupdate = () => {};
           audio.currentTime = 0;
-          resolve(audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) ? audio.duration : 0);
+          finish(audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) ? audio.duration : 0);
         };
       });
-      audio.addEventListener('error', () => resolve(0));
+      audio.addEventListener('error', () => finish(0));
     });
+  };
+
+  const getSupportedRecordingMimeType = () => {
+    const candidates = [
+      'audio/mp4;codecs=mp4a.40.2',
+      'audio/mp4',
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+    ];
+
+    return candidates.find((mimeType) => MediaRecorder.isTypeSupported?.(mimeType)) || '';
   };
 
   const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string) => {
@@ -487,7 +510,12 @@ export default function NewEvolution() {
     try {
       isDiscardingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
+      if (typeof MediaRecorder === 'undefined') {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error('Este dispositivo não oferece suporte à gravação de áudio.');
+      }
+      const mimeType = getSupportedRecordingMimeType();
+      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
       recordingTimeRef.current = 0;
@@ -498,7 +526,7 @@ export default function NewEvolution() {
           chunksRef.current.push(e.data);
           // Salva rascunho periodicamente
           if (!isDiscardingRef.current) {
-            const partialBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            const partialBlob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
             void persistDraft(audioItemsRef.current, partialBlob);
           }
         }
@@ -507,7 +535,7 @@ export default function NewEvolution() {
       mediaRecorder.onstop = () => {
         if (!isDiscardingRef.current) {
           if (chunksRef.current.length > 0) {
-            const newBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+            const newBlob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType || 'audio/webm' });
             void (async () => {
               const nextItem = await createAudioItem(
                 newBlob,
@@ -1141,7 +1169,13 @@ export default function NewEvolution() {
                         </button>
                       </div>
                     </div>
-                    <audio src={item.url} controls className="w-full" />
+                    <audio
+                      src={item.url}
+                      controls
+                      preload="metadata"
+                      className="w-full"
+                      onError={() => setErrorMessage('O áudio foi gerado, mas este dispositivo não conseguiu reproduzir o formato. Tente gravar novamente.')}
+                    />
                   </div>
                 ))}
               </div>
