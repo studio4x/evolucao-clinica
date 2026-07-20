@@ -27,6 +27,8 @@ type AudioEvolutionItem = {
 
 const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const fallbackContextRef = useRef<AudioContext | null>(null);
+  const fallbackSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackError, setPlaybackError] = useState('');
 
@@ -40,16 +42,40 @@ const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
         await audio.play();
         setIsPlaying(true);
       } catch (error) {
-        console.error('[Audio] Falha ao iniciar reprodução', {
-          error,
-          mimeType: item.blob.type,
-          bytes: item.blob.size,
-        });
-        setIsPlaying(false);
-        setPlaybackError('Este áudio não pôde ser reproduzido neste dispositivo.');
+        try {
+          const AudioContextConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+          if (!AudioContextConstructor) throw error;
+          const context = fallbackContextRef.current || new AudioContextConstructor();
+          fallbackContextRef.current = context;
+          if (context.state === 'suspended') await context.resume();
+          const buffer = await context.decodeAudioData(await item.blob.arrayBuffer());
+          const source = context.createBufferSource();
+          source.buffer = buffer;
+          source.connect(context.destination);
+          source.onended = () => {
+            fallbackSourceRef.current = null;
+            setIsPlaying(false);
+          };
+          fallbackSourceRef.current = source;
+          source.start();
+          setIsPlaying(true);
+        } catch (fallbackError) {
+          console.error('[Audio] Falha ao iniciar reprodução', {
+            error,
+            fallbackError,
+            mimeType: item.blob.type,
+            bytes: item.blob.size,
+          });
+          setIsPlaying(false);
+          setPlaybackError('Este áudio não pôde ser reproduzido neste dispositivo.');
+        }
       }
     } else {
       audio.pause();
+      if (fallbackSourceRef.current) {
+        fallbackSourceRef.current.stop();
+        fallbackSourceRef.current = null;
+      }
       setIsPlaying(false);
     }
   };
@@ -71,7 +97,6 @@ const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
             bytes: item.blob.size,
           });
           setIsPlaying(false);
-          setPlaybackError('Este áudio não pôde ser reproduzido neste dispositivo.');
         }}
       />
       <button
@@ -304,12 +329,12 @@ export default function NewEvolution() {
 
   const getSupportedRecordingMimeType = () => {
     const candidates = [
-      'audio/mp4;codecs=mp4a.40.2',
-      'audio/mp4',
       'audio/webm;codecs=opus',
       'audio/webm',
       'audio/ogg;codecs=opus',
       'audio/ogg',
+      'audio/mp4;codecs=mp4a.40.2',
+      'audio/mp4',
     ];
 
     return candidates.find((mimeType) => MediaRecorder.isTypeSupported?.(mimeType)) || '';
@@ -1181,8 +1206,7 @@ export default function NewEvolution() {
                   </div>
                   <div className="w-full rounded-2xl border border-brand-primary/20 bg-brand-surface p-3 text-left">
                     <div className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-brand-primary">
-                      <span className="flex items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${isPaused ? 'bg-yellow-500' : 'animate-pulse bg-red-500'}`} />{isPaused ? 'Gravação pausada' : 'Gravando agora'}</span>
-                      <span className="font-normal normal-case text-brand-text-muted">Onda do microfone</span>
+                      <span className="flex w-full items-center gap-2"><span className={`h-2.5 w-2.5 rounded-full ${isPaused ? 'bg-yellow-500' : 'animate-pulse bg-red-500'}`} />{isPaused ? 'Gravação pausada' : 'Gravando agora'}</span>
                     </div>
                     <canvas ref={waveformCanvasRef} className="h-[72px] w-full rounded-xl" aria-label="Visualização do áudio capturado" />
                   </div>
