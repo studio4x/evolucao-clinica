@@ -51,6 +51,25 @@
   }
 }
 
+/* Compatibilidade com WebView Android: filtros e animações de entrada em
+   camadas fixed podem ocultar o conteúdo interno dos modais. */
+@media (max-width: 767px) {
+  .backdrop-blur-xs,
+  .backdrop-blur-sm,
+  .backdrop-blur-md {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .animate-in,
+  .animate-fade-in,
+  .animate-fadeIn {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
 /* Estilos de Impressão Limpa */
 @media print {
   @page {
