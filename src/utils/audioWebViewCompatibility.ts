@@ -26,7 +26,7 @@ export const installWebViewAudioCompatibility = () => {
 
   const NativeAudio = compatibleWindow.Audio;
 
-  const CompatibleAudio = function (_this: HTMLAudioElement, src?: string): HTMLAudioElement {
+  const CompatibleAudio = function (this: HTMLAudioElement, src?: string): HTMLAudioElement {
     const audio = new NativeAudio();
 
     if (src) {
