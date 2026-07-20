@@ -5,11 +5,14 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.graphics.Color;
 import android.util.Log;
+import android.view.View;
+import android.view.ViewGroup;
 import android.webkit.ConsoleMessage;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
@@ -20,7 +23,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
-import android.view.View;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -38,19 +40,43 @@ public class LauncherActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // O LauncherActivity original do Bubblewrap usa uma janela translúcida porque
+        // apenas encaminha a navegação para o Chrome/TWA. Como esta Activity agora
+        // mantém um WebView próprio, garantimos uma superfície opaca e acelerada para
+        // evitar falhas de composição em overlays, backdrop e conteúdo dos modais.
+        getWindow().setBackgroundDrawable(new ColorDrawable(Color.WHITE));
+        getWindow().setStatusBarColor(Color.rgb(0, 92, 19));
+        getWindow().setNavigationBarColor(Color.BLACK);
+
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.O) {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         }
+
         requestRequiredPermissions();
+
         swipeRefreshLayout = new SwipeRefreshLayout(this);
+        swipeRefreshLayout.setBackgroundColor(Color.WHITE);
+        swipeRefreshLayout.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
         swipeRefreshLayout.setColorSchemeColors(Color.rgb(0, 92, 19));
         swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) -> webView != null && webView.getScrollY() > 0);
         swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
 
         webView = new WebView(this);
+        webView.setBackgroundColor(Color.WHITE);
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        webView.setLayoutParams(new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
         configureWebView(webView);
+
         swipeRefreshLayout.addView(webView);
         setContentView(swipeRefreshLayout);
+
         Uri launchUri = getIntent() == null ? null : getIntent().getData();
         webView.loadUrl(isTrustedUrl(launchUri) ? launchUri.toString() : APP_URL);
     }
@@ -73,8 +99,18 @@ public class LauncherActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(false);
         settings.setSupportZoom(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " EvolucaoClinicaApp/31");
+        settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setTextZoom(100);
+        settings.setSupportMultipleWindows(false);
+        settings.setUserAgentString(settings.getUserAgentString() + " EvolucaoClinicaApp/37");
+
+        view.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        view.setVerticalScrollBarEnabled(false);
+
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(view, true);
 
