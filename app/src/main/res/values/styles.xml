@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        O projeto foi originalmente gerado pelo Bubblewrap para TWA, cujo tema
+        translúcido serve apenas como ponte para o Chrome. O LauncherActivity
+        atual mantém um WebView dentro da própria Activity, portanto precisa de
+        uma janela opaca e acelerada para compor corretamente overlays e modais.
+    -->
+    <style name="EvolucaoClinicaWebViewTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">@color/backgroundColor</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowDisablePreview">false</item>
+        <item name="android:windowContentTransitions">false</item>
+        <item name="android:colorAccent">@color/colorPrimary</item>
+        <item name="android:statusBarColor">@color/colorPrimary</item>
+        <item name="android:navigationBarColor">@color/navigationColor</item>
+    </style>
+</resources>
