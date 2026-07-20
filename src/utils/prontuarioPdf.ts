@@ -209,12 +209,33 @@ export const downloadPdfFile = async (doc: jsPDF, fileName: string): Promise<boo
   const nativeDownload = (window as Window & {
     NativeFileDownload?: {
       saveFile?: (name: string, mimeType: string, base64Data: string) => boolean;
+      beginFile?: (name: string, mimeType: string) => boolean;
+      appendFileChunk?: (base64Chunk: string) => boolean;
+      finishFile?: () => boolean;
     };
   }).NativeFileDownload;
 
-  if (typeof nativeDownload?.saveFile === 'function') {
+  const nativeBase64 = await blobToBase64(blob);
+  const canWriteInChunks = typeof nativeDownload?.beginFile === 'function'
+    && typeof nativeDownload.appendFileChunk === 'function'
+    && typeof nativeDownload.finishFile === 'function';
+
+  if (canWriteInChunks) {
     try {
-      const saved = nativeDownload.saveFile(fileName, 'application/pdf', await blobToBase64(blob));
+      if (!nativeDownload.beginFile!(fileName, 'application/pdf')) return false;
+      const chunkSize = 48 * 1024;
+      for (let offset = 0; offset < nativeBase64.length; offset += chunkSize) {
+        const chunk = nativeBase64.slice(offset, offset + chunkSize);
+        if (!nativeDownload.appendFileChunk!(chunk)) return false;
+      }
+      const saved = nativeDownload.finishFile!();
+      if (saved) return true;
+    } catch (error) {
+      console.error('[PDF] Falha no salvamento nativo:', error);
+    }
+  } else if (typeof nativeDownload?.saveFile === 'function') {
+    try {
+      const saved = nativeDownload.saveFile(fileName, 'application/pdf', nativeBase64);
       if (saved) return true;
     } catch (error) {
       console.error('[PDF] Falha no salvamento nativo:', error);

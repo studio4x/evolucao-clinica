@@ -203,16 +203,14 @@ public class LauncherActivity extends Activity {
     }
 
     private final class NativeFileDownloadBridge {
+        private ByteArrayOutputStream pendingFileBuffer;
+        private String pendingFileName;
+        private String pendingFileMimeType;
+
         @android.webkit.JavascriptInterface
         public synchronized boolean saveFile(String fileName, String mimeType, String base64Data) {
             if (base64Data == null || base64Data.trim().isEmpty()) return false;
 
-            String safeName = fileName == null || fileName.trim().isEmpty()
-                    ? "arquivo.pdf"
-                    : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
-            String safeMimeType = mimeType == null || mimeType.trim().isEmpty()
-                    ? "application/octet-stream"
-                    : mimeType;
             byte[] bytes;
 
             try {
@@ -222,6 +220,59 @@ public class LauncherActivity extends Activity {
                 return false;
             }
 
+            return saveDecodedFile(fileName, mimeType, bytes);
+        }
+
+        @android.webkit.JavascriptInterface
+        public synchronized boolean beginFile(String fileName, String mimeType) {
+            pendingFileBuffer = new ByteArrayOutputStream();
+            pendingFileName = fileName;
+            pendingFileMimeType = mimeType;
+            return true;
+        }
+
+        @android.webkit.JavascriptInterface
+        public synchronized boolean appendFileChunk(String base64Chunk) {
+            if (pendingFileBuffer == null || base64Chunk == null || base64Chunk.trim().isEmpty()) return false;
+
+            try {
+                pendingFileBuffer.write(Base64.decode(base64Chunk, Base64.DEFAULT));
+                return true;
+            } catch (IllegalArgumentException | java.io.IOException exception) {
+                Log.e(LOG_TAG, "Não foi possível receber bloco do arquivo", exception);
+                clearPendingFile();
+                return false;
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public synchronized boolean finishFile() {
+            if (pendingFileBuffer == null) return false;
+
+            byte[] bytes = pendingFileBuffer.toByteArray();
+            String fileName = pendingFileName;
+            String mimeType = pendingFileMimeType;
+            clearPendingFile();
+            return saveDecodedFile(fileName, mimeType, bytes);
+        }
+
+        private void clearPendingFile() {
+            pendingFileBuffer = null;
+            pendingFileName = null;
+            pendingFileMimeType = null;
+        }
+
+        private boolean saveDecodedFile(String fileName, String mimeType, byte[] bytes) {
+            if (bytes == null || bytes.length == 0) return false;
+
+            String safeName = fileName == null || fileName.trim().isEmpty()
+                    ? "arquivo.pdf"
+                    : fileName.replaceAll("[^a-zA-Z0-9._-]", "_");
+            String safeMimeType = mimeType == null || mimeType.trim().isEmpty()
+                    ? "application/octet-stream"
+                    : mimeType;
+            Uri pendingUri = null;
+
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     ContentValues values = new ContentValues();
@@ -230,17 +281,17 @@ public class LauncherActivity extends Activity {
                     values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Evolução Clínica");
                     values.put(MediaStore.Downloads.IS_PENDING, 1);
 
-                    Uri fileUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-                    if (fileUri == null) return false;
+                    pendingUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                    if (pendingUri == null) return false;
 
-                    try (OutputStream output = getContentResolver().openOutputStream(fileUri)) {
+                    try (OutputStream output = getContentResolver().openOutputStream(pendingUri)) {
                         if (output == null) throw new IllegalStateException("Não foi possível abrir o arquivo no Downloads.");
                         output.write(bytes);
                     }
 
                     values.clear();
                     values.put(MediaStore.Downloads.IS_PENDING, 0);
-                    getContentResolver().update(fileUri, values, null, null);
+                    getContentResolver().update(pendingUri, values, null, null);
                 } else {
                     File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
                     if (downloadsDirectory == null) return false;
@@ -251,9 +302,12 @@ public class LauncherActivity extends Activity {
                     }
                 }
 
-                runOnUiThread(() -> Toast.makeText(LauncherActivity.this, "Arquivo salvo em Downloads", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(LauncherActivity.this, "PDF salvo em Downloads", Toast.LENGTH_SHORT).show());
                 return true;
             } catch (Exception exception) {
+                if (pendingUri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    getContentResolver().delete(pendingUri, null, null);
+                }
                 Log.e(LOG_TAG, "Não foi possível salvar o arquivo", exception);
                 return false;
             }
