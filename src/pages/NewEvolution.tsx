@@ -25,60 +25,115 @@ type AudioEvolutionItem = {
   name: string;
 };
 
+let activeAudioStopper: (() => void) | null = null;
+
 const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fallbackContextRef = useRef<AudioContext | null>(null);
   const fallbackSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const isPlayingRef = useRef(false);
+  const isStartingRef = useRef(false);
+  const playbackAttemptRef = useRef(0);
+  const stopPlaybackRef = useRef<() => void>(() => undefined);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackError, setPlaybackError] = useState('');
+
+  const setPlaying = (playing: boolean) => {
+    isPlayingRef.current = playing;
+    setIsPlaying(playing);
+  };
+
+  const stopPlayback = () => {
+    playbackAttemptRef.current += 1;
+    isStartingRef.current = false;
+    audioRef.current?.pause();
+
+    if (fallbackSourceRef.current) {
+      try {
+        fallbackSourceRef.current.stop();
+      } catch {
+        // A source that already ended cannot be stopped a second time.
+      }
+      fallbackSourceRef.current = null;
+    }
+
+    setPlaying(false);
+    activeAudioStopper = null;
+  };
+
+  stopPlaybackRef.current = stopPlayback;
 
   const togglePlayback = async () => {
     const audio = audioRef.current;
     if (!audio) return;
 
     setPlaybackError('');
-    if (audio.paused) {
+    if (isPlayingRef.current || fallbackSourceRef.current) {
+      stopPlayback();
+      return;
+    }
+    if (isStartingRef.current) return;
+
+    activeAudioStopper?.();
+    activeAudioStopper = stopPlaybackRef.current;
+    isStartingRef.current = true;
+    const attempt = playbackAttemptRef.current + 1;
+    playbackAttemptRef.current = attempt;
+
+    try {
+      await audio.play();
+      if (playbackAttemptRef.current !== attempt) {
+        audio.pause();
+        return;
+      }
+
+      setPlaying(true);
+    } catch (error) {
       try {
-        await audio.play();
-        setIsPlaying(true);
-      } catch (error) {
-        try {
-          const AudioContextConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-          if (!AudioContextConstructor) throw error;
-          const context = fallbackContextRef.current || new AudioContextConstructor();
-          fallbackContextRef.current = context;
-          if (context.state === 'suspended') await context.resume();
-          const buffer = await context.decodeAudioData(await item.blob.arrayBuffer());
-          const source = context.createBufferSource();
-          source.buffer = buffer;
-          source.connect(context.destination);
-          source.onended = () => {
-            fallbackSourceRef.current = null;
-            setIsPlaying(false);
-          };
-          fallbackSourceRef.current = source;
-          source.start();
-          setIsPlaying(true);
-        } catch (fallbackError) {
-          console.error('[Audio] Falha ao iniciar reprodução', {
-            error,
-            fallbackError,
-            mimeType: item.blob.type,
-            bytes: item.blob.size,
-          });
-          setIsPlaying(false);
+        const AudioContextConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!AudioContextConstructor) throw error;
+        const context = fallbackContextRef.current || new AudioContextConstructor();
+        fallbackContextRef.current = context;
+        if (context.state === 'suspended') await context.resume();
+        const buffer = await context.decodeAudioData(await item.blob.arrayBuffer());
+        if (playbackAttemptRef.current !== attempt) return;
+
+        const source = context.createBufferSource();
+        source.buffer = buffer;
+        source.connect(context.destination);
+        source.onended = () => {
+          if (fallbackSourceRef.current !== source) return;
+          fallbackSourceRef.current = null;
+          if (playbackAttemptRef.current === attempt) {
+            isStartingRef.current = false;
+            setPlaying(false);
+            if (activeAudioStopper === stopPlaybackRef.current) activeAudioStopper = null;
+          }
+        };
+        fallbackSourceRef.current = source;
+        source.start();
+        setPlaying(true);
+      } catch (fallbackError) {
+        console.error('[Audio] Falha ao iniciar reprodução', {
+          error,
+          fallbackError,
+          mimeType: item.blob.type,
+          bytes: item.blob.size,
+        });
+        if (playbackAttemptRef.current === attempt) {
+          setPlaying(false);
           setPlaybackError('Este áudio não pôde ser reproduzido neste dispositivo.');
         }
+      } finally {
+        if (playbackAttemptRef.current === attempt) isStartingRef.current = false;
       }
-    } else {
-      audio.pause();
-      if (fallbackSourceRef.current) {
-        fallbackSourceRef.current.stop();
-        fallbackSourceRef.current = null;
-      }
-      setIsPlaying(false);
     }
   };
+
+  useEffect(() => () => {
+    stopPlaybackRef.current();
+    void fallbackContextRef.current?.close();
+  }, []);
 
   return (
     <div className="space-y-2">
@@ -87,7 +142,13 @@ const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
         src={item.url}
         preload="metadata"
         className="hidden"
-        onEnded={() => setIsPlaying(false)}
+        onEnded={() => {
+          if (!fallbackSourceRef.current) {
+            isStartingRef.current = false;
+            setPlaying(false);
+            if (activeAudioStopper === stopPlaybackRef.current) activeAudioStopper = null;
+          }
+        }}
         onError={(event) => {
           const mediaError = event.currentTarget.error;
           console.error('[Audio] Falha na reprodução', {
@@ -96,7 +157,7 @@ const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
             mimeType: item.blob.type,
             bytes: item.blob.size,
           });
-          setIsPlaying(false);
+          if (!fallbackSourceRef.current) setPlaying(false);
         }}
       />
       <button
