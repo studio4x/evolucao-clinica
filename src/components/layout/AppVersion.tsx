@@ -1,8 +1,8 @@
 import React from 'react';
 
-export const APP_VERSION = "v1.10.573";
+export const APP_VERSION = "v1.10.574";
 
-export const PLAY_STORE_VERSION = "1.0.35";
+export const PLAY_STORE_VERSION = "1.0.36";
 
 interface AppVersionProps {
   collapsed?: boolean;

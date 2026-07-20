@@ -25,6 +25,21 @@ const sanitizeFileName = (value: string) => {
     .replace(/^_+|_+$/g, '') || 'Paciente';
 };
 
+const normalizePdfText = (value: string) => {
+  return String(value || '')
+    .replace(/\r\n?/g, '\n')
+    // The standard jsPDF fonts use WinAnsi and cannot render emoji or box-drawing glyphs.
+    .replace(/📅/gu, '')
+    .replace(/🔒/gu, '')
+    .replace(/[─━═]/gu, '-')
+    .replace(/[‐‑‒–—―]/gu, '-')
+    .replace(/[“”]/gu, '"')
+    .replace(/[‘’]/gu, "'")
+    .replace(/…/gu, '...')
+    // Keep Latin-1 characters (including Portuguese accents) and the supported bullet.
+    .replace(/[^\u0000-\u00FF\u2022\n]/gu, '');
+};
+
 export const generateProntuarioPDF = ({
   content,
   patient,
@@ -108,36 +123,44 @@ export const generateProntuarioPDF = ({
     }
   };
 
-  const lines = String(content || '').replace(/\r\n/g, '\n').split('\n');
+  const lines = normalizePdfText(content).split('\n');
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed) {
-      y += 4;
+      y += 3;
       continue;
     }
 
-    if (/^={5,}$/.test(trimmed) || /^-{5,}$/.test(trimmed)) {
+    if (/^[=_-]{5,}$/.test(trimmed)) {
       ensureSpace(4);
       doc.setDrawColor(210, 205, 200);
       doc.setLineWidth(0.2);
       doc.line(margin, y, pageWidth - margin, y);
-      y += 5;
+      y += 4;
       continue;
     }
 
-    const isHeading = /^(#{1,6}\s+|EVOLUÇÃO CLÍNICA\b)/i.test(trimmed);
-    const text = trimmed.replace(/^#{1,6}\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1');
-    doc.setFont('Helvetica', isHeading ? 'bold' : 'normal');
-    doc.setFontSize(isHeading ? 10.5 : 9.5);
+    const text = trimmed
+      .replace(/^#{1,6}\s+/, '')
+      .replace(/\*\*([^*]+)\*\*/g, '$1');
+    const isSessionHeading = /^DATA DA SESSÃO\s*:/i.test(text);
+    const isSystemHeading = /^REGISTRO DE INSERÇÃO SISTÊMICA\b/i.test(text);
+    const isSectionHeading = /^(EVOLUÇÃO(?: CLÍNICA)?\s*:|TRANSCRIÇÃO DO TRECHO\s*:|EVOLUÇÃO CLÍNICA\s*-)/i.test(text);
+    const isHeading = isSessionHeading || isSystemHeading || isSectionHeading;
+    const isSignedNotice = /^\[Documento Assinado|^\[Rascunho\]/i.test(text);
+    const fontStyle = isHeading ? 'bold' : isSignedNotice ? 'italic' : 'normal';
+    const fontSize = isSessionHeading ? 10.5 : isHeading ? 10 : 9.5;
+    doc.setFont('Helvetica', fontStyle);
+    doc.setFontSize(fontSize);
     doc.setTextColor(isHeading ? primary.r : 28, isHeading ? primary.g : 25, isHeading ? primary.b : 22);
 
     const wrapped = doc.splitTextToSize(text, contentWidth);
     for (const wrappedLine of wrapped) {
       ensureSpace(6);
       doc.text(wrappedLine, margin, y);
-      y += isHeading ? 6 : 5;
+      y += isHeading ? 5.5 : 5;
     }
-    y += isHeading ? 2 : 1.5;
+    y += isHeading ? 2.5 : 1.5;
   }
 
   ensureSpace(28);
