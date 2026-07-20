@@ -48,8 +48,6 @@ public class LauncherActivity extends Activity {
         swipeRefreshLayout.setOnRefreshListener(() -> webView.reload());
 
         webView = new WebView(this);
-        // Evita falhas de composição de camadas (overlays e modais) em alguns WebViews Android.
-        webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
         configureWebView(webView);
         swipeRefreshLayout.addView(webView);
         setContentView(swipeRefreshLayout);
@@ -76,7 +74,7 @@ public class LauncherActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setSupportZoom(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " EvolucaoClinicaApp/30");
+        settings.setUserAgentString(settings.getUserAgentString() + " EvolucaoClinicaApp/31");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(view, true);
 

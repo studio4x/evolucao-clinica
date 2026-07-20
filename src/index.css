@@ -51,23 +51,25 @@
   }
 }
 
-/* Compatibilidade com WebView Android: filtros e animações de entrada em
-   camadas fixed podem ocultar o conteúdo interno dos modais. */
-@media (max-width: 767px) {
-  .backdrop-blur-xs,
-  .backdrop-blur-sm,
-  .backdrop-blur-md {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
+/* Compatibilidade com WebView do App: filtros e animações de entrada em
+   camadas fixed podem falhar ou congelar a renderização dos modais. */
+.is-webview .backdrop-blur-xs,
+.is-webview .backdrop-blur-sm,
+.is-webview .backdrop-blur-md,
+.is-webview .backdrop-blur-lg,
+.is-webview .backdrop-blur {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
 
-  .animate-in,
-  .animate-fade-in,
-  .animate-fadeIn {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
+.is-webview .animate-in,
+.is-webview .animate-fade-in,
+.is-webview .animate-fadeIn,
+.is-webview .animate-scaleIn {
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
 }
 
 /* Estilos de Impressão Limpa */
