@@ -278,7 +278,7 @@ public class LauncherActivity extends Activity {
                     ContentValues values = new ContentValues();
                     values.put(MediaStore.Downloads.DISPLAY_NAME, safeName);
                     values.put(MediaStore.Downloads.MIME_TYPE, safeMimeType);
-                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Evolução Clínica");
+                    values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
                     values.put(MediaStore.Downloads.IS_PENDING, 1);
 
                     pendingUri = getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
@@ -302,7 +302,7 @@ public class LauncherActivity extends Activity {
                     }
                 }
 
-                runOnUiThread(() -> Toast.makeText(LauncherActivity.this, "PDF salvo em Downloads", Toast.LENGTH_SHORT).show());
+                runOnUiThread(() -> Toast.makeText(LauncherActivity.this, "PDF salvo na pasta Downloads", Toast.LENGTH_SHORT).show());
                 return true;
             } catch (Exception exception) {
                 if (pendingUri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
