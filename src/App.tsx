@@ -47,6 +47,7 @@ import { CookieConsent } from './components/CookieConsent';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl } from './utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
+import { PermissionNotice } from './components/common/PermissionNotice';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 
@@ -561,6 +562,7 @@ export default function App() {
     <Router>
       <CookieConsent />
       <InstallPrompt />
+      <PermissionNotice />
       <SpeedInsights />
       
       <Suspense fallback={<SplashScreen message="Carregando..." />}>
