@@ -85,6 +85,8 @@ Dependendo dos recursos habilitados no ambiente, o backend também pode usar:
 
 Para detalhes sobre como atualizar as versões do aplicativo móvel, baixar os novos ícones, gerar novos arquivos `.apk` ou `.aab` e enviá-los para a Google Play Store, consulte o guia passo a passo em [PLAY_STORE_RUNBOOK.md](file:///c:/PLATAFORMAS%20VS%20CODE/EVOLUÇÃO%20CLINICA/evolucao-clinica/PLAY_STORE_RUNBOOK.md).
 
+Regra de versionamento: `PLAY_STORE_VERSION` deve ser sempre `1.0.<versionCode>`; por exemplo, `versionCode 41` corresponde a `1.0.41`.
+
 ## Deploy
 
 O repositório já inclui configuração compatível com ambientes de deploy baseados em Vercel.

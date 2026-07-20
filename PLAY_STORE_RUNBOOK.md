@@ -20,10 +20,21 @@ graph TD
 
 ## 🛠️ Passo a Passo Detalhado
 
-### Passo 1: Atualizar as Versões no Frontend
-Abra o arquivo [AppVersion.tsx](file:///c:/PLATAFORMAS%20VS%20CODE/EVOLUÇÃO%20CLINICA/evolucao-clinica/src/components/layout/AppVersion.tsx) e incremente os números:
-* `APP_VERSION`: Versão de exibição da build web (ex: `v1.10.409`).
-* `PLAY_STORE_VERSION`: Versão de exibição na loja (ex: `1.0.11`).
+### Passo 1: Atualizar as Versões no Frontend e no Android
+
+Antes de alterar o frontend, determine o `versionCode` numérico em `app/build.gradle`. Esse número é a fonte de verdade para a versão da Play Store:
+
+1. Defina `PLAY_STORE_VERSION` em [AppVersion.tsx](file:///c:/PLATAFORMAS%20VS%20CODE/EVOLUÇÃO%20CLINICA/evolucao-clinica/src/components/layout/AppVersion.tsx) como `1.0.<versionCode>`.
+2. Mantenha `versionCode` e `versionName` em `app/build.gradle` com o mesmo número.
+3. Ao executar a atualização do Bubblewrap, confira se `twa-manifest.json` ficou com o mesmo `appVersionCode` e `appVersionName`.
+4. Atualize `APP_VERSION` com a versão exibida no rodapé, seguindo o padrão `v1.10.X` para mudanças pequenas.
+
+Exemplos:
+
+* `versionCode 41` → `PLAY_STORE_VERSION = "1.0.41"`.
+* `versionCode 46` → `PLAY_STORE_VERSION = "1.0.46"`.
+
+Nunca incremente `PLAY_STORE_VERSION` separadamente do `versionCode`.
 
 ### Passo 2: Compilar o Frontend
 Gere os novos arquivos estáticos de produção do React rodando no terminal:

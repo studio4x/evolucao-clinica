@@ -10,6 +10,12 @@ These instructions apply to any AI agent working in this repository.
 - To force CI bump, set `HCM_BUMP_IN_CI=1`.
 - This rule is mandatory regardless of active chat session or agent identity.
 
+## Android / Play Store Version Rule
+
+- `PLAY_STORE_VERSION` in `src/components/layout/AppVersion.tsx` must always be `1.0.<versionCode>`, using the numeric `versionCode` from `app/build.gradle`.
+- Example: `versionCode 41` means `PLAY_STORE_VERSION = "1.0.41"`.
+- Keep `versionName` in `app/build.gradle` and `appVersionCode`/`appVersionName` in `twa-manifest.json` synchronized with the same number when generating an Android bundle.
+
 ## Required Build Commands
 - `npm run build`
 - `npm run build:dev`
