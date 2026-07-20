@@ -646,10 +646,25 @@ export default function NewEvolution() {
   }, [isAuthReady, recoveredDraft, id]);
 
   const handleOpenModal = async () => {
-    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
     setIsModalOpen(true);
-    setModalLoading(true);
     setModalError('');
+
+    if (!patient) {
+      setModalError('O paciente ainda não foi carregado. Tente novamente em instantes.');
+      return;
+    }
+
+    if (!patient.google_doc_id) {
+      setModalError('Este paciente não possui um prontuário Google Docs vinculado.');
+      return;
+    }
+
+    if (!hasClinicalAccess || !googleAccessToken) {
+      setModalError('Sua conexão com o Google expirou ou não possui as permissões clínicas necessárias. Renove a autenticação para editar a transcrição.');
+      return;
+    }
+
+    setModalLoading(true);
     try {
       const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
       setModalText(content);
@@ -1468,6 +1483,7 @@ export default function NewEvolution() {
                   <span>Acessar no Google Drive</span>
                 </a>
                 <button
+                  type="button"
                   onClick={handleOpenModal}
                   className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 font-medium transition-colors text-sm"
                 >
@@ -1582,6 +1598,7 @@ export default function NewEvolution() {
                   )}
                   {hasClinicalAccess && (
                     <button
+                      type="button"
                       onClick={handleOpenModal}
                       className="px-4 py-2 bg-stone-800 text-white rounded-xl hover:bg-stone-700 text-sm font-medium transition-colors"
                     >
