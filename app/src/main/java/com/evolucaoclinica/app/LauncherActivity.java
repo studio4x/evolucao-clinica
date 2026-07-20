@@ -106,7 +106,7 @@ public class LauncherActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setTextZoom(100);
         settings.setSupportMultipleWindows(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " EvolucaoClinicaApp/31");
+        settings.setUserAgentString(settings.getUserAgentString() + " EvolucaoClinicaApp/37");
 
         view.setOverScrollMode(View.OVER_SCROLL_NEVER);
         view.setVerticalScrollBarEnabled(false);
