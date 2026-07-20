@@ -3769,13 +3769,7 @@ app.post("/api/migrations/analyze-chunk", requireAuth, async (req: any, res) => 
     const { data: prof, error: profError } = await supabaseAdmin.from("professionals").select("role").eq("id", user.id).single();
     if (profError || !prof || prof.role !== "admin") return res.status(403).json({ error: "Apenas administradores podem usar esta ferramenta." });
 
-    let apiKey = "";
-    try {
-      const { data: settingsData, error: settingsError } = await supabaseAdmin.from("settings").select("api_key").eq("id", "gemini").single();
-      if (!settingsError && settingsData?.api_key) apiKey = settingsData.api_key;
-    } catch (e) { }
-
-    if (!apiKey) apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
+    const { apiKey } = await getGeminiSettings();
     if (!apiKey) return res.status(500).json({ error: "Chave do Gemini ausente no servidor." });
 
     const ai = new GoogleGenAI({ apiKey });
@@ -4932,24 +4926,7 @@ app.post("/api/patients/:id/ai-report", requireAuth, requireActiveSubscription, 
     }
 
     // E. Configurar a chave do Gemini
-    let apiKey = "";
-    try {
-      const { data: settingsData, error: settingsError } = await supabaseAdmin
-        .from("settings")
-        .select("api_key")
-        .eq("id", "gemini")
-        .single();
-      if (!settingsError && settingsData?.api_key) {
-        apiKey = settingsData.api_key;
-      }
-    } catch (e) {
-      console.warn("Erro ao ler chave do Gemini do banco:", e);
-    }
-
-    if (!apiKey) {
-      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
-    }
-
+    const { apiKey } = await getGeminiSettings();
     if (!apiKey) {
       return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
     }
@@ -5256,24 +5233,7 @@ app.post("/api/patients/:id/semantic-index", requireAuth, requireActiveSubscript
     }
 
     // Obter chave do Gemini
-    let apiKey = "";
-    try {
-      const { data: settingsData, error: settingsError } = await supabaseAdmin
-        .from("settings")
-        .select("api_key")
-        .eq("id", "gemini")
-        .single();
-      if (!settingsError && settingsData?.api_key) {
-        apiKey = settingsData.api_key;
-      }
-    } catch (e) {
-      console.warn("Erro ao ler chave do Gemini do banco:", e);
-    }
-
-    if (!apiKey) {
-      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
-    }
-
+    const { apiKey } = await getGeminiSettings();
     if (!apiKey) {
       return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
     }
@@ -5349,24 +5309,7 @@ app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscrip
     }
 
     // Obter chave do Gemini
-    let apiKey = "";
-    try {
-      const { data: settingsData, error: settingsError } = await supabaseAdmin
-        .from("settings")
-        .select("api_key")
-        .eq("id", "gemini")
-        .single();
-      if (!settingsError && settingsData?.api_key) {
-        apiKey = settingsData.api_key;
-      }
-    } catch (e) {
-      console.warn("Erro ao ler chave do Gemini do banco:", e);
-    }
-
-    if (!apiKey) {
-      apiKey = process.env.GEMINI_API_KEY_REAL || process.env.GEMINI_API_KEY || "";
-    }
-
+    const { apiKey } = await getGeminiSettings();
     if (!apiKey) {
       return res.status(500).json({ error: "Configuração do Gemini (chave de API) ausente no servidor." });
     }
