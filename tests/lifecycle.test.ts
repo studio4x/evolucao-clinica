@@ -37,10 +37,10 @@ for (const removedRuleKey of ['logged_in_without_patient', 'patient_without_link
   assert.equal(evaluateKnownRule({ id: removedRuleKey, rule_key: removedRuleKey, name: removedRuleKey, rule_type: 'state', priority: 80, cooldown_hours: 96, delay_minutes: 0, enabled: true, message_config: {} }, baseState, now), null);
 }
 assert.equal(getContextualActionPendingAt(baseState), baseState.firstLoginAt);
-assert.equal(getNextBestAction(baseState).label, 'Cadastrar primeiro paciente');
-assert.equal(getNextBestAction(baseState).ctaLabel, 'Cadastrar paciente');
-assert.equal(getNextBestAction({ ...baseState, patientsCount: 1 }).label, 'Criar ou vincular um prontuário');
-assert.equal(getNextBestAction({ ...baseState, patientsCount: 1, linkedRecordsCount: 1, evolutionsCount: 1 }).label, 'Consultar o histórico do paciente');
+assert.equal(getNextBestAction(baseState, now).label, 'Cadastrar primeiro paciente');
+assert.equal(getNextBestAction(baseState, now).ctaLabel, 'Cadastrar paciente');
+assert.equal(getNextBestAction({ ...baseState, patientsCount: 1 }, now).label, 'Criar ou vincular um prontuário');
+assert.equal(getNextBestAction({ ...baseState, patientsCount: 1, linkedRecordsCount: 1, evolutionsCount: 1 }, now).label, 'Consultar o histórico do paciente');
 assert.equal(getSubscriberNextBestAction(baseState).label, 'Cadastre seu primeiro paciente');
 assert.equal(getSubscriberNextBestAction({ ...baseState, patientsCount: 1, linkedRecordsCount: 1, evolutionsCount: 1 }).ctaLabel, 'Registrar atendimento');
 assert.equal(getNextBestAction({ ...baseState, subscriptionStatus: 'canceled', trialEndsAt: '2026-07-15T12:00:00.000Z' }, now).label, 'Conhecer os planos disponíveis');
