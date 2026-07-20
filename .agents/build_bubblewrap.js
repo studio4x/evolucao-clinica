@@ -97,6 +97,14 @@ function applyFixes() {
   // Set compileSdkVersion to 36
   buildGradleContent = buildGradleContent.replace(/compileSdkVersion\s+\d+/, 'compileSdkVersion 36');
   
+  // Garante a inclusao da dependência SwipeRefreshLayout que o LauncherActivity customizado utiliza
+  if (!buildGradleContent.includes('androidx.swiperefreshlayout:swiperefreshlayout')) {
+    buildGradleContent = buildGradleContent.replace(
+      'dependencies {',
+      "dependencies {\n    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'"
+    );
+  }
+  
   fs.writeFileSync(buildGradlePath, buildGradleContent);
   console.log('- app/build.gradle configured.');
 
@@ -127,6 +135,14 @@ function applyFixes() {
 
 async function main() {
   try {
+    // Realiza backup do LauncherActivity.java customizado para evitar que o Bubblewrap o sobrescreva com o template padrão de TWA
+    const launcherActivityPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'evolucaoclinica', 'app', 'LauncherActivity.java');
+    let launcherActivityBackup = null;
+    if (fs.existsSync(launcherActivityPath)) {
+      launcherActivityBackup = fs.readFileSync(launcherActivityPath, 'utf8');
+      console.log('- Custom LauncherActivity.java backed up.');
+    }
+
     // Step 1: Run update to apply manifest changes (and download new icons)
     console.log('=== STEP 1: RUNNING BUBBLEWRAP UPDATE ===');
     await runCommand('npx', ['@bubblewrap/cli', 'update'], [
@@ -136,6 +152,12 @@ async function main() {
     // Step 2: Apply gradle configuration overrides
     console.log('=== STEP 2: APPLYING OVERRIDES ===');
     applyFixes();
+
+    // Restaura o LauncherActivity.java customizado se necessário
+    if (launcherActivityBackup && fs.existsSync(launcherActivityPath)) {
+      fs.writeFileSync(launcherActivityPath, launcherActivityBackup, 'utf8');
+      console.log('- LauncherActivity.java restored from backup (preventing Bubblewrap overwrite).');
+    }
 
     // Step 3: Run build and sign
     console.log('=== STEP 3: RUNNING BUBBLEWRAP BUILD ===');
