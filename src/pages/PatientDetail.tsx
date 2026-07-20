@@ -13,6 +13,7 @@ import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogl
 import DOMPurify from 'dompurify';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { generateReportPDF } from '../utils/reportPdf';
+import { downloadPdfFile, generateProntuarioPDF, getProntuarioPdfFileName } from '../utils/prontuarioPdf';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 
 // Converte Markdown para HTML e remove conteúdo potencialmente perigoso antes da renderização
@@ -550,6 +551,29 @@ export default function PatientDetail() {
     setShowPrintFilterModal(true);
   };
 
+  const downloadProntuarioPdf = async (content: string, documentType: string, periodLabel = '') => {
+    let logoBase64: string | null = null;
+    const logoUrl = getLogoUrl();
+    if (logoUrl) {
+      try {
+        logoBase64 = await getBase64ImageFromUrl(logoUrl);
+      } catch (error) {
+        console.warn('[PDF] Continuando sem logotipo:', error);
+      }
+    }
+
+    const doc = generateProntuarioPDF({
+      content,
+      patient,
+      professional,
+      siteConfig,
+      documentType,
+      periodLabel,
+      logoBase64
+    });
+    downloadPdfFile(doc, getProntuarioPdfFileName(patient?.full_name));
+  };
+
   const handleExecutePrintProntuario = async () => {
     setPrintSignatureInfo(null);
     setShowPrintFilterModal(false);
@@ -577,15 +601,10 @@ export default function PatientDetail() {
 
       try {
         const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
-        setProntuarioDocContent(content);
-        setPrintMode('prontuario');
-        setPrintDocType('Prontuário de Evoluções Clínicas (Google Docs)');
-        setPrintPeriodLabel('');
-        setTimeout(() => {
-          window.print();
-          document.title = originalTitle;
-          setPrintingProntuario(false);
-        }, 300);
+        await downloadProntuarioPdf(content, 'Prontuário de Evoluções Clínicas (Google Docs)');
+        document.title = originalTitle;
+        setPrintingProntuario(false);
+        alert('Prontuário gerado com sucesso.');
       } catch (err: any) {
         console.error("Erro ao carregar prontuário do Google Docs:", err);
         alert("Erro ao ler prontuário do Google Docs: " + (err.message || err));
@@ -631,22 +650,25 @@ export default function PatientDetail() {
       });
 
       setProntuarioDocContent(contentText);
-      setPrintMode('prontuario');
-      setPrintDocType('Prontuário de Evoluções Clínicas (Plataforma)');
-      setPrintPeriodLabel(start && end 
+      const periodLabel = start && end 
         ? `De ${start.toLocaleDateString('pt-BR')} até ${end.toLocaleDateString('pt-BR')}` 
         : start 
           ? `A partir de ${start.toLocaleDateString('pt-BR')}` 
           : end 
             ? `Até ${end.toLocaleDateString('pt-BR')}` 
-            : 'Todo o Período'
-      );
+            : 'Todo o Período';
 
-      setTimeout(() => {
-        window.print();
+      try {
+        await downloadProntuarioPdf(contentText, 'Prontuário de Evoluções Clínicas (Plataforma)', periodLabel);
         document.title = originalTitle;
         setPrintingProntuario(false);
-      }, 300);
+        alert('Prontuário gerado com sucesso.');
+      } catch (err: any) {
+        console.error('Erro ao gerar PDF do prontuário:', err);
+        document.title = originalTitle;
+        setPrintingProntuario(false);
+        alert('Erro ao gerar o arquivo do prontuário: ' + (err.message || err));
+      }
     }
   };
 
@@ -2735,7 +2757,7 @@ export default function PatientDetail() {
                 className="bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold px-4 py-2 rounded-xl transition-all shadow-sm flex items-center space-x-1.5 cursor-pointer"
               >
                 <Printer size={14} />
-                <span>Iniciar Impressão</span>
+                <span>Gerar arquivo PDF</span>
               </button>
             </div>
           </div>
