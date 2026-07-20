@@ -66,8 +66,40 @@ function runCommand(command, args, promptHandlers, timeoutDuration = 0) {
   });
 }
 
+function ensureOpaqueWebViewTheme() {
+  const valuesDir = path.join(projectDir, 'app', 'src', 'main', 'res', 'values');
+  const stylesPath = path.join(valuesDir, 'styles.xml');
+  const stylesContent = `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        O projeto foi originalmente gerado pelo Bubblewrap para TWA, cujo tema
+        translúcido serve apenas como ponte para o Chrome. O LauncherActivity
+        atual mantém um WebView dentro da própria Activity, portanto precisa de
+        uma janela opaca e acelerada para compor corretamente overlays e modais.
+    -->
+    <style name="EvolucaoClinicaWebViewTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowBackground">@color/backgroundColor</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:windowDisablePreview">false</item>
+        <item name="android:windowContentTransitions">false</item>
+        <item name="android:colorAccent">@color/colorPrimary</item>
+        <item name="android:statusBarColor">@color/colorPrimary</item>
+        <item name="android:navigationBarColor">@color/navigationColor</item>
+    </style>
+</resources>
+`;
+
+  fs.mkdirSync(valuesDir, { recursive: true });
+  if (!fs.existsSync(stylesPath) || fs.readFileSync(stylesPath, 'utf8') !== stylesContent) {
+    fs.writeFileSync(stylesPath, stylesContent, 'utf8');
+    console.log('- Opaque WebView activity theme written to app/src/main/res/values/styles.xml.');
+  }
+}
+
 function applyFixes() {
-  console.log('\nApplying custom gradle fixes to ensure compilation succeeds under SDK 36...');
+  console.log('\nApplying custom gradle and WebView fixes to ensure compilation succeeds under SDK 36...');
 
   // 1. Write local.properties (find user home dir dynamically)
   const userHome = process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\medei';
@@ -97,7 +129,7 @@ function applyFixes() {
   // Set compileSdkVersion to 36
   buildGradleContent = buildGradleContent.replace(/compileSdkVersion\s+\d+/, 'compileSdkVersion 36');
   
-  // Garante a inclusao da dependência SwipeRefreshLayout que o LauncherActivity customizado utiliza
+  // Garante a inclusão da dependência SwipeRefreshLayout que o LauncherActivity customizado utiliza
   if (!buildGradleContent.includes('androidx.swiperefreshlayout:swiperefreshlayout')) {
     buildGradleContent = buildGradleContent.replace(
       'dependencies {',
@@ -108,7 +140,7 @@ function applyFixes() {
   fs.writeFileSync(buildGradlePath, buildGradleContent);
   console.log('- app/build.gradle configured.');
 
-  // 5. Ensure RECORD_AUDIO and MODIFY_AUDIO_SETTINGS permissions are in AndroidManifest.xml
+  // 5. Restore permissions and the opaque/hardware-accelerated theme after Bubblewrap update.
   const manifestPath = path.join(projectDir, 'app', 'src', 'main', 'AndroidManifest.xml');
   if (fs.existsSync(manifestPath)) {
     let manifestContent = fs.readFileSync(manifestPath, 'utf8');
@@ -122,6 +154,28 @@ function applyFixes() {
       modified = true;
       console.log('- RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, INTERNET & ACCESS_NETWORK_STATE permissions added to AndroidManifest.xml');
     }
+
+    const launcherActivityMatch = manifestContent.match(/<activity android:name="LauncherActivity"[\s\S]*?android:exported="true">/);
+    if (launcherActivityMatch) {
+      const originalActivityTag = launcherActivityMatch[0];
+      let activityTag = originalActivityTag
+        .replace(/\s+android:theme="[^"]*"/g, '')
+        .replace(/\s+android:hardwareAccelerated="[^"]*"/g, '')
+        .replace(/\s+android:windowSoftInputMode="[^"]*"/g, '');
+
+      activityTag = activityTag.replace(
+        'android:exported="true">',
+        'android:theme="@style/EvolucaoClinicaWebViewTheme"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize"\n            android:exported="true">'
+      );
+
+      if (activityTag !== originalActivityTag) {
+        manifestContent = manifestContent.replace(originalActivityTag, activityTag);
+        modified = true;
+        console.log('- LauncherActivity configured with opaque theme and hardware acceleration.');
+      }
+    } else {
+      console.log('WARNING: LauncherActivity declaration not found in AndroidManifest.xml.');
+    }
     
     if (modified) {
       fs.writeFileSync(manifestPath, manifestContent, 'utf8');
@@ -130,6 +184,7 @@ function applyFixes() {
     console.log('WARNING: AndroidManifest.xml not found at ' + manifestPath);
   }
 
+  ensureOpaqueWebViewTheme();
   console.log('All fixes applied successfully!\n');
 }
 
@@ -153,8 +208,9 @@ async function main() {
     console.log('=== STEP 2: APPLYING OVERRIDES ===');
     applyFixes();
 
-    // Restaura o LauncherActivity.java customizado se necessário
-    if (launcherActivityBackup && fs.existsSync(launcherActivityPath)) {
+    // Restaura o LauncherActivity.java customizado mesmo que o Bubblewrap tenha removido o arquivo.
+    if (launcherActivityBackup) {
+      fs.mkdirSync(path.dirname(launcherActivityPath), { recursive: true });
       fs.writeFileSync(launcherActivityPath, launcherActivityBackup, 'utf8');
       console.log('- LauncherActivity.java restored from backup (preventing Bubblewrap overwrite).');
     }
