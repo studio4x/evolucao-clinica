@@ -1646,6 +1646,38 @@ app.post("/api/ai/test-model", requireAuth, async (req: any, res) => {
   }
 });
 
+// Endpoint para validar se uma chave do Gemini é válida
+app.post("/api/ai/validate-key", requireAuth, async (req: any, res) => {
+  try {
+    let { key } = req.body;
+
+    // Se não passou chave no body, pega a salva nas configurações
+    if (!key) {
+      const { apiKey } = await getGeminiSettings();
+      key = apiKey;
+    }
+
+    if (!key) {
+      return res.status(400).json({ success: false, error: "Nenhuma chave fornecida ou configurada." });
+    }
+
+    // Chama a API do Gemini para validar a chave (listando modelos com limite de 1 resultado)
+    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${key}&pageSize=1`;
+    const response = await fetch(listUrl);
+    const data = await response.json() as any;
+
+    if (!response.ok) {
+      const errMsg = data?.error?.message || "Chave de API inválida ou erro na API do Gemini.";
+      return res.json({ success: false, error: errMsg });
+    }
+
+    return res.json({ success: true, message: "Chave de API válida!" });
+  } catch (err: any) {
+    console.error("[AI-Validate] Erro ao validar chave Gemini:", err);
+    return res.status(500).json({ success: false, error: err.message || "Erro interno ao validar chave." });
+  }
+});
+
 app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
   let storageAdmin: any = null;
   let audioPathToCleanup: string | null = null;

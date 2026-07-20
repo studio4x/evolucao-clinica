@@ -702,6 +702,8 @@ export default function AdminPanel() {
   const [dbCurrentModel, setDbCurrentModel] = useState(''); // modelo que está salvo no banco
   const [testingModel, setTestingModel] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; error?: string }>>({});
+  const [validateLoading, setValidateLoading] = useState(false);
+  const [validateResult, setValidateResult] = useState<{ success: boolean; message: string } | null>(null);
 
   // Lista de fallback (modelos confirmados para Tier 1 do Google AI Studio)
   const GEMINI_MODELS_FALLBACK = [
@@ -2291,6 +2293,43 @@ export default function AdminPanel() {
       alert(`Erro ao salvar configurações do Gemini: ${error.message}`);
     } finally {
       setSaveLoading(false);
+    }
+  };
+
+  // Validar se a Chave Gemini é Válida
+  const handleValidateKey = async () => {
+    setValidateLoading(true);
+    setValidateResult(null);
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const res = await fetch('/api/ai/validate-key', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ key: newGeminiKey || undefined })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao validar a chave.');
+      }
+
+      if (data.success) {
+        setValidateResult({ success: true, message: data.message || 'Chave de API válida!' });
+      } else {
+        setValidateResult({ success: false, message: data.error || 'Chave de API inválida.' });
+      }
+    } catch (err: any) {
+      console.error("Erro ao validar chave Gemini:", err);
+      setValidateResult({ success: false, message: err.message || 'Erro desconhecido ao validar chave.' });
+    } finally {
+      setValidateLoading(false);
     }
   };
 
@@ -3959,7 +3998,41 @@ export default function AdminPanel() {
                         </div>
                       )}
 
-                      <div className="flex justify-end">
+                      {validateResult && (
+                        <div className={`p-3 border rounded-xl flex items-start space-x-2 text-xs animate-fadeIn ${
+                          validateResult.success
+                            ? 'bg-emerald-50 border-emerald-100 text-emerald-700'
+                            : 'bg-red-50 border-red-100 text-red-700'
+                        }`}>
+                          {validateResult.success ? (
+                            <Check className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                          )}
+                          <span>{validateResult.message}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={handleValidateKey}
+                          disabled={validateLoading || (!newGeminiKey && !currentGeminiKey)}
+                          className="btn-secondary py-3 px-6 text-sm font-semibold flex items-center justify-center space-x-2 border border-brand-border text-brand-text hover:bg-brand-bg transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                        >
+                          {validateLoading ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Validando chave...</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              <span>Validar Chave API</span>
+                            </>
+                          )}
+                        </button>
+
                         <button
                           type="submit"
                           disabled={saveLoading || (!newGeminiKey && !currentGeminiKey)}
