@@ -65,11 +65,37 @@
 .is-webview .animate-in,
 .is-webview .animate-fade-in,
 .is-webview .animate-fadeIn,
-.is-webview .animate-scaleIn {
+.is-webview .animate-scaleIn,
+.is-webview .animate-scale-up {
   animation: none !important;
   opacity: 1 !important;
   transform: none !important;
   transition: none !important;
+}
+
+/* Alguns WebViews Android não preservam o User-Agent customizado da
+   aplicação. Em telas estreitas, mantenha os modais em uma única camada
+   estável mesmo quando a detecção acima não estiver disponível. */
+@media (max-width: 767px) {
+  .backdrop-blur-xs,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .animate-in,
+  .animate-fade-in,
+  .animate-fadeIn,
+  .animate-scaleIn,
+  .animate-scale-up {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
 }
 
 /* Estilos de Impressão Limpa */
