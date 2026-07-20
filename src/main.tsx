@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import { APP_VERSION } from './components/layout/AppVersion';
 import { initAnalytics } from './services/analytics';
+import { installWebViewAudioCompatibility } from './utils/audioWebViewCompatibility';
 
 // Inicializa o Google Analytics
 initAnalytics();
@@ -11,6 +12,7 @@ initAnalytics();
 // Detecta se esta rodando no WebView do App
 if (/EvolucaoClinicaApp/i.test(navigator.userAgent)) {
   document.documentElement.classList.add('is-webview');
+  installWebViewAudioCompatibility();
 }
 
 
