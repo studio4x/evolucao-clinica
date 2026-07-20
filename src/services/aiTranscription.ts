@@ -1,4 +1,5 @@
 import { supabase } from "../supabaseClient";
+import { getAudioDurationFromBlob } from "../utils/audioDuration";
 
 export interface TranscriptionOptions {
   audioBlob: Blob;
@@ -96,6 +97,20 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
     throw new Error("O áudio excede o tamanho máximo permitido de 20 MB por evolução.");
   }
 
+  const detectedAudioDuration = typeof audioDuration === 'number' && Number.isFinite(audioDuration) && audioDuration > 0
+    ? audioDuration
+    : await getAudioDurationFromBlob(audioBlob);
+
+  if (!detectedAudioDuration || !Number.isFinite(detectedAudioDuration)) {
+    throw new Error("Não foi possível identificar a duração do áudio. Reproduza o arquivo ou selecione-o novamente antes de processar.");
+  }
+
+  if (detectedAudioDuration > MAX_AUDIO_DURATION_SECONDS) {
+    throw new Error("O áudio excede o limite máximo de 20 minutos por evolução.");
+  }
+
+  const audioDurationSeconds = Math.max(1, Math.ceil(detectedAudioDuration));
+
   const attemptTranscription = async (): Promise<string> => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -138,7 +153,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
           audioPath,
           mimeType: normalizedMimeType,
           prompt,
-          audioDuration
+          audioDuration: audioDurationSeconds
         })
       });
 

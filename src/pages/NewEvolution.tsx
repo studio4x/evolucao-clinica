@@ -15,6 +15,7 @@ import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, remov
 import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
+import { getAudioDurationFromUrl } from '../utils/audioDuration';
 
 type AudioEvolutionItem = {
   id: string;
@@ -357,36 +358,6 @@ export default function NewEvolution() {
 
   const getTotalAudioDuration = (items: AudioEvolutionItem[]) => {
     return items.reduce((total, item) => total + (item.duration || 0), 0);
-  };
-
-  const getAudioDurationFromUrl = (url: string) => {
-    return new Promise<number>((resolve) => {
-      const audio = new Audio(url);
-      audio.preload = 'metadata';
-      const timeoutId = window.setTimeout(() => resolve(0), 2500);
-      const finish = (duration: number) => {
-        window.clearTimeout(timeoutId);
-        resolve(Number.isFinite(duration) && duration > 0 ? duration : 0);
-      };
-      audio.addEventListener('loadedmetadata', () => {
-        if (audio.duration && audio.duration !== Infinity && !isNaN(audio.duration)) {
-          finish(audio.duration);
-          return;
-        }
-
-        try {
-          audio.currentTime = 1e101;
-        } catch {
-          finish(0);
-        }
-        audio.ontimeupdate = function() {
-          this.ontimeupdate = () => {};
-          audio.currentTime = 0;
-          finish(audio.duration && audio.duration !== Infinity && !isNaN(audio.duration) ? audio.duration : 0);
-        };
-      });
-      audio.addEventListener('error', () => finish(0));
-    });
   };
 
   const getSupportedRecordingMimeType = () => {
@@ -1010,7 +981,7 @@ export default function NewEvolution() {
         const transcription = await transcribeAudio({
           audioBlob: item.blob,
           mimeType: item.blob.type || 'audio/webm',
-          audioDuration: item.duration || 0,
+          audioDuration: item.duration,
           customPrompt: customPrompt || undefined,
           onRetry: (attempt, delay, isFallback) => {
             console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
