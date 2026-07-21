@@ -21,6 +21,7 @@ const ShareTarget = lazyWithRetry(() => import('./pages/ShareTarget'), 'ShareTar
 const Tutorial = lazyWithRetry(() => import('./pages/Tutorial'), 'Tutorial');
 const Subscription = lazyWithRetry(() => import('./pages/Subscription'), 'Subscription');
 const Profile = lazyWithRetry(() => import('./pages/Profile'), 'Profile');
+const AboutApp = lazyWithRetry(() => import('./pages/AboutApp'), 'AboutApp');
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'Notifications');
 const SupportTickets = lazyWithRetry(() => import('./pages/SupportTickets'), 'SupportTickets');
 const SupportTicketDetail = lazyWithRetry(() => import('./pages/SupportTicketDetail'), 'SupportTicketDetail');
@@ -605,6 +606,7 @@ export default function App() {
             <Route path="subscription" element={<Subscription />} />
             <Route path="migration" element={<Migration />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="about" element={<AboutApp />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="preferencias-de-comunicacao" element={<CommunicationPreferences />} />
             <Route path="support" element={<SupportTickets />} />

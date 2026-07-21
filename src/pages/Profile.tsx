@@ -7,7 +7,6 @@ import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, S
 import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
 import { showAlert, showConfirm } from '../store/modalStore';
-import { AboutAppCard } from '../components/profile/AboutAppCard';
 import { 
   getBackupPreferences, 
   updateBackupPreferences, 
@@ -736,8 +735,6 @@ export default function Profile() {
           Gerencie suas informações pessoais e visualize seus detalhes de acesso.
         </p>
       </div>
-
-      <AboutAppCard />
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
         {/* Card Lateral do Avatar */}

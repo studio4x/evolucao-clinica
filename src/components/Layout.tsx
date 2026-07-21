@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb, Info } from 'lucide-react';
 import { AppVersion } from './layout/AppVersion';
 import { UserAvatar } from './common/UserAvatar';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
@@ -135,6 +135,7 @@ export default function Layout() {
     { name: 'Suporte', path: '/painel/support', icon: LifeBuoy },
     { name: 'Sugestões', path: '/painel/sugestoes', icon: Lightbulb },
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
+    { name: 'Sobre o app', path: '/painel/about', icon: Info },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
   ];
 

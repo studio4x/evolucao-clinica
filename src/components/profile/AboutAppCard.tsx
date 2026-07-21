@@ -15,7 +15,7 @@ export function AboutAppCard() {
   const isAndroid = appInfo.platform === 'android';
 
   return (
-    <section className="card overflow-hidden bg-white shadow-sm border border-brand-border/60" aria-labelledby="about-app-title">
+    <section className="card overflow-hidden bg-white shadow-sm border border-brand-border/60" aria-labelledby="about-app-card-title">
       <div className="h-1.5 bg-gradient-to-r from-brand-primary to-brand-accent" />
 
       <div className="p-6 md:p-8 space-y-6">
@@ -24,8 +24,8 @@ export function AboutAppCard() {
             <Info className="h-6 w-6" aria-hidden="true" />
           </div>
           <div className="space-y-1.5">
-            <h2 id="about-app-title" className="text-xl font-display font-semibold text-brand-primary">
-              Sobre o app
+            <h2 id="about-app-card-title" className="text-xl font-display font-semibold text-brand-primary">
+              Evolução Clínica
             </h2>
             <p className="text-sm text-brand-text-muted leading-relaxed max-w-2xl">
               O Evolução Clínica é uma plataforma inteligente de acompanhamento terapêutico criada para apoiar
