@@ -76,14 +76,24 @@ export function GooglePayCheckoutButton({
 }: GooglePayButtonProps) {
   const [availability, setAvailability] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [nativePaymentSupported] = useState(() => {
-    if (typeof window === 'undefined' || !window.NativePaymentBridge?.isPaymentRequestSupported) {
+    if (typeof window === 'undefined') {
       return true;
+    }
+
+    const isNativeApp = /EvolucaoClinicaApp/i.test(window.navigator.userAgent);
+    if (!isNativeApp) return true;
+
+    if (
+      !window.NativePaymentBridge?.isPaymentRequestSupported ||
+      typeof window.PaymentRequest !== 'function'
+    ) {
+      return false;
     }
 
     try {
       return window.NativePaymentBridge.isPaymentRequestSupported();
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -104,19 +114,22 @@ export function GooglePayCheckoutButton({
   }
 
   return (
-    <GooglePayButton
-      environment={paymentSettings.environment}
-      buttonType="subscribe"
-      buttonColor="default"
-      buttonSizeMode="fill"
-      buttonLocale="pt"
-      buttonRadius={8}
-      paymentRequest={getGooglePayRequest(planPrice, paymentSettings)}
-      onLoadPaymentData={onLoadPaymentData}
-      onError={onError}
-      onCancel={onCancel}
-      onReadyToPayChange={handleReadyToPayChange}
-      style={{ width: '100%', height: '48px' }}
-    />
+    <div className={`overflow-hidden rounded-xl bg-brand-primary p-1 shadow-sm ${className}`}>
+      <GooglePayButton
+        environment={paymentSettings.environment}
+        buttonType="subscribe"
+        buttonColor="white"
+        buttonSizeMode="fill"
+        buttonLocale="pt"
+        buttonRadius={8}
+        paymentRequest={getGooglePayRequest(planPrice, paymentSettings)}
+        onLoadPaymentData={onLoadPaymentData}
+        onError={onError}
+        onCancel={onCancel}
+        onReadyToPayChange={handleReadyToPayChange}
+        className="block w-full overflow-hidden rounded-lg"
+        style={{ width: '100%', height: '48px' }}
+      />
+    </div>
   );
 }
