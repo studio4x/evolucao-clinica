@@ -55,6 +55,8 @@ import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 
 const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
+const AUTH_SESSION_TIMEOUT_MS = 15000;
+const isNativeWebView = typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -331,6 +333,7 @@ export default function App() {
           const hasPersistedGoogleScopes = latestState.googleGrantedScopes.length > 0;
           const tokenAge = latestState.googleAccessTokenIssuedAt ? Date.now() - latestState.googleAccessTokenIssuedAt : Number.POSITIVE_INFINITY;
           const shouldSilentlyRefreshGoogle =
+            !isNativeWebView &&
             sameGoogleUser &&
             hasPersistedGoogleScopes &&
             !session.provider_token &&
@@ -544,10 +547,32 @@ export default function App() {
       }
     };
 
-    // Pega a sessão inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      handleAuthSession(session);
-    });
+    // Pega a sessão inicial. O limite evita que uma falha de rede, armazenamento
+    // ou redirecionamento OAuth deixe o app preso indefinidamente no splash.
+    const loadInitialSession = async () => {
+      let sessionTimeoutId: number | undefined;
+
+      try {
+        const result = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<{ data: { session: null } }>((resolve) => {
+            sessionTimeoutId = window.setTimeout(() => {
+              console.warn('[Auth] Tempo limite ao recuperar a sessão inicial.');
+              resolve({ data: { session: null } });
+            }, AUTH_SESSION_TIMEOUT_MS);
+          })
+        ]);
+
+        await handleAuthSession(result.data.session);
+      } catch (error) {
+        console.error('[Auth] Falha ao recuperar a sessão inicial:', error);
+        await handleAuthSession(null);
+      } finally {
+        if (sessionTimeoutId !== undefined) window.clearTimeout(sessionTimeoutId);
+      }
+    };
+
+    void loadInitialSession();
 
     // Escuta mudanças no Auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
