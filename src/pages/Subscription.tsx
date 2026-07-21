@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import { GooglePayCheckoutButton, describeGooglePayError } from '../components/payments/GooglePayButton';
-import { DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
+import { StripeSubscriptionButton, type ConfirmedBillingResult } from '../components/payments/StripeSubscriptionButton';
 import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
-import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
+import { createStripeCustomerPortalSession, hasNativeBillingBridge } from '../services/billing';
 
 const DEFAULT_PLANS = [
   {
@@ -141,36 +140,13 @@ function getPlanBenefitsCopy(plan: SubscriptionPlanLike | undefined, fallbackId:
   };
 }
 
-function getGooglePayPaymentLabel(paymentData: any) {
-  const paymentMethodData = paymentData?.paymentMethodData || {};
-  const description = String(paymentMethodData.description || '').trim();
-  if (description) {
-    return `Google Pay (${description})`;
-  }
-
-  const network = String(paymentMethodData.info?.cardNetwork || '').trim();
-  const cardDetails = String(paymentMethodData.info?.cardDetails || '').trim();
-
-  if (network && cardDetails) {
-    const formattedNetwork = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
-    return `Google Pay (${formattedNetwork} **** ${cardDetails})`;
-  }
-
-  if (network) {
-    const formattedNetwork = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
-    return `Google Pay (${formattedNetwork})`;
-  }
-
-  return 'Google Pay';
-}
-
 function buildPaymentSummaryLines(plan: SubscriptionPlanLike | undefined, data: any) {
   const lines = [
     `Plano: ${getPlanDisplayName(plan, plan?.id || '')}`,
     data?.amountPaid ? `Valor: ${formatCurrencyValue(Number(data.amountPaid), String(data.currency || 'BRL'))}` : null,
     data?.paymentLabel ? `Forma de pagamento: ${data.paymentLabel}` : null,
-    data?.subscriptionId ? `Assinatura Google Pay: ${data.subscriptionId}` : null,
-    data?.invoiceId ? `Fatura Google Pay: ${data.invoiceId}` : null,
+    data?.subscriptionId ? `Assinatura: ${data.subscriptionId}` : null,
+    data?.invoiceId ? `Fatura: ${data.invoiceId}` : null,
     data?.endsAt ? `Próxima renovação: ${new Date(data.endsAt).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -203,11 +179,12 @@ export default function Subscription() {
 
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
-  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
-  const [paymentSettingsStatus, setPaymentSettingsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [paymentErrorByPlan, setPaymentErrorByPlan] = useState<Record<string, string>>({});
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
+  const [billingSubscription, setBillingSubscription] = useState<any>(null);
+  const [managingSubscription, setManagingSubscription] = useState(false);
   const [showPersuadeModal, setShowPersuadeModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedTxForRefund, setSelectedTxForRefund] = useState<any>(null);
@@ -232,34 +209,6 @@ export default function Subscription() {
     const diffDays = diffTime / (1000 * 60 * 60 * 24);
     return diffDays <= 7;
   };
-
-  useEffect(() => {
-    const fetchPaymentSettings = async () => {
-      try {
-        const response = await fetch('/api/payment-settings', {
-          cache: 'no-store'
-        });
-
-        if (!response.ok) {
-          throw new Error('Falha ao carregar configurações públicas de pagamento.');
-        }
-
-        const parsed = await response.json();
-        if (parsed) {
-          setPaymentSettings({
-            ...DEFAULT_PAYMENT_SETTINGS,
-            ...parsed
-          });
-        }
-        setPaymentSettingsStatus('ready');
-      } catch (err) {
-        console.error("Erro ao carregar configurações de pagamento do banco:", err);
-        setPaymentSettingsStatus('error');
-      }
-    };
-    
-    fetchPaymentSettings();
-  }, []);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -300,6 +249,20 @@ export default function Subscription() {
 
   useEffect(() => {
     fetchTransactions();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    const fetchBillingSubscription = async () => {
+      const { data, error } = await supabase
+        .from('billing_subscriptions')
+        .select('provider, plan_id, status, play_product_id')
+        .eq('professional_id', user.id)
+        .maybeSingle();
+      if (error) console.error('[Subscription] Falha ao consultar provedor da assinatura:', error);
+      else setBillingSubscription(data || null);
+    };
+    void fetchBillingSubscription();
   }, [user]);
 
   // Calcula o status e tempo restante
@@ -349,10 +312,13 @@ export default function Subscription() {
           professional_id: user.id,
           stripe_invoice_id: null,
           stripe_subscription_id: null,
-          amount: plan === 'monthly' ? 49.90 : 499.00,
+          amount: plan === 'monthly' ? 39.00 : 199.00,
           currency: 'brl',
           plan_id: plan,
           status: 'paid',
+          payment_provider: 'simulation',
+          provider_transaction_id: `sim-${Date.now()}`,
+          payment_method: 'Pagamento (Simulado)',
           stripe_invoice_url: null,
           invoice_pdf_url: null,
           created_at: new Date().toISOString()
@@ -373,13 +339,13 @@ export default function Subscription() {
       );
 
       const simulatedTxId = `sim-${Date.now().toString().slice(-6)}`;
-      navigate('/checkout/sucess', {
+      navigate('/checkout/success', {
         state: {
           transactionId: simulatedTxId,
           planId: plan,
           planName: plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal',
-          amount: plan === 'yearly' ? 499.00 : 49.90,
-          paymentMethod: 'Simulador Admin (Pix/Checkout)'
+          amount: plan === 'yearly' ? 199.00 : 39.00,
+          paymentMethod: 'Pagamento (Simulado)'
         },
         replace: true
       });
@@ -474,7 +440,7 @@ export default function Subscription() {
       benefits: isSuccess
         ? planDetails.benefits
         : [
-            'Você pode revisar os dados de pagamento no Google Pay.',
+            'Você pode revisar os dados de pagamento no provedor escolhido.',
             'Tente novamente quando quiser refazer a assinatura.',
             'Se houver dúvida, entre em contato com o suporte.'
           ],
@@ -485,87 +451,71 @@ export default function Subscription() {
     });
   };
 
-  const handleGooglePaySuccess = async (plan: 'monthly' | 'yearly', paymentData: any) => {
-    if (!user) return;
-    setLoadingPlan(plan);
-    setSuccessMessage(null);
-    setPaymentModal(null);
+  const handleBillingSuccess = (result: ConfirmedBillingResult) => {
+    const plan = result.planId;
+    const planDetails = getPlanDetails(plan);
+    const paymentLabel = result.provider === 'google_play'
+      ? 'Google Play Billing'
+      : 'Stripe (cartão ou Google Pay)';
 
-    try {
-      const token = paymentData.paymentMethodData?.tokenizationData?.token;
-      const paymentLabel = getGooglePayPaymentLabel(paymentData);
-      console.log("Token do Google Pay recebido com sucesso:", token);
-      
-      if (!token) {
-        throw new Error("Token de pagamento não retornado pela API do Google Pay.");
-      }
-
-      // Invoca a Edge Function do Supabase para processar a assinatura real na Stripe
-      const { data, error: functionError } = await supabase.functions.invoke('process-google-pay', {
-        body: {
-          userId: user.id,
-          planId: plan,
-          paymentToken: token,
-          paymentDescriptor: paymentLabel
-        }
-      });
-
-      if (functionError) {
-        const functionMessage = await resolveSupabaseFunctionErrorMessage(
-          functionError,
-          "Ocorreu um erro no processamento do pagamento."
-        );
-        throw new Error(functionMessage);
-      }
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Ocorreu um erro no processamento do pagamento.");
-      }
-
-      // Atualiza o estado global do Zustand com os dados reais retornados pelo backend
-      setProfileInfo(
-        'active', 
-        profileRole || 'therapist',
-        plan,
-        data.status || 'active',
-        data.endsAt,
-        trialEndsAt
-      );
-
-      const transactionId = data.subscriptionId || data.chargeId || data.paymentIntentId || `gpay-${Date.now()}`;
-      navigate('/checkout/sucess', {
-        state: {
-          transactionId,
-          subscriptionId: data.subscriptionId,
-          invoiceId: data.invoiceId,
-          invoiceUrl: data.invoiceUrl,
-          invoicePdfUrl: data.invoicePdfUrl,
-          endsAt: data.endsAt,
-          planId: plan,
-          planName: data.planName || (plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal'),
-          amount: data.amountPaid || (plan === 'yearly' ? 199.00 : 39.00),
-          paymentMethod: paymentLabel
-        },
-        replace: true
-      });
-    } catch (error: any) {
-      console.error("Erro ao processar assinatura via Google Pay:", error);
-      const paymentLabel = getGooglePayPaymentLabel(paymentData);
-      await sendPaymentEmailAndShowModal('error', plan, paymentLabel, { paymentLabel }, error.message || "Erro ao processar pagamento real.");
-    } finally {
-      setLoadingPlan(null);
-    }
+    setProfileInfo(
+      'active',
+      profileRole || 'therapist',
+      plan,
+      'active',
+      result.currentPeriodEnd || null,
+      trialEndsAt
+    );
+    navigate('/checkout/success', {
+      state: {
+        transactionId: result.subscriptionId || `${result.provider}-${Date.now()}`,
+        subscriptionId: result.subscriptionId,
+        endsAt: result.currentPeriodEnd,
+        planId: plan,
+        planName: getPlanDisplayName(planDetails, plan),
+        amount: Number(planDetails.price || 0),
+        paymentMethod: paymentLabel
+      },
+      replace: true
+    });
   };
 
-  const handleGooglePayError = async (plan: 'monthly' | 'yearly', error: any) => {
-    if (!user) return;
-    console.error('Erro na API do Google Pay:', error);
-    setLoadingPlan(plan);
-    setSuccessMessage(null);
-    setPaymentModal(null);
+  const handleBillingError = async (plan: 'monthly' | 'yearly', error: Error) => {
+    console.error('[Subscription] Erro no pagamento:', error);
+    setPaymentErrorByPlan((current) => ({ ...current, [plan]: error.message }));
+    await sendPaymentEmailAndShowModal(
+      'error',
+      plan,
+      'Pagamento seguro',
+      { paymentLabel: 'Pagamento seguro' },
+      error.message
+    );
+  };
 
-    const errorMessage = describeGooglePayError(error);
-    await sendPaymentEmailAndShowModal('error', plan, 'Google Pay', {}, errorMessage);
-    setLoadingPlan(null);
+  const handleManageSubscription = async () => {
+    if (!billingSubscription || managingSubscription) return;
+    setManagingSubscription(true);
+    try {
+      if (billingSubscription.provider === 'google_play') {
+        const productId = billingSubscription.play_product_id ||
+          (billingSubscription.plan_id === 'yearly' ? 'evolucao_yearly' : 'evolucao_monthly');
+        const url = new URL('https://play.google.com/store/account/subscriptions');
+        url.searchParams.set('sku', productId);
+        url.searchParams.set('package', 'com.evolucaoclinica.app');
+        if (hasNativeBillingBridge()) url.searchParams.set('open_external', '1');
+        window.location.assign(url.toString());
+        return;
+      }
+
+      const { portalUrl } = await createStripeCustomerPortalSession();
+      const url = new URL(portalUrl);
+      if (hasNativeBillingBridge()) url.searchParams.set('open_external', '1');
+      window.location.assign(url.toString());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível abrir o gerenciamento.';
+      setPaymentErrorByPlan((current) => ({ ...current, management: message }));
+      setManagingSubscription(false);
+    }
   };
 
   const handleRequestRefund = async () => {
@@ -819,39 +769,47 @@ export default function Subscription() {
 
                 <div className="mt-8 pt-4 space-y-3">
                   {isCurrentPlan ? (
-                    <button
-                      disabled
-                      className="w-full py-3.5 px-4 font-bold rounded-2xl bg-brand-bg text-brand-primary border border-brand-primary/20 cursor-default flex items-center justify-center space-x-2"
-                    >
-                      <CreditCard className="w-5 h-5" />
-                      <span>Plano Ativo</span>
-                    </button>
+                    <div className="space-y-3">
+                      <div className="w-full py-3.5 px-4 font-bold rounded-2xl bg-brand-bg text-brand-primary border border-brand-primary/20 cursor-default flex items-center justify-center space-x-2">
+                        <CreditCard className="w-5 h-5" />
+                        <span>Plano Ativo</span>
+                      </div>
+                      {billingSubscription?.plan_id === plan.id && (
+                        <button
+                          type="button"
+                          onClick={() => void handleManageSubscription()}
+                          disabled={managingSubscription}
+                          className="w-full py-3 px-4 font-semibold rounded-2xl border border-brand-border bg-white text-brand-text hover:bg-brand-bg transition-colors cursor-pointer disabled:opacity-60 flex items-center justify-center gap-2"
+                        >
+                          {managingSubscription && <Loader2 className="w-4 h-4 animate-spin" />}
+                          <span>
+                            Gerenciar pela {billingSubscription.provider === 'google_play' ? 'Google Play' : 'Stripe'}
+                          </span>
+                        </button>
+                      )}
+                      {paymentErrorByPlan.management && (
+                        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-950">
+                          {paymentErrorByPlan.management}
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="space-y-3">
-                      {paymentSettingsStatus === 'loading' && (
-                        <div className="flex min-h-12 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-bg/50 px-4 text-xs text-brand-text-muted">
-                          Carregando configuração segura do Google Pay…
-                        </div>
-                      )}
-                      {paymentSettingsStatus === 'error' && (
+                      {paymentErrorByPlan[plan.id] && (
                         <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-950">
-                          Não foi possível carregar a configuração do Google Pay. Atualize a página e tente novamente.
+                          {paymentErrorByPlan[plan.id]}
                         </div>
                       )}
-                      {paymentSettingsStatus === 'ready' && (
-                        <GooglePayCheckoutButton
-                          key={`${paymentSettings.environment}-${paymentSettings.googleMerchantId}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
-                          planPrice={plan.price}
-                          paymentSettings={paymentSettings}
-                          onLoadPaymentData={(paymentRequest) => {
-                            handleGooglePaySuccess(plan.id, paymentRequest);
-                          }}
-                          onError={(error) => void handleGooglePayError(plan.id, error)}
-                          onCancel={(reason) => {
-                            console.log('Pagamento cancelado pelo usuário:', reason);
-                          }}
-                        />
-                      )}
+                      <StripeSubscriptionButton
+                        planId={plan.id}
+                        disabled={loadingPlan !== null}
+                        onLoadingChange={(loading) => {
+                          setPaymentErrorByPlan((current) => ({ ...current, [plan.id]: '' }));
+                          setLoadingPlan(loading ? plan.id : null);
+                        }}
+                        onSuccess={handleBillingSuccess}
+                        onError={(error) => void handleBillingError(plan.id, error)}
+                      />
                       
                       {profileRole === 'admin' && (
                         <button
@@ -999,7 +957,7 @@ export default function Subscription() {
         )}
       </div>
 
-      {/* Manual de Integração Stripe/Asaas (Ajuda técnica do SaaS - Exibido apenas para Admin) */}
+      {/* Resumo técnico da integração de cobrança - exibido apenas para Admin */}
       {profileRole === 'admin' && (
         <div className="card border-brand-primary/5 bg-white shadow p-6">
           <button
@@ -1011,8 +969,8 @@ export default function Subscription() {
                 <Code className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-brand-text">Como integrar com Stripe ou Asaas em produção?</h3>
-                <p className="text-xs text-brand-text-muted">Clique aqui para ver a arquitetura recomendada e código de webhooks</p>
+                <h3 className="font-bold text-brand-text">Como funciona a cobrança em produção?</h3>
+                <p className="text-xs text-brand-text-muted">Stripe na web e escolha oficial de faturamento no Android</p>
               </div>
             </div>
             <HelpCircle className={`w-5 h-5 text-brand-text-muted transition-transform duration-200 ${showWebhookGuide ? 'rotate-180 text-brand-primary' : ''}`} />
@@ -1021,61 +979,33 @@ export default function Subscription() {
           {showWebhookGuide && (
             <div className="mt-6 pt-6 border-t border-brand-border/60 space-y-4 text-sm text-brand-text leading-relaxed">
               <p>
-                Para disponibilizar este SaaS comercialmente, você deve conectar os planos a um gateway de pagamentos real. O fluxo de produção recomendado é:
+                A ativação do plano acontece somente depois da confirmação assinada pelo webhook do provedor:
               </p>
               
               <ol className="list-decimal pl-5 space-y-2 text-xs">
-                <li><strong>Checkout</strong>: O botão de assinatura redireciona o usuário para o Stripe Checkout Session ou gera um Pix/Boleto no Asaas.</li>
-                <li><strong>Metadata</strong>: Você passa o `uid` do usuário do Firebase Auth como metadata na transação.</li>
-                <li><strong>Webhook</strong>: Quando o pagamento é confirmado, o gateway envia um evento POST (webhook) para o seu servidor.</li>
-                <li><strong>Atualização no Firestore</strong>: O servidor valida o webhook e atualiza o documento correspondente na coleção `professionals` no Firestore.</li>
+                <li><strong>Web</strong>: o usuário é redirecionado ao Stripe Checkout hospedado.</li>
+                <li><strong>Android</strong>: a Google exibe a escolha entre Play Billing e Stripe PaymentSheet nativo.</li>
+                <li><strong>Webhooks</strong>: Stripe e RTDN atualizam o registro unificado no Supabase.</li>
+                <li><strong>Liberação</strong>: o plano só é projetado em `professionals` depois da confirmação do provedor.</li>
               </ol>
 
               <div className="mt-4">
                 <p className="font-semibold text-xs text-brand-primary mb-2 flex items-center">
-                  <span>Exemplo de endpoint de Webhook Node.js / Express (Stripe):</span>
+                  <span>Endpoints e eventos obrigatórios:</span>
                 </p>
-                <pre className="bg-gray-900 text-emerald-400 p-4 rounded-xl font-mono text-[11px] overflow-x-auto">
-{`const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const admin = require('firebase-admin');
-
-app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (err) {
-    return res.status(400).send(\`Webhook Error: \${err.message}\`);
-  }
-
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const userId = session.metadata.userId;
-    const plan = session.metadata.plan; // 'monthly' | 'yearly'
-    
-    const db = admin.firestore();
-    const durationMs = plan === 'monthly' ? 30 * 24 * 60 * 60 * 1000 : 365 * 24 * 60 * 60 * 1000;
-    const subscriptionEndsAt = new Date(Date.now() + durationMs).toISOString();
-
-    await db.collection('professionals').doc(userId).update({
-      subscription_plan: plan,
-      subscription_status: 'active',
-      subscription_ends_at: subscriptionEndsAt,
-      updated_at: new Date().toISOString()
-    });
-  }
-
-  res.json({ received: true });
-});`}
-                </pre>
+                <div className="bg-gray-900 text-emerald-300 p-4 rounded-xl font-mono text-[11px] overflow-x-auto space-y-2">
+                  <p>/functions/v1/stripe-webhook</p>
+                  <p>/functions/v1/google-play-rtdn</p>
+                  <p className="text-gray-300">checkout.session.completed · invoice.paid · invoice.payment_failed</p>
+                  <p className="text-gray-300">customer.subscription.updated · customer.subscription.deleted</p>
+                </div>
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* Overlay de carregamento do Google Pay */}
+      {/* Overlay de carregamento do provedor */}
       {loadingPlan && (loadingPlan === 'monthly' || loadingPlan === 'yearly') && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-8 text-center space-y-6 shadow-2xl border border-brand-primary/10 animate-in zoom-in-95 duration-200">
@@ -1088,7 +1018,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
             <div className="space-y-2">
               <h3 className="text-lg font-display font-bold text-brand-primary">Processando seu pagamento...</h3>
               <p className="text-xs text-brand-text-muted leading-relaxed">
-                Estamos validando sua transação com segurança no Google Pay. Por favor, não feche ou recarregue esta página.
+                Estamos abrindo e validando o provedor de pagamento. Não feche nem recarregue esta página.
               </p>
             </div>
           </div>

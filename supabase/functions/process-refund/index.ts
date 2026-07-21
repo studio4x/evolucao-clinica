@@ -1,203 +1,120 @@
-// supabase/functions/process-refund/index.ts
-// Supabase Edge Function (Deno) para processar reembolso e cancelamento de assinaturas na Stripe
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4";
-import Stripe from "https://esm.sh/stripe@13.10.0";
+import {
+  BillingHttpError,
+  corsHeaders,
+  createAdminClient,
+  createStripe,
+  getBillingConfig,
+  jsonResponse,
+  refundExternalStripeTransaction,
+  refundGooglePlayOrder,
+  requireAuthenticatedUser,
+} from "../_shared/billing.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+function asId(value: any) {
+  return typeof value === "string" ? value : value?.id || null;
+}
+
+function paymentIntentIdsFromInvoice(invoice: any) {
+  const ids = Array.isArray(invoice?.payments?.data)
+    ? invoice.payments.data
+      .map((item: any) => asId(item?.payment?.payment_intent))
+      .filter(Boolean)
+    : [];
+  const legacyId = asId(invoice?.payment_intent);
+  return Array.from(new Set(legacyId ? [...ids, legacyId] : ids)) as string[];
+}
 
 serve(async (req) => {
-  // Trata requisição OPTIONS para CORS
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "Método não permitido." }, 405);
 
   try {
-    // 1. Validar autenticação do usuário via JWT enviado no Header Authorization
-    const authHeader = req.headers.get("Authorization") || "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Token de autorização inválido ou ausente." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-
-    // Inicializar cliente administrativo do Supabase
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Recupera usuário associado ao token
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-    if (authError || !user) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Usuário não autenticado." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    const admin = createAdminClient();
+    const user = await requireAuthenticatedUser(req, admin);
     const { transactionId, refundReason } = await req.json();
+    if (!transactionId) throw new BillingHttpError(400, "Transação não informada.");
 
-    if (!transactionId) {
-      throw new Error("Parâmetro obrigatório ausente: transactionId.");
-    }
-
-    // 2. Buscar a transação no banco
-    const { data: tx, error: txError } = await supabaseAdmin
+    const { data: transaction, error: transactionLookupError } = await admin
       .from("transactions")
       .select("*")
       .eq("id", transactionId)
       .single();
+    if (transactionLookupError || !transaction) throw new BillingHttpError(404, "Transação não encontrada.");
 
-    if (txError || !tx) {
-      throw new Error(`Transação com ID ${transactionId} não encontrada.`);
-    }
-
-    // Verificar se o usuário é dono da transação ou um administrador
-    const { data: prof, error: profError } = await supabaseAdmin
-      .from("professionals")
+    const { data: requester } = await admin.from("professionals")
       .select("role")
       .eq("id", user.id)
       .single();
-
-    if (profError || !prof) {
-      throw new Error("Não foi possível carregar as permissões do usuário.");
+    const isAdmin = requester?.role === "admin";
+    if (transaction.professional_id !== user.id && !isAdmin) {
+      throw new BillingHttpError(403, "Esta transação não pertence à conta autenticada.");
     }
 
-    const isAdmin = prof.role === "admin";
-    if (tx.professional_id !== user.id && !isAdmin) {
-      return new Response(
-        JSON.stringify({ success: false, error: "Permissão negada. Esta transação não pertence a você." }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const ageInDays = (Date.now() - new Date(transaction.created_at).getTime()) / 86400000;
+    if (ageInDays > 7 && !isAdmin) {
+      throw new BillingHttpError(400, "O prazo de 7 dias para solicitar o reembolso expirou.");
+    }
+    if (transaction.status === "refunded") {
+      return jsonResponse({ success: true, message: "Esta transação já foi reembolsada." });
     }
 
-    // Validar prazo de reembolso (7 dias conforme Art. 49 do CDC), exceto para admins
-    const createdAt = new Date(tx.created_at);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - createdAt.getTime());
-    const diffDays = diffTime / (1000 * 60 * 60 * 24);
-    if (diffDays > 7 && !isAdmin) {
-      return new Response(
-        JSON.stringify({ success: false, error: "O prazo de 7 dias para arrependimento e reembolso garantido pelo CDC já expirou para esta transação." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const config = await getBillingConfig(admin);
+    const provider = transaction.payment_provider ||
+      (transaction.stripe_invoice_id ? "stripe" : transaction.play_purchase_token ? "google_play" : "simulation");
 
-    // Se já estiver reembolsada, não faz nada
-    if (tx.status === "refunded") {
-      return new Response(
-        JSON.stringify({ success: true, message: "Esta transação já foi reembolsada anteriormente." }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // 3. Processar reembolso na Stripe se for uma transação real (com stripe_invoice_id)
-    if (tx.stripe_invoice_id) {
-      // Carregar configurações globais de pagamento
-      const { data: settingsData, error: settingsError } = await supabaseAdmin
-        .from("settings")
-        .select("api_key")
-        .eq("id", "payment_settings")
-        .single();
-
-      if (settingsError || !settingsData || !settingsData.api_key) {
-        throw new Error("Configurações de pagamento (Google Pay/Stripe) não encontradas.");
+    if (provider === "stripe") {
+      const stripe = createStripe(config.stripeSecretKey);
+      if (!transaction.stripe_invoice_id) throw new Error("Fatura Stripe não encontrada para esta transação.");
+      const invoice: any = await stripe.invoices.retrieve(transaction.stripe_invoice_id, {
+        expand: ["payments.data.payment.payment_intent"],
+      } as any);
+      const paymentIntentIds = paymentIntentIdsFromInvoice(invoice);
+      for (const paymentIntentId of paymentIntentIds) {
+        await stripe.refunds.create({ payment_intent: paymentIntentId, reason: "requested_by_customer" });
       }
+      const subscriptionId = asId(invoice?.parent?.subscription_details?.subscription) ||
+        asId(invoice?.subscription) || transaction.stripe_subscription_id;
+      if (subscriptionId) await stripe.subscriptions.cancel(subscriptionId);
 
-      const settings = JSON.parse(settingsData.api_key);
-      const isProduction = settings.environment === "PRODUCTION";
-      const stripeSecretKey = isProduction ? settings.stripeProdSecretKey : settings.stripeSandboxSecretKey;
-
-      if (!stripeSecretKey) {
-        throw new Error("Chave Secreta da Stripe não configurada.");
+      if (transaction.external_transaction_id) {
+        await refundExternalStripeTransaction(config.googlePackageName, transaction.external_transaction_id);
       }
-
-      const stripe = new Stripe(stripeSecretKey, {
-        apiVersion: "2023-10-16",
-        httpClient: Stripe.createFetchHttpClient(),
-      });
-
-      // Recuperar a fatura na Stripe para achar o Payment Intent e a Assinatura
-      console.log(`Buscando fatura ${tx.stripe_invoice_id} no Stripe...`);
-      const invoice = await stripe.invoices.retrieve(tx.stripe_invoice_id);
-
-      // Efetuar reembolso no Stripe
-      if (invoice.payment_intent) {
-        console.log(`Reembolsando Payment Intent ${invoice.payment_intent} no Stripe...`);
-        await stripe.refunds.create({
-          payment_intent: invoice.payment_intent as string,
-          reason: "requested_by_customer",
-        });
-      } else {
-        console.warn("Fatura do Stripe não possui payment_intent vinculado.");
+    } else if (provider === "google_play") {
+      let orderId = transaction.play_order_id;
+      if (!orderId) {
+        const { data: billing } = await admin.from("billing_subscriptions")
+          .select("metadata")
+          .eq("professional_id", transaction.professional_id)
+          .maybeSingle();
+        orderId = billing?.metadata?.latestOrderId || null;
       }
-
-      // Cancelar a assinatura no Stripe
-      if (invoice.subscription) {
-        console.log(`Cancelando assinatura ${invoice.subscription} no Stripe...`);
-        // Cancelar imediatamente
-        await stripe.subscriptions.cancel(invoice.subscription as string);
-      }
-    } else {
-      console.log(`Transação ${transactionId} é simulada. Pulando integração Stripe.`);
+      if (!orderId) throw new Error("Pedido Google Play não encontrado para reembolso.");
+      await refundGooglePlayOrder(config.googlePackageName, orderId);
     }
 
-    // 4. Atualizar o status da transação para 'refunded'
-    const { error: txUpdateError } = await supabaseAdmin
-      .from("transactions")
-      .update({
-        status: "refunded",
-        refund_reason: refundReason || "Cancelamento solicitado pelo cliente",
-      })
-      .eq("id", transactionId);
+    const now = new Date().toISOString();
+    const { error: updateError } = await admin.from("transactions").update({
+      status: "refunded",
+      refund_reason: String(refundReason || "Cancelamento solicitado pelo cliente"),
+    }).eq("id", transaction.id);
+    if (updateError) throw updateError;
 
-    if (txUpdateError) {
-      throw new Error(`Erro ao atualizar transação: ${txUpdateError.message}`);
-    }
+    await admin.from("billing_subscriptions").update({
+      status: "refunded",
+      updated_at: now,
+    }).eq("professional_id", transaction.professional_id);
+    await admin.from("professionals").update({
+      subscription_status: "canceled",
+      updated_at: now,
+    }).eq("id", transaction.professional_id);
 
-    // 5. Atualizar o profissional para plano 'trial' e status 'canceled'
-    const { error: profUpdateError } = await supabaseAdmin
-      .from("professionals")
-      .update({
-        subscription_plan: "trial",
-        subscription_status: "canceled",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", tx.professional_id);
-
-    if (profUpdateError) {
-      throw new Error(`Erro ao atualizar o profissional: ${profUpdateError.message}`);
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Assinatura cancelada e reembolso processado com sucesso!",
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-
-  } catch (error: any) {
-    console.error("Erro no processamento do reembolso:", error.message);
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: error.message,
-      }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+    return jsonResponse({ success: true, message: "Assinatura cancelada e reembolso processado." });
+  } catch (error) {
+    console.error("[process-refund]", error);
+    return jsonResponse(
+      { error: error instanceof Error ? error.message : "Falha ao processar o reembolso." },
+      error instanceof BillingHttpError ? error.status : 400,
     );
   }
 });

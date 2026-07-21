@@ -2,15 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import { GooglePayCheckoutButton, describeGooglePayError } from '../components/payments/GooglePayButton';
-import { DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
+import { StripeSubscriptionButton, type ConfirmedBillingResult } from '../components/payments/StripeSubscriptionButton';
 import { Check, ShieldCheck, Sparkles, LogOut, ArrowRight, Clock, HelpCircle, AlertTriangle, CreditCard } from 'lucide-react';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 import { trackBeginCheckout } from '../services/analytics';
-import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
 
 
 const DEFAULT_PLANS = [
@@ -44,23 +42,6 @@ const DEFAULT_PLANS = [
   }
 ];
 
-function getGooglePayPaymentLabel(paymentData: any) {
-  const paymentMethodData = paymentData?.paymentMethodData || {};
-  const description = String(paymentMethodData.description || '').trim();
-  if (description) {
-    return `Google Pay (${description})`;
-  }
-
-  const network = String(paymentMethodData.info?.cardNetwork || '').trim();
-  const cardDetails = String(paymentMethodData.info?.cardDetails || '').trim();
-
-  if (network && cardDetails) {
-    const formattedNetwork = network.charAt(0).toUpperCase() + network.slice(1).toLowerCase();
-    return `Google Pay (${formattedNetwork} **** ${cardDetails})`;
-  }
-  return 'Google Pay';
-}
-
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { user, profileRole, trialEndsAt, setProfileInfo } = useAuthStore();
@@ -73,36 +54,11 @@ export default function CheckoutPage() {
 
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [showTrialModal, setShowTrialModal] = useState(false);
-  const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
-  const [paymentSettingsStatus, setPaymentSettingsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const [plans, setPlans] = useState<any[]>([]);
 
   useEffect(() => {
-    const fetchPaymentSettings = async () => {
-      try {
-        const response = await fetch('/api/payment-settings', {
-          cache: 'no-store'
-        });
-
-        if (!response.ok) {
-          throw new Error('Falha ao carregar configurações públicas de pagamento.');
-        }
-
-        const parsed = await response.json();
-        if (parsed) {
-          setPaymentSettings({
-            ...DEFAULT_PAYMENT_SETTINGS,
-            ...parsed
-          });
-        }
-        setPaymentSettingsStatus('ready');
-      } catch (e) {
-        console.error("Error fetching payment settings in checkout:", e);
-        setPaymentSettingsStatus('error');
-      }
-    };
-
     const fetchPlans = async () => {
       try {
         const { data, error } = await supabase
@@ -118,7 +74,6 @@ export default function CheckoutPage() {
       }
     };
 
-    fetchPaymentSettings();
     fetchPlans();
   }, []);
 
@@ -171,85 +126,35 @@ export default function CheckoutPage() {
     }
   };
 
-  const handleGooglePaySuccess = async (plan: string, paymentData: any) => {
-    if (!user) return;
-    setLoadingPlan(plan);
+  const handleBillingSuccess = (result: ConfirmedBillingResult) => {
+    const plan = result.planId;
+    const details = getPlanDetails(plan);
+    const paymentMethod = result.provider === 'google_play'
+      ? 'Google Play Billing'
+      : 'Stripe (cartão ou Google Pay)';
 
-    try {
-      const token = paymentData.paymentMethodData?.tokenizationData?.token;
-      const paymentLabel = getGooglePayPaymentLabel(paymentData);
-      
-      if (!token) {
-        throw new Error("Token de pagamento não retornado pela API.");
-      }
-
-      const { data, error: functionError } = await supabase.functions.invoke('process-google-pay', {
-        body: {
-          userId: user.id,
-          planId: plan,
-          paymentToken: token,
-          paymentDescriptor: paymentLabel
-        }
-      });
-
-      if (functionError) {
-        const functionMessage = await resolveSupabaseFunctionErrorMessage(
-          functionError,
-          "Erro no processamento do pagamento."
-        );
-        throw new Error(functionMessage);
-      }
-      if (!data || !data.success) {
-        throw new Error(data?.error || "Erro no processamento do pagamento.");
-      }
-
-      const now = new Date();
-      let durationMs = 0;
-      if (plan === 'monthly') {
-        durationMs = 30 * 24 * 60 * 60 * 1000;
-      } else if (plan === 'yearly') {
-        durationMs = 365 * 24 * 60 * 60 * 1000;
-      }
-      const newExpirationDate = data.endsAt || new Date(now.getTime() + durationMs).toISOString();
-
-      setProfileInfo(
-        'active', 
-        profileRole || 'therapist',
-        plan as any,
-        data.status || 'active',
-        newExpirationDate,
-        trialEndsAt
-      );
-
-      sessionStorage.removeItem('pending_checkout_flow');
-      sessionStorage.removeItem('selected_checkout_plan');
-      const transactionId = data.subscriptionId || data.chargeId || data.paymentIntentId || `gpay-${Date.now()}`;
-      navigate('/checkout/sucess', {
-        state: {
-          transactionId,
-          subscriptionId: data.subscriptionId,
-          invoiceId: data.invoiceId,
-          invoiceUrl: data.invoiceUrl,
-          invoicePdfUrl: data.invoicePdfUrl,
-          endsAt: data.endsAt,
-          planId: plan,
-          planName: data.planName || (plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal'),
-          amount: data.amountPaid || (plan === 'yearly' ? 199.00 : 39.00),
-          paymentMethod: paymentLabel
-        },
-        replace: true
-      });
-    } catch (error: any) {
-      console.error("Erro ao processar assinatura via Google Pay:", error);
-      alert(`Falha ao processar pagamento: ${error.message || error}`);
-    } finally {
-      setLoadingPlan(null);
-    }
-  };
-
-  const handleGooglePayError = (plan: string, error: any) => {
-    console.error('Erro na API do Google Pay:', error);
-    alert(`Google Pay: ${describeGooglePayError(error)}`);
+    setProfileInfo(
+      'active',
+      profileRole || 'therapist',
+      plan,
+      'active',
+      result.currentPeriodEnd || null,
+      trialEndsAt
+    );
+    sessionStorage.removeItem('pending_checkout_flow');
+    sessionStorage.removeItem('selected_checkout_plan');
+    navigate('/checkout/success', {
+      state: {
+        transactionId: result.subscriptionId || `${result.provider}-${Date.now()}`,
+        subscriptionId: result.subscriptionId,
+        endsAt: result.currentPeriodEnd,
+        planId: plan,
+        planName: details.name,
+        amount: Number(details.price || 0),
+        paymentMethod
+      },
+      replace: true
+    });
   };
 
   const handleSimulatePayment = async (plan: string) => {
@@ -286,12 +191,14 @@ export default function CheckoutPage() {
           professional_id: user.id,
           stripe_invoice_id: null,
           stripe_subscription_id: null,
-          amount: plan === 'monthly' ? 49.90 : 499.00,
+          amount: plan === 'monthly' ? 39.00 : 199.00,
           currency: 'brl',
           plan_id: plan,
           status: 'paid',
-          payment_method: 'Google Pay (Simulado)',
-          invoice_url: null,
+          payment_method: 'Pagamento (Simulado)',
+          payment_provider: 'simulation',
+          provider_transaction_id: `sim-${Date.now()}`,
+          stripe_invoice_url: null,
           invoice_pdf_url: null,
           created_at: now.toISOString()
         });
@@ -309,13 +216,13 @@ export default function CheckoutPage() {
       sessionStorage.removeItem('selected_checkout_plan');
 
       const simulatedTxId = `sim-${Date.now().toString().slice(-6)}`;
-      navigate('/checkout/sucess', {
+      navigate('/checkout/success', {
         state: {
           transactionId: simulatedTxId,
           planId: plan,
           planName: plan === 'yearly' ? 'Plano Anual' : 'Plano Mensal',
-          amount: plan === 'yearly' ? 499.00 : 49.90,
-          paymentMethod: 'Google Pay (Simulado)'
+          amount: plan === 'yearly' ? 199.00 : 39.00,
+          paymentMethod: 'Pagamento (Simulado)'
         },
         replace: true
       });
@@ -410,7 +317,7 @@ export default function CheckoutPage() {
                     Concluir Assinatura: {planDetails.name}
                   </h2>
                   <p className="text-xs text-brand-text-muted mt-2 leading-relaxed">
-                    Você selecionou este plano. Complete o pagamento abaixo de forma 100% segura com o Google Pay para liberar seu acesso clínico instantaneamente e prosseguir para a etapa de onboarding.
+                    Você selecionou este plano. Complete o pagamento com segurança. Na web, cartão, Google Pay e Apple Pay são exibidos pela Stripe conforme a compatibilidade do dispositivo; no Android, a Play Store apresenta as opções permitidas.
                   </p>
                 </div>
 
@@ -448,30 +355,21 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                {paymentSettingsStatus === 'loading' && (
-                  <div className="flex min-h-12 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-bg/50 px-4 text-xs text-brand-text-muted">
-                    Carregando configuração segura do Google Pay…
-                  </div>
-                )}
-                {paymentSettingsStatus === 'error' && (
+                {paymentError && (
                   <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-950">
-                    Não foi possível carregar a configuração do Google Pay. Atualize a página e tente novamente.
+                    {paymentError}
                   </div>
                 )}
-                {paymentSettingsStatus === 'ready' && (
-                  <GooglePayCheckoutButton
-                    key={`${paymentSettings.environment}-${paymentSettings.googleMerchantId}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
-                    planPrice={planDetails.price}
-                    paymentSettings={paymentSettings}
-                    onLoadPaymentData={(paymentRequest) => {
-                      handleGooglePaySuccess(selectedCheckoutPlan, paymentRequest);
-                    }}
-                    onError={(error) => handleGooglePayError(selectedCheckoutPlan, error)}
-                    onCancel={(reason) => {
-                      console.log('Pagamento cancelado pelo usuário:', reason);
-                    }}
-                  />
-                )}
+                <StripeSubscriptionButton
+                  planId={selectedCheckoutPlan as 'monthly' | 'yearly'}
+                  disabled={loadingPlan !== null}
+                  onLoadingChange={(loading) => {
+                    setPaymentError(null);
+                    setLoadingPlan(loading ? selectedCheckoutPlan : null);
+                  }}
+                  onSuccess={handleBillingSuccess}
+                  onError={(error) => setPaymentError(error.message)}
+                />
 
                 {profileRole === 'admin' && (
                   <button
@@ -563,7 +461,7 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      {/* Overlay de carregamento do Google Pay */}
+      {/* Overlay de carregamento do provedor */}
       {loadingPlan && (loadingPlan === 'monthly' || loadingPlan === 'yearly') && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[100] flex flex-col items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-sm w-full p-8 text-center space-y-6 shadow-2xl border border-brand-primary/10 animate-in zoom-in-95 duration-200">
@@ -576,7 +474,7 @@ export default function CheckoutPage() {
             <div className="space-y-2">
               <h3 className="text-lg font-display font-bold text-brand-primary">Processando seu pagamento...</h3>
               <p className="text-xs text-brand-text-muted leading-relaxed">
-                Estamos validando sua transação com segurança no Google Pay. Por favor, não feche ou recarregue esta página.
+                Estamos abrindo e validando o provedor de pagamento. Não feche nem recarregue esta página.
               </p>
             </div>
           </div>

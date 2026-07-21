@@ -1,7 +1,6 @@
 package com.evolucaoclinica.app;
 
 import android.Manifest;
-import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -34,9 +33,22 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.activity.ComponentActivity;
 import androidx.webkit.ServiceWorkerControllerCompat;
-import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewFeature;
+
+import com.android.billingclient.api.BillingClient;
+import com.android.billingclient.api.BillingClientStateListener;
+import com.android.billingclient.api.BillingFlowParams;
+import com.android.billingclient.api.BillingResult;
+import com.android.billingclient.api.PendingPurchasesParams;
+import com.android.billingclient.api.ProductDetails;
+import com.android.billingclient.api.Purchase;
+import com.android.billingclient.api.QueryProductDetailsParams;
+import com.android.billingclient.api.QueryPurchasesParams;
+import com.stripe.android.PaymentConfiguration;
+import com.stripe.android.paymentsheet.PaymentSheet;
+import com.stripe.android.paymentsheet.PaymentSheetResult;
 
 import org.json.JSONObject;
 
@@ -46,8 +58,14 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
-public class LauncherActivity extends Activity {
+public class LauncherActivity extends ComponentActivity {
     private static final String LOG_TAG = "EvolucaoAudio";
     private static final int REQUEST_PERMISSIONS = 1001;
     private static final int REQUEST_FILE_CHOOSER = 1002;
@@ -61,6 +79,11 @@ public class LauncherActivity extends Activity {
     private Uri sharedFileUri;
     private String sharedFileMimeType;
     private String sharedFileName;
+    private BillingClient billingClient;
+    private PaymentSheet paymentSheet;
+    private final Map<String, ProductDetails> subscriptionProducts = new HashMap<>();
+    private String pendingBillingPlanId;
+    private String pendingBillingAccountId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,6 +104,8 @@ public class LauncherActivity extends Activity {
         captureShareIntent(getIntent());
         createDownloadNotificationChannel();
         requestRequiredPermissions();
+        paymentSheet = new PaymentSheet(this, this::onPaymentSheetResult);
+        initializeBillingClient();
 
         swipeRefreshLayout = new SwipeRefreshLayout(this);
         swipeRefreshLayout.setBackgroundColor(Color.WHITE);
@@ -101,7 +126,7 @@ public class LauncherActivity extends Activity {
         ));
         webView.addJavascriptInterface(new NativeShareBridge(), "NativeShare");
         webView.addJavascriptInterface(new NativeFileDownloadBridge(), "NativeFileDownload");
-        webView.addJavascriptInterface(new NativePaymentBridge(), "NativePaymentBridge");
+        webView.addJavascriptInterface(new NativeBillingBridge(), "NativeBillingBridge");
         webView.addJavascriptInterface(new NativeAppInfoBridge(), "NativeAppInfoBridge");
         configureWebView(webView);
         webView.clearCache(true);
@@ -353,10 +378,278 @@ public class LauncherActivity extends Activity {
         }
     }
 
-    private final class NativePaymentBridge {
+    private final class NativeBillingBridge {
         @android.webkit.JavascriptInterface
-        public boolean isPaymentRequestSupported() {
-            return WebViewFeature.isFeatureSupported(WebViewFeature.PAYMENT_REQUEST);
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @android.webkit.JavascriptInterface
+        public void startSubscription(String planId, String accountId) {
+            runOnUiThread(() -> startNativeSubscription(planId, accountId));
+        }
+
+        @android.webkit.JavascriptInterface
+        public void restorePurchases(String accountId) {
+            runOnUiThread(() -> restoreNativePurchases(accountId));
+        }
+
+        @android.webkit.JavascriptInterface
+        public void presentStripePaymentSheet(String clientSecret, String publishableKey, boolean production) {
+            runOnUiThread(() -> showStripePaymentSheet(clientSecret, publishableKey, production));
+        }
+    }
+
+    private void initializeBillingClient() {
+        billingClient = BillingClient.newBuilder(this)
+                .setListener(this::onPurchasesUpdated)
+                .enablePendingPurchases(
+                        PendingPurchasesParams.newBuilder()
+                                .enableOneTimeProducts()
+                                .build()
+                )
+                .enableUserChoiceBilling(userChoiceDetails -> {
+                    try {
+                        JSONObject payload = new JSONObject();
+                        payload.put("type", "alternative_selected");
+                        payload.put("planId", pendingBillingPlanId == null ? "" : pendingBillingPlanId);
+                        payload.put("externalTransactionToken", userChoiceDetails.getExternalTransactionToken());
+                        dispatchBillingEvent(payload);
+                    } catch (Exception exception) {
+                        dispatchBillingError("Não foi possível receber a escolha de faturamento.");
+                    }
+                })
+                .build();
+        connectBillingClient(null);
+    }
+
+    private void connectBillingClient(Runnable onReady) {
+        if (billingClient == null) initializeBillingClient();
+        if (billingClient.isReady()) {
+            if (onReady != null) onReady.run();
+            return;
+        }
+        billingClient.startConnection(new BillingClientStateListener() {
+            @Override
+            public void onBillingSetupFinished(BillingResult billingResult) {
+                if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.OK) {
+                    if (onReady != null) onReady.run();
+                } else {
+                    dispatchBillingError(billingMessage("Não foi possível conectar à Google Play.", billingResult));
+                }
+            }
+
+            @Override
+            public void onBillingServiceDisconnected() {
+                Log.w(LOG_TAG, "Conexão com Google Play Billing interrompida.");
+            }
+        });
+    }
+
+    private void startNativeSubscription(String planId, String accountId) {
+        if (!"monthly".equals(planId) && !"yearly".equals(planId)) {
+            dispatchBillingError("Plano de assinatura inválido.");
+            return;
+        }
+        if (accountId == null || accountId.trim().isEmpty()) {
+            dispatchBillingError("Conta autenticada não identificada.");
+            return;
+        }
+        pendingBillingPlanId = planId;
+        pendingBillingAccountId = accountId;
+        connectBillingClient(() -> queryProductAndLaunch(planId));
+    }
+
+    private void queryProductAndLaunch(String planId) {
+        String productId = productIdForPlan(planId);
+        QueryProductDetailsParams.Product product = QueryProductDetailsParams.Product.newBuilder()
+                .setProductId(productId)
+                .setProductType(BillingClient.ProductType.SUBS)
+                .build();
+        QueryProductDetailsParams params = QueryProductDetailsParams.newBuilder()
+                .setProductList(Collections.singletonList(product))
+                .build();
+
+        billingClient.queryProductDetailsAsync(params, (billingResult, queryResult) -> {
+            if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                dispatchBillingError(billingMessage("Não foi possível consultar o plano na Google Play.", billingResult));
+                return;
+            }
+            List<ProductDetails> products = queryResult.getProductDetailsList();
+            if (products == null || products.isEmpty()) {
+                dispatchBillingError("O produto ainda não está disponível para esta conta na Google Play.");
+                return;
+            }
+
+            ProductDetails details = products.get(0);
+            subscriptionProducts.put(details.getProductId(), details);
+            List<ProductDetails.SubscriptionOfferDetails> offers = details.getSubscriptionOfferDetails();
+            if (offers == null || offers.isEmpty()) {
+                dispatchBillingError("O plano base da assinatura não foi encontrado na Google Play.");
+                return;
+            }
+
+            String expectedBasePlan = "yearly".equals(planId) ? "yearly-auto" : "monthly-auto";
+            ProductDetails.SubscriptionOfferDetails selectedOffer = offers.get(0);
+            for (ProductDetails.SubscriptionOfferDetails offer : offers) {
+                if (expectedBasePlan.equals(offer.getBasePlanId())) {
+                    selectedOffer = offer;
+                    break;
+                }
+            }
+
+            BillingFlowParams.ProductDetailsParams productParams =
+                    BillingFlowParams.ProductDetailsParams.newBuilder()
+                            .setProductDetails(details)
+                            .setOfferToken(selectedOffer.getOfferToken())
+                            .build();
+            BillingFlowParams flowParams = BillingFlowParams.newBuilder()
+                    .setProductDetailsParamsList(Collections.singletonList(productParams))
+                    .setObfuscatedAccountId(sha256(pendingBillingAccountId))
+                    .build();
+            BillingResult launchResult = billingClient.launchBillingFlow(this, flowParams);
+            if (launchResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                dispatchBillingError(billingMessage("Não foi possível abrir a compra na Google Play.", launchResult));
+            }
+        });
+    }
+
+    private void onPurchasesUpdated(BillingResult billingResult, List<Purchase> purchases) {
+        if (billingResult.getResponseCode() == BillingClient.BillingResponseCode.USER_CANCELED) {
+            dispatchSimpleBillingEvent("billing_cancelled", pendingBillingPlanId, null);
+            return;
+        }
+        if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+            dispatchBillingError(billingMessage("A compra não foi concluída pela Google Play.", billingResult));
+            return;
+        }
+        if (purchases == null) return;
+        for (Purchase purchase : purchases) dispatchPlayPurchase(purchase, false);
+    }
+
+    private void dispatchPlayPurchase(Purchase purchase, boolean restored) {
+        try {
+            List<String> products = purchase.getProducts();
+            String productId = products == null || products.isEmpty() ? "" : products.get(0);
+            String planId = planIdForProduct(productId);
+            JSONObject payload = new JSONObject();
+            payload.put(
+                    "type",
+                    purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED
+                            ? "play_purchase"
+                            : "play_purchase_pending"
+            );
+            payload.put("planId", planId);
+            payload.put("productId", productId);
+            payload.put("purchaseToken", purchase.getPurchaseToken());
+            payload.put("orderId", purchase.getOrderId() == null ? "" : purchase.getOrderId());
+            payload.put("restored", restored);
+            dispatchBillingEvent(payload);
+        } catch (Exception exception) {
+            dispatchBillingError("Não foi possível validar os dados retornados pela Google Play.");
+        }
+    }
+
+    private void restoreNativePurchases(String accountId) {
+        pendingBillingAccountId = accountId;
+        connectBillingClient(() -> {
+            QueryPurchasesParams params = QueryPurchasesParams.newBuilder()
+                    .setProductType(BillingClient.ProductType.SUBS)
+                    .build();
+            billingClient.queryPurchasesAsync(params, (billingResult, purchases) -> {
+                if (billingResult.getResponseCode() != BillingClient.BillingResponseCode.OK) {
+                    Log.w(LOG_TAG, billingMessage("Falha ao restaurar compras.", billingResult));
+                    return;
+                }
+                for (Purchase purchase : purchases) {
+                    if (purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
+                        dispatchPlayPurchase(purchase, true);
+                    }
+                }
+            });
+        });
+    }
+
+    private void showStripePaymentSheet(String clientSecret, String publishableKey, boolean production) {
+        if (clientSecret == null || clientSecret.trim().isEmpty() ||
+                publishableKey == null || publishableKey.trim().isEmpty()) {
+            dispatchBillingError("Configuração Stripe incompleta.");
+            return;
+        }
+        PaymentConfiguration.init(getApplicationContext(), publishableKey);
+        PaymentSheet.GooglePayConfiguration.Environment environment = production
+                ? PaymentSheet.GooglePayConfiguration.Environment.Production
+                : PaymentSheet.GooglePayConfiguration.Environment.Test;
+        PaymentSheet.GooglePayConfiguration googlePay =
+                new PaymentSheet.GooglePayConfiguration(environment, "BR", "BRL");
+        PaymentSheet.Configuration configuration = new PaymentSheet.Configuration.Builder("Evolução Clínica")
+                .googlePay(googlePay)
+                .allowsDelayedPaymentMethods(false)
+                .build();
+        paymentSheet.presentWithPaymentIntent(clientSecret, configuration);
+    }
+
+    private void onPaymentSheetResult(PaymentSheetResult result) {
+        if (result instanceof PaymentSheetResult.Completed) {
+            dispatchSimpleBillingEvent("stripe_payment_completed", pendingBillingPlanId, null);
+        } else if (result instanceof PaymentSheetResult.Canceled) {
+            dispatchSimpleBillingEvent("stripe_payment_cancelled", pendingBillingPlanId, null);
+        } else if (result instanceof PaymentSheetResult.Failed) {
+            Throwable error = ((PaymentSheetResult.Failed) result).getError();
+            dispatchSimpleBillingEvent(
+                    "stripe_payment_failed",
+                    pendingBillingPlanId,
+                    error == null ? "Pagamento recusado pela Stripe." : error.getLocalizedMessage()
+            );
+        }
+    }
+
+    private void dispatchBillingError(String message) {
+        dispatchSimpleBillingEvent("billing_error", pendingBillingPlanId, message);
+    }
+
+    private void dispatchSimpleBillingEvent(String type, String planId, String message) {
+        try {
+            JSONObject payload = new JSONObject();
+            payload.put("type", type);
+            payload.put("planId", planId == null ? "" : planId);
+            if (message != null) payload.put("message", message);
+            dispatchBillingEvent(payload);
+        } catch (Exception exception) {
+            Log.e(LOG_TAG, "Falha ao montar evento de pagamento", exception);
+        }
+    }
+
+    private void dispatchBillingEvent(JSONObject payload) {
+        runOnUiThread(() -> {
+            if (webView == null) return;
+            String script = "window.dispatchEvent(new CustomEvent('native-billing',{detail:" + payload + "}));";
+            webView.evaluateJavascript(script, null);
+        });
+    }
+
+    private String billingMessage(String fallback, BillingResult result) {
+        String details = result == null ? "" : result.getDebugMessage();
+        return details == null || details.trim().isEmpty() ? fallback : fallback + " " + details;
+    }
+
+    private String productIdForPlan(String planId) {
+        return "yearly".equals(planId) ? "evolucao_yearly" : "evolucao_monthly";
+    }
+
+    private String planIdForProduct(String productId) {
+        return "evolucao_yearly".equals(productId) ? "yearly" : "monthly";
+    }
+
+    private String sha256(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(String.valueOf(value).getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder();
+            for (byte item : bytes) result.append(String.format("%02x", item));
+            return result.toString();
+        } catch (Exception exception) {
+            return String.valueOf(value).replaceAll("[^a-zA-Z0-9]", "");
         }
     }
 
@@ -378,10 +671,6 @@ public class LauncherActivity extends Activity {
     private void configureWebView(WebView view) {
         WebSettings settings = view.getSettings();
         settings.setJavaScriptEnabled(true);
-        boolean paymentRequestSupported = WebViewFeature.isFeatureSupported(WebViewFeature.PAYMENT_REQUEST);
-        if (paymentRequestSupported) {
-            WebSettingsCompat.setPaymentRequestEnabled(settings, true);
-        }
         settings.setDomStorageEnabled(true);
         settings.setDatabaseEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
@@ -396,7 +685,6 @@ public class LauncherActivity extends Activity {
         settings.setTextZoom(100);
         settings.setSupportMultipleWindows(false);
         String userAgent = settings.getUserAgentString() + " EvolucaoClinicaApp/" + getInstalledVersionName();
-        if (paymentRequestSupported) userAgent += " GOOGLE_PAY_SUPPORTED";
         settings.setUserAgentString(userAgent);
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_CACHE_MODE)) {
@@ -441,7 +729,7 @@ public class LauncherActivity extends Activity {
                     }
                     return true;
                 }
-                if ("http".equalsIgnoreCase(url.getScheme()) || "https".equalsIgnoreCase(url.getScheme())) return false;
+                if (isTrustedUrl(url)) return false;
                 try {
                     startActivity(new Intent(Intent.ACTION_VIEW, url));
                 } catch (Exception ignored) {
@@ -607,6 +895,7 @@ public class LauncherActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (billingClient != null) billingClient.endConnection();
         if (webView != null) {
             webView.stopLoading();
             webView.destroy();

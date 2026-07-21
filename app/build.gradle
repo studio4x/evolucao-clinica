@@ -55,10 +55,10 @@ android {
     namespace "com.evolucaoclinica.app"
     defaultConfig {
         applicationId "com.evolucaoclinica.app"
-        minSdkVersion 21
+        minSdkVersion 23
         targetSdkVersion 35
-        versionCode 56
-        versionName "56"
+        versionCode 57
+        versionName "57"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -209,6 +209,9 @@ repositories {
 }
 
 dependencies {
+    implementation 'com.stripe:stripe-android:23.0.1'
+    implementation 'com.android.billingclient:billing:9.1.0'
+    implementation 'androidx.activity:activity:1.10.1'
     implementation 'androidx.webkit:webkit:1.14.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation fileTree(include: ['*.jar'], dir: 'libs')

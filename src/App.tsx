@@ -52,11 +52,49 @@ import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
+import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 
 const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 const AUTH_SESSION_TIMEOUT_MS = 15000;
 const isNativeWebView = typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent);
+
+function NativeBillingRestore() {
+  const user = useAuthStore((state) => state.user);
+  const restoredUserRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!user || !hasNativeBillingBridge()) return;
+    const removeListener = addNativeBillingListener((event) => {
+      if (
+        event.type !== 'play_purchase' ||
+        event.restored !== true ||
+        !event.productId ||
+        !event.purchaseToken
+      ) return;
+      const planId = event.productId === 'evolucao_yearly' ? 'yearly' : 'monthly';
+      void verifyGooglePlaySubscription({
+        planId,
+        productId: event.productId,
+        purchaseToken: event.purchaseToken
+      }).catch((error) => {
+        console.error('[BillingRestore] Falha ao restaurar compra Google Play:', error);
+      });
+    });
+
+    if (restoredUserRef.current !== user.id) {
+      restoredUserRef.current = user.id;
+      try {
+        window.NativeBillingBridge?.restorePurchases(user.id);
+      } catch (error) {
+        console.error('[BillingRestore] Não foi possível consultar compras:', error);
+      }
+    }
+    return removeListener;
+  }, [user]);
+
+  return null;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -591,6 +629,7 @@ export default function App() {
       <InstallPrompt />
       <PermissionNotice />
       <CustomModalContainer />
+      <NativeBillingRestore />
       <SpeedInsights />
       
       <Suspense fallback={<SplashScreen message="Carregando..." />}>

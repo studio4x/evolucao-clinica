@@ -36,19 +36,6 @@
 
     
 
-
-    <queries>
-        <intent>
-            <action android:name="org.chromium.intent.action.PAY" />
-        </intent>
-        <intent>
-            <action android:name="org.chromium.intent.action.IS_READY_TO_PAY" />
-        </intent>
-        <intent>
-            <action android:name="org.chromium.intent.action.UPDATE_PAYMENT_DETAILS" />
-        </intent>
-    </queries>
-
     <application
         android:name="Application"
         android:allowBackup="true"
@@ -59,6 +46,10 @@
         
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Translucent.NoTitleBar">
+
+        <meta-data
+            android:name="com.google.android.gms.wallet.api.enabled"
+            android:value="true" />
 
         <meta-data
             android:name="asset_statements"

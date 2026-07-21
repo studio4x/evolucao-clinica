@@ -196,7 +196,7 @@ export default function AdminPanel() {
       title: 'Financeiro & SaaS',
       items: [
         { key: 'plans', label: 'Planos SaaS', icon: Coins },
-        { key: 'google_pay_config', label: 'Google Pay & Stripe', icon: CreditCard },
+        { key: 'google_pay_config', label: 'Cobrança Stripe & Play', icon: CreditCard },
         { key: 'transactions', label: 'Transações', icon: Clock }
       ]
     },
@@ -246,24 +246,15 @@ export default function AdminPanel() {
     else if (tab === 'whatsapp_config') navigate('/admin/whatsapp');
   };
 
-  // Estados de Configuração de Pagamento (Google Pay & Stripe)
+  // Estados de configuração pública de cobrança Stripe e Google Play.
   const [paymentEnvironment, setPaymentEnvironment] = useState<'TEST' | 'PRODUCTION'>('TEST');
-  const [googleMerchantId, setGoogleMerchantId] = useState('');
   const [stripeProdPublishableKey, setStripeProdPublishableKey] = useState('');
-  const [stripeProdSecretKey, setStripeProdSecretKey] = useState('');
   const [stripeSandboxPublishableKey, setStripeSandboxPublishableKey] = useState('');
-  const [stripeSandboxSecretKey, setStripeSandboxSecretKey] = useState('');
-  const [stripeWebhookSecretProd, setStripeWebhookSecretProd] = useState('');
-  const [stripeWebhookSecretSandbox, setStripeWebhookSecretSandbox] = useState('');
   const [paymentSettingsLoading, setPaymentSettingsLoading] = useState(false);
   const [paymentSaveSuccess, setPaymentSaveSuccess] = useState(false);
   const [paymentSaveLoading, setPaymentSaveLoading] = useState(false);
 
   // Controle de exibição de chaves secretas
-  const [showStripeProdSecret, setShowStripeProdSecret] = useState(false);
-  const [showStripeSandboxSecret, setShowStripeSandboxSecret] = useState(false);
-  const [showStripeWebhookSecretProd, setShowStripeWebhookSecretProd] = useState(false);
-  const [showStripeWebhookSecretSandbox, setShowStripeWebhookSecretSandbox] = useState(false);
 
   // Estados do Perfil do Admin
   const [adminFirstName, setAdminFirstName] = useState('');
@@ -1855,7 +1846,7 @@ export default function AdminPanel() {
     }
   }, [user, profileRole, activeTab]);
 
-  // Efeito para carregar as chaves de Pagamento do Google Pay/Stripe
+  // Carrega somente a configuração que pode ser exibida no navegador.
   useEffect(() => {
     const fetchPaymentSettings = async () => {
       setPaymentSettingsLoading(true);
@@ -1869,23 +1860,14 @@ export default function AdminPanel() {
         if (!error && data && data.api_key) {
           const parsed = JSON.parse(data.api_key);
           setPaymentEnvironment(parsed.environment || 'TEST');
-          setGoogleMerchantId(parsed.googleMerchantId || '');
           setStripeProdPublishableKey(parsed.stripeProdPublishableKey || '');
-          setStripeProdSecretKey(parsed.stripeProdSecretKey || '');
           setStripeSandboxPublishableKey(parsed.stripeSandboxPublishableKey || '');
-          setStripeSandboxSecretKey(parsed.stripeSandboxSecretKey || '');
-          setStripeWebhookSecretProd(parsed.stripeWebhookSecretProd || '');
-          setStripeWebhookSecretSandbox(parsed.stripeWebhookSecretSandbox || '');
+          // Chaves secretas não são carregadas no navegador. O novo fluxo usa Supabase Secrets.
         } else {
           // Preencher com as credenciais padrão se não houver dados salvos
           setPaymentEnvironment('TEST');
-          setGoogleMerchantId('BCR2DN7TTCHMTFAJ');
           setStripeProdPublishableKey('pk_live_wDyGJo2Rl2ikV2HaBXzZey1o');
-          setStripeProdSecretKey('');
           setStripeSandboxPublishableKey('pk_test_0b7fQSiyaxD7OjUH6lKL6Slh');
-          setStripeSandboxSecretKey('');
-          setStripeWebhookSecretProd('');
-          setStripeWebhookSecretSandbox('');
         }
       } catch (err) {
         console.error("Erro ao buscar configurações de pagamento:", err);
@@ -2383,7 +2365,7 @@ export default function AdminPanel() {
     }
   };
 
-  // Salvar Configurações de Pagamento (Google Pay & Stripe)
+  // Salvar configurações públicas de pagamento.
   const handleSavePaymentSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setPaymentSaveLoading(true);
@@ -2392,13 +2374,8 @@ export default function AdminPanel() {
     try {
       const payload = {
         environment: paymentEnvironment,
-        googleMerchantId,
         stripeProdPublishableKey,
-        stripeProdSecretKey,
-        stripeSandboxPublishableKey,
-        stripeSandboxSecretKey,
-        stripeWebhookSecretProd,
-        stripeWebhookSecretSandbox
+        stripeSandboxPublishableKey
       };
 
       const { error } = await supabase
@@ -3441,7 +3418,7 @@ export default function AdminPanel() {
                 </div>
               </div>
             ) : activeTab === 'google_pay_config' ? (
-              /* Aba de Configuração do Google Pay & Stripe */
+              /* Aba de configuração de cobrança Stripe e Google Play */
               <div className="space-y-6">
                 <div className="card bg-white p-6 md:p-8 border-brand-border">
                   <div className="flex items-center space-x-3 mb-6">
@@ -3450,7 +3427,7 @@ export default function AdminPanel() {
                     </div>
                     <div>
                       <h2 className="text-xl font-display font-bold text-brand-primary">
-                        Configuração do Google Pay & Stripe
+                        Configuração de cobrança Stripe & Google Play
                       </h2>
                       <p className="text-xs text-brand-text-muted mt-0.5">
                         Gerencie as credenciais e defina se a plataforma opera em modo sandbox ou produção.
@@ -3481,15 +3458,13 @@ export default function AdminPanel() {
 
                     <div className="p-5 bg-brand-bg/50 border border-brand-border/60 rounded-2xl space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-semibold">Google Pay API</span>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          googleMerchantId ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                        }`}>
-                          {googleMerchantId ? 'Configurado' : 'Pendente'}
+                        <span className="text-[10px] text-brand-text-muted uppercase tracking-wider font-semibold">Google Play</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-100 text-blue-800">
+                          Configuração externa
                         </span>
                       </div>
-                      <div className="text-xs font-mono font-semibold text-brand-text truncate pt-1">
-                        ID: {googleMerchantId || 'Não definido'}
+                      <div className="text-xs font-semibold text-brand-text pt-1">
+                        Produtos, escolha de faturamento e RTDN no Play Console
                       </div>
                     </div>
 
@@ -3516,6 +3491,9 @@ export default function AdminPanel() {
                     </div>
                   ) : (
                     <form onSubmit={handleSavePaymentSettings} className="space-y-8">
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-xs leading-relaxed text-blue-950">
+                        Chaves secretas Stripe, segredos de webhook e credenciais da Google Play não são exibidos nem salvos no navegador. Configure-os exclusivamente em <strong>Supabase Secrets</strong>, conforme o guia de implantação da cobrança.
+                      </div>
                       {/* Seletor de Ambiente (Toggle Switch) */}
                       <div className="bg-brand-bg/60 border border-brand-border rounded-2xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                         <div className="space-y-0.5">
@@ -3553,29 +3531,6 @@ export default function AdminPanel() {
                         </div>
                       </div>
 
-                      {/* Google Pay Merchant ID */}
-                      <div className="space-y-4">
-                        <h3 className="text-xs font-bold text-brand-text uppercase tracking-wider border-b border-brand-border/60 pb-1.5">
-                          Google Pay API (Geral)
-                        </h3>
-                        <div className="space-y-2">
-                          <label className="text-xs font-semibold text-brand-text-muted block">
-                            Google Pay Merchant ID (Produção)
-                          </label>
-                          <div className="relative">
-                            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
-                            <input
-                              type="text"
-                              required
-                              placeholder="Digite seu Google Merchant ID (ex: BCR2DN...)"
-                              value={googleMerchantId}
-                              onChange={(e) => setGoogleMerchantId(e.target.value)}
-                              className="w-full pl-10 pr-4 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
                       {/* Credenciais de Testes (Sandbox) */}
                       <div className="space-y-4 pt-2">
                         <h3 className="text-xs font-bold text-amber-700 uppercase tracking-wider border-b border-amber-200/60 pb-1.5 flex items-center">
@@ -3598,50 +3553,6 @@ export default function AdminPanel() {
                             />
                           </div>
                           
-                          <div className="space-y-2">
-                            <label className="text-xs font-semibold text-brand-text-muted block">
-                              Secret Key (Chave Privada)
-                            </label>
-                            <div className="relative">
-                              <input
-                                type={showStripeSandboxSecret ? "text" : "password"}
-                                required
-                                placeholder="sk_test_..."
-                                value={stripeSandboxSecretKey}
-                                onChange={(e) => setStripeSandboxSecretKey(e.target.value)}
-                                className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowStripeSandboxSecret(!showStripeSandboxSecret)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
-                              >
-                                {showStripeSandboxSecret ? <EyeOff size={16} /> : <Eye size={16} />}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 mt-3">
-                          <label className="text-xs font-semibold text-brand-text-muted block">
-                            Webhook Signing Secret (Segredo de Assinatura do Webhook - Sandbox)
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showStripeWebhookSecretSandbox ? "text" : "password"}
-                              placeholder="whsec_..."
-                              value={stripeWebhookSecretSandbox}
-                              onChange={(e) => setStripeWebhookSecretSandbox(e.target.value)}
-                              className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowStripeWebhookSecretSandbox(!showStripeWebhookSecretSandbox)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
-                            >
-                              {showStripeWebhookSecretSandbox ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
                         </div>
                       </div>
 
@@ -3667,50 +3578,6 @@ export default function AdminPanel() {
                             />
                           </div>
                           
-                          <div className="space-y-2">
-                            <label className="text-xs font-semibold text-brand-text-muted block">
-                              Secret Key (Chave Privada)
-                            </label>
-                            <div className="relative">
-                              <input
-                                type={showStripeProdSecret ? "text" : "password"}
-                                required
-                                placeholder="sk_live_..."
-                                value={stripeProdSecretKey}
-                                onChange={(e) => setStripeProdSecretKey(e.target.value)}
-                                className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => setShowStripeProdSecret(!showStripeProdSecret)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
-                              >
-                                {showStripeProdSecret ? <EyeOff size={16} /> : <Eye size={16} />}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2 mt-3">
-                          <label className="text-xs font-semibold text-brand-text-muted block">
-                            Webhook Signing Secret (Segredo de Assinatura do Webhook - Produção)
-                          </label>
-                          <div className="relative">
-                            <input
-                              type={showStripeWebhookSecretProd ? "text" : "password"}
-                              placeholder="whsec_..."
-                              value={stripeWebhookSecretProd}
-                              onChange={(e) => setStripeWebhookSecretProd(e.target.value)}
-                              className="w-full pl-4 pr-10 py-3 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowStripeWebhookSecretProd(!showStripeWebhookSecretProd)}
-                              className="absolute right-3 top-1/2 -translate-y-1/2 text-brand-text-muted hover:text-brand-primary transition-colors cursor-pointer"
-                            >
-                              {showStripeWebhookSecretProd ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                          </div>
                         </div>
                       </div>
 
@@ -3802,7 +3669,6 @@ export default function AdminPanel() {
                             <ul className="list-disc pl-4 text-xs space-y-1.5 text-brand-text-muted">
                               <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">invoice.paid</code><br />Ocorre a cada renovação mensal/anual paga com sucesso.</li>
                               <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">invoice.payment_failed</code><br />Notifica quando uma tentativa de renovação automática falha.</li>
-                              <li><code className="font-mono text-[10px] text-brand-primary bg-brand-bg px-1 py-0.5 rounded">charge.succeeded</code><br />Confirmação genérica de cobrança bem-sucedida.</li>
                             </ul>
                           </div>
                         </div>
@@ -4549,7 +4415,7 @@ export default function AdminPanel() {
                         Transações Efetuadas
                       </h2>
                       <p className="text-xs text-brand-text-muted mt-0.5">
-                        Acompanhe o histórico de assinaturas reais e simuladas integradas com a Stripe.
+                        Acompanhe assinaturas processadas pela Stripe, Google Play e pelo ambiente de simulação.
                       </p>
                     </div>
                   </div>
@@ -4573,7 +4439,7 @@ export default function AdminPanel() {
                             <th className="py-3 px-4">Data</th>
                             <th className="py-3 px-4">Valor</th>
                             <th className="py-3 px-4">Status</th>
-                            <th className="py-3 px-4">Stripe ID</th>
+                            <th className="py-3 px-4">Provedor / ID</th>
                             <th className="py-3 px-4 text-right">Ação</th>
                           </tr>
                         </thead>
@@ -4618,7 +4484,14 @@ export default function AdminPanel() {
                                 </span>
                               </td>
                               <td className="py-3.5 px-4 font-mono text-[10px] text-brand-text-muted">
-                                {tx.stripe_invoice_id || 'Simulado'}
+                                <span className="block font-sans font-semibold uppercase">
+                                  {tx.payment_provider === 'google_play'
+                                    ? 'Google Play'
+                                    : tx.payment_provider === 'simulation'
+                                      ? 'Simulação'
+                                      : 'Stripe'}
+                                </span>
+                                <span>{tx.provider_transaction_id || tx.stripe_invoice_id || tx.play_order_id || '—'}</span>
                               </td>
                               <td className="py-3.5 px-4 text-right space-y-1 sm:space-y-0 sm:space-x-2">
                                 {tx.stripe_invoice_url ? (

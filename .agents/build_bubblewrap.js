@@ -1,4 +1,5 @@
 import { spawn } from 'child_process';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -98,7 +99,24 @@ function ensureOpaqueWebViewTheme() {
   }
 }
 
-function applyFixes() {
+function restorePinnedVersion(manifestPath, pinnedVersion) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.appVersionCode = pinnedVersion.code;
+  manifest.appVersionName = pinnedVersion.name;
+  manifest.appVersion = pinnedVersion.name;
+  manifest.minSdkVersion = Math.max(Number(manifest.minSdkVersion || 0), 23);
+
+  const manifestContent = `${JSON.stringify(manifest, null, 2)}\n`;
+  fs.writeFileSync(manifestPath, manifestContent, 'utf8');
+  fs.writeFileSync(
+    path.join(projectDir, 'manifest-checksum.txt'),
+    `${crypto.createHash('sha1').update(manifestContent).digest('hex')}\n`,
+    'utf8'
+  );
+  console.log(`- Play Store version pinned at ${pinnedVersion.name} (versionCode ${pinnedVersion.code}).`);
+}
+
+function applyFixes(pinnedVersion) {
   console.log('\nApplying custom gradle and WebView fixes to ensure compilation succeeds under SDK 36...');
 
   // 1. Write local.properties (find user home dir dynamically)
@@ -122,12 +140,34 @@ function applyFixes() {
     console.log('- root gradle.properties configured.');
   }
 
+  // Stripe Android 23.0.1 usa metadata Kotlin 2.3.10, que exige R8/AGP 8.13+.
+  const rootBuildGradlePath = path.join(projectDir, 'build.gradle');
+  let rootBuildGradleContent = fs.readFileSync(rootBuildGradlePath, 'utf8');
+  rootBuildGradleContent = rootBuildGradleContent.replace(
+    /com\.android\.tools\.build:gradle:[^']+/,
+    'com.android.tools.build:gradle:8.13.2'
+  );
+  fs.writeFileSync(rootBuildGradlePath, rootBuildGradleContent, 'utf8');
+  console.log('- Android Gradle Plugin 8.13.2 configured for Kotlin 2.3 metadata.');
+
+  const gradleWrapperPath = path.join(projectDir, 'gradle', 'wrapper', 'gradle-wrapper.properties');
+  let gradleWrapperContent = fs.readFileSync(gradleWrapperPath, 'utf8');
+  gradleWrapperContent = gradleWrapperContent.replace(
+    /distributionUrl=.*gradle-[^-]+-bin\.zip/,
+    'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip'
+  );
+  fs.writeFileSync(gradleWrapperPath, gradleWrapperContent, 'utf8');
+  console.log('- Gradle Wrapper 8.13 configured for Android Gradle Plugin 8.13.2.');
+
   // 4. Update app/build.gradle
   const buildGradlePath = path.join(projectDir, 'app', 'build.gradle');
   let buildGradleContent = fs.readFileSync(buildGradlePath, 'utf8');
   
   // Set compileSdkVersion to 36
   buildGradleContent = buildGradleContent.replace(/compileSdkVersion\s+\d+/, 'compileSdkVersion 36');
+  buildGradleContent = buildGradleContent.replace(/minSdkVersion\s+\d+/, 'minSdkVersion 23');
+  buildGradleContent = buildGradleContent.replace(/versionCode\s+\d+/, `versionCode ${pinnedVersion.code}`);
+  buildGradleContent = buildGradleContent.replace(/versionName\s+"[^"]+"/, `versionName "${pinnedVersion.name}"`);
   
   // Garante a inclusão da dependência SwipeRefreshLayout que o LauncherActivity customizado utiliza
   if (!buildGradleContent.includes('androidx.swiperefreshlayout:swiperefreshlayout')) {
@@ -137,12 +177,26 @@ function applyFixes() {
     );
   }
 
-  // Google Pay no WebView depende do AndroidX WebKit para habilitar a Payment Request API.
+  // O WebView usa o AndroidX WebKit para controlar cache e Service Worker.
   if (!buildGradleContent.includes('androidx.webkit:webkit')) {
     buildGradleContent = buildGradleContent.replace(
       'dependencies {',
       "dependencies {\n    implementation 'androidx.webkit:webkit:1.14.0'"
     );
+  }
+
+  const requiredBillingDependencies = [
+    "implementation 'androidx.activity:activity:1.10.1'",
+    "implementation 'com.android.billingclient:billing:9.1.0'",
+    "implementation 'com.stripe:stripe-android:23.0.1'"
+  ];
+  for (const dependency of requiredBillingDependencies) {
+    if (!buildGradleContent.includes(dependency)) {
+      buildGradleContent = buildGradleContent.replace(
+        'dependencies {',
+        `dependencies {\n    ${dependency}`
+      );
+    }
   }
   
   fs.writeFileSync(buildGradlePath, buildGradleContent);
@@ -163,23 +217,13 @@ function applyFixes() {
       console.log('- RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, INTERNET & ACCESS_NETWORK_STATE permissions added to AndroidManifest.xml');
     }
 
-    if (!manifestContent.includes('org.chromium.intent.action.PAY')) {
-      const paymentQueries = `
-    <queries>
-        <intent>
-            <action android:name="org.chromium.intent.action.PAY" />
-        </intent>
-        <intent>
-            <action android:name="org.chromium.intent.action.IS_READY_TO_PAY" />
-        </intent>
-        <intent>
-            <action android:name="org.chromium.intent.action.UPDATE_PAYMENT_DETAILS" />
-        </intent>
-    </queries>
-`;
-      manifestContent = manifestContent.replace('    <application', `${paymentQueries}\n    <application`);
+    if (!manifestContent.includes('com.google.android.gms.wallet.api.enabled')) {
+      manifestContent = manifestContent.replace(
+        '<meta-data\n            android:name="asset_statements"',
+        '<meta-data\n            android:name="com.google.android.gms.wallet.api.enabled"\n            android:value="true" />\n\n        <meta-data\n            android:name="asset_statements"'
+      );
       modified = true;
-      console.log('- Google Pay Payment Request queries added to AndroidManifest.xml');
+      console.log('- Google Pay API enabled for Stripe PaymentSheet.');
     }
 
     const launcherActivityMatch = manifestContent.match(/<activity android:name="LauncherActivity"[\s\S]*?android:exported="true">/);
@@ -217,6 +261,16 @@ function applyFixes() {
 
 async function main() {
   try {
+    const twaManifestPath = path.join(projectDir, 'twa-manifest.json');
+    const currentManifest = JSON.parse(fs.readFileSync(twaManifestPath, 'utf8'));
+    const pinnedVersion = {
+      code: Number(currentManifest.appVersionCode),
+      name: String(currentManifest.appVersionName)
+    };
+    if (!Number.isInteger(pinnedVersion.code) || pinnedVersion.code <= 0 || !pinnedVersion.name) {
+      throw new Error('twa-manifest.json contém uma versão inválida.');
+    }
+
     // Realiza backup do LauncherActivity.java customizado para evitar que o Bubblewrap o sobrescreva com o template padrão de TWA
     const launcherActivityPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'evolucaoclinica', 'app', 'LauncherActivity.java');
     let launcherActivityBackup = null;
@@ -231,9 +285,13 @@ async function main() {
       { pattern: /Accept\?\s*\(y\/N\)/i, response: 'y\n', allowMultiple: true }
     ], 30000);
 
+    // O Bubblewrap incrementa a versão durante o update. A versão publicada é
+    // definida explicitamente no repositório e deve permanecer sincronizada.
+    restorePinnedVersion(twaManifestPath, pinnedVersion);
+
     // Step 2: Apply gradle configuration overrides
     console.log('=== STEP 2: APPLYING OVERRIDES ===');
-    applyFixes();
+    applyFixes(pinnedVersion);
 
     // Restaura o LauncherActivity.java customizado mesmo que o Bubblewrap tenha removido o arquivo.
     if (launcherActivityBackup) {

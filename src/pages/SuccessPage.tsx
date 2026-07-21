@@ -2,26 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { CheckCircle2, ArrowRight, ShieldCheck, CreditCard, Sparkles, Check, Mail, Loader2 } from 'lucide-react';
+import { CheckCircle2, ArrowRight, ShieldCheck, Check, Mail, Loader2, Clock3 } from 'lucide-react';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination } from '../utils/onboarding';
 import { supabase } from '../supabaseClient';
-
-const GooglePayLogo = ({ className = "h-3.5 w-auto" }: { className?: string }) => (
-  <svg 
-    viewBox="0 0 80 38.1" 
-    className={className} 
-    xmlns="http://www.w3.org/2000/svg"
-  >
-    <path fill="#5F6368" d="M37.8,19.7V29h-3V6h7.8c1.9,0,3.7,0.7,5.1,2c1.4,1.2,2.1,3,2.1,4.9c0,1.9-0.7,3.6-2.1,4.9c-1.4,1.3-3.1,2-5.1,2L37.8,19.7L37.8,19.7z M37.8,8.8v8h5c1.1,0,2.2-0.4,2.9-1.2c1.6-1.5,1.6-4,0.1-5.5c0,0-0.1-0.1-0.1-0.1c-0.8-0.8-1.8-1.3-2.9-1.2L37.8,8.8L37.8,8.8z"/>
-    <path fill="#5F6368" d="M56.7,12.8c2.2,0,3.9,0.6,5.2,1.8s1.9,2.8,1.9,4.8V29H61v-2.2h-0.1c-1.2,1.8-2.9,2.7-4.9,2.7c-1.7,0-3.2-0.5-4.4-1.5c-1.1-1-1.8-2.4-1.8-3.9c0-1.6,0.6-2.9,1.8-3.9c1.2-1,2.9-1.4,4.9-1.4c1.8,0,3.2,0.3,4.3,1v-0.7c0-1-0.4-2-1.2-2.6c-0.8-0.7-1.8-1.1-2.9-1.1c-1.7,0-3,0.7-3.9,2.1l-2.6-1.6C51.8,13.8,53.9,12.8,56.7,12.8z M52.9,24.2c0,0.8,0.4,1.5,1,1.9c0.7,0.5,1.5,0.8,2.3,0.8c1.2,0,2.4-0.5,3.3-1.4c1-0.9,1.5-2,1.5-3.2c-0.9-0.7-2.2-1.1-3.9-1.1c-1.2,0-2.2,0.3-3,0.9C53.3,22.6,52.9,23.3,52.9,24.2z"/>
-    <path fill="#5F6368" d="M80,13.3l-9.9,22.7h-3l3.7-7.9l-6.5-14.7h3.2l4.7,11.3h0.1l4.6-11.3H80z"/>
-    <path fill="#4285F4" d="M25.9,17.7c0-0.9-0.1-1.8-0.2-2.7H13.2v5.1h7.1c-0.3,1.6-1.2,3.1-2.6,4v3.3H22C24.5,25.1,25.9,21.7,25.9,17.7z"/>
-    <path fill="#34A853" d="M13.2,30.6c3.6,0,6.6-1.2,8.8-3.2l-4.3-3.3c-1.2,0.8-2.7,1.3-4.5,1.3c-3.4,0-6.4-2.3-7.4-5.5H1.4v3.4C3.7,27.8,8.2,30.6,13.2,30.6z"/>
-    <path fill="#FBBC04" d="M5.8,19.9c-0.6-1.6-0.6-3.4,0-5.1v-3.4H1.4c-1.9,3.7-1.9,8.1,0,11.9L5.8,19.9z"/>
-    <path fill="#EA4335" d="M13.2,9.4c1.9,0,3.7,0.7,5.1,2l0,0l3.8-3.8c-2.4-2.2-5.6-3.5-8.8-3.4c-5,0-9.6,2.8-11.8,7.3l4.4,3.4C6.8,11.7,9.8,9.4,13.2,9.4z"/>
-  </svg>
-);
+import { waitForConfirmedSubscription } from '../services/billing';
 
 const formatRenewalDate = (dateStr: string) => {
   try {
@@ -62,10 +47,14 @@ const getPlanBenefitsList = (planId: string) => {
 export default function SuccessPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, subscriptionPlan } = useAuthStore();
+  const { user, subscriptionPlan, profileRole, trialEndsAt, setProfileInfo } = useAuthStore();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [isProceeding, setIsProceeding] = useState(false);
+  const [confirmationStatus, setConfirmationStatus] = useState<'checking' | 'confirmed' | 'delayed'>(
+    location.state ? 'confirmed' : 'checking'
+  );
+  const [confirmationMessage, setConfirmationMessage] = useState('');
 
   const state = location.state as {
     transactionId?: string;
@@ -80,12 +69,68 @@ export default function SuccessPage() {
     paymentMethod: string;
   } | null;
 
+  const [webCheckoutState, setWebCheckoutState] = useState<typeof state>(null);
+  const effectiveState = state || webCheckoutState;
+  const query = new URLSearchParams(location.search);
+  const checkoutSessionId = query.get('session_id');
+  const queryPlanId = query.get('plan') === 'yearly' ? 'yearly' : 'monthly';
+
   useEffect(() => {
     if (state) {
-      const transactionId = state.transactionId || `sim-${Date.now().toString().slice(-6)}`;
-      const amount = state.amount;
-      const planName = state.planName;
-      const planId = state.planId;
+      setConfirmationStatus('confirmed');
+      return;
+    }
+    if (!checkoutSessionId || !user) {
+      setConfirmationStatus('delayed');
+      setConfirmationMessage('Não foi possível identificar este retorno de pagamento.');
+      return;
+    }
+
+    let cancelled = false;
+    const confirmFromWebhook = async () => {
+      try {
+        const confirmed = await waitForConfirmedSubscription(user.id, queryPlanId, 20, checkoutSessionId);
+        const { data: plan } = await supabase
+          .from('plans')
+          .select('name, price')
+          .eq('id', queryPlanId)
+          .maybeSingle();
+        if (cancelled) return;
+        const nextState = {
+          transactionId: checkoutSessionId,
+          subscriptionId: confirmed.provider_subscription_id,
+          endsAt: confirmed.current_period_end,
+          planId: queryPlanId,
+          planName: plan?.name || (queryPlanId === 'yearly' ? 'Plano Anual' : 'Plano Mensal'),
+          amount: Number(plan?.price || (queryPlanId === 'yearly' ? 199 : 39)),
+          paymentMethod: 'Stripe (cartão ou carteira digital)'
+        };
+        setWebCheckoutState(nextState);
+        setProfileInfo(
+          'active',
+          profileRole || 'therapist',
+          queryPlanId,
+          'active',
+          confirmed.current_period_end,
+          trialEndsAt
+        );
+        setConfirmationStatus('confirmed');
+      } catch (error) {
+        if (cancelled) return;
+        setConfirmationMessage(error instanceof Error ? error.message : 'A confirmação ainda está pendente.');
+        setConfirmationStatus('delayed');
+      }
+    };
+    void confirmFromWebhook();
+    return () => { cancelled = true; };
+  }, [checkoutSessionId, profileRole, queryPlanId, setProfileInfo, state, trialEndsAt, user]);
+
+  useEffect(() => {
+    if (confirmationStatus === 'confirmed' && effectiveState) {
+      const transactionId = effectiveState.transactionId || `sim-${Date.now().toString().slice(-6)}`;
+      const amount = effectiveState.amount;
+      const planName = effectiveState.planName;
+      const planId = effectiveState.planId;
 
       // 1. Push to Google Tag Manager dataLayer
       if (typeof window !== 'undefined') {
@@ -118,7 +163,7 @@ export default function SuccessPage() {
         }
       }
     }
-  }, [state]);
+  }, [confirmationStatus, effectiveState]);
 
   const handleProceed = async () => {
     if (!user || isProceeding) return;
@@ -144,21 +189,47 @@ export default function SuccessPage() {
     navigate(destination, { replace: true });
   };
 
-  const formattedAmount = state?.amount 
-    ? state.amount.toFixed(2).replace('.', ',') 
-    : (subscriptionPlan === 'yearly' ? '499,00' : '49,90');
+  if (confirmationStatus !== 'confirmed') {
+    const isChecking = confirmationStatus === 'checking';
+    return (
+      <div className="min-h-screen bg-brand-bg flex items-center justify-center p-6">
+        <div className="card bg-white border border-brand-border shadow-xl rounded-3xl p-8 max-w-lg w-full text-center space-y-5">
+          <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center ${isChecking ? 'bg-brand-primary/10 text-brand-primary' : 'bg-amber-100 text-amber-700'}`}>
+            {isChecking ? <Loader2 className="w-7 h-7 animate-spin" /> : <Clock3 className="w-7 h-7" />}
+          </div>
+          <h1 className="text-2xl font-bold text-brand-text">
+            {isChecking ? 'Confirmando sua assinatura' : 'Pagamento em processamento'}
+          </h1>
+          <p className="text-sm leading-relaxed text-brand-text-muted">
+            {isChecking
+              ? 'Aguardando a confirmação segura do provedor. Não feche esta página.'
+              : confirmationMessage}
+          </p>
+          {!isChecking && (
+            <button type="button" onClick={() => navigate('/painel/subscription', { replace: true })} className="btn-primary w-full py-3 cursor-pointer">
+              Consultar minha assinatura
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
-  const displayPlanName = state?.planName 
-    ? state.planName 
+  const formattedAmount = effectiveState?.amount
+    ? effectiveState.amount.toFixed(2).replace('.', ',')
+    : (subscriptionPlan === 'yearly' ? '199,00' : '39,00');
+
+  const displayPlanName = effectiveState?.planName
+    ? effectiveState.planName
     : (subscriptionPlan === 'yearly' ? 'Plano Anual' : 'Plano Mensal');
 
-  const displayTransactionId = state?.transactionId 
-    ? state.transactionId 
+  const displayTransactionId = effectiveState?.transactionId
+    ? effectiveState.transactionId
     : `TX-${Date.now().toString().slice(-8)}`;
 
-  const displayPaymentMethod = state?.paymentMethod 
-    ? state.paymentMethod 
-    : 'Google Pay / Cartão';
+  const displayPaymentMethod = effectiveState?.paymentMethod
+    ? effectiveState.paymentMethod
+    : 'Pagamento seguro';
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col relative overflow-hidden">
@@ -225,22 +296,26 @@ export default function SuccessPage() {
                     <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
                     <span>Forma de pagamento: {displayPaymentMethod}</span>
                   </p>
-                  {state?.subscriptionId && (
+                  <p className="flex items-start gap-2 break-all">
+                    <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                    <span>Referência: {displayTransactionId}</span>
+                  </p>
+                  {effectiveState?.subscriptionId && (
                     <p className="flex items-start gap-2">
                       <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
-                      <span>Assinatura Google Pay: {state.subscriptionId}</span>
+                      <span>Assinatura: {effectiveState.subscriptionId}</span>
                     </p>
                   )}
-                  {state?.invoiceId && (
+                  {effectiveState?.invoiceId && (
                     <p className="flex items-start gap-2">
                       <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
-                      <span>Fatura Google Pay: {state.invoiceId}</span>
+                      <span>Fatura: {effectiveState.invoiceId}</span>
                     </p>
                   )}
-                  {state?.endsAt && (
+                  {effectiveState?.endsAt && (
                     <p className="flex items-start gap-2">
                       <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
-                      <span>Próxima renovação: {formatRenewalDate(state.endsAt)}</span>
+                      <span>Próxima renovação: {formatRenewalDate(effectiveState.endsAt)}</span>
                     </p>
                   )}
                 </div>
@@ -260,13 +335,13 @@ export default function SuccessPage() {
               </div>
 
               <p className="text-sm text-brand-text-muted leading-relaxed">
-                {state?.planId === 'yearly'
+                {effectiveState?.planId === 'yearly'
                   ? 'Você escolheu a melhor opção para manter a operação rodando com previsibilidade e foco no longo prazo.'
                   : 'Você ativou uma assinatura flexível, pensada para quem quer controle mês a mês sem perder produtividade.'}
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {getPlanBenefitsList(state?.planId || 'monthly').map((benefit) => (
+                {getPlanBenefitsList(effectiveState?.planId || 'monthly').map((benefit) => (
                   <div key={benefit} className="rounded-xl border bg-brand-bg/40 border-brand-border/60 p-3 text-sm leading-relaxed text-brand-text">
                     <div className="flex items-start gap-2">
                       <Check className="w-4 h-4 mt-0.5 shrink-0 text-brand-primary" />
@@ -279,9 +354,9 @@ export default function SuccessPage() {
 
             {/* Bottom Actions */}
             <div className="flex flex-col sm:flex-row gap-3 pt-1 w-full">
-              {state?.invoiceUrl && (
+              {effectiveState?.invoiceUrl && (
                 <a
-                  href={state.invoiceUrl}
+                  href={effectiveState.invoiceUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-brand-primary/15 bg-brand-primary text-white font-bold hover:bg-brand-primary-hover transition-colors text-sm"
@@ -290,9 +365,9 @@ export default function SuccessPage() {
                   <span>Ver fatura</span>
                 </a>
               )}
-              {state?.invoicePdfUrl && (
+              {effectiveState?.invoicePdfUrl && (
                 <a
-                  href={state.invoicePdfUrl}
+                  href={effectiveState.invoicePdfUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-brand-border bg-white text-brand-text font-bold hover:bg-brand-bg transition-colors text-sm"
@@ -314,8 +389,7 @@ export default function SuccessPage() {
 
             <div className="flex justify-center items-center gap-1.5 text-[10px] text-brand-text-muted select-none pt-2">
               <ShieldCheck className="w-4 h-4 text-brand-primary flex-shrink-0" />
-              <span>Transação protegida e auditada pelo</span>
-              <GooglePayLogo className="h-3.5 w-auto" />
+              <span>Transação protegida e confirmada pela Stripe ou Google Play</span>
             </div>
           </div>
         </div>
