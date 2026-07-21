@@ -19,9 +19,16 @@ const parsePositiveInteger = (value: unknown): number | null => {
 };
 
 const formatPlayStoreVersion = (versionCode: number | null, versionName?: string | null) => {
-  if (versionCode) return `1.0.${versionCode}`;
   const normalizedName = String(versionName ?? '').trim();
-  return normalizedName ? normalizedName.replace(/^v/i, '') : null;
+  const cleanName = normalizedName.replace(/^v/i, '');
+
+  // O Android pode expor o versionName como "55" ou como "1.0.55".
+  // O nome é a versão que o usuário reconhece; o versionCode permanece
+  // disponível separadamente para conferir divergências no Play Console.
+  if (/^\d+$/.test(cleanName)) return `1.0.${cleanName}`;
+  if (/^\d+(?:\.\d+){1,3}$/.test(cleanName)) return cleanName;
+  if (versionCode) return `1.0.${versionCode}`;
+  return cleanName || null;
 };
 
 const readNativeBridge = (): InstalledAppInfo | null => {

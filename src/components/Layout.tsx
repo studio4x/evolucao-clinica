@@ -4,7 +4,6 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, LifeBuoy, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb, Info } from 'lucide-react';
-import { AppVersion } from './layout/AppVersion';
 import { UserAvatar } from './common/UserAvatar';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
@@ -135,13 +134,14 @@ export default function Layout() {
     { name: 'Suporte', path: '/painel/support', icon: LifeBuoy },
     { name: 'Sugestões', path: '/painel/sugestoes', icon: Lightbulb },
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
-    { name: 'Sobre o app', path: '/painel/about', icon: Info },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
   ];
 
   if (profileRole === 'admin') {
     navItems.push({ name: 'Painel Admin', path: '/admin', icon: ShieldCheck });
   }
+
+  navItems.push({ name: 'Sobre o app', path: '/painel/about', icon: Info });
 
   const bottomNavItems = [
     { name: 'Início', path: '/painel/dashboard', icon: LayoutDashboard },
@@ -324,14 +324,6 @@ export default function Layout() {
         <main className="p-4 md:p-8 w-full md:w-[90%] max-w-none mx-auto flex-1">
           <Outlet />
         </main>
-        <footer className="p-8 mt-auto flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-brand-border/30 text-brand-text-muted">
-          <AppVersion />
-          <div className="flex gap-4 text-xs font-medium">
-            <Link to="/privacy" className="hover:text-brand-primary transition-colors">Política de Privacidade</Link>
-            <span className="text-brand-border">|</span>
-            <Link to="/terms" className="hover:text-brand-primary transition-colors">Termos de Serviço</Link>
-          </div>
-        </footer>
       </div>
 
       {/* Mobile Full Screen Menu Overlay */}
