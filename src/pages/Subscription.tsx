@@ -462,6 +462,31 @@ export default function Subscription() {
   const handleManageSubscription = async () => {
     if (!billingSubscription || managingSubscription) return;
     setManagingSubscription(true);
+    const nativeApp = hasNativeBillingBridge();
+    const browserTab = nativeApp ? null : window.open('about:blank', '_blank');
+
+    const openManagementUrl = (rawUrl: string) => {
+      const url = new URL(rawUrl);
+      if (nativeApp) {
+        // O WebView intercepta esta sinalização e abre o navegador externo,
+        // mantendo o aplicativo aberto na tela atual.
+        url.searchParams.set('open_external', '1');
+        window.location.assign(url.toString());
+        setManagingSubscription(false);
+        return;
+      }
+
+      if (browserTab && !browserTab.closed) {
+        browserTab.opener = null;
+        browserTab.location.href = url.toString();
+        return;
+      }
+
+      // Fallback para navegadores que bloquearam a aba aberta previamente.
+      window.open(url.toString(), '_blank', 'noopener,noreferrer');
+      setManagingSubscription(false);
+    };
+
     try {
       if (billingSubscription.provider === 'google_play') {
         const productId = billingSubscription.play_product_id ||
@@ -469,16 +494,14 @@ export default function Subscription() {
         const url = new URL('https://play.google.com/store/account/subscriptions');
         url.searchParams.set('sku', productId);
         url.searchParams.set('package', 'com.evolucaoclinica.app');
-        if (hasNativeBillingBridge()) url.searchParams.set('open_external', '1');
-        window.location.assign(url.toString());
+        openManagementUrl(url.toString());
         return;
       }
 
       const { portalUrl } = await createStripeCustomerPortalSession();
-      const url = new URL(portalUrl);
-      if (hasNativeBillingBridge()) url.searchParams.set('open_external', '1');
-      window.location.assign(url.toString());
+      openManagementUrl(portalUrl);
     } catch (error) {
+      if (browserTab && !browserTab.closed) browserTab.close();
       const message = error instanceof Error ? error.message : 'Não foi possível abrir o gerenciamento.';
       setPaymentErrorByPlan((current) => ({ ...current, management: message }));
       setManagingSubscription(false);
