@@ -11,9 +11,21 @@ initAnalytics();
 
 // Detecta se esta rodando no WebView do App
 const isNativeWebView = /EvolucaoClinicaApp/i.test(navigator.userAgent);
+const NATIVE_VERSION_STORAGE_KEY = 'evolucao-clinica:native-version-code';
 if (isNativeWebView) {
   document.documentElement.classList.add('is-webview');
   installWebViewAudioCompatibility();
+
+  // O LauncherActivity envia o versionCode na primeira URL. Persistimos esse
+  // valor porque a navegação SPA remove os parâmetros da URL inicial.
+  try {
+    const nativeVersion = new URLSearchParams(window.location.search).get('native_version');
+    if (nativeVersion && /^\d+$/.test(nativeVersion) && Number(nativeVersion) > 0) {
+      window.sessionStorage.setItem(NATIVE_VERSION_STORAGE_KEY, nativeVersion);
+    }
+  } catch (error) {
+    console.warn('[AppInfo] Não foi possível persistir a versão nativa.', error);
+  }
 }
 
 

@@ -18,6 +18,20 @@ const parsePositiveInteger = (value: unknown): number | null => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 };
 
+const NATIVE_VERSION_STORAGE_KEY = 'evolucao-clinica:native-version-code';
+
+const readLaunchVersionCode = (): number | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const queryVersion = new URLSearchParams(window.location.search).get('native_version');
+    const storedVersion = window.sessionStorage.getItem(NATIVE_VERSION_STORAGE_KEY);
+    return parsePositiveInteger(queryVersion) || parsePositiveInteger(storedVersion);
+  } catch {
+    return null;
+  }
+};
+
 const formatPlayStoreVersion = (versionCode: number | null, versionName?: string | null) => {
   const normalizedName = String(versionName ?? '').trim();
   const cleanName = normalizedName.replace(/^v/i, '');
@@ -74,7 +88,20 @@ const readNativeUserAgent = (): InstalledAppInfo | null => {
 
 export const getInstalledAppInfo = (): InstalledAppInfo => {
   const nativeInfo = readNativeBridge() || readNativeUserAgent();
-  if (nativeInfo) return nativeInfo;
+  const launchVersionCode = readLaunchVersionCode();
+  if (nativeInfo || launchVersionCode) {
+    // O versionCode enviado pelo LauncherActivity identifica o pacote que foi
+    // realmente instalado e deve prevalecer sobre um User-Agent persistido.
+    const versionCode = launchVersionCode || nativeInfo?.versionCode || null;
+    const versionName = launchVersionCode ? String(launchVersionCode) : nativeInfo?.versionName || null;
+
+    return {
+      platform: 'android',
+      versionCode,
+      versionName,
+      displayVersion: formatPlayStoreVersion(versionCode, versionName)
+    };
+  }
 
   const isPwa = typeof window !== 'undefined' && (
     window.matchMedia('(display-mode: standalone)').matches ||
