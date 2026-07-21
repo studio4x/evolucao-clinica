@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import GooglePayButton from '@google-pay/button-react';
-import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
+import { GooglePayCheckoutButton, describeGooglePayError } from '../components/payments/GooglePayButton';
+import { DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
 import { Check, ShieldCheck, Sparkles, LogOut, ArrowRight, Clock, HelpCircle, AlertTriangle, CreditCard } from 'lucide-react';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -74,6 +74,7 @@ export default function CheckoutPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
+  const [paymentSettingsStatus, setPaymentSettingsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   const [plans, setPlans] = useState<any[]>([]);
 
@@ -95,8 +96,10 @@ export default function CheckoutPage() {
             ...parsed
           });
         }
+        setPaymentSettingsStatus('ready');
       } catch (e) {
         console.error("Error fetching payment settings in checkout:", e);
+        setPaymentSettingsStatus('error');
       }
     };
 
@@ -246,7 +249,7 @@ export default function CheckoutPage() {
 
   const handleGooglePayError = (plan: string, error: any) => {
     console.error('Erro na API do Google Pay:', error);
-    alert('Erro ao processar pagamento com Google Pay. Tente novamente.');
+    alert(`Google Pay: ${describeGooglePayError(error)}`);
   };
 
   const handleSimulatePayment = async (plan: string) => {
@@ -445,26 +448,30 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                <GooglePayButton
-                  key={`${paymentSettings.environment}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
-                  environment={paymentSettings.environment}
-                  buttonType="subscribe"
-                  buttonColor="white"
-                  buttonSizeMode="fill"
-                  buttonLocale="pt"
-                  buttonRadius={8}
-                  paymentRequest={getGooglePayRequest(planDetails.price, paymentSettings)}
-                  onLoadPaymentData={(paymentRequest) => {
-                    handleGooglePaySuccess(selectedCheckoutPlan, paymentRequest);
-                  }}
-                  onError={(error) => {
-                    handleGooglePayError(selectedCheckoutPlan, error);
-                  }}
-                  onCancel={(reason) => {
-                    console.log('Pagamento cancelado pelo usuário:', reason);
-                  }}
-                  style={{ width: '100%', height: '48px' }}
-                />
+                {paymentSettingsStatus === 'loading' && (
+                  <div className="flex min-h-12 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-bg/50 px-4 text-xs text-brand-text-muted">
+                    Carregando configuração segura do Google Pay…
+                  </div>
+                )}
+                {paymentSettingsStatus === 'error' && (
+                  <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-950">
+                    Não foi possível carregar a configuração do Google Pay. Atualize a página e tente novamente.
+                  </div>
+                )}
+                {paymentSettingsStatus === 'ready' && (
+                  <GooglePayCheckoutButton
+                    key={`${paymentSettings.environment}-${paymentSettings.googleMerchantId}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
+                    planPrice={planDetails.price}
+                    paymentSettings={paymentSettings}
+                    onLoadPaymentData={(paymentRequest) => {
+                      handleGooglePaySuccess(selectedCheckoutPlan, paymentRequest);
+                    }}
+                    onError={(error) => handleGooglePayError(selectedCheckoutPlan, error)}
+                    onCancel={(reason) => {
+                      console.log('Pagamento cancelado pelo usuário:', reason);
+                    }}
+                  />
+                )}
 
                 {profileRole === 'admin' && (
                   <button

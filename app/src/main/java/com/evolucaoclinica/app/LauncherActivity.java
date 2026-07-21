@@ -100,6 +100,7 @@ public class LauncherActivity extends Activity {
         ));
         webView.addJavascriptInterface(new NativeShareBridge(), "NativeShare");
         webView.addJavascriptInterface(new NativeFileDownloadBridge(), "NativeFileDownload");
+        webView.addJavascriptInterface(new NativePaymentBridge(), "NativePaymentBridge");
         configureWebView(webView);
 
         swipeRefreshLayout.addView(webView);
@@ -325,10 +326,18 @@ public class LauncherActivity extends Activity {
         }
     }
 
+    private final class NativePaymentBridge {
+        @android.webkit.JavascriptInterface
+        public boolean isPaymentRequestSupported() {
+            return WebViewFeature.isFeatureSupported(WebViewFeature.PAYMENT_REQUEST);
+        }
+    }
+
     private void configureWebView(WebView view) {
         WebSettings settings = view.getSettings();
         settings.setJavaScriptEnabled(true);
-        if (WebViewFeature.isFeatureSupported(WebViewFeature.PAYMENT_REQUEST)) {
+        boolean paymentRequestSupported = WebViewFeature.isFeatureSupported(WebViewFeature.PAYMENT_REQUEST);
+        if (paymentRequestSupported) {
             WebSettingsCompat.setPaymentRequestEnabled(settings, true);
         }
         settings.setDomStorageEnabled(true);
@@ -343,7 +352,9 @@ public class LauncherActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setTextZoom(100);
         settings.setSupportMultipleWindows(false);
-        settings.setUserAgentString(settings.getUserAgentString() + " EvolucaoClinicaApp/49 GOOGLE_PAY_SUPPORTED");
+        String userAgent = settings.getUserAgentString() + " EvolucaoClinicaApp/52";
+        if (paymentRequestSupported) userAgent += " GOOGLE_PAY_SUPPORTED";
+        settings.setUserAgentString(userAgent);
 
         view.setOverScrollMode(View.OVER_SCROLL_NEVER);
         view.setVerticalScrollBarEnabled(false);

@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import GooglePayButton from '@google-pay/button-react';
-import { getGooglePayRequest, DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
+import { GooglePayCheckoutButton, describeGooglePayError } from '../components/payments/GooglePayButton';
+import { DEFAULT_PAYMENT_SETTINGS, type PaymentSettings } from '../services/googlePay';
 import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
 import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
@@ -204,6 +204,7 @@ export default function Subscription() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [paymentSettings, setPaymentSettings] = useState<PaymentSettings>(DEFAULT_PAYMENT_SETTINGS);
+  const [paymentSettingsStatus, setPaymentSettingsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
@@ -250,8 +251,10 @@ export default function Subscription() {
             ...parsed
           });
         }
+        setPaymentSettingsStatus('ready');
       } catch (err) {
         console.error("Erro ao carregar configurações de pagamento do banco:", err);
+        setPaymentSettingsStatus('error');
       }
     };
     
@@ -560,7 +563,7 @@ export default function Subscription() {
     setSuccessMessage(null);
     setPaymentModal(null);
 
-    const errorMessage = error?.message || 'Ocorreu uma falha ao processar o pagamento.';
+    const errorMessage = describeGooglePayError(error);
     await sendPaymentEmailAndShowModal('error', plan, 'Google Pay', {}, errorMessage);
     setLoadingPlan(null);
   };
@@ -825,26 +828,30 @@ export default function Subscription() {
                     </button>
                   ) : (
                     <div className="space-y-3">
-                      <GooglePayButton
-                        key={`${paymentSettings.environment}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
-                        environment={paymentSettings.environment}
-                        buttonType="subscribe"
-                        buttonColor="black"
-                        buttonSizeMode="fill"
-                        buttonLocale="pt"
-                        buttonRadius={8}
-                        paymentRequest={getGooglePayRequest(plan.price, paymentSettings)}
-                        onLoadPaymentData={(paymentRequest) => {
-                          handleGooglePaySuccess(plan.id, paymentRequest);
-                        }}
-                        onError={(error) => {
-                          void handleGooglePayError(plan.id, error);
-                        }}
-                        onCancel={(reason) => {
-                          console.log('Pagamento cancelado pelo usuário:', reason);
-                        }}
-                        style={{ width: '100%', height: '48px' }}
-                      />
+                      {paymentSettingsStatus === 'loading' && (
+                        <div className="flex min-h-12 items-center justify-center rounded-xl border border-brand-border/60 bg-brand-bg/50 px-4 text-xs text-brand-text-muted">
+                          Carregando configuração segura do Google Pay…
+                        </div>
+                      )}
+                      {paymentSettingsStatus === 'error' && (
+                        <div role="alert" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-950">
+                          Não foi possível carregar a configuração do Google Pay. Atualize a página e tente novamente.
+                        </div>
+                      )}
+                      {paymentSettingsStatus === 'ready' && (
+                        <GooglePayCheckoutButton
+                          key={`${paymentSettings.environment}-${paymentSettings.googleMerchantId}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
+                          planPrice={plan.price}
+                          paymentSettings={paymentSettings}
+                          onLoadPaymentData={(paymentRequest) => {
+                            handleGooglePaySuccess(plan.id, paymentRequest);
+                          }}
+                          onError={(error) => void handleGooglePayError(plan.id, error)}
+                          onCancel={(reason) => {
+                            console.log('Pagamento cancelado pelo usuário:', reason);
+                          }}
+                        />
+                      )}
                       
                       {profileRole === 'admin' && (
                         <button
