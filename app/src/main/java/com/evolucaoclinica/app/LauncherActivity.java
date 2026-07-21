@@ -422,6 +422,17 @@ public class LauncherActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView webView, WebResourceRequest request) {
                 Uri url = request.getUrl();
+                try {
+                    if (url != null && url.isHierarchical() && url.getQueryParameter("open_external") != null) {
+                        try {
+                            startActivity(new Intent(Intent.ACTION_VIEW, url));
+                        } catch (Exception ignored) {
+                            Toast.makeText(LauncherActivity.this, "Não foi possível abrir no navegador.", Toast.LENGTH_SHORT).show();
+                        }
+                        return true;
+                    }
+                } catch (Exception ignored) {}
+
                 if (isOAuthUrl(url)) {
                     try {
                         startActivity(new Intent(Intent.ACTION_VIEW, url));

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import GooglePayButton, { type ReadyToPayChangeResponse } from '@google-pay/button-react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ExternalLink } from 'lucide-react';
 import { getGooglePayRequest, type PaymentSettings } from '../../services/googlePay';
 
 declare global {
@@ -75,12 +75,13 @@ export function GooglePayCheckoutButton({
   className = ''
 }: GooglePayButtonProps) {
   const [availability, setAvailability] = useState<'checking' | 'available' | 'unavailable'>('checking');
+  const isNativeApp = typeof window !== 'undefined' && /EvolucaoClinicaApp/i.test(window.navigator.userAgent);
+
   const [nativePaymentSupported] = useState(() => {
     if (typeof window === 'undefined') {
       return true;
     }
 
-    const isNativeApp = /EvolucaoClinicaApp/i.test(window.navigator.userAgent);
     if (!isNativeApp) return true;
 
     if (
@@ -101,6 +102,16 @@ export function GooglePayCheckoutButton({
     setAvailability(result.isButtonVisible && result.isReadyToPay ? 'available' : 'unavailable');
   };
 
+  const handleOpenExternal = () => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('open_external', 'true');
+      window.location.href = url.toString();
+    } catch (err) {
+      console.warn('[GooglePay] Falha ao abrir no navegador externo:', err);
+    }
+  };
+
   if (!nativePaymentSupported || availability === 'unavailable') {
     return (
       <div
@@ -114,21 +125,33 @@ export function GooglePayCheckoutButton({
   }
 
   return (
-    <GooglePayButton
-      environment={paymentSettings.environment}
-      buttonType="subscribe"
-      buttonColor="black"
-      buttonBorderType="default_border"
-      buttonSizeMode="fill"
-      buttonLocale="pt"
-      buttonRadius={8}
-      paymentRequest={getGooglePayRequest(planPrice, paymentSettings)}
-      onLoadPaymentData={onLoadPaymentData}
-      onError={onError}
-      onCancel={onCancel}
-      onReadyToPayChange={handleReadyToPayChange}
-      className={className}
-      style={{ display: 'block', width: '100%', height: '48px' }}
-    />
+    <div className="flex flex-col gap-2.5 w-full">
+      <GooglePayButton
+        environment={paymentSettings.environment}
+        buttonType="subscribe"
+        buttonColor="white"
+        buttonBorderType="default_border"
+        buttonSizeMode="fill"
+        buttonLocale="pt"
+        buttonRadius={8}
+        paymentRequest={getGooglePayRequest(planPrice, paymentSettings)}
+        onLoadPaymentData={onLoadPaymentData}
+        onError={onError}
+        onCancel={onCancel}
+        onReadyToPayChange={handleReadyToPayChange}
+        className={className}
+        style={{ display: 'block', width: '100%', height: '48px' }}
+      />
+      {isNativeApp && (
+        <button
+          onClick={handleOpenExternal}
+          type="button"
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-brand-border/60 bg-brand-bg/40 py-2.5 text-center text-xs font-semibold text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary hover:border-brand-primary/30 transition-all cursor-pointer shadow-sm"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          <span>Problemas com Google Pay? Abrir no Navegador</span>
+        </button>
+      )}
+    </div>
   );
 }
