@@ -303,7 +303,10 @@ async function main() {
     // Step 3: Run build and sign
     console.log('=== STEP 3: RUNNING BUBBLEWRAP BUILD ===');
     await runCommand('npx', ['@bubblewrap/cli', 'build'], [
-      { pattern: /changes in twa-manifest\.json/i, response: 'y\n' },
+      // O projeto já foi atualizado e recebeu novamente as customizações da
+      // WebView no passo anterior. Executar outro update aqui sobrescreve o
+      // LauncherActivity e o gradle.properties, além de incrementar a versão.
+      { pattern: /changes in twa-manifest\.json/i, response: 'n\n' },
       { pattern: /Password for the Key Store:/i, response: 'evolucao123\n' },
       { pattern: /Password for the Key\b(?! Store):/i, response: 'evolucao123\n' }
     ]);
