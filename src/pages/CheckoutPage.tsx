@@ -449,7 +449,7 @@ export default function CheckoutPage() {
                   key={`${paymentSettings.environment}-${paymentSettings.stripeSandboxPublishableKey}-${paymentSettings.stripeProdPublishableKey}`}
                   environment={paymentSettings.environment}
                   buttonType="subscribe"
-                  buttonColor="black"
+                  buttonColor="white"
                   buttonSizeMode="fill"
                   buttonLocale="pt"
                   buttonRadius={8}

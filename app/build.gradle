@@ -57,8 +57,8 @@ android {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 21
         targetSdkVersion 35
-        versionCode 48
-        versionName "48"
+        versionCode 49
+        versionName "49"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -209,6 +209,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'androidx.webkit:webkit:1.14.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     

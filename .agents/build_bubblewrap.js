@@ -136,6 +136,14 @@ function applyFixes() {
       "dependencies {\n    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'"
     );
   }
+
+  // Google Pay no WebView depende do AndroidX WebKit para habilitar a Payment Request API.
+  if (!buildGradleContent.includes('androidx.webkit:webkit')) {
+    buildGradleContent = buildGradleContent.replace(
+      'dependencies {',
+      "dependencies {\n    implementation 'androidx.webkit:webkit:1.14.0'"
+    );
+  }
   
   fs.writeFileSync(buildGradlePath, buildGradleContent);
   console.log('- app/build.gradle configured.');
@@ -153,6 +161,25 @@ function applyFixes() {
       );
       modified = true;
       console.log('- RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, INTERNET & ACCESS_NETWORK_STATE permissions added to AndroidManifest.xml');
+    }
+
+    if (!manifestContent.includes('org.chromium.intent.action.PAY')) {
+      const paymentQueries = `
+    <queries>
+        <intent>
+            <action android:name="org.chromium.intent.action.PAY" />
+        </intent>
+        <intent>
+            <action android:name="org.chromium.intent.action.IS_READY_TO_PAY" />
+        </intent>
+        <intent>
+            <action android:name="org.chromium.intent.action.UPDATE_PAYMENT_DETAILS" />
+        </intent>
+    </queries>
+`;
+      manifestContent = manifestContent.replace('    <application', `${paymentQueries}\n    <application`);
+      modified = true;
+      console.log('- Google Pay Payment Request queries added to AndroidManifest.xml');
     }
 
     const launcherActivityMatch = manifestContent.match(/<activity android:name="LauncherActivity"[\s\S]*?android:exported="true">/);
