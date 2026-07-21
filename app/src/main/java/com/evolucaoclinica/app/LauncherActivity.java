@@ -34,6 +34,7 @@ import android.webkit.WebViewClient;
 import android.widget.Toast;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+import androidx.webkit.ServiceWorkerControllerCompat;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -102,12 +103,13 @@ public class LauncherActivity extends Activity {
         webView.addJavascriptInterface(new NativeFileDownloadBridge(), "NativeFileDownload");
         webView.addJavascriptInterface(new NativePaymentBridge(), "NativePaymentBridge");
         configureWebView(webView);
+        webView.clearCache(true);
 
         swipeRefreshLayout.addView(webView);
         setContentView(swipeRefreshLayout);
 
         Uri launchUri = getIntent() == null ? null : getIntent().getData();
-        webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(launchUri) ? launchUri.toString() : APP_URL));
+        webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(launchUri) ? launchUri.toString() : appUrl()));
     }
 
     @Override
@@ -117,12 +119,36 @@ public class LauncherActivity extends Activity {
         captureShareIntent(intent);
         Uri callbackUri = intent == null ? null : intent.getData();
         if (webView != null) {
-            webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(callbackUri) ? callbackUri.toString() : APP_URL));
+            webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(callbackUri) ? callbackUri.toString() : appUrl()));
         }
     }
 
     private String shareTargetUrl() {
         return "https://" + TRUSTED_HOST + "/painel/share-target?nativeShare=1";
+    }
+
+    private String appUrl() {
+        return APP_URL + "&native_version=" + getInstalledVersionCode();
+    }
+
+    private long getInstalledVersionCode() {
+        try {
+            android.content.pm.PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                    ? packageInfo.getLongVersionCode()
+                    : packageInfo.versionCode;
+        } catch (Exception exception) {
+            return 0;
+        }
+    }
+
+    private String getInstalledVersionName() {
+        try {
+            String versionName = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+            return versionName == null || versionName.trim().isEmpty() ? "unknown" : versionName;
+        } catch (Exception exception) {
+            return "unknown";
+        }
     }
 
     private boolean hasSharedFile() {
@@ -345,6 +371,7 @@ public class LauncherActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
+        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(false);
         settings.setSupportZoom(false);
@@ -352,9 +379,15 @@ public class LauncherActivity extends Activity {
         settings.setDisplayZoomControls(false);
         settings.setTextZoom(100);
         settings.setSupportMultipleWindows(false);
-        String userAgent = settings.getUserAgentString() + " EvolucaoClinicaApp/52";
+        String userAgent = settings.getUserAgentString() + " EvolucaoClinicaApp/" + getInstalledVersionName();
         if (paymentRequestSupported) userAgent += " GOOGLE_PAY_SUPPORTED";
         settings.setUserAgentString(userAgent);
+
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.SERVICE_WORKER_CACHE_MODE)) {
+            ServiceWorkerControllerCompat.getInstance()
+                    .getServiceWorkerWebSettings()
+                    .setCacheMode(WebSettings.LOAD_NO_CACHE);
+        }
 
         view.setOverScrollMode(View.OVER_SCROLL_NEVER);
         view.setVerticalScrollBarEnabled(false);
@@ -367,6 +400,7 @@ public class LauncherActivity extends Activity {
             public void onPageFinished(WebView webView, String url) {
                 super.onPageFinished(webView, url);
                 if (swipeRefreshLayout != null) swipeRefreshLayout.setRefreshing(false);
+                refreshWebAppCacheIfNeeded(webView, url);
             }
 
             @Override
@@ -425,6 +459,29 @@ public class LauncherActivity extends Activity {
                 return true;
             }
         });
+    }
+
+    private void refreshWebAppCacheIfNeeded(WebView webView, String url) {
+        Uri pageUri;
+        try {
+            pageUri = Uri.parse(url);
+        } catch (Exception exception) {
+            return;
+        }
+        if (!isTrustedUrl(pageUri)) return;
+
+        String cacheMarker = "evolucao_native_cache_" + getInstalledVersionCode();
+        String script = "(async function(){try{"
+                + "var key='" + cacheMarker + "';"
+                + "if(localStorage.getItem(key)==='1')return;"
+                + "localStorage.setItem(key,'1');"
+                + "if('caches' in window){var names=await caches.keys();"
+                + "await Promise.all(names.map(function(name){return caches.delete(name);}));}"
+                + "if('serviceWorker' in navigator){var regs=await navigator.serviceWorker.getRegistrations();"
+                + "await Promise.all(regs.map(function(reg){return reg.update();}));}"
+                + "location.reload();"
+                + "}catch(error){console.warn('[NativeCache] Falha ao atualizar cache',error);}})();";
+        webView.evaluateJavascript(script, null);
     }
 
     private void requestRequiredPermissions() {

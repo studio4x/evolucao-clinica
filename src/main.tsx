@@ -10,7 +10,8 @@ import { installWebViewAudioCompatibility } from './utils/audioWebViewCompatibil
 initAnalytics();
 
 // Detecta se esta rodando no WebView do App
-if (/EvolucaoClinicaApp/i.test(navigator.userAgent)) {
+const isNativeWebView = /EvolucaoClinicaApp/i.test(navigator.userAgent);
+if (isNativeWebView) {
   document.documentElement.classList.add('is-webview');
   installWebViewAudioCompatibility();
 }
@@ -19,8 +20,13 @@ if (/EvolucaoClinicaApp/i.test(navigator.userAgent)) {
 // Registro do Service Worker
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    void navigator.serviceWorker.register("/sw.js", { scope: '/' }).then(reg => {
+    const serviceWorkerUrl = `/sw.js?v=${encodeURIComponent(APP_VERSION)}`;
+    void navigator.serviceWorker.register(serviceWorkerUrl, {
+      scope: '/',
+      updateViaCache: 'none'
+    }).then(reg => {
       console.log("[PWA] Service Worker registrado com escopo:", reg.scope);
+      void reg.update();
     }).catch((error) => {
       console.warn("[PWA] Falha ao registrar service worker:", error);
     });

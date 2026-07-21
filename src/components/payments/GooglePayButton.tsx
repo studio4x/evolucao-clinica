@@ -114,22 +114,21 @@ export function GooglePayCheckoutButton({
   }
 
   return (
-    <div className={`overflow-hidden rounded-xl bg-brand-primary p-1 shadow-sm ${className}`}>
-      <GooglePayButton
-        environment={paymentSettings.environment}
-        buttonType="subscribe"
-        buttonColor="white"
-        buttonSizeMode="fill"
-        buttonLocale="pt"
-        buttonRadius={8}
-        paymentRequest={getGooglePayRequest(planPrice, paymentSettings)}
-        onLoadPaymentData={onLoadPaymentData}
-        onError={onError}
-        onCancel={onCancel}
-        onReadyToPayChange={handleReadyToPayChange}
-        className="block w-full overflow-hidden rounded-lg"
-        style={{ width: '100%', height: '48px' }}
-      />
-    </div>
+    <GooglePayButton
+      environment={paymentSettings.environment}
+      buttonType="subscribe"
+      buttonColor="black"
+      buttonBorderType="default_border"
+      buttonSizeMode="fill"
+      buttonLocale="pt"
+      buttonRadius={8}
+      paymentRequest={getGooglePayRequest(planPrice, paymentSettings)}
+      onLoadPaymentData={onLoadPaymentData}
+      onError={onError}
+      onCancel={onCancel}
+      onReadyToPayChange={handleReadyToPayChange}
+      className={className}
+      style={{ display: 'block', width: '100%', height: '48px' }}
+    />
   );
 }
