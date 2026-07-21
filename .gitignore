@@ -9,6 +9,9 @@ coverage/
 .vercel
 supabase/.temp/
 
+# Credenciais privadas de contas de serviço
+docs/evolucaoclinica-*.json
+
 # Android TWA binaries and signing keys
 *.apk
 *.aab
