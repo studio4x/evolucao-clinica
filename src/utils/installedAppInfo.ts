@@ -25,8 +25,17 @@ const readLaunchVersionCode = (): number | null => {
 
   try {
     const queryVersion = new URLSearchParams(window.location.search).get('native_version');
-    const storedVersion = window.sessionStorage.getItem(NATIVE_VERSION_STORAGE_KEY);
-    return parsePositiveInteger(queryVersion) || parsePositiveInteger(storedVersion);
+    return parsePositiveInteger(queryVersion);
+  } catch {
+    return null;
+  }
+};
+
+const readStoredLaunchVersionCode = (): number | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return parsePositiveInteger(window.sessionStorage.getItem(NATIVE_VERSION_STORAGE_KEY));
   } catch {
     return null;
   }
@@ -87,13 +96,24 @@ const readNativeUserAgent = (): InstalledAppInfo | null => {
 };
 
 export const getInstalledAppInfo = (): InstalledAppInfo => {
-  const nativeInfo = readNativeBridge() || readNativeUserAgent();
+  // A ponte consulta o PackageManager em tempo real e, por isso, é a fonte
+  // mais confiável após uma atualização feita pela Play Store. Um parâmetro
+  // ou dado de sessão pode pertencer à execução anterior do WebView.
+  const nativeBridgeInfo = readNativeBridge();
+  if (nativeBridgeInfo) return nativeBridgeInfo;
+
   const launchVersionCode = readLaunchVersionCode();
-  if (nativeInfo || launchVersionCode) {
-    // O versionCode enviado pelo LauncherActivity identifica o pacote que foi
-    // realmente instalado e deve prevalecer sobre um User-Agent persistido.
-    const versionCode = launchVersionCode || nativeInfo?.versionCode || null;
-    const versionName = launchVersionCode ? String(launchVersionCode) : nativeInfo?.versionName || null;
+  const storedLaunchVersionCode = readStoredLaunchVersionCode();
+  const nativeUserAgentInfo = readNativeUserAgent();
+
+  if (launchVersionCode || storedLaunchVersionCode || nativeUserAgentInfo) {
+    // A URL atual identifica o lançamento do app. O valor persistido serve
+    // apenas de contingência para navegações SPA, quando a ponte nativa não
+    // está disponível (por exemplo, em instalações antigas).
+    const versionCode = launchVersionCode || storedLaunchVersionCode || nativeUserAgentInfo?.versionCode || null;
+    const versionName = launchVersionCode || storedLaunchVersionCode
+      ? String(versionCode)
+      : nativeUserAgentInfo?.versionName || null;
 
     return {
       platform: 'android',
