@@ -107,7 +107,7 @@ export function GooglePayCheckoutButton({
     <GooglePayButton
       environment={paymentSettings.environment}
       buttonType="subscribe"
-      buttonColor="black"
+      buttonColor="default"
       buttonSizeMode="fill"
       buttonLocale="pt"
       buttonRadius={8}
