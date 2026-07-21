@@ -58,8 +58,11 @@ export async function getBillingConfig(admin: any) {
     publicSettings = {};
   }
 
+  // A configuração salva no painel deve controlar o ambiente em tempo real.
+  // PAYMENT_ENVIRONMENT permanece como fallback para a implantação inicial,
+  // quando ainda não existe um registro payment_settings no banco.
   const configuredEnvironment = String(
-    Deno.env.get("PAYMENT_ENVIRONMENT") || publicSettings.environment || "TEST",
+    publicSettings.environment || Deno.env.get("PAYMENT_ENVIRONMENT") || "TEST",
   ).toUpperCase();
   const environment: BillingEnvironment = configuredEnvironment === "PRODUCTION" ? "PRODUCTION" : "TEST";
   const isProduction = environment === "PRODUCTION";
