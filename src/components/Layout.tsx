@@ -152,22 +152,6 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
-      {/* Mobile Header */}
-      <div className="md:hidden bg-white border-b border-brand-border p-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
-        <Link to="/">
-          {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
-            <img
-              src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-              alt={siteConfig.pwa_app_name || "Evolução Clínica"}
-              className="h-14 w-auto max-w-[150px] object-contain"
-            />
-          ) : (
-            <span className="text-lg font-display font-bold text-brand-primary">
-              {siteConfig.pwa_app_name || "Evolução Clínica"}
-            </span>
-          )}
-        </Link>
-      </div>
 
       {/* Sidebar */}
       <div className={`
