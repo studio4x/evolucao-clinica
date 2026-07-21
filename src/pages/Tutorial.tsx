@@ -63,8 +63,8 @@ export default function Tutorial() {
     },
     {
       icon: ShieldCheck,
-      title: 'Assinatura com Proteção Legal',
-      description: 'Assine digitalmente suas evoluções e relatórios para gerar um código digital de segurança imutável, garantindo conformidade jurídica.',
+      title: 'Assinatura e Fechamento Seguro',
+      description: 'Registre autoria, data, hora e um hash de integridade ao fechar evoluções e relatórios contra alterações posteriores.',
       color: 'bg-indigo-600'
     },
     {

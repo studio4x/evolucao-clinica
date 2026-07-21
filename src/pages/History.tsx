@@ -9,6 +9,7 @@ import { transcribeAudio } from '../services/aiTranscription';
 import { appendToGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { useSiteConfig } from '../hooks/useSiteConfig';
+import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -42,13 +43,18 @@ export default function History() {
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const [professional, setProfessional] = useState<any>(null);
 
   const getLogoUrl = () => {
-    const isYearly = professional?.subscription_plan === 'yearly' || subscriptionPlan === 'yearly';
+    const isYearly = hasActiveYearlyAccess({
+      profileRole: professional?.role ?? profileRole,
+      subscriptionPlan: professional?.subscription_plan ?? subscriptionPlan,
+      subscriptionStatus: professional?.subscription_status ?? subscriptionStatus,
+      subscriptionEndsAt: professional?.subscription_ends_at ?? subscriptionEndsAt
+    });
     return (isYearly && professional?.custom_logo_url) ? professional.custom_logo_url : siteConfig.logo_light_url;
   };
   const [printMode, setPrintMode] = useState<'prontuario' | 'report' | null>(null);
@@ -93,7 +99,7 @@ export default function History() {
 
       const { data: profData, error: profError } = await supabase
         .from('professionals')
-        .select('full_name, professional_title, professional_register, custom_logo_url, subscription_plan')
+        .select('full_name, professional_title, professional_register, custom_logo_url, role, subscription_plan, subscription_status, subscription_ends_at')
         .eq('id', user.id)
         .single();
       if (!profError && profData) {

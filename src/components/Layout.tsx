@@ -9,9 +9,10 @@ import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
 import { runAutoBackupIfNeeded } from '../services/backupService';
+import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 
 export default function Layout() {
-  const { user, profileRole, googleAccessToken, subscriptionPlan } = useAuthStore();
+  const { user, profileRole, googleAccessToken, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const siteConfig = useSiteConfig();
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,6 +21,12 @@ export default function Layout() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const hasYearlyAccess = hasActiveYearlyAccess({
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt
+  });
   const [isCollapsed, setIsCollapsed] = useState(() => {
     return window.innerWidth >= 768 && window.innerWidth < 1024;
   });
@@ -92,7 +99,7 @@ export default function Layout() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || !googleAccessToken || subscriptionPlan !== 'yearly') return;
+    if (!user || !googleAccessToken || !hasYearlyAccess) return;
 
     const triggerBackup = async () => {
       try {
@@ -104,7 +111,7 @@ export default function Layout() {
 
     const timer = setTimeout(triggerBackup, 5000);
     return () => clearTimeout(timer);
-  }, [user, googleAccessToken, subscriptionPlan]);
+  }, [user, googleAccessToken, hasYearlyAccess]);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) {

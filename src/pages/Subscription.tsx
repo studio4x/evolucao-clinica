@@ -7,6 +7,7 @@ import { StripeSubscriptionButton, type ConfirmedBillingResult } from '../compon
 import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
 import { createStripeCustomerPortalSession, hasNativeBillingBridge } from '../services/billing';
+import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
 
 const DEFAULT_PLANS = [
   {
@@ -17,19 +18,7 @@ const DEFAULT_PLANS = [
     original_price: null,
     equivalent_monthly_price: null,
     launch_offer_text: null,
-    features: [
-      'Pacientes ilimitados',
-      'Transcrições de áudio com uso justo de até 20 horas por mês',
-      'Integração com Google Docs em tempo real',
-      'Gravação e transcrição de áudio nativa',
-      'Geração de Relatórios & PDI por IA',
-      'Pesquisa Inteligente por IA (Pergunte ao Prontuário)',
-      'Assinatura Digital de Documentos com Proteção Legal',
-      'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
-      'Filtro de Período na Impressão do Prontuário',
-      'Lembrete e envio de WhatsApp para aniversariantes',
-      'Impressão de prontuários do Google Docs'
-    ],
+    features: MONTHLY_PLAN_FEATURES,
     button_text_simulate: 'Assinar Mensal (Simulado)',
     tag_text: 'Recorrente',
     discount_text: null
@@ -42,15 +31,7 @@ const DEFAULT_PLANS = [
     original_price: null,
     equivalent_monthly_price: 16.58,
     launch_offer_text: null,
-    features: [
-      'Tudo do plano mensal',
-      'Economia de 57% em relação ao plano mensal',
-      'Suporte prioritário via ticket',
-      'Garantia de novos recursos exclusivos em primeira mão',
-      'Migração assistida de prontuários por IA (PDF/Word/Excel)',
-      'Logotipo personalizado nos relatórios e evoluções (PDF/Impresso)',
-      'Backup e Restauração completa de dados no Google Drive (Diário/Semanal/Mensal)'
-    ],
+    features: YEARLY_PLAN_FEATURES,
     button_text_simulate: 'Assinar Anual (Simulado)',
     tag_text: 'Popular',
     discount_text: '57% OFF'
@@ -103,25 +84,11 @@ function getPlanDisplayName(plan: SubscriptionPlanLike | undefined, fallbackId: 
 }
 
 function getPlanBenefitsCopy(plan: SubscriptionPlanLike | undefined, fallbackId: string) {
-  const defaultMonthlyBenefits = [
-    'Pacientes ilimitados',
-    'Transcrições de áudio com uso justo de até 20 horas por mês',
-    'Integração com Google Docs em tempo real',
-    'Gravação e transcrição de áudio nativa'
-  ];
-
-  const defaultYearlyBenefits = [
-    'Tudo do plano mensal',
-    'Desconto de ~17% sobre o valor mensal',
-    'Suporte prioritário via e-mail',
-    'Garantia de novos recursos em primeira mão'
-  ];
-
   const benefits = Array.isArray(plan?.features) && plan.features.length > 0
     ? plan.features.map((feature) => String(feature).trim()).filter(Boolean)
     : fallbackId === 'yearly'
-      ? defaultYearlyBenefits
-      : defaultMonthlyBenefits;
+      ? YEARLY_PLAN_FEATURES
+      : MONTHLY_PLAN_FEATURES;
 
   if (fallbackId === 'yearly') {
     return {

@@ -9,6 +9,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 import { trackBeginCheckout } from '../services/analytics';
+import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
 
 
 const DEFAULT_PLANS = [
@@ -16,29 +17,13 @@ const DEFAULT_PLANS = [
     id: 'monthly',
     name: 'Plano Mensal',
     price: 39.00,
-    features: [
-      'Pacientes ilimitados',
-      'Transcrições de áudio com uso justo de até 20 horas por mês',
-      'Integração com Google Docs em tempo real',
-      'Gravação e transcrição de áudio nativa',
-      'Geração de Relatórios & PDI por IA',
-      'Pesquisa Inteligente por IA (Pergunte ao Prontuário)',
-      'Assinatura Digital de Documentos com Proteção Legal',
-      'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)'
-    ]
+    features: MONTHLY_PLAN_FEATURES
   },
   {
     id: 'yearly',
     name: 'Plano Anual',
     price: 199.00,
-    features: [
-      'Tudo do plano mensal',
-      'Desconto de ~17% sobre o valor mensal',
-      'Suporte prioritário via ticket',
-      'Garantia de novos recursos exclusivos em primeira mão',
-      'Migração assistida de prontuários por IA (PDF/Word/Excel)',
-      'Logotipo personalizado nos relatórios e evoluções (PDF/Impresso)'
-    ]
+    features: YEARLY_PLAN_FEATURES
   }
 ];
 

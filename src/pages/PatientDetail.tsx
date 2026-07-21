@@ -16,6 +16,7 @@ import { generateReportPDF } from '../utils/reportPdf';
 import { downloadPdfFile, generateProntuarioPDF, getProntuarioPdfFileName } from '../utils/prontuarioPdf';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { showAlert } from '../store/modalStore';
+import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -203,7 +204,12 @@ export default function PatientDetail() {
   const [professional, setProfessional] = useState<any>(null);
 
   const getLogoUrl = () => {
-    const isYearly = professional?.subscription_plan === 'yearly' || subscriptionPlan === 'yearly';
+    const isYearly = hasActiveYearlyAccess({
+      profileRole: professional?.role ?? profileRole,
+      subscriptionPlan: professional?.subscription_plan ?? subscriptionPlan,
+      subscriptionStatus: professional?.subscription_status ?? subscriptionStatus,
+      subscriptionEndsAt: professional?.subscription_ends_at ?? subscriptionEndsAt
+    });
     return (isYearly && professional?.custom_logo_url) ? professional.custom_logo_url : siteConfig.logo_light_url;
   };
   const [printingProntuario, setPrintingProntuario] = useState(false);
@@ -980,7 +986,7 @@ export default function PatientDetail() {
       // Buscar dados do profissional logado da tabela professionals
       const { data: profData, error: profError } = await supabase
         .from('professionals')
-        .select('full_name, professional_title, professional_register, custom_logo_url, subscription_plan')
+        .select('full_name, professional_title, professional_register, custom_logo_url, role, subscription_plan, subscription_status, subscription_ends_at')
         .eq('id', user.id)
         .single();
       if (!profError && profData) {

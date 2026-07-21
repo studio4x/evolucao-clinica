@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Paperclip, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { createSupportTicket, SupportTicketCategory } from '../../services/support';
+import { hasActivePaidAccess, hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
 
 interface SupportTicketModalProps {
   isOpen: boolean;
@@ -10,7 +11,9 @@ interface SupportTicketModalProps {
 }
 
 export default function SupportTicketModal({ isOpen, onClose, onSuccess }: SupportTicketModalProps) {
-  const { subscriptionPlan } = useAuthStore();
+  const { profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const hasPaidAccess = hasActivePaidAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
+  const hasYearlyAccess = hasActiveYearlyAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
   const [subject, setSubject] = useState('');
   const [category, setCategory] = useState<SupportTicketCategory>('general');
   const [description, setDescription] = useState('');
@@ -78,7 +81,7 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
     </div>
   );
 
-  if (subscriptionPlan === 'yearly') {
+  if (hasYearlyAccess) {
     slaMessage = (
       <div className="bg-gradient-to-r from-amber-50 to-orange-50 text-amber-900 p-4 rounded-2xl border border-amber-200 text-xs leading-relaxed flex items-start space-x-2">
         <span className="text-base">✨</span>
@@ -88,7 +91,7 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
         </div>
       </div>
     );
-  } else if (subscriptionPlan === 'monthly') {
+  } else if (hasPaidAccess && subscriptionPlan === 'monthly') {
     slaMessage = (
       <div className="bg-emerald-50 text-emerald-900 p-4 rounded-2xl border border-emerald-200 text-xs leading-relaxed">
         <strong className="text-emerald-800">Suporte Plano Mensal:</strong> O prazo estimado de primeira resposta é de 

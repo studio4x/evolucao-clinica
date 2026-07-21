@@ -6,9 +6,12 @@ import { fetchMySupportTickets, SupportTicket, isSupportTicketUnread, setSupport
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import SupportTicketModal from '../components/support/SupportTicketModal';
+import { hasActivePaidAccess, hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 
 export default function SupportTickets() {
-  const { user, subscriptionPlan } = useAuthStore();
+  const { user, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const hasPaidAccess = hasActivePaidAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
+  const hasYearlyAccess = hasActiveYearlyAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -97,7 +100,7 @@ export default function SupportTickets() {
     </div>
   );
 
-  if (subscriptionPlan === 'yearly') {
+  if (hasYearlyAccess) {
     slaInfoCard = (
       <div className="card p-6 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-white border border-amber-500/20 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden shadow-sm">
         <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-amber-400/10 to-transparent rounded-full blur-2xl pointer-events-none" />
@@ -123,7 +126,7 @@ export default function SupportTickets() {
         </div>
       </div>
     );
-  } else if (subscriptionPlan === 'monthly') {
+  } else if (hasPaidAccess && subscriptionPlan === 'monthly') {
     slaInfoCard = (
       <div className="card p-6 bg-emerald-50/50 border border-emerald-500/10 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start space-x-3.5">

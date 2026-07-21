@@ -16,10 +16,11 @@ import {
   getBackupsListFromDrive,
   restoreBackupFromDrive
 } from '../services/backupService';
+import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { user, googleAccessToken, setUser, setGoogleAccessToken, setGoogleGrantedScopes, setProfileInfo, subscriptionPlan } = useAuthStore();
+  const { user, googleAccessToken, setUser, setGoogleAccessToken, setGoogleGrantedScopes, setProfileInfo, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -267,7 +268,12 @@ export default function Profile() {
     }
   };
 
-  const isYearly = dbSubscriptionPlan === 'yearly' || subscriptionPlan === 'yearly';
+  const isYearly = hasActiveYearlyAccess({
+    profileRole,
+    subscriptionPlan: dbSubscriptionPlan ?? subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt
+  });
 
   useEffect(() => {
     if (googleAccessToken && isYearly) {
@@ -503,6 +509,14 @@ export default function Profile() {
 
   const handleChangeBackupFrequency = async (freq: 'daily' | 'weekly' | 'monthly') => {
     if (!user) return;
+    if (!isYearly) {
+      await showAlert("O backup automático no Google Drive é uma funcionalidade exclusiva do Plano Anual ativo.", {
+        title: "Funcionalidade Premium",
+        variant: "warning",
+        icon: "warning"
+      });
+      return;
+    }
     try {
       await updateBackupPreferences(user.id, autoBackupEnabled, freq);
       setBackupFrequency(freq);
@@ -520,6 +534,14 @@ export default function Profile() {
 
   const handleManualDriveBackup = async () => {
     if (!user) return;
+    if (!isYearly) {
+      await showAlert("O backup no Google Drive é uma funcionalidade exclusiva do Plano Anual ativo.", {
+        title: "Funcionalidade Premium",
+        variant: "warning",
+        icon: "warning"
+      });
+      return;
+    }
     if (!googleAccessToken) {
       await showAlert("Você precisa conectar sua conta do Google nas configurações antes de enviar para o Drive.", {
         title: "Conectar Google",
@@ -573,6 +595,14 @@ export default function Profile() {
 
   const handleRestoreBackup = async (backupFile: any) => {
     if (!user || !googleAccessToken) return;
+    if (!isYearly) {
+      await showAlert("A restauração de backups é uma funcionalidade exclusiva do Plano Anual ativo.", {
+        title: "Funcionalidade Premium",
+        variant: "warning",
+        icon: "warning"
+      });
+      return;
+    }
     
     try {
       setRestoringBackupId(backupFile.id);

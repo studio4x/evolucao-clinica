@@ -3186,8 +3186,8 @@ export default function AdminPanel() {
                           style: 'currency',
                           currency: 'BRL'
                         }).format(
-                          (professionals.filter(p => p.subscription_plan === 'monthly' && p.subscription_status === 'active' && p.status === 'active').length * 49.90) +
-                          (professionals.filter(p => p.subscription_plan === 'yearly' && p.subscription_status === 'active' && p.status === 'active').length * (499.00 / 12))
+                          (professionals.filter(p => p.subscription_plan === 'monthly' && p.subscription_status === 'active' && p.status === 'active').length * Number(plans.find(plan => plan.id === 'monthly')?.price || 39)) +
+                          (professionals.filter(p => p.subscription_plan === 'yearly' && p.subscription_status === 'active' && p.status === 'active').length * (Number(plans.find(plan => plan.id === 'yearly')?.price || 199) / 12))
                         )}
                       </h3>
                     </div>

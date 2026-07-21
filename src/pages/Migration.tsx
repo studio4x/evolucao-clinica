@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { Database, UploadCloud, CheckCircle2, Lock, Shield, FileText, ArrowRight, Loader2, RefreshCw, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { createMigrationRequest, fetchMyMigrationRequests, getMigrationAttachmentUrl, MigrationRequest } from '../services/migration';
+import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 
 export default function Migration() {
   const navigate = useNavigate();
-  const { subscriptionPlan, user } = useAuthStore();
-  const isYearlyOrAdmin = subscriptionPlan === 'yearly' || subscriptionPlan === 'none';
+  const { subscriptionPlan, subscriptionStatus, subscriptionEndsAt, profileRole, user } = useAuthStore();
+  const isYearlyOrAdmin = hasActiveYearlyAccess({
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt
+  });
 
   const [requests, setRequests] = useState<MigrationRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -260,7 +266,7 @@ export default function Migration() {
                 <ArrowRight size={16} />
               </button>
               <p className="text-[10px] text-amber-800/60 mt-2">
-                Mude para o Plano Anual e garanta mais 17% de desconto
+                Mude para o Plano Anual e economize 57% em relação a 12 mensalidades
               </p>
             </div>
           </div>

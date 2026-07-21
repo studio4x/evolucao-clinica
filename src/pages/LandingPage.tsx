@@ -37,6 +37,7 @@ import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandA
 import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 import { supabase } from '../supabaseClient';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
+import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
 
 const DEFAULT_PLANS = [
   {
@@ -49,19 +50,7 @@ const DEFAULT_PLANS = [
     launch_offer_text: null,
     tag_text: 'Mês a Mês',
     description: 'Flexibilidade para experimentar sem amarras contratuais.',
-    features: [
-      'Pacientes ilimitados',
-      'Transcrições de áudio com uso justo de até 20 horas por mês',
-      'Integração com Google Docs em tempo real',
-      'Gravação e transcrição de áudio nativa',
-      'Geração de Relatórios & PDI por IA',
-      'Pesquisa Inteligente por IA (Pergunte ao Prontuário)',
-      'Assinatura Digital de Documentos com Proteção Legal',
-      'Compartilhamento Seguro de Relatórios (WhatsApp/E-mail)',
-      'Filtro de Período na Impressão do Prontuário',
-      'Lembrete e envio de WhatsApp para aniversariantes',
-      'Impressão de prontuários do Google Docs'
-    ]
+    features: MONTHLY_PLAN_FEATURES
   },
   {
     id: 'yearly',
@@ -73,15 +62,7 @@ const DEFAULT_PLANS = [
     launch_offer_text: null,
     tag_text: 'Popular',
     description: 'A alternativa perfeita para consolidar sua economia anual.',
-    features: [
-      'Tudo do plano mensal',
-      'Economia de 57% em relação ao plano mensal',
-      'Suporte prioritário via e-mail e WhatsApp',
-      'Garantia de novos recursos em primeira mão',
-      'Migração assistida de prontuários por IA (PDF/Word/Excel)',
-      'Logotipo personalizado nos relatórios e evoluções (PDF/Impresso)',
-      'Backup e Restauração no Google Drive (Diário/Semanal/Mensal)'
-    ]
+    features: YEARLY_PLAN_FEATURES
   }
 ];
 

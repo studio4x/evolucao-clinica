@@ -7,6 +7,7 @@ import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandA
 import { getOnboardingDestination } from '../utils/onboarding';
 import { supabase } from '../supabaseClient';
 import { waitForConfirmedSubscription } from '../services/billing';
+import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
 
 const formatRenewalDate = (dateStr: string) => {
   try {
@@ -23,25 +24,7 @@ const formatRenewalDate = (dateStr: string) => {
 };
 
 const getPlanBenefitsList = (planId: string) => {
-  const defaultMonthlyBenefits = [
-    'Pacientes ilimitados',
-    'Transcrições de áudio com uso justo de até 20 horas por mês',
-    'Integração com Google Docs em tempo real',
-    'Gravação e transcrição de áudio nativa',
-    'Geração de Relatórios & PDI por IA',
-    'Lembrete e envio de WhatsApp para aniversariantes',
-    'Compartilhamento de relatórios via WhatsApp',
-    'Impressão de prontuários do Google Docs'
-  ];
-
-  const defaultYearlyBenefits = [
-    'Tudo do plano mensal',
-    'Desconto de ~17% sobre o valor mensal',
-    'Suporte prioritário via e-mail e WhatsApp',
-    'Garantia de novos recursos exclusivo em primeira mão'
-  ];
-
-  return planId === 'yearly' ? defaultYearlyBenefits : defaultMonthlyBenefits;
+  return planId === 'yearly' ? YEARLY_PLAN_FEATURES : MONTHLY_PLAN_FEATURES;
 };
 
 export default function SuccessPage() {
