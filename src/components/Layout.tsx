@@ -147,7 +147,7 @@ export default function Layout() {
     { name: 'Pacientes', path: '/painel/patients', icon: Users },
     { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
     { name: 'Notif.', path: '/painel/notifications', icon: Bell },
-    { name: 'Perfil', path: '/painel/profile', icon: User },
+    { name: 'Mais', path: '#menu', icon: Menu },
   ];
 
   return (
@@ -167,23 +167,14 @@ export default function Layout() {
             </span>
           )}
         </Link>
-        <div className="flex items-center space-x-2">
-          <Link to="/painel/tutorial" className="p-2 text-brand-primary" title="Ajuda">
-            <HelpCircle size={22} />
-          </Link>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-brand-primary">
-            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
       </div>
 
       {/* Sidebar */}
       <div className={`
-        ${isMobileMenuOpen ? 'flex' : 'hidden'} 
-        md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
-        fixed md:sticky top-[73px] md:top-0 z-50 md:z-40 h-[calc(100vh-133px)] md:h-screen shadow-sm
+        hidden md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
+        sticky top-0 z-40 h-screen shadow-sm
         transition-all duration-300 md:relative overflow-y-auto md:overflow-y-visible
-        ${isCollapsed ? 'w-full md:w-20' : 'w-full md:w-64'}
+        ${isCollapsed ? 'w-20' : 'w-64'}
       `}>
         {/* Toggle Collapse Button - Only visible on desktop/tablet (md) */}
         <button
@@ -358,6 +349,127 @@ export default function Layout() {
         </footer>
       </div>
 
+      {/* Mobile Full Screen Menu Overlay */}
+      <div className={`
+        fixed inset-0 z-[100] bg-white flex flex-col md:hidden
+        transition-all duration-300 ease-out origin-bottom-right
+        ${isMobileMenuOpen 
+          ? 'opacity-100 scale-100 translate-x-0 translate-y-0 pointer-events-auto' 
+          : 'opacity-0 scale-0 translate-x-1/4 translate-y-1/4 pointer-events-none'
+        }
+      `}>
+        {/* Mobile Menu Header */}
+        <div className="bg-white border-b border-brand-border/60 p-4 flex justify-between items-center shrink-0">
+          {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
+            <img
+              src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
+              alt={siteConfig.pwa_app_name || "Evolução Clínica"}
+              className="h-12 w-auto max-w-[140px] object-contain"
+            />
+          ) : (
+            <span className="text-lg font-display font-bold text-brand-primary">
+              {siteConfig.pwa_app_name || "Evolução Clínica"}
+            </span>
+          )}
+          <button 
+            onClick={() => setIsMobileMenuOpen(false)} 
+            className="p-2 text-brand-primary hover:bg-brand-bg rounded-lg cursor-pointer"
+            title="Fechar menu"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Mobile Menu Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24 pb-safe">
+          {/* User Profile Info Card */}
+          <div className="flex items-center space-x-3 p-4 bg-brand-bg rounded-xl border border-brand-border/50">
+            <UserAvatar
+              name={user?.user_metadata?.full_name || user?.user_metadata?.name}
+              email={user?.email}
+              src={user?.user_metadata?.avatar_url || user?.user_metadata?.picture || user?.user_metadata?.photo_url}
+              className="h-12 w-12 border border-brand-border"
+            />
+            <div className="overflow-hidden">
+              <p className="text-sm font-medium text-brand-text truncate">{user?.user_metadata?.full_name || user?.email || 'Profissional'}</p>
+              <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="space-y-1">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
+              return (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-200 relative group ${
+                    isActive 
+                      ? 'bg-brand-primary text-white shadow-sm' 
+                      : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                  }`}
+                >
+                  <div className="flex items-center space-x-3">
+                    <Icon size={20} className="flex-shrink-0" />
+                    <span className="font-medium text-sm">{item.name}</span>
+                  </div>
+                  
+                  {item.name === 'Notificações' && unreadCount > 0 && (
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                      isActive ? 'bg-white text-brand-primary' : 'bg-brand-primary text-white animate-pulse'
+                    }`}>
+                      {unreadCount}
+                    </span>
+                  )}
+                  {item.isPremium && (
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md flex items-center shrink-0 ${
+                      isActive 
+                        ? 'bg-white/20 text-white' 
+                        : 'bg-amber-50 text-amber-600 border border-amber-200'
+                    }`} title="Recurso Premium do Plano Anual">
+                      <Crown size={10} className="fill-current shrink-0" />
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Actions & Utilities */}
+          <div className="pt-4 border-t border-brand-border/60 space-y-2">
+            {!isStandalone && deferredPrompt && (
+              <button
+                onClick={handleInstallClick}
+                className="flex items-center space-x-3 px-4 py-3.5 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-all duration-200 cursor-pointer"
+              >
+                <Download size={20} className="flex-shrink-0" />
+                <span className="font-medium text-sm">Instalar App</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                const text = "Olá! Estou usando o aplicativo Evolução Clínica para gerenciar meus prontuários com IA e achei fantástico. Facilita muito o dia a dia! Dá uma olhada: " + window.location.origin;
+                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+              }}
+              className="flex items-center space-x-3 px-4 py-3.5 w-full rounded-xl text-brand-primary hover:bg-brand-bg transition-all duration-200 cursor-pointer animate-none"
+            >
+              <Share2 size={20} className="flex-shrink-0" />
+              <span className="font-medium text-sm">Compartilhar App</span>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="flex items-center space-x-3 px-4 py-3.5 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+            >
+              <LogOut size={20} className="flex-shrink-0" />
+              <span className="font-medium text-sm">Sair</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Fila de Sincronização Offline */}
       <OfflineQueueMonitor />
 
@@ -365,7 +477,34 @@ export default function Layout() {
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center py-2 pb-safe">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
+          const isMais = item.name === 'Mais';
+          
+          const isFirst4Active = bottomNavItems
+            .slice(0, 4)
+            .some(nav => location.pathname === nav.path || (nav.path !== '/painel/dashboard' && location.pathname.startsWith(nav.path)));
+          const isActive = isMais 
+            ? (isMobileMenuOpen || !isFirst4Active)
+            : (location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path)));
+
+          if (isMais) {
+            return (
+              <button
+                key={item.name}
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className={`flex flex-col items-center justify-center flex-1 py-1 transition-all duration-200 cursor-pointer ${
+                  isActive 
+                    ? 'text-brand-primary font-semibold scale-105' 
+                    : 'text-brand-text-muted hover:text-brand-primary'
+                }`}
+              >
+                <div className="relative">
+                  <Icon size={20} className={isActive ? 'stroke-[2.5px]' : 'stroke-[1.8px]'} />
+                </div>
+                <span className="text-[10px] mt-1 font-sans">Mais</span>
+              </button>
+            );
+          }
+
           return (
             <Link
               key={item.name}
