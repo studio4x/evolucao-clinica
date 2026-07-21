@@ -102,6 +102,7 @@ public class LauncherActivity extends Activity {
         webView.addJavascriptInterface(new NativeShareBridge(), "NativeShare");
         webView.addJavascriptInterface(new NativeFileDownloadBridge(), "NativeFileDownload");
         webView.addJavascriptInterface(new NativePaymentBridge(), "NativePaymentBridge");
+        webView.addJavascriptInterface(new NativeAppInfoBridge(), "NativeAppInfoBridge");
         configureWebView(webView);
         webView.clearCache(true);
 
@@ -356,6 +357,21 @@ public class LauncherActivity extends Activity {
         @android.webkit.JavascriptInterface
         public boolean isPaymentRequestSupported() {
             return WebViewFeature.isFeatureSupported(WebViewFeature.PAYMENT_REQUEST);
+        }
+    }
+
+    private final class NativeAppInfoBridge {
+        @android.webkit.JavascriptInterface
+        public String getAppInfo() {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("versionCode", getInstalledVersionCode());
+                payload.put("versionName", getInstalledVersionName());
+                return payload.toString();
+            } catch (Exception exception) {
+                Log.e(LOG_TAG, "Não foi possível obter a versão instalada", exception);
+                return "{}";
+            }
         }
     }
 
