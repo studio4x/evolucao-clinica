@@ -237,6 +237,7 @@ export default function Subscription() {
   const now = new Date();
   const endsAtDate = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
   const isExpired = endsAtDate ? endsAtDate < now : false;
+  const isCanceled = subscriptionStatus === 'canceled' || (subscriptionPlan !== 'none' && isExpired && subscriptionStatus !== 'active');
   
   let daysRemaining = 0;
   if (endsAtDate && !isExpired) {
@@ -583,6 +584,38 @@ export default function Subscription() {
         </p>
       </div>
 
+      {/* Card de Notificação de Assinatura Cancelada */}
+      {isCanceled && (
+        <div className="bg-amber-50/90 border border-amber-200/80 rounded-2xl p-5 md:p-6 shadow-sm animate-fade-in flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative overflow-hidden">
+          <div className="flex items-start space-x-3.5">
+            <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl flex-shrink-0 mt-0.5 md:mt-0">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-bold text-amber-900 text-base md:text-lg">
+                Sua assinatura está cancelada
+              </h3>
+              <p className="text-sm text-amber-800/90 leading-relaxed max-w-2xl">
+                Sua assinatura foi cancelada. Para reativar seu acesso e continuar aproveitando todos os recursos e automatizações da plataforma sem interrupções, orientamos que você escolha um dos planos disponíveis abaixo.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const plansElement = document.getElementById('subscription-plans');
+              if (plansElement) {
+                plansElement.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+            className="flex-shrink-0 inline-flex items-center space-x-2 text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-200 px-4 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            <span>Escolher um plano</span>
+            <ArrowRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {successMessage && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-2xl flex items-start space-x-3 shadow-sm animate-fade-in">
           <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
@@ -677,7 +710,7 @@ export default function Subscription() {
       </div>
 
       {/* Cartões dos Planos de Assinatura */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4">
+      <div id="subscription-plans" className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4 scroll-mt-6">
           {(plans.length > 0 ? plans : DEFAULT_PLANS).map((plan) => {
             const isCurrentPlan = subscriptionPlan === plan.id && !isExpired;
             const isYearly = plan.id === 'yearly';
