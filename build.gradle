@@ -17,6 +17,9 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
+    dependencyLocking {
+        lockAllConfigurations()
+    }
 
     repositories {
         google()
@@ -32,6 +35,9 @@ buildscript {
 }
 
 allprojects {
+    dependencyLocking {
+        lockAllConfigurations()
+    }
     repositories {
         google()
         jcenter()
@@ -41,3 +47,4 @@ allprojects {
 task clean(type: Delete) {
     delete rootProject.buildDir
 }
+
