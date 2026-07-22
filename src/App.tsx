@@ -155,8 +155,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Pula a validação de expiração se o usuário já estiver na página de assinatura
-  if (location.pathname === '/painel/subscription') {
+  // Mantém acessíveis as páginas de assinatura e perfil mesmo sem plano ativo,
+  // para que o usuário possa gerenciar a conta ou contratar novamente.
+  if (location.pathname === '/painel/subscription' || location.pathname === '/painel/profile') {
     return <>{children}</>;
   }
 
