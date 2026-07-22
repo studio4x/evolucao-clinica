@@ -158,6 +158,7 @@ export default function Subscription() {
   const [refundReason, setRefundReason] = useState('');
   const [confirmPhrase, setConfirmPhrase] = useState('');
   const [loadingRefund, setLoadingRefund] = useState(false);
+  const isRefundConfirmationValid = confirmPhrase.trim().toUpperCase() === 'REEMBOLSAR';
 
   const getPlanDetails = (planId: string): SubscriptionPlanLike => {
     return (plans.length > 0 ? plans : DEFAULT_PLANS).find((plan) => plan.id === planId) || DEFAULT_PLANS.find((plan) => plan.id === planId) || {
@@ -510,7 +511,7 @@ export default function Subscription() {
 
   const handleRequestRefund = async () => {
     if (!selectedTxForRefund) return;
-    if (confirmPhrase !== 'REEMBOLSAR') {
+    if (!isRefundConfirmationValid) {
       alert("Por favor, digite 'REEMBOLSAR' para confirmar.");
       return;
     }
@@ -1239,7 +1240,9 @@ export default function Subscription() {
                   value={confirmPhrase}
                   onChange={(e) => setConfirmPhrase(e.target.value)}
                   placeholder="Digite REEMBOLSAR"
-                  className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary font-mono uppercase"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary font-mono"
                 />
               </div>
             </div>
@@ -1261,7 +1264,7 @@ export default function Subscription() {
               <button
                 type="button"
                 onClick={handleRequestRefund}
-                disabled={loadingRefund || confirmPhrase !== 'REEMBOLSAR'}
+                disabled={loadingRefund || !isRefundConfirmationValid}
                 className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-sm hover:bg-red-700 transition-colors flex items-center justify-center space-x-1.5 shadow disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
               >
                 {loadingRefund ? (
