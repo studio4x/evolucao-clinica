@@ -3217,7 +3217,7 @@ async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: 
   if (sub.endpoint.startsWith("fcm:")) {
     const messaging = getFirebaseMessaging();
     if (!messaging) throw new Error("FCM não configurado no servidor (FIREBASE_SERVICE_ACCOUNT_JSON ausente). ");
-    const parsed = JSON.parse(payload) as { title: string; body: string; link?: string; image?: string; icon?: string };
+    const parsed = JSON.parse(payload) as { title: string; body: string; link?: string; image?: string; icon?: string; badge?: string };
     await messaging.send({
       token: String(sub.keys?.token || sub.endpoint.slice(4)),
       data: {
@@ -3225,7 +3225,8 @@ async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: 
         body: parsed.body,
         link: parsed.link || "/painel/notifications",
         ...(parsed.image ? { image: parsed.image } : {}),
-        ...(parsed.icon ? { icon: parsed.icon } : {})
+        ...(parsed.icon ? { icon: parsed.icon } : {}),
+        ...(parsed.badge ? { badge: parsed.badge } : {})
       }
     });
     return;

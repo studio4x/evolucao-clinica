@@ -12,6 +12,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.graphics.drawable.IconCompat;
 
 import com.google.firebase.messaging.FirebaseMessagingService;
 import com.google.firebase.messaging.RemoteMessage;
@@ -37,6 +38,7 @@ public class NativeFirebaseMessagingService extends FirebaseMessagingService {
         String title = message.getData().get("title");
         String body = message.getData().get("body");
         String iconUrl = message.getData().get("icon");
+        String badgeUrl = message.getData().get("badge");
         String imageUrl = message.getData().get("image");
 
         if (TextUtils.isEmpty(title) && message.getNotification() != null) title = message.getNotification().getTitle();
@@ -44,7 +46,7 @@ public class NativeFirebaseMessagingService extends FirebaseMessagingService {
         if (TextUtils.isEmpty(title)) title = "Evolução Clínica";
         if (TextUtils.isEmpty(body)) body = "Você tem uma nova notificação.";
 
-        showNotification(title, body, message.getData().get("link"), iconUrl, imageUrl);
+        showNotification(title, body, message.getData().get("link"), iconUrl, badgeUrl, imageUrl);
     }
 
     private Bitmap getBitmapFromUrl(String urlString) {
@@ -64,7 +66,7 @@ public class NativeFirebaseMessagingService extends FirebaseMessagingService {
         }
     }
 
-    private void showNotification(String title, String body, String link, String iconUrl, String imageUrl) {
+    private void showNotification(String title, String body, String link, String iconUrl, String badgeUrl, String imageUrl) {
         NotificationManager manager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (manager == null) return;
 
@@ -86,15 +88,21 @@ public class NativeFirebaseMessagingService extends FirebaseMessagingService {
         PendingIntent pendingIntent = PendingIntent.getActivity(this, (int) System.currentTimeMillis(), intent, flags);
 
         Bitmap largeIcon = getBitmapFromUrl(iconUrl);
+        Bitmap badgeIcon = getBitmapFromUrl(badgeUrl);
         Bitmap bigPicture = getBitmapFromUrl(imageUrl);
 
         NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_notification_icon)
                 .setContentTitle(title)
                 .setContentText(body)
                 .setContentIntent(pendingIntent)
                 .setAutoCancel(true)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT);
+
+        if (badgeIcon != null) {
+            builder.setSmallIcon(IconCompat.createWithBitmap(badgeIcon));
+        } else {
+            builder.setSmallIcon(R.drawable.ic_notification_icon);
+        }
 
         if (largeIcon != null) {
             builder.setLargeIcon(largeIcon);
@@ -110,4 +118,3 @@ public class NativeFirebaseMessagingService extends FirebaseMessagingService {
         manager.notify((int) (System.currentTimeMillis() & 0x7FFFFFFF), notification);
     }
 }
-
