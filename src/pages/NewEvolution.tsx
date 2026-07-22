@@ -269,6 +269,8 @@ export default function NewEvolution() {
   const isDiscardingRef = useRef(false);
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const recordingStreamRef = useRef<MediaStream | null>(null);
+  const originalRecordingStreamRef = useRef<MediaStream | null>(null);
+  const recordingAudioContextRef = useRef<AudioContext | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const waveformFrameRef = useRef<number | null>(null);
@@ -356,6 +358,47 @@ export default function NewEvolution() {
       pauseWaveform();
     }
   }, [isRecording, isPaused]);
+
+  const stopRecordingAudioProcessing = () => {
+    if (recordingAudioContextRef.current) {
+      void recordingAudioContextRef.current.close();
+      recordingAudioContextRef.current = null;
+    }
+  };
+
+  const createProcessedRecordingStream = async (stream: MediaStream) => {
+    try {
+      const AudioContextConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioContextConstructor) return stream;
+
+      const audioContext = new AudioContextConstructor();
+      if (audioContext.state === 'suspended') await audioContext.resume();
+
+      const source = audioContext.createMediaStreamSource(stream);
+      const gain = audioContext.createGain();
+      const compressor = audioContext.createDynamicsCompressor();
+      const destination = audioContext.createMediaStreamDestination();
+
+      // Eleva a voz capturada e reduz picos para evitar distorção nos aparelhos.
+      gain.gain.value = 1.7;
+      compressor.threshold.value = -24;
+      compressor.knee.value = 18;
+      compressor.ratio.value = 4;
+      compressor.attack.value = 0.003;
+      compressor.release.value = 0.25;
+
+      source.connect(gain);
+      gain.connect(compressor);
+      compressor.connect(destination);
+      recordingAudioContextRef.current = audioContext;
+
+      return destination.stream;
+    } catch (error) {
+      console.warn('Não foi possível aplicar ganho à gravação; usando captura direta:', error);
+      stopRecordingAudioProcessing();
+      return stream;
+    }
+  };
 
   useEffect(() => {
     audioItemsRef.current = audioItems;
@@ -769,15 +812,24 @@ export default function NewEvolution() {
   const startRecording = async () => {
     try {
       isDiscardingRef.current = false;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          autoGainControl: true,
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      originalRecordingStreamRef.current = stream;
       rememberMicrophonePermission();
       if (typeof MediaRecorder === 'undefined') {
         stream.getTracks().forEach((track) => track.stop());
+        originalRecordingStreamRef.current = null;
         throw new Error('Este dispositivo não oferece suporte à gravação de áudio.');
       }
       const mimeType = getSupportedRecordingMimeType();
-      const mediaRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-      recordingStreamRef.current = stream;
+      const recordingStream = await createProcessedRecordingStream(stream);
+      const mediaRecorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
+      recordingStreamRef.current = recordingStream;
       console.info('[Audio] Gravador iniciado', { requestedMimeType: mimeType || 'padrão', mimeType: mediaRecorder.mimeType });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
@@ -821,7 +873,10 @@ export default function NewEvolution() {
         }
         stopWaveform();
         recordingStreamRef.current = null;
+        recordingStream.getTracks().forEach(track => track.stop());
         stream.getTracks().forEach(track => track.stop());
+        originalRecordingStreamRef.current = null;
+        stopRecordingAudioProcessing();
       };
 
       // Inicia gravando e fatiando os dados a cada 3 segundos (3000ms)
@@ -836,6 +891,9 @@ export default function NewEvolution() {
         });
       }, 1000);
     } catch (err) {
+      stopRecordingAudioProcessing();
+      originalRecordingStreamRef.current?.getTracks().forEach(track => track.stop());
+      originalRecordingStreamRef.current = null;
       console.error("Error accessing microphone:", err);
       await showAlert("Não foi possível acessar o microfone. Verifique as permissões.", {
         title: "Erro de Microfone",
@@ -883,7 +941,10 @@ export default function NewEvolution() {
         mediaRecorderRef.current.stop();
         mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       }
+      originalRecordingStreamRef.current?.getTracks().forEach(track => track.stop());
+      originalRecordingStreamRef.current = null;
       stopWaveform();
+      stopRecordingAudioProcessing();
       recordingStreamRef.current = null;
       if (timerRef.current) clearInterval(timerRef.current);
       
