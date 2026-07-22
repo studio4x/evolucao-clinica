@@ -20,7 +20,21 @@ interface Notification {
   created_at: string;
 }
 
+interface NativePushBridge {
+  isAvailable?: () => boolean;
+  isPermissionGranted?: () => boolean;
+  requestToken?: () => void;
+  deleteToken?: () => void;
+}
+
+declare global {
+  interface Window {
+    NativePushBridge?: NativePushBridge;
+  }
+}
+
 export default function Notifications() {
+  const NATIVE_PUSH_ENABLED_KEY = 'evolucao-clinica:native-push-enabled';
   const { user, profileRole } = useAuthStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,6 +151,16 @@ export default function Notifications() {
 
   // Checar suporte e estado de Push
   const checkPushSubscription = async () => {
+    const nativePush = window.NativePushBridge;
+    if (nativePush?.isAvailable?.()) {
+      setIsPushSupported(true);
+      setPushPermission(nativePush.isPermissionGranted?.() ? 'granted' : 'denied');
+      const nativePushEnabled = window.localStorage.getItem(NATIVE_PUSH_ENABLED_KEY) === 'true';
+      setIsPushSubscribed(nativePushEnabled && nativePush.isPermissionGranted?.() === true);
+      if (nativePushEnabled && nativePush.isPermissionGranted?.()) nativePush.requestToken?.();
+      return;
+    }
+
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       setIsPushSupported(false);
       return;
@@ -155,6 +179,11 @@ export default function Notifications() {
 
   useEffect(() => {
     if (user) {
+      const handleNativePushToken = (event: Event) => {
+        const token = (event as CustomEvent<{ token?: string }>).detail?.token;
+        if (token) void registerNativePushToken(token);
+      };
+      window.addEventListener('native-push-token', handleNativePushToken);
       fetchNotifications();
       checkPushSubscription();
       fetchSmtpSettings();
@@ -172,10 +201,28 @@ export default function Notifications() {
         .subscribe();
 
       return () => {
+        window.removeEventListener('native-push-token', handleNativePushToken);
         void supabase.removeChannel(channel);
       };
     }
   }, [user, profileRole]);
+
+  const registerNativePushToken = async (token: string) => {
+    if (!user) return;
+    const session = await supabase.auth.getSession();
+    const accessToken = session.data.session?.access_token;
+    const res = await fetch('/api/notifications/subscribe', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({ provider: 'fcm', token })
+    });
+    if (!res.ok) throw new Error('Não foi possível registrar as notificações do aplicativo.');
+    window.localStorage.setItem(NATIVE_PUSH_ENABLED_KEY, 'true');
+    setIsPushSubscribed(true);
+  };
 
   // Converter string VAPID para Uint8Array
   const urlBase64ToUint8Array = (base64String: string) => {
@@ -194,6 +241,30 @@ export default function Notifications() {
     if (!user) return;
     setPushLoading(true);
     try {
+      const nativePush = window.NativePushBridge;
+      if (nativePush?.isAvailable?.()) {
+        if (!nativePush.isPermissionGranted?.()) {
+          throw new Error('Permissão de notificações não concedida no Android. Ative-a nas configurações do aplicativo.');
+        }
+
+        nativePush.requestToken?.();
+        await new Promise<void>((resolve, reject) => {
+          const onToken = (event: Event) => {
+            const token = (event as CustomEvent<{ token?: string }>).detail?.token;
+            if (!token) return;
+            window.clearTimeout(timeout);
+            window.removeEventListener('native-push-token', onToken);
+            void registerNativePushToken(token).then(resolve).catch(reject);
+          };
+          const timeout = window.setTimeout(() => {
+            window.removeEventListener('native-push-token', onToken);
+            reject(new Error('Tempo excedido ao registrar o dispositivo para notificações.'));
+          }, 15000);
+          window.addEventListener('native-push-token', onToken);
+        });
+        return;
+      }
+
       // Solicitar permissao
       const permission = await Notification.requestPermission();
       setPushPermission(permission);
@@ -267,6 +338,24 @@ export default function Notifications() {
     if (!user) return;
     setPushLoading(true);
     try {
+      const nativePush = window.NativePushBridge;
+      if (nativePush?.isAvailable?.()) {
+        const session = await supabase.auth.getSession();
+        const accessToken = session.data.session?.access_token;
+        await fetch('/api/notifications/unsubscribe', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${accessToken}`
+          },
+          body: JSON.stringify({ provider: 'fcm' })
+        });
+        nativePush.deleteToken?.();
+        window.localStorage.removeItem(NATIVE_PUSH_ENABLED_KEY);
+        setIsPushSubscribed(false);
+        return;
+      }
+
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       

@@ -37,6 +37,9 @@ import androidx.activity.ComponentActivity;
 import androidx.webkit.ServiceWorkerControllerCompat;
 import androidx.webkit.WebViewFeature;
 
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.FirebaseMessaging;
+
 import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
@@ -128,6 +131,7 @@ public class LauncherActivity extends ComponentActivity {
         webView.addJavascriptInterface(new NativeFileDownloadBridge(), "NativeFileDownload");
         webView.addJavascriptInterface(new NativeBillingBridge(), "NativeBillingBridge");
         webView.addJavascriptInterface(new NativeAppInfoBridge(), "NativeAppInfoBridge");
+        webView.addJavascriptInterface(new NativePushBridge(), "NativePushBridge");
         configureWebView(webView);
         webView.clearCache(true);
 
@@ -135,7 +139,8 @@ public class LauncherActivity extends ComponentActivity {
         setContentView(swipeRefreshLayout);
 
         Uri launchUri = getIntent() == null ? null : getIntent().getData();
-        webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(launchUri) ? launchUri.toString() : appUrl()));
+        String notificationLink = getIntent() == null ? null : getIntent().getStringExtra("notification_link");
+        webView.loadUrl(hasSharedFile() ? shareTargetUrl() : notificationUrl(notificationLink, launchUri));
     }
 
     @Override
@@ -145,8 +150,17 @@ public class LauncherActivity extends ComponentActivity {
         captureShareIntent(intent);
         Uri callbackUri = intent == null ? null : intent.getData();
         if (webView != null) {
-            webView.loadUrl(hasSharedFile() ? shareTargetUrl() : (isTrustedUrl(callbackUri) ? callbackUri.toString() : appUrl()));
+            String notificationLink = intent == null ? null : intent.getStringExtra("notification_link");
+            webView.loadUrl(hasSharedFile() ? shareTargetUrl() : notificationUrl(notificationLink, callbackUri));
         }
+    }
+
+    private String notificationUrl(String link, Uri fallbackUri) {
+        if (link != null && !link.trim().isEmpty()) {
+            Uri linkUri = Uri.parse(link.startsWith("http") ? link : "https://" + TRUSTED_HOST + (link.startsWith("/") ? link : "/" + link));
+            if (isTrustedUrl(linkUri)) return linkUri.toString();
+        }
+        return isTrustedUrl(fallbackUri) ? fallbackUri.toString() : appUrl();
     }
 
     private String shareTargetUrl() {
@@ -665,6 +679,46 @@ public class LauncherActivity extends ComponentActivity {
                 Log.e(LOG_TAG, "Não foi possível obter a versão instalada", exception);
                 return "{}";
             }
+        }
+    }
+
+    private final class NativePushBridge {
+        @android.webkit.JavascriptInterface
+        public boolean isAvailable() {
+            try {
+                return !FirebaseApp.getApps(LauncherActivity.this).isEmpty();
+            } catch (Exception exception) {
+                Log.w(LOG_TAG, "Firebase ainda não está configurado para push", exception);
+                return false;
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public boolean isPermissionGranted() {
+            return hasNotificationPermission();
+        }
+
+        @android.webkit.JavascriptInterface
+        public void requestToken() {
+            if (!isAvailable()) return;
+            FirebaseMessaging.getInstance().getToken().addOnCompleteListener(task -> {
+                if (!task.isSuccessful() || task.getResult() == null || webView == null) {
+                    Log.w(LOG_TAG, "Não foi possível obter o token FCM", task.getException());
+                    return;
+                }
+                String token = JSONObject.quote(task.getResult());
+                runOnUiThread(() -> webView.evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('native-push-token',{detail:{token:" + token + "}}));",
+                        null
+                ));
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void deleteToken() {
+            if (!isAvailable()) return;
+            FirebaseMessaging.getInstance().deleteToken().addOnFailureListener(error ->
+                    Log.w(LOG_TAG, "Não foi possível remover o token FCM", error));
         }
     }
 

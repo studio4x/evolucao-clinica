@@ -6,6 +6,8 @@ import webpush from "web-push";
 import nodemailer from "nodemailer";
 import { Client as PostgresClient } from "pg";
 import { createClient } from "@supabase/supabase-js";
+import { cert, getApps, initializeApp, type App as FirebaseAdminApp } from "firebase-admin/app";
+import { getMessaging } from "firebase-admin/messaging";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { createRequire } from "module";
@@ -33,6 +35,24 @@ const PRODUCTION_ORIGIN = (process.env.VERCEL_PRODUCTION_URL || DEFAULT_PRODUCTI
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kvxboovgrrhhttaqinld.supabase.co";
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt2eGJvb3ZncnJoaHR0YXFpbmxkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTc2NjIwMSwiZXhwIjoyMDk3MzQyMjAxfQ.N2U7i-im1MlQgS0-Vw7QtmY6n8LRPRf97wI3WJVbzlk";
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+let firebaseAdminApp: FirebaseAdminApp | null = null;
+const getFirebaseMessaging = () => {
+  const rawCredentials = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!rawCredentials) return null;
+  try {
+    if (!firebaseAdminApp) {
+      const credentials = JSON.parse(rawCredentials);
+      firebaseAdminApp = getApps()[0] || initializeApp({
+        credential: cert(credentials)
+      });
+    }
+    return getMessaging(firebaseAdminApp);
+  } catch (error) {
+    console.error("[FCM] Configuração inválida do Firebase Admin:", error);
+    return null;
+  }
+};
 
 const GEMINI_DEFAULT_MODEL = "gemini-3.5-flash";
 const GEMINI_TRANSCRIPTION_FALLBACK_MODEL = "gemini-3.5-flash";
@@ -2245,6 +2265,27 @@ app.get("/api/notifications/vapid-public-key", async (req, res) => {
 
 // 2. Inscrever para Push
 app.post("/api/notifications/subscribe", requireAuth, async (req: any, res) => {
+  const { provider, token } = req.body;
+  if (provider === "fcm") {
+    if (typeof token !== "string" || token.trim().length < 20) {
+      return res.status(400).json({ error: "Token FCM inválido" });
+    }
+    try {
+      const { error } = await supabaseAdmin
+        .from("push_subscriptions")
+        .upsert({
+          user_id: req.user.id,
+          endpoint: `fcm:${token.trim()}`,
+          keys: { provider: "fcm", token: token.trim() }
+        }, { onConflict: "endpoint" });
+      if (error) throw error;
+      return res.json({ success: true, provider: "fcm" });
+    } catch (err: any) {
+      console.error("Erro ao salvar token FCM:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   const { subscription } = req.body;
   if (!subscription || !subscription.endpoint) {
     return res.status(400).json({ error: "Dados de inscricao invalidos" });
@@ -2271,6 +2312,21 @@ app.post("/api/notifications/subscribe", requireAuth, async (req: any, res) => {
 
 // 3. Desinscrever de Push
 app.post("/api/notifications/unsubscribe", requireAuth, async (req: any, res) => {
+  if (req.body?.provider === "fcm") {
+    try {
+      const { error } = await supabaseAdmin
+        .from("push_subscriptions")
+        .delete()
+        .eq("user_id", req.user.id)
+        .like("endpoint", "fcm:%");
+      if (error) throw error;
+      return res.json({ success: true, provider: "fcm" });
+    } catch (err: any) {
+      console.error("Erro ao remover token FCM:", err);
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   const { endpoint } = req.body;
   if (!endpoint) {
     return res.status(400).json({ error: "Endpoint ausente" });
@@ -2390,17 +2446,11 @@ app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: an
     let successCount = 0;
     for (const sub of subscriptions) {
       try {
-        await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: sub.keys
-          },
-          payload
-        );
+        await sendPushSubscription(sub, payload);
         successCount++;
       } catch (pushErr: any) {
         console.warn("Falha no teste de push diário:", pushErr.message);
-        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404 || pushErr.code === "messaging/registration-token-not-registered" || pushErr.code === "messaging/invalid-registration-token") {
           await supabaseAdmin
             .from("push_subscriptions")
             .delete()
@@ -3122,20 +3172,40 @@ async function sendPushNotificationInternal(
 
   for (const sub of subscriptions) {
     try {
-      await webpush.sendNotification(
-        { endpoint: sub.endpoint, keys: sub.keys },
-        payload
-      );
+      await sendPushSubscription(sub, payload);
       sentCount += 1;
     } catch (pushErr: any) {
       console.warn("Falha no envio do push para endpoint:", sub.endpoint, pushErr.message);
-      if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+      if (pushErr.statusCode === 410 || pushErr.statusCode === 404 || pushErr.code === "messaging/registration-token-not-registered" || pushErr.code === "messaging/invalid-registration-token") {
         await supabaseAdmin.from("push_subscriptions").delete().eq("id", sub.id);
       }
     }
   }
 
   return sentCount > 0;
+}
+
+async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: any }, payload: string) {
+  if (sub.endpoint.startsWith("fcm:")) {
+    const messaging = getFirebaseMessaging();
+    if (!messaging) throw new Error("FCM não configurado no servidor (FIREBASE_SERVICE_ACCOUNT_JSON ausente). ");
+    const parsed = JSON.parse(payload) as { title: string; body: string; link?: string; image?: string };
+    await messaging.send({
+      token: String(sub.keys?.token || sub.endpoint.slice(4)),
+      data: {
+        title: parsed.title,
+        body: parsed.body,
+        link: parsed.link || "/painel/notifications",
+        ...(parsed.image ? { image: parsed.image } : {})
+      }
+    });
+    return;
+  }
+
+  await webpush.sendNotification(
+    { endpoint: sub.endpoint, keys: sub.keys },
+    payload
+  );
 }
 
 // Helper para enviar notificação (In-App, Push e E-mail)
@@ -4327,17 +4397,11 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
     let sentCount = 0;
     for (const sub of activeSubs) {
       try {
-        await webpush.sendNotification(
-          {
-            endpoint: sub.endpoint,
-            keys: sub.keys
-          },
-          payload
-        );
+        await sendPushSubscription(sub, payload);
         sentCount++;
       } catch (pushErr: any) {
         console.warn("Falha no disparo diário de push:", pushErr.message);
-        if (pushErr.statusCode === 410 || pushErr.statusCode === 404) {
+        if (pushErr.statusCode === 410 || pushErr.statusCode === 404 || pushErr.code === "messaging/registration-token-not-registered" || pushErr.code === "messaging/invalid-registration-token") {
           await supabaseAdmin
             .from("push_subscriptions")
             .delete()

@@ -20,6 +20,10 @@ plugins {
     id 'com.android.application'
 }
 
+if (file('google-services.json').exists()) {
+    apply plugin: 'com.google.gms.google-services'
+}
+
 def twaManifest = [
     applicationId: 'com.evolucaoclinica.app',
     hostName: 'www.evolucaoclinica.app.br', // The domain being opened in the TWA.
@@ -209,6 +213,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'com.google.firebase:firebase-messaging:24.1.0'
     implementation 'com.stripe:stripe-android:23.0.1'
     implementation 'com.android.billingclient:billing:9.1.0'
     implementation 'androidx.activity:activity:1.10.1'

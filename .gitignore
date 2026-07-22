@@ -19,3 +19,4 @@ docs/evolucaoclinica-*.json
 *.idsig
 .gradle/
 local.properties
+app/google-services.json
