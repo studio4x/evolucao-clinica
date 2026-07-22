@@ -3137,14 +3137,40 @@ app.post("/api/onboarding/approved", requireAuth, requireAdmin, async (req: any,
   }
 });
 
+async function getResolvedPushNotificationIcon(customIconUrl?: string): Promise<string> {
+  if (customIconUrl && customIconUrl.trim().length > 0) {
+    const trimmed = customIconUrl.trim();
+    if (trimmed.startsWith("/")) {
+      return `${PRODUCTION_ORIGIN}${trimmed}`;
+    }
+    return trimmed;
+  }
+
+  const brandConfig = await getBrandConfigSnapshot();
+  const brandIcon = brandConfig.pwa_push_notification_icon_url || brandConfig.pwa_icon_192_url || brandConfig.favicon_url;
+
+  if (brandIcon && brandIcon.trim().length > 0) {
+    const trimmed = brandIcon.trim();
+    if (trimmed.startsWith("/")) {
+      return `${PRODUCTION_ORIGIN}${trimmed}`;
+    }
+    return trimmed;
+  }
+
+  return `${PRODUCTION_ORIGIN}/api/pwa-notification-icon`;
+}
+
 async function sendPushNotificationInternal(
   targetUserId: string,
   title: string,
   content: string,
   link?: string,
-  imageUrl?: string
+  imageUrl?: string,
+  iconUrl?: string
 ): Promise<boolean> {
   const settings = await getNotificationSettings();
+  const resolvedIcon = await getResolvedPushNotificationIcon(iconUrl);
+
   webpush.setVapidDetails(
     settings.vapid_subject,
     settings.vapid_public_key,
@@ -3166,7 +3192,9 @@ async function sendPushNotificationInternal(
     title,
     body: content,
     link: link || "/painel/notifications",
-    image: imageUrl
+    image: imageUrl,
+    icon: resolvedIcon,
+    badge: `${PRODUCTION_ORIGIN}/api/pwa-notification-badge`
   });
   let sentCount = 0;
 
@@ -3189,14 +3217,15 @@ async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: 
   if (sub.endpoint.startsWith("fcm:")) {
     const messaging = getFirebaseMessaging();
     if (!messaging) throw new Error("FCM não configurado no servidor (FIREBASE_SERVICE_ACCOUNT_JSON ausente). ");
-    const parsed = JSON.parse(payload) as { title: string; body: string; link?: string; image?: string };
+    const parsed = JSON.parse(payload) as { title: string; body: string; link?: string; image?: string; icon?: string };
     await messaging.send({
       token: String(sub.keys?.token || sub.endpoint.slice(4)),
       data: {
         title: parsed.title,
         body: parsed.body,
         link: parsed.link || "/painel/notifications",
-        ...(parsed.image ? { image: parsed.image } : {})
+        ...(parsed.image ? { image: parsed.image } : {}),
+        ...(parsed.icon ? { icon: parsed.icon } : {})
       }
     });
     return;

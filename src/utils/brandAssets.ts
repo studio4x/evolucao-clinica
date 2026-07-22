@@ -58,6 +58,11 @@ export const getBrandInstallLogoUrl = (config: BrandAssetSource) => {
   return config.pwa_install_logo_url || config.pwa_icon_192_url || config.pwa_icon_512_url || config.pwa_maskable_icon_url || getBrandFaviconUrl(config);
 };
 
+export const getBrandPushNotificationIconUrl = (config: BrandAssetSource) => {
+  return config.pwa_push_notification_icon_url || config.pwa_icon_192_url || config.pwa_maskable_icon_url || config.pwa_icon_512_url || getBrandFaviconUrl(config);
+};
+
 export const getBrandSocialShareUrl = (config: BrandAssetSource) => {
   return config.social_share_url || '/og-image-social.png';
 };
+

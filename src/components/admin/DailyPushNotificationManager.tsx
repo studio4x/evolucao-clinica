@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import { showAlert } from '../../store/modalStore';
+import { useSiteConfig } from '../../hooks/useSiteConfig';
+import { getBrandPushNotificationIconUrl } from '../../utils/brandAssets';
 import { 
   Bell, Save, Play, Loader2, Check, AlertTriangle, 
   HelpCircle, Calendar, Clock, Upload, Trash2, Smartphone, 
@@ -48,6 +50,7 @@ const WEEKDAYS = [
 ];
 
 export default function DailyPushNotificationManager() {
+  const siteConfig = useSiteConfig();
   const [config, setConfig] = useState<DailyPushConfig>({
     enabled: false,
     days: [1, 2, 3, 4, 5],
@@ -58,6 +61,8 @@ export default function DailyPushNotificationManager() {
     icon_url: '',
     destination_url: '/painel/patients'
   });
+
+  const displayIconUrl = config.icon_url || getBrandPushNotificationIconUrl(siteConfig);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -690,8 +695,8 @@ export default function DailyPushNotificationManager() {
                   
                   {/* Icon */}
                   <div className="w-9 h-9 rounded-lg bg-brand-primary/10 flex-shrink-0 flex items-center justify-center overflow-hidden border border-brand-primary/10">
-                    {config.icon_url ? (
-                      <img src={config.icon_url} alt="Ícone notif" className="w-full h-full object-cover" />
+                    {displayIconUrl ? (
+                      <img src={displayIconUrl} alt="Ícone notif" className="w-full h-full object-cover" />
                     ) : (
                       <Bell size={18} className="text-brand-primary" />
                     )}
