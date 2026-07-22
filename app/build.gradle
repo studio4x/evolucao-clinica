@@ -157,9 +157,19 @@ android {
 
         
     }
+    signingConfigs {
+        release {
+            storeFile file('../android.keystore')
+            storePassword 'evolucao123'
+            keyAlias 'android'
+            keyPassword 'evolucao123'
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
+            signingConfig signingConfigs.release
         }
     }
     compileOptions {
@@ -169,6 +179,7 @@ android {
     lintOptions {
         checkReleaseBuilds false
     }
+
 }
 
 task generateShorcutsFile {
