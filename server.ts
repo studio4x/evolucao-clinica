@@ -2428,6 +2428,8 @@ app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: an
       notifSettings.vapid_public_key,
       notifSettings.vapid_private_key
     );
+    const resolvedDailyPushIcon = await getResolvedPushNotificationIcon();
+    const resolvedDailyPushBadge = `${PRODUCTION_ORIGIN}/api/pwa-notification-badge`;
 
     const { data: subscriptions, error: subsError } = await supabaseAdmin
       .from("push_subscriptions")
@@ -2445,7 +2447,8 @@ app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: an
       body: config.body || "Mensagem de teste.",
       link: config.destination_url || "/painel/patients",
       image: config.image_url || undefined,
-      icon: config.icon_url || undefined
+      icon: resolvedDailyPushIcon,
+      badge: resolvedDailyPushBadge
     });
 
     let successCount = 0;
@@ -4418,13 +4421,16 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
       notifSettings.vapid_public_key,
       notifSettings.vapid_private_key
     );
+    const resolvedDailyPushIcon = await getResolvedPushNotificationIcon();
+    const resolvedDailyPushBadge = `${PRODUCTION_ORIGIN}/api/pwa-notification-badge`;
 
     const payload = JSON.stringify({
       title: config.title || "Hora das Evoluções!",
       body: config.body || "Não se esqueça de registrar as evoluções clínicas hoje.",
       link: config.destination_url || "/painel/patients",
       image: config.image_url || undefined,
-      icon: config.icon_url || undefined
+      icon: resolvedDailyPushIcon,
+      badge: resolvedDailyPushBadge
     });
 
     console.log(`[Cron Daily Push] Disparando push para ${activeSubs.length} inscrições...`);
@@ -4468,7 +4474,8 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
             body: config.body || "Não se esqueça de registrar as evoluções clínicas hoje.",
             link: config.destination_url || "/painel/patients",
             image: config.image_url || undefined,
-            icon: config.icon_url || undefined
+            icon: resolvedDailyPushIcon,
+            badge: resolvedDailyPushBadge
           }
         });
     } catch (logError) {
