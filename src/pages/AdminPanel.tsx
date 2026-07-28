@@ -2074,7 +2074,7 @@ export default function AdminPanel() {
         await supabase.auth.signOut();
         setUser(null);
         setProfileInfo(null, null, null, null, null, null);
-        setLoginError('Acesso recusado. Esta conta nao possui privilegios de administrador.');
+        setLoginError('Acesso recusado. Conta não encontrada ou sem permissão de acesso.');
       }
     } catch (error: any) {
       console.error("Erro no login do administrador:", error);
@@ -2582,10 +2582,10 @@ export default function AdminPanel() {
               <ShieldCheck className="h-10 w-10 text-brand-primary" />
             </div>
             <h2 className="mt-6 text-center text-3xl font-display font-bold text-brand-primary tracking-tight">
-              Acesso ao Painel Admin
+              Acesso com E-mail e Senha
             </h2>
             <p className="mt-2 text-center text-sm text-brand-text-muted">
-              Insira suas credenciais de acesso para entrar no fluxo administrativo ou no painel do terapeuta.
+              Insira suas credenciais para entrar na sua conta e acessar o painel.
             </p>
           </div>
 
@@ -2658,7 +2658,7 @@ export default function AdminPanel() {
               onClick={() => navigate('/login')}
               className="text-xs font-medium text-brand-primary hover:text-brand-primary-hover transition-colors underline cursor-pointer"
             >
-              Voltar para login de profissionais
+              Voltar para login principal (Google)
             </button>
           </div>
         </div>
