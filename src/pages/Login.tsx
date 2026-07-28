@@ -2,7 +2,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Zap, Sparkles, Files, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Zap, Sparkles, Files, ArrowLeft, KeyRound } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
@@ -156,6 +156,14 @@ export default function Login() {
               </>
             )}
           </button>
+
+          <Link
+            to="/admin"
+            className="mt-3.5 w-full py-2.5 px-4 text-xs font-semibold text-brand-text-muted hover:text-brand-primary bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+          >
+            <KeyRound size={14} className="opacity-70" />
+            <span>Entrar com e-mail e senha</span>
+          </Link>
           
           <p className="mt-5 text-center text-[11px] text-brand-text-muted leading-relaxed">
             No primeiro acesso pedimos só o básico para entrar. As permissões do Drive, prontuário e agenda são solicitadas depois, apenas quando você chegar em cada etapa.
