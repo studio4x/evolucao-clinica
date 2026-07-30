@@ -846,6 +846,7 @@ export default function AdminPanel() {
   // Estados de Configuração da API do WhatsApp Cloud
   const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('');
   const [adminWhatsappWebhookCopied, setAdminWhatsappWebhookCopied] = useState(false);
+  const [adminWhatsappN8nEventsCopied, setAdminWhatsappN8nEventsCopied] = useState(false);
   const [adminWhatsappTestLoading, setAdminWhatsappTestLoading] = useState(false);
   const [adminWhatsappTestSuccess, setAdminWhatsappTestSuccess] = useState(false);
   const [adminWhatsappTestError, setAdminWhatsappTestError] = useState('');
@@ -6378,6 +6379,67 @@ export default function AdminPanel() {
                             Access Token, Phone Number ID, App Secret e Verify Token são configurados exclusivamente como variáveis de ambiente protegidas na Vercel. Eles não são armazenados no banco nem enviados ao navegador.
                           </p>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4 md:p-5 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-violet-100 rounded-lg text-violet-700 shrink-0">
+                          <Code className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-violet-900">Endpoint interno do roteador n8n</h3>
+                          <p className="text-xs text-violet-900/80 mt-1 leading-relaxed">
+                            Use esta rota somente no fluxo normalizador do n8n. Ela é diferente do webhook da Meta acima: não recebe callbacks da Meta e não usa <code className="font-mono">x-hub-signature-256</code> nem <code className="font-mono">WHATSAPP_APP_SECRET</code>.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="block">
+                        <span className="text-sm font-semibold text-brand-text">URL para o n8n</span>
+                        <div className="mt-1 flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="url"
+                            readOnly
+                            value={`${window.location.origin}/api/integrations/whatsapp/events`}
+                            className="w-full rounded-xl border border-violet-200 bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(`${window.location.origin}/api/integrations/whatsapp/events`);
+                                setAdminWhatsappN8nEventsCopied(true);
+                                setTimeout(() => setAdminWhatsappN8nEventsCopied(false), 2500);
+                              } catch {
+                                setAdminWhatsappN8nEventsCopied(false);
+                              }
+                            }}
+                            className="btn-outline px-4 py-2.5 flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer"
+                          >
+                            {adminWhatsappN8nEventsCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                            <span>{adminWhatsappN8nEventsCopied ? 'Copiada' : 'Copiar URL'}</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-2 text-xs">
+                        <div className="rounded-xl border border-violet-200/80 bg-white/80 p-3">
+                          <p className="font-bold text-violet-950">Autenticação obrigatória</p>
+                          <code className="mt-1 block break-all rounded-lg bg-slate-900 px-2.5 py-2 font-mono text-[11px] text-slate-100">Authorization: Bearer &lt;WHATSAPP_N8N_EVENTS_TOKEN&gt;</code>
+                          <p className="mt-2 leading-relaxed text-violet-900/75">O valor fica apenas nas variáveis protegidas da Vercel e na credencial do n8n. Nunca cole o token nesta tela, no payload ou no histórico do fluxo.</p>
+                        </div>
+                        <div className="rounded-xl border border-violet-200/80 bg-white/80 p-3">
+                          <p className="font-bold text-violet-950">Resultado esperado</p>
+                          <p className="mt-1 leading-relaxed text-violet-900/75"><strong>200</strong> processado ou repetido; <strong>401</strong> token ausente/inválido; <strong>400</strong> payload inválido; <strong>500</strong> somente falha interna.</p>
+                          <p className="mt-2 leading-relaxed text-violet-900/75"><code className="font-mono">eventKey</code> é único: reenvios seguros respondem com <code className="font-mono">alreadyProcessed: true</code>.</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-violet-200/80 bg-white/80 p-3 text-xs leading-relaxed text-violet-950">
+                        <p className="font-bold">Contrato normalizado do payload</p>
+                        <p className="mt-1 text-violet-900/75">Envie <code className="font-mono">tenant</code>, <code className="font-mono">eventType</code>, <code className="font-mono">eventKey</code>, <code className="font-mono">messageId</code>, <code className="font-mono">status</code>, <code className="font-mono">receivedAt</code>, <code className="font-mono">phoneNumberId</code>, <code className="font-mono">senderPhone</code>, <code className="font-mono">recipientPhone</code> e <code className="font-mono">rawValue</code>.</p>
+                        <p className="mt-2 text-violet-900/75"><code className="font-mono">message_status</code> aceita <code className="font-mono">sent</code>, <code className="font-mono">delivered</code>, <code className="font-mono">read</code> ou <code className="font-mono">failed</code> e correlaciona <code className="font-mono">messageId</code> com o <code className="font-mono">wamid</code> da entrega. <code className="font-mono">business_app_echo</code> e <code className="font-mono">coexistence_sync</code> são armazenados sem processamento adicional.</p>
                       </div>
                     </div>
                   </div>

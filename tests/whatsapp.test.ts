@@ -355,6 +355,12 @@ assert.match(n8nEndpointSource, /whatsappConfig\.n8nEventsToken/);
 assert.match(n8nEndpointSource, /validateNormalizedWhatsAppN8nEvent/);
 assert.doesNotMatch(n8nEndpointSource, /x-hub-signature-256|appSecret|WHATSAPP_APP_SECRET|verifyWhatsAppWebhookSignature/);
 
+const whatsappAdminSource = readFileSync("src/pages/AdminPanel.tsx", "utf8");
+assert.match(whatsappAdminSource, /\/api\/integrations\/whatsapp\/events/);
+assert.match(whatsappAdminSource, /WHATSAPP_N8N_EVENTS_TOKEN/);
+assert.match(whatsappAdminSource, /message_status/);
+assert.match(whatsappAdminSource, /alreadyProcessed/);
+
 const whatsappMigration = readFileSync(
   "supabase/migrations/20260730190000_create_whatsapp_message_deliveries.sql",
   "utf8"
