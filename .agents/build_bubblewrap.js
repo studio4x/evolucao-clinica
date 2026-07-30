@@ -296,6 +296,9 @@ async function main() {
 
     // Restaura o LauncherActivity.java customizado mesmo que o Bubblewrap tenha removido o arquivo.
     if (launcherActivityBackup) {
+
+    // Restaura o LauncherActivity.java customizado mesmo que o Bubblewrap tenha removido o arquivo.
+    if (launcherActivityBackup) {
       fs.mkdirSync(path.dirname(launcherActivityPath), { recursive: true });
       fs.writeFileSync(launcherActivityPath, launcherActivityBackup, 'utf8');
       console.log('- LauncherActivity.java restored from backup (preventing Bubblewrap overwrite).');
@@ -311,6 +314,19 @@ async function main() {
       { pattern: /Password for the Key Store:/i, response: 'evolucao123\n' },
       { pattern: /Password for the Key\b(?! Store):/i, response: 'evolucao123\n' }
     ]);
+
+    // Step 4: Sign AAB explicitly with jarsigner
+    console.log('=== STEP 4: SIGNING AAB WITH JARSIGNER ===');
+    const aabPath = path.join(projectDir, 'app-release-bundle.aab');
+    if (fs.existsSync(aabPath)) {
+      await runCommand('jarsigner', [
+        '-keystore', 'android.keystore',
+        '-storepass', 'evolucao123',
+        '-keypass', 'evolucao123',
+        aabPath, 'android'
+      ], []);
+      console.log('- app-release-bundle.aab signed successfully with jarsigner.');
+    }
 
     console.log('\n=== BUILD COMPLETE AND SIGNED! ===');
   } catch (error) {
