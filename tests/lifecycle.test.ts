@@ -137,5 +137,12 @@ assert.doesNotThrow(() => assertLifecycleSchedulerHealthy({ scheduled: 0, failed
 const lifecycleSchedulerSource = readFileSync('server/lifecycle/lifecycleScheduler.ts', 'utf8');
 assert.match(lifecycleSchedulerSource, /from\("transactions"\)\.select\("id, created_at"\)/);
 assert.doesNotMatch(lifecycleSchedulerSource, /from\("transactions"\)\.select\("id, updated_at"\)/);
+assert.doesNotMatch(lifecycleSchedulerSource, /current_position:\s*chosen\.dispatchType/);
+assert.match(lifecycleSchedulerSource, /chosen\.dispatchType === "sequence"\s*\?\s*scheduledFor\.toISOString\(\)/);
+
+const lifecycleRepositorySource = readFileSync('server/lifecycle/lifecycleRepository.ts', 'utf8');
+const existingEnrollmentLookup = lifecycleRepositorySource.indexOf('const { data: existingEnrollment');
+const newUserEligibilityCheck = lifecycleRepositorySource.indexOf('campaign.enrollment_mode === "new_users_only"');
+assert.ok(existingEnrollmentLookup >= 0 && existingEnrollmentLookup < newUserEligibilityCheck);
 
 console.log('Lifecycle unit tests passed.');

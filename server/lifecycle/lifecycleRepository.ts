@@ -252,6 +252,16 @@ export async function ensureLifecycleEnrollment(deps: LifecycleDependencies, use
   const { data: professional, error: professionalError } = await deps.supabaseAdmin.from("professionals").select("id, status, role, created_at").eq("id", userId).maybeSingle();
   if (professionalError) throw new Error(professionalError.message);
   if (!professional || professional.status !== "active" || professional.role === "admin") return null;
+
+  const { data: existingEnrollment, error: existingEnrollmentError } = await deps.supabaseAdmin
+    .from("lifecycle_enrollments")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("campaign_id", campaign.id)
+    .maybeSingle();
+  if (existingEnrollmentError) throw new Error(existingEnrollmentError.message || "Falha ao consultar matrícula lifecycle existente.");
+  if (existingEnrollment) return existingEnrollment;
+
   if (!options.force && campaign.enrollment_mode === "new_users_only" && new Date(professional.created_at).getTime() < new Date(campaign.eligible_from).getTime()) return null;
   const preferences = await getLifecyclePreferences(deps, userId);
   if (!options.force && preferences.lifecycle_enabled !== true) return null;

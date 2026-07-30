@@ -372,18 +372,12 @@ async function scheduleForEnrollment(
   });
   if (dispatchError && dispatchError.code !== "23505") throw new Error(dispatchError.message || "Falha ao criar dispatch lifecycle.");
 
-  const nextStep = chosen.dispatchType === "sequence" ? steps.find((step) => step.position === chosen.step!.position + 1) : currentStep;
-  const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
-  let nextStepAt: string | null = null;
-  if (nextStep) {
-    if (chosen.dispatchType === "sequence") {
-      nextStepAt = new Date(startedAt + Number(nextStep.wait_minutes || 0) * 60000).toISOString();
-    } else {
-      nextStepAt = new Date(now.getTime() + 86400000).toISOString();
-    }
-  }
+  const nextStepAt = chosen.dispatchType === "sequence"
+    ? scheduledFor.toISOString()
+    : currentStep
+      ? new Date(now.getTime() + 86400000).toISOString()
+      : null;
   await deps.supabaseAdmin.from("lifecycle_enrollments").update({
-    current_position: chosen.dispatchType === "sequence" ? chosen.step!.position : enrollment.current_position,
     next_step_at: nextStepAt
   }).eq("id", enrollment.id);
   return "scheduled";
@@ -408,7 +402,6 @@ export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now
   if (stepsError || rulesError || professionalsError || conditionalStepsError) throw new Error(stepsError?.message || rulesError?.message || professionalsError?.message || conditionalStepsError?.message || "Falha ao buscar dados do scheduler lifecycle.");
   const users = professionals || [];
   const batchResult = await processLifecycleSchedulerUsers(users, async (professional) => {
-    if (campaign.enrollment_mode === "new_users_only" && new Date(professional.created_at).getTime() < new Date(campaign.eligible_from).getTime()) return "ineligible";
     const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
     if (!enrollment) return "not_enrolled";
     const state = await getOrRecalculateLifecycleState(deps, professional.id);
