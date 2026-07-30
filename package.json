@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test:lifecycle": "tsx tests/lifecycle.test.ts"
+    "test": "npm run test:lifecycle && npm run test:whatsapp",
+    "test:lifecycle": "tsx tests/lifecycle.test.ts",
+    "test:whatsapp": "tsx tests/whatsapp.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

@@ -78,10 +78,11 @@ const DISPATCH_TYPE_LABELS: Record<string, string> = {
   transactional_bridge: 'Transacional'
 };
 
-type ChannelDeliveryStatus = 'sent' | 'failed' | 'disabled' | 'not_configured' | 'unknown';
+type ChannelDeliveryStatus = 'sent' | 'accepted' | 'failed' | 'disabled' | 'not_configured' | 'unknown';
 
 const CHANNEL_STATUS_LABELS: Record<ChannelDeliveryStatus, string> = {
   sent: 'Enviado',
+  accepted: 'Aceito pela Meta',
   failed: 'Falhou',
   disabled: 'Desabilitado',
   not_configured: 'Não configurado',

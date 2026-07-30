@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { WhatsAppSendResult } from "../whatsapp/whatsappTypes.js";
 import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { getContextualActionPendingAt, getNextActionCopy, getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
 import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
@@ -729,7 +730,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   let emailSent = Boolean(existingEmailDelivery);
   let emailFailureReason: string | null = null;
   let pushSent = false;
-  let whatsappSent = false;
+  let whatsappResult: WhatsAppSendResult | null = null;
 
   // A. Enviar E-mail
   if (emailEnabled && !existingEmailDelivery) {
@@ -788,17 +789,18 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   if (whatsappEnabled && whatsappNumber && deps.sendWhatsAppNotification) {
     try {
       const waText = `*${rendered.subject}*\n\n${rendered.text}\n\n👉 *Acesse aqui:* ${actionUrl}`;
-      const waSuccess = await deps.sendWhatsAppNotification(
-        dispatch.user_id,
-        whatsappNumber,
-        waText
-      );
-      whatsappSent = waSuccess;
-      if (waSuccess) {
-        console.log(`[Lifecycle Queue] WhatsApp enviado com sucesso para o número ${whatsappNumber}`);
+      whatsappResult = await deps.sendWhatsAppNotification({
+        userId: dispatch.user_id,
+        lifecycleDispatchId: dispatch.id,
+        recipientPhone: whatsappNumber,
+        type: "text",
+        text: waText
+      });
+      if (whatsappResult.success) {
+        console.log(`[Lifecycle Queue] WhatsApp aceito pela Meta para o dispatch ${dispatch.id}; deliveryId=${whatsappResult.deliveryId || "indisponível"} wamid=${whatsappResult.wamid || "indisponível"}`);
       }
     } catch (waErr) {
-      console.warn(`[Lifecycle Queue] Falha ao enviar WhatsApp para o número ${whatsappNumber}:`, waErr);
+      console.warn(`[Lifecycle Queue] Falha ao enviar WhatsApp para o dispatch ${dispatch.id}:`, waErr instanceof Error ? waErr.message : waErr);
     }
   }
 
@@ -806,9 +808,30 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     email: emailEnabled ? (emailSent ? "sent" : "failed") : "disabled",
     push: pushEnabled ? (pushSent ? "sent" : "failed") : "disabled",
     whatsapp: whatsappEnabled
-      ? (whatsappNumber ? (whatsappSent ? "sent" : "failed") : "not_configured")
+      ? (whatsappNumber
+          ? (whatsappResult?.status || (deps.sendWhatsAppNotification ? "failed" : "not_configured"))
+          : "not_configured")
       : "disabled"
   };
+  const channelMetadata = {
+    ...(dispatch.metadata || {}),
+    channel_delivery: channelDelivery,
+    whatsapp_delivery_id: whatsappResult?.deliveryId || null,
+    whatsapp_wamid: whatsappResult?.wamid || null,
+    channel_delivery_updated_at: new Date().toISOString()
+  };
+  const atLeastOneChannelProcessed = emailSent || pushSent || whatsappResult?.status === "accepted";
+
+  if (!atLeastOneChannelProcessed) {
+    await deps.supabaseAdmin.from("lifecycle_dispatches").update({
+      rendered_subject: rendered.subject,
+      rendered_preheader: rendered.preheader,
+      rendered_text: rendered.text,
+      metadata: channelMetadata,
+      updated_at: new Date().toISOString()
+    }).eq("id", dispatch.id);
+    throw new Error("Nenhum canal de comunicação aceitou o dispatch.");
+  }
 
   await deps.supabaseAdmin.from("lifecycle_dispatches").update({
     status: "sent",
@@ -817,11 +840,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     rendered_subject: rendered.subject,
     rendered_preheader: rendered.preheader,
     rendered_text: rendered.text,
-    metadata: {
-      ...(dispatch.metadata || {}),
-      channel_delivery: channelDelivery,
-      channel_delivery_updated_at: new Date().toISOString()
-    },
+    metadata: channelMetadata,
     updated_at: new Date().toISOString()
   }).eq("id", dispatch.id);
   try {

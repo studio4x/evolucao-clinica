@@ -1,3 +1,5 @@
+import type { WhatsAppSendResult, WhatsAppTextSendInput } from "../whatsapp/whatsappTypes.js";
+
 export const LIFECYCLE_EVENT_NAMES = [
   "user_registered", "user_activated", "user_logged_in", "profile_updated", "profession_selected",
   "onboarding_started", "onboarding_completed", "patient_created", "patient_record_linked",
@@ -156,5 +158,5 @@ export type LifecycleDependencies = {
   sendTransactionalEmail: (settings: any, input: any) => Promise<{ provider: "smtp" | "brevo"; messageId: string | null; emailDeliveryId: string | null }>;
   getAdminRecipients?: () => Promise<Array<{ id?: string; full_name?: string | null; google_email?: string | null }>>;
   sendPushNotification?: (userId: string, title: string, content: string, link?: string, imageUrl?: string) => Promise<boolean>;
-  sendWhatsAppNotification?: (userId: string, phone: string, text: string) => Promise<boolean>;
+  sendWhatsAppNotification?: (input: WhatsAppTextSendInput) => Promise<WhatsAppSendResult>;
 };

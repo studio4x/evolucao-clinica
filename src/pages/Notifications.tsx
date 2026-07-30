@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { showAlert, showConfirm } from '../store/modalStore';
+import { mergeNotificationSettings } from '../utils/notificationSettings';
 import { 
   Bell, BellOff, CheckCheck, Trash2, Mail, Settings, Shield, 
   Info, AlertTriangle, CheckCircle2, XCircle, Loader2 
@@ -464,11 +465,25 @@ export default function Notifications() {
         vapid_subject: `mailto:${smtpUser || 'contato@evolucaoclinica.app.br'}`
       };
  
+      const { data: currentSettings } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'notification_settings')
+        .maybeSingle();
+      let currentSettingsJson: Record<string, unknown> = {};
+      if (currentSettings?.api_key) {
+        try {
+          currentSettingsJson = JSON.parse(currentSettings.api_key);
+        } catch (parseError) {
+          console.error('Erro ao ler configurações atuais de notificações:', parseError);
+        }
+      }
+
       const { error } = await supabase
         .from('settings')
         .upsert({
           id: 'notification_settings',
-          api_key: JSON.stringify(settings),
+          api_key: JSON.stringify(mergeNotificationSettings(currentSettingsJson, settings)),
           updated_at: new Date().toISOString(),
           updated_by: user?.email || 'admin'
         });

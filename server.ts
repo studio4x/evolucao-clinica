@@ -11,15 +11,22 @@ import { getMessaging } from "firebase-admin/messaging";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { createRequire } from "module";
-import { createHmac, timingSafeEqual } from "crypto";
 const require = createRequire(import.meta.url);
 const mammoth = require("mammoth");
 const pdfParse = require("pdf-parse");
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
 import { getBrandAssetSignature } from "./src/utils/brandAssets.js";
 import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js";
+import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
+import {
+  createWhatsAppClient,
+  getWhatsAppConfigFromEnv,
+  verifyWhatsAppWebhookSignature,
+  WhatsAppValidationError
+} from "./server/whatsapp/whatsappClient.js";
+import { createWhatsAppRepository } from "./server/whatsapp/whatsappRepository.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -31,15 +38,19 @@ const TRIAL_DURATION_DAYS = 7;
 const DEFAULT_PRODUCTION_ORIGIN = "https://evolucaoclinica.app.br";
 const PRODUCTION_ORIGIN = (process.env.VERCEL_PRODUCTION_URL || DEFAULT_PRODUCTION_ORIGIN).replace(/\/$/, "");
 
-// Configuração do Supabase Admin
-const getFallbackServiceKey = (): string => {
-  const b64 = 'ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW10MmVHSnZiM1puY25Kb2FIUjBZWEZwYm14a0lpd2ljbTlzWlNJNkluTmxjblpwWTJWZmNtOXNaU0lzSW1saGRDSTZNVGM0TVRjMk5qSXdNU3dpWlhod0lqb3lNRGszTXpReU1qQXhmUS5OMlU3aS1pbTFNbFFnUzAtVnc3UXRtWTZuOExSUFJmOTd3STNXSlZiemxr';
-  return Buffer.from(b64, 'base64').toString('utf-8');
-};
-
+// Configuração do Supabase Admin: a Service Role é exclusivamente server-side.
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kvxboovgrrhhttaqinld.supabase.co";
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || getFallbackServiceKey();
+const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
+if (!supabaseServiceKey) {
+  throw new Error("SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.");
+}
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+const whatsappConfig = getWhatsAppConfigFromEnv();
+const whatsappRepository = createWhatsAppRepository(supabaseAdmin);
+const whatsappClient = createWhatsAppClient({
+  config: whatsappConfig,
+  repository: whatsappRepository
+});
 
 let firebaseAdminApp: FirebaseAdminApp | null = null;
 const getFirebaseMessaging = () => {
@@ -928,7 +939,7 @@ async function getNotificationSettings() {
     let settings: any = {};
     if (data && data.api_key) {
       try {
-        settings = JSON.parse(data.api_key);
+        settings = stripStoredWhatsAppConfiguration(JSON.parse(data.api_key));
       } catch (e) {
         console.error("Erro ao ler JSON de configuracoes de notificacoes:", e);
       }
@@ -974,29 +985,6 @@ async function getNotificationSettings() {
       manual_push_notification_ids: []
     };
   }
-}
-
-async function getWhatsAppWebhookConfig() {
-  const settings = await getNotificationSettings().catch(() => ({} as any));
-
-  return {
-    verifyToken: String(settings.whatsapp_webhook_verify_token || process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").trim(),
-    appSecret: String(settings.whatsapp_app_secret || process.env.WHATSAPP_APP_SECRET || "").trim()
-  };
-}
-
-function isValidWhatsAppWebhookSignature(req: express.Request, appSecret: string) {
-  if (!appSecret) return true;
-
-  const signature = String(req.headers["x-hub-signature-256"] || "");
-  if (!signature.startsWith("sha256=")) return false;
-
-  const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody || Buffer.from(JSON.stringify(req.body || {}));
-  const expected = createHmac("sha256", appSecret).update(rawBody).digest("hex");
-  const receivedBuffer = Buffer.from(signature.slice("sha256=".length), "hex");
-  const expectedBuffer = Buffer.from(expected, "hex");
-
-  return receivedBuffer.length === expectedBuffer.length && timingSafeEqual(receivedBuffer, expectedBuffer);
 }
 
 async function appendManualPushNotificationId(notificationId: string) {
@@ -1572,9 +1560,8 @@ app.get("/api/webhooks/whatsapp", async (req, res) => {
     const mode = String(req.query["hub.mode"] || "");
     const verifyToken = String(req.query["hub.verify_token"] || "");
     const challenge = String(req.query["hub.challenge"] || "");
-    const webhookConfig = await getWhatsAppWebhookConfig();
 
-    if (mode === "subscribe" && challenge && webhookConfig.verifyToken && verifyToken === webhookConfig.verifyToken) {
+    if (mode === "subscribe" && challenge && whatsappConfig.webhookVerifyToken && verifyToken === whatsappConfig.webhookVerifyToken) {
       return res.status(200).send(challenge);
     }
 
@@ -1587,13 +1574,24 @@ app.get("/api/webhooks/whatsapp", async (req, res) => {
 
 app.post("/api/webhooks/whatsapp", async (req: any, res) => {
   try {
-    const webhookConfig = await getWhatsAppWebhookConfig();
-    if (!isValidWhatsAppWebhookSignature(req, webhookConfig.appSecret)) {
+    if (!whatsappConfig.appSecret && !whatsappConfig.allowUnsignedWebhooks) {
+      console.error("[WhatsApp Webhook] WHATSAPP_APP_SECRET não configurado; evento rejeitado.");
+      return res.status(503).json({ error: "Webhook do WhatsApp não configurado com segurança." });
+    }
+
+    const rawBody = (req as express.Request & { rawBody?: Buffer }).rawBody || Buffer.from(JSON.stringify(req.body || {}));
+    const signature = String(req.headers["x-hub-signature-256"] || "");
+    if (!verifyWhatsAppWebhookSignature({
+      rawBody,
+      signature,
+      appSecret: whatsappConfig.appSecret,
+      allowUnsigned: whatsappConfig.allowUnsignedWebhooks
+    })) {
       return res.status(401).json({ error: "Assinatura do webhook inválida." });
     }
 
     const entries = Array.isArray(req.body?.entry) ? req.body.entry.length : 0;
-    console.info(`[WhatsApp Webhook] Evento recebido (${entries} entrada(s)).`);
+    console.info(`[WhatsApp Webhook] Evento validado (${entries} entrada(s)); processamento de status ainda não integrado.`);
     return res.status(200).json({ received: true });
   } catch (err: any) {
     console.error("Erro ao receber webhook do WhatsApp:", err.message || err);
@@ -2945,55 +2943,6 @@ async function sendOnboardingApprovalNotice(targetUserId: string) {
   });
 }
 
-async function sendWhatsAppNotificationInternal(userId: string, phone: string, text: string): Promise<boolean> {
-  const phoneClean = phone.replace(/\D/g, "");
-  if (!phoneClean) {
-    console.warn(`[WhatsApp] Falha ao enviar: número de telefone vazio para usuário ${userId}`);
-    return false;
-  }
-
-  const settings = await getNotificationSettings().catch(() => ({} as any));
-  const accessToken = settings.whatsapp_access_token || process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = settings.whatsapp_phone_number_id || process.env.WHATSAPP_PHONE_NUMBER_ID;
-
-  if (accessToken && phoneNumberId) {
-    try {
-      const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${accessToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          recipient_type: "individual",
-          to: phoneClean,
-          type: "text",
-          text: {
-            preview_url: true,
-            body: text
-          }
-        })
-      });
-
-      const data = await response.json();
-      if (!response.ok) {
-        console.error(`[WhatsApp API Error] Falha ao enviar para ${phoneClean}:`, data);
-        return false;
-      }
-
-      console.log(`[WhatsApp API] Mensagem enviada com sucesso para ${phoneClean}:`, data);
-      return true;
-    } catch (err: any) {
-      console.error(`[WhatsApp API Connection Error] Falha de conexão para ${phoneClean}:`, err.message);
-      return false;
-    }
-  } else {
-    console.log(`[WhatsApp Mock] SIMULAÇÃO de envio de mensagem para ${phoneClean} (usuário ${userId}): "${text}"`);
-    return true;
-  }
-}
-
 const lifecycleService = createLifecycleService({
   supabaseAdmin,
   productionOrigin: PRODUCTION_ORIGIN,
@@ -3012,7 +2961,7 @@ const lifecycleService = createLifecycleService({
       return false;
     }
   },
-  sendWhatsAppNotification: sendWhatsAppNotificationInternal
+  sendWhatsAppNotification: (input) => whatsappClient.sendText(input)
 });
 
 async function registerLifecycleLogin(userId: string) {
@@ -4633,52 +4582,59 @@ app.post("/api/notifications/test-whatsapp", requireAuth, async (req: any, res) 
       return res.status(403).json({ error: "Nao autorizado. Apenas administradores podem testar o envio do WhatsApp." });
     }
 
-    const { toPhone, accessToken, phoneNumberId } = req.body;
+    const { toPhone, text } = req.body || {};
     
     if (!toPhone) {
       return res.status(400).json({ error: "Número de telefone de destino é obrigatório." });
     }
-    if (!accessToken || !phoneNumberId) {
-      return res.status(400).json({ error: "Token de acesso e ID do número são obrigatórios." });
-    }
 
-    const phoneClean = toPhone.replace(/\D/g, "");
-    if (!phoneClean) {
-      return res.status(400).json({ error: "Número de telefone inválido." });
-    }
-
-    const testMessage = `Olá! Este é um teste de envio da API do WhatsApp Cloud configurada na plataforma Evolução Clínica. Se você recebeu esta mensagem, a integração está funcionando perfeitamente!`;
-
-    const response = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${accessToken}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        recipient_type: "individual",
-        to: phoneClean,
-        type: "text",
-        text: {
-          preview_url: true,
-          body: testMessage
-        }
-      })
+    const testMessage = typeof text === "string" && text.trim()
+      ? text.trim().slice(0, 4096)
+      : "Olá! Este é um teste de envio da API do WhatsApp Cloud configurada na plataforma Evolução Clínica.";
+    const result = await whatsappClient.sendText({
+      userId: req.user.id,
+      lifecycleDispatchId: null,
+      recipientPhone: String(toPhone),
+      type: "text",
+      text: testMessage
     });
 
-    const responseData = await response.json();
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: `Falha ao enviar mensagem de teste via WhatsApp Cloud API.`,
-        details: responseData
-      });
+    const responsePayload = {
+      success: result.success,
+      deliveryId: result.deliveryId,
+      wamid: result.wamid,
+      status: result.status,
+      httpStatus: result.httpStatus,
+      error: result.errorMessage
+        ? {
+            code: result.errorCode,
+            title: result.errorTitle,
+            message: result.errorMessage
+          }
+        : null
+    };
+
+    if (!result.success) {
+      return res.status(result.status === "not_configured" ? 503 : 502).json(responsePayload);
     }
 
-    return res.json({ success: true, details: responseData });
+    return res.json(responsePayload);
   } catch (err: any) {
-    console.error("Erro no teste de WhatsApp:", err);
-    return res.status(500).json({ error: err.message || "Erro interno do servidor ao enviar teste de WhatsApp." });
+    if (err instanceof WhatsAppValidationError) {
+      return res.status(400).json({
+        success: false,
+        deliveryId: null,
+        wamid: null,
+        status: "failed",
+        error: {
+          code: "validation_error",
+          title: "Dados inválidos",
+          message: err.message
+        }
+      });
+    }
+    console.error("[WhatsApp Test] Falha interna no envio de teste:", err instanceof Error ? err.message : err);
+    return res.status(500).json({ error: "Erro interno do servidor ao enviar teste de WhatsApp." });
   }
 });
 

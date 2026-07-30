@@ -20,6 +20,7 @@ import JourneyAdmin from '../components/admin/JourneyAdmin';
 import DailyPushNotificationManager from '../components/admin/DailyPushNotificationManager';
 import LifecycleAdmin from '../components/admin/LifecycleAdmin';
 import { showAlert, showConfirm } from '../store/modalStore';
+import { mergeNotificationSettings } from '../utils/notificationSettings';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -843,14 +844,8 @@ export default function AdminPanel() {
   const [adminSmtpSuccess, setAdminSmtpSuccess] = useState(false);
 
   // Estados de Configuração da API do WhatsApp Cloud
-  const [adminWhatsappAccessToken, setAdminWhatsappAccessToken] = useState('');
-  const [adminWhatsappPhoneNumberId, setAdminWhatsappPhoneNumberId] = useState('');
-  const [adminWhatsappWebhookVerifyToken, setAdminWhatsappWebhookVerifyToken] = useState('');
   const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('');
   const [adminWhatsappWebhookCopied, setAdminWhatsappWebhookCopied] = useState(false);
-  const [adminWhatsappSaving, setAdminWhatsappSaving] = useState(false);
-  const [adminWhatsappSuccess, setAdminWhatsappSuccess] = useState(false);
-  const [adminWhatsappError, setAdminWhatsappError] = useState('');
   const [adminWhatsappTestLoading, setAdminWhatsappTestLoading] = useState(false);
   const [adminWhatsappTestSuccess, setAdminWhatsappTestSuccess] = useState(false);
   const [adminWhatsappTestError, setAdminWhatsappTestError] = useState('');
@@ -1058,10 +1053,6 @@ export default function AdminPanel() {
           setAdminBrevoSenderEmail(parsed.brevo_sender_email || '');
           setAdminVapidPublic(parsed.vapid_public_key || '');
           setAdminVapidPrivate(parsed.vapid_private_key || '');
-          setAdminWhatsappAccessToken(parsed.whatsapp_access_token || '');
-          setAdminWhatsappPhoneNumberId(parsed.whatsapp_phone_number_id || '');
-          setAdminWhatsappWebhookVerifyToken(parsed.whatsapp_webhook_verify_token || '');
-          setAdminWhatsappTestNumber(parsed.whatsapp_test_number || '');
         }
       } catch (err) {
         console.error('Erro ao buscar configuracoes SMTP:', err);
@@ -1156,13 +1147,12 @@ export default function AdminPanel() {
         .from('settings')
         .upsert({
           id: 'notification_settings',
-          api_key: JSON.stringify({
-            ...currentSettingsJson,
+          api_key: JSON.stringify(mergeNotificationSettings(currentSettingsJson, {
             ...settings,
             manual_push_notification_ids: Array.isArray(currentSettingsJson.manual_push_notification_ids)
               ? currentSettingsJson.manual_push_notification_ids
               : []
-          }),
+          })),
           updated_at: new Date().toISOString(),
           updated_by: user?.email || 'admin'
         });
@@ -1178,55 +1168,6 @@ export default function AdminPanel() {
     }
   };
 
-  // Salvar Configurações do WhatsApp Cloud API
-  const handleSaveWhatsappSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminWhatsappSaving(true);
-    setAdminWhatsappSuccess(false);
-    setAdminWhatsappError('');
-
-    try {
-      const { data: currentSettings } = await supabase
-        .from('settings')
-        .select('api_key')
-        .eq('id', 'notification_settings')
-        .maybeSingle();
-
-      let currentSettingsJson: Record<string, any> = {};
-      if (currentSettings?.api_key) {
-        try {
-          currentSettingsJson = JSON.parse(currentSettings.api_key);
-        } catch (parseErr) {
-          console.error('Erro ao ler configurações atuais de notificações:', parseErr);
-        }
-      }
-
-      const { error } = await supabase
-        .from('settings')
-        .upsert({
-          id: 'notification_settings',
-          api_key: JSON.stringify({
-            ...currentSettingsJson,
-            whatsapp_access_token: adminWhatsappAccessToken,
-            whatsapp_phone_number_id: adminWhatsappPhoneNumberId,
-            whatsapp_webhook_verify_token: adminWhatsappWebhookVerifyToken,
-            whatsapp_test_number: adminWhatsappTestNumber
-          }),
-          updated_at: new Date().toISOString(),
-          updated_by: user?.email || 'admin'
-        });
-
-      if (error) throw error;
-      setAdminWhatsappSuccess(true);
-      setTimeout(() => setAdminWhatsappSuccess(false), 5000);
-    } catch (err: any) {
-      console.error('Erro ao salvar WhatsApp settings:', err);
-      setAdminWhatsappError(err.message || 'Erro ao salvar configurações do WhatsApp.');
-    } finally {
-      setAdminWhatsappSaving(false);
-    }
-  };
-
   // Disparar Mensagem de Teste do WhatsApp Cloud API
   const handleTestWhatsapp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1234,11 +1175,6 @@ export default function AdminPanel() {
       setAdminWhatsappTestError('Por favor, informe o número de telefone de destino para o teste.');
       return;
     }
-    if (!adminWhatsappAccessToken || !adminWhatsappPhoneNumberId) {
-      setAdminWhatsappTestError('Por favor, configure o token de acesso e o ID do número antes de testar.');
-      return;
-    }
-
     setAdminWhatsappTestLoading(true);
     setAdminWhatsappTestSuccess(false);
     setAdminWhatsappTestError('');
@@ -1252,9 +1188,7 @@ export default function AdminPanel() {
           'Authorization': `Bearer ${sessionData.session?.access_token || ''}`
         },
         body: JSON.stringify({
-          toPhone: adminWhatsappTestNumber,
-          accessToken: adminWhatsappAccessToken,
-          phoneNumberId: adminWhatsappPhoneNumberId
+          toPhone: adminWhatsappTestNumber
         })
       });
 
@@ -6390,20 +6324,7 @@ export default function AdminPanel() {
                     </div>
                   </div>
 
-                  <form onSubmit={handleSaveWhatsappSettings} className="space-y-6">
-                    {adminWhatsappError && (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                        <span>{adminWhatsappError}</span>
-                      </div>
-                    )}
-
-                    {adminWhatsappSuccess && (
-                      <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-xl text-sm flex items-center gap-2 animate-fadeIn">
-                        <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        <span>Configurações do WhatsApp salvas com sucesso!</span>
-                      </div>
-                    )}
+                  <div className="space-y-6">
 
                     <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 md:p-5 space-y-4">
                       <div className="flex items-start gap-3">
@@ -6446,71 +6367,20 @@ export default function AdminPanel() {
                         </div>
                       </div>
 
-                      <div className="block">
-                        <span className="text-sm font-semibold text-brand-text">Token de verificação</span>
-                        <input
-                          type="password"
-                          value={adminWhatsappWebhookVerifyToken}
-                          onChange={(e) => setAdminWhatsappWebhookVerifyToken(e.target.value)}
-                          placeholder="Crie um token e use o mesmo no Meta Developers"
-                          className="mt-1 w-full rounded-xl border border-blue-200 bg-white px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
-                        />
-                        <p className="text-xs text-brand-text-muted mt-1.5">
-                          Salve este token e informe exatamente o mesmo valor no campo Verify Token da Meta.
-                        </p>
-                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-6">
-                      <div className="block">
-                        <span className="text-sm font-semibold text-brand-text">Access Token (Token de Acesso Permanente da Meta)</span>
-                        <input
-                          type="password"
-                          value={adminWhatsappAccessToken}
-                          onChange={(e) => setAdminWhatsappAccessToken(e.target.value)}
-                          placeholder="E.g. EAAG..."
-                          className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
-                        />
-                        <p className="text-xs text-brand-text-muted mt-1.5">
-                          Insira o Token de Acesso da Meta for WhatsApp. Recomendamos utilizar um token permanente (System User Access Token) para evitar interrupções.
-                        </p>
-                      </div>
-
-                      <div className="block">
-                        <span className="text-sm font-semibold text-brand-text">Phone Number ID (ID do Número de Telefone no WhatsApp Business)</span>
-                        <input
-                          type="text"
-                          value={adminWhatsappPhoneNumberId}
-                          onChange={(e) => setAdminWhatsappPhoneNumberId(e.target.value)}
-                          placeholder="E.g. 109283746..."
-                          className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
-                        />
-                        <p className="text-xs text-brand-text-muted mt-1.5">
-                          O ID numérico fornecido no painel de desenvolvedor da Meta correspondente ao número que fará os envios.
-                        </p>
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 md:p-5">
+                      <div className="flex items-start gap-3">
+                        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" />
+                        <div>
+                          <h3 className="text-sm font-bold text-amber-900">Credenciais protegidas no servidor</h3>
+                          <p className="mt-1 text-xs leading-relaxed text-amber-900/80">
+                            Access Token, Phone Number ID, App Secret e Verify Token são configurados exclusivamente como variáveis de ambiente protegidas na Vercel. Eles não são armazenados no banco nem enviados ao navegador.
+                          </p>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="flex justify-end pt-4">
-                      <button
-                        type="submit"
-                        disabled={adminWhatsappSaving}
-                        className="btn-primary px-6 py-2.5 flex items-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
-                      >
-                        {adminWhatsappSaving ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Salvando...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4" />
-                            <span>Salvar Configurações do WhatsApp</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
+                  </div>
                 </div>
 
                 <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
@@ -6602,7 +6472,7 @@ Para não receber mais mensagens de ativação, responda SAIR.`}</pre>
                     {adminWhatsappTestSuccess && (
                       <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-xl text-sm flex items-center gap-2 animate-fadeIn">
                         <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        <span>Mensagem de teste enviada com sucesso! Verifique seu WhatsApp.</span>
+                        <span>Mensagem de teste aceita pela Meta. A entrega final dependerá dos eventos de status do WhatsApp.</span>
                       </div>
                     )}
 
