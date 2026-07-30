@@ -57,8 +57,8 @@ android {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 23
         targetSdkVersion 35
-        versionCode 61
-        versionName "61"
+        versionCode 62
+        versionName "62"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name
@@ -209,6 +209,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'com.google.firebase:firebase-messaging:24.1.0'
     implementation 'com.stripe:stripe-android:23.0.1'
     implementation 'com.android.billingclient:billing:9.1.0'
     implementation 'androidx.activity:activity:1.10.1'

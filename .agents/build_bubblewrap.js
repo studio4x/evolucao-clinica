@@ -188,7 +188,8 @@ function applyFixes(pinnedVersion) {
   const requiredBillingDependencies = [
     "implementation 'androidx.activity:activity:1.10.1'",
     "implementation 'com.android.billingclient:billing:9.1.0'",
-    "implementation 'com.stripe:stripe-android:23.0.1'"
+    "implementation 'com.stripe:stripe-android:23.0.1'",
+    "implementation 'com.google.firebase:firebase-messaging:24.1.0'"
   ];
   for (const dependency of requiredBillingDependencies) {
     if (!buildGradleContent.includes(dependency)) {
