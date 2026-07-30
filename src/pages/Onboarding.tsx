@@ -865,7 +865,7 @@ export default function Onboarding() {
               <>
                 <button
                   type="button"
-                  onClick={() => navigate('/painel/dashboard')}
+                  onClick={handleFinish}
                   className="px-4 py-2 text-xs font-bold text-brand-text-muted hover:text-brand-primary rounded-xl hover:bg-brand-bg transition-colors"
                 >
                   Sincronizar Depois
