@@ -355,11 +355,23 @@ assert.match(n8nEndpointSource, /whatsappConfig\.n8nEventsToken/);
 assert.match(n8nEndpointSource, /validateNormalizedWhatsAppN8nEvent/);
 assert.doesNotMatch(n8nEndpointSource, /x-hub-signature-256|appSecret|WHATSAPP_APP_SECRET|verifyWhatsAppWebhookSignature/);
 
+const n8nAdminEventsStart = serverSource.indexOf('app.get("/api/admin/whatsapp/integration-events"');
+const n8nAdminEventsEnd = serverSource.indexOf('app.get("/api/debug-env"', n8nAdminEventsStart);
+const n8nAdminEventsSource = serverSource.slice(n8nAdminEventsStart, n8nAdminEventsEnd);
+assert.ok(n8nAdminEventsStart >= 0);
+assert.match(n8nAdminEventsSource, /requireAuth, requireAdmin/);
+assert.match(n8nAdminEventsSource, /\.range\(from, from \+ pageSize - 1\)/);
+assert.match(n8nAdminEventsSource, /app\.delete\("\/api\/admin\/whatsapp\/integration-events"/);
+assert.doesNotMatch(n8nAdminEventsSource, /raw_value/);
+
 const whatsappAdminSource = readFileSync("src/pages/AdminPanel.tsx", "utf8");
 assert.match(whatsappAdminSource, /\/api\/integrations\/whatsapp\/events/);
 assert.match(whatsappAdminSource, /WHATSAPP_N8N_EVENTS_TOKEN/);
 assert.match(whatsappAdminSource, /message_status/);
 assert.match(whatsappAdminSource, /alreadyProcessed/);
+assert.match(whatsappAdminSource, /\/api\/admin\/whatsapp\/integration-events\?page=/);
+assert.match(whatsappAdminSource, /Limpar chamadas/);
+assert.match(whatsappAdminSource, /Página \{whatsappIntegrationEventsPage\} de \{whatsappIntegrationEventsTotalPages\}/);
 
 const whatsappMigration = readFileSync(
   "supabase/migrations/20260730190000_create_whatsapp_message_deliveries.sql",

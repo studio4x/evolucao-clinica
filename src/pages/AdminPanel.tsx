@@ -97,6 +97,23 @@ interface AdminInboxNotification {
   created_at: string;
 }
 
+interface WhatsAppIntegrationEvent {
+  id: string;
+  event_key: string;
+  tenant: string;
+  event_type: 'message_status' | 'business_app_echo' | 'coexistence_sync';
+  message_id: string | null;
+  status: string | null;
+  received_at: string;
+  phone_number_id: string | null;
+  delivery_id: string | null;
+  processing_status: 'processing' | 'processed' | 'ignored' | 'failed';
+  processing_result: Record<string, unknown> | null;
+  processing_error: string | null;
+  processed_at: string | null;
+  created_at: string;
+}
+
 const BRAND_COLOR_FIELDS: { key: keyof BrandColors; label: string; desc: string }[] = [
   { key: 'primary', label: 'Cor Primária', desc: 'Botões principais, cabeçalhos, destaques e links.' },
   { key: 'primary_hover', label: 'Cor Primária (Hover)', desc: 'Cor do botão primário ao passar o mouse.' },
@@ -850,6 +867,13 @@ export default function AdminPanel() {
   const [adminWhatsappTestLoading, setAdminWhatsappTestLoading] = useState(false);
   const [adminWhatsappTestSuccess, setAdminWhatsappTestSuccess] = useState(false);
   const [adminWhatsappTestError, setAdminWhatsappTestError] = useState('');
+  const [whatsappIntegrationEvents, setWhatsappIntegrationEvents] = useState<WhatsAppIntegrationEvent[]>([]);
+  const [whatsappIntegrationEventsPage, setWhatsappIntegrationEventsPage] = useState(1);
+  const [whatsappIntegrationEventsTotal, setWhatsappIntegrationEventsTotal] = useState(0);
+  const [whatsappIntegrationEventsTotalPages, setWhatsappIntegrationEventsTotalPages] = useState(1);
+  const [whatsappIntegrationEventsLoading, setWhatsappIntegrationEventsLoading] = useState(false);
+  const [whatsappIntegrationEventsError, setWhatsappIntegrationEventsError] = useState('');
+  const [whatsappIntegrationEventsClearing, setWhatsappIntegrationEventsClearing] = useState(false);
 
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
   const [selectedProfessionalId, setSelectedProfessionalId] = useState('');
@@ -1166,6 +1190,76 @@ export default function AdminPanel() {
       alert('Erro ao salvar configurações: ' + err.message);
     } finally {
       setAdminSmtpSaving(false);
+    }
+  };
+
+  const loadWhatsappIntegrationEvents = async (page = whatsappIntegrationEventsPage) => {
+    setWhatsappIntegrationEventsLoading(true);
+    setWhatsappIntegrationEventsError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const response = await fetch(`/api/admin/whatsapp/integration-events?page=${page}&pageSize=10`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar as chamadas do n8n.');
+
+      setWhatsappIntegrationEvents(payload.events || []);
+      setWhatsappIntegrationEventsTotal(Number(payload.pagination?.total || 0));
+      setWhatsappIntegrationEventsTotalPages(Math.max(1, Number(payload.pagination?.totalPages || 1)));
+    } catch (error: any) {
+      setWhatsappIntegrationEventsError(error.message || 'Não foi possível carregar as chamadas do n8n.');
+    } finally {
+      setWhatsappIntegrationEventsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'whatsapp_config') {
+      void loadWhatsappIntegrationEvents(whatsappIntegrationEventsPage);
+    }
+  }, [activeTab, whatsappIntegrationEventsPage]);
+
+  const handleClearWhatsappIntegrationEvents = async () => {
+    if (whatsappIntegrationEventsClearing) return;
+    const confirmed = await showConfirm(
+      'Isso removerá permanentemente o histórico de chamadas normalizadas do n8n. As entregas de WhatsApp não serão alteradas. Deseja continuar?',
+      {
+        title: 'Limpar chamadas do n8n',
+        confirmLabel: 'Limpar chamadas',
+        cancelLabel: 'Cancelar',
+        variant: 'danger',
+        icon: 'warning'
+      }
+    );
+    if (!confirmed) return;
+
+    setWhatsappIntegrationEventsClearing(true);
+    setWhatsappIntegrationEventsError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const response = await fetch('/api/admin/whatsapp/integration-events', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível limpar as chamadas do n8n.');
+
+      setWhatsappIntegrationEventsPage(1);
+      setWhatsappIntegrationEvents([]);
+      setWhatsappIntegrationEventsTotal(0);
+      setWhatsappIntegrationEventsTotalPages(1);
+      await loadWhatsappIntegrationEvents(1);
+    } catch (error: any) {
+      setWhatsappIntegrationEventsError(error.message || 'Não foi possível limpar as chamadas do n8n.');
+    } finally {
+      setWhatsappIntegrationEventsClearing(false);
     }
   };
 
@@ -6440,6 +6534,84 @@ export default function AdminPanel() {
                         <p className="font-bold">Contrato normalizado do payload</p>
                         <p className="mt-1 text-violet-900/75">Envie <code className="font-mono">tenant</code>, <code className="font-mono">eventType</code>, <code className="font-mono">eventKey</code>, <code className="font-mono">messageId</code>, <code className="font-mono">status</code>, <code className="font-mono">receivedAt</code>, <code className="font-mono">phoneNumberId</code>, <code className="font-mono">senderPhone</code>, <code className="font-mono">recipientPhone</code> e <code className="font-mono">rawValue</code>.</p>
                         <p className="mt-2 text-violet-900/75"><code className="font-mono">message_status</code> aceita <code className="font-mono">sent</code>, <code className="font-mono">delivered</code>, <code className="font-mono">read</code> ou <code className="font-mono">failed</code> e correlaciona <code className="font-mono">messageId</code> com o <code className="font-mono">wamid</code> da entrega. <code className="font-mono">business_app_echo</code> e <code className="font-mono">coexistence_sync</code> são armazenados sem processamento adicional.</p>
+                      </div>
+
+                      <div className="rounded-xl border border-violet-200/80 bg-white/90 overflow-hidden">
+                        <div className="flex flex-col gap-3 border-b border-violet-100 p-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="text-sm font-bold text-violet-950">Chamadas recebidas</p>
+                            <p className="text-xs text-violet-900/75">{whatsappIntegrationEventsTotal} chamada{whatsappIntegrationEventsTotal === 1 ? '' : 's'} registrada{whatsappIntegrationEventsTotal === 1 ? '' : 's'}. O conteúdo bruto não é exibido para evitar exposição desnecessária de dados.</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void loadWhatsappIntegrationEvents(whatsappIntegrationEventsPage)}
+                              disabled={whatsappIntegrationEventsLoading || whatsappIntegrationEventsClearing}
+                              className="btn-outline px-3 py-2 text-xs flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 ${whatsappIntegrationEventsLoading ? 'animate-spin' : ''}`} />
+                              Atualizar
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleClearWhatsappIntegrationEvents()}
+                              disabled={whatsappIntegrationEventsClearing || whatsappIntegrationEventsTotal === 0}
+                              className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 flex items-center gap-1.5 transition-colors hover:bg-red-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {whatsappIntegrationEventsClearing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                              Limpar chamadas
+                            </button>
+                          </div>
+                        </div>
+
+                        {whatsappIntegrationEventsError && (
+                          <div className="m-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{whatsappIntegrationEventsError}</div>
+                        )}
+
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full text-left text-xs">
+                            <thead className="bg-violet-50 text-[10px] uppercase tracking-wide text-violet-800">
+                              <tr>
+                                <th className="px-3 py-2.5 font-bold">Recebido</th>
+                                <th className="px-3 py-2.5 font-bold">Evento</th>
+                                <th className="px-3 py-2.5 font-bold">Status</th>
+                                <th className="px-3 py-2.5 font-bold">Processamento</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-violet-100 text-brand-text">
+                              {whatsappIntegrationEventsLoading ? (
+                                <tr><td colSpan={4} className="px-3 py-8 text-center text-violet-800"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Carregando chamadas...</td></tr>
+                              ) : whatsappIntegrationEvents.length === 0 ? (
+                                <tr><td colSpan={4} className="px-3 py-8 text-center text-violet-800">Nenhuma chamada do n8n registrada.</td></tr>
+                              ) : whatsappIntegrationEvents.map((event) => (
+                                <tr key={event.id} className="align-top">
+                                  <td className="px-3 py-3 whitespace-nowrap text-violet-900/80">{formatDate(event.received_at)}</td>
+                                  <td className="px-3 py-3">
+                                    <code className="font-mono text-[11px] text-violet-950">{event.event_type}</code>
+                                    <p className="mt-1 max-w-[220px] truncate font-mono text-[10px] text-brand-text-muted" title={event.event_key}>{event.event_key}</p>
+                                    {event.message_id && <p className="mt-1 max-w-[220px] truncate font-mono text-[10px] text-brand-text-muted" title={event.message_id}>wamid: {event.message_id}</p>}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${event.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{event.status || '—'}</span>
+                                    <p className="mt-1 text-[10px] text-brand-text-muted">tenant: {event.tenant}</p>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${event.processing_status === 'processed' ? 'bg-emerald-100 text-emerald-700' : event.processing_status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-800'}`}>{event.processing_status}</span>
+                                    {event.processing_error && <p className="mt-1 max-w-[260px] text-[10px] text-red-700">{event.processing_error}</p>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-3 border-t border-violet-100 p-3 text-xs text-violet-900/80">
+                          <span>Página {whatsappIntegrationEventsPage} de {whatsappIntegrationEventsTotalPages}</span>
+                          <div className="flex gap-2">
+                            <button type="button" onClick={() => setWhatsappIntegrationEventsPage((page) => Math.max(1, page - 1))} disabled={whatsappIntegrationEventsPage === 1 || whatsappIntegrationEventsLoading} className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">Anterior</button>
+                            <button type="button" onClick={() => setWhatsappIntegrationEventsPage((page) => Math.min(whatsappIntegrationEventsTotalPages, page + 1))} disabled={whatsappIntegrationEventsPage >= whatsappIntegrationEventsTotalPages || whatsappIntegrationEventsLoading} className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">Próxima</button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

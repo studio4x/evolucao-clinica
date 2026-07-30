@@ -1633,6 +1633,61 @@ app.post("/api/integrations/whatsapp/events", async (req, res) => {
   }
 });
 
+// Auditoria administrativa dos eventos já normalizados pelo n8n. O payload
+// bruto não é devolvido ao navegador para reduzir a exposição de dados.
+app.get("/api/admin/whatsapp/integration-events", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const requestedPage = Number.parseInt(String(req.query.page || "1"), 10);
+    const requestedPageSize = Number.parseInt(String(req.query.pageSize || "20"), 10);
+    const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const pageSize = Number.isFinite(requestedPageSize)
+      ? Math.min(100, Math.max(1, requestedPageSize))
+      : 20;
+    const from = (page - 1) * pageSize;
+
+    const { data, error, count } = await supabaseAdmin
+      .from("whatsapp_integration_events")
+      .select("id, event_key, tenant, event_type, message_id, status, received_at, phone_number_id, delivery_id, processing_status, processing_result, processing_error, processed_at, created_at", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message || "Não foi possível carregar as chamadas do n8n.");
+
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    return res.json({
+      events: data || [],
+      pagination: {
+        page,
+        pageSize,
+        total: count || 0,
+        totalPages: Math.max(1, Math.ceil((count || 0) / pageSize))
+      }
+    });
+  } catch (error: any) {
+    console.error("[Admin WhatsApp] Erro ao listar eventos n8n:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar as chamadas do n8n." });
+  }
+});
+
+app.delete("/api/admin/whatsapp/integration-events", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const { count, error: countError } = await supabaseAdmin
+      .from("whatsapp_integration_events")
+      .select("id", { count: "exact", head: true });
+    if (countError) throw new Error(countError.message || "Não foi possível contar as chamadas do n8n.");
+
+    const { error: deleteError } = await supabaseAdmin
+      .from("whatsapp_integration_events")
+      .delete()
+      .gte("created_at", "1970-01-01T00:00:00.000Z");
+    if (deleteError) throw new Error(deleteError.message || "Não foi possível limpar as chamadas do n8n.");
+
+    return res.json({ success: true, deletedCount: count || 0 });
+  } catch (error: any) {
+    console.error("[Admin WhatsApp] Erro ao limpar eventos n8n:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível limpar as chamadas do n8n." });
+  }
+});
+
 app.get("/api/debug-env", (req, res) => {
   const envs = {
     NODE_ENV: process.env.NODE_ENV,
