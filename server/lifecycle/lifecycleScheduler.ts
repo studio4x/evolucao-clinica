@@ -9,7 +9,7 @@ type LifecycleSchedulerBatchResult = {
   failed: number;
 };
 
-export async function processLifecycleSchedulerUsers<T extends { id: string }>(
+export async function processLifecycleSchedulerUsers<T extends { id: string; created_at?: string }>(
   users: T[],
   processUser: (user: T) => Promise<unknown>,
   onError: (user: T, error: unknown) => void = (user, error) => {
