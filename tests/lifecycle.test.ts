@@ -145,4 +145,10 @@ const existingEnrollmentLookup = lifecycleRepositorySource.indexOf('const { data
 const newUserEligibilityCheck = lifecycleRepositorySource.indexOf('campaign.enrollment_mode === "new_users_only"');
 assert.ok(existingEnrollmentLookup >= 0 && existingEnrollmentLookup < newUserEligibilityCheck);
 
+const hardenedLifecycleCronMigration = readFileSync('supabase/migrations/20260730150000_harden_lifecycle_cron_jobs.sql', 'utf8');
+assert.match(hardenedLifecycleCronMigration, /'lifecycle-process'/);
+assert.match(hardenedLifecycleCronMigration, /'lifecycle-schedule'/);
+assert.match(hardenedLifecycleCronMigration, /'lifecycle-recalculate'/);
+assert.equal((hardenedLifecycleCronMigration.match(/timeout_milliseconds := 30000/g) || []).length, 3);
+
 console.log('Lifecycle unit tests passed.');
