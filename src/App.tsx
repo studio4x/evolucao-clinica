@@ -53,6 +53,7 @@ import { PermissionNotice } from './components/common/PermissionNotice';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
+import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 
 const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
@@ -235,6 +236,7 @@ export default function App() {
 
   useEffect(() => {
     clearLazyRetryQueryParam();
+    captureAcquisitionData();
   }, []);
 
   useEffect(() => {
@@ -472,6 +474,8 @@ export default function App() {
               profileData.subscription_ends_at,
               profileData.trial_ends_at
             );
+
+            void syncAcquisitionWithDatabase(session.user.id, profileData.acquisition_info);
 
             pendingOnboardingNoticeRef.current = profileData.status === 'pending' ? session.user.id : null;
 

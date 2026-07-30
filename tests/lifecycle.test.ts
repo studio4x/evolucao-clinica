@@ -5,6 +5,7 @@ import { chooseHighestPriority, evaluateKnownRule, getContextualActionPendingAt,
 import { renderLifecycleTemplate } from '../server/lifecycle/templates/tokenRegistry.js';
 import { renderSafeLifecycleMarkdown } from '../server/lifecycle/lifecycleRenderer.js';
 import { sanitizeLifecycleMetadata } from '../server/lifecycle/lifecycleRepository.js';
+import { assertLifecycleSchedulerHealthy, processLifecycleSchedulerUsers } from '../server/lifecycle/lifecycleScheduler.js';
 
 const now = new Date('2026-07-16T12:00:00.000Z');
 const baseState: any = {
@@ -115,5 +116,26 @@ assert.equal(sanitized.has_google_doc, true);
 // 3. Padrões sensíveis (CPF, CID, Email) dentro de chaves autorizadas devem ter sido substituídos
 assert.equal(sanitized.status, 'active with CPF [CPF_REDACTED] and ICD [CID_REDACTED]');
 assert.equal(sanitized.result, 'email send to [EMAIL_REDACTED] success');
+
+const schedulerErrors: string[] = [];
+const schedulerBatch = await processLifecycleSchedulerUsers(
+  [{ id: 'ok' }, { id: 'broken' }, { id: 'idle' }],
+  async (user) => {
+    if (user.id === 'broken') throw new Error('schema mismatch');
+    return user.id === 'ok' ? 'scheduled' : 'nothing_due';
+  },
+  (user, error) => schedulerErrors.push(`${user.id}:${error instanceof Error ? error.message : String(error)}`)
+);
+assert.deepEqual(schedulerBatch, { scheduled: 1, failed: 1 });
+assert.deepEqual(schedulerErrors, ['broken:schema mismatch']);
+assert.throws(
+  () => assertLifecycleSchedulerHealthy(schedulerBatch, 3),
+  /falhou para 1 de 3 usuário/
+);
+assert.doesNotThrow(() => assertLifecycleSchedulerHealthy({ scheduled: 0, failed: 0 }, 3));
+
+const lifecycleSchedulerSource = readFileSync('server/lifecycle/lifecycleScheduler.ts', 'utf8');
+assert.match(lifecycleSchedulerSource, /from\("transactions"\)\.select\("id, created_at"\)/);
+assert.doesNotMatch(lifecycleSchedulerSource, /from\("transactions"\)\.select\("id, updated_at"\)/);
 
 console.log('Lifecycle unit tests passed.');

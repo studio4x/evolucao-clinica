@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -41,6 +41,19 @@ interface Professional {
   subscription_status?: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid';
   subscription_ends_at?: string;
   trial_ends_at?: string;
+  acquisition_info?: {
+    utm_source?: string;
+    utm_medium?: string;
+    utm_campaign?: string;
+    utm_term?: string;
+    utm_content?: string;
+    gclid?: string;
+    fbclid?: string;
+    referrer?: string;
+    landing_page?: string;
+    first_seen_at?: string;
+    channel?: string;
+  };
 }
 
 type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config';
@@ -802,6 +815,9 @@ export default function AdminPanel() {
   const [editingProf, setEditingProf] = useState<Professional | null>(null);
   const [editPlan, setEditPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none'>('trial');
   const [editStatus, setEditStatus] = useState<'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid'>('trialing');
+
+  // Estado do modal de rastreamento de aquisição / UTMs
+  const [selectedAcquisitionProf, setSelectedAcquisitionProf] = useState<Professional | null>(null);
 
   // Estados para aba de Notificações & SMTP no Painel Admin
   const [adminSmtpHost, setAdminSmtpHost] = useState('');
@@ -3344,6 +3360,17 @@ export default function AdminPanel() {
                                     <div className="inline-flex gap-1.5 items-center">
                                       <span className="text-xs text-brand-text-muted italic mr-2">Administrador Geral</span>
                                       <button
+                                        onClick={() => setSelectedAcquisitionProf(prof)}
+                                        className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
+                                          prof.acquisition_info && (prof.acquisition_info.utm_source || prof.acquisition_info.referrer || prof.acquisition_info.channel)
+                                            ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100'
+                                            : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border-gray-200'
+                                        }`}
+                                        title="Origem do Cadastro / UTMs de Aquisição"
+                                      >
+                                        <Compass className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
                                         onClick={() => handleForceGoogleDisconnect(prof)}
                                         disabled={updatingId !== null}
                                         className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100 transition-colors disabled:opacity-50 cursor-pointer"
@@ -3354,6 +3381,18 @@ export default function AdminPanel() {
                                     </div>
                                   ) : (
                                     <div className="inline-flex gap-1.5">
+                                      <button
+                                        onClick={() => setSelectedAcquisitionProf(prof)}
+                                        className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
+                                          prof.acquisition_info && (prof.acquisition_info.utm_source || prof.acquisition_info.referrer || prof.acquisition_info.channel)
+                                            ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100'
+                                            : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border-gray-200'
+                                        }`}
+                                        title="Origem do Cadastro / UTMs de Aquisição"
+                                      >
+                                        <Compass className="w-3.5 h-3.5" />
+                                      </button>
+
                                       <button
                                         onClick={() => handleOpenEditSubscription(prof)}
                                         className="inline-flex items-center justify-center p-2 rounded-lg bg-brand-bg hover:bg-brand-border/40 text-brand-primary border border-brand-border transition-colors cursor-pointer"
@@ -7078,6 +7117,169 @@ Para não receber mais mensagens de ativação, responda SAIR.`}</pre>
                   className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors shadow shadow-brand-primary/20 cursor-pointer text-center block"
                 >
                   Fechar Janela
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Origem e Rastreamento de Aquisição (UTMs) */}
+        {selectedAcquisitionProf && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden border border-brand-border/60 animate-in zoom-in-95 duration-200">
+              <div className="px-6 py-4 bg-gradient-to-r from-brand-primary/10 via-indigo-500/10 to-brand-accent/10 border-b border-brand-border/50 flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-md">
+                    <Compass className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-brand-primary font-display">
+                      Origem de Aquisição e UTMs
+                    </h3>
+                    <p className="text-xs text-brand-text-muted">
+                      {selectedAcquisitionProf.full_name} ({selectedAcquisitionProf.google_email})
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedAcquisitionProf(null)}
+                  className="p-1.5 rounded-lg text-brand-text-muted hover:text-brand-text hover:bg-black/5 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
+                {selectedAcquisitionProf.acquisition_info && (
+                  selectedAcquisitionProf.acquisition_info.channel ||
+                  selectedAcquisitionProf.acquisition_info.utm_source ||
+                  selectedAcquisitionProf.acquisition_info.referrer ||
+                  selectedAcquisitionProf.acquisition_info.landing_page
+                ) ? (
+                  <>
+                    {/* Canal em Destaque */}
+                    <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between shadow-sm">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">
+                          Canal Principal Detectado
+                        </span>
+                        <span className="text-base font-extrabold text-indigo-950">
+                          {selectedAcquisitionProf.acquisition_info.channel || 'Desconhecido'}
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm">
+                        <Target className="w-5 h-5" />
+                      </div>
+                    </div>
+
+                    {/* Grid de UTMs */}
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-bold text-brand-text uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-brand-primary" />
+                        Parâmetros de Rastreamento (UTMs)
+                      </h4>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Source</span>
+                          <p className="font-semibold text-gray-800 break-all">
+                            {selectedAcquisitionProf.acquisition_info.utm_source || <span className="text-gray-400 italic">Não informado</span>}
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Medium</span>
+                          <p className="font-semibold text-gray-800 break-all">
+                            {selectedAcquisitionProf.acquisition_info.utm_medium || <span className="text-gray-400 italic">Não informado</span>}
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Campaign</span>
+                          <p className="font-semibold text-gray-800 break-all">
+                            {selectedAcquisitionProf.acquisition_info.utm_campaign || <span className="text-gray-400 italic">Não informado</span>}
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Term</span>
+                          <p className="font-semibold text-gray-800 break-all">
+                            {selectedAcquisitionProf.acquisition_info.utm_term || <span className="text-gray-400 italic">Não informado</span>}
+                          </p>
+                        </div>
+
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1 sm:col-span-2">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Content</span>
+                          <p className="font-semibold text-gray-800 break-all">
+                            {selectedAcquisitionProf.acquisition_info.utm_content || <span className="text-gray-400 italic">Não informado</span>}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Informações Técnicas de Acesso */}
+                    <div className="space-y-3 pt-2 border-t border-brand-border/40">
+                      <h4 className="text-xs font-bold text-brand-text uppercase tracking-wider flex items-center gap-1.5">
+                        <Globe className="w-3.5 h-3.5 text-brand-primary" />
+                        Dados de Entrada e Navegação
+                      </h4>
+
+                      <div className="space-y-2 text-xs">
+                        {selectedAcquisitionProf.acquisition_info.referrer && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Site de Origem (Referrer)</span>
+                            <a
+                              href={selectedAcquisitionProf.acquisition_info.referrer}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-brand-primary hover:underline break-all flex items-center gap-1"
+                            >
+                              <span>{selectedAcquisitionProf.acquisition_info.referrer}</span>
+                              <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                            </a>
+                          </div>
+                        )}
+
+                        {selectedAcquisitionProf.acquisition_info.landing_page && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Página Inicial de Entrada (Landing Page)</span>
+                            <p className="font-mono text-[11px] text-gray-700 break-all">
+                              {selectedAcquisitionProf.acquisition_info.landing_page}
+                            </p>
+                          </div>
+                        )}
+
+                        {selectedAcquisitionProf.acquisition_info.first_seen_at && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">Primeiro Acesso Detectado</span>
+                            <span className="font-semibold text-gray-700">
+                              {new Date(selectedAcquisitionProf.acquisition_info.first_seen_at).toLocaleString('pt-BR')}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-8 text-center space-y-3">
+                    <div className="w-12 h-12 bg-gray-100 text-gray-400 rounded-2xl flex items-center justify-center mx-auto">
+                      <Compass className="w-6 h-6" />
+                    </div>
+                    <h4 className="text-sm font-bold text-brand-text">Sem dados de rastreamento (UTMs)</h4>
+                    <p className="text-xs text-brand-text-muted max-w-sm mx-auto leading-relaxed">
+                      Este usuário não possui parâmetros de UTM ou origem registrados. Isso acontece em contas criadas antes da ativação do rastreamento ou em acessos diretos sem parâmetros de busca na URL.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-6 py-4 bg-gray-50 border-t border-brand-border/40 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSelectedAcquisitionProf(null)}
+                  className="btn-primary py-2 px-5 text-xs font-semibold"
+                >
+                  Fechar
                 </button>
               </div>
             </div>

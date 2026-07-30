@@ -4,6 +4,38 @@ import { ensureLifecycleEnrollment, getLifecyclePreferences, getLifecycleRuntime
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
 import type { LifecycleCandidate, LifecycleDependencies, LifecycleOperationalContext, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
 
+type LifecycleSchedulerBatchResult = {
+  scheduled: number;
+  failed: number;
+};
+
+export async function processLifecycleSchedulerUsers<T extends { id: string }>(
+  users: T[],
+  processUser: (user: T) => Promise<unknown>,
+  onError: (user: T, error: unknown) => void = (user, error) => {
+    console.error(`[Lifecycle Scheduler] Falha para ${user.id}:`, error instanceof Error ? error.message : error);
+  }
+): Promise<LifecycleSchedulerBatchResult> {
+  let scheduled = 0;
+  let failed = 0;
+
+  for (const user of users) {
+    try {
+      if (await processUser(user) === "scheduled") scheduled += 1;
+    } catch (error) {
+      failed += 1;
+      onError(user, error);
+    }
+  }
+
+  return { scheduled, failed };
+}
+
+export function assertLifecycleSchedulerHealthy(result: LifecycleSchedulerBatchResult, users: number): void {
+  if (result.failed === 0) return;
+  throw new Error(`Lifecycle scheduler falhou para ${result.failed} de ${users} usuário(s); ${result.scheduled} mensagem(ns) foram agendadas antes da falha.`);
+}
+
 function firstName(value: string) { return value.trim().split(/\s+/)[0] || "Profissional"; }
 
 function zonedDateParts(value: Date, timeZone: string) {
@@ -199,7 +231,7 @@ async function loadOperationalContext(deps: LifecycleDependencies, userId: strin
     deps.supabaseAdmin.from("evolutions").select("id, updated_at").eq("professional_id", userId).eq("transcription_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     deps.supabaseAdmin.from("evolutions").select("id, updated_at").eq("professional_id", userId).eq("transcription_status", "completed").eq("google_doc_append_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     deps.supabaseAdmin.from("professionals").select("force_google_disconnect, updated_at").eq("id", userId).maybeSingle(),
-    deps.supabaseAdmin.from("transactions").select("id, updated_at").eq("professional_id", userId).eq("status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle()
+    deps.supabaseAdmin.from("transactions").select("id, created_at").eq("professional_id", userId).eq("status", "failed").order("created_at", { ascending: false }).limit(1).maybeSingle()
   ]);
   const error = failedEvolution.error || notAddedEvolution.error || professional.error || failedPayment.error;
   if (error) throw new Error(error.message || "Falha ao carregar sinais operacionais do lifecycle.");
@@ -207,7 +239,7 @@ async function loadOperationalContext(deps: LifecycleDependencies, userId: strin
     failedEvolution: failedEvolution.data ? { id: failedEvolution.data.id, updatedAt: failedEvolution.data.updated_at || null } : null,
     notAddedEvolution: notAddedEvolution.data ? { id: notAddedEvolution.data.id, updatedAt: notAddedEvolution.data.updated_at || null } : null,
     googleConnection: professional.data?.force_google_disconnect ? { updatedAt: professional.data.updated_at || null } : null,
-    failedPayment: failedPayment.data ? { id: failedPayment.data.id, updatedAt: failedPayment.data.updated_at || null } : null
+    failedPayment: failedPayment.data ? { id: failedPayment.data.id, updatedAt: failedPayment.data.created_at || null } : null
   };
 }
 
@@ -374,24 +406,21 @@ export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now
       : Promise.resolve({ data: [] as any[], error: null })
   ]);
   if (stepsError || rulesError || professionalsError || conditionalStepsError) throw new Error(stepsError?.message || rulesError?.message || professionalsError?.message || conditionalStepsError?.message || "Falha ao buscar dados do scheduler lifecycle.");
-  let scheduled = 0;
-  for (const professional of professionals || []) {
+  const users = professionals || [];
+  const batchResult = await processLifecycleSchedulerUsers(users, async (professional) => {
     if (campaign.enrollment_mode === "new_users_only" && new Date(professional.created_at).getTime() < new Date(campaign.eligible_from).getTime()) continue;
-    try {
-      const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
-      if (!enrollment) continue;
-      const state = await getOrRecalculateLifecycleState(deps, professional.id);
-      const operational = await loadOperationalContext(deps, professional.id);
-      const result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], conditionalCampaign, conditionalSteps || [], rules || [], state, operational, runtime, now);
-      if (result === "scheduled") scheduled += 1;
-      if (state.subscriptionStatus === "trialing" && state.trialEndsAt) {
-        const trialDays = Math.ceil((new Date(state.trialEndsAt).getTime() - now.getTime()) / 86400000);
-        if (trialDays > 0 && trialDays <= 3) await recordLifecycleEvent(deps, { userId: professional.id, eventName: "trial_expiring", source: "backend", metadata: { days: trialDays }, idempotencyKey: `trial_expiring:${professional.id}:${state.trialEndsAt}:${trialDays}` });
-      }
-      if (state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime()) await recordLifecycleEvent(deps, { userId: professional.id, eventName: "trial_expired", source: "backend", metadata: {}, idempotencyKey: `trial_expired:${professional.id}:${state.trialEndsAt}` });
-    } catch (error) {
-      console.error(`[Lifecycle Scheduler] Falha para ${professional.id}:`, error instanceof Error ? error.message : error);
+    const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
+    if (!enrollment) return "not_enrolled";
+    const state = await getOrRecalculateLifecycleState(deps, professional.id);
+    const operational = await loadOperationalContext(deps, professional.id);
+    const result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], conditionalCampaign, conditionalSteps || [], rules || [], state, operational, runtime, now);
+    if (state.subscriptionStatus === "trialing" && state.trialEndsAt) {
+      const trialDays = Math.ceil((new Date(state.trialEndsAt).getTime() - now.getTime()) / 86400000);
+      if (trialDays > 0 && trialDays <= 3) await recordLifecycleEvent(deps, { userId: professional.id, eventName: "trial_expiring", source: "backend", metadata: { days: trialDays }, idempotencyKey: `trial_expiring:${professional.id}:${state.trialEndsAt}:${trialDays}` });
     }
-  }
-  return { scheduled, dryRun: runtime.dry_run || !runtime.send_enabled, users: professionals?.length || 0 };
+    if (state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime()) await recordLifecycleEvent(deps, { userId: professional.id, eventName: "trial_expired", source: "backend", metadata: {}, idempotencyKey: `trial_expired:${professional.id}:${state.trialEndsAt}` });
+    return result;
+  });
+  assertLifecycleSchedulerHealthy(batchResult, users.length);
+  return { ...batchResult, dryRun: runtime.dry_run || !runtime.send_enabled, users: users.length };
 }
