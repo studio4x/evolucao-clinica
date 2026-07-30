@@ -408,7 +408,7 @@ export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now
   if (stepsError || rulesError || professionalsError || conditionalStepsError) throw new Error(stepsError?.message || rulesError?.message || professionalsError?.message || conditionalStepsError?.message || "Falha ao buscar dados do scheduler lifecycle.");
   const users = professionals || [];
   const batchResult = await processLifecycleSchedulerUsers(users, async (professional) => {
-    if (campaign.enrollment_mode === "new_users_only" && new Date(professional.created_at).getTime() < new Date(campaign.eligible_from).getTime()) continue;
+    if (campaign.enrollment_mode === "new_users_only" && new Date(professional.created_at).getTime() < new Date(campaign.eligible_from).getTime()) return "ineligible";
     const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
     if (!enrollment) return "not_enrolled";
     const state = await getOrRecalculateLifecycleState(deps, professional.id);
