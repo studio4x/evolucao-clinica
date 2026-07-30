@@ -26,6 +26,65 @@ export type WhatsAppConfig = {
   appSecret: string;
   webhookVerifyToken: string;
   allowUnsignedWebhooks: boolean;
+  n8nEventsToken: string;
+};
+
+export type WhatsAppN8nEventType =
+  | "message_status"
+  | "business_app_echo"
+  | "coexistence_sync";
+
+export type WhatsAppN8nMessageStatus = "sent" | "delivered" | "read" | "failed";
+
+export type NormalizedWhatsAppN8nEvent = {
+  tenant: string;
+  eventType: WhatsAppN8nEventType;
+  eventKey: string;
+  messageId: string | null;
+  status: WhatsAppN8nMessageStatus | null;
+  receivedAt: string;
+  phoneNumberId: string | null;
+  senderPhone: string | null;
+  recipientPhone: string | null;
+  rawValue: unknown;
+};
+
+export type WhatsAppN8nEventClaim = {
+  eventId: string;
+  shouldProcess: boolean;
+  alreadyProcessed: boolean;
+};
+
+export type WhatsAppN8nDelivery = {
+  id: string;
+  responsePayload: Record<string, unknown> | null;
+};
+
+export type WhatsAppN8nDeliveryUpdate = {
+  status: WhatsAppN8nMessageStatus;
+  receivedAt: string;
+  eventKey: string;
+  tenant: string;
+  phoneNumberId: string | null;
+  errorCode: string | null;
+  errorTitle: string | null;
+  errorMessage: string | null;
+};
+
+export type WhatsAppN8nEventsRepository = {
+  claimN8nEvent(event: NormalizedWhatsAppN8nEvent): Promise<WhatsAppN8nEventClaim>;
+  completeN8nEvent(input: {
+    eventId: string;
+    processingStatus: "processed" | "ignored";
+    deliveryId: string | null;
+    processingResult: Record<string, unknown>;
+  }): Promise<void>;
+  failN8nEvent(eventId: string, errorMessage: string): Promise<void>;
+  findDeliveryByWamid(wamid: string): Promise<WhatsAppN8nDelivery | null>;
+  updateDeliveryFromN8nEvent(
+    delivery: WhatsAppN8nDelivery,
+    update: WhatsAppN8nDeliveryUpdate
+  ): Promise<void>;
 };
 
 export type WhatsAppTextSendInput = {

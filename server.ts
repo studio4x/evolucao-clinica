@@ -27,6 +27,12 @@ import {
   WhatsAppValidationError
 } from "./server/whatsapp/whatsappClient.js";
 import { createWhatsAppRepository } from "./server/whatsapp/whatsappRepository.js";
+import {
+  createWhatsAppN8nEventsService,
+  validateNormalizedWhatsAppN8nEvent,
+  verifyWhatsAppN8nEventsAuthorization,
+  WhatsAppN8nEventValidationError
+} from "./server/whatsapp/whatsappN8nEvents.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -51,6 +57,7 @@ const whatsappClient = createWhatsAppClient({
   config: whatsappConfig,
   repository: whatsappRepository
 });
+const whatsappN8nEventsService = createWhatsAppN8nEventsService({ repository: whatsappRepository });
 
 let firebaseAdminApp: FirebaseAdminApp | null = null;
 const getFirebaseMessaging = () => {
@@ -1596,6 +1603,33 @@ app.post("/api/webhooks/whatsapp", async (req: any, res) => {
   } catch (err: any) {
     console.error("Erro ao receber webhook do WhatsApp:", err.message || err);
     return res.status(500).json({ error: "Erro interno ao receber webhook." });
+  }
+});
+
+// Endpoint interno do roteador n8n. Não é callback da Meta e não compartilha
+// assinatura, segredo de app ou contrato do webhook público acima.
+app.post("/api/integrations/whatsapp/events", async (req, res) => {
+  if (!verifyWhatsAppN8nEventsAuthorization(
+    String(req.headers.authorization || ""),
+    whatsappConfig.n8nEventsToken
+  )) {
+    return res.status(401).json({ error: "Token de integração ausente ou inválido." });
+  }
+
+  try {
+    const event = validateNormalizedWhatsAppN8nEvent(req.body);
+    const result = await whatsappN8nEventsService.process(event);
+    return res.status(200).json({
+      processed: result.processed,
+      alreadyProcessed: result.alreadyProcessed,
+      result: result.result
+    });
+  } catch (error) {
+    if (error instanceof WhatsAppN8nEventValidationError) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error("[WhatsApp n8n] Erro interno ao processar evento:", error instanceof Error ? error.message : error);
+    return res.status(500).json({ error: "Erro interno ao processar evento de integração." });
   }
 });
 

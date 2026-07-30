@@ -20,6 +20,7 @@ WHATSAPP_GRAPH_API_VERSION=v25.0
 WHATSAPP_APP_SECRET=
 WHATSAPP_WEBHOOK_VERIFY_TOKEN=
 WHATSAPP_ALLOW_UNSIGNED_WEBHOOKS=false
+WHATSAPP_N8N_EVENTS_TOKEN=
 ```
 
 `WHATSAPP_ALLOW_UNSIGNED_WEBHOOKS=true` só é aceito fora de produção e deve ser
@@ -62,11 +63,57 @@ exposta, atualizar `SUPABASE_SERVICE_ROLE_KEY` na Vercel e em outros ambientes
 backend autorizados e gerar um novo deploy. Não tente automatizar essa rotação
 pelo aplicativo.
 
+## Eventos internos normalizados pelo n8n
+
+`POST /api/integrations/whatsapp/events` é um endpoint interno exclusivo para
+o roteador n8n. Ele não é um callback da Meta e não usa
+`x-hub-signature-256`, `WHATSAPP_APP_SECRET` nem o Verify Token do webhook
+público. O n8n deve enviar somente:
+
+```http
+Authorization: Bearer <WHATSAPP_N8N_EVENTS_TOKEN>
+Content-Type: application/json
+```
+
+O token é lido apenas no backend, a comparação é segura e nenhuma credencial
+é salva nos eventos. Configure um valor forte e diferente por ambiente na
+Vercel, sem prefixo `VITE_`.
+
+Contrato normalizado:
+
+```json
+{
+  "tenant": "producao",
+  "eventType": "message_status",
+  "eventKey": "meta:wamid.exemplo:delivered:2026-07-30T12:00:00.000Z",
+  "messageId": "wamid.exemplo",
+  "status": "delivered",
+  "receivedAt": "2026-07-30T12:00:00.000Z",
+  "phoneNumberId": "123456789",
+  "senderPhone": "5511999999999",
+  "recipientPhone": "5511888888888",
+  "rawValue": { "status": "delivered" }
+}
+```
+
+Os tipos aceitos são `message_status`, `business_app_echo` e
+`coexistence_sync`. Apenas `message_status` atualiza
+`whatsapp_message_deliveries`, correlacionando `messageId` com `wamid` e
+registrando `sent`, `delivered`, `read` ou `failed` com o timestamp recebido.
+Os dois tipos reservados são persistidos de forma idempotente, sem inventar
+processamento. `eventKey` é único na tabela
+`whatsapp_integration_events`; reenvios retornam `200` com
+`alreadyProcessed: true`.
+
+Aplique também a migration
+`supabase/migrations/20260730210000_create_whatsapp_integration_events.sql`.
+Ela restringe a tabela ao `service_role` e guarda somente o valor bruto
+higienizado, removendo campos de credenciais conhecidos.
+
 ## Limites desta etapa
 
-O endpoint do webhook valida o token de verificação e a assinatura, mas ainda
-não processa eventos de status. A correlação futura deverá usar o `wamid`
-armazenado.
+O endpoint público `/api/webhooks/whatsapp` continua separado, valida o token
+de verificação e a assinatura da Meta, e não recebe tráfego do n8n.
 
 O webhook central do n8n ainda não participa do roteamento. A integração futura
 deverá consumir ou encaminhar eventos sem receber Access Token, App Secret,
