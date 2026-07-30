@@ -75,3 +75,25 @@ Authorization ou Service Role.
 O envio funcional desta etapa permanece em texto. Mensagens proativas futuras,
 especialmente fora da janela de atendimento, devem usar templates previamente
 aprovados pela Meta; nenhum template é escolhido ou criado automaticamente.
+
+## Estado operacional validado em 30/07/2026
+
+- As migrations `20260730120000` e `20260730190000` foram aplicadas no projeto
+  Supabase de produção.
+- A tabela foi validada com Service Role no ciclo `pending` para `accepted`,
+  incluindo `wamid`, `accepted_at` e atualização automática de `updated_at`; o
+  registro sintético foi removido após o teste.
+- O acesso com chave anônima foi recusado e nenhuma chave legada do WhatsApp
+  permaneceu em `notification_settings`.
+- `WHATSAPP_GRAPH_API_VERSION=v25.0` e
+  `WHATSAPP_ALLOW_UNSIGNED_WEBHOOKS=false` foram configuradas na Vercel para
+  Development, Preview e Production.
+- O commit `286134e` foi publicado em produção pelo deployment
+  `dpl_FGi4L6SEHonkpR6EeY8fYgCM3xNH` e associado aos domínios canônicos.
+- A saúde da API respondeu `200`; webhook com Verify Token inválido respondeu
+  `403`; webhook POST sem App Secret respondeu `503`; e o endpoint de teste sem
+  autenticação respondeu `401`.
+- `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`,
+  `WHATSAPP_APP_SECRET` e `WHATSAPP_WEBHOOK_VERIFY_TOKEN` ainda precisam ser
+  obtidas na Meta e configuradas como valores protegidos. Enquanto estiverem
+  ausentes, o canal retorna `not_configured` e não simula sucesso.
