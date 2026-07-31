@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle, Image, Loader2, Lock, Shield, Trash2, Upload } from 'lucide-react';
+import { ArrowRight, CheckCircle, FileText, Image, Loader2, Lock, Shield, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { showAlert } from '../store/modalStore';
@@ -217,7 +217,8 @@ export default function CustomLogo() {
           </aside>
         </div>
       ) : (
-        <div className="card space-y-5 border border-brand-border/60 bg-white p-6 shadow-sm md:p-8">
+        <>
+          <div className="card space-y-5 border border-brand-border/60 bg-white p-6 shadow-sm md:p-8">
           <p className="text-xs leading-relaxed text-brand-text-muted">
             Envie uma imagem com o seu logotipo profissional ou da sua clínica. Formatos aceitos: PNG, JPG ou WEBP (máx. 2MB). Este logotipo substituirá a marca padrão da plataforma no cabeçalho das evoluções e relatórios clínicos impressos e em PDF.
           </p>
@@ -257,7 +258,54 @@ export default function CustomLogo() {
               </p>
             </div>
           </div>
-        </div>
+          </div>
+
+          <section className="card overflow-hidden border border-brand-border/60 bg-white shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-brand-border/60 px-6 py-5 sm:flex-row sm:items-center sm:justify-between md:px-8">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-semibold text-brand-primary">
+                  <FileText size={20} />
+                  Prévia dos seus documentos
+                </h2>
+                <p className="mt-1 text-xs text-brand-text-muted">Exemplo de como o seu logotipo aparecerá em relatórios, PDIs e evoluções clínicas.</p>
+              </div>
+              <span className="inline-flex w-fit items-center rounded-full bg-brand-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-primary">Visualização ilustrativa</span>
+            </div>
+
+            <div className="bg-brand-bg/60 p-5 md:p-8">
+              <div className="mx-auto max-w-3xl overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg shadow-brand-primary/10">
+                <div className="flex min-h-24 items-center justify-between gap-5 border-b-4 border-brand-primary px-6 py-5">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-primary">Documento clínico</p>
+                    <h3 className="mt-1 text-lg font-bold text-brand-text">Relatório de Evolução</h3>
+                    <p className="mt-1 text-[10px] text-brand-text-muted">Profissional responsável · registro de classe</p>
+                  </div>
+                  <div className="flex h-16 w-40 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-stone-50 p-2">
+                    {customLogoUrl ? (
+                      <img src={customLogoUrl} alt="Prévia do logotipo nos documentos" className="max-h-full max-w-full object-contain" />
+                    ) : (
+                      <div className="text-center text-brand-text-muted"><Image size={18} className="mx-auto mb-1 text-brand-accent" /><span className="text-[9px] font-semibold">Seu logotipo</span></div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-4 px-6 py-5">
+                  <div className="flex items-center justify-between border-b border-brand-border/70 pb-3 text-[10px] text-brand-text-muted"><span>Paciente: Nome do paciente</span><span>Data: 31/07/2026</span></div>
+                  <div className="space-y-2">
+                    <div className="h-2 w-2/5 rounded-full bg-stone-200" />
+                    <div className="h-2 w-full rounded-full bg-stone-100" />
+                    <div className="h-2 w-11/12 rounded-full bg-stone-100" />
+                    <div className="h-2 w-4/5 rounded-full bg-stone-100" />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-brand-border bg-stone-50 px-6 py-3 text-[9px] text-brand-text-muted"><span>Documento gerado pela Evolução Clínica</span><span>Seu logotipo no cabeçalho</span></div>
+              </div>
+            </div>
+
+            {!customLogoUrl && <p className="border-t border-amber-100 bg-amber-50 px-6 py-3 text-xs text-amber-800">Envie seu logotipo acima para vê-lo aplicado nesta prévia.</p>}
+          </section>
+        </>
       )}
     </div>
   );
