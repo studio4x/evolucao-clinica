@@ -10,6 +10,7 @@ import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
 import { runAutoBackupIfNeeded } from '../services/backupService';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { showAlert } from '../store/modalStore';
 
 export default function Layout() {
   const { user, profileRole, googleAccessToken, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
@@ -21,6 +22,7 @@ export default function Layout() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const isNativeWebView = typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent);
   const hasYearlyAccess = hasActiveYearlyAccess({
     profileRole,
     subscriptionPlan,
@@ -114,16 +116,42 @@ export default function Layout() {
   }, [user, googleAccessToken, hasYearlyAccess]);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) {
-      return;
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        console.log('User accepted the install prompt');
+      }
+      setDeferredPrompt(null);
+    } else {
+      const isIOS = () => {
+        if (typeof navigator === 'undefined') return false;
+        return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+               (/Macintosh/.test(navigator.userAgent) && 'ontouchend' in document);
+      };
+      const iosDevice = isIOS();
+      if (iosDevice) {
+        await showAlert(
+          "Para instalar o aplicativo no seu iPhone/iPad:\n\n1. Toque no ícone de Compartilhar (no rodapé do Safari ou topo do iPad).\n2. Role a lista de opções para baixo e selecione 'Adicionar à Tela de Início'.\n3. Confirme tocando em 'Adicionar' no canto superior direito.",
+          {
+            title: "Instalar Aplicativo (iOS)",
+            confirmLabel: "Entendi",
+            variant: "info",
+            icon: "download"
+          }
+        );
+      } else {
+        await showAlert(
+          "Para instalar o aplicativo no seu navegador:\n\n1. Clique no menu do navegador (geralmente o ícone de três pontos ou traços no canto superior direito).\n2. Selecione 'Instalar aplicativo' ou 'Adicionar à tela inicial'.\n3. Confirme a instalação.",
+          {
+            title: "Instalar Aplicativo",
+            confirmLabel: "Entendi",
+            variant: "info",
+            icon: "download"
+          }
+        );
+      }
     }
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
-    }
-    setDeferredPrompt(null);
   };
 
   const handleLogout = async () => {
@@ -280,7 +308,7 @@ export default function Layout() {
         </div>
 
         <div className={`${isCollapsed ? 'p-2' : 'p-4'} border-t border-brand-border bg-white space-y-2`}>
-          {!isStandalone && deferredPrompt && (
+          {!isStandalone && !isNativeWebView && (
             <button
               onClick={handleInstallClick}
               title={isCollapsed ? "Instalar App" : undefined}
@@ -424,7 +452,7 @@ export default function Layout() {
 
           {/* Actions & Utilities */}
           <div className="pt-4 border-t border-brand-border/60 space-y-2">
-            {!isStandalone && deferredPrompt && (
+            {!isStandalone && !isNativeWebView && (
               <button
                 onClick={handleInstallClick}
                 className="flex items-center space-x-3 px-4 py-3.5 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-all duration-200 cursor-pointer"

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, X } from 'lucide-react';
 import { useSiteConfig } from '../../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandInstallLogoUrl } from '../../utils/brandAssets';
+import { showAlert } from '../../store/modalStore';
 
 export const InstallPrompt = () => {
   const siteConfig = useSiteConfig();
@@ -61,7 +62,9 @@ export const InstallPrompt = () => {
     };
   }, []);
 
-  if (!mounted || isInstalled || isDismissed) {
+  const isNativeWebView = typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent);
+
+  if (!mounted || isInstalled || isDismissed || isNativeWebView) {
     return null;
   }
 
@@ -73,15 +76,37 @@ export const InstallPrompt = () => {
   };
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) {
-      return;
-    }
-
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      setDeferredPrompt(null);
-      setIsInstalled(true);
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+        setIsInstalled(true);
+      }
+    } else {
+      // Custom instructions alert based on OS
+      const iosDevice = isIOS();
+      if (iosDevice) {
+        await showAlert(
+          "Para instalar o aplicativo no seu iPhone/iPad:\n\n1. Toque no ícone de Compartilhar (no rodapé do Safari ou topo do iPad).\n2. Role a lista de opções para baixo e selecione 'Adicionar à Tela de Início'.\n3. Confirme tocando em 'Adicionar' no canto superior direito.",
+          {
+            title: "Instalar Aplicativo (iOS)",
+            confirmLabel: "Entendi",
+            variant: "info",
+            icon: "download"
+          }
+        );
+      } else {
+        await showAlert(
+          "Para instalar o aplicativo no seu navegador:\n\n1. Clique no menu do navegador (geralmente o ícone de três pontos ou traços no canto superior direito).\n2. Selecione 'Instalar aplicativo' ou 'Adicionar à tela inicial'.\n3. Confirme a instalação.",
+          {
+            title: "Instalar Aplicativo",
+            confirmLabel: "Entendi",
+            variant: "info",
+            icon: "download"
+          }
+        );
+      }
     }
   };
 
@@ -89,11 +114,6 @@ export const InstallPrompt = () => {
   const installTitle = siteConfig.pwa_install_title || `Instalar ${appName}`;
   const installDesc = siteConfig.pwa_install_description || "Acesse seus prontuários rapidamente e offline direto da tela inicial.";
   const installLogoUrl = appendBrandAssetVersion(getBrandInstallLogoUrl(siteConfig), assetSignature);
-  const canInstallNatively = Boolean(deferredPrompt);
-
-  if (!canInstallNatively) {
-    return null;
-  }
 
   return (
     <>
