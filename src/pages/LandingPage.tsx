@@ -1223,7 +1223,7 @@ export default function LandingPage() {
             </div>
           )}
           <p>© {new Date().getFullYear()} Evolução Clínica. Todos os direitos reservados.</p>
-          <p>Evolução Clínica é uma plataforma desenvolvida e operada por "RODOLFO J M LOPES SERVIÇOS DIGITAIS - STUDIO 4X", inscrita no CNPJ sob o nº 10.682.236/0001-09.</p>
+          <p className="max-w-2xl mx-auto">Evolução Clínica é uma plataforma desenvolvida e operada por "RODOLFO J M LOPES SERVIÇOS DIGITAIS - STUDIO 4X", inscrita no CNPJ sob o nº 10.682.236/0001-09.</p>
           <p>
             Contato oficial:{' '}
             <a href={`mailto:${LEGAL_SUPPORT_EMAIL}`} className="hover:text-brand-primary transition-colors">
