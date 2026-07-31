@@ -5479,17 +5479,9 @@ Caso o documento não possua datas explícitas nas sessões, analise os registro
 Se o documento não contiver relatos suficientes para o período solicitado, avise em tom profissional e retorne um texto explicando isso.
 
 FORMATO DE SAÍDA OBRIGATÓRIO — MARKDOWN:
-Você DEVE retornar o relatório inteiramente em formato Markdown, seguindo EXATAMENTE esta estrutura:
+O cabeçalho do documento (título, paciente, período, profissional, especialidade, registro e data) é inserido automaticamente pela plataforma. NÃO repita esses dados no conteúdo.
 
-# Relatório de Evolução Clínica
-**Paciente:** [Nome do Paciente]  
-**Período Analisado:** [Período]  
-**Profissional:** [Nome do Profissional]  
-**Especialidade:** [Cargo/Especialidade]  
-${profRegister ? `**Registro Profissional:** ${profRegister}  ` : ''}
-**Data de Emissão:** [Data de hoje em DD/MM/AAAA]
-
----
+Você DEVE retornar somente o corpo do relatório em formato Markdown, começando EXATAMENTE por:
 
 ## 1. Resumo do Período
 [Parágrafo descritivo sobre o processo terapêutico no período]
@@ -5545,20 +5537,12 @@ Caso o documento não possua datas explícitas nas sessões, analise os registro
 Se o documento não contiver relatos suficientes para o período solicitado, avise em tom profissional e retorne um texto explicando isso.
 
 FORMATO DE SAÍDA OBRIGATÓRIO — MARKDOWN:
-Você DEVE iniciar a sua resposta DIRETAMENTE com a linha de título "# Plano de Desenvolvimento Individual (PDI)".
-NÃO INCLUA nenhuma introdução, saudação, análise prévia de dados/sessão/nomes, justificativas ou qualquer comentário explicativo antes do título.
-O texto gerado deve começar imediatamente com a linha "# Plano de Desenvolvimento Individual (PDI)".
+O cabeçalho do documento (título, paciente, data do plano, profissional, especialidade, registro e período) é inserido automaticamente pela plataforma. NÃO repita esses dados no conteúdo.
 
-Você DEVE retornar o PDI inteiramente em formato Markdown, seguindo EXATAMENTE esta estrutura:
+Você DEVE iniciar a sua resposta DIRETAMENTE com a linha "## 1. Objetivos Terapêuticos Gerais".
+NÃO INCLUA nenhuma introdução, saudação, título do documento, dados do paciente/profissional, análise prévia de dados/sessão/nomes, justificativas ou qualquer comentário explicativo antes desse título.
 
-# Plano de Desenvolvimento Individual (PDI)
-**Paciente:** [Nome do Paciente]  
-**Data do Plano:** [Data de hoje em DD/MM/AAAA]  
-**Profissional:** [Nome do Profissional]  
-**Especialidade:** [Cargo/Especialidade]  
-${profRegister ? `**Registro Profissional:** ${profRegister}  ` : ''}
-
----
+Você DEVE retornar somente o corpo do PDI em formato Markdown, seguindo EXATAMENTE esta estrutura:
 
 ## 1. Objetivos Terapêuticos Gerais
 - [Objetivo 1]

@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { drawDocumentLogo } from './documentLogo';
+import { getReportBodyContent } from './reportContent';
 
 const hexToRgb = (hex: string) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -95,7 +96,19 @@ export const generateReportPDF = (
   if (prof?.professional_register) {
     doc.text(`Registro Profissional: ${prof.professional_register}`, margin, y);
   }
-  doc.text(`Período de Análise: ${rep.period_label || 'Não informado'}`, margin + contentWidth / 2, y);
+  const isPdi = rep.type !== 'evolution_report';
+  const rightSecondaryLabel = isPdi
+    ? `Data do Plano: ${new Date(rep.created_at || Date.now()).toLocaleDateString('pt-BR')}`
+    : `Período de Análise: ${rep.period_label || 'Não informado'}`;
+  doc.text(rightSecondaryLabel, margin + contentWidth / 2, y);
+
+  if (isPdi) {
+    y += 6;
+    if (prof?.professional_title) {
+      doc.text(`Especialidade: ${prof.professional_title}`, margin, y);
+    }
+    doc.text(`Período de Análise: ${rep.period_label || 'Não informado'}`, margin + contentWidth / 2, y);
+  }
   
   y += 8;
   doc.setDrawColor(231, 229, 228);
@@ -106,7 +119,7 @@ export const generateReportPDF = (
   y += 10;
   
   // Dividir o conteudo em linhas de markdown
-  const lines = (rep.content || '').split('\n');
+  const lines = getReportBodyContent(rep.content).split('\n');
   
   for (const line of lines) {
     if (y > 270) {

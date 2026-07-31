@@ -15,6 +15,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { generateReportPDF } from '../utils/reportPdf';
 import { downloadPdfFile, generateProntuarioPDF, getProntuarioPdfFileName } from '../utils/prontuarioPdf';
 import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
+import { getReportBodyContent } from '../utils/reportContent';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { showAlert } from '../store/modalStore';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
@@ -611,7 +612,7 @@ export default function PatientDetail() {
     }
 
     setPrintMode('report');
-    setPrintContent(content);
+    setPrintContent(getReportBodyContent(content));
     setPrintPeriodLabel(periodLabel);
     setPrintDocType(type === 'evolution_report' ? 'Relatório de Evolução Clínico' : 'Plano de Desenvolvimento Individual (PDI)');
     setTimeout(() => {
