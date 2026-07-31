@@ -115,6 +115,20 @@ export default function Layout() {
     return () => clearTimeout(timer);
   }, [user, googleAccessToken, hasYearlyAccess]);
 
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const htmlOverscrollBehavior = document.documentElement.style.overscrollBehaviorY;
+    const bodyOverscrollBehavior = document.body.style.overscrollBehaviorY;
+    document.documentElement.style.overscrollBehaviorY = 'none';
+    document.body.style.overscrollBehaviorY = 'none';
+
+    return () => {
+      document.documentElement.style.overscrollBehaviorY = htmlOverscrollBehavior;
+      document.body.style.overscrollBehaviorY = bodyOverscrollBehavior;
+    };
+  }, [isMobileMenuOpen]);
+
   const handleInstallClick = async () => {
     if (deferredPrompt) {
       deferredPrompt.prompt();
@@ -364,7 +378,7 @@ export default function Layout() {
 
       {/* Mobile Full Screen Menu Overlay */}
       <div className={`
-        fixed inset-0 z-[100] bg-white flex flex-col md:hidden
+        fixed inset-0 z-[100] bg-white flex flex-col overscroll-y-none md:hidden
         transition-all duration-300 ease-out origin-bottom-right
         ${isMobileMenuOpen 
           ? 'opacity-100 scale-100 translate-x-0 translate-y-0 pointer-events-auto' 
