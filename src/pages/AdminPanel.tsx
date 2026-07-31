@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -112,6 +112,17 @@ interface WhatsAppIntegrationEvent {
   processing_error: string | null;
   processed_at: string | null;
   created_at: string;
+}
+
+interface BrevoSyncLog {
+  id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: 'running' | 'success' | 'error';
+  total_contacts: number | null;
+  brevo_process_id: string | null;
+  error_message: string | null;
+  triggered_by: string;
 }
 
 const BRAND_COLOR_FIELDS: { key: keyof BrandColors; label: string; desc: string }[] = [
@@ -864,6 +875,12 @@ export default function AdminPanel() {
   const [loadingBrevoLists, setLoadingBrevoLists] = useState<boolean>(false);
   const [savingBrevoLists, setSavingBrevoLists] = useState<boolean>(false);
   const [saveSuccessBrevoLists, setSaveSuccessBrevoLists] = useState<boolean>(false);
+  const [syncingAllBrevo, setSyncingAllBrevo] = useState<boolean>(false);
+  const [syncAllResult, setSyncAllResult] = useState<{ totalContacts: number; processId: string | null } | null>(null);
+  const [syncLogs, setSyncLogs] = useState<BrevoSyncLog[]>([]);
+  const [loadingSyncLogs, setLoadingSyncLogs] = useState<boolean>(false);
+  const [syncLogsError, setSyncLogsError] = useState<string>('');
+  const [syncAllError, setSyncAllError] = useState<string>('');
   const [adminVapidPublic, setAdminVapidPublic] = useState('');
   const [adminVapidPrivate, setAdminVapidPrivate] = useState('');
   const [adminSmtpSaving, setAdminSmtpSaving] = useState(false);
@@ -1244,8 +1261,9 @@ export default function AdminPanel() {
   };
 
   useEffect(() => {
-    if (activeTab === 'email_notifications' && adminBrevoApiKey) {
-      void fetchBrevoData();
+    if (activeTab === 'email_notifications') {
+      void fetchSyncLogs();
+      if (adminBrevoApiKey) void fetchBrevoData();
     }
   }, [activeTab, adminBrevoApiKey]);
 
@@ -1291,6 +1309,50 @@ export default function AdminPanel() {
       alert('Erro ao salvar definições: ' + err.message);
     } finally {
       setSavingBrevoLists(false);
+    }
+  };
+
+  const fetchSyncLogs = async () => {
+    setLoadingSyncLogs(true);
+    setSyncLogsError('');
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Sessão administrativa não encontrada.');
+      const res = await fetch('/api/admin/brevo/sync-logs', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao buscar histórico de sincronizações.');
+      setSyncLogs(data.logs || []);
+    } catch (err: any) {
+      console.error('Erro ao buscar histórico de sync Brevo:', err);
+      setSyncLogsError(err.message || 'Erro ao buscar histórico de sincronizações.');
+    } finally {
+      setLoadingSyncLogs(false);
+    }
+  };
+
+  const handleSyncAllBrevo = async () => {
+    setSyncingAllBrevo(true);
+    setSyncAllResult(null);
+    setSyncAllError('');
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+      const res = await fetch('/api/admin/brevo/sync-all', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Erro ao sincronizar com a Brevo.');
+      setSyncAllResult({ totalContacts: data.totalContacts, processId: data.processId });
+      await fetchSyncLogs();
+    } catch (err: any) {
+      setSyncAllError(err.message || 'Erro ao sincronizar com a Brevo.');
+    } finally {
+      setSyncingAllBrevo(false);
     }
   };
 
@@ -5610,6 +5672,26 @@ export default function AdminPanel() {
                         {savingBrevoLists ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
                         <span>Salvar definicoes</span>
                       </button>
+                      <button
+                        type="button"
+                        onClick={handleSyncAllBrevo}
+                        disabled={syncingAllBrevo || !selectedBrevoListId}
+                        className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-brand-primary hover:bg-brand-primary-hover text-white font-semibold transition-colors text-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        {syncingAllBrevo ? <Loader2 className="animate-spin" size={14} /> : <RefreshCw size={14} />}
+                        <span>{syncingAllBrevo ? 'Sincronizando...' : 'Sincronizar todos'}</span>
+                      </button>
+                      {syncAllResult && (
+                        <div className="text-[11px] text-emerald-700 font-medium bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                          ✓ {syncAllResult.totalContacts} contatos aceitos pela fila da Brevo
+                          {syncAllResult.processId && <span className="text-emerald-500 ml-1">(processo {syncAllResult.processId})</span>}
+                        </div>
+                      )}
+                      {syncAllError && (
+                        <div className="text-[11px] text-red-700 font-medium bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                          {syncAllError}
+                        </div>
+                      )}
                     </div>
 
                     {brevoAttributes.length > 0 && (
@@ -5624,6 +5706,85 @@ export default function AdminPanel() {
                       </div>
                     )}
                   </form>
+
+                  {/* Card Histórico de Sincronizações Brevo */}
+                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                          <History className="text-brand-primary w-5 h-5" />
+                          <span>Histórico de sincronizações Brevo</span>
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={fetchSyncLogs}
+                          disabled={loadingSyncLogs}
+                          className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs text-brand-text-muted border border-brand-border/60 hover:bg-brand-bg/40 transition-colors disabled:opacity-50 cursor-pointer"
+                        >
+                          {loadingSyncLogs ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          <span>Atualizar</span>
+                        </button>
+                      </div>
+
+                      {loadingSyncLogs && syncLogs.length === 0 ? (
+                        <div className="flex items-center justify-center py-6 text-brand-text-muted text-sm">
+                          <Loader2 className="animate-spin mr-2" size={16} /> Carregando histórico...
+                        </div>
+                      ) : syncLogs.length === 0 ? (
+                        <p className="text-[11px] text-brand-text-muted text-center py-4">Nenhuma sincronização realizada ainda.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[11px]">
+                            <thead>
+                              <tr className="border-b border-brand-border/40">
+                                <th className="text-left font-bold text-brand-text pb-2 pr-3">Data/hora</th>
+                                <th className="text-left font-bold text-brand-text pb-2 pr-3">Status</th>
+                                <th className="text-left font-bold text-brand-text pb-2 pr-3">Contatos</th>
+                                <th className="text-left font-bold text-brand-text pb-2 pr-3">Processo Brevo</th>
+                                <th className="text-left font-bold text-brand-text pb-2">Disparado por</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {syncLogs.map((log) => (
+                                <tr key={log.id} className="border-b border-brand-border/20 hover:bg-brand-bg/30 transition-colors">
+                                  <td className="py-2 pr-3 text-brand-text-muted whitespace-nowrap">
+                                    {new Date(log.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                  </td>
+                                  <td className="py-2 pr-3">
+                                    <span className={[
+                                      'inline-flex items-center px-2 py-0.5 rounded-full font-semibold text-[10px]',
+                                      log.status === 'success' ? 'bg-emerald-100 text-emerald-700' :
+                                      log.status === 'running' ? 'bg-amber-100 text-amber-700' :
+                                      'bg-red-100 text-red-700'
+                                    ].join(' ')}>
+                                      {log.status === 'success' ? '✓ Aceito pela fila' : log.status === 'running' ? '⟳ Em execução' : '✕ Erro'}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 pr-3 text-brand-text font-medium">
+                                    {log.total_contacts ?? '—'}
+                                  </td>
+                                  <td className="py-2 pr-3 text-brand-text-muted font-mono">
+                                    {log.brevo_process_id ?? '—'}
+                                  </td>
+                                  <td className="py-2 text-brand-text-muted truncate max-w-[140px]" title={log.triggered_by}>
+                                    {log.triggered_by}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {syncLogs.some(l => l.status === 'error') && (
+                        <div className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                          {syncLogs.find(l => l.status === 'error')?.error_message}
+                        </div>
+                      )}
+                      {syncLogsError && (
+                        <div className="text-[10px] text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                          {syncLogsError}
+                        </div>
+                      )}
+                    </div>
               </div>
             ) : activeTab === 'migrations' ? (
               <MigrationRequestsAdmin />

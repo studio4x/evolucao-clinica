@@ -2655,6 +2655,168 @@ app.get("/api/admin/brevo/attributes", requireAuth, requireAdmin, async (req, re
   }
 });
 
+// Sincronização em lote de todos os profissionais da plataforma com a Brevo
+app.post("/api/admin/brevo/sync-all", requireAuth, requireAdmin, async (req: any, res) => {
+  const triggeredBy = req.user?.email || req.user?.id || "admin";
+  let logId: string | null = null;
+  let totalContacts: number | null = null;
+  let acceptedProcessId: string | null = null;
+
+  try {
+    const settings = await getNotificationSettingsRaw();
+    const brevoApiKey = settings.brevo_api_key;
+    const listId = settings.brevo_list_id;
+    const consentGroupId = settings.brevo_consent_group_id;
+
+    const numericListId = Number(listId);
+    const numericConsentGroupId = consentGroupId ? Number(consentGroupId) : null;
+
+    if (!brevoApiKey || !Number.isInteger(numericListId) || numericListId <= 0) {
+      return res.status(400).json({ error: "API Key ou Lista da Brevo não configurada no painel." });
+    }
+    if (consentGroupId && (!Number.isInteger(numericConsentGroupId) || Number(numericConsentGroupId) <= 0)) {
+      return res.status(400).json({ error: "Consent Group da Brevo inválido." });
+    }
+
+    // Cria o registro de log com status 'running'
+    const { data: logData, error: logInsertError } = await supabaseAdmin
+      .from("brevo_sync_logs")
+      .insert({ triggered_by: triggeredBy, status: "running" })
+      .select("id")
+      .single();
+    if (logInsertError || !logData?.id) {
+      throw logInsertError || new Error("Não foi possível iniciar o histórico da sincronização.");
+    }
+    logId = logData.id;
+
+    // Busca todos os profissionais com e-mail
+    const { data: professionals, error: profError } = await supabaseAdmin
+      .from("professionals")
+      .select("id, full_name, google_email")
+      .not("google_email", "is", null)
+      .neq("google_email", "");
+
+    if (profError) throw profError;
+    if (!professionals || professionals.length === 0) {
+      const { error: emptyLogError } = await supabaseAdmin.from("brevo_sync_logs").update({
+        status: "success",
+        finished_at: new Date().toISOString(),
+        total_contacts: 0
+      }).eq("id", logId);
+      if (emptyLogError) throw emptyLogError;
+      return res.json({ totalContacts: 0, message: "Nenhum profissional encontrado para sincronizar." });
+    }
+
+    // Busca preferências de comunicação (whatsapp_number)
+    const { data: prefs, error: prefsError } = await supabaseAdmin
+      .from("communication_preferences")
+      .select("user_id, whatsapp_number");
+    if (prefsError) throw prefsError;
+
+    const prefsMap: Record<string, string> = {};
+    for (const pref of prefs || []) {
+      if (pref.whatsapp_number) prefsMap[pref.user_id] = pref.whatsapp_number;
+    }
+
+    // Monta o payload para a Brevo
+    const jsonBody = professionals.flatMap((prof) => {
+      const email = String(prof.google_email || "").trim();
+      if (!email) return [];
+
+      const nameParts = (prof.full_name || "").trim().split(/\s+/);
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      const entry: any = {
+        email,
+        attributes: { NOME: firstName, SOBRENOME: lastName }
+      };
+      const whatsapp = prefsMap[prof.id];
+      if (whatsapp) entry.attributes.SMS = whatsapp.replace(/\D/g, "");
+      return [entry];
+    });
+
+    if (jsonBody.length === 0) {
+      const { error: emptyLogError } = await supabaseAdmin.from("brevo_sync_logs").update({
+        status: "success",
+        finished_at: new Date().toISOString(),
+        total_contacts: 0
+      }).eq("id", logId);
+      if (emptyLogError) throw emptyLogError;
+      return res.json({ totalContacts: 0, message: "Nenhum profissional com e-mail válido encontrado." });
+    }
+    totalContacts = jsonBody.length;
+
+    const importBody: any = {
+      jsonBody,
+      listIds: [numericListId],
+      updateExistingContacts: true,
+      emptyContactsAttributes: false
+    };
+    if (numericConsentGroupId) importBody.consentGroupIds = [numericConsentGroupId];
+
+    const brevoRes = await fetch("https://api.brevo.com/v3/contacts/import", {
+      method: "POST",
+      headers: { "api-key": brevoApiKey, "content-type": "application/json" },
+      body: JSON.stringify(importBody)
+    });
+
+    const brevoData = await brevoRes.json().catch(() => ({}));
+
+    if (!brevoRes.ok) {
+      const errMsg = brevoData?.message || `Brevo import API retornou status ${brevoRes.status}`;
+      const providerError = new Error(errMsg) as Error & { statusCode?: number };
+      providerError.statusCode = 502;
+      throw providerError;
+    }
+
+    const processId = brevoData.processId ? String(brevoData.processId) : null;
+    if (!processId) {
+      throw new Error("A Brevo aceitou a requisição sem retornar o identificador do processo.");
+    }
+    acceptedProcessId = processId;
+
+    const { error: successLogError } = await supabaseAdmin.from("brevo_sync_logs").update({
+      status: "success", finished_at: new Date().toISOString(),
+      total_contacts: jsonBody.length, brevo_process_id: processId
+    }).eq("id", logId);
+    if (successLogError) throw successLogError;
+
+    return res.status(202).json({ totalContacts: jsonBody.length, processId });
+  } catch (err: any) {
+    console.error("[Brevo Sync All] Error:", err);
+    if (logId) {
+      try {
+        const { error: errorLogError } = await supabaseAdmin.from("brevo_sync_logs").update({
+          status: "error", finished_at: new Date().toISOString(),
+          total_contacts: totalContacts,
+          brevo_process_id: acceptedProcessId,
+          error_message: err.message || "Erro desconhecido"
+        }).eq("id", logId);
+        if (errorLogError) console.error("[Brevo Sync All] Failed to persist error status:", errorLogError);
+      } catch (_) { /* silently ignore log update failure */ }
+    }
+    const statusCode = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+    return res.status(statusCode).json({ error: err.message || "Erro ao sincronizar contatos com a Brevo." });
+  }
+});
+
+// Histórico de sincronizações Brevo
+app.get("/api/admin/brevo/sync-logs", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("brevo_sync_logs")
+      .select("id, started_at, finished_at, status, total_contacts, brevo_process_id, error_message, triggered_by")
+      .order("started_at", { ascending: false })
+      .limit(20);
+
+    if (error) throw error;
+    return res.json({ logs: data || [] });
+  } catch (err: any) {
+    console.error("[Brevo Sync Logs] Error:", err);
+    return res.status(500).json({ error: err.message || "Erro ao buscar histórico de sincronizações." });
+  }
+});
+
 // 4. Obter configuração do push diário (Apenas Admin)
 app.get("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, res) => {
   try {
