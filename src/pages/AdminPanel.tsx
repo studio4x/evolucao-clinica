@@ -1125,6 +1125,7 @@ export default function AdminPanel() {
   const [notifSending, setNotifSending] = useState(false);
   const [notifSendSuccess, setNotifSendSuccess] = useState(false);
   const [notifSendError, setNotifSendError] = useState('');
+  const [notifWhatsappSummary, setNotifWhatsappSummary] = useState<string | null>(null);
 
   const [manualPushNotifications, setManualPushNotifications] = useState<any[]>([]);
   const [platformPushNotifications, setPlatformPushNotifications] = useState<any[]>([]);
@@ -1726,6 +1727,7 @@ export default function AdminPanel() {
     setNotifSending(true);
     setNotifSendSuccess(false);
     setNotifSendError('');
+    setNotifWhatsappSummary(null);
 
     try {
       const session = await supabase.auth.getSession();
@@ -1745,6 +1747,9 @@ export default function AdminPanel() {
 
       let successCount = 0;
       let errorMsg = '';
+      let whatsappAcceptedCount = 0;
+      let whatsappSkippedCount = 0;
+      let whatsappFailedCount = 0;
 
       for (const targetId of targets) {
         try {
@@ -1769,6 +1774,12 @@ export default function AdminPanel() {
           if (res.ok) {
             const resData = await res.json().catch(() => ({}));
             addStoredManualPushNotificationId(resData?.notification?.id);
+            if (notifSendWhatsapp) {
+              const whatsappStatus = String(resData?.whatsapp?.status || 'not_sent');
+              if (whatsappStatus === 'accepted') whatsappAcceptedCount++;
+              else if (whatsappStatus === 'not_sent') whatsappSkippedCount++;
+              else whatsappFailedCount++;
+            }
             successCount++;
           } else {
             const errData = await res.json().catch(() => ({}));
@@ -1781,6 +1792,9 @@ export default function AdminPanel() {
 
       if (successCount > 0) {
         setNotifSendSuccess(true);
+        if (notifSendWhatsapp) {
+          setNotifWhatsappSummary(`WhatsApp: ${whatsappAcceptedCount} aceita(s) pela Meta, ${whatsappSkippedCount} sem envio e ${whatsappFailedCount} com falha. Aceita não significa entregue.`);
+        }
         setNotifTitle('');
         setNotifContent('');
         setNotifLink('');
@@ -1855,6 +1869,7 @@ export default function AdminPanel() {
     setNotifSending(true);
     setNotifSendSuccess(false);
     setNotifSendError('');
+    setNotifWhatsappSummary(null);
 
     try {
       const session = await supabase.auth.getSession();
@@ -4941,7 +4956,10 @@ export default function AdminPanel() {
                         {notifSendSuccess && (
                           <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
                             <Check className="flex-shrink-0 text-emerald-600" size={16} />
-                            <span>Notificação disparada com sucesso para o(s) destinatário(s)!</span>
+                            <span>
+                              Notificação disparada pelos canais disponíveis.
+                              {notifWhatsappSummary && <span className="mt-1 block">{notifWhatsappSummary}</span>}
+                            </span>
                           </div>
                         )}
 
