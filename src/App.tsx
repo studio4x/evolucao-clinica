@@ -21,6 +21,8 @@ const ShareTarget = lazyWithRetry(() => import('./pages/ShareTarget'), 'ShareTar
 const Tutorial = lazyWithRetry(() => import('./pages/Tutorial'), 'Tutorial');
 const Subscription = lazyWithRetry(() => import('./pages/Subscription'), 'Subscription');
 const Profile = lazyWithRetry(() => import('./pages/Profile'), 'Profile');
+const CustomLogo = lazyWithRetry(() => import('./pages/CustomLogo'), 'CustomLogo');
+const BackupExport = lazyWithRetry(() => import('./pages/BackupExport'), 'BackupExport');
 const AboutApp = lazyWithRetry(() => import('./pages/AboutApp'), 'AboutApp');
 const Notifications = lazyWithRetry(() => import('./pages/Notifications'), 'Notifications');
 const SupportTickets = lazyWithRetry(() => import('./pages/SupportTickets'), 'SupportTickets');
@@ -156,9 +158,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Mantém acessíveis as páginas de assinatura e perfil mesmo sem plano ativo,
+  // Mantém acessíveis as páginas de conta e recursos premium mesmo sem plano ativo,
   // para que o usuário possa gerenciar a conta ou contratar novamente.
-  if (location.pathname === '/painel/subscription' || location.pathname === '/painel/profile') {
+  if (
+    location.pathname === '/painel/subscription' ||
+    location.pathname === '/painel/profile' ||
+    location.pathname === '/painel/logotipo-personalizado' ||
+    location.pathname === '/painel/backup-exportacao'
+  ) {
     return <>{children}</>;
   }
 
@@ -675,6 +682,8 @@ export default function App() {
             <Route path="subscription" element={<Subscription />} />
             <Route path="migration" element={<Migration />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="logotipo-personalizado" element={<CustomLogo />} />
+            <Route path="backup-exportacao" element={<BackupExport />} />
             <Route path="about" element={<AboutApp />} />
             <Route path="notifications" element={<Notifications />} />
             <Route path="preferencias-de-comunicacao" element={<CommunicationPreferences />} />
