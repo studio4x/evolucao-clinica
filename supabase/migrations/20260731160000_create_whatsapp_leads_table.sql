@@ -37,3 +37,8 @@ ON public.whatsapp_leads
 FOR DELETE 
 TO authenticated 
 USING (is_admin());
+
+-- Grant explicit privileges to Supabase roles
+GRANT ALL ON TABLE public.whatsapp_leads TO postgres, service_role;
+GRANT INSERT ON TABLE public.whatsapp_leads TO anon, authenticated;
+GRANT SELECT, DELETE ON TABLE public.whatsapp_leads TO authenticated;

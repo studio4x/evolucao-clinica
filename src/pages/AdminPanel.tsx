@@ -7622,7 +7622,8 @@ Acesse a plataforma para ver os detalhes.`}</pre>
                           <thead className="bg-brand-bg/60 text-[10px] uppercase tracking-wide text-brand-text-muted">
                             <tr className="border-b border-brand-border">
                               <th className="px-4 py-3 font-bold">Data</th>
-                              <th className="px-4 py-3 font-bold">Lead</th>
+                              <th className="px-4 py-3 font-bold">Nome</th>
+                              <th className="px-4 py-3 font-bold">WhatsApp</th>
                               <th className="px-4 py-3 font-bold">Mensagem</th>
                               <th className="px-4 py-3 font-bold">Origem</th>
                               <th className="px-4 py-3 font-bold text-right">Ações</th>
@@ -7631,14 +7632,14 @@ Acesse a plataforma para ver os detalhes.`}</pre>
                           <tbody className="divide-y divide-brand-border text-brand-text">
                             {whatsappLeadsLoading ? (
                               <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-brand-text-muted">
+                                <td colSpan={6} className="px-4 py-8 text-center text-brand-text-muted">
                                   <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-brand-primary" />
                                   Carregando contatos...
                                 </td>
                               </tr>
                             ) : whatsappLeads.length === 0 ? (
                               <tr>
-                                <td colSpan={5} className="px-4 py-8 text-center text-brand-text-muted">
+                                <td colSpan={6} className="px-4 py-8 text-center text-brand-text-muted">
                                   Nenhum lead registrado no formulário de WhatsApp.
                                 </td>
                               </tr>
@@ -7648,13 +7649,15 @@ Acesse a plataforma para ver os detalhes.`}</pre>
                                   <td className="px-4 py-3 whitespace-nowrap text-brand-text-muted">
                                     {new Date(lead.created_at).toLocaleString('pt-BR')}
                                   </td>
-                                  <td className="px-4 py-3">
-                                    <p className="font-bold">{lead.name}</p>
+                                  <td className="px-4 py-3 font-semibold text-brand-text">
+                                    {lead.name}
+                                  </td>
+                                  <td className="px-4 py-3 whitespace-nowrap">
                                     <a
                                       href={`https://wa.me/${lead.phone}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="inline-flex items-center text-emerald-600 hover:text-emerald-700 font-semibold mt-1 gap-1"
+                                      className="inline-flex items-center text-emerald-600 hover:text-emerald-700 font-semibold gap-1"
                                     >
                                       <MessageCircle className="w-3.5 h-3.5" />
                                       {lead.phone}
