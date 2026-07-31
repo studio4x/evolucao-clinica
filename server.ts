@@ -2439,6 +2439,156 @@ app.post("/api/notifications/unsubscribe", requireAuth, async (req: any, res) =>
   }
 });
 
+// Obter configurações de notificações de forma isolada
+async function getNotificationSettingsRaw() {
+  const { data: settingsData } = await supabaseAdmin
+    .from("settings")
+    .select("api_key")
+    .eq("id", "notification_settings")
+    .maybeSingle();
+
+  if (settingsData?.api_key) {
+    try {
+      return JSON.parse(settingsData.api_key);
+    } catch (e) {
+      console.error("Erro ao ler JSON de configuracoes de notificacoes:", e);
+    }
+  }
+  return {};
+}
+
+async function syncNewUserToBrevo(fullName: string, email: string) {
+  try {
+    const settings = await getNotificationSettingsRaw();
+    const brevoApiKey = settings.brevo_api_key;
+    const listId = settings.brevo_list_id;
+    const consentGroupId = settings.brevo_consent_group_id;
+
+    if (!brevoApiKey || !listId) {
+      console.log("[Brevo Sync] Brevo integration or list not configured. Skipping.");
+      return;
+    }
+
+    const nameParts = fullName.trim().split(/\s+/);
+    const firstName = nameParts[0] || "";
+    const lastName = nameParts.slice(1).join(" ") || "";
+
+    const body: any = {
+      jsonBody: [
+        {
+          email,
+          attributes: {
+            NOME: firstName,
+            SOBRENOME: lastName
+          }
+        }
+      ],
+      listIds: [Number(listId)],
+      updateExistingContacts: true
+    };
+
+    if (consentGroupId) {
+      body.consentGroupIds = [Number(consentGroupId)];
+    }
+
+    const response = await fetch("https://api.brevo.com/v3/contacts/import", {
+      method: "POST",
+      headers: {
+        "api-key": brevoApiKey,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      console.error("[Brevo Sync] Failed to sync contact to Brevo:", response.status, errData);
+    } else {
+      console.log(`[Brevo Sync] Successfully queued sync for contact ${email} to Brevo list ${listId}`);
+    }
+  } catch (err) {
+    console.error("[Brevo Sync] Error in syncNewUserToBrevo:", err);
+  }
+}
+
+// Rotas da API Brevo para Admin
+app.get("/api/admin/brevo/lists", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const settings = await getNotificationSettingsRaw();
+    const brevoApiKey = settings.brevo_api_key;
+    if (!brevoApiKey) {
+      return res.json({ lists: [] });
+    }
+    const response = await fetch("https://api.brevo.com/v3/contacts/lists?limit=50&offset=0", {
+      headers: {
+        "api-key": brevoApiKey,
+        "content-type": "application/json"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Brevo lists API returned status ${response.status}`);
+    }
+    const data = await response.json();
+    res.json({ lists: data.lists || [] });
+  } catch (err: any) {
+    console.error("[Brevo API] Error fetching lists:", err);
+    res.status(500).json({ error: err.message || "Erro ao obter listas da Brevo." });
+  }
+});
+
+app.get("/api/admin/brevo/consent-groups", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const settings = await getNotificationSettingsRaw();
+    const brevoApiKey = settings.brevo_api_key;
+    if (!brevoApiKey) {
+      return res.json({ consentGroups: [], enabled: false });
+    }
+    const response = await fetch("https://api.brevo.com/v3/contacts/consent-groups", {
+      headers: {
+        "api-key": brevoApiKey,
+        "content-type": "application/json"
+      }
+    });
+    if (response.status === 403) {
+      return res.json({ consentGroups: [], enabled: false });
+    }
+    if (!response.ok) {
+      throw new Error(`Brevo consent groups API returned status ${response.status}`);
+    }
+    const data = await response.json();
+    const consentGroups = data.consentGroups || (Array.isArray(data) ? data : []);
+    res.json({ consentGroups, enabled: true });
+  } catch (err: any) {
+    console.error("[Brevo API] Error fetching consent groups:", err);
+    res.status(500).json({ error: err.message || "Erro ao obter consent groups da Brevo." });
+  }
+});
+
+app.get("/api/admin/brevo/attributes", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const settings = await getNotificationSettingsRaw();
+    const brevoApiKey = settings.brevo_api_key;
+    if (!brevoApiKey) {
+      return res.json({ attributes: [] });
+    }
+    const response = await fetch("https://api.brevo.com/v3/contacts/attributes", {
+      headers: {
+        "api-key": brevoApiKey,
+        "content-type": "application/json"
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Brevo attributes API returned status ${response.status}`);
+    }
+    const data = await response.json();
+    const attributes = (data.attributes || []).map((attr: any) => attr.name);
+    res.json({ attributes });
+  } catch (err: any) {
+    console.error("[Brevo API] Error fetching attributes:", err);
+    res.status(500).json({ error: err.message || "Erro ao obter atributos da Brevo." });
+  }
+});
+
 // 4. Obter configuração do push diário (Apenas Admin)
 app.get("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req, res) => {
   try {
@@ -2694,6 +2844,8 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
       throw profileError;
     }
 
+    void syncNewUserToBrevo(fullName, normalizedEmail);
+
     let notificationResult: any = null;
     try {
       await sendWelcomeEmail(createdUser.id, targetStatus).catch((err) => {
@@ -2933,6 +3085,7 @@ async function ensureProfessionalProfile(user: any, status: "pending" | "active"
     });
 
   if (error) throw error;
+  void syncNewUserToBrevo(fullName, user.email);
 }
 
 async function ensurePendingProfessionalProfile(user: any) {

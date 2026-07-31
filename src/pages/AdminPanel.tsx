@@ -855,6 +855,15 @@ export default function AdminPanel() {
   const [adminBrevoApiKey, setAdminBrevoApiKey] = useState('');
   const [adminBrevoSenderName, setAdminBrevoSenderName] = useState('');
   const [adminBrevoSenderEmail, setAdminBrevoSenderEmail] = useState('');
+  const [brevoLists, setBrevoLists] = useState<{ id: number; name: string }[]>([]);
+  const [brevoConsentGroups, setBrevoConsentGroups] = useState<{ id: number; name: string }[]>([]);
+  const [brevoAttributes, setBrevoAttributes] = useState<string[]>([]);
+  const [selectedBrevoListId, setSelectedBrevoListId] = useState<string>('');
+  const [selectedBrevoConsentGroupId, setSelectedBrevoConsentGroupId] = useState<string>('');
+  const [consentGroupsEnabled, setConsentGroupsEnabled] = useState<boolean>(false);
+  const [loadingBrevoLists, setLoadingBrevoLists] = useState<boolean>(false);
+  const [savingBrevoLists, setSavingBrevoLists] = useState<boolean>(false);
+  const [saveSuccessBrevoLists, setSaveSuccessBrevoLists] = useState<boolean>(false);
   const [adminVapidPublic, setAdminVapidPublic] = useState('');
   const [adminVapidPrivate, setAdminVapidPrivate] = useState('');
   const [adminSmtpSaving, setAdminSmtpSaving] = useState(false);
@@ -1077,6 +1086,8 @@ export default function AdminPanel() {
           setAdminBrevoSenderName(parsed.brevo_sender_name || '');
           setAdminBrevoSenderEmail(parsed.brevo_sender_email || '');
           setAdminVapidPublic(parsed.vapid_public_key || '');
+          setSelectedBrevoListId(parsed.brevo_list_id ? String(parsed.brevo_list_id) : '');
+          setSelectedBrevoConsentGroupId(parsed.brevo_consent_group_id ? String(parsed.brevo_consent_group_id) : '');
           setAdminVapidPrivate(parsed.vapid_private_key || '');
         }
       } catch (err) {
@@ -1190,6 +1201,96 @@ export default function AdminPanel() {
       alert('Erro ao salvar configurações: ' + err.message);
     } finally {
       setAdminSmtpSaving(false);
+    }
+  };
+
+  const fetchBrevoData = async () => {
+    if (!adminBrevoApiKey) return;
+    setLoadingBrevoLists(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) return;
+
+      const listsRes = await fetch('/api/admin/brevo/lists', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (listsRes.ok) {
+        const listsData = await listsRes.json();
+        setBrevoLists(listsData.lists || []);
+      }
+
+      const groupsRes = await fetch('/api/admin/brevo/consent-groups', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (groupsRes.ok) {
+        const groupsData = await groupsRes.json();
+        setBrevoConsentGroups(groupsData.consentGroups || []);
+        setConsentGroupsEnabled(groupsData.enabled === true);
+      }
+
+      const attrsRes = await fetch('/api/admin/brevo/attributes', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (attrsRes.ok) {
+        const attrsData = await attrsRes.json();
+        setBrevoAttributes(attrsData.attributes || []);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar dados da Brevo:', err);
+    } finally {
+      setLoadingBrevoLists(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'email_notifications' && adminBrevoApiKey) {
+      void fetchBrevoData();
+    }
+  }, [activeTab, adminBrevoApiKey]);
+
+  const handleSaveBrevoLists = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingBrevoLists(true);
+    setSaveSuccessBrevoLists(false);
+
+    try {
+      const { data: currentSettings } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'notification_settings')
+        .maybeSingle();
+
+      let currentSettingsJson: Record<string, any> = {};
+      if (currentSettings?.api_key) {
+        try {
+          currentSettingsJson = JSON.parse(currentSettings.api_key);
+        } catch (parseErr) {
+          console.error('Erro ao ler configurações atuais de notificações:', parseErr);
+        }
+      }
+
+      const { error } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'notification_settings',
+          api_key: JSON.stringify({
+            ...currentSettingsJson,
+            brevo_list_id: selectedBrevoListId ? Number(selectedBrevoListId) : null,
+            brevo_consent_group_id: selectedBrevoConsentGroupId ? Number(selectedBrevoConsentGroupId) : null
+          }),
+          updated_at: new Date().toISOString(),
+          updated_by: user?.email || 'admin'
+        });
+
+      if (error) throw error;
+      setSaveSuccessBrevoLists(true);
+      setTimeout(() => setSaveSuccessBrevoLists(false), 3000);
+    } catch (err: any) {
+      console.error('Erro ao salvar definições do Brevo Lead:', err);
+      alert('Erro ao salvar definições: ' + err.message);
+    } finally {
+      setSavingBrevoLists(false);
     }
   };
 
@@ -5447,6 +5548,81 @@ export default function AdminPanel() {
                     <div className="rounded-xl border border-sky-100 bg-sky-50/70 p-3 text-[11px] text-sky-800 leading-relaxed">
                       O remetente precisa estar validado na Brevo para que a API envie as mensagens com sucesso.
                     </div>
+                  </form>
+
+                  {/* Brevo Lead e Consentimento Config */}
+                  <form onSubmit={handleSaveBrevoLists} className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
+                    <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
+                      <Users className="text-brand-primary w-5 h-5" />
+                      <span>Lead e consentimento</span>
+                    </h3>
+                    <p className="text-xs text-brand-text-muted leading-relaxed">
+                      So contatos com checkbox explicito marcado entram nesta lista.
+                    </p>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">LISTA BREVO</label>
+                        <select
+                          value={selectedBrevoListId}
+                          onChange={e => setSelectedBrevoListId(e.target.value)}
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium"
+                        >
+                          <option value="">Nenhum / nao disponivel</option>
+                          {brevoLists.map(list => (
+                            <option key={list.id} value={list.id}>
+                              {list.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-[10px] font-bold text-brand-text block mb-1">CONSENT GROUP (OPCIONAL)</label>
+                        <select
+                          value={selectedBrevoConsentGroupId}
+                          onChange={e => setSelectedBrevoConsentGroupId(e.target.value)}
+                          disabled={!consentGroupsEnabled}
+                          className="w-full text-sm border border-brand-border/80 rounded-xl px-3 py-2 bg-brand-bg/30 focus:outline-none focus:border-brand-primary focus:bg-white transition-all font-medium disabled:opacity-50"
+                        >
+                          <option value="">Nenhum / nao disponivel</option>
+                          {brevoConsentGroups.map(group => (
+                            <option key={group.id} value={group.id}>
+                              {group.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="border border-brand-border/40 bg-brand-bg/10 rounded-xl p-4 space-y-3">
+                      <div className="text-xs font-semibold text-brand-text">
+                        {saveSuccessBrevoLists ? "Definições salvas com sucesso!" : "A lista selecionada ja esta salva."}
+                      </div>
+                      <p className="text-[11px] text-brand-text-muted leading-relaxed">
+                        Depois de escolher a lista ou o Consent Group, clique em salvar definicoes para manter a selecao ao recarregar a pagina.
+                      </p>
+                      <button
+                        type="submit"
+                        disabled={savingBrevoLists}
+                        className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-slate-400 hover:bg-slate-500 text-white font-semibold transition-colors text-xs disabled:opacity-50 cursor-pointer"
+                      >
+                        {savingBrevoLists ? <Loader2 className="animate-spin" size={14} /> : <Save size={14} />}
+                        <span>Salvar definicoes</span>
+                      </button>
+                    </div>
+
+                    {brevoAttributes.length > 0 && (
+                      <div className="text-[10px] text-brand-text-muted leading-relaxed">
+                        Atributos disponiveis: {brevoAttributes.join(', ')}.
+                      </div>
+                    )}
+
+                    {!consentGroupsEnabled && adminBrevoApiKey && (
+                      <div className="rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] text-amber-800 leading-relaxed font-semibold">
+                        Consent Groups nao estao habilitados nesta conta Brevo.
+                      </div>
+                    )}
                   </form>
               </div>
             ) : activeTab === 'migrations' ? (
