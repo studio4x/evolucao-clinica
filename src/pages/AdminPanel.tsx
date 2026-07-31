@@ -382,7 +382,7 @@ export default function AdminPanel() {
 
   // Efeito para carregar as configurações do widget do WhatsApp
   useEffect(() => {
-    if (user && profileRole === 'admin' && activeTab === 'whatsapp_config') {
+    if (user && profileRole === 'admin' && (activeTab === 'whatsapp_widget' || activeTab === 'whatsapp_config')) {
       const fetchWhatsappWidgetSettings = async () => {
         setLoadingWhatsappWidget(true);
         try {
