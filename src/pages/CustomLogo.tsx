@@ -152,7 +152,7 @@ export default function CustomLogo() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="w-full space-y-6 pb-12">
       <div className="flex items-start justify-between gap-4 border-b border-brand-border/60 pb-5">
         <div>
           <h1 className="text-3xl font-display font-bold text-brand-primary">Logotipo Personalizado</h1>
