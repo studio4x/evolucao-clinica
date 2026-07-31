@@ -2997,6 +2997,19 @@ export default function AdminPanel() {
     }
   };
 
+  const formatRegistrationDate = (isoString?: string) => {
+    if (!isoString) return '-';
+
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return '-';
+
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      timeZone: 'America/Sao_Paulo'
+    }).format(date);
+  };
+
   const formatInboxDate = (isoString: string) => {
     try {
       return new Intl.DateTimeFormat('pt-BR', {
@@ -3459,6 +3472,7 @@ export default function AdminPanel() {
                           <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
                             <th className="p-4 pl-6">Profissional</th>
                             <th className="p-4">Contato</th>
+                            <th className="p-4">Data do cadastro</th>
                             <th className="p-4">Assinatura / Plano</th>
                             <th className="p-4">Vencimento</th>
                             <th className="p-4">Status</th>
@@ -3491,6 +3505,10 @@ export default function AdminPanel() {
 
                                 <td className="p-4 text-brand-text-muted font-medium break-all">
                                   {prof.google_email}
+                                </td>
+
+                                <td className="p-4 text-brand-text-muted whitespace-nowrap text-xs">
+                                  {formatRegistrationDate(prof.created_at)}
                                 </td>
 
                                 <td className="p-4">
