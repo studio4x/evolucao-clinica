@@ -248,7 +248,7 @@ export default function Layout() {
               )}
             </div>
 
-            <nav className="space-y-2">
+            <nav className="space-y-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
@@ -260,8 +260,8 @@ export default function Layout() {
                     title={isCollapsed ? item.name : undefined}
                     className={`flex items-center rounded-xl transition-all duration-200 relative group ${
                       isCollapsed 
-                        ? 'justify-center p-3' 
-                        : 'justify-between px-4 py-3'
+                        ? 'justify-center p-2.5'
+                        : 'justify-between px-4 py-2.5'
                     } ${
                       isActive 
                         ? 'bg-brand-primary text-white shadow-sm' 
@@ -308,13 +308,13 @@ export default function Layout() {
           </div>
         </div>
 
-        <div className={`${isCollapsed ? 'p-2' : 'p-4'} border-t border-brand-border bg-white space-y-2`}>
+        <div className={`${isCollapsed ? 'p-2' : 'p-4'} border-t border-brand-border bg-white space-y-1`}>
           {!isStandalone && !isNativeWebView && (
             <button
               onClick={handleInstallClick}
               title={isCollapsed ? "Instalar App" : undefined}
               className={`flex items-center rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-all duration-200 relative group ${
-                isCollapsed ? 'justify-center p-3 w-full' : 'space-x-3 px-4 py-3 w-full'
+                isCollapsed ? 'justify-center p-2.5 w-full' : 'space-x-3 px-4 py-2.5 w-full'
               }`}
             >
               <Download size={20} className="flex-shrink-0" />
@@ -329,7 +329,7 @@ export default function Layout() {
               }}
               title={isCollapsed ? "Compartilhar App" : undefined}
               className={`flex items-center rounded-xl text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary-hover transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer relative group ${
-                isCollapsed ? 'justify-center p-3 w-full' : 'space-x-3 px-4 py-3 w-full'
+                isCollapsed ? 'justify-center p-2.5 w-full' : 'space-x-3 px-4 py-2.5 w-full'
               }`}
             >
               <Share2 size={20} className="flex-shrink-0" />
@@ -345,7 +345,7 @@ export default function Layout() {
             onClick={handleLogout}
             title={isCollapsed ? "Sair" : undefined}
             className={`flex items-center rounded-xl text-red-600 hover:bg-red-50 transition-colors relative group ${
-              isCollapsed ? 'justify-center p-3 w-full' : 'space-x-3 px-4 py-3 w-full'
+              isCollapsed ? 'justify-center p-2.5 w-full' : 'space-x-3 px-4 py-2.5 w-full'
             }`}
           >
             <LogOut size={20} className="flex-shrink-0" />
@@ -410,7 +410,7 @@ export default function Layout() {
           </div>
 
           {/* Navigation Links */}
-          <nav className="space-y-1">
+          <nav className="space-y-0.5">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path || (item.path !== '/painel/dashboard' && location.pathname.startsWith(item.path));
@@ -419,7 +419,7 @@ export default function Layout() {
                   key={item.name}
                   to={item.path}
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className={`flex items-center justify-between px-4 py-3.5 rounded-xl transition-all duration-200 relative group ${
+                  className={`flex items-center justify-between px-4 py-2.5 rounded-xl transition-all duration-200 relative group ${
                     isActive 
                       ? 'bg-brand-primary text-white shadow-sm' 
                       : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
@@ -452,11 +452,11 @@ export default function Layout() {
           </nav>
 
           {/* Actions & Utilities */}
-          <div className="pt-4 border-t border-brand-border/60 space-y-2">
+          <div className="pt-3 border-t border-brand-border/60 space-y-1">
             {!isStandalone && !isNativeWebView && (
               <button
                 onClick={handleInstallClick}
-                className="flex items-center space-x-3 px-4 py-3.5 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-all duration-200 cursor-pointer"
+                className="flex items-center space-x-3 px-4 py-2.5 w-full rounded-xl text-brand-primary bg-brand-primary/10 hover:bg-brand-primary/20 transition-all duration-200 cursor-pointer"
               >
                 <Download size={20} className="flex-shrink-0" />
                 <span className="font-medium text-sm">Instalar App</span>
@@ -467,14 +467,14 @@ export default function Layout() {
                 const text = "Olá! Estou usando o aplicativo Evolução Clínica para gerenciar meus prontuários com IA e achei fantástico. Facilita muito o dia a dia! Dá uma olhada: " + window.location.origin;
                 window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
               }}
-              className="flex items-center space-x-3 px-4 py-3.5 w-full rounded-xl text-brand-primary hover:bg-brand-bg transition-all duration-200 cursor-pointer animate-none"
+              className="flex items-center space-x-3 px-4 py-2.5 w-full rounded-xl text-brand-primary hover:bg-brand-bg transition-all duration-200 cursor-pointer animate-none"
             >
               <Share2 size={20} className="flex-shrink-0" />
               <span className="font-medium text-sm">Compartilhar App</span>
             </button>
             <button
               onClick={handleLogout}
-              className="flex items-center space-x-3 px-4 py-3.5 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              className="flex items-center space-x-3 px-4 py-2.5 w-full rounded-xl text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
             >
               <LogOut size={20} className="flex-shrink-0" />
               <span className="font-medium text-sm">Sair</span>
