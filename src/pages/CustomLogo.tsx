@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle, Image, Loader2, Lock, Sparkles, Trash2, Upload } from 'lucide-react';
+import { ArrowRight, CheckCircle, Image, Loader2, Lock, Shield, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { showAlert } from '../store/modalStore';
@@ -153,16 +153,16 @@ export default function CustomLogo() {
 
   return (
     <div className="w-full space-y-6 pb-12">
-      <div className="flex items-start justify-between gap-4 border-b border-brand-border/60 pb-5">
+      <div>
         <div>
-          <h1 className="text-3xl font-display font-bold text-brand-primary">Logotipo Personalizado</h1>
+          <h1 className="flex items-center text-3xl font-display font-bold text-brand-text">
+            <Image className="mr-3 shrink-0 text-brand-primary" size={32} />
+            <span>Logotipo Personalizado</span>
+          </h1>
           <p className="mt-1 text-sm text-brand-text-muted">
             Personalize o timbre dos seus relatórios, PDIs e evoluções clínicas.
           </p>
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm">
-          <Lock size={10} /> Plano Anual
-        </span>
       </div>
 
       {successMessage && (
@@ -173,25 +173,48 @@ export default function CustomLogo() {
       )}
 
       {!isYearly ? (
-        <div className="rounded-2xl border border-amber-200/60 bg-gradient-to-br from-amber-50/40 to-orange-50/20 p-5">
-          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-            <div className="max-w-lg space-y-1.5">
-              <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-800">
-                <Sparkles size={16} className="text-amber-600" />
-                Timbre Exclusivo com Sua Marca
-              </h2>
-              <p className="text-xs leading-relaxed text-amber-700/80">
-                Personalize os seus relatórios, planos de desenvolvimento (PDI) e evoluções clínicas impressas ou em PDF com o seu próprio logotipo ou o logotipo da sua clínica.
-              </p>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+          <section className="card space-y-6 rounded-3xl border border-brand-border bg-white p-8 lg:col-span-3">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-brand-text">
+              <Shield className="text-brand-primary" size={24} />
+              <span>Como funciona o Logotipo Personalizado?</span>
+            </h2>
+
+            <div className="space-y-4">
+              {[
+                ['1', 'Você envia a sua marca', 'Escolha o logotipo profissional ou da clínica nos formatos PNG, JPG ou WEBP.'],
+                ['2', 'A plataforma aplica o seu timbre', 'A sua identidade passa a aparecer no cabeçalho dos documentos clínicos.'],
+                ['3', 'Documentos prontos para compartilhar', 'Relatórios, PDIs e evoluções em PDF ou impressos ficam com a sua marca.']
+              ].map(([number, title, description]) => (
+                <div key={number} className="flex items-start space-x-3">
+                  <div className="mt-0.5 rounded-lg bg-brand-bg p-2 font-bold text-brand-primary">{number}</div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-brand-text">{title}</h3>
+                    <p className="mt-0.5 text-xs text-brand-text-muted">{description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/painel/subscription')}
-              className="btn-primary shrink-0 cursor-pointer bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-amber-500/10 transition-all hover:from-amber-600 hover:to-amber-700 active:scale-95 animate-none"
-            >
-              Assinar Plano Anual
-            </button>
-          </div>
+
+            <div className="border-t border-brand-border/60 pt-4">
+              <div className="flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-xs text-sky-800">
+                <Shield className="mt-0.5 shrink-0 text-sky-600" size={16} />
+                <div><span className="mb-0.5 block font-bold">Sua identidade profissional:</span>Use uma apresentação visual consistente em todos os documentos entregues aos pacientes e responsáveis.</div>
+              </div>
+            </div>
+          </section>
+
+          <aside className="card relative flex flex-col justify-between overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white p-8 text-center shadow-sm lg:col-span-2">
+            <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 rounded-full bg-gradient-to-br from-amber-400/15 to-transparent blur-3xl" />
+            <div className="relative z-10 space-y-6">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"><Lock size={32} /></div>
+              <div className="space-y-2"><h2 className="text-lg font-bold text-amber-950">Disponível no Plano Anual</h2><p className="text-xs leading-relaxed text-amber-800/80">Personalize os documentos clínicos com a identidade visual do seu consultório.</p></div>
+              <div className="space-y-2.5 rounded-2xl border border-amber-200/50 bg-amber-50 p-4 text-left">
+                {['Timbre exclusivo em documentos', 'Sua marca em PDFs e impressões', 'Identidade visual da sua clínica'].map((benefit) => <div key={benefit} className="flex items-center gap-2 text-xs font-semibold text-amber-900"><CheckCircle size={14} className="shrink-0 text-amber-600" />{benefit}</div>)}
+              </div>
+            </div>
+            <div className="relative z-10 pt-8"><button type="button" onClick={() => navigate('/painel/subscription')} className="flex w-full cursor-pointer items-center justify-center space-x-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 font-bold text-white shadow-md shadow-orange-500/10 transition-all hover:from-amber-600 hover:to-orange-600"><span>Fazer Upgrade Agora</span><ArrowRight size={16} /></button><p className="mt-2 text-[10px] text-amber-800/60">Mude para o Plano Anual e economize 57% em relação a 12 mensalidades</p></div>
+          </aside>
         </div>
       ) : (
         <div className="card space-y-5 border border-brand-border/60 bg-white p-6 shadow-sm md:p-8">
