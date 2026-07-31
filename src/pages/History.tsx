@@ -58,7 +58,7 @@ export default function History() {
     });
     return (isYearly && professional?.custom_logo_url) ? professional.custom_logo_url : siteConfig.logo_light_url;
   };
-  const getLogoPrintHeight = () => `${40 * (normalizeCustomLogoSettings(professional?.custom_logo_settings).scale / 100)}px`;
+  const getLogoPrintHeight = () => `${56 * (normalizeCustomLogoSettings(professional?.custom_logo_settings).scale / 100)}px`;
   const [printMode, setPrintMode] = useState<'prontuario' | 'report' | null>(null);
   const [printDocType, setPrintDocType] = useState('');
   const [printPeriodLabel, setPrintPeriodLabel] = useState('');
@@ -133,7 +133,7 @@ export default function History() {
 
     if (logoBase64) {
       try {
-        taglineX = drawDocumentLogo(doc, logoBase64, prof?.custom_logo_settings, margin, 11);
+        taglineX = drawDocumentLogo(doc, logoBase64, prof?.custom_logo_settings, margin, 7);
       } catch (err) {
         console.error("Error drawing logo in PDF:", err);
         doc.setFont('Helvetica', 'bold');

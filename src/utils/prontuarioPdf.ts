@@ -63,7 +63,7 @@ export const generateProntuarioPDF = ({
   let headerTextX = margin;
   if (logoBase64) {
     try {
-      headerTextX = drawDocumentLogo(doc, logoBase64, customLogoSettings, margin, 10);
+    headerTextX = drawDocumentLogo(doc, logoBase64, customLogoSettings, margin, 6);
     } catch (error) {
       console.warn('[PDF] Não foi possível inserir o logotipo:', error);
     }

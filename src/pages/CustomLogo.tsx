@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle, FileText, Image, Loader2, Lock, Shield, Trash2, Upload } from 'lucide-react';
+import { ArrowRight, CheckCircle, Crop, FileText, Image, Loader2, Lock, Move, Shield, Trash2, Upload } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { showAlert } from '../store/modalStore';
@@ -12,6 +12,11 @@ export default function CustomLogo() {
   const { user, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const [customLogoUrl, setCustomLogoUrl] = useState('');
   const [logoScale, setLogoScale] = useState(100);
+  const [showCropEditor, setShowCropEditor] = useState(false);
+  const [cropAspect, setCropAspect] = useState(3);
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
+  const cropDragStart = useRef<{ x: number; y: number; pointerX: number; pointerY: number } | null>(null);
   const [previewDocument, setPreviewDocument] = useState<'prontuario' | 'report' | 'pdi'>('prontuario');
   const [dbSubscriptionPlan, setDbSubscriptionPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none' | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,6 +35,7 @@ export default function CustomLogo() {
       ? 'Relatório de Evolução Clínico'
       : 'Plano de Desenvolvimento Individual (PDI)';
   const previewPeriodLabel = previewDocument === 'pdi' ? 'Período de Análise: Julho/2026' : 'Data: 31/07/2026';
+  const cropAspectLabel = cropAspect === 3 ? '3:1' : cropAspect === 2 ? '2:1' : cropAspect === 1 ? '1:1' : '16:9';
 
   useEffect(() => {
     const loadLogoSettings = async () => {
@@ -178,6 +184,79 @@ export default function CustomLogo() {
     }
   };
 
+  const handleCropDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    cropDragStart.current = { x: cropPosition.x, y: cropPosition.y, pointerX: event.clientX, pointerY: event.clientY };
+  };
+
+  const handleCropDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = cropDragStart.current;
+    if (!start) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setCropPosition({
+      x: Math.max(-1, Math.min(1, start.x + ((event.clientX - start.pointerX) / bounds.width) * 2)),
+      y: Math.max(-1, Math.min(1, start.y + ((event.clientY - start.pointerY) / bounds.height) * 2))
+    });
+  };
+
+  const handleCropDragEnd = () => {
+    cropDragStart.current = null;
+  };
+
+  const createCroppedLogoBlob = async () => new Promise<Blob>((resolve, reject) => {
+    const image = new window.Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => {
+      const imageAspect = image.naturalWidth / image.naturalHeight;
+      const baseWidth = imageAspect > cropAspect ? image.naturalHeight * cropAspect : image.naturalWidth;
+      const baseHeight = imageAspect > cropAspect ? image.naturalHeight : image.naturalWidth / cropAspect;
+      const sourceWidth = baseWidth / cropZoom;
+      const sourceHeight = baseHeight / cropZoom;
+      const sourceX = (image.naturalWidth - sourceWidth) / 2 + cropPosition.x * ((image.naturalWidth - sourceWidth) / 2);
+      const sourceY = (image.naturalHeight - sourceHeight) / 2 + cropPosition.y * ((image.naturalHeight - sourceHeight) / 2);
+      const canvas = document.createElement('canvas');
+      canvas.width = 1800;
+      canvas.height = Math.round(canvas.width / cropAspect);
+      const context = canvas.getContext('2d');
+      if (!context) {
+        reject(new Error('Não foi possível preparar o editor de imagem.'));
+        return;
+      }
+      context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Não foi possível gerar o recorte do logotipo.')), 'image/png');
+    };
+    image.onerror = () => reject(new Error('Não foi possível carregar esta imagem para recorte.'));
+    image.src = customLogoUrl;
+  });
+
+  const handleApplyCrop = async () => {
+    if (!user || !customLogoUrl) return;
+    try {
+      setUploadingLogo(true);
+      const croppedBlob = await createCroppedLogoBlob();
+      const filePath = `custom_logos/${user.id}/${Date.now()}-cropped.png`;
+      const { error: uploadError } = await supabase.storage.from('brand').upload(filePath, croppedBlob, { cacheControl: '3600', contentType: 'image/png', upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: publicUrlData } = supabase.storage.from('brand').getPublicUrl(filePath);
+      const publicUrl = publicUrlData.publicUrl;
+      const { error: dbError } = await supabase
+        .from('professionals')
+        .update({ custom_logo_url: publicUrl, custom_logo_settings: { scale: logoScale }, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+      if (dbError) throw dbError;
+      setCustomLogoUrl(publicUrl);
+      setShowCropEditor(false);
+      setCropZoom(1);
+      setCropPosition({ x: 0, y: 0 });
+      showSuccess('Recorte aplicado ao logotipo com sucesso!');
+    } catch (error: any) {
+      console.error('[CustomLogo] Erro ao aplicar recorte:', error);
+      await showAlert(`Erro ao aplicar o recorte: ${error.message || error}`, { title: 'Erro no Recorte', variant: 'danger', icon: 'warning' });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
@@ -284,9 +363,14 @@ export default function CustomLogo() {
                   <input type="file" accept="image/png, image/jpeg, image/jpg, image/webp" onChange={handleLogoUpload} disabled={uploadingLogo} className="hidden" />
                 </label>
                 {customLogoUrl && (
-                  <button type="button" onClick={handleRemoveLogo} disabled={uploadingLogo} className="cursor-pointer rounded-xl border border-red-200 bg-red-50/50 px-4 py-2.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100/70 disabled:opacity-60">
-                    Remover
-                  </button>
+                  <>
+                    <button type="button" onClick={() => setShowCropEditor((visible) => !visible)} disabled={uploadingLogo} className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-4 py-2.5 text-xs font-semibold text-brand-primary transition-colors hover:bg-brand-primary/10 disabled:opacity-60">
+                      <Crop size={14} /> Ajustar corte
+                    </button>
+                    <button type="button" onClick={handleRemoveLogo} disabled={uploadingLogo} className="cursor-pointer rounded-xl border border-red-200 bg-red-50/50 px-4 py-2.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100/70 disabled:opacity-60">
+                      Remover
+                    </button>
+                  </>
                 )}
               </div>
               <p className="text-[10px] text-brand-text-muted">
@@ -296,16 +380,43 @@ export default function CustomLogo() {
           </div>
 
           {customLogoUrl && (
+            <>
+            {showCropEditor && (
+              <div className="rounded-2xl border border-brand-primary/20 bg-brand-primary/5 p-4 sm:p-5">
+                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <div><h3 className="flex items-center gap-2 text-sm font-semibold text-brand-primary"><Crop size={17} /> Enquadramento do logotipo</h3><p className="mt-1 text-[10px] text-brand-text-muted">Arraste a imagem para definir a posição do corte. O arquivo final será salvo em PNG, pronto para o cabeçalho.</p></div>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-brand-primary">Proporção {cropAspectLabel}</span>
+                </div>
+                <div
+                  className="relative mx-auto max-w-2xl touch-none overflow-hidden rounded-xl border-2 border-dashed border-brand-primary/40 bg-stone-100 shadow-inner cursor-grab active:cursor-grabbing"
+                  style={{ aspectRatio: String(cropAspect) }}
+                  onPointerDown={handleCropDragStart}
+                  onPointerMove={handleCropDragMove}
+                  onPointerUp={handleCropDragEnd}
+                  onPointerCancel={handleCropDragEnd}
+                >
+                  <img src={customLogoUrl} alt="Editor de recorte do logotipo" draggable={false} className="h-full w-full select-none object-cover transition-transform duration-75" style={{ objectPosition: `${50 + cropPosition.x * 50}% ${50 + cropPosition.y * 50}%`, transform: `scale(${cropZoom})` }} />
+                  <div className="pointer-events-none absolute inset-0 border-8 border-white/25" />
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><span className="rounded-full bg-black/55 px-3 py-1.5 text-[10px] font-semibold text-white"><Move size={13} className="mr-1 inline" /> Arraste para mover</span></div>
+                </div>
+                <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <label className="block"><span className="text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Proporção</span><select value={cropAspect} onChange={(event) => setCropAspect(Number(event.target.value))} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-xs text-brand-text outline-none focus:border-brand-primary"><option value={3}>Horizontal 3:1</option><option value={2}>Horizontal 2:1</option><option value={16 / 9}>Panorâmico 16:9</option><option value={1}>Quadrado 1:1</option></select></label>
+                  <label className="block"><span className="flex justify-between text-[10px] font-bold uppercase tracking-wide text-brand-text-muted"><span>Aproximação</span><span>{Math.round(cropZoom * 100)}%</span></span><input type="range" min="1" max="3" step="0.05" value={cropZoom} onChange={(event) => setCropZoom(Number(event.target.value))} className="mt-3 w-full accent-brand-primary" /></label>
+                  <div className="flex items-end gap-2"><button type="button" onClick={() => { setCropZoom(1); setCropPosition({ x: 0, y: 0 }); }} className="rounded-xl border border-brand-border bg-white px-3 py-2 text-xs font-semibold text-brand-text-muted hover:bg-brand-bg">Redefinir</button><button type="button" onClick={handleApplyCrop} disabled={uploadingLogo} className="flex-1 rounded-xl bg-brand-primary px-3 py-2 text-xs font-semibold text-white hover:bg-brand-primary/90 disabled:opacity-60">{uploadingLogo ? 'Aplicando...' : 'Aplicar corte'}</button></div>
+                </div>
+              </div>
+            )}
             <div className="rounded-2xl border border-brand-border/60 bg-brand-bg/40 p-4 sm:p-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div className="flex-1">
                   <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-brand-primary">Ajuste no cabeçalho do documento</h3><span className="text-xs font-bold text-brand-primary">{logoScale}%</span></div>
                   <input type="range" min="50" max="100" step="5" value={logoScale} onChange={(event) => setLogoScale(Number(event.target.value))} className="mt-3 w-full accent-brand-primary" aria-label="Tamanho do logotipo nos documentos" />
-                  <p className="mt-2 text-[10px] text-brand-text-muted">Reduza o tamanho se o seu logotipo tiver formato alto ou elementos muito próximos das bordas. O ajuste é aplicado aos próximos PDFs gerados.</p>
+                  <p className="mt-2 text-[10px] text-brand-text-muted">A área do timbre foi ampliada. Use o recorte para remover margens vazias e este controle para reduzir o tamanho quando necessário. O ajuste é aplicado aos próximos PDFs gerados.</p>
                 </div>
                 <button type="button" onClick={handleSaveLogoScale} disabled={uploadingLogo} className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-xl border border-brand-primary/20 bg-white px-4 py-2.5 text-xs font-semibold text-brand-primary transition-colors hover:bg-brand-primary/5 disabled:cursor-not-allowed disabled:opacity-60">Salvar ajuste</button>
               </div>
             </div>
+            </>
           )}
           </div>
 
@@ -329,15 +440,15 @@ export default function CustomLogo() {
 
             <div className="bg-brand-bg/60 p-5 md:p-8">
               <div className="mx-auto max-w-3xl overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg shadow-brand-primary/10">
-                <div className="flex min-h-24 items-center gap-4 px-6 py-5">
-                  <div className="flex h-14 w-32 shrink-0 items-center justify-center bg-white p-2">
+                <div className="flex min-h-28 items-center gap-4 px-6 py-5">
+                  <div className="flex h-20 w-48 shrink-0 items-center justify-center bg-white p-2">
                     {customLogoUrl ? (
                       <img src={customLogoUrl} alt="Prévia do logotipo nos documentos" className="object-contain" style={getDocumentLogoPreviewStyle({ scale: logoScale })} />
                     ) : (
                       <div className="text-center text-brand-text-muted"><Image size={18} className="mx-auto mb-1 text-brand-accent" /><span className="text-[9px] font-semibold">Seu logotipo</span></div>
                     )}
                   </div>
-                  <div className="h-14 w-px shrink-0 bg-stone-300" />
+                  <div className="h-20 w-px shrink-0 bg-stone-300" />
                   <div className="min-w-0"><p className="text-xs font-bold text-brand-text">Plataforma Inteligente de Acompanhamento Terapêutico</p><p className="mt-1 text-[9px] text-brand-text-muted">Emitido por evolucaoclinica.app.br</p></div>
                 </div>
 

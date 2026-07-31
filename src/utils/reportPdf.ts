@@ -36,7 +36,7 @@ export const generateReportPDF = (
 
   if (logoBase64) {
     try {
-      taglineX = drawDocumentLogo(doc, logoBase64, prof?.custom_logo_settings, margin, 11);
+      taglineX = drawDocumentLogo(doc, logoBase64, prof?.custom_logo_settings, margin, 7);
     } catch (err) {
       console.error("Error drawing logo in PDF:", err);
       doc.setFont('Helvetica', 'bold');

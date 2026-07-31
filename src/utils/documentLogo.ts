@@ -28,8 +28,9 @@ export const drawDocumentLogo = (
   x = 20,
   y = 11
 ) => {
-  const containerWidth = 40;
-  const containerHeight = 14;
+  // Espaço ampliado para dar mais presença ao timbre no documento.
+  const containerWidth = 58;
+  const containerHeight = 20;
   const { scale } = normalizeCustomLogoSettings(settings);
 
   doc.setFillColor(255, 255, 255);
@@ -50,7 +51,7 @@ export const drawDocumentLogo = (
   doc.addImage(logoBase64, 'PNG', x + (containerWidth - width) / 2, y + (containerHeight - height) / 2, width, height, undefined, 'FAST');
   doc.setDrawColor(200, 195, 190);
   doc.setLineWidth(0.25);
-  doc.line(x + 44, y, x + 44, y + containerHeight);
+  doc.line(x + containerWidth + 4, y, x + containerWidth + 4, y + containerHeight);
 
-  return x + 48;
+  return x + containerWidth + 8;
 };
