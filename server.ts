@@ -2511,6 +2511,72 @@ async function syncNewUserToBrevo(fullName: string, email: string) {
   }
 }
 
+async function syncContactUpdateToBrevo(email: string, attributes: Record<string, any>) {
+  try {
+    const settings = await getNotificationSettingsRaw();
+    const brevoApiKey = settings.brevo_api_key;
+
+    if (!brevoApiKey) {
+      console.log("[Brevo Update] Brevo API key not configured. Skipping contact update.");
+      return;
+    }
+
+    const encodedEmail = encodeURIComponent(email);
+    const response = await fetch(`https://api.brevo.com/v3/contacts/${encodedEmail}`, {
+      method: "PATCH",
+      headers: {
+        "api-key": brevoApiKey,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ attributes })
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      console.error("[Brevo Update] Failed to update contact on Brevo:", response.status, errData);
+    } else {
+      console.log(`[Brevo Update] Successfully updated contact ${email} on Brevo.`);
+    }
+  } catch (err) {
+    console.error("[Brevo Update] Error in syncContactUpdateToBrevo:", err);
+  }
+}
+
+// Rota para sincronizar atualização de perfil com a Brevo
+app.put("/api/profile/sync-brevo", requireAuth, async (req: any, res) => {
+  try {
+    const { fullName, whatsappNumber } = req.body || {};
+    const email = req.user?.email;
+
+    if (!email) {
+      return res.status(400).json({ error: "Usuário sem e-mail identificado." });
+    }
+
+    const attributes: Record<string, any> = {};
+
+    if (fullName) {
+      const nameParts = String(fullName).trim().split(/\s+/);
+      attributes.NOME = nameParts[0] || "";
+      attributes.SOBRENOME = nameParts.slice(1).join(" ") || "";
+    }
+
+    if (whatsappNumber !== undefined) {
+      attributes.SMS = whatsappNumber ? String(whatsappNumber).replace(/\D/g, "") : "";
+    }
+
+    if (Object.keys(attributes).length === 0) {
+      return res.json({ success: true, message: "Nada a atualizar." });
+    }
+
+    void syncContactUpdateToBrevo(email, attributes);
+    return res.json({ success: true });
+  } catch (err: any) {
+    console.error("[Brevo Profile Sync] Error:", err);
+    res.status(500).json({ error: err.message || "Erro ao sincronizar perfil com a Brevo." });
+  }
+});
+
+
 // Rotas da API Brevo para Admin
 app.get("/api/admin/brevo/lists", requireAuth, requireAdmin, async (req, res) => {
   try {

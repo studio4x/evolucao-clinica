@@ -27,6 +27,7 @@ export default function Profile() {
   const [email, setEmail] = useState('');
   const [professionalTitle, setProfessionalTitle] = useState('');
   const [professionalRegister, setProfessionalRegister] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
 
   // Lista pré-definida de rótulos profissionais / especialidades médicas e terapêuticas
   const professionalOptions = [
@@ -200,6 +201,23 @@ export default function Profile() {
           setAutoBackupEnabled(data.auto_backup_enabled || false);
           setBackupFrequency((data.backup_frequency as 'daily' | 'weekly' | 'monthly') || 'monthly');
           setLastBackupAt(data.last_backup_at || null);
+
+          // Carregar whatsapp_number de communication_preferences
+          try {
+            const { data: sessionPrefs } = await supabase.auth.getSession();
+            const prefToken = sessionPrefs.session?.access_token;
+            if (prefToken) {
+              const prefsRes = await fetch('/api/communication/preferences', {
+                headers: { Authorization: `Bearer ${prefToken}` }
+              });
+              if (prefsRes.ok) {
+                const prefsData = await prefsRes.json();
+                setWhatsappNumber(prefsData.preferences?.whatsapp_number || '');
+              }
+            }
+          } catch (prefErr) {
+            console.warn('[Profile] Erro ao carregar preferências de comunicação:', prefErr);
+          }
         } else {
           // Fallback para metadados do auth
           const fullName = user.user_metadata?.full_name || user.user_metadata?.name || '';
@@ -324,6 +342,26 @@ export default function Profile() {
       // 3. Atualiza o estado global no authStore com o usuário atualizado
       if (authData?.user) {
         setUser(authData.user);
+      }
+
+      // 4. Atualiza whatsapp_number em communication_preferences e sincroniza com Brevo
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const syncToken = sessionData.session?.access_token;
+        if (syncToken) {
+          await fetch('/api/communication/preferences', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
+            body: JSON.stringify({ whatsapp_number: whatsappNumber.trim() || null })
+          });
+          fetch('/api/profile/sync-brevo', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
+            body: JSON.stringify({ fullName, whatsappNumber: whatsappNumber.trim() || null })
+          }).catch((err) => console.warn('[Profile] Erro ao sincronizar perfil com Brevo:', err));
+        }
+      } catch (syncErr) {
+        console.warn('[Profile] Erro ao salvar preferências WhatsApp:', syncErr);
       }
 
       setSuccessMessage('Perfil atualizado com sucesso!');
@@ -942,6 +980,28 @@ export default function Profile() {
               </div>
               <p className="text-[10px] text-brand-text-muted">
                 O e-mail não pode ser alterado pois é a credencial de login oficial.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                Número do WhatsApp (DDI + DDD + Número)
+              </label>
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                </svg>
+                <input
+                  type="tel"
+                  value={whatsappNumber}
+                  onChange={(e) => setWhatsappNumber(e.target.value)}
+                  className="input-field pl-10 pr-4 py-3"
+                  placeholder="Ex: 5511999887766"
+                  disabled={saving}
+                />
+              </div>
+              <p className="text-[10px] text-brand-text-muted">
+                DDI + DDD + Número, sem espaços ou caracteres especiais. Ex: 5511999887766.
               </p>
             </div>
 
