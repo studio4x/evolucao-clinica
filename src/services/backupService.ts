@@ -134,6 +134,7 @@ export async function generateBackupJson(userId: string): Promise<string> {
       professional_title: professional.professional_title,
       professional_register: professional.professional_register,
       custom_logo_url: professional.custom_logo_url,
+      custom_logo_settings: professional.custom_logo_settings,
       auto_backup_enabled: professional.auto_backup_enabled,
       backup_frequency: professional.backup_frequency
     },
@@ -244,6 +245,7 @@ export async function restoreBackupFromDrive(
         professional_title: backupData.professional.professional_title,
         professional_register: backupData.professional.professional_register,
         custom_logo_url: backupData.professional.custom_logo_url,
+        custom_logo_settings: backupData.professional.custom_logo_settings || { scale: 100 },
         updated_at: new Date().toISOString()
       })
       .eq('id', userId);

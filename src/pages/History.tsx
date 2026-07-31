@@ -10,6 +10,7 @@ import { appendToGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDoc
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -57,6 +58,7 @@ export default function History() {
     });
     return (isYearly && professional?.custom_logo_url) ? professional.custom_logo_url : siteConfig.logo_light_url;
   };
+  const getLogoPrintHeight = () => `${40 * (normalizeCustomLogoSettings(professional?.custom_logo_settings).scale / 100)}px`;
   const [printMode, setPrintMode] = useState<'prontuario' | 'report' | null>(null);
   const [printDocType, setPrintDocType] = useState('');
   const [printPeriodLabel, setPrintPeriodLabel] = useState('');
@@ -99,7 +101,7 @@ export default function History() {
 
       const { data: profData, error: profError } = await supabase
         .from('professionals')
-        .select('full_name, professional_title, professional_register, custom_logo_url, role, subscription_plan, subscription_status, subscription_ends_at')
+        .select('full_name, professional_title, professional_register, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at')
         .eq('id', user.id)
         .single();
       if (!profError && profData) {
@@ -130,12 +132,8 @@ export default function History() {
     const appName = siteConfig.pwa_app_name || "Evolução Clínica";
 
     if (logoBase64) {
-      // Garantir fundo branco sob o logo
-      doc.setFillColor(255, 255, 255);
-      doc.rect(margin, 11, 40, 14, 'F');
-      
       try {
-        doc.addImage(logoBase64, 'PNG', margin, 11, 40, 14, undefined, 'FAST');
+        taglineX = drawDocumentLogo(doc, logoBase64, prof?.custom_logo_settings, margin, 11);
       } catch (err) {
         console.error("Error drawing logo in PDF:", err);
         doc.setFont('Helvetica', 'bold');
@@ -144,12 +142,6 @@ export default function History() {
         doc.text(appName, margin, 20);
       }
       
-      // Linha divisória vertical
-      doc.setDrawColor(200, 195, 190); // stone-300
-      doc.setLineWidth(0.25);
-      doc.line(margin + 44, 11, margin + 44, 25);
-      
-      taglineX = margin + 48;
     } else {
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
@@ -890,7 +882,7 @@ export default function History() {
           <div className="flex items-center gap-4">
             {getLogoUrl() ? (
               <div className="bg-white p-1 rounded border border-stone-100 flex items-center justify-center">
-                <img src={getLogoUrl()} alt="Logo" className="h-10 object-contain bg-white" style={{ backgroundColor: '#ffffff' }} />
+                <img src={getLogoUrl()} alt="Logo" className="object-contain bg-white" style={{ backgroundColor: '#ffffff', height: getLogoPrintHeight() }} />
               </div>
             ) : (
               <h1 className="text-xl font-display font-bold text-brand-primary leading-none">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>

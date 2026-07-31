@@ -14,6 +14,7 @@ import DOMPurify from 'dompurify';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { generateReportPDF } from '../utils/reportPdf';
 import { downloadPdfFile, generateProntuarioPDF, getProntuarioPdfFileName } from '../utils/prontuarioPdf';
+import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { showAlert } from '../store/modalStore';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
@@ -212,6 +213,7 @@ export default function PatientDetail() {
     });
     return (isYearly && professional?.custom_logo_url) ? professional.custom_logo_url : siteConfig.logo_light_url;
   };
+  const getLogoPrintHeight = () => `${40 * (normalizeCustomLogoSettings(professional?.custom_logo_settings).scale / 100)}px`;
   const [printingProntuario, setPrintingProntuario] = useState(false);
   const [showPrintFilterModal, setShowPrintFilterModal] = useState(false);
   const [printStartDate, setPrintStartDate] = useState('');
@@ -643,7 +645,8 @@ export default function PatientDetail() {
       siteConfig,
       documentType,
       periodLabel,
-      logoBase64
+      logoBase64,
+      customLogoSettings: professional?.custom_logo_settings
     });
     const saved = await downloadPdfFile(doc, getProntuarioPdfFileName(patient?.full_name));
     if (!saved) {
@@ -986,7 +989,7 @@ export default function PatientDetail() {
       // Buscar dados do profissional logado da tabela professionals
       const { data: profData, error: profError } = await supabase
         .from('professionals')
-        .select('full_name, professional_title, professional_register, custom_logo_url, role, subscription_plan, subscription_status, subscription_ends_at')
+        .select('full_name, professional_title, professional_register, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at')
         .eq('id', user.id)
         .single();
       if (!profError && profData) {
@@ -1297,12 +1300,8 @@ export default function PatientDetail() {
     const appName = siteConfig.pwa_app_name || "Evolução Clínica";
 
     if (logoBase64) {
-      // Garantir fundo branco sob o logo
-      doc.setFillColor(255, 255, 255);
-      doc.rect(margin, 11, 40, 14, 'F');
-      
       try {
-        doc.addImage(logoBase64, 'PNG', margin, 11, 40, 14, undefined, 'FAST');
+        taglineX = drawDocumentLogo(doc, logoBase64, prof?.custom_logo_settings, margin, 11);
       } catch (err) {
         console.error("Error drawing logo in PDF:", err);
         doc.setFont('Helvetica', 'bold');
@@ -1311,12 +1310,6 @@ export default function PatientDetail() {
         doc.text(appName, margin, 20);
       }
       
-      // Linha divisória vertical
-      doc.setDrawColor(200, 195, 190); // stone-300
-      doc.setLineWidth(0.25);
-      doc.line(margin + 44, 11, margin + 44, 25);
-      
-      taglineX = margin + 48;
     } else {
       doc.setFont('Helvetica', 'bold');
       doc.setFontSize(18);
@@ -4023,7 +4016,7 @@ export default function PatientDetail() {
             <div className="flex items-center gap-4">
             {getLogoUrl() ? (
               <div className="bg-white p-1 rounded border border-stone-100 flex items-center justify-center">
-                <img src={getLogoUrl()} alt="Logo" className="h-10 object-contain bg-white" style={{ backgroundColor: '#ffffff' }} />
+                <img src={getLogoUrl()} alt="Logo" className="object-contain bg-white" style={{ backgroundColor: '#ffffff', height: getLogoPrintHeight() }} />
               </div>
               ) : (
                 <h1 className="text-xl font-bold text-brand-primary uppercase tracking-wider leading-none">{siteConfig.pwa_app_name || "Evolução Clínica"}</h1>

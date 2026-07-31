@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { drawDocumentLogo } from './documentLogo';
 
 const hexToRgb = (hex: string) => {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -33,12 +34,8 @@ export const generateReportPDF = (
   const appName = siteConfig?.pwa_app_name || "Evolução Clínica";
 
   if (logoBase64) {
-    // Garantir fundo branco sob o logo
-    doc.setFillColor(255, 255, 255);
-    doc.rect(margin, 11, 40, 14, 'F');
-    
     try {
-      doc.addImage(logoBase64, 'PNG', margin, 11, 40, 14, undefined, 'FAST');
+      taglineX = drawDocumentLogo(doc, logoBase64, prof?.custom_logo_settings, margin, 11);
     } catch (err) {
       console.error("Error drawing logo in PDF:", err);
       doc.setFont('Helvetica', 'bold');
@@ -47,12 +44,6 @@ export const generateReportPDF = (
       doc.text(appName, margin, 20);
     }
     
-    // Linha divisória vertical
-    doc.setDrawColor(200, 195, 190); // stone-300
-    doc.setLineWidth(0.25);
-    doc.line(margin + 44, 11, margin + 44, 25);
-    
-    taglineX = margin + 48;
   } else {
     doc.setFont('Helvetica', 'bold');
     doc.setFontSize(18);

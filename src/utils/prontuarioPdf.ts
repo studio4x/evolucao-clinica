@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { drawDocumentLogo } from './documentLogo';
 
 type ProntuarioPdfOptions = {
   content: string;
@@ -8,6 +9,7 @@ type ProntuarioPdfOptions = {
   documentType?: string;
   periodLabel?: string;
   logoBase64?: string | null;
+  customLogoSettings?: unknown;
 };
 
 const hexToRgb = (hex: string) => {
@@ -47,7 +49,8 @@ export const generateProntuarioPDF = ({
   siteConfig,
   documentType = 'Prontuário de Evoluções Clínicas',
   periodLabel,
-  logoBase64
+  logoBase64,
+  customLogoSettings
 }: ProntuarioPdfOptions) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -60,11 +63,7 @@ export const generateProntuarioPDF = ({
   let headerTextX = margin;
   if (logoBase64) {
     try {
-      doc.addImage(logoBase64, 'PNG', margin, 10, 40, 14, undefined, 'FAST');
-      doc.setDrawColor(200, 195, 190);
-      doc.setLineWidth(0.25);
-      doc.line(margin + 44, 10, margin + 44, 24);
-      headerTextX = margin + 48;
+      headerTextX = drawDocumentLogo(doc, logoBase64, customLogoSettings, margin, 10);
     } catch (error) {
       console.warn('[PDF] Não foi possível inserir o logotipo:', error);
     }

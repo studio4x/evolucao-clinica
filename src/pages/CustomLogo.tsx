@@ -5,11 +5,14 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { showAlert } from '../store/modalStore';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { getDocumentLogoPreviewStyle, normalizeCustomLogoSettings } from '../utils/documentLogo';
 
 export default function CustomLogo() {
   const navigate = useNavigate();
   const { user, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const [customLogoUrl, setCustomLogoUrl] = useState('');
+  const [logoScale, setLogoScale] = useState(100);
+  const [previewDocument, setPreviewDocument] = useState<'prontuario' | 'report' | 'pdi'>('prontuario');
   const [dbSubscriptionPlan, setDbSubscriptionPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none' | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -21,6 +24,12 @@ export default function CustomLogo() {
     subscriptionStatus,
     subscriptionEndsAt
   });
+  const previewTitle = previewDocument === 'prontuario'
+    ? 'Prontuário de Evoluções Clínicas (Plataforma)'
+    : previewDocument === 'report'
+      ? 'Relatório de Evolução Clínico'
+      : 'Plano de Desenvolvimento Individual (PDI)';
+  const previewPeriodLabel = previewDocument === 'pdi' ? 'Período de Análise: Julho/2026' : 'Data: 31/07/2026';
 
   useEffect(() => {
     const loadLogoSettings = async () => {
@@ -30,12 +39,13 @@ export default function CustomLogo() {
       try {
         const { data, error } = await supabase
           .from('professionals')
-          .select('custom_logo_url, subscription_plan')
+          .select('custom_logo_url, custom_logo_settings, subscription_plan')
           .eq('id', user.id)
           .single();
 
         if (error) throw error;
         setCustomLogoUrl(data?.custom_logo_url || '');
+        setLogoScale(normalizeCustomLogoSettings(data?.custom_logo_settings).scale);
         setDbSubscriptionPlan(data?.subscription_plan || null);
       } catch (error) {
         console.error('[CustomLogo] Erro ao carregar configurações:', error);
@@ -98,11 +108,12 @@ export default function CustomLogo() {
       const publicUrl = publicUrlData.publicUrl;
       const { error: dbError } = await supabase
         .from('professionals')
-        .update({ custom_logo_url: publicUrl, updated_at: new Date().toISOString() })
+        .update({ custom_logo_url: publicUrl, custom_logo_settings: { scale: 100 }, updated_at: new Date().toISOString() })
         .eq('id', user.id);
 
       if (dbError) throw dbError;
       setCustomLogoUrl(publicUrl);
+      setLogoScale(100);
       showSuccess('Logotipo personalizado atualizado com sucesso!');
     } catch (error: any) {
       console.error('[CustomLogo] Erro ao fazer upload:', error);
@@ -134,6 +145,31 @@ export default function CustomLogo() {
       console.error('[CustomLogo] Erro ao remover logotipo:', error);
       await showAlert(`Erro ao remover logotipo: ${error.message || error}`, {
         title: 'Erro ao Remover',
+        variant: 'danger',
+        icon: 'warning'
+      });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  const handleSaveLogoScale = async () => {
+    if (!user || !customLogoUrl) return;
+
+    try {
+      setUploadingLogo(true);
+      const settings = { scale: logoScale };
+      const { error } = await supabase
+        .from('professionals')
+        .update({ custom_logo_settings: settings, updated_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      showSuccess('Ajuste do logotipo salvo para os documentos!');
+    } catch (error: any) {
+      console.error('[CustomLogo] Erro ao salvar ajuste:', error);
+      await showAlert(`Erro ao salvar ajuste: ${error.message || error}`, {
+        title: 'Erro ao Salvar',
         variant: 'danger',
         icon: 'warning'
       });
@@ -258,6 +294,19 @@ export default function CustomLogo() {
               </p>
             </div>
           </div>
+
+          {customLogoUrl && (
+            <div className="rounded-2xl border border-brand-border/60 bg-brand-bg/40 p-4 sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-semibold text-brand-primary">Ajuste no cabeçalho do documento</h3><span className="text-xs font-bold text-brand-primary">{logoScale}%</span></div>
+                  <input type="range" min="50" max="100" step="5" value={logoScale} onChange={(event) => setLogoScale(Number(event.target.value))} className="mt-3 w-full accent-brand-primary" aria-label="Tamanho do logotipo nos documentos" />
+                  <p className="mt-2 text-[10px] text-brand-text-muted">Reduza o tamanho se o seu logotipo tiver formato alto ou elementos muito próximos das bordas. O ajuste é aplicado aos próximos PDFs gerados.</p>
+                </div>
+                <button type="button" onClick={handleSaveLogoScale} disabled={uploadingLogo} className="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-xl border border-brand-primary/20 bg-white px-4 py-2.5 text-xs font-semibold text-brand-primary transition-colors hover:bg-brand-primary/5 disabled:cursor-not-allowed disabled:opacity-60">Salvar ajuste</button>
+              </div>
+            </div>
+          )}
           </div>
 
           <section className="card overflow-hidden border border-brand-border/60 bg-white shadow-sm">
@@ -269,28 +318,34 @@ export default function CustomLogo() {
                 </h2>
                 <p className="mt-1 text-xs text-brand-text-muted">Exemplo de como o seu logotipo aparecerá em relatórios, PDIs e evoluções clínicas.</p>
               </div>
-              <span className="inline-flex w-fit items-center rounded-full bg-brand-primary/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-brand-primary">Visualização ilustrativa</span>
+              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                {([
+                  ['prontuario', 'Prontuário'],
+                  ['report', 'Relatório'],
+                  ['pdi', 'PDI']
+                ] as const).map(([type, label]) => <button key={type} type="button" onClick={() => setPreviewDocument(type)} className={`cursor-pointer rounded-lg px-3 py-1.5 text-[10px] font-bold transition-colors ${previewDocument === type ? 'bg-brand-primary text-white' : 'bg-brand-primary/10 text-brand-primary hover:bg-brand-primary/15'}`}>{label}</button>)}
+              </div>
             </div>
 
             <div className="bg-brand-bg/60 p-5 md:p-8">
               <div className="mx-auto max-w-3xl overflow-hidden rounded-xl border border-stone-200 bg-white shadow-lg shadow-brand-primary/10">
-                <div className="flex min-h-24 items-center justify-between gap-5 border-b-4 border-brand-primary px-6 py-5">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-primary">Documento clínico</p>
-                    <h3 className="mt-1 text-lg font-bold text-brand-text">Relatório de Evolução</h3>
-                    <p className="mt-1 text-[10px] text-brand-text-muted">Profissional responsável · registro de classe</p>
-                  </div>
-                  <div className="flex h-16 w-40 shrink-0 items-center justify-center rounded-lg border border-brand-border bg-stone-50 p-2">
+                <div className="flex min-h-24 items-center gap-4 px-6 py-5">
+                  <div className="flex h-14 w-32 shrink-0 items-center justify-center bg-white p-2">
                     {customLogoUrl ? (
-                      <img src={customLogoUrl} alt="Prévia do logotipo nos documentos" className="max-h-full max-w-full object-contain" />
+                      <img src={customLogoUrl} alt="Prévia do logotipo nos documentos" className="object-contain" style={getDocumentLogoPreviewStyle({ scale: logoScale })} />
                     ) : (
                       <div className="text-center text-brand-text-muted"><Image size={18} className="mx-auto mb-1 text-brand-accent" /><span className="text-[9px] font-semibold">Seu logotipo</span></div>
                     )}
                   </div>
+                  <div className="h-14 w-px shrink-0 bg-stone-300" />
+                  <div className="min-w-0"><p className="text-xs font-bold text-brand-text">Plataforma Inteligente de Acompanhamento Terapêutico</p><p className="mt-1 text-[9px] text-brand-text-muted">Emitido por evolucaoclinica.app.br</p></div>
                 </div>
 
+                <div className="mx-6 border-t-2 border-brand-primary" />
+
                 <div className="space-y-4 px-6 py-5">
-                  <div className="flex items-center justify-between border-b border-brand-border/70 pb-3 text-[10px] text-brand-text-muted"><span>Paciente: Nome do paciente</span><span>Data: 31/07/2026</span></div>
+                  <h3 className="text-base font-bold text-brand-primary">{previewTitle}</h3>
+                  <div className="grid grid-cols-1 gap-2 border-b border-brand-border/70 pb-3 text-[10px] text-brand-text-muted sm:grid-cols-2"><span>Paciente: Nome do paciente</span><span>Profissional: Nome do profissional</span><span>Registro Profissional: CRP 00/00000</span><span>{previewPeriodLabel}</span></div>
                   <div className="space-y-2">
                     <div className="h-2 w-2/5 rounded-full bg-stone-200" />
                     <div className="h-2 w-full rounded-full bg-stone-100" />
