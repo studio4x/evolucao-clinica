@@ -29,7 +29,8 @@ import {
   Coins,
   Database,
   AlertCircle,
-  ChevronUp
+  ChevronUp,
+  Loader2
 } from 'lucide-react';
 import { APP_VERSION, PLAY_STORE_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -75,13 +76,75 @@ export default function LandingPage() {
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [showWhatsappTooltip, setShowWhatsappTooltip] = useState(false);
+  const [isWhatsappFormOpen, setIsWhatsappFormOpen] = useState(false);
+  const [leadName, setLeadName] = useState('');
+  const [leadPhone, setLeadPhone] = useState('');
+  const [leadMessage, setLeadMessage] = useState('');
+  const [submittingLead, setSubmittingLead] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setShowWhatsappTooltip(true);
+      // Exibe tooltip somente se o form não estiver aberto
+      if (!isWhatsappFormOpen) {
+        setShowWhatsappTooltip(true);
+      }
     }, 3000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [isWhatsappFormOpen]);
+
+  const handleOpenWhatsappForm = () => {
+    setLeadMessage(siteConfig.whatsapp_widget_message || "Olá! Gostaria de saber mais sobre a Evolução Clínica.");
+    setIsWhatsappFormOpen(true);
+    setShowWhatsappTooltip(false);
+  };
+
+  const handleSubmitLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!leadName.trim() || !leadPhone.trim()) return;
+
+    setSubmittingLead(true);
+    try {
+      // 1. Extrair parâmetros UTM da URL
+      const searchParams = new URLSearchParams(window.location.search);
+      const utmSource = searchParams.get('utm_source');
+      const utmMedium = searchParams.get('utm_medium');
+      const utmCampaign = searchParams.get('utm_campaign');
+      const utmTerm = searchParams.get('utm_term');
+      const utmContent = searchParams.get('utm_content');
+
+      // 2. Tentar salvar o lead no banco de dados
+      const { error } = await supabase
+        .from('whatsapp_leads')
+        .insert({
+          name: leadName,
+          phone: leadPhone.replace(/\D/g, ''),
+          message: leadMessage,
+          utm_source: utmSource || null,
+          utm_medium: utmMedium || null,
+          utm_campaign: utmCampaign || null,
+          utm_term: utmTerm || null,
+          utm_content: utmContent || null,
+          referrer: document.referrer || null
+        });
+
+      if (error) throw error;
+    } catch (err) {
+      console.error("Erro ao salvar lead do WhatsApp no Supabase:", err);
+      // Continuamos o redirecionamento mesmo se der erro para não travar o cliente
+    } finally {
+      setSubmittingLead(false);
+      setIsWhatsappFormOpen(false);
+      
+      // 3. Redirecionar para o WhatsApp
+      const finalPhone = (siteConfig.whatsapp_number || '').replace(/\D/g, '');
+      const url = `https://wa.me/${finalPhone}?text=${encodeURIComponent(leadMessage)}`;
+      window.open(url, '_blank', 'noopener,noreferrer');
+      
+      // Limpar formulário
+      setLeadName('');
+      setLeadPhone('');
+    }
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -1286,10 +1349,8 @@ export default function LandingPage() {
               </button>
             </div>
           )}
-          <a
-            href={`https://wa.me/${siteConfig.whatsapp_number}?text=${encodeURIComponent(siteConfig.whatsapp_widget_message || '')}`}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={handleOpenWhatsappForm}
             className="p-4 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#20ba5a] transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#25D366] cursor-pointer flex items-center justify-center relative group"
             aria-label="Fale conosco no WhatsApp"
           >
@@ -1297,7 +1358,117 @@ export default function LandingPage() {
             <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
               <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.97C16.528 1.967 14.069 1.94 12.01 1.94c-5.44 0-9.866 4.372-9.87 9.802 0 1.746.46 3.446 1.332 4.96l-.975 3.565 3.66-.954zm10.902-5.499c-.299-.15-1.772-.875-2.046-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.267-.467-2.414-1.492-.893-.797-1.495-1.78-1.67-2.08-.175-.3-.018-.462.13-.61.135-.133.3-.349.45-.523.15-.174.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.589-.493-.51-.675-.52l-.575-.01c-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.075 2.9 1.225 3.1c.15.2 2.11 3.224 5.112 4.521.714.309 1.272.494 1.707.633.718.228 1.37.196 1.885.119.574-.085 1.772-.725 2.022-1.425.25-.7.25-1.3.175-1.425-.075-.125-.275-.2-.575-.35z" />
             </svg>
-          </a>
+          </button>
+        </div>
+      )}
+
+      {/* Modal do Pré-formulário do WhatsApp */}
+      {isWhatsappFormOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Overlay */}
+          <div 
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => setIsWhatsappFormOpen(false)}
+          />
+          
+          {/* Card do Modal */}
+          <div className="bg-white rounded-3xl shadow-2xl border border-brand-border w-full max-w-md overflow-hidden relative z-10 animate-scaleUp">
+            {/* Header com gradiente de WhatsApp */}
+            <div className="bg-[#25D366] px-6 py-5 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <svg className="w-7 h-7 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.97C16.528 1.967 14.069 1.94 12.01 1.94c-5.44 0-9.866 4.372-9.87 9.802 0 1.746.46 3.446 1.332 4.96l-.975 3.565 3.66-.954zm10.902-5.499c-.299-.15-1.772-.875-2.046-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.267-.467-2.414-1.492-.893-.797-1.495-1.78-1.67-2.08-.175-.3-.018-.462.13-.61.135-.133.3-.349.45-.523.15-.174.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.589-.493-.51-.675-.52l-.575-.01c-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.075 2.9 1.225 3.1c.15.2 2.11 3.224 5.112 4.521.714.309 1.272.494 1.707.633.718.228 1.37.196 1.885.119.574-.085 1.772-.725 2.022-1.425.25-.7.25-1.3.175-1.425-.075-.125-.275-.2-.575-.35z" />
+                </svg>
+                <div>
+                  <h3 className="font-bold text-base text-white">Falar no WhatsApp</h3>
+                  <p className="text-[10px] text-white/90">Preencha rapidamente para iniciar o chat</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsWhatsappFormOpen(false)}
+                className="text-white hover:text-white/80 p-1 rounded-full hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Formulário */}
+            <form onSubmit={handleSubmitLead} className="p-6 space-y-4">
+              <div>
+                <label htmlFor="lead-name" className="block text-xs font-bold text-brand-text mb-1">
+                  Seu Nome
+                </label>
+                <input
+                  id="lead-name"
+                  type="text"
+                  required
+                  value={leadName}
+                  onChange={(e) => setLeadName(e.target.value)}
+                  placeholder="Seu nome completo"
+                  className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-xs text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="lead-phone" className="block text-xs font-bold text-brand-text mb-1">
+                  Seu WhatsApp
+                </label>
+                <input
+                  id="lead-phone"
+                  type="text"
+                  required
+                  value={leadPhone}
+                  onChange={(e) => setLeadPhone(e.target.value)}
+                  placeholder="DDD + Telefone (ex: 11999999999)"
+                  className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-xs text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="lead-message" className="block text-xs font-bold text-brand-text mb-1">
+                  Mensagem
+                </label>
+                <textarea
+                  id="lead-message"
+                  rows={3}
+                  required
+                  value={leadMessage}
+                  onChange={(e) => setLeadMessage(e.target.value)}
+                  placeholder="Escreva sua mensagem..."
+                  className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-xs text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                />
+              </div>
+
+              <div className="pt-2 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsWhatsappFormOpen(false)}
+                  className="btn-outline w-full sm:w-auto px-4 py-2.5 text-xs font-bold cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingLead}
+                  className="w-full sm:w-auto px-5 py-2.5 bg-[#25D366] hover:bg-[#20ba5a] text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 cursor-pointer disabled:opacity-50"
+                >
+                  {submittingLead ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Conectando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.97C16.528 1.967 14.069 1.94 12.01 1.94c-5.44 0-9.866 4.372-9.87 9.802 0 1.746.46 3.446 1.332 4.96l-.975 3.565 3.66-.954zm10.902-5.499c-.299-.15-1.772-.875-2.046-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.267-.467-2.414-1.492-.893-.797-1.495-1.78-1.67-2.08-.175-.3-.018-.462.13-.61.135-.133.3-.349.45-.523.15-.174.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.589-.493-.51-.675-.52l-.575-.01c-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.075 2.9 1.225 3.1c.15.2 2.11 3.224 5.112 4.521.714.309 1.272.494 1.707.633.718.228 1.37.196 1.885.119.574-.085 1.772-.725 2.022-1.425.25-.7.25-1.3.175-1.425-.075-.125-.275-.2-.575-.35z" />
+                      </svg>
+                      <span>Falar no WhatsApp</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

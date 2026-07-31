@@ -57,7 +57,7 @@ interface Professional {
   };
 }
 
-type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config';
+type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
 type AdminNavItem = { key: AdminTab; label: string; icon: typeof Users };
 type AdminNavGroup = { title: string; items: AdminNavItem[] };
 
@@ -218,6 +218,7 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/jornada') || normalizedPath.includes('/jornada/')) return 'jornada';
     if (normalizedPath.endsWith('/lifecycle') || normalizedPath.includes('/lifecycle/')) return 'lifecycle';
     if (normalizedPath.endsWith('/whatsapp')) return 'whatsapp_config';
+    if (normalizedPath.endsWith('/whatsapp-widget')) return 'whatsapp_widget';
     return 'professionals'; // default
   };
 
@@ -258,6 +259,7 @@ export default function AdminPanel() {
         { key: 'token_usage', label: 'Consumo & Chaves IA', icon: BarChart3 },
         { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
         { key: 'whatsapp_config', label: 'API do WhatsApp', icon: MessageCircle },
+        { key: 'whatsapp_widget', label: 'Widget do WhatsApp', icon: MessageSquare },
         { key: 'brand', label: 'Identidade Visual', icon: Globe },
         { key: 'tracking', label: 'Rastreamento', icon: Code },
         { key: 'profile', label: 'Meu Perfil', icon: User }
@@ -286,6 +288,7 @@ export default function AdminPanel() {
     else if (tab === 'jornada') navigate('/admin/jornada');
     else if (tab === 'lifecycle') navigate('/admin/lifecycle');
     else if (tab === 'whatsapp_config') navigate('/admin/whatsapp');
+    else if (tab === 'whatsapp_widget') navigate('/admin/whatsapp-widget');
   };
 
   // Estados de configuração pública de cobrança Stripe e Google Play.
@@ -474,6 +477,135 @@ export default function AdminPanel() {
       setSavingWhatsappWidget(false);
     }
   };
+
+
+  // Estados dos Leads de WhatsApp
+  const [whatsappLeads, setWhatsappLeads] = useState<any[]>([]);
+  const [whatsappLeadsLoading, setWhatsappLeadsLoading] = useState(false);
+  const [whatsappLeadsSearch, setWhatsappLeadsSearch] = useState('');
+  const [whatsappLeadsPage, setWhatsappLeadsPage] = useState(1);
+  const [whatsappLeadsTotal, setWhatsappLeadsTotal] = useState(0);
+  const [whatsappLeadsTotalPages, setWhatsappLeadsTotalPages] = useState(1);
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+
+  const loadWhatsappLeads = async (page = 1, search = '') => {
+    if (!user || profileRole !== 'admin') return;
+    setWhatsappLeadsLoading(true);
+    try {
+      const pageSize = 10;
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize - 1;
+
+      let query = supabase
+        .from('whatsapp_leads')
+        .select('*', { count: 'exact' });
+
+      if (search.trim().length > 0) {
+        query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+      }
+
+      const { data, count, error } = await query
+        .order('created_at', { ascending: false })
+        .range(start, end);
+
+      if (error) throw error;
+
+      setWhatsappLeads(data || []);
+      setWhatsappLeadsTotal(count || 0);
+      setWhatsappLeadsTotalPages(Math.ceil((count || 0) / pageSize));
+    } catch (e) {
+      console.error("Erro ao carregar leads do WhatsApp:", e);
+    } finally {
+      setWhatsappLeadsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'whatsapp_widget') {
+      void loadWhatsappLeads(whatsappLeadsPage, whatsappLeadsSearch);
+    }
+  }, [activeTab, whatsappLeadsPage, whatsappLeadsSearch]);
+
+  const handleDeleteLead = async (leadId: string) => {
+    if (!user || profileRole !== 'admin') return;
+    
+    const confirmDelete = await showConfirm("Tem certeza que deseja remover este lead da lista?", {
+      title: "Excluir Lead",
+      confirmLabel: "Excluir",
+      cancelLabel: "Cancelar",
+      variant: "danger"
+    });
+
+    if (!confirmDelete) return;
+
+    setDeletingLeadId(leadId);
+    try {
+      const { error } = await supabase
+        .from('whatsapp_leads')
+        .delete()
+        .eq('id', leadId);
+
+      if (error) throw error;
+
+      void showAlert("Lead removido com sucesso.", { title: "Sucesso", variant: "success" });
+      void loadWhatsappLeads(whatsappLeadsPage, whatsappLeadsSearch);
+    } catch (e) {
+      console.error("Erro ao deletar lead:", e);
+      void showAlert("Erro ao deletar lead.", { title: "Erro", variant: "error" });
+    } finally {
+      setDeletingLeadId(null);
+    }
+  };
+
+  const exportWhatsappLeadsCsv = async () => {
+    if (!user || profileRole !== 'admin') return;
+    try {
+      const { data, error } = await supabase
+        .from('whatsapp_leads')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        void showAlert("Nenhum lead para exportar.", { title: "Aviso", variant: "info" });
+        return;
+      }
+
+      // Gerar CSV
+      const headers = ['Data', 'Nome', 'WhatsApp', 'Mensagem', 'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Term', 'UTM Content', 'Referrer'];
+      const rows = data.map(lead => [
+        new Date(lead.created_at).toLocaleString('pt-BR'),
+        lead.name,
+        lead.phone,
+        lead.message,
+        lead.utm_source || '',
+        lead.utm_medium || '',
+        lead.utm_campaign || '',
+        lead.utm_term || '',
+        lead.utm_content || '',
+        lead.referrer || ''
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(e => e.map(val => `"${val.replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `leads_whatsapp_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (e) {
+      console.error("Erro ao exportar leads:", e);
+      void showAlert("Erro ao exportar leads. Tente novamente.", { title: "Erro", variant: "error" });
+    }
+  };
+
 
   const handleSaveTrackingSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -6897,113 +7029,6 @@ export default function AdminPanel() {
             ) : activeTab === 'whatsapp_config' ? (
               /* Aba de Configuração do WhatsApp Cloud API [NEW] */
               <div className="space-y-6 max-w-4xl">
-                {/* Novo Card: WhatsApp de Atendimento (Widget) */}
-                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
-                      <MessageCircle className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                        WhatsApp de Atendimento (Widget da Landing Page)
-                      </h2>
-                      <p className="text-xs text-brand-text-muted mt-0.5">
-                        Configure o botão flutuante de atendimento do WhatsApp que aparece no canto inferior direito do site público.
-                      </p>
-                    </div>
-                  </div>
-
-                  {loadingWhatsappWidget ? (
-                    <div className="flex items-center justify-center py-8 text-brand-text-muted">
-                      <Loader2 className="w-6 h-6 animate-spin mr-2 text-brand-primary" />
-                      <span>Carregando configurações...</span>
-                    </div>
-                  ) : (
-                    <form onSubmit={handleSaveWhatsappWidget} className="space-y-6">
-                      <div className="grid gap-6 md:grid-cols-2">
-                        <div className="block">
-                          <label className="block text-sm font-semibold text-brand-text mb-1">
-                            Número do WhatsApp
-                          </label>
-                          <input
-                            type="text"
-                            value={whatsappWidgetNumber}
-                            onChange={(e) => setWhatsappWidgetNumber(e.target.value)}
-                            placeholder="E.g. 5511999999999"
-                            className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-all"
-                          />
-                          <p className="text-[10px] text-brand-text-muted mt-1.5 leading-relaxed">
-                            Insira o número completo com DDI e DDD (ex: 5511999999999). Apenas dígitos, sem espaços ou traços.
-                          </p>
-                        </div>
-
-                        <div className="flex flex-col justify-center">
-                          <span className="block text-sm font-semibold text-brand-text mb-2">
-                            Status do Botão Flutuante
-                          </span>
-                          <label className="relative inline-flex items-center cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={whatsappWidgetEnabled}
-                              onChange={(e) => setWhatsappWidgetEnabled(e.target.checked)}
-                              className="sr-only peer"
-                            />
-                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
-                            <span className="ml-3 text-xs font-semibold text-brand-text">
-                              {whatsappWidgetEnabled ? 'Widget Ativado' : 'Widget Desativado'}
-                            </span>
-                          </label>
-                          <p className="text-[10px] text-brand-text-muted mt-1.5">
-                            Se ativado, um botão flutuante de atendimento do WhatsApp será exibido no site público.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="block">
-                        <label className="block text-sm font-semibold text-brand-text mb-1">
-                          Mensagem Inicial de Saudação
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={whatsappWidgetMessage}
-                          onChange={(e) => setWhatsappWidgetMessage(e.target.value)}
-                          placeholder="Olá, gostaria de saber mais sobre o Evolução Clínica."
-                          className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-all"
-                        />
-                        <p className="text-[10px] text-brand-text-muted mt-1.5">
-                          Essa mensagem virá pré-preenchida para o cliente quando ele iniciar a conversa no WhatsApp.
-                        </p>
-                      </div>
-
-                      <div className="flex justify-end pt-2">
-                        <button
-                          type="submit"
-                          disabled={savingWhatsappWidget}
-                          className="btn-primary w-full sm:w-auto px-6 py-2.5 flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
-                        >
-                          {savingWhatsappWidget ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>Salvando Configurações...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Save className="w-4 h-4" />
-                              <span>Salvar Configurações do Widget</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      {whatsappWidgetSuccess && (
-                        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center space-x-3 text-sm mt-3 animate-fadeIn">
-                          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
-                          <span>Configurações do widget salvas com sucesso! O cache do site público foi limpo.</span>
-                        </div>
-                      )}
-                    </form>
-                  )}
-                </div>
                 <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
@@ -7424,6 +7449,286 @@ Acesse a plataforma para ver os detalhes.`}</pre>
                       </button>
                     </div>
                   </form>
+                </div>
+              </div>
+) : activeTab === 'whatsapp_widget' ? (
+              /* Aba de Widget do WhatsApp [NEW] */
+              <div className="space-y-6 max-w-4xl">
+                {/* Card 1: Configuração do Widget de WhatsApp */}
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+                      <MessageCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        WhatsApp de Atendimento (Widget da Landing Page)
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Configure o botão flutuante de atendimento do WhatsApp que aparece no canto inferior direito do site público.
+                      </p>
+                    </div>
+                  </div>
+
+                  {loadingWhatsappWidget ? (
+                    <div className="flex items-center justify-center py-8 text-brand-text-muted">
+                      <Loader2 className="w-6 h-6 animate-spin mr-2 text-brand-primary" />
+                      <span>Carregando configurações...</span>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveWhatsappWidget} className="space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="block">
+                          <label className="block text-sm font-semibold text-brand-text mb-1">
+                            Número do WhatsApp
+                          </label>
+                          <input
+                            type="text"
+                            value={whatsappWidgetNumber}
+                            onChange={(e) => setWhatsappWidgetNumber(e.target.value)}
+                            placeholder="E.g. 5511999999999"
+                            className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                          />
+                          <p className="text-[10px] text-brand-text-muted mt-1.5 leading-relaxed">
+                            Insira o número completo com DDI e DDD (ex: 5511999999999). Apenas dígitos, sem espaços ou traços.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col justify-center">
+                          <span className="block text-sm font-semibold text-brand-text mb-2">
+                            Status do Botão Flutuante
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={whatsappWidgetEnabled}
+                              onChange={(e) => setWhatsappWidgetEnabled(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                            <span className="ml-3 text-xs font-semibold text-brand-text">
+                              {whatsappWidgetEnabled ? 'Widget Ativado' : 'Widget Desativado'}
+                            </span>
+                          </label>
+                          <p className="text-[10px] text-brand-text-muted mt-1.5">
+                            Se ativado, um botão flutuante de atendimento do WhatsApp será exibido no site público.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="block">
+                        <label className="block text-sm font-semibold text-brand-text mb-1">
+                          Mensagem Inicial de Saudação
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={whatsappWidgetMessage}
+                          onChange={(e) => setWhatsappWidgetMessage(e.target.value)}
+                          placeholder="Olá, gostaria de saber mais sobre o Evolução Clínica."
+                          className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                        />
+                        <p className="text-[10px] text-brand-text-muted mt-1.5">
+                          Essa mensagem virá pré-preenchida para o cliente quando ele iniciar a conversa no WhatsApp.
+                        </p>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="submit"
+                          disabled={savingWhatsappWidget}
+                          className="btn-primary w-full sm:w-auto px-6 py-2.5 flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                        >
+                          {savingWhatsappWidget ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Salvando Configurações...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              <span>Salvar Configurações do Widget</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {whatsappWidgetSuccess && (
+                        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center space-x-3 text-sm mt-3 animate-fadeIn">
+                          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          <span>Configurações do widget salvas com sucesso! O cache do site público foi limpo.</span>
+                        </div>
+                      )}
+                    </form>
+                  )}
+                </div>
+
+                {/* Card 2: Listagem de Leads do WhatsApp */}
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                        <Users className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                          Contatos Recebidos (Leads)
+                        </h2>
+                        <p className="text-xs text-brand-text-muted mt-0.5">
+                          Lista de pessoas que preencheram o formulário do WhatsApp na Landing Page pública.
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={exportWhatsappLeadsCsv}
+                      className="btn-outline px-4 py-2.5 flex items-center justify-center gap-2 whitespace-nowrap text-xs font-semibold cursor-pointer"
+                    >
+                      <Upload className="w-4 h-4 rotate-180" />
+                      <span>Exportar Leads (CSV)</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                        <input
+                          type="text"
+                          value={whatsappLeadsSearch}
+                          onChange={(e) => {
+                            setWhatsappLeadsSearch(e.target.value);
+                            setWhatsappLeadsPage(1);
+                          }}
+                          placeholder="Buscar por nome ou telefone..."
+                          className="w-full rounded-xl border border-brand-border bg-white pl-10 pr-4 py-2 text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                        />
+                      </div>
+                      
+                      <button
+                        type="button"
+                        onClick={() => loadWhatsappLeads(whatsappLeadsPage, whatsappLeadsSearch)}
+                        disabled={whatsappLeadsLoading}
+                        className="btn-outline px-4 py-2 flex items-center justify-center gap-2 text-sm cursor-pointer disabled:cursor-not-allowed"
+                      >
+                        <RefreshCw className={`w-4 h-4 ${whatsappLeadsLoading ? 'animate-spin' : ''}`} />
+                        <span>Atualizar</span>
+                      </button>
+                    </div>
+
+                    <div className="rounded-2xl border border-brand-border overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-left text-xs">
+                          <thead className="bg-brand-bg/60 text-[10px] uppercase tracking-wide text-brand-text-muted">
+                            <tr className="border-b border-brand-border">
+                              <th className="px-4 py-3 font-bold">Data</th>
+                              <th className="px-4 py-3 font-bold">Lead</th>
+                              <th className="px-4 py-3 font-bold">Mensagem</th>
+                              <th className="px-4 py-3 font-bold">Origem</th>
+                              <th className="px-4 py-3 font-bold text-right">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-brand-border text-brand-text">
+                            {whatsappLeadsLoading ? (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-brand-text-muted">
+                                  <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-brand-primary" />
+                                  Carregando contatos...
+                                </td>
+                              </tr>
+                            ) : whatsappLeads.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="px-4 py-8 text-center text-brand-text-muted">
+                                  Nenhum lead registrado no formulário de WhatsApp.
+                                </td>
+                              </tr>
+                            ) : (
+                              whatsappLeads.map((lead) => (
+                                <tr key={lead.id} className="align-top hover:bg-brand-bg/20 transition-colors">
+                                  <td className="px-4 py-3 whitespace-nowrap text-brand-text-muted">
+                                    {new Date(lead.created_at).toLocaleString('pt-BR')}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <p className="font-bold">{lead.name}</p>
+                                    <a
+                                      href={`https://wa.me/${lead.phone}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center text-emerald-600 hover:text-emerald-700 font-semibold mt-1 gap-1"
+                                    >
+                                      <MessageCircle className="w-3.5 h-3.5" />
+                                      {lead.phone}
+                                    </a>
+                                  </td>
+                                  <td className="px-4 py-3 max-w-[250px] whitespace-pre-wrap break-words">
+                                    {lead.message}
+                                  </td>
+                                  <td className="px-4 py-3 text-[11px] space-y-1">
+                                    {lead.utm_source && (
+                                      <p><span className="font-semibold text-brand-text-muted">Source:</span> {lead.utm_source}</p>
+                                    )}
+                                    {lead.utm_medium && (
+                                      <p><span className="font-semibold text-brand-text-muted">Medium:</span> {lead.utm_medium}</p>
+                                    )}
+                                    {lead.utm_campaign && (
+                                      <p><span className="font-semibold text-brand-text-muted">Campaign:</span> {lead.utm_campaign}</p>
+                                    )}
+                                    {lead.referrer && (
+                                      <p className="max-w-[200px] truncate" title={lead.referrer}>
+                                        <span className="font-semibold text-brand-text-muted">Referrer:</span> {lead.referrer}
+                                      </p>
+                                    )}
+                                    {!lead.utm_source && !lead.utm_medium && !lead.utm_campaign && !lead.referrer && (
+                                      <span className="text-brand-text-muted italic">Direto / Desconhecido</span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteLead(lead.id)}
+                                      disabled={deletingLeadId === lead.id}
+                                      className="p-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition-colors cursor-pointer disabled:opacity-50"
+                                      title="Remover Lead"
+                                    >
+                                      {deletingLeadId === lead.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      )}
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {whatsappLeadsTotalPages > 1 && (
+                        <div className="flex items-center justify-between gap-3 border-t border-brand-border p-3 text-xs text-brand-text-muted">
+                          <span>Página {whatsappLeadsPage} de {whatsappLeadsTotalPages} (Total: {whatsappLeadsTotal} leads)</span>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setWhatsappLeadsPage((page) => Math.max(1, page - 1))}
+                              disabled={whatsappLeadsPage === 1 || whatsappLeadsLoading}
+                              className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Anterior
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setWhatsappLeadsPage((page) => Math.min(whatsappLeadsTotalPages, page + 1))}
+                              disabled={whatsappLeadsPage >= whatsappLeadsTotalPages || whatsappLeadsLoading}
+                              className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Próxima
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
