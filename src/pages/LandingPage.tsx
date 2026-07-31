@@ -74,6 +74,14 @@ export default function LandingPage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [faqOpen, setFaqOpen] = useState<number | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [showWhatsappTooltip, setShowWhatsappTooltip] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowWhatsappTooltip(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -1252,13 +1260,46 @@ export default function LandingPage() {
       {/* Botão Scroll to Top */}
       <button
         onClick={scrollToTop}
-        className={`fixed bottom-6 right-6 z-50 p-3 rounded-full bg-brand-primary text-white shadow-lg hover:bg-brand-primary-hover transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary cursor-pointer ${
+        className={`fixed ${
+          siteConfig.whatsapp_widget_enabled && siteConfig.whatsapp_number ? 'bottom-24' : 'bottom-6'
+        } right-6 z-50 p-3 rounded-full bg-brand-primary text-white shadow-lg hover:bg-brand-primary-hover transition-all duration-300 hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary cursor-pointer ${
           showScrollTop ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'
         }`}
         aria-label="Voltar ao topo"
       >
         <ChevronUp size={24} />
       </button>
+
+      {/* Widget do WhatsApp Flutuante */}
+      {siteConfig.whatsapp_widget_enabled && siteConfig.whatsapp_number && (
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end space-y-2 animate-fadeIn select-none">
+          {/* Balãozinho de Conversa (Tooltip com botão de fechar) */}
+          {showWhatsappTooltip && (
+            <div className="bg-white border border-brand-border text-brand-text px-4 py-2.5 rounded-2xl shadow-xl flex items-center justify-between space-x-3 text-xs font-semibold animate-bounce max-w-[220px]">
+              <span className="leading-snug">Precisa de ajuda? Fale conosco!</span>
+              <button
+                onClick={() => setShowWhatsappTooltip(false)}
+                className="text-brand-text-muted hover:text-brand-text transition-colors p-0.5 rounded-full hover:bg-brand-bg cursor-pointer"
+                aria-label="Fechar mensagem"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          <a
+            href={`https://wa.me/${siteConfig.whatsapp_number}?text=${encodeURIComponent(siteConfig.whatsapp_widget_message || '')}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-4 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#20ba5a] transition-all duration-300 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#25D366] cursor-pointer flex items-center justify-center relative group"
+            aria-label="Fale conosco no WhatsApp"
+          >
+            {/* Ícone do WhatsApp em SVG oficial */}
+            <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.502-5.724-1.457L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.37 9.864-9.799.002-2.63-1.023-5.101-2.885-6.97C16.528 1.967 14.069 1.94 12.01 1.94c-5.44 0-9.866 4.372-9.87 9.802 0 1.746.46 3.446 1.332 4.96l-.975 3.565 3.66-.954zm10.902-5.499c-.299-.15-1.772-.875-2.046-.975-.275-.1-.475-.15-.675.15-.2.3-.775.975-.95 1.175-.175.2-.35.225-.65.075-.3-.15-1.267-.467-2.414-1.492-.893-.797-1.495-1.78-1.67-2.08-.175-.3-.018-.462.13-.61.135-.133.3-.349.45-.523.15-.174.2-.3.3-.5.1-.2.05-.375-.025-.525-.075-.15-.675-1.625-.925-2.225-.244-.589-.493-.51-.675-.52l-.575-.01c-.2 0-.525.075-.8.375-.275.3-1.05 1.025-1.05 2.5s1.075 2.9 1.225 3.1c.15.2 2.11 3.224 5.112 4.521.714.309 1.272.494 1.707.633.718.228 1.37.196 1.885.119.574-.085 1.772-.725 2.022-1.425.25-.7.25-1.3.175-1.425-.075-.125-.275-.2-.575-.35z" />
+            </svg>
+          </a>
+        </div>
+      )}
     </div>
   );
 }

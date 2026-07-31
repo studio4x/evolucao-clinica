@@ -788,13 +788,22 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   // C. Enviar WhatsApp
   if (whatsappEnabled && whatsappNumber && deps.sendWhatsAppNotification) {
     try {
-      const waText = `*${rendered.subject}*\n\n${rendered.text}\n\n👉 *Acesse aqui:* ${actionUrl}`;
+      const firstName = String(profile.full_name || "Profissional").trim().split(/\s+/)[0] || "Profissional";
+      const templateContent = `${rendered.subject}\n\n${rendered.text}`.slice(0, 800);
       whatsappResult = await deps.sendWhatsAppNotification({
         userId: dispatch.user_id,
         lifecycleDispatchId: dispatch.id,
         recipientPhone: whatsappNumber,
-        type: "text",
-        text: waText
+        type: "template",
+        templateName: deps.whatsappLifecycleTemplateName || "ec_jornada_ativacao",
+        languageCode: deps.whatsappLifecycleTemplateLanguage || "pt_BR",
+        components: [{
+          type: "body",
+          parameters: [
+            { type: "text", text: firstName },
+            { type: "text", text: templateContent }
+          ]
+        }]
       });
       if (whatsappResult.success) {
         console.log(`[Lifecycle Queue] WhatsApp aceito pela Meta para o dispatch ${dispatch.id}; deliveryId=${whatsappResult.deliveryId || "indisponível"} wamid=${whatsappResult.wamid || "indisponível"}`);

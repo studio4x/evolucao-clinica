@@ -349,7 +349,7 @@ export default function AdminPanel() {
             .select('api_key')
             .eq('id', 'tracking_settings')
             .single();
-          
+
           if (!error && data && data.api_key) {
             const parsed = JSON.parse(data.api_key);
             setGtmId(parsed.gtm_id || '');
@@ -369,6 +369,111 @@ export default function AdminPanel() {
       void fetchTrackingSettings();
     }
   }, [user, profileRole, activeTab]);
+
+  const [whatsappWidgetNumber, setWhatsappWidgetNumber] = useState('');
+  const [whatsappWidgetEnabled, setWhatsappWidgetEnabled] = useState(false);
+  const [whatsappWidgetMessage, setWhatsappWidgetMessage] = useState('');
+  const [loadingWhatsappWidget, setLoadingWhatsappWidget] = useState(false);
+  const [savingWhatsappWidget, setSavingWhatsappWidget] = useState(false);
+  const [whatsappWidgetSuccess, setWhatsappWidgetSuccess] = useState(false);
+
+  // Efeito para carregar as configurações do widget do WhatsApp
+  useEffect(() => {
+    if (user && profileRole === 'admin' && activeTab === 'whatsapp_config') {
+      const fetchWhatsappWidgetSettings = async () => {
+        setLoadingWhatsappWidget(true);
+        try {
+          const { data, error } = await supabase
+            .from('settings')
+            .select('api_key')
+            .eq('id', 'brand_settings')
+            .single();
+
+          if (!error && data && data.api_key) {
+            const parsed = JSON.parse(data.api_key);
+            setWhatsappWidgetNumber(parsed.whatsapp_number || '');
+            setWhatsappWidgetEnabled(parsed.whatsapp_widget_enabled || false);
+            setWhatsappWidgetMessage(parsed.whatsapp_widget_message || '');
+          }
+        } catch (e) {
+          console.error("Erro ao carregar configurações do widget do WhatsApp:", e);
+        } finally {
+          setLoadingWhatsappWidget(false);
+        }
+      };
+      void fetchWhatsappWidgetSettings();
+    }
+  }, [user, profileRole, activeTab]);
+
+  const handleSaveWhatsappWidget = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || profileRole !== 'admin') return;
+
+    setSavingWhatsappWidget(true);
+    setWhatsappWidgetSuccess(false);
+
+    try {
+      // 1. Buscar valor atual
+      const { data, error: fetchError } = await supabase
+        .from('settings')
+        .select('api_key')
+        .eq('id', 'brand_settings')
+        .single();
+
+      let currentSettings: any = {};
+      if (!fetchError && data && data.api_key) {
+        currentSettings = JSON.parse(data.api_key);
+      }
+
+      // 2. Mesclar com os dados do whatsapp widget
+      const payload = {
+        ...currentSettings,
+        whatsapp_number: whatsappWidgetNumber.replace(/\D/g, ''), // Salvar apenas números
+        whatsapp_widget_enabled: whatsappWidgetEnabled,
+        whatsapp_widget_message: whatsappWidgetMessage,
+        version: Date.now().toString() // Forçar nova versão para bustar cache
+      };
+
+      const { error: upsertError } = await supabase
+        .from('settings')
+        .upsert({
+          id: 'brand_settings',
+          api_key: JSON.stringify(payload),
+          updated_at: new Date().toISOString(),
+          updated_by: user.email || 'admin'
+        });
+
+      if (upsertError) throw upsertError;
+
+      setWhatsappWidgetSuccess(true);
+
+      // Limpar cache de runtime
+      if (window.caches) {
+        const cacheKeys = await caches.keys();
+        for (const name of cacheKeys) {
+          if (name.includes('runtime')) {
+            await caches.delete(name);
+          }
+        }
+      }
+
+      await reloadSiteConfig();
+
+      // Notificar outras abas
+      if (typeof window !== 'undefined') {
+        const syncChannel = new BroadcastChannel('brand_settings_channel');
+        syncChannel.postMessage('reload');
+        syncChannel.close();
+      }
+
+      setTimeout(() => setWhatsappWidgetSuccess(false), 5000);
+    } catch (error: any) {
+      console.error("Erro ao salvar configurações do widget de WhatsApp:", error);
+      void showAlert("Erro ao salvar as configurações. Tente novamente.", { title: "Erro", variant: "danger" });
+    } finally {
+      setSavingWhatsappWidget(false);
+    }
+  };
 
   const handleSaveTrackingSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -908,6 +1013,7 @@ export default function AdminPanel() {
   const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
   const [notifLink, setNotifLink] = useState('');
   const [notifImageUrl, setNotifImageUrl] = useState('');
+  const [notifSendWhatsapp, setNotifSendWhatsapp] = useState(true);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [pushNotificationsTab, setPushNotificationsTab] = useState<'manual' | 'platform' | 'daily_reminder'>('manual');
 
@@ -1655,7 +1761,8 @@ export default function AdminPanel() {
               type: notifType,
               link: notifLink || undefined,
               imageUrl: notifImageUrl || undefined,
-              source: 'manual'
+              source: 'manual',
+              channels: { whatsapp: notifSendWhatsapp }
           })
         });
 
@@ -4822,10 +4929,10 @@ export default function AdminPanel() {
                         </div>
                         <div>
                           <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                            Disparar Nova Notificação Push
+                            Disparar Nova Notificação
                           </h2>
                           <p className="text-xs text-brand-text-muted mt-0.5">
-                            Envie um alerta push/in-app para um profissional específico ou faça um broadcast para toda a plataforma.
+                            Envie um alerta in-app, push e e-mail, com opção de WhatsApp, para um profissional específico ou para toda a plataforma.
                           </p>
                         </div>
                       </div>
@@ -4976,6 +5083,19 @@ export default function AdminPanel() {
                           )}
                         </div>
 
+                        <label className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={notifSendWhatsapp}
+                            onChange={(event) => setNotifSendWhatsapp(event.target.checked)}
+                            className="mt-0.5 h-4 w-4 accent-emerald-700"
+                          />
+                          <span>
+                            <strong className="block text-sm text-emerald-950">Enviar também pelo WhatsApp</strong>
+                            <span className="mt-1 block text-xs leading-relaxed text-emerald-900/75">Somente profissionais que habilitaram o canal e cadastraram um número receberão o template aprovado <code className="font-mono">ec_notificacao_plataforma</code>.</span>
+                          </span>
+                        </label>
+
                         <div className="pt-2">
                           <button
                             type="submit"
@@ -4983,7 +5103,7 @@ export default function AdminPanel() {
                             className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
                           >
                             {notifSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                            <span>Disparar Notificação Push</span>
+                            <span>Disparar Notificação</span>
                           </button>
                         </div>
                       </form>
@@ -6759,6 +6879,113 @@ export default function AdminPanel() {
             ) : activeTab === 'whatsapp_config' ? (
               /* Aba de Configuração do WhatsApp Cloud API [NEW] */
               <div className="space-y-6 max-w-4xl">
+                {/* Novo Card: WhatsApp de Atendimento (Widget) */}
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-600">
+                      <MessageCircle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
+                        WhatsApp de Atendimento (Widget da Landing Page)
+                      </h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Configure o botão flutuante de atendimento do WhatsApp que aparece no canto inferior direito do site público.
+                      </p>
+                    </div>
+                  </div>
+
+                  {loadingWhatsappWidget ? (
+                    <div className="flex items-center justify-center py-8 text-brand-text-muted">
+                      <Loader2 className="w-6 h-6 animate-spin mr-2 text-brand-primary" />
+                      <span>Carregando configurações...</span>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveWhatsappWidget} className="space-y-6">
+                      <div className="grid gap-6 md:grid-cols-2">
+                        <div className="block">
+                          <label className="block text-sm font-semibold text-brand-text mb-1">
+                            Número do WhatsApp
+                          </label>
+                          <input
+                            type="text"
+                            value={whatsappWidgetNumber}
+                            onChange={(e) => setWhatsappWidgetNumber(e.target.value)}
+                            placeholder="E.g. 5511999999999"
+                            className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                          />
+                          <p className="text-[10px] text-brand-text-muted mt-1.5 leading-relaxed">
+                            Insira o número completo com DDI e DDD (ex: 5511999999999). Apenas dígitos, sem espaços ou traços.
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col justify-center">
+                          <span className="block text-sm font-semibold text-brand-text mb-2">
+                            Status do Botão Flutuante
+                          </span>
+                          <label className="relative inline-flex items-center cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={whatsappWidgetEnabled}
+                              onChange={(e) => setWhatsappWidgetEnabled(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                            <span className="ml-3 text-xs font-semibold text-brand-text">
+                              {whatsappWidgetEnabled ? 'Widget Ativado' : 'Widget Desativado'}
+                            </span>
+                          </label>
+                          <p className="text-[10px] text-brand-text-muted mt-1.5">
+                            Se ativado, um botão flutuante de atendimento do WhatsApp será exibido no site público.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="block">
+                        <label className="block text-sm font-semibold text-brand-text mb-1">
+                          Mensagem Inicial de Saudação
+                        </label>
+                        <textarea
+                          rows={3}
+                          value={whatsappWidgetMessage}
+                          onChange={(e) => setWhatsappWidgetMessage(e.target.value)}
+                          placeholder="Olá, gostaria de saber mais sobre o Evolução Clínica."
+                          className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:outline-none focus:border-brand-primary transition-all"
+                        />
+                        <p className="text-[10px] text-brand-text-muted mt-1.5">
+                          Essa mensagem virá pré-preenchida para o cliente quando ele iniciar a conversa no WhatsApp.
+                        </p>
+                      </div>
+
+                      <div className="flex justify-end pt-2">
+                        <button
+                          type="submit"
+                          disabled={savingWhatsappWidget}
+                          className="btn-primary w-full sm:w-auto px-6 py-2.5 flex items-center justify-center space-x-2 shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all hover:-translate-y-0.5 active:translate-y-0 cursor-pointer"
+                        >
+                          {savingWhatsappWidget ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Salvando Configurações...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4" />
+                              <span>Salvar Configurações do Widget</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+
+                      {whatsappWidgetSuccess && (
+                        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-xl flex items-center space-x-3 text-sm mt-3 animate-fadeIn">
+                          <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0" />
+                          <span>Configurações do widget salvas com sucesso! O cache do site público foi limpo.</span>
+                        </div>
+                      )}
+                    </form>
+                  )}
+                </div>
                 <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
@@ -6979,18 +7206,18 @@ export default function AdminPanel() {
                     </div>
                     <div>
                       <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                        Templates para a Jornada de Ativação
+                        Templates de WhatsApp
                       </h2>
                       <p className="text-xs text-brand-text-muted mt-0.5">
-                        Crie este template no WhatsApp Manager para permitir o envio proativo da jornada fora da janela de 24 horas.
+                        Cadastre os modelos conforme a finalidade da mensagem para permitir envios proativos fora da janela de 24 horas.
                       </p>
                     </div>
                   </div>
 
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 mb-5 text-sm text-emerald-900">
-                    <strong>Template recomendado: um único modelo reutilizável</strong>
+                    <strong>Use cada modelo somente na finalidade indicada</strong>
                     <p className="mt-1 text-xs leading-relaxed">
-                      O conteúdo de cada passo será preenchido na variável <code className="font-mono font-bold">{'{{2}}'}</code>. Assim, não é necessário criar 15 templates diferentes.
+                      A jornada educativa e de reengajamento usa o modelo <strong>Marketing</strong>. O modelo <strong>Utility</strong> é exclusivo para uma configuração realmente iniciada e ainda pendente; ele não deve transportar o texto livre dos 15 passos.
                     </p>
                   </div>
 
@@ -6998,7 +7225,7 @@ export default function AdminPanel() {
                     <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-bg/60 px-4 py-3 border-b border-brand-border">
                       <div>
                         <p className="font-bold text-brand-text">ec_jornada_ativacao</p>
-                        <p className="text-xs text-brand-text-muted">Categoria: Utility · Idioma: Português (Brasil) · pt_BR</p>
+                        <p className="text-xs text-brand-text-muted">Categoria: Marketing · Idioma: Português (Brasil) · pt_BR</p>
                       </div>
                       <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Enviar para aprovação</span>
                     </div>
@@ -7030,8 +7257,88 @@ Para não receber mais mensagens de ativação, responda SAIR.`}</pre>
                     </div>
                   </div>
 
+                  <div className="mt-5 rounded-2xl border border-brand-border overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-bg/60 px-4 py-3 border-b border-brand-border">
+                      <div>
+                        <p className="font-bold text-brand-text">ec_configuracao_pendente</p>
+                        <p className="text-xs text-brand-text-muted">Categoria: Utility · Idioma: Português (Brasil) · pt_BR</p>
+                      </div>
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Enviar para aprovação</span>
+                    </div>
+                    <div className="space-y-4 p-4 text-sm">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Nome do template</span>
+                        <code className="mt-1 block rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">ec_configuracao_pendente</code>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Corpo da mensagem</span>
+                        <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-900 px-3 py-3 font-sans text-xs leading-relaxed text-slate-100">{`Olá, {{1}}.
+
+Você iniciou a configuração da sua conta na Evolução Clínica em {{2}}, mas ela ainda não foi concluída.
+
+Etapa pendente: {{3}}.
+
+Acesse sua conta para concluir essa configuração.`}</pre>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Botão</span>
+                        <div className="mt-1 rounded-lg border border-brand-border bg-white px-3 py-2 text-xs text-brand-text">
+                          <strong>Visitar site</strong> · Concluir configuração · URL: <code className="font-mono">https://www.evolucaoclinica.app.br/painel/dashboard</code>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 px-3 py-3 text-xs leading-relaxed text-blue-900">
+                        <strong>Exemplos para informar no Meta:</strong><br />
+                        <code className="font-mono">{'{{1}}'}</code> = Mariana · <code className="font-mono">{'{{2}}'}</code> = 30/07/2026 · <code className="font-mono">{'{{3}}'}</code> = conectar sua agenda.
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-relaxed text-amber-900">
+                        <strong>Uso operacional:</strong> este modelo ainda não substitui automaticamente o template da jornada. Conecte-o somente a um evento que confirme uma configuração iniciada pelo usuário e informe dados objetivos nas três variáveis.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 rounded-2xl border border-brand-border overflow-hidden">
+                    <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-bg/60 px-4 py-3 border-b border-brand-border">
+                      <div>
+                        <p className="font-bold text-brand-text">ec_notificacao_plataforma</p>
+                        <p className="text-xs text-brand-text-muted">Categoria: Marketing · Idioma: Português (Brasil) · pt_BR</p>
+                      </div>
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Enviar para aprovação</span>
+                    </div>
+                    <div className="space-y-4 p-4 text-sm">
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Nome do template</span>
+                        <code className="mt-1 block rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">ec_notificacao_plataforma</code>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Corpo da mensagem</span>
+                        <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-900 px-3 py-3 font-sans text-xs leading-relaxed text-slate-100">{`Olá, {{1}}.
+
+Você recebeu uma nova notificação da Evolução Clínica.
+
+Assunto: {{2}}
+
+{{3}}
+
+Acesse a plataforma para ver os detalhes.`}</pre>
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Botão</span>
+                        <div className="mt-1 rounded-lg border border-brand-border bg-white px-3 py-2 text-xs text-brand-text">
+                          <strong>Visitar site</strong> · Ver notificação · URL: <code className="font-mono">https://www.evolucaoclinica.app.br/painel/notifications</code>
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-blue-50 px-3 py-3 text-xs leading-relaxed text-blue-900">
+                        <strong>Exemplos para informar no Meta:</strong><br />
+                        <code className="font-mono">{'{{1}}'}</code> = Mariana · <code className="font-mono">{'{{2}}'}</code> = Atualização do sistema · <code className="font-mono">{'{{3}}'}</code> = A manutenção programada foi concluída com sucesso.
+                      </div>
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-relaxed text-amber-900">
+                        <strong>Categoria recomendada:</strong> Marketing, pois o painel permite título e conteúdo livres, inclusive comunicados e broadcasts. Um template genérico assim não deve ser apresentado como Utility.
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="mt-5 rounded-xl border border-brand-border bg-brand-bg/40 p-4 text-xs leading-relaxed text-brand-text-muted">
-                    <strong className="text-brand-text">No WhatsApp Manager:</strong> WhatsApp Manager → Contas → Conta do WhatsApp → Modelos de mensagem → Criar modelo. Selecione <strong>Utility</strong>, o idioma <strong>Português (Brasil)</strong>, adicione o corpo acima e um botão de URL estático. Aguarde a aprovação antes de ativar os envios da jornada.
+                    <strong className="text-brand-text">Configuração da plataforma:</strong> a jornada usa <code className="font-mono">ec_jornada_ativacao</code> e as notificações usam <code className="font-mono">ec_notificacao_plataforma</code>, ambos em <code className="font-mono">pt_BR</code>. Nomes e idiomas podem ser sobrescritos na Vercel com <code className="font-mono">WHATSAPP_LIFECYCLE_TEMPLATE_*</code> e <code className="font-mono">WHATSAPP_NOTIFICATION_TEMPLATE_*</code>. Aguarde a aprovação antes de ativar cada envio.
                   </div>
                 </div>
 

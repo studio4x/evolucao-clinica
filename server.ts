@@ -27,6 +27,7 @@ import {
   WhatsAppValidationError
 } from "./server/whatsapp/whatsappClient.js";
 import { createWhatsAppRepository } from "./server/whatsapp/whatsappRepository.js";
+import type { WhatsAppSendResult } from "./server/whatsapp/whatsappTypes.js";
 import {
   createWhatsAppN8nEventsService,
   validateNormalizedWhatsAppN8nEvent,
@@ -1123,7 +1124,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 type EmailProvider = "smtp" | "brevo";
 type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend";
 type NotificationOrigin = "platform" | "manual";
-type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean };
+type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean; whatsapp?: boolean };
 
 type EmailDeliveryInput = {
   userId?: string | null;
@@ -3431,7 +3432,11 @@ const lifecycleService = createLifecycleService({
       return false;
     }
   },
-  sendWhatsAppNotification: (input) => whatsappClient.sendText(input)
+  whatsappLifecycleTemplateName: String(process.env.WHATSAPP_LIFECYCLE_TEMPLATE_NAME || "ec_jornada_ativacao").trim(),
+  whatsappLifecycleTemplateLanguage: String(process.env.WHATSAPP_LIFECYCLE_TEMPLATE_LANGUAGE || "pt_BR").trim(),
+  sendWhatsAppNotification: (input) => input.type === "template"
+    ? whatsappClient.sendTemplate(input)
+    : whatsappClient.sendText(input)
 });
 
 async function registerLifecycleLogin(userId: string) {
@@ -3665,7 +3670,7 @@ async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: 
   );
 }
 
-// Helper para enviar notificação (In-App, Push e E-mail)
+// Helper para enviar notificação (In-App, Push, E-mail e WhatsApp)
 async function sendNotificationInternal(
   targetUserId: string,
   title: string,
@@ -3706,7 +3711,48 @@ async function sendNotificationInternal(
     console.error("Erro geral no disparo de Push:", pushGeneralError.message);
   }
 
-  // C. Enviar e-mail por SMTP se configurado
+  // C. Enviar WhatsApp somente para quem habilitou o canal e informou número
+  let whatsappResult: WhatsAppSendResult | null = null;
+  if (channels.whatsapp !== false) {
+    try {
+      const [{ data: communicationPreferences }, { data: whatsappProfile }] = await Promise.all([
+        supabaseAdmin
+          .from("communication_preferences")
+          .select("whatsapp_enabled, whatsapp_number")
+          .eq("user_id", targetUserId)
+          .maybeSingle(),
+        supabaseAdmin
+          .from("professionals")
+          .select("full_name")
+          .eq("id", targetUserId)
+          .maybeSingle()
+      ]);
+      const whatsappNumber = String(communicationPreferences?.whatsapp_number || "").trim();
+      if (communicationPreferences?.whatsapp_enabled === true && whatsappNumber) {
+        const firstName = String(whatsappProfile?.full_name || "Profissional").trim().split(/\s+/)[0] || "Profissional";
+        whatsappResult = await whatsappClient.sendTemplate({
+          userId: targetUserId,
+          lifecycleDispatchId: null,
+          recipientPhone: whatsappNumber,
+          type: "template",
+          templateName: String(process.env.WHATSAPP_NOTIFICATION_TEMPLATE_NAME || "ec_notificacao_plataforma").trim(),
+          languageCode: String(process.env.WHATSAPP_NOTIFICATION_TEMPLATE_LANGUAGE || "pt_BR").trim(),
+          components: [{
+            type: "body",
+            parameters: [
+              { type: "text", text: firstName.slice(0, 80) },
+              { type: "text", text: String(title).trim().slice(0, 150) },
+              { type: "text", text: String(content).trim().slice(0, 600) }
+            ]
+          }]
+        });
+      }
+    } catch (whatsappError: any) {
+      console.warn("[Notifications] Falha ao enviar template do WhatsApp:", whatsappError?.message || whatsappError);
+    }
+  }
+
+  // D. Enviar e-mail por SMTP se configurado
   let emailSent = false;
   let emailError: string | null = null;
   let emailTo: string | null = null;
@@ -3805,7 +3851,7 @@ async function sendNotificationInternal(
     console.log(`[Notifications] Nenhum provedor configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
   }
 
-  return { notification, emailSent, emailTo, emailError, pushSent };
+  return { notification, emailSent, emailTo, emailError, pushSent, whatsappResult };
 }
 
 async function sendTrialExpirationEmail(prof: { id: string; full_name: string | null; google_email: string | null; trial_ends_at: string | null }) {
@@ -3881,7 +3927,8 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
     push: requestedChannels.push !== false,
     // Notificações manuais do sistema sempre devem acompanhar o push por e-mail.
     // Isso também protege clientes/PWAs antigos que ainda enviam email: false.
-    email: notificationSource === "manual" || requestedChannels.email !== false
+    email: notificationSource === "manual" || requestedChannels.email !== false,
+    whatsapp: requestedChannels.whatsapp !== false
   };
   
   if (!title || !content) {
@@ -3917,6 +3964,13 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
         sent: result.emailSent,
         to: result.emailTo,
         error: result.emailError
+      },
+      whatsapp: {
+        accepted: result.whatsappResult?.status === "accepted",
+        status: result.whatsappResult?.status || "not_sent",
+        deliveryId: result.whatsappResult?.deliveryId || null,
+        wamid: result.whatsappResult?.wamid || null,
+        error: result.whatsappResult?.errorMessage || null
       }
     });
   } catch (err: any) {

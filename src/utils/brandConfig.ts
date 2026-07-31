@@ -32,6 +32,9 @@ export interface SiteConfig {
   social_share_url: string;
   version: string;
   colors: BrandColors;
+  whatsapp_number?: string;
+  whatsapp_widget_enabled?: boolean;
+  whatsapp_widget_message?: string;
 }
 
 export type BrandConfigLike = Partial<Omit<SiteConfig, "colors">> & {
@@ -77,7 +80,10 @@ export const defaultSiteConfig: SiteConfig = {
   favicon_url: "/favicon.png",
   social_share_url: "",
   version: "1.0",
-  colors: defaultColors
+  colors: defaultColors,
+  whatsapp_number: "",
+  whatsapp_widget_enabled: false,
+  whatsapp_widget_message: "Olá! Gostaria de saber mais sobre a Evolução Clínica."
 };
 
 export const normalizeSiteConfig = (config?: BrandConfigLike | null): SiteConfig => {
@@ -91,6 +97,9 @@ export const normalizeSiteConfig = (config?: BrandConfigLike | null): SiteConfig
           ...defaultColors,
           ...safeConfig.colors
         }
-      : defaultColors
+      : defaultColors,
+    whatsapp_number: safeConfig.whatsapp_number ?? defaultSiteConfig.whatsapp_number,
+    whatsapp_widget_enabled: safeConfig.whatsapp_widget_enabled ?? defaultSiteConfig.whatsapp_widget_enabled,
+    whatsapp_widget_message: safeConfig.whatsapp_widget_message ?? defaultSiteConfig.whatsapp_widget_message
   };
 };

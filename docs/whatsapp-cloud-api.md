@@ -21,6 +21,10 @@ WHATSAPP_APP_SECRET=
 WHATSAPP_WEBHOOK_VERIFY_TOKEN=
 WHATSAPP_ALLOW_UNSIGNED_WEBHOOKS=false
 WHATSAPP_N8N_EVENTS_TOKEN=
+WHATSAPP_LIFECYCLE_TEMPLATE_NAME=ec_jornada_ativacao
+WHATSAPP_LIFECYCLE_TEMPLATE_LANGUAGE=pt_BR
+WHATSAPP_NOTIFICATION_TEMPLATE_NAME=ec_notificacao_plataforma
+WHATSAPP_NOTIFICATION_TEMPLATE_LANGUAGE=pt_BR
 ```
 
 `WHATSAPP_ALLOW_UNSIGNED_WEBHOOKS=true` só é aceito fora de produção e deve ser
@@ -110,6 +114,32 @@ Aplique também a migration
 Ela restringe a tabela ao `service_role` e guarda somente o valor bruto
 higienizado, removendo campos de credenciais conhecidos.
 
+## Templates proativos da jornada
+
+A jornada de ativação envia `ec_jornada_ativacao` em `pt_BR` como mensagem
+do tipo `template`. Os valores podem ser substituídos pelas variáveis
+`WHATSAPP_LIFECYCLE_TEMPLATE_NAME` e
+`WHATSAPP_LIFECYCLE_TEMPLATE_LANGUAGE`, sem prefixo `VITE_`, quando o nome ou
+idioma aprovado na Meta for diferente.
+
+O modelo `ec_jornada_ativacao` possui finalidade de educação e
+reengajamento e deve ser cadastrado como Marketing. O modelo
+`ec_configuracao_pendente`, documentado em `/admin/whatsapp`, é Utility e fica
+reservado para um fluxo operacional futuro que consiga comprovar uma
+configuração iniciada pelo usuário. Ele não substitui a jornada inteira.
+
+Notificações in-app/push/e-mail também podem ser enviadas pelo WhatsApp com
+`ec_notificacao_plataforma`. O envio só ocorre quando
+`communication_preferences.whatsapp_enabled` está ativo, existe um
+`whatsapp_number` e o canal não foi desabilitado na chamada. Como o painel
+administrativo aceita título e conteúdo livres, esse modelo deve ser cadastrado
+como Marketing. A resposta inicial registra apenas `accepted`; entrega e
+leitura continuam dependendo dos eventos de status.
+
+O teste administrativo continua enviando texto comum para validar credenciais
+e conectividade. Portanto, para validar um template fora da janela de 24 horas,
+use um disparo controlado da jornada depois que o modelo estiver aprovado.
+
 ## Limites desta etapa
 
 O endpoint público `/api/webhooks/whatsapp` continua separado, valida o token
@@ -119,9 +149,9 @@ O webhook central do n8n ainda não participa do roteamento. A integração futu
 deverá consumir ou encaminhar eventos sem receber Access Token, App Secret,
 Authorization ou Service Role.
 
-O envio funcional desta etapa permanece em texto. Mensagens proativas futuras,
-especialmente fora da janela de atendimento, devem usar templates previamente
-aprovados pela Meta; nenhum template é escolhido ou criado automaticamente.
+Templates não são criados automaticamente na Meta. O nome configurado precisa
+existir, estar aprovado e ter exatamente dois parâmetros no corpo, na ordem:
+primeiro nome do profissional e conteúdo do passo da jornada.
 
 ## Estado operacional validado em 30/07/2026
 

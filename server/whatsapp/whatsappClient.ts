@@ -4,6 +4,7 @@ import type {
   WhatsAppDeliveryRepository,
   WhatsAppMetaError,
   WhatsAppSendResult,
+  WhatsAppTemplateSendInput,
   WhatsAppTextSendInput
 } from "./whatsappTypes.js";
 
@@ -180,43 +181,136 @@ export function createWhatsAppClient(deps: WhatsAppClientDependencies) {
   const fetchImpl = deps.fetchImpl || fetch;
   const logger = deps.logger || console;
 
+  async function sendPrepared(input: {
+    userId?: string | null;
+    lifecycleDispatchId?: string | null;
+    recipientPhone: string;
+    messageType: "text" | "template";
+    templateName: string | null;
+    requestBody: Record<string, unknown>;
+    storedRequestPayload: Record<string, unknown>;
+    sensitiveValues?: string[];
+  }): Promise<WhatsAppSendResult> {
+    const configurationError = getConfigurationError(deps.config);
+    if (configurationError) {
+      logger.error(`[WhatsApp] ${configurationError}`);
+      return {
+        success: false,
+        deliveryId: null,
+        wamid: null,
+        status: "not_configured",
+        httpStatus: null,
+        errorCode: "configuration_error",
+        errorTitle: "WhatsApp não configurado",
+        errorMessage: configurationError
+      };
+    }
+
+    const recipientPhone = normalizeWhatsAppPhone(input.recipientPhone);
+    const maskedPhone = maskWhatsAppPhone(recipientPhone);
+    const pending = await deps.repository.createPending({
+      userId: input.userId || null,
+      lifecycleDispatchId: input.lifecycleDispatchId || null,
+      recipientPhone,
+      phoneNumberId: deps.config.phoneNumberId,
+      messageType: input.messageType,
+      templateName: input.templateName,
+      requestPayload: input.storedRequestPayload
+    });
+
+    let response: Response;
+    let payload: unknown;
+    try {
+      response = await fetchImpl(buildWhatsAppMessagesUrl(deps.config), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${deps.config.accessToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ ...input.requestBody, to: recipientPhone })
+      });
+      payload = await response.json().catch(() => ({}));
+    } catch (error) {
+      const errorMessage = sanitizeProviderText(
+        error instanceof Error ? error.message : "Falha de conexão com a WhatsApp Graph API.",
+        deps.config,
+        [recipientPhone, ...(input.sensitiveValues || [])]
+      ) || "Falha de conexão com a WhatsApp Graph API.";
+      await deps.repository.markFailed(pending.id, {
+        responsePayload: null,
+        errorCode: "network_error",
+        errorTitle: "Falha de conexão",
+        errorMessage
+      });
+      logger.error(`[WhatsApp] deliveryId=${pending.id} phone=${maskedPhone} type=${input.messageType} status=failed http=none code=network_error`);
+      return {
+        success: false,
+        deliveryId: pending.id,
+        wamid: null,
+        status: "failed",
+        httpStatus: null,
+        errorCode: "network_error",
+        errorTitle: "Falha de conexão",
+        errorMessage
+      };
+    }
+
+    if (!response.ok) {
+      const metaError = sanitizeMetaError(parseWhatsAppMetaError(payload), deps.config, [recipientPhone, ...(input.sensitiveValues || [])]);
+      const errorCode = combinedErrorCode(metaError);
+      const errorTitle = metaError.userTitle || metaError.type || "Erro da WhatsApp Graph API";
+      const errorMessage = metaError.userMessage || metaError.message || "A Meta rejeitou o envio.";
+      await deps.repository.markFailed(pending.id, {
+        responsePayload: sanitizedErrorPayload(metaError),
+        errorCode,
+        errorTitle,
+        errorMessage
+      });
+      logger.warn(`[WhatsApp] deliveryId=${pending.id} phone=${maskedPhone} type=${input.messageType} status=failed http=${response.status} code=${errorCode || "unknown"}`);
+      return {
+        success: false,
+        deliveryId: pending.id,
+        wamid: null,
+        status: "failed",
+        httpStatus: response.status,
+        errorCode,
+        errorTitle,
+        errorMessage
+      };
+    }
+
+    const wamid = extractWhatsAppWamid(payload);
+    await deps.repository.markAccepted(pending.id, wamid, sanitizedSuccessPayload(payload));
+    logger.info(`[WhatsApp] deliveryId=${pending.id} wamid=${wamid || "missing"} phone=${maskedPhone} type=${input.messageType} status=accepted http=${response.status}`);
+    return {
+      success: true,
+      deliveryId: pending.id,
+      wamid,
+      status: "accepted",
+      httpStatus: response.status,
+      errorCode: null,
+      errorTitle: null,
+      errorMessage: null
+    };
+  }
+
   return {
     async sendText(input: WhatsAppTextSendInput): Promise<WhatsAppSendResult> {
-      const configurationError = getConfigurationError(deps.config);
-      if (configurationError) {
-        logger.error(`[WhatsApp] ${configurationError}`);
-        return {
-          success: false,
-          deliveryId: null,
-          wamid: null,
-          status: "not_configured",
-          httpStatus: null,
-          errorCode: "configuration_error",
-          errorTitle: "WhatsApp não configurado",
-          errorMessage: configurationError
-        };
-      }
-
-      const recipientPhone = normalizeWhatsAppPhone(input.recipientPhone);
-      const maskedPhone = maskWhatsAppPhone(recipientPhone);
       const requestBody = {
         messaging_product: "whatsapp",
         recipient_type: "individual",
-        to: recipientPhone,
         type: "text",
         text: {
           preview_url: input.previewUrl !== false,
           body: input.text
         }
       };
-      const pending = await deps.repository.createPending({
-        userId: input.userId || null,
-        lifecycleDispatchId: input.lifecycleDispatchId || null,
-        recipientPhone,
-        phoneNumberId: deps.config.phoneNumberId,
+      return sendPrepared({
+        ...input,
         messageType: "text",
         templateName: null,
-        requestPayload: {
+        requestBody,
+        storedRequestPayload: {
           messaging_product: "whatsapp",
           recipient_type: "individual",
           type: "text",
@@ -224,83 +318,52 @@ export function createWhatsAppClient(deps: WhatsAppClientDependencies) {
             preview_url: requestBody.text.preview_url,
             character_count: input.text.length
           }
-        }
+        },
+        sensitiveValues: [input.text]
       });
+    },
 
-      let response: Response;
-      let payload: unknown;
-      try {
-        response = await fetchImpl(buildWhatsAppMessagesUrl(deps.config), {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${deps.config.accessToken}`,
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(requestBody)
-        });
-        payload = await response.json().catch(() => ({}));
-      } catch (error) {
-        const errorMessage = sanitizeProviderText(
-          error instanceof Error ? error.message : "Falha de conexão com a WhatsApp Graph API.",
-          deps.config,
-          [recipientPhone]
-        ) || "Falha de conexão com a WhatsApp Graph API.";
-        await deps.repository.markFailed(pending.id, {
-          responsePayload: null,
-          errorCode: "network_error",
-          errorTitle: "Falha de conexão",
-          errorMessage
-        });
-        logger.error(`[WhatsApp] deliveryId=${pending.id} phone=${maskedPhone} status=failed http=none code=network_error`);
-        return {
-          success: false,
-          deliveryId: pending.id,
-          wamid: null,
-          status: "failed",
-          httpStatus: null,
-          errorCode: "network_error",
-          errorTitle: "Falha de conexão",
-          errorMessage
-        };
+    async sendTemplate(input: WhatsAppTemplateSendInput): Promise<WhatsAppSendResult> {
+      const templateName = String(input.templateName || "").trim();
+      const languageCode = String(input.languageCode || "").trim();
+      if (!/^[a-z0-9_]+$/.test(templateName)) {
+        throw new WhatsAppValidationError("Nome do template do WhatsApp inválido.");
       }
-
-      if (!response.ok) {
-        const metaError = sanitizeMetaError(parseWhatsAppMetaError(payload), deps.config, [recipientPhone]);
-        const errorCode = combinedErrorCode(metaError);
-        const errorTitle = metaError.userTitle || metaError.type || "Erro da WhatsApp Graph API";
-        const errorMessage = metaError.userMessage || metaError.message || "A Meta rejeitou o envio.";
-        await deps.repository.markFailed(pending.id, {
-          responsePayload: sanitizedErrorPayload(metaError),
-          errorCode,
-          errorTitle,
-          errorMessage
-        });
-        logger.warn(`[WhatsApp] deliveryId=${pending.id} phone=${maskedPhone} status=failed http=${response.status} code=${errorCode || "unknown"}`);
-        return {
-          success: false,
-          deliveryId: pending.id,
-          wamid: null,
-          status: "failed",
-          httpStatus: response.status,
-          errorCode,
-          errorTitle,
-          errorMessage
-        };
+      if (!/^[a-z]{2}(?:_[A-Z]{2})?$/.test(languageCode)) {
+        throw new WhatsAppValidationError("Código de idioma do template do WhatsApp inválido.");
       }
-
-      const wamid = extractWhatsAppWamid(payload);
-      await deps.repository.markAccepted(pending.id, wamid, sanitizedSuccessPayload(payload));
-      logger.info(`[WhatsApp] deliveryId=${pending.id} wamid=${wamid || "missing"} phone=${maskedPhone} status=accepted http=${response.status}`);
-      return {
-        success: true,
-        deliveryId: pending.id,
-        wamid,
-        status: "accepted",
-        httpStatus: response.status,
-        errorCode: null,
-        errorTitle: null,
-        errorMessage: null
+      const components = input.components || [];
+      const parameterValues = components.flatMap((component) => component.parameters.map((parameter) => parameter.text));
+      const requestBody = {
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        type: "template",
+        template: {
+          name: templateName,
+          language: { code: languageCode },
+          ...(components.length ? { components } : {})
+        }
       };
+      return sendPrepared({
+        ...input,
+        messageType: "template",
+        templateName,
+        requestBody,
+        storedRequestPayload: {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: languageCode },
+            components: components.map((component) => ({
+              type: component.type,
+              parameter_count: component.parameters.length
+            }))
+          }
+        },
+        sensitiveValues: parameterValues
+      });
     }
   };
 }

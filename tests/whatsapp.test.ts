@@ -136,6 +136,54 @@ assert.equal(successLogs.join(" ").includes("5511999991234"), false);
 assert.equal(successLogs.join(" ").includes(baseConfig.accessToken), false);
 assert.equal(JSON.stringify(successResult).includes(baseConfig.accessToken), false);
 
+const templateRepo = createRepositoryDouble();
+let templateRequestBody: any = null;
+const templateResult = await createWhatsAppClient({
+  config: baseConfig,
+  repository: templateRepo.repository,
+  logger: { info: () => {}, warn: () => {}, error: () => {} },
+  fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
+    templateRequestBody = JSON.parse(String(init?.body || "{}"));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => successPayload
+    } as Response;
+  }) as typeof fetch
+});
+await templateResult.sendTemplate({
+  userId: "user-123",
+  lifecycleDispatchId: "dispatch-template-123",
+  recipientPhone: "5511999991234",
+  type: "template",
+  templateName: "ec_jornada_ativacao",
+  languageCode: "pt_BR",
+  components: [{
+    type: "body",
+    parameters: [
+      { type: "text", text: "Mariana" },
+      { type: "text", text: "Cadastre seu primeiro paciente." }
+    ]
+  }]
+});
+assert.equal(templateRequestBody.type, "template");
+assert.equal(templateRequestBody.template.name, "ec_jornada_ativacao");
+assert.equal(templateRequestBody.template.language.code, "pt_BR");
+assert.equal(templateRequestBody.template.components[0].parameters[0].text, "Mariana");
+assert.equal(templateRepo.pendingInputs[0]?.messageType, "template");
+assert.equal(templateRepo.pendingInputs[0]?.templateName, "ec_jornada_ativacao");
+assert.equal(JSON.stringify(templateRepo.pendingInputs[0]?.requestPayload).includes("Mariana"), false);
+assert.equal(JSON.stringify(templateRepo.pendingInputs[0]?.requestPayload).includes("Cadastre seu primeiro paciente"), false);
+await assert.rejects(
+  () => templateResult.sendTemplate({
+    recipientPhone: "5511999991234",
+    type: "template",
+    templateName: "Template Inválido",
+    languageCode: "pt_BR"
+  }),
+  WhatsAppValidationError
+);
+
 const failureRepo = createRepositoryDouble();
 const failureClient = createWhatsAppClient({
   config: baseConfig,
@@ -346,6 +394,14 @@ assert.doesNotMatch(
   serverSource,
   /SUPABASE_SERVICE_ROLE_KEY\s*\|\|\s*process\.env\.VITE_SUPABASE_ANON_KEY/
 );
+const notificationSenderStart = serverSource.indexOf("async function sendNotificationInternal");
+const notificationSenderEnd = serverSource.indexOf("async function sendTrialExpirationEmail", notificationSenderStart);
+const notificationSenderSource = serverSource.slice(notificationSenderStart, notificationSenderEnd);
+assert.ok(notificationSenderStart >= 0);
+assert.match(notificationSenderSource, /WHATSAPP_NOTIFICATION_TEMPLATE_NAME/);
+assert.match(notificationSenderSource, /ec_notificacao_plataforma/);
+assert.match(notificationSenderSource, /communicationPreferences\?\.whatsapp_enabled === true/);
+assert.match(notificationSenderSource, /whatsappClient\.sendTemplate/);
 const n8nEndpointStart = serverSource.indexOf('app.post("/api/integrations/whatsapp/events"');
 const n8nEndpointEnd = serverSource.indexOf('app.get("/api/debug-env"', n8nEndpointStart);
 const n8nEndpointSource = serverSource.slice(n8nEndpointStart, n8nEndpointEnd);
@@ -372,6 +428,10 @@ assert.match(whatsappAdminSource, /alreadyProcessed/);
 assert.match(whatsappAdminSource, /\/api\/admin\/whatsapp\/integration-events\?page=/);
 assert.match(whatsappAdminSource, /Limpar chamadas/);
 assert.match(whatsappAdminSource, /Página \{whatsappIntegrationEventsPage\} de \{whatsappIntegrationEventsTotalPages\}/);
+assert.match(whatsappAdminSource, /ec_jornada_ativacao/);
+assert.match(whatsappAdminSource, /ec_configuracao_pendente/);
+assert.match(whatsappAdminSource, /ec_notificacao_plataforma/);
+assert.match(whatsappAdminSource, /Enviar também pelo WhatsApp/);
 
 const whatsappMigration = readFileSync(
   "supabase/migrations/20260730190000_create_whatsapp_message_deliveries.sql",

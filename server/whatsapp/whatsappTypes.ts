@@ -96,9 +96,14 @@ export type WhatsAppTextSendInput = {
   previewUrl?: boolean;
 };
 
-// Contrato reservado para mensagens proativas futuras. O envio funcional desta
-// etapa permanece exclusivamente em texto; templates exigirão nomes aprovados
-// pela Meta e não são selecionados automaticamente.
+export type WhatsAppTemplateComponent = {
+  type: "body";
+  parameters: Array<{
+    type: "text";
+    text: string;
+  }>;
+};
+
 export type WhatsAppTemplateSendInput = {
   userId?: string | null;
   lifecycleDispatchId?: string | null;
@@ -106,8 +111,10 @@ export type WhatsAppTemplateSendInput = {
   type: "template";
   templateName: string;
   languageCode: string;
-  components?: unknown[];
+  components?: WhatsAppTemplateComponent[];
 };
+
+export type WhatsAppSendInput = WhatsAppTextSendInput | WhatsAppTemplateSendInput;
 
 export type WhatsAppSendStatus = "accepted" | "failed" | "not_configured";
 
