@@ -33,6 +33,7 @@ const isBrandAssetPath = (pathname) => {
 
 const isApiNoCachePath = (pathname) => {
   return pathname === "/api/payment-settings" ||
+         pathname.startsWith("/api/communication/") ||
          pathname.startsWith("/api/notifications/") ||
          pathname.startsWith("/api/pwa-install-icon") ||
          pathname.startsWith("/api/pwa-notification-icon") ||

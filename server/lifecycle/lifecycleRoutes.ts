@@ -119,7 +119,10 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ success: true, id });
       }));
 
-      app.get("/api/communication/preferences", middleware.requireAuth, asyncRoute(async (req, res) => res.json({ preferences: await getLifecyclePreferences(deps, req.user.id) })));
+      app.get("/api/communication/preferences", middleware.requireAuth, asyncRoute(async (req, res) => {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        return res.json({ preferences: await getLifecyclePreferences(deps, req.user.id) });
+      }));
       app.put("/api/communication/preferences", middleware.requireAuth, asyncRoute(async (req, res) => {
         const preferences = await updateLifecyclePreferences(deps, req.user.id, req.body || {});
         if (preferences.lifecycle_enabled === false) await suppressLifecycleDispatches(deps, req.user.id, "lifecycle_disabled_by_user");

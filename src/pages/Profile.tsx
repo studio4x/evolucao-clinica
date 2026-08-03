@@ -183,6 +183,7 @@ export default function Profile() {
             const prefToken = sessionPrefs.session?.access_token;
             if (prefToken) {
               const prefsRes = await fetch('/api/communication/preferences', {
+                cache: 'no-store',
                 headers: { Authorization: `Bearer ${prefToken}` }
               });
               if (prefsRes.ok) {
