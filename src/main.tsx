@@ -5,9 +5,11 @@ import './index.css';
 import { APP_VERSION } from './components/layout/AppVersion';
 import { initAnalytics } from './services/analytics';
 import { installWebViewAudioCompatibility } from './utils/audioWebViewCompatibility';
+import { installGlobalChunkRecovery } from './utils/lazyWithRetry';
 
 // Inicializa o Google Analytics
 initAnalytics();
+installGlobalChunkRecovery();
 
 // Detecta se esta rodando no WebView do App
 const isNativeWebView = /EvolucaoClinicaApp/i.test(navigator.userAgent);

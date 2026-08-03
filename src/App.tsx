@@ -54,6 +54,7 @@ import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
 import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
+import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 
@@ -644,8 +645,9 @@ export default function App() {
       <NativeBillingRestore />
       <SpeedInsights />
       
-      <Suspense fallback={<SplashScreen message="Carregando..." />}>
-        <Routes>
+      <ChunkLoadErrorBoundary>
+        <Suspense fallback={<SplashScreen message="Carregando..." />}>
+          <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
           <Route path="/checkout/success" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
@@ -698,8 +700,9 @@ export default function App() {
           <Route path="/share-target" element={<Navigate to="/painel/share-target" replace />} />
           <Route path="/api/share-target" element={<Navigate to="/painel/share-target" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+          </Routes>
+        </Suspense>
+      </ChunkLoadErrorBoundary>
     </Router>
   );
 }
