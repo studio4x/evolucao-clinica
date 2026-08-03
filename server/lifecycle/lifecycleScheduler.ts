@@ -2,6 +2,7 @@ import { LIFECYCLE_COOLDOWN_HOURS, LIFECYCLE_PRIORITY, type LifecycleRuntimeConf
 import { chooseHighestPriority, evaluateKnownRule, getNextBestAction, shouldSkipSequenceStep } from "./lifecycleRules.js";
 import { ensureLifecycleEnrollment, getLifecyclePreferences, getLifecycleRuntimeConfig, findCampaign, recordLifecycleEvent } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
+import { calculateNextSequenceStepAt } from "./lifecycleSequenceTiming.js";
 import type { LifecycleCandidate, LifecycleDependencies, LifecycleOperationalContext, LifecycleRule, LifecycleState, LifecycleStep } from "./lifecycleTypes.js";
 
 type LifecycleSchedulerBatchResult = {
@@ -284,8 +285,9 @@ async function scheduleForEnrollment(
     if (!runtime.dry_run && runtime.send_enabled) {
       await insertSkippedDispatch(deps, { user_id: state.userId, enrollment_id: enrollment.id, campaign_id: campaign.id, step_id: currentStep!.id, message_key: sequence.messageKey, dispatch_type: "sequence", priority: sequence.priority, status: "skipped", scheduled_for: now.toISOString(), dedupe_key: `sequence:${enrollment.id}:${currentStep!.id}`, skip_reason: skipReason, skipped_at: now.toISOString() });
       const nextStep = steps.find((s) => s.position === currentStep!.position + 1);
-      const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
-      const nextStepAt = nextStep ? new Date(startedAt + Number(nextStep.wait_minutes || 0) * 60000).toISOString() : null;
+      const nextStepAt = nextStep
+        ? calculateNextSequenceStepAt(now, currentStep!.wait_minutes, nextStep.wait_minutes).toISOString()
+        : null;
       await deps.supabaseAdmin.from("lifecycle_enrollments").update({ current_position: currentStep!.position, next_step_at: nextStepAt }).eq("id", enrollment.id);
     }
     sequence = null;

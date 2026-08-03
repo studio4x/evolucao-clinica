@@ -6,6 +6,7 @@ import { renderLifecycleTemplate } from '../server/lifecycle/templates/tokenRegi
 import { renderSafeLifecycleMarkdown } from '../server/lifecycle/lifecycleRenderer.js';
 import { sanitizeLifecycleMetadata } from '../server/lifecycle/lifecycleRepository.js';
 import { assertLifecycleSchedulerHealthy, processLifecycleSchedulerUsers } from '../server/lifecycle/lifecycleScheduler.js';
+import { calculateNextSequenceStepAt, getSequenceIntervalMinutes } from '../server/lifecycle/lifecycleSequenceTiming.js';
 
 const now = new Date('2026-07-16T12:00:00.000Z');
 const baseState: any = {
@@ -73,6 +74,9 @@ for (const [ruleKey, messageKey, resourceId] of [
 
 const sequenceStep: any = { id: 'step-2', campaign_id: 'campaign', step_key: 'day_02', position: 2, wait_minutes: 2880, category: 'activation', priority: 50, status: 'active', enabled: true, subject_template: 'x', body_markdown: 'x' };
 assert.equal(shouldSkipSequenceStep(sequenceStep, withPatient), 'ação já concluída: paciente existente');
+assert.equal(getSequenceIntervalMinutes(8640, 10080), 1440);
+assert.equal(calculateNextSequenceStepAt(new Date('2026-08-03T11:30:05.000Z'), 8640, 10080).toISOString(), '2026-08-04T11:30:05.000Z');
+assert.equal(calculateNextSequenceStepAt(new Date('2026-08-03T11:30:05.000Z'), 10080, 10080).toISOString(), '2026-08-03T11:30:05.000Z');
 const low: any = { messageKey: 'low', priority: 50 };
 const high: any = { messageKey: 'high', priority: 90 };
 assert.equal(chooseHighestPriority([low, high])?.messageKey, 'high');
@@ -139,6 +143,10 @@ assert.match(lifecycleSchedulerSource, /from\("transactions"\)\.select\("id, cre
 assert.doesNotMatch(lifecycleSchedulerSource, /from\("transactions"\)\.select\("id, updated_at"\)/);
 assert.doesNotMatch(lifecycleSchedulerSource, /current_position:\s*chosen\.dispatchType/);
 assert.match(lifecycleSchedulerSource, /chosen\.dispatchType === "sequence"\s*\?\s*scheduledFor\.toISOString\(\)/);
+assert.match(lifecycleSchedulerSource, /calculateNextSequenceStepAt\(now, currentStep!\.wait_minutes, nextStep\.wait_minutes\)/);
+
+const lifecycleQueueSource = readFileSync('server/lifecycle/lifecycleQueue.ts', 'utf8');
+assert.match(lifecycleQueueSource, /calculateNextSequenceStepAt\(sentAt, step\.wait_minutes, nextStep\.wait_minutes\)/);
 
 const lifecycleRepositorySource = readFileSync('server/lifecycle/lifecycleRepository.ts', 'utf8');
 const existingEnrollmentLookup = lifecycleRepositorySource.indexOf('const { data: existingEnrollment');

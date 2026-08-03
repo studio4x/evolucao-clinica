@@ -5,6 +5,7 @@ import { getContextualActionPendingAt, getNextActionCopy, getNextBestAction, get
 import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
 import { escapeLifecycleHtml, renderLifecycleMessage, renderSafeLifecycleMarkdown, resolveLifecycleUrl } from "./lifecycleRenderer.js";
+import { calculateNextSequenceStepAt } from "./lifecycleSequenceTiming.js";
 import { renderLifecycleTemplate } from "./templates/tokenRegistry.js";
 import type { LifecycleDependencies, LifecycleState } from "./lifecycleTypes.js";
 
@@ -62,7 +63,7 @@ async function markFailure(deps: LifecycleDependencies, dispatch: any, error: un
   }).eq("id", dispatch.id);
 }
 
-async function advanceSequenceEnrollment(deps: LifecycleDependencies, dispatch: any, step: any) {
+async function advanceSequenceEnrollment(deps: LifecycleDependencies, dispatch: any, step: any, sentAt: Date) {
   if (dispatch.dispatch_type !== "sequence" || !dispatch.enrollment_id || !step?.position) return;
 
   const { data: enrollment, error: enrollmentError } = await deps.supabaseAdmin
@@ -88,8 +89,9 @@ async function advanceSequenceEnrollment(deps: LifecycleDependencies, dispatch: 
     .maybeSingle();
   if (nextStepError) throw new Error(nextStepError.message || "Falha ao consultar próximo passo lifecycle.");
 
-  const startedAt = new Date(enrollment.started_at || enrollment.enrolled_at).getTime();
-  const nextStepAt = nextStep ? new Date(startedAt + Number(nextStep.wait_minutes || 0) * 60000).toISOString() : null;
+  const nextStepAt = nextStep
+    ? calculateNextSequenceStepAt(sentAt, step.wait_minutes, nextStep.wait_minutes).toISOString()
+    : null;
 
   const { error: updateError } = await deps.supabaseAdmin
     .from("lifecycle_enrollments")
@@ -842,9 +844,10 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     throw new Error("Nenhum canal de comunicação aceitou o dispatch.");
   }
 
+  const sentAt = new Date();
   await deps.supabaseAdmin.from("lifecycle_dispatches").update({
     status: "sent",
-    sent_at: new Date().toISOString(),
+    sent_at: sentAt.toISOString(),
     email_delivery_id: emailDeliveryId,
     rendered_subject: rendered.subject,
     rendered_preheader: rendered.preheader,
@@ -853,7 +856,7 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     updated_at: new Date().toISOString()
   }).eq("id", dispatch.id);
   try {
-    await advanceSequenceEnrollment(deps, dispatch, stepResult.data);
+    await advanceSequenceEnrollment(deps, dispatch, stepResult.data, sentAt);
   } catch (advanceError) {
     console.error(`[Lifecycle Queue] E-mail enviado, mas não foi possível avançar a matrícula ${dispatch.enrollment_id}:`, advanceError);
   }
