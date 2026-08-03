@@ -114,19 +114,12 @@ Aplique também a migration
 Ela restringe a tabela ao `service_role` e guarda somente o valor bruto
 higienizado, removendo campos de credenciais conhecidos.
 
-## Templates proativos da jornada
+## Lifecycle
 
-A jornada de ativação envia `ec_jornada_ativacao` em `pt_BR` como mensagem
-do tipo `template`. Os valores podem ser substituídos pelas variáveis
-`WHATSAPP_LIFECYCLE_TEMPLATE_NAME` e
-`WHATSAPP_LIFECYCLE_TEMPLATE_LANGUAGE`, sem prefixo `VITE_`, quando o nome ou
-idioma aprovado na Meta for diferente.
-
-O modelo `ec_jornada_ativacao` possui finalidade de educação e
-reengajamento e deve ser cadastrado como Marketing. O modelo
-`ec_configuracao_pendente`, documentado em `/admin/whatsapp`, é Utility e fica
-reservado para um fluxo operacional futuro que consiga comprovar uma
-configuração iniciada pelo usuário. Ele não substitui a jornada inteira.
+O lifecycle não envia WhatsApp. `ec_jornada_ativacao` permanece histórico e
+desativado até que exista consentimento separado de Marketing, preferência
+separada, templates Marketing e lógica independente do consentimento
+operacional atual.
 
 ## Política de notificações e consentimento
 
@@ -136,7 +129,7 @@ Mesmo com a solicitação explícita, a camada central aceita somente `account_a
 
 Conteúdo clínico ou relação assistencial (paciente, prontuário, evolução, relatório, gravação, transcrição, áudio e atendimento) é suprimido e não interrompe os demais canais. `ec_notificacao_plataforma` é legado de Marketing e não pode ser usado como Utility para conteúdo livre. O painel manual não envia WhatsApp.
 
-Crie manualmente na Meta, em `pt_BR`, os templates com um único parâmetro de corpo `{{1}}` (primeiro nome): `ec_acesso_liberado`, `ec_suporte_atualizado`, `ec_assinatura_atualizada`, `ec_pagamento_atualizado` e `ec_seguranca_conta`. Configure-os respectivamente nas variáveis `WHATSAPP_TEMPLATE_ACCOUNT_ACCESS`, `WHATSAPP_TEMPLATE_SUPPORT_UPDATE`, `WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE`, `WHATSAPP_TEMPLATE_PAYMENT_UPDATE` e `WHATSAPP_TEMPLATE_SECURITY_NOTICE`; use `WHATSAPP_TEMPLATE_LANGUAGE=pt_BR`. Não habilite novos disparos até a aprovação dos templates.
+Configure os templates aprovados nas variáveis `WHATSAPP_TEMPLATE_ACCOUNT_ACCESS`, `WHATSAPP_TEMPLATE_SUPPORT_UPDATE`, `WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE`, `WHATSAPP_TEMPLATE_PAYMENT_UPDATE` e `WHATSAPP_TEMPLATE_SECURITY_NOTICE`; use `WHATSAPP_TEMPLATE_LANGUAGE=pt_BR`.
 
 ## Webhook interno de descadastramento
 
@@ -155,9 +148,18 @@ Ele aceita somente os campos documentados, limita o corpo, normaliza o telefone 
 
 O processamento muda exclusivamente `whatsapp_opt_in = false`, `whatsapp_enabled = false` e `whatsapp_opt_out_at`. E-mail, push, lifecycle, educação e preferências comerciais não mudam. `whatsapp_opt_out_events` guarda somente SHA-256 do número, origem, motivo, status e timestamps; a migration normaliza números existentes e cria índice não único. O teste administrativo usa o template configurado de acesso; texto comum não é a validação padrão fora da janela de 24 horas.
 
-O teste administrativo continua enviando texto comum para validar credenciais
-e conectividade. Portanto, para validar um template fora da janela de 24 horas,
-use um disparo controlado da jornada depois que o modelo estiver aprovado.
+## Contratos atuais dos templates de Utilidade
+
+O código envia exclusivamente payloads internos tipados e nunca encaminha título, conteúdo livre, resposta de suporte ou dados técnicos. A ordem é fixa: `ec_acesso_liberado`: `{{1}}` primeiro nome; `ec_suporte_atualizado`: primeiro nome, protocolo, status controlado; `ec_assinatura_atualizada`: primeiro nome, status, data; `ec_pagamento_atualizado`: primeiro nome, referência, status; `ec_seguranca_conta`: primeiro nome, evento, data/hora. Cada campo é higienizado, limitado e validado contra status/eventos permitidos.
+
+`POST /api/notifications/send` nunca envia WhatsApp e ignora `channels.whatsapp` e `notificationKey` recebidos do navegador. Somente `sendAdministrativeWhatsAppNotification` no backend pode chamar a Cloud API. Atualmente há gatilhos reais para acesso liberado e atualizações/respostas/conclusão de suporte; assinatura, pagamento e segurança permanecem preparados, sem gatilho artificial.
+
+O lifecycle não envia WhatsApp. `ec_jornada_ativacao` está desativado: o consentimento atual é exclusivamente operacional. Uma futura ativação exige consentimento e preferência próprios de Marketing, templates Marketing e lógica independente.
+
+O opt-out aceita somente `user_requested_opt_out`, `admin_requested_opt_out`, `invalid_consent` e `number_changed`. O parser específico é aplicado antes do parser global e impõe 8 KB mesmo sem `Content-Length`. A RPC `process_whatsapp_opt_out` reivindica `eventId` por `INSERT ... ON CONFLICT` e atualiza auditoria/preferências na mesma transação.
+
+O teste administrativo usa `ec_acesso_liberado` com somente `{{1}}`; não envia
+texto comum como validação padrão.
 
 ## Limites desta etapa
 
@@ -168,9 +170,8 @@ O webhook central do n8n ainda não participa do roteamento. A integração futu
 deverá consumir ou encaminhar eventos sem receber Access Token, App Secret,
 Authorization ou Service Role.
 
-Templates não são criados automaticamente na Meta. O nome configurado precisa
-existir, estar aprovado e ter exatamente dois parâmetros no corpo, na ordem:
-primeiro nome do profissional e conteúdo do passo da jornada.
+Templates não são criados automaticamente na Meta. Os nomes configurados
+precisam existir e estar aprovados com a quantidade e ordem documentadas acima.
 
 ## Estado operacional validado em 30/07/2026
 

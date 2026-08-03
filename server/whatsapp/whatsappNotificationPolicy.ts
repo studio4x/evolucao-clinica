@@ -1,72 +1,55 @@
 import type { WhatsAppTemplateComponent } from "./whatsappTypes.js";
 
-export type WhatsAppAdministrativeNotificationKey =
-  | "account_access_granted"
-  | "support_ticket_updated"
-  | "subscription_status_updated"
-  | "payment_confirmed"
-  | "payment_failed"
-  | "account_security_notice";
+export type SupportStatus = "Recebido" | "Em análise" | "Aguardando informações" | "Respondido" | "Concluído";
+export type SubscriptionStatus = "Ativa" | "Em análise" | "Pagamento pendente" | "Suspensa" | "Cancelada";
+export type PaymentStatus = "Confirmado" | "Não concluído" | "Pendente" | "Cancelado" | "Estornado";
+export type SecurityEvent = "Alteração de senha" | "Solicitação de redefinição de senha" | "Alteração de e-mail" | "Novo acesso à conta" | "Alteração de dados da conta";
 
-export type WhatsAppNotificationSuppression =
-  | "suppressed_not_requested"
-  | "suppressed_not_allowed"
-  | "suppressed_clinical_content"
-  | "suppressed_no_consent"
-  | "suppressed_no_number"
-  | "suppressed_not_configured";
+export type WhatsAppAdministrativeNotification =
+  | { key: "account_access_granted"; data: { firstName: string } }
+  | { key: "support_ticket_updated"; data: { firstName: string; protocol: string; status: SupportStatus } }
+  | { key: "subscription_status_updated"; data: { firstName: string; status: SubscriptionStatus; updatedAt: string } }
+  | { key: "payment_confirmed" | "payment_failed"; data: { firstName: string; reference: string; status: PaymentStatus } }
+  | { key: "account_security_notice"; data: { firstName: string; event: SecurityEvent; occurredAt: string } };
 
-type TemplateDefinition = {
-  env: "WHATSAPP_TEMPLATE_ACCOUNT_ACCESS" | "WHATSAPP_TEMPLATE_SUPPORT_UPDATE" | "WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE" | "WHATSAPP_TEMPLATE_PAYMENT_UPDATE" | "WHATSAPP_TEMPLATE_SECURITY_NOTICE";
-  fallback: string;
+export type WhatsAppAdministrativeNotificationKey = WhatsAppAdministrativeNotification["key"];
+export type WhatsAppNotificationSuppression = "suppressed_not_allowed" | "suppressed_clinical_content" | "suppressed_not_configured" | "suppressed_invalid_payload";
+
+const TEMPLATE_ENV: Record<WhatsAppAdministrativeNotificationKey, string> = {
+  account_access_granted: "WHATSAPP_TEMPLATE_ACCOUNT_ACCESS",
+  support_ticket_updated: "WHATSAPP_TEMPLATE_SUPPORT_UPDATE",
+  subscription_status_updated: "WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE",
+  payment_confirmed: "WHATSAPP_TEMPLATE_PAYMENT_UPDATE",
+  payment_failed: "WHATSAPP_TEMPLATE_PAYMENT_UPDATE",
+  account_security_notice: "WHATSAPP_TEMPLATE_SECURITY_NOTICE"
 };
+const CLINICAL_CONTENT = /\b(paciente|prontu[aá]rio|evolu[çc][aã]o|relat[oó]rio cl[ií]nico|transcri[çc][aã]o|grava[çc][aã]o|[aá]udio|atendimento|sess[aã]o|consulta|diagn[oó]stico|anamnese|prescri[çc][aã]o|rela[çc][aã]o assistencial|migra[çc][aã]o de prontu[aá]rios)\b/i;
+const supportStatuses = new Set<SupportStatus>(["Recebido", "Em análise", "Aguardando informações", "Respondido", "Concluído"]);
+const subscriptionStatuses = new Set<SubscriptionStatus>(["Ativa", "Em análise", "Pagamento pendente", "Suspensa", "Cancelada"]);
+const paymentStatuses = new Set<PaymentStatus>(["Confirmado", "Não concluído", "Pendente", "Cancelado", "Estornado"]);
+const securityEvents = new Set<SecurityEvent>(["Alteração de senha", "Solicitação de redefinição de senha", "Alteração de e-mail", "Novo acesso à conta", "Alteração de dados da conta"]);
 
-const TEMPLATES: Record<WhatsAppAdministrativeNotificationKey, TemplateDefinition> = {
-  account_access_granted: { env: "WHATSAPP_TEMPLATE_ACCOUNT_ACCESS", fallback: "ec_acesso_liberado" },
-  support_ticket_updated: { env: "WHATSAPP_TEMPLATE_SUPPORT_UPDATE", fallback: "ec_suporte_atualizado" },
-  subscription_status_updated: { env: "WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE", fallback: "ec_assinatura_atualizada" },
-  payment_confirmed: { env: "WHATSAPP_TEMPLATE_PAYMENT_UPDATE", fallback: "ec_pagamento_atualizado" },
-  payment_failed: { env: "WHATSAPP_TEMPLATE_PAYMENT_UPDATE", fallback: "ec_pagamento_atualizado" },
-  account_security_notice: { env: "WHATSAPP_TEMPLATE_SECURITY_NOTICE", fallback: "ec_seguranca_conta" }
-};
+export function containsClinicalWhatsAppContent(...values: Array<string | undefined | null>): boolean { return values.some((value) => CLINICAL_CONTENT.test(String(value || ""))); }
+function clean(value: unknown, max: number) { return String(value ?? "").replace(/[\r\n\t\0-\x1F\x7F]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max); }
+function firstName(value: unknown) { return clean(value, 80).split(" ")[0] || "Profissional"; }
+function body(parameters: string[]): WhatsAppTemplateComponent[] { return [{ type: "body", parameters: parameters.map((text) => ({ type: "text", text })) }]; }
 
-// This is deliberately broad. A false positive keeps a message in the safer
-// in-app/push/e-mail channels; a false negative could expose clinical context.
-const CLINICAL_CONTENT = /\b(paciente|prontu[aá]rio|evolu[çc][aã]o|relat[oó]rio cl[ií]nico|transcri[çc][aã]o|grava[çc][aã]o|[aá]udio|atendimento|sess[aã]o|consulta|diagn[oó]stico|anamnese|prescri[çc][aã]o|profissional.*paciente|migra[çc][aã]o de prontu[aá]rios)\b/i;
-
-export function isWhatsAppAdministrativeNotificationKey(value: unknown): value is WhatsAppAdministrativeNotificationKey {
-  return typeof value === "string" && value in TEMPLATES;
-}
-
-export function containsClinicalWhatsAppContent(...values: Array<string | undefined | null>): boolean {
-  return values.some((value) => CLINICAL_CONTENT.test(String(value || "")));
-}
-
-export function resolveWhatsAppAdministrativeTemplate(input: {
-  requested: boolean;
-  notificationKey?: unknown;
-  title?: string;
-  content?: string;
-  firstName?: string;
-  env?: NodeJS.ProcessEnv;
-}): { allowed: true; templateName: string; languageCode: string; components: WhatsAppTemplateComponent[] } | { allowed: false; reason: WhatsAppNotificationSuppression } {
-  if (!input.requested) return { allowed: false, reason: "suppressed_not_requested" };
-  if (!isWhatsAppAdministrativeNotificationKey(input.notificationKey)) return { allowed: false, reason: "suppressed_not_allowed" };
-  if (containsClinicalWhatsAppContent(input.title, input.content)) return { allowed: false, reason: "suppressed_clinical_content" };
-
-  const env = input.env || process.env;
-  const definition = TEMPLATES[input.notificationKey];
-  const templateName = String(env[definition.env] || "").trim();
+export function resolveWhatsAppAdministrativeTemplate(notification: WhatsAppAdministrativeNotification, env: NodeJS.ProcessEnv = process.env): { allowed: true; templateName: string; languageCode: string; components: WhatsAppTemplateComponent[] } | { allowed: false; reason: WhatsAppNotificationSuppression } {
+  const templateName = clean(env[TEMPLATE_ENV[notification.key]], 128);
   if (!templateName) return { allowed: false, reason: "suppressed_not_configured" };
-  const languageCode = String(env.WHATSAPP_TEMPLATE_LANGUAGE || "pt_BR").trim();
-  const firstName = String(input.firstName || "Profissional").trim().split(/\s+/)[0].slice(0, 80) || "Profissional";
-
-  // Only the recipient first name is allowed as a parameter. Titles, content,
-  // support messages and technical details never cross this boundary.
-  return {
-    allowed: true,
-    templateName,
-    languageCode,
-    components: [{ type: "body", parameters: [{ type: "text", text: firstName }] }]
-  };
+  let parameters: string[];
+  switch (notification.key) {
+    case "account_access_granted": parameters = [firstName(notification.data.firstName)]; break;
+    case "support_ticket_updated": if (!supportStatuses.has(notification.data.status)) return { allowed: false, reason: "suppressed_invalid_payload" }; parameters = [firstName(notification.data.firstName), clean(notification.data.protocol, 80), clean(notification.data.status, 60)]; break;
+    case "subscription_status_updated": if (!subscriptionStatuses.has(notification.data.status)) return { allowed: false, reason: "suppressed_invalid_payload" }; parameters = [firstName(notification.data.firstName), clean(notification.data.status, 60), clean(notification.data.updatedAt, 40)]; break;
+    case "payment_confirmed": case "payment_failed": if (!paymentStatuses.has(notification.data.status)) return { allowed: false, reason: "suppressed_invalid_payload" }; parameters = [firstName(notification.data.firstName), clean(notification.data.reference, 80), clean(notification.data.status, 60)]; break;
+    case "account_security_notice": if (!securityEvents.has(notification.data.event)) return { allowed: false, reason: "suppressed_invalid_payload" }; parameters = [firstName(notification.data.firstName), clean(notification.data.event, 100), clean(notification.data.occurredAt, 40)]; break;
+    default: return { allowed: false, reason: "suppressed_not_allowed" };
+  }
+  if (parameters.some((parameter) => !parameter || containsClinicalWhatsAppContent(parameter))) return { allowed: false, reason: "suppressed_clinical_content" };
+  return { allowed: true, templateName, languageCode: clean(env.WHATSAPP_TEMPLATE_LANGUAGE || "pt_BR", 16), components: body(parameters) };
 }
+
+export function mapSupportStatus(status: unknown): SupportStatus | null { return ({ open: "Recebido", in_progress: "Em análise", waiting_user: "Aguardando informações", responded: "Respondido", closed: "Concluído" } as Record<string, SupportStatus>)[String(status)] || null; }
+export function mapSubscriptionStatus(status: unknown): SubscriptionStatus | null { return ({ active: "Ativa", trialing: "Ativa", pending: "Pagamento pendente", past_due: "Pagamento pendente", unpaid: "Suspensa", canceled: "Cancelada" } as Record<string, SubscriptionStatus>)[String(status)] || null; }
+export function mapPaymentStatus(status: unknown): PaymentStatus | null { return ({ succeeded: "Confirmado", paid: "Confirmado", failed: "Não concluído", pending: "Pendente", canceled: "Cancelado", refunded: "Estornado" } as Record<string, PaymentStatus>)[String(status)] || null; }

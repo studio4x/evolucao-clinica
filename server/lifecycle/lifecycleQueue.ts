@@ -714,7 +714,8 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   const forceEmailOnly = dispatch.metadata?.force_email_only === true;
   const emailEnabled = preferences.email_enabled !== false;
   const pushEnabled = !forceEmailOnly && preferences.push_enabled !== false;
-  const whatsappEnabled = !forceEmailOnly && preferences.whatsapp_enabled === true && preferences.whatsapp_opt_in === true;
+  // Operational consent cannot authorize lifecycle/marketing messages.
+  const whatsappEnabled = false;
   const whatsappNumber = String(preferences.whatsapp_number || "").trim();
 
   if (forceEmailOnly && !emailEnabled) {

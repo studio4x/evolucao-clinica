@@ -405,32 +405,31 @@ assert.doesNotMatch(
   /SUPABASE_SERVICE_ROLE_KEY\s*\|\|\s*process\.env\.VITE_SUPABASE_ANON_KEY/
 );
 const notificationSenderStart = serverSource.indexOf("async function sendNotificationInternal");
-const notificationSenderEnd = serverSource.indexOf("async function sendTrialExpirationEmail", notificationSenderStart);
+const notificationSenderEnd = serverSource.indexOf("async function sendAdministrativeWhatsAppNotification", notificationSenderStart);
 const notificationSenderSource = serverSource.slice(notificationSenderStart, notificationSenderEnd);
 assert.ok(notificationSenderStart >= 0);
-assert.match(notificationSenderSource, /resolveWhatsAppAdministrativeTemplate/);
-assert.match(notificationSenderSource, /channels\.whatsapp === true/);
-assert.match(notificationSenderSource, /communicationPreferences\?\.whatsapp_enabled !== true/);
-assert.match(notificationSenderSource, /communicationPreferences\?\.whatsapp_opt_in !== true/);
-assert.match(notificationSenderSource, /whatsappClient\.sendTemplate/);
-assert.match(serverSource, /whatsapp: requestedChannels\.whatsapp === true/);
+assert.doesNotMatch(notificationSenderSource, /whatsappClient\.sendTemplate/);
+assert.match(serverSource, /whatsapp: false/);
+assert.match(serverSource, /sendAdministrativeWhatsAppNotification/);
 
-const policyEnv = { WHATSAPP_TEMPLATE_ACCOUNT_ACCESS: "ec_acesso_liberado", WHATSAPP_TEMPLATE_LANGUAGE: "pt_BR" } as NodeJS.ProcessEnv;
-assert.equal(resolveWhatsAppAdministrativeTemplate({ requested: false, notificationKey: "account_access_granted", env: policyEnv }).allowed, false);
-assert.deepEqual(resolveWhatsAppAdministrativeTemplate({ requested: true, env: policyEnv }), { allowed: false, reason: "suppressed_not_allowed" });
-assert.deepEqual(resolveWhatsAppAdministrativeTemplate({ requested: true, notificationKey: "not_allowed", env: policyEnv }), { allowed: false, reason: "suppressed_not_allowed" });
-assert.deepEqual(resolveWhatsAppAdministrativeTemplate({ requested: true, notificationKey: "account_access_granted", title: "Paciente atualizado", env: policyEnv }), { allowed: false, reason: "suppressed_clinical_content" });
+const policyEnv = { WHATSAPP_TEMPLATE_ACCOUNT_ACCESS: "ec_acesso_liberado", WHATSAPP_TEMPLATE_SUPPORT_UPDATE: "ec_suporte_atualizado", WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE: "ec_assinatura_atualizada", WHATSAPP_TEMPLATE_PAYMENT_UPDATE: "ec_pagamento_atualizado", WHATSAPP_TEMPLATE_SECURITY_NOTICE: "ec_seguranca_conta", WHATSAPP_TEMPLATE_LANGUAGE: "pt_BR" } as NodeJS.ProcessEnv;
+const parameterTexts = (value: ReturnType<typeof resolveWhatsAppAdministrativeTemplate>) => value.allowed ? value.components[0]!.parameters.map((parameter) => parameter.text) : [];
+assert.deepEqual(parameterTexts(resolveWhatsAppAdministrativeTemplate({ key: "account_access_granted", data: { firstName: "Mariana Souza" } }, policyEnv)), ["Mariana"]);
+assert.deepEqual(parameterTexts(resolveWhatsAppAdministrativeTemplate({ key: "support_ticket_updated", data: { firstName: "Mariana", protocol: "SUP-01", status: "Respondido" } }, policyEnv)), ["Mariana", "SUP-01", "Respondido"]);
+assert.deepEqual(parameterTexts(resolveWhatsAppAdministrativeTemplate({ key: "subscription_status_updated", data: { firstName: "Mariana", status: "Ativa", updatedAt: "03/08/2026" } }, policyEnv)), ["Mariana", "Ativa", "03/08/2026"]);
+assert.deepEqual(parameterTexts(resolveWhatsAppAdministrativeTemplate({ key: "payment_confirmed", data: { firstName: "Mariana", reference: "PAY-01", status: "Confirmado" } }, policyEnv)), ["Mariana", "PAY-01", "Confirmado"]);
+assert.deepEqual(parameterTexts(resolveWhatsAppAdministrativeTemplate({ key: "account_security_notice", data: { firstName: "Mariana", event: "Novo acesso à conta", occurredAt: "03/08/2026 10:00" } }, policyEnv)), ["Mariana", "Novo acesso à conta", "03/08/2026 10:00"]);
+assert.deepEqual(resolveWhatsAppAdministrativeTemplate({ key: "support_ticket_updated", data: { firstName: "Mariana", protocol: "SUP-01", status: "Livre" as any } }, policyEnv), { allowed: false, reason: "suppressed_invalid_payload" });
+assert.deepEqual(resolveWhatsAppAdministrativeTemplate({ key: "support_ticket_updated", data: { firstName: "Mariana", protocol: "Paciente\nMaria", status: "Respondido" } }, policyEnv), { allowed: false, reason: "suppressed_clinical_content" });
 assert.equal(containsClinicalWhatsAppContent("Transcrição da evolução"), true);
-const approvedTemplate = resolveWhatsAppAdministrativeTemplate({ requested: true, notificationKey: "account_access_granted", title: "Acesso liberado", content: "Acesse sua conta", firstName: "Mariana Souza", env: policyEnv });
-assert.equal(approvedTemplate.allowed, true);
-if (approvedTemplate.allowed) assert.deepEqual(approvedTemplate.components[0]?.parameters, [{ type: "text", text: "Mariana" }]);
 
 assert.equal(verifyWhatsAppOptOutAuthorization("Bearer secret", "secret"), true);
 assert.equal(verifyWhatsAppOptOutAuthorization("Bearer wrong", "secret"), false);
 const optOut = validateWhatsAppOptOutPayload({ phoneNumber: "+55 (11) 99999-9999", source: "typebot", reason: "user_requested_opt_out", eventId: "event-1" });
 assert.equal(optOut.phoneNumber, "5511999999999");
 assert.equal(optOut.phoneHash.length, 64);
-assert.throws(() => validateWhatsAppOptOutPayload({ phoneNumber: "5511999999999", source: "invalid", reason: "x" }), WhatsAppOptOutValidationError);
+assert.throws(() => validateWhatsAppOptOutPayload({ phoneNumber: "5511999999999", source: "invalid", reason: "user_requested_opt_out" }), WhatsAppOptOutValidationError);
+assert.throws(() => validateWhatsAppOptOutPayload({ phoneNumber: "5511999999999", source: "n8n", reason: "free text" }), WhatsAppOptOutValidationError);
 assert.throws(() => validateWhatsAppOptOutPayload({ phoneNumber: "5511999999999", source: "n8n", reason: "x", extra: true }), WhatsAppOptOutValidationError);
 const n8nEndpointStart = serverSource.indexOf('app.post("/api/integrations/whatsapp/events"');
 const n8nEndpointEnd = serverSource.indexOf('app.get("/api/debug-env"', n8nEndpointStart);
@@ -444,7 +443,7 @@ const optOutEndpointStart = serverSource.indexOf('app.post("/api/integrations/wh
 assert.ok(optOutEndpointStart >= 0);
 const optOutEndpointSource = serverSource.slice(optOutEndpointStart, serverSource.indexOf('app.get("/api/admin/whatsapp/consent-metrics"', optOutEndpointStart));
 assert.match(optOutEndpointSource, /verifyWhatsAppOptOutAuthorization/);
-assert.match(optOutEndpointSource, /whatsapp_opt_in: false, whatsapp_enabled: false/);
+assert.match(optOutEndpointSource, /process_whatsapp_opt_out/);
 assert.doesNotMatch(optOutEndpointSource, /phoneNumber.*json\(/);
 
 const n8nAdminEventsStart = serverSource.indexOf('app.get("/api/admin/whatsapp/integration-events"');
@@ -467,7 +466,7 @@ assert.match(whatsappAdminSource, /alreadyProcessed/);
 assert.match(whatsappAdminSource, /\/api\/admin\/whatsapp\/integration-events\?page=/);
 assert.match(whatsappAdminSource, /Limpar chamadas/);
 assert.match(whatsappAdminSource, /Página \{whatsappIntegrationEventsPage\} de \{whatsappIntegrationEventsTotalPages\}/);
-assert.match(whatsappAdminSource, /ec_jornada_ativacao/);
+assert.match(whatsappAdminSource, /Motivos aceitos/);
 assert.match(whatsappAdminSource, /ec_configuracao_pendente/);
 assert.match(whatsappAdminSource, /ec_notificacao_plataforma/);
 assert.match(whatsappAdminSource, /WhatsApp não é usado em notificações manuais/);

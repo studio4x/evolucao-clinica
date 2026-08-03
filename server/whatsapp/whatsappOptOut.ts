@@ -2,6 +2,8 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { normalizeWhatsAppPhone, WhatsAppValidationError } from "./whatsappClient.js";
 
 const SOURCES = new Set(["typebot", "n8n", "chatbot", "admin"]);
+const REASONS = new Set(["user_requested_opt_out", "admin_requested_opt_out", "invalid_consent", "number_changed"]);
+export type WhatsAppOptOutReason = "user_requested_opt_out" | "admin_requested_opt_out" | "invalid_consent" | "number_changed";
 
 export class WhatsAppOptOutValidationError extends Error {
   constructor(message: string) { super(message); this.name = "WhatsAppOptOutValidationError"; }
@@ -27,8 +29,8 @@ export function validateWhatsAppOptOutPayload(payload: unknown) {
   if (phoneNumber.length < 8 || phoneNumber.length > 15) throw new WhatsAppOptOutValidationError("phoneNumber deve estar no formato internacional com DDI.");
   const source = String(input.source || "").trim();
   if (!SOURCES.has(source)) throw new WhatsAppOptOutValidationError("source não é suportado.");
-  const reason = String(input.reason || "").trim();
-  if (!reason || reason.length > 200) throw new WhatsAppOptOutValidationError("reason é obrigatório e deve ter no máximo 200 caracteres.");
+  const reason = String(input.reason || "").trim() as WhatsAppOptOutReason;
+  if (!REASONS.has(reason)) throw new WhatsAppOptOutValidationError("reason não é suportado.");
   const eventId = input.eventId == null || input.eventId === "" ? null : String(input.eventId).trim();
   if (eventId && eventId.length > 255) throw new WhatsAppOptOutValidationError("eventId excede o tamanho permitido.");
   return { phoneNumber, phoneHash: createHash("sha256").update(phoneNumber).digest("hex"), source, reason, eventId };
