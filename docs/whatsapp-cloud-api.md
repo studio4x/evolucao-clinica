@@ -128,13 +128,32 @@ reengajamento e deve ser cadastrado como Marketing. O modelo
 reservado para um fluxo operacional futuro que consiga comprovar uma
 configuração iniciada pelo usuário. Ele não substitui a jornada inteira.
 
-Notificações in-app/push/e-mail também podem ser enviadas pelo WhatsApp com
-`ec_notificacao_plataforma`. O envio só ocorre quando
-`communication_preferences.whatsapp_enabled` está ativo, existe um
-`whatsapp_number` e o canal não foi desabilitado na chamada. Como o painel
-administrativo aceita título e conteúdo livres, esse modelo deve ser cadastrado
-como Marketing. A resposta inicial registra apenas `accepted`; entrega e
-leitura continuam dependendo dos eventos de status.
+## Política de notificações e consentimento
+
+O WhatsApp é **desativado por padrão** em `sendNotification` e no backend. A chamada precisa informar explicitamente `channels.whatsapp: true`; omissão ou `false` nunca envia WhatsApp. In-app, push e e-mail permanecem independentes.
+
+Mesmo com a solicitação explícita, a camada central aceita somente `account_access_granted`, `support_ticket_updated`, `subscription_status_updated`, `payment_confirmed`, `payment_failed` e `account_security_notice`, além de `whatsapp_enabled`, `whatsapp_opt_in`, número internacional válido e template configurado. Título e conteúdo livres jamais são encaminhados à Meta: os parâmetros são limitados ao primeiro nome.
+
+Conteúdo clínico ou relação assistencial (paciente, prontuário, evolução, relatório, gravação, transcrição, áudio e atendimento) é suprimido e não interrompe os demais canais. `ec_notificacao_plataforma` é legado de Marketing e não pode ser usado como Utility para conteúdo livre. O painel manual não envia WhatsApp.
+
+Crie manualmente na Meta, em `pt_BR`, os templates com um único parâmetro de corpo `{{1}}` (primeiro nome): `ec_acesso_liberado`, `ec_suporte_atualizado`, `ec_assinatura_atualizada`, `ec_pagamento_atualizado` e `ec_seguranca_conta`. Configure-os respectivamente nas variáveis `WHATSAPP_TEMPLATE_ACCOUNT_ACCESS`, `WHATSAPP_TEMPLATE_SUPPORT_UPDATE`, `WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE`, `WHATSAPP_TEMPLATE_PAYMENT_UPDATE` e `WHATSAPP_TEMPLATE_SECURITY_NOTICE`; use `WHATSAPP_TEMPLATE_LANGUAGE=pt_BR`. Não habilite novos disparos até a aprovação dos templates.
+
+## Webhook interno de descadastramento
+
+`POST /api/integrations/whatsapp/opt-out` é exclusivo de Typebot, n8n, chatbot ou serviço administrativo autorizado e exige `Authorization: Bearer <WHATSAPP_OPT_OUT_WEBHOOK_TOKEN>` e JSON:
+
+```json
+{
+  "phoneNumber": "5511999999999",
+  "source": "typebot",
+  "reason": "user_requested_opt_out",
+  "eventId": "wamid-ou-identificador-unico"
+}
+```
+
+Ele aceita somente os campos documentados, limita o corpo, normaliza o telefone internacional e compara o token em tempo constante. Token, headers, payload bruto e telefone completo não são registrados nem devolvidos. `eventId` é idempotente; duplicidade de número retorna conflito controlado e número inexistente responde sucesso sem revelar dados.
+
+O processamento muda exclusivamente `whatsapp_opt_in = false`, `whatsapp_enabled = false` e `whatsapp_opt_out_at`. E-mail, push, lifecycle, educação e preferências comerciais não mudam. `whatsapp_opt_out_events` guarda somente SHA-256 do número, origem, motivo, status e timestamps; a migration normaliza números existentes e cria índice não único. O teste administrativo usa o template configurado de acesso; texto comum não é a validação padrão fora da janela de 24 horas.
 
 O teste administrativo continua enviando texto comum para validar credenciais
 e conectividade. Portanto, para validar um template fora da janela de 24 horas,

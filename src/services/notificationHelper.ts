@@ -11,6 +11,7 @@ export interface NotificationPayload {
     inApp?: boolean;
     push?: boolean;
     email?: boolean;
+    whatsapp?: boolean;
   };
 }
 
@@ -35,7 +36,7 @@ export async function sendNotification(payload: NotificationPayload) {
       body: JSON.stringify({
         ...payload,
         source: payload.source || 'manual',
-        channels: payload.channels || { inApp: true, push: true, email: true }
+        channels: { inApp: true, push: true, email: true, whatsapp: false, ...payload.channels }
       })
     });
 

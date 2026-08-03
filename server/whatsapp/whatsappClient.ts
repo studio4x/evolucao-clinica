@@ -37,6 +37,7 @@ export function getWhatsAppConfigFromEnv(
     appSecret: String(env.WHATSAPP_APP_SECRET || "").trim(),
     webhookVerifyToken: String(env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").trim(),
     n8nEventsToken: String(env.WHATSAPP_N8N_EVENTS_TOKEN || "").trim(),
+    optOutWebhookToken: String(env.WHATSAPP_OPT_OUT_WEBHOOK_TOKEN || "").trim(),
     allowUnsignedWebhooks:
       env.NODE_ENV !== "production" &&
       String(env.WHATSAPP_ALLOW_UNSIGNED_WEBHOOKS || "false").toLowerCase() === "true"
@@ -47,6 +48,9 @@ export function normalizeWhatsAppPhone(value: string): string {
   const normalized = String(value || "").replace(/\D/g, "");
   if (!normalized) {
     throw new WhatsAppValidationError("Número de telefone do WhatsApp é obrigatório.");
+  }
+  if (normalized.length < 8 || normalized.length > 15) {
+    throw new WhatsAppValidationError("Número de telefone do WhatsApp deve conter DDI e entre 8 e 15 dígitos.");
   }
   return normalized;
 }

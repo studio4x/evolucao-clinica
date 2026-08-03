@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { normalizeWhatsAppPhone } from "../whatsapp/whatsappClient.js";
 import { DEFAULT_RUNTIME_CONFIG, LIFECYCLE_COMPLETION_WINDOW_DAYS, LIFECYCLE_TIMEZONE, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { LIFECYCLE_EVENT_NAMES, type LifecycleDependencies, type LifecycleEventName, type LifecycleEventSource, type LifecycleState } from "./lifecycleTypes.js";
 
@@ -158,6 +159,11 @@ export async function updateLifecyclePreferences(deps: LifecycleDependencies, us
   const allowed = ["product_education_enabled", "lifecycle_enabled", "commercial_enabled", "preferred_send_time", "timezone", "email_enabled", "push_enabled", "whatsapp_enabled", "whatsapp_number", "whatsapp_opt_in", "whatsapp_opt_in_source", "whatsapp_opt_in_text_version", "unsubscribed_at", "unsubscribe_reason"];
   const update: Record<string, unknown> = {};
   for (const key of allowed) if (key in values) update[key] = values[key];
+  if ("whatsapp_number" in update) {
+    const rawNumber = update.whatsapp_number;
+    if (rawNumber == null || String(rawNumber).trim() === "") update.whatsapp_number = null;
+    else update.whatsapp_number = normalizeWhatsAppPhone(String(rawNumber));
+  }
   if (update.timezone && typeof update.timezone !== "string") throw new Error("Fuso horário inválido.");
   if (typeof update.timezone === "string") {
     try { new Intl.DateTimeFormat("en-US", { timeZone: update.timezone }).format(); }

@@ -29,6 +29,16 @@ import {
 import { createWhatsAppRepository } from "./server/whatsapp/whatsappRepository.js";
 import type { WhatsAppSendResult } from "./server/whatsapp/whatsappTypes.js";
 import {
+  resolveWhatsAppAdministrativeTemplate,
+  type WhatsAppAdministrativeNotificationKey
+} from "./server/whatsapp/whatsappNotificationPolicy.js";
+import {
+  safeWhatsAppOptOutLog,
+  validateWhatsAppOptOutPayload,
+  verifyWhatsAppOptOutAuthorization,
+  WhatsAppOptOutValidationError
+} from "./server/whatsapp/whatsappOptOut.js";
+import {
   createWhatsAppN8nEventsService,
   validateNormalizedWhatsAppN8nEvent,
   verifyWhatsAppN8nEventsAuthorization,
@@ -1125,6 +1135,17 @@ type EmailProvider = "smtp" | "brevo";
 type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend";
 type NotificationOrigin = "platform" | "manual";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean; whatsapp?: boolean };
+type NotificationWhatsAppResult = WhatsAppSendResult | {
+  success: false;
+  status: string;
+  deliveryId: null;
+  wamid: null;
+  httpStatus: null;
+  errorCode: null;
+  errorTitle: null;
+  errorMessage: null;
+};
+const suppressedWhatsAppResult = (status: string): NotificationWhatsAppResult => ({ success: false, status, deliveryId: null, wamid: null, httpStatus: null, errorCode: null, errorTitle: null, errorMessage: null });
 
 type EmailDeliveryInput = {
   userId?: string | null;
@@ -1546,6 +1567,13 @@ async function deleteProfessionalAccount(targetUserId: string) {
 }
 
 // Middleware
+app.use((req, res, next) => {
+  if (req.originalUrl.split("?")[0] === "/api/integrations/whatsapp/opt-out") {
+    const contentLength = Number(req.headers["content-length"] || 0);
+    if (Number.isFinite(contentLength) && contentLength > 8192) return res.status(413).json({ error: "Payload excede o tamanho permitido." });
+  }
+  next();
+});
 app.use(express.json({
   limit: '10mb',
   verify: (req, _res, buf) => {
@@ -3446,6 +3474,71 @@ const lifecycleService = createLifecycleService({
     : whatsappClient.sendText(input)
 });
 
+// Internal opt-out webhook. It intentionally has a small body limit and never
+// returns or logs a phone number, token, headers, or raw payload.
+app.post("/api/integrations/whatsapp/opt-out", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!verifyWhatsAppOptOutAuthorization(String(req.headers.authorization || ""), whatsappConfig.optOutWebhookToken)) {
+    return res.status(401).json({ error: "Token de integração ausente ou inválido." });
+  }
+  try {
+    const event = validateWhatsAppOptOutPayload(req.body);
+    const now = new Date().toISOString();
+    if (event.eventId) {
+      const { data: existing, error } = await supabaseAdmin.from("whatsapp_opt_out_events").select("id, status").eq("event_id", event.eventId).maybeSingle();
+      if (error) throw new Error(error.message);
+      if (existing) {
+        console.info(safeWhatsAppOptOutLog({ eventId: event.eventId, source: event.source, status: "already_processed" }));
+        return res.status(200).json({ processed: true, alreadyProcessed: true, result: "already_processed" });
+      }
+    }
+    const { data: preferences, error: findError } = await supabaseAdmin
+      .from("communication_preferences")
+      .select("user_id, whatsapp_opt_in, whatsapp_enabled")
+      .eq("whatsapp_number", event.phoneNumber)
+      .limit(2);
+    if (findError) throw new Error(findError.message);
+    if ((preferences || []).length > 1) {
+      await supabaseAdmin.from("whatsapp_opt_out_events").insert({ event_id: event.eventId, phone_hash: event.phoneHash, source: event.source, reason: event.reason, status: "conflict", received_at: now, processed_at: now });
+      console.warn(safeWhatsAppOptOutLog({ eventId: event.eventId, source: event.source, status: "conflict" }));
+      return res.status(409).json({ processed: false, error: "Não foi possível associar a solicitação com segurança." });
+    }
+    const preference = preferences?.[0];
+    if (!preference) {
+      await supabaseAdmin.from("whatsapp_opt_out_events").insert({ event_id: event.eventId, phone_hash: event.phoneHash, source: event.source, reason: event.reason, status: "not_found", received_at: now, processed_at: now });
+      console.info(safeWhatsAppOptOutLog({ eventId: event.eventId, source: event.source, status: "not_found" }));
+      return res.status(200).json({ processed: true, alreadyProcessed: false, result: "not_found" });
+    }
+    const alreadyOptedOut = preference.whatsapp_opt_in !== true && preference.whatsapp_enabled !== true;
+    if (!alreadyOptedOut) {
+      const { error: updateError } = await supabaseAdmin.from("communication_preferences").update({ whatsapp_opt_in: false, whatsapp_enabled: false, whatsapp_opt_out_at: now, whatsapp_opt_out_source: event.source, whatsapp_opt_out_reason: event.reason }).eq("user_id", preference.user_id);
+      if (updateError) throw new Error(updateError.message);
+    }
+    const { error: auditError } = await supabaseAdmin.from("whatsapp_opt_out_events").insert({ event_id: event.eventId, user_id: preference.user_id, phone_hash: event.phoneHash, source: event.source, reason: event.reason, status: alreadyOptedOut ? "already_opted_out" : "processed", received_at: now, processed_at: now });
+    if (auditError) throw new Error(auditError.message);
+    console.info(safeWhatsAppOptOutLog({ eventId: event.eventId, source: event.source, status: alreadyOptedOut ? "already_opted_out" : "processed" }));
+    return res.status(200).json({ processed: true, alreadyProcessed: alreadyOptedOut, result: alreadyOptedOut ? "already_opted_out" : "processed" });
+  } catch (error) {
+    if (error instanceof WhatsAppOptOutValidationError) return res.status(400).json({ error: error.message });
+    console.error("[WhatsApp opt-out] Erro interno ao processar solicitação.");
+    return res.status(500).json({ error: "Erro interno ao processar descadastramento." });
+  }
+});
+
+app.get("/api/admin/whatsapp/consent-metrics", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const [enabled, optedIn, noConsent, optOutEvents] = await Promise.all([
+      supabaseAdmin.from("communication_preferences").select("user_id", { count: "exact", head: true }).eq("whatsapp_enabled", true),
+      supabaseAdmin.from("communication_preferences").select("user_id", { count: "exact", head: true }).eq("whatsapp_opt_in", true),
+      supabaseAdmin.from("communication_preferences").select("user_id", { count: "exact", head: true }).not("whatsapp_number", "is", null).eq("whatsapp_opt_in", false),
+      supabaseAdmin.from("whatsapp_opt_out_events").select("processed_at", { count: "exact" }).in("status", ["processed", "already_opted_out"]).order("processed_at", { ascending: false }).limit(1)
+    ]);
+    for (const result of [enabled, optedIn, noConsent, optOutEvents]) if (result.error) throw new Error(result.error.message);
+    return res.json({ enabled: enabled.count || 0, optedIn: optedIn.count || 0, numberWithoutConsent: noConsent.count || 0, optOutProcessed: optOutEvents.count || 0, lastOptOutAt: optOutEvents.data?.[0]?.processed_at || null, tokenConfigured: Boolean(whatsappConfig.optOutWebhookToken) });
+  } catch {
+    return res.status(500).json({ error: "Não foi possível carregar métricas de consentimento do WhatsApp." });
+  }
+});
+
 async function registerLifecycleLogin(userId: string) {
   try {
     await lifecycleService.recordEvent({
@@ -3686,7 +3779,8 @@ async function sendNotificationInternal(
   link?: string,
   imageUrl?: string,
   source: NotificationOrigin = "platform",
-  channels: NotificationChannels = {}
+  channels: NotificationChannels = {},
+  notificationKey?: WhatsAppAdministrativeNotificationKey
 ) {
   const notificationRecord = {
     user_id: targetUserId,
@@ -3718,9 +3812,16 @@ async function sendNotificationInternal(
     console.error("Erro geral no disparo de Push:", pushGeneralError.message);
   }
 
-  // C. Enviar WhatsApp somente para quem habilitou o canal e informou número
-  let whatsappResult: WhatsAppSendResult | null = null;
-  if (channels.whatsapp !== false) {
+  // C. WhatsApp is opt-in for the call and protected by an allowlist. Never
+  // forward arbitrary title/content to a Meta template.
+  let whatsappResult: NotificationWhatsAppResult | null = null;
+  const templatePolicy = resolveWhatsAppAdministrativeTemplate({
+    requested: channels.whatsapp === true,
+    notificationKey,
+    title,
+    content
+  });
+  if (templatePolicy.allowed) {
     try {
       const [{ data: communicationPreferences }, { data: whatsappProfile }] = await Promise.all([
         supabaseAdmin
@@ -3735,27 +3836,34 @@ async function sendNotificationInternal(
           .maybeSingle()
       ]);
       const whatsappNumber = String(communicationPreferences?.whatsapp_number || "").trim();
-      if (communicationPreferences?.whatsapp_enabled === true && communicationPreferences?.whatsapp_opt_in === true && whatsappNumber) {
-        const firstName = String(whatsappProfile?.full_name || "Profissional").trim().split(/\s+/)[0] || "Profissional";
+      if (communicationPreferences?.whatsapp_enabled !== true || communicationPreferences?.whatsapp_opt_in !== true) {
+        whatsappResult = suppressedWhatsAppResult("suppressed_no_consent");
+      } else if (!whatsappNumber) {
+        whatsappResult = suppressedWhatsAppResult("suppressed_no_number");
+      } else {
+        const resolvedTemplate = resolveWhatsAppAdministrativeTemplate({ requested: true, notificationKey, title, content, firstName: whatsappProfile?.full_name });
+        if (resolvedTemplate.allowed === false) {
+          whatsappResult = suppressedWhatsAppResult(resolvedTemplate.reason);
+        } else {
         whatsappResult = await whatsappClient.sendTemplate({
           userId: targetUserId,
           lifecycleDispatchId: null,
           recipientPhone: whatsappNumber,
           type: "template",
-          templateName: String(process.env.WHATSAPP_NOTIFICATION_TEMPLATE_NAME || "ec_notificacao_plataforma").trim(),
-          languageCode: String(process.env.WHATSAPP_NOTIFICATION_TEMPLATE_LANGUAGE || "pt_BR").trim(),
-          components: [{
-            type: "body",
-            parameters: [
-              { type: "text", text: firstName.slice(0, 80) },
-              { type: "text", text: String(title).trim().slice(0, 150) },
-              { type: "text", text: String(content).trim().slice(0, 600) }
-            ]
-          }]
+          templateName: resolvedTemplate.templateName,
+          languageCode: resolvedTemplate.languageCode,
+          components: resolvedTemplate.components
         });
+        }
       }
     } catch (whatsappError: any) {
       console.warn("[Notifications] Falha ao enviar template do WhatsApp:", whatsappError?.message || whatsappError);
+    }
+  } else {
+    const suppressionReason = templatePolicy.allowed === false ? templatePolicy.reason : "suppressed_not_allowed";
+    whatsappResult = suppressedWhatsAppResult(suppressionReason);
+    if (channels.whatsapp === true && suppressionReason !== "suppressed_not_requested") {
+      console.info(`[Notifications] WhatsApp ${suppressionReason}; notificationKey=${String(notificationKey || "missing").slice(0, 64)}`);
     }
   }
 
@@ -3935,7 +4043,7 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
     // Notificações manuais do sistema sempre devem acompanhar o push por e-mail.
     // Isso também protege clientes/PWAs antigos que ainda enviam email: false.
     email: notificationSource === "manual" || requestedChannels.email !== false,
-    whatsapp: requestedChannels.whatsapp !== false
+    whatsapp: requestedChannels.whatsapp === true
   };
   
   if (!title || !content) {
@@ -3963,7 +4071,8 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   }
 
   try {
-    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl, notificationSource, channels);
+    const notificationKey = req.body?.notificationKey;
+    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl, notificationSource, channels, notificationKey);
     res.json({
       success: true,
       notification: result.notification,
@@ -5113,21 +5222,24 @@ app.post("/api/notifications/test-whatsapp", requireAuth, async (req: any, res) 
       return res.status(403).json({ error: "Nao autorizado. Apenas administradores podem testar o envio do WhatsApp." });
     }
 
-    const { toPhone, text } = req.body || {};
+    const { toPhone } = req.body || {};
     
     if (!toPhone) {
       return res.status(400).json({ error: "Número de telefone de destino é obrigatório." });
     }
 
-    const testMessage = typeof text === "string" && text.trim()
-      ? text.trim().slice(0, 4096)
-      : "Olá! Este é um teste de envio da API do WhatsApp Cloud configurada na plataforma Evolução Clínica.";
-    const result = await whatsappClient.sendText({
+    const templateName = String(process.env.WHATSAPP_TEMPLATE_ACCOUNT_ACCESS || "").trim();
+    if (!templateName) {
+      return res.status(503).json({ error: "WHATSAPP_TEMPLATE_ACCOUNT_ACCESS não configurado. O teste padrão exige um template aprovado." });
+    }
+    const result = await whatsappClient.sendTemplate({
       userId: req.user.id,
       lifecycleDispatchId: null,
       recipientPhone: String(toPhone),
-      type: "text",
-      text: testMessage
+      type: "template",
+      templateName,
+      languageCode: String(process.env.WHATSAPP_TEMPLATE_LANGUAGE || "pt_BR").trim(),
+      components: [{ type: "body", parameters: [{ type: "text", text: "Administrador" }] }]
     });
 
     const responsePayload = {

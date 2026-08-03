@@ -27,6 +27,7 @@ export type WhatsAppConfig = {
   webhookVerifyToken: string;
   allowUnsignedWebhooks: boolean;
   n8nEventsToken: string;
+  optOutWebhookToken?: string;
 };
 
 export type WhatsAppN8nEventType =

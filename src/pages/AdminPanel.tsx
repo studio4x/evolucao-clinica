@@ -1137,6 +1137,7 @@ export default function AdminPanel() {
   const [whatsappIntegrationEventsLoading, setWhatsappIntegrationEventsLoading] = useState(false);
   const [whatsappIntegrationEventsError, setWhatsappIntegrationEventsError] = useState('');
   const [whatsappIntegrationEventsClearing, setWhatsappIntegrationEventsClearing] = useState(false);
+  const [whatsappConsentMetrics, setWhatsappConsentMetrics] = useState<{ enabled: number; optedIn: number; numberWithoutConsent: number; optOutProcessed: number; lastOptOutAt: string | null; tokenConfigured: boolean } | null>(null);
 
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
   const [selectedProfessionalId, setSelectedProfessionalId] = useState('');
@@ -1145,7 +1146,7 @@ export default function AdminPanel() {
   const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
   const [notifLink, setNotifLink] = useState('');
   const [notifImageUrl, setNotifImageUrl] = useState('');
-  const [notifSendWhatsapp, setNotifSendWhatsapp] = useState(true);
+  const [notifSendWhatsapp] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [pushNotificationsTab, setPushNotificationsTab] = useState<'manual' | 'platform' | 'daily_reminder'>('manual');
 
@@ -1619,9 +1620,22 @@ export default function AdminPanel() {
     }
   };
 
+  const loadWhatsappConsentMetrics = async () => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin/whatsapp/consent-metrics', { headers: { Authorization: `Bearer ${sessionData.session?.access_token || ''}` } });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar métricas de consentimento.');
+      setWhatsappConsentMetrics(payload);
+    } catch (error) {
+      console.warn('[Admin WhatsApp] Métricas de consentimento indisponíveis.', error);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'whatsapp_config') {
       void loadWhatsappIntegrationEvents(whatsappIntegrationEventsPage);
+      void loadWhatsappConsentMetrics();
     }
   }, [activeTab, whatsappIntegrationEventsPage]);
 
@@ -1899,7 +1913,7 @@ export default function AdminPanel() {
               link: notifLink || undefined,
               imageUrl: notifImageUrl || undefined,
               source: 'manual',
-              channels: { whatsapp: notifSendWhatsapp }
+              channels: { inApp: true, push: true, email: true, whatsapp: false }
           })
         });
 
@@ -5233,18 +5247,9 @@ export default function AdminPanel() {
                           )}
                         </div>
 
-                        <label className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={notifSendWhatsapp}
-                            onChange={(event) => setNotifSendWhatsapp(event.target.checked)}
-                            className="mt-0.5 h-4 w-4 accent-emerald-700"
-                          />
-                          <span>
-                            <strong className="block text-sm text-emerald-950">Enviar também pelo WhatsApp</strong>
-                            <span className="mt-1 block text-xs leading-relaxed text-emerald-900/75">Somente profissionais que habilitaram o canal e cadastraram um número receberão o template aprovado <code className="font-mono">ec_notificacao_plataforma</code>.</span>
-                          </span>
-                        </label>
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs leading-relaxed text-amber-900">
+                          <strong>WhatsApp não é usado em notificações manuais.</strong> Título, conteúdo livre, dados técnicos ou clínicos continuam somente nos canais in-app, push e e-mail. O WhatsApp exige um evento administrativo autorizado e um template específico aprovado.
+                        </div>
 
                         <div className="pt-2">
                           <button
@@ -7087,6 +7092,24 @@ export default function AdminPanel() {
                         </div>
                       </div>
 
+                    </div>
+
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 md:p-5 space-y-4">
+                      <div className="flex items-start gap-3">
+                        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700" />
+                        <div>
+                          <h3 className="text-sm font-bold text-emerald-950">Webhook de descadastramento</h3>
+                          <p className="mt-1 text-xs leading-relaxed text-emerald-900/80">Este endpoint é utilizado pelo Typebot ou n8n para retirar a autorização de recebimento pelo WhatsApp quando o usuário solicitar “SAIR”, “PARAR”, “CANCELAR” ou expressão equivalente.</p>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2 text-xs">
+                        <div className="rounded-xl border border-emerald-200 bg-white/85 p-3 space-y-2"><strong>URL</strong><code className="block break-all rounded bg-slate-900 p-2 text-slate-100">{`${window.location.origin}/api/integrations/whatsapp/opt-out`}</code><button type="button" onClick={() => void navigator.clipboard.writeText(`${window.location.origin}/api/integrations/whatsapp/opt-out`)} className="btn-outline px-3 py-1.5 text-xs"><Copy className="mr-1 inline h-3.5 w-3.5" />Copiar URL</button></div>
+                        <div className="rounded-xl border border-emerald-200 bg-white/85 p-3 space-y-2"><strong>Método e headers</strong><code className="block whitespace-pre-wrap rounded bg-slate-900 p-2 text-[11px] text-slate-100">{`POST\nAuthorization: Bearer SEU_TOKEN_CONFIGURADO\nContent-Type: application/json`}</code><button type="button" onClick={() => void navigator.clipboard.writeText('Authorization: Bearer SEU_TOKEN_CONFIGURADO\nContent-Type: application/json')} className="btn-outline px-3 py-1.5 text-xs"><Copy className="mr-1 inline h-3.5 w-3.5" />Copiar headers</button></div>
+                      </div>
+                      <div className="rounded-xl border border-emerald-200 bg-white/85 p-3 space-y-2 text-xs"><strong>Exemplo de payload</strong><pre className="whitespace-pre-wrap rounded bg-slate-900 p-2 text-[11px] text-slate-100">{`{\n  "phoneNumber": "5511999999999",\n  "source": "typebot",\n  "reason": "user_requested_opt_out",\n  "eventId": "wamid-ou-identificador-unico"\n}`}</pre><button type="button" onClick={() => void navigator.clipboard.writeText(JSON.stringify({ phoneNumber: '5511999999999', source: 'typebot', reason: 'user_requested_opt_out', eventId: 'wamid-ou-identificador-unico' }, null, 2))} className="btn-outline px-3 py-1.5 text-xs"><Copy className="mr-1 inline h-3.5 w-3.5" />Copiar payload</button></div>
+                      <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">Este webhook deve ser chamado somente pelo Typebot, n8n ou outro serviço autorizado. O token deve ser armazenado como segredo e nunca inserido em códigos executados no navegador.</p>
+                      <p className="text-xs text-emerald-950">Ao processar: <code>whatsapp_opt_in = false</code>, <code>whatsapp_enabled = false</code> e <code>whatsapp_opt_out_at = data e hora da solicitação</code>. Status do token: <strong>{whatsappConsentMetrics?.tokenConfigured ? 'Token configurado' : 'Token não configurado'}</strong>.</p>
+                      <div className="grid grid-cols-2 gap-2 text-center text-xs md:grid-cols-5">{[['Habilitado', whatsappConsentMetrics?.enabled], ['Opt-in', whatsappConsentMetrics?.optedIn], ['Número sem consentimento', whatsappConsentMetrics?.numberWithoutConsent], ['Descadastros', whatsappConsentMetrics?.optOutProcessed], ['Último', whatsappConsentMetrics?.lastOptOutAt ? formatDate(whatsappConsentMetrics.lastOptOutAt) : '—']].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-emerald-200 bg-white p-2"><strong className="block text-emerald-800">{value ?? '—'}</strong><span className="text-[10px] text-emerald-900/70">{label}</span></div>)}</div>
                     </div>
 
                     <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 md:p-5">
