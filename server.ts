@@ -3505,7 +3505,7 @@ app.get("/api/admin/whatsapp/consent-metrics", requireAuth, requireAdmin, async 
       supabaseAdmin.from("whatsapp_opt_out_events").select("processed_at", { count: "exact" }).in("status", ["processed", "already_opted_out"]).order("processed_at", { ascending: false }).limit(1)
     ]);
     for (const result of [enabled, optedIn, noConsent, optOutEvents]) if (result.error) throw new Error(result.error.message);
-    return res.json({ enabled: enabled.count || 0, optedIn: optedIn.count || 0, numberWithoutConsent: noConsent.count || 0, optOutProcessed: optOutEvents.count || 0, lastOptOutAt: optOutEvents.data?.[0]?.processed_at || null, tokenConfigured: Boolean(whatsappConfig.optOutWebhookToken), templates: { accountAccess: Boolean(process.env.WHATSAPP_TEMPLATE_ACCOUNT_ACCESS), support: Boolean(process.env.WHATSAPP_TEMPLATE_SUPPORT_UPDATE), subscription: Boolean(process.env.WHATSAPP_TEMPLATE_SUBSCRIPTION_UPDATE), payment: Boolean(process.env.WHATSAPP_TEMPLATE_PAYMENT_UPDATE), security: Boolean(process.env.WHATSAPP_TEMPLATE_SECURITY_NOTICE) } });
+    return res.json({ enabled: enabled.count || 0, optedIn: optedIn.count || 0, numberWithoutConsent: noConsent.count || 0, optOutProcessed: optOutEvents.count || 0, lastOptOutAt: optOutEvents.data?.[0]?.processed_at || null, tokenConfigured: Boolean(whatsappConfig.optOutWebhookToken) });
   } catch {
     return res.status(500).json({ error: "Não foi possível carregar métricas de consentimento do WhatsApp." });
   }
@@ -6130,6 +6130,9 @@ app.all(/^\/api\/.*$/, (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
 });
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err?.type === "entity.too.large" && req.originalUrl.split("?")[0] === "/api/integrations/whatsapp/opt-out") {
+    return res.status(413).json({ error: "Payload excede o limite de 8 KB para o webhook de descadastramento." });
+  }
   console.error("Express error:", err);
   if (req.path && req.path.startsWith('/api/')) {
     return res.status(err.status || 500).json({ 

@@ -467,8 +467,10 @@ assert.match(whatsappAdminSource, /\/api\/admin\/whatsapp\/integration-events\?p
 assert.match(whatsappAdminSource, /Limpar chamadas/);
 assert.match(whatsappAdminSource, /Página \{whatsappIntegrationEventsPage\} de \{whatsappIntegrationEventsTotalPages\}/);
 assert.match(whatsappAdminSource, /Motivos aceitos/);
-assert.match(whatsappAdminSource, /ec_configuracao_pendente/);
-assert.match(whatsappAdminSource, /ec_notificacao_plataforma/);
+assert.doesNotMatch(whatsappAdminSource, /Templates de WhatsApp/);
+assert.doesNotMatch(whatsappAdminSource, /ec_jornada_ativacao/);
+assert.doesNotMatch(whatsappAdminSource, /ec_configuracao_pendente/);
+assert.doesNotMatch(whatsappAdminSource, /ec_notificacao_plataforma/);
 assert.match(whatsappAdminSource, /WhatsApp não é usado em notificações manuais/);
 assert.doesNotMatch(whatsappAdminSource, /Enviar também pelo WhatsApp/);
 
@@ -482,6 +484,17 @@ assert.match(whatsappMigration, /user_id uuid REFERENCES auth\.users\(id\) ON DE
 assert.match(whatsappMigration, /ALTER TABLE public\.whatsapp_message_deliveries ENABLE ROW LEVEL SECURITY/);
 assert.match(whatsappMigration, /REVOKE ALL ON TABLE public\.whatsapp_message_deliveries FROM anon, authenticated/);
 assert.match(whatsappMigration, /status IN \('pending', 'accepted', 'sent', 'delivered', 'read', 'failed'\)/);
+
+const atomicOptOutMigration = readFileSync(
+  "supabase/migrations/20260803140000_atomic_whatsapp_opt_out_and_templates.sql",
+  "utf8"
+);
+assert.match(atomicOptOutMigration, /SECURITY DEFINER SET search_path = public, auth/);
+assert.match(atomicOptOutMigration, /ON CONFLICT \(event_id\) DO NOTHING/);
+assert.match(atomicOptOutMigration, /REVOKE ALL ON FUNCTION public\.process_whatsapp_opt_out/);
+assert.match(atomicOptOutMigration, /GRANT EXECUTE ON FUNCTION public\.process_whatsapp_opt_out[\s\S]*TO service_role/);
+assert.match(serverSource, /express\.json\(\{ limit: "8kb" \}\)/);
+assert.match(serverSource, /status\(413\)\.json\(\{ error: "Payload excede o limite de 8 KB para o webhook de descadastramento\." \}\)/);
 
 const n8nMigration = readFileSync(
   "supabase/migrations/20260730210000_create_whatsapp_integration_events.sql",

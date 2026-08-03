@@ -1137,7 +1137,7 @@ export default function AdminPanel() {
   const [whatsappIntegrationEventsLoading, setWhatsappIntegrationEventsLoading] = useState(false);
   const [whatsappIntegrationEventsError, setWhatsappIntegrationEventsError] = useState('');
   const [whatsappIntegrationEventsClearing, setWhatsappIntegrationEventsClearing] = useState(false);
-  const [whatsappConsentMetrics, setWhatsappConsentMetrics] = useState<{ enabled: number; optedIn: number; numberWithoutConsent: number; optOutProcessed: number; lastOptOutAt: string | null; tokenConfigured: boolean; templates?: Record<string, boolean> } | null>(null);
+  const [whatsappConsentMetrics, setWhatsappConsentMetrics] = useState<{ enabled: number; optedIn: number; numberWithoutConsent: number; optOutProcessed: number; lastOptOutAt: string | null; tokenConfigured: boolean } | null>(null);
 
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
   const [selectedProfessionalId, setSelectedProfessionalId] = useState('');
@@ -7109,7 +7109,6 @@ export default function AdminPanel() {
                       <div className="rounded-xl border border-emerald-200 bg-white/85 p-3 space-y-2 text-xs"><strong>Exemplo de payload</strong><pre className="whitespace-pre-wrap rounded bg-slate-900 p-2 text-[11px] text-slate-100">{`{\n  "phoneNumber": "5511999999999",\n  "source": "typebot",\n  "reason": "user_requested_opt_out",\n  "eventId": "wamid-ou-identificador-unico"\n}`}</pre><button type="button" onClick={() => void navigator.clipboard.writeText(JSON.stringify({ phoneNumber: '5511999999999', source: 'typebot', reason: 'user_requested_opt_out', eventId: 'wamid-ou-identificador-unico' }, null, 2))} className="btn-outline px-3 py-1.5 text-xs"><Copy className="mr-1 inline h-3.5 w-3.5" />Copiar payload</button></div>
                       <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">Este webhook deve ser chamado somente pelo Typebot, n8n ou outro serviço autorizado. O token deve ser armazenado como segredo e nunca inserido em códigos executados no navegador.</p>
                       <p className="text-xs text-emerald-900/80">Motivos aceitos: <code>user_requested_opt_out</code>, <code>admin_requested_opt_out</code>, <code>invalid_consent</code> e <code>number_changed</code>.</p>
-                      <p className="text-xs text-emerald-900/80">Templates: {Object.entries({ ec_acesso_liberado: whatsappConsentMetrics?.templates?.accountAccess, ec_suporte_atualizado: whatsappConsentMetrics?.templates?.support, ec_assinatura_atualizada: whatsappConsentMetrics?.templates?.subscription, ec_pagamento_atualizado: whatsappConsentMetrics?.templates?.payment, ec_seguranca_conta: whatsappConsentMetrics?.templates?.security }).map(([name, configured]) => <span key={name} className="mr-2"><code>{name}</code> — {configured ? 'configurado' : 'não configurado'}</span>)}</p>
                       <p className="text-xs text-emerald-950">Ao processar: <code>whatsapp_opt_in = false</code>, <code>whatsapp_enabled = false</code> e <code>whatsapp_opt_out_at = data e hora da solicitação</code>. Status do token: <strong>{whatsappConsentMetrics?.tokenConfigured ? 'Token configurado' : 'Token não configurado'}</strong>.</p>
                       <div className="grid grid-cols-2 gap-2 text-center text-xs md:grid-cols-5">{[['Habilitado', whatsappConsentMetrics?.enabled], ['Opt-in', whatsappConsentMetrics?.optedIn], ['Número sem consentimento', whatsappConsentMetrics?.numberWithoutConsent], ['Descadastros', whatsappConsentMetrics?.optOutProcessed], ['Último', whatsappConsentMetrics?.lastOptOutAt ? formatDate(whatsappConsentMetrics.lastOptOutAt) : '—']].map(([label, value]) => <div key={String(label)} className="rounded-lg border border-emerald-200 bg-white p-2"><strong className="block text-emerald-800">{value ?? '—'}</strong><span className="text-[10px] text-emerald-900/70">{label}</span></div>)}</div>
                     </div>
@@ -7264,149 +7263,6 @@ export default function AdminPanel() {
                         </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
-                  <div className="flex items-start gap-3 mb-6">
-                    <div className="p-3 bg-emerald-50 rounded-xl text-emerald-700">
-                      <MessageCircle className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                        Templates de WhatsApp
-                      </h2>
-                      <p className="text-xs text-brand-text-muted mt-0.5">
-                        Cadastre os modelos conforme a finalidade da mensagem para permitir envios proativos fora da janela de 24 horas.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 mb-5 text-sm text-emerald-900">
-                    <strong>Use cada modelo somente na finalidade indicada</strong>
-                    <p className="mt-1 text-xs leading-relaxed">
-                      A jornada educativa e de reengajamento usa o modelo <strong>Marketing</strong>. O modelo <strong>Utility</strong> é exclusivo para uma configuração realmente iniciada e ainda pendente; ele não deve transportar o texto livre dos 15 passos.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-brand-border overflow-hidden">
-                    <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-bg/60 px-4 py-3 border-b border-brand-border">
-                      <div>
-                        <p className="font-bold text-brand-text">ec_jornada_ativacao</p>
-                        <p className="text-xs text-brand-text-muted">Categoria: Marketing · Idioma: Português (Brasil) · pt_BR</p>
-                      </div>
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Enviar para aprovação</span>
-                    </div>
-                    <div className="space-y-4 p-4 text-sm">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Nome do template</span>
-                        <code className="mt-1 block rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">ec_jornada_ativacao</code>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Corpo da mensagem</span>
-                        <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-900 px-3 py-3 font-sans text-xs leading-relaxed text-slate-100">{`Olá, {{1}}! 👋
-
-{{2}}
-
-Continue sua jornada no Evolução Clínica pelo botão abaixo.
-
-Para não receber mais mensagens de ativação, responda SAIR.`}</pre>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Botão</span>
-                        <div className="mt-1 rounded-lg border border-brand-border bg-white px-3 py-2 text-xs text-brand-text">
-                          <strong>Visitar site</strong> · Acessar a plataforma · URL: <code className="font-mono">https://www.evolucaoclinica.app.br/painel/dashboard</code>
-                        </div>
-                      </div>
-                      <div className="rounded-lg bg-blue-50 px-3 py-3 text-xs leading-relaxed text-blue-900">
-                        <strong>Variáveis para informar no Meta:</strong><br />
-                        <code className="font-mono">{'{{1}}'}</code> = primeiro nome do profissional · <code className="font-mono">{'{{2}}'}</code> = texto personalizado do passo da jornada.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-2xl border border-brand-border overflow-hidden">
-                    <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-bg/60 px-4 py-3 border-b border-brand-border">
-                      <div>
-                        <p className="font-bold text-brand-text">ec_configuracao_pendente</p>
-                        <p className="text-xs text-brand-text-muted">Categoria: Utility · Idioma: Português (Brasil) · pt_BR</p>
-                      </div>
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Enviar para aprovação</span>
-                    </div>
-                    <div className="space-y-4 p-4 text-sm">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Nome do template</span>
-                        <code className="mt-1 block rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">ec_configuracao_pendente</code>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Corpo da mensagem</span>
-                        <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-900 px-3 py-3 font-sans text-xs leading-relaxed text-slate-100">{`Olá, {{1}}.
-
-Você iniciou a configuração da sua conta na Evolução Clínica em {{2}}, mas ela ainda não foi concluída.
-
-Etapa pendente: {{3}}.
-
-Acesse sua conta para concluir essa configuração.`}</pre>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Botão</span>
-                        <div className="mt-1 rounded-lg border border-brand-border bg-white px-3 py-2 text-xs text-brand-text">
-                          <strong>Visitar site</strong> · Concluir configuração · URL: <code className="font-mono">https://www.evolucaoclinica.app.br/painel/dashboard</code>
-                        </div>
-                      </div>
-                      <div className="rounded-lg bg-blue-50 px-3 py-3 text-xs leading-relaxed text-blue-900">
-                        <strong>Exemplos para informar no Meta:</strong><br />
-                        <code className="font-mono">{'{{1}}'}</code> = Mariana · <code className="font-mono">{'{{2}}'}</code> = 30/07/2026 · <code className="font-mono">{'{{3}}'}</code> = conectar sua agenda.
-                      </div>
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-relaxed text-amber-900">
-                        <strong>Uso operacional:</strong> este modelo ainda não substitui automaticamente o template da jornada. Conecte-o somente a um evento que confirme uma configuração iniciada pelo usuário e informe dados objetivos nas três variáveis.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-2xl border border-brand-border overflow-hidden">
-                    <div className="flex flex-wrap items-center justify-between gap-3 bg-brand-bg/60 px-4 py-3 border-b border-brand-border">
-                      <div>
-                        <p className="font-bold text-brand-text">ec_notificacao_plataforma</p>
-                        <p className="text-xs text-brand-text-muted">Categoria: Marketing · Idioma: Português (Brasil) · pt_BR</p>
-                      </div>
-                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-800">Enviar para aprovação</span>
-                    </div>
-                    <div className="space-y-4 p-4 text-sm">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Nome do template</span>
-                        <code className="mt-1 block rounded-lg bg-slate-900 px-3 py-2 font-mono text-xs text-slate-100">ec_notificacao_plataforma</code>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Corpo da mensagem</span>
-                        <pre className="mt-1 whitespace-pre-wrap rounded-lg bg-slate-900 px-3 py-3 font-sans text-xs leading-relaxed text-slate-100">{`Olá, {{1}}.
-
-Você recebeu uma nova notificação da Evolução Clínica.
-
-Assunto: {{2}}
-
-{{3}}
-
-Acesse a plataforma para ver os detalhes.`}</pre>
-                      </div>
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Botão</span>
-                        <div className="mt-1 rounded-lg border border-brand-border bg-white px-3 py-2 text-xs text-brand-text">
-                          <strong>Visitar site</strong> · Ver notificação · URL: <code className="font-mono">https://www.evolucaoclinica.app.br/painel/notifications</code>
-                        </div>
-                      </div>
-                      <div className="rounded-lg bg-blue-50 px-3 py-3 text-xs leading-relaxed text-blue-900">
-                        <strong>Exemplos para informar no Meta:</strong><br />
-                        <code className="font-mono">{'{{1}}'}</code> = Mariana · <code className="font-mono">{'{{2}}'}</code> = Atualização do sistema · <code className="font-mono">{'{{3}}'}</code> = A manutenção programada foi concluída com sucesso.
-                      </div>
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-relaxed text-amber-900">
-                        <strong>Categoria recomendada:</strong> Marketing, pois o painel permite título e conteúdo livres, inclusive comunicados e broadcasts. Um template genérico assim não deve ser apresentado como Utility.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 rounded-xl border border-brand-border bg-brand-bg/40 p-4 text-xs leading-relaxed text-brand-text-muted">
-                    <strong className="text-brand-text">Configuração da plataforma:</strong> a jornada usa <code className="font-mono">ec_jornada_ativacao</code> e as notificações usam <code className="font-mono">ec_notificacao_plataforma</code>, ambos em <code className="font-mono">pt_BR</code>. Nomes e idiomas podem ser sobrescritos na Vercel com <code className="font-mono">WHATSAPP_LIFECYCLE_TEMPLATE_*</code> e <code className="font-mono">WHATSAPP_NOTIFICATION_TEMPLATE_*</code>. Aguarde a aprovação antes de ativar cada envio.
                   </div>
                 </div>
 

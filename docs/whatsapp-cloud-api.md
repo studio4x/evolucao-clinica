@@ -40,7 +40,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 Essa chave não pode usar prefixo `VITE_`, não possui fallback para a chave
 anônima e nunca deve ser enviada ao navegador.
 
-## Aplicação da migration
+## Aplicação das migrations
 
 Aplique
 `supabase/migrations/20260730190000_create_whatsapp_message_deliveries.sql` no
@@ -56,6 +56,11 @@ projeto Supabase correspondente ao ambiente. A migration:
 Depois da migration, valide que o backend com Service Role cria e atualiza um
 registro de teste e que uma sessão comum do frontend não consegue consultar a
 tabela.
+
+As migrations `20260803130000_secure_whatsapp_notification_consent.sql` e
+`20260803140000_atomic_whatsapp_opt_out_and_templates.sql` foram aplicadas no
+Supabase de produção em 03/08/2026. A segunda consolida o descadastramento em
+uma RPC atômica, com RLS mantida e execução restrita a `service_role`.
 
 ## Rotação obrigatória da chave exposta
 
@@ -156,7 +161,7 @@ O código envia exclusivamente payloads internos tipados e nunca encaminha títu
 
 O lifecycle não envia WhatsApp. `ec_jornada_ativacao` está desativado: o consentimento atual é exclusivamente operacional. Uma futura ativação exige consentimento e preferência próprios de Marketing, templates Marketing e lógica independente.
 
-O opt-out aceita somente `user_requested_opt_out`, `admin_requested_opt_out`, `invalid_consent` e `number_changed`. O parser específico é aplicado antes do parser global e impõe 8 KB mesmo sem `Content-Length`. A RPC `process_whatsapp_opt_out` reivindica `eventId` por `INSERT ... ON CONFLICT` e atualiza auditoria/preferências na mesma transação.
+O opt-out aceita somente `user_requested_opt_out`, `admin_requested_opt_out`, `invalid_consent` e `number_changed`. O parser específico é aplicado antes do parser global e impõe 8 KB mesmo sem `Content-Length`; cargas maiores recebem JSON com HTTP `413`. A RPC `process_whatsapp_opt_out` reivindica `eventId` por `INSERT ... ON CONFLICT` e atualiza auditoria/preferências na mesma transação.
 
 O teste administrativo usa `ec_acesso_liberado` com somente `{{1}}`; não envia
 texto comum como validação padrão.
