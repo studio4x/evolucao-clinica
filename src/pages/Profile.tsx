@@ -18,6 +18,10 @@ export default function Profile() {
   const [professionalTitle, setProfessionalTitle] = useState('');
   const [professionalRegister, setProfessionalRegister] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [whatsappOptIn, setWhatsappOptIn] = useState(false);
+
+  const WHATSAPP_OPT_IN_TEXT = 'Quero receber pelo WhatsApp notificações operacionais relacionadas à minha conta e ao uso do Evolução Clínica. Posso cancelar essa autorização a qualquer momento.';
+  const WHATSAPP_OPT_IN_TEXT_VERSION = 'v1';
 
   // Lista pré-definida de rótulos profissionais / especialidades médicas e terapêuticas
   const professionalOptions = [
@@ -184,6 +188,7 @@ export default function Profile() {
               if (prefsRes.ok) {
                 const prefsData = await prefsRes.json();
                 setWhatsappNumber(prefsData.preferences?.whatsapp_number || '');
+                setWhatsappOptIn(prefsData.preferences?.whatsapp_opt_in === true);
               }
             }
           } catch (prefErr) {
@@ -292,11 +297,20 @@ export default function Profile() {
         const { data: sessionData } = await supabase.auth.getSession();
         const syncToken = sessionData.session?.access_token;
         if (syncToken) {
-          await fetch('/api/communication/preferences', {
+          const preferencesResponse = await fetch('/api/communication/preferences', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
-            body: JSON.stringify({ whatsapp_number: whatsappNumber.trim() || null })
+            body: JSON.stringify({
+              whatsapp_number: whatsappNumber.trim() || null,
+              whatsapp_opt_in: whatsappOptIn,
+              whatsapp_opt_in_source: 'configurações',
+              whatsapp_opt_in_text_version: WHATSAPP_OPT_IN_TEXT_VERSION
+            })
           });
+          if (!preferencesResponse.ok) {
+            const preferencesError = await preferencesResponse.json().catch(() => ({}));
+            throw new Error(preferencesError.error || 'Não foi possível salvar a autorização do WhatsApp.');
+          }
           fetch('/api/profile/sync-brevo', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
@@ -653,6 +667,19 @@ export default function Profile() {
               <p className="text-[10px] text-brand-text-muted">
                 DDI + DDD + Número, sem espaços ou caracteres especiais. Ex: 5511999887766.
               </p>
+              <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-brand-bg/40 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={whatsappOptIn}
+                  onChange={(e) => setWhatsappOptIn(e.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0 accent-brand-primary"
+                  disabled={saving}
+                  aria-describedby="whatsapp-opt-in-text"
+                />
+                <span id="whatsapp-opt-in-text" className="text-xs leading-relaxed text-brand-text-muted">
+                  {WHATSAPP_OPT_IN_TEXT}
+                </span>
+              </label>
             </div>
 
             {/* Seção de Senha Explicativa */}

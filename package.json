@@ -9,10 +9,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "test": "npm run test:lifecycle && npm run test:whatsapp && npm run test:chunk-recovery",
+    "test": "npm run test:lifecycle && npm run test:whatsapp && npm run test:chunk-recovery && npm run test:whatsapp-opt-in",
     "test:lifecycle": "tsx tests/lifecycle.test.ts",
     "test:whatsapp": "tsx tests/whatsapp.test.ts",
-    "test:chunk-recovery": "tsx tests/chunk-recovery.test.ts"
+    "test:chunk-recovery": "tsx tests/chunk-recovery.test.ts",
+    "test:whatsapp-opt-in": "tsx tests/whatsapp-opt-in.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

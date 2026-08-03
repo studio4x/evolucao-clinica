@@ -154,7 +154,8 @@ export async function getLifecyclePreferences(deps: LifecycleDependencies, userI
 }
 
 export async function updateLifecyclePreferences(deps: LifecycleDependencies, userId: string, values: Record<string, unknown>) {
-  const allowed = ["product_education_enabled", "lifecycle_enabled", "commercial_enabled", "preferred_send_time", "timezone", "email_enabled", "push_enabled", "whatsapp_enabled", "whatsapp_number", "unsubscribed_at", "unsubscribe_reason"];
+  const current = await getLifecyclePreferences(deps, userId);
+  const allowed = ["product_education_enabled", "lifecycle_enabled", "commercial_enabled", "preferred_send_time", "timezone", "email_enabled", "push_enabled", "whatsapp_enabled", "whatsapp_number", "whatsapp_opt_in", "whatsapp_opt_in_source", "whatsapp_opt_in_text_version", "unsubscribed_at", "unsubscribe_reason"];
   const update: Record<string, unknown> = {};
   for (const key of allowed) if (key in values) update[key] = values[key];
   if (update.timezone && typeof update.timezone !== "string") throw new Error("Fuso horário inválido.");
@@ -163,6 +164,30 @@ export async function updateLifecyclePreferences(deps: LifecycleDependencies, us
     catch { throw new Error("Fuso horário inválido."); }
   }
   if (update.preferred_send_time && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(String(update.preferred_send_time))) throw new Error("Horário preferido inválido.");
+
+  if ("whatsapp_opt_in_source" in update && update.whatsapp_opt_in_source !== null && !["cadastro", "configurações", "checkout"].includes(String(update.whatsapp_opt_in_source))) {
+    throw new Error("Origem do consentimento WhatsApp inválida.");
+  }
+  if ("whatsapp_opt_in_text_version" in update && update.whatsapp_opt_in_text_version !== null && update.whatsapp_opt_in_text_version !== "v1") {
+    throw new Error("Versão do texto de consentimento WhatsApp inválida.");
+  }
+  if ("whatsapp_opt_in" in update) {
+    if (typeof update.whatsapp_opt_in !== "boolean") throw new Error("Consentimento WhatsApp inválido.");
+    if (update.whatsapp_opt_in === true) {
+      if (current.whatsapp_opt_in !== true) {
+        update.whatsapp_opt_in_at = new Date().toISOString();
+        update.whatsapp_opt_in_source = update.whatsapp_opt_in_source || "configurações";
+        update.whatsapp_opt_in_text_version = update.whatsapp_opt_in_text_version || "v1";
+      } else {
+        delete update.whatsapp_opt_in_source;
+        delete update.whatsapp_opt_in_text_version;
+      }
+    } else {
+      if (current.whatsapp_opt_in === true) update.whatsapp_opt_out_at = new Date().toISOString();
+      delete update.whatsapp_opt_in_source;
+      delete update.whatsapp_opt_in_text_version;
+    }
+  }
 
   // Se o usuário ativar alguma preferência de comunicação, limpamos o status de descadastrado
   if (update.lifecycle_enabled === true || update.product_education_enabled === true || update.commercial_enabled === true) {

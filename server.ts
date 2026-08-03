@@ -2562,7 +2562,14 @@ app.put("/api/profile/sync-brevo", requireAuth, async (req: any, res) => {
     }
 
     if (whatsappNumber !== undefined) {
-      attributes.SMS = whatsappNumber ? String(whatsappNumber).replace(/\D/g, "") : "";
+      const { data: communicationPreferences } = await supabaseAdmin
+        .from("communication_preferences")
+        .select("whatsapp_opt_in")
+        .eq("user_id", req.user.id)
+        .maybeSingle();
+      attributes.SMS = communicationPreferences?.whatsapp_opt_in === true && whatsappNumber
+        ? String(whatsappNumber).replace(/\D/g, "")
+        : "";
     }
 
     if (Object.keys(attributes).length === 0) {
@@ -2711,12 +2718,12 @@ app.post("/api/admin/brevo/sync-all", requireAuth, requireAdmin, async (req: any
     // Busca preferências de comunicação (whatsapp_number)
     const { data: prefs, error: prefsError } = await supabaseAdmin
       .from("communication_preferences")
-      .select("user_id, whatsapp_number");
+      .select("user_id, whatsapp_number, whatsapp_opt_in");
     if (prefsError) throw prefsError;
 
     const prefsMap: Record<string, string> = {};
     for (const pref of prefs || []) {
-      if (pref.whatsapp_number) prefsMap[pref.user_id] = pref.whatsapp_number;
+      if (pref.whatsapp_opt_in === true && pref.whatsapp_number) prefsMap[pref.user_id] = pref.whatsapp_number;
     }
 
     // Monta o payload para a Brevo
@@ -3718,7 +3725,7 @@ async function sendNotificationInternal(
       const [{ data: communicationPreferences }, { data: whatsappProfile }] = await Promise.all([
         supabaseAdmin
           .from("communication_preferences")
-          .select("whatsapp_enabled, whatsapp_number")
+          .select("whatsapp_enabled, whatsapp_number, whatsapp_opt_in")
           .eq("user_id", targetUserId)
           .maybeSingle(),
         supabaseAdmin
@@ -3728,7 +3735,7 @@ async function sendNotificationInternal(
           .maybeSingle()
       ]);
       const whatsappNumber = String(communicationPreferences?.whatsapp_number || "").trim();
-      if (communicationPreferences?.whatsapp_enabled === true && whatsappNumber) {
+      if (communicationPreferences?.whatsapp_enabled === true && communicationPreferences?.whatsapp_opt_in === true && whatsappNumber) {
         const firstName = String(whatsappProfile?.full_name || "Profissional").trim().split(/\s+/)[0] || "Profissional";
         whatsappResult = await whatsappClient.sendTemplate({
           userId: targetUserId,

@@ -401,6 +401,7 @@ assert.ok(notificationSenderStart >= 0);
 assert.match(notificationSenderSource, /WHATSAPP_NOTIFICATION_TEMPLATE_NAME/);
 assert.match(notificationSenderSource, /ec_notificacao_plataforma/);
 assert.match(notificationSenderSource, /communicationPreferences\?\.whatsapp_enabled === true/);
+assert.match(notificationSenderSource, /communicationPreferences\?\.whatsapp_opt_in === true/);
 assert.match(notificationSenderSource, /whatsappClient\.sendTemplate/);
 const n8nEndpointStart = serverSource.indexOf('app.post("/api/integrations/whatsapp/events"');
 const n8nEndpointEnd = serverSource.indexOf('app.get("/api/debug-env"', n8nEndpointStart);
