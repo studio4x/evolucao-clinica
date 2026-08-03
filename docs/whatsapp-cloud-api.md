@@ -153,6 +153,20 @@ Ele aceita somente os campos documentados, limita o corpo, normaliza o telefone 
 
 O processamento muda exclusivamente `whatsapp_opt_in = false`, `whatsapp_enabled = false` e `whatsapp_opt_out_at`. E-mail, push, lifecycle, educação e preferências comerciais não mudam. `whatsapp_opt_out_events` guarda somente SHA-256 do número, origem, motivo, status e timestamps; a migration normaliza números existentes e cria índice não único. O teste administrativo usa o template configurado de acesso; texto comum não é a validação padrão fora da janela de 24 horas.
 
+## Consulta interna de conta pelo n8n
+
+`POST https://evolucaoclinica.app.br/api/integrations/whatsapp/user-lookup` permite que o workflow interno de atendimento identifique, pelo número internacional, se há uma conta registrada. Ele exige `Authorization: Bearer <WHATSAPP_USER_LOOKUP_TOKEN>` e `Content-Type: application/json`.
+
+```json
+{
+  "phoneNumber": "5511942919276"
+}
+```
+
+O corpo aceita somente `phoneNumber`, é normalizado para dígitos com DDI e é limitado a 2 KB. As respostas têm `Cache-Control: no-store`: `found` retorna somente `id`, `name` e `email`; `not_found` e `conflict` retornam `user: null`. Telefone, preferências, metadata completa, dados clínicos, financeiros ou de pacientes nunca são devolvidos. Duplicidades não são escolhidas arbitrariamente: retornam `conflict`.
+
+No node HTTP Request do n8n, use o body `{ "phoneNumber": "={{ $json.numero }}" }` e o header `Authorization: ={{ 'Bearer ' + $env.EVOLUCAO_CLINICA_WHATSAPP_USER_LOOKUP_TOKEN }}`. Armazene `EVOLUCAO_CLINICA_WHATSAPP_USER_LOOKUP_TOKEN` somente no servidor n8n; não o inclua no workflow exportado, frontend ou repositório. Sem token, token inválido, JSON inválido ou corpo acima de 2 KB, o endpoint responde respectivamente `401`, `401`, `400` e `413` em JSON.
+
 ## Contratos atuais dos templates de Utilidade
 
 O código envia exclusivamente payloads internos tipados e nunca encaminha título, conteúdo livre, resposta de suporte ou dados técnicos. A ordem é fixa: `ec_acesso_liberado`: `{{1}}` primeiro nome; `ec_suporte_atualizado`: primeiro nome, protocolo, status controlado; `ec_assinatura_atualizada`: primeiro nome, status, data; `ec_pagamento_atualizado`: primeiro nome, referência, status; `ec_seguranca_conta`: primeiro nome, evento, data/hora. Cada campo é higienizado, limitado e validado contra status/eventos permitidos.

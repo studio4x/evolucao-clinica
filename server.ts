@@ -40,6 +40,13 @@ import {
   WhatsAppOptOutValidationError
 } from "./server/whatsapp/whatsappOptOut.js";
 import {
+  lookupWhatsAppUser,
+  safeWhatsAppUserLookupLog,
+  validateWhatsAppUserLookupPayload,
+  verifyWhatsAppUserLookupAuthorization,
+  WhatsAppUserLookupValidationError
+} from "./server/whatsapp/whatsappUserLookup.js";
+import {
   createWhatsAppN8nEventsService,
   validateNormalizedWhatsAppN8nEvent,
   verifyWhatsAppN8nEventsAuthorization,
@@ -1570,6 +1577,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
 // Must run before the global parser: this is the real 8 KB limit even when
 // Content-Length is missing or forged.
 app.use("/api/integrations/whatsapp/opt-out", express.json({ limit: "8kb" }));
+app.use("/api/integrations/whatsapp/user-lookup", express.json({ limit: "2kb" }));
 // Middleware
 app.use(express.json({
   limit: '10mb',
@@ -3493,6 +3501,41 @@ app.post("/api/integrations/whatsapp/opt-out", async (req, res) => {
     if (error instanceof WhatsAppOptOutValidationError) return res.status(400).json({ error: error.message });
     console.error("[WhatsApp opt-out] Erro interno ao processar solicitação.");
     return res.status(500).json({ error: "Erro interno ao processar descadastramento." });
+  }
+});
+
+// Internal n8n account lookup. It accepts only a normalized WhatsApp number
+// and returns the minimum account identity needed to route human support.
+app.post("/api/integrations/whatsapp/user-lookup", async (req, res) => {
+  res.set("Cache-Control", "no-store");
+  if (!verifyWhatsAppUserLookupAuthorization(String(req.headers.authorization || ""), whatsappConfig.userLookupToken)) {
+    return res.status(401).json({ error: "Token de integração ausente ou inválido." });
+  }
+  try {
+    const input = validateWhatsAppUserLookupPayload(req.body);
+    const result = await lookupWhatsAppUser(input.phoneNumber, {
+      async findUserIdsByPhone(phoneNumber) {
+        const { data, error } = await supabaseAdmin.from("communication_preferences").select("user_id").eq("whatsapp_number", phoneNumber).limit(2);
+        if (error) throw new Error(error.message);
+        return (data || []).map((row: { user_id?: unknown }) => String(row.user_id || "")).filter(Boolean);
+      },
+      async findProfileByUserId(userId) {
+        const { data, error } = await supabaseAdmin.from("professionals").select("full_name, google_email").eq("id", userId).maybeSingle();
+        if (error) throw new Error(error.message);
+        return data ? { fullName: data.full_name == null ? null : String(data.full_name), email: data.google_email == null ? null : String(data.google_email) } : null;
+      },
+      async getAuthUserById(userId) {
+        const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);
+        if (error || !data?.user) return null;
+        return { id: String(data.user.id), email: data.user.email == null ? null : String(data.user.email), userMetadata: data.user.user_metadata && typeof data.user.user_metadata === "object" ? data.user.user_metadata : null };
+      }
+    });
+    console.info(safeWhatsAppUserLookupLog(result.matchStatus));
+    return res.status(200).json(result);
+  } catch (error) {
+    if (error instanceof WhatsAppUserLookupValidationError) return res.status(400).json({ error: error.message });
+    console.error("[WhatsApp user lookup] Erro interno ao consultar conta.");
+    return res.status(500).json({ error: "Erro interno ao consultar conta." });
   }
 });
 
@@ -6130,8 +6173,17 @@ app.all(/^\/api\/.*$/, (req, res) => {
   res.status(404).json({ error: `API route not found: ${req.method} ${req.path}` });
 });
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const isWhatsAppUserLookup = req.originalUrl.split("?")[0] === "/api/integrations/whatsapp/user-lookup";
   if (err?.type === "entity.too.large" && req.originalUrl.split("?")[0] === "/api/integrations/whatsapp/opt-out") {
     return res.status(413).json({ error: "Payload excede o limite de 8 KB para o webhook de descadastramento." });
+  }
+  if (err?.type === "entity.too.large" && isWhatsAppUserLookup) {
+    res.set("Cache-Control", "no-store");
+    return res.status(413).json({ error: "Payload excede o limite permitido." });
+  }
+  if (isWhatsAppUserLookup && err?.type === "entity.parse.failed") {
+    res.set("Cache-Control", "no-store");
+    return res.status(400).json({ error: "Payload JSON inválido." });
   }
   console.error("Express error:", err);
   if (req.path && req.path.startsWith('/api/')) {

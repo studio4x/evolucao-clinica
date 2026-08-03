@@ -20,6 +20,12 @@ import {
   WhatsAppOptOutValidationError
 } from "../server/whatsapp/whatsappOptOut.js";
 import {
+  lookupWhatsAppUser,
+  validateWhatsAppUserLookupPayload,
+  verifyWhatsAppUserLookupAuthorization,
+  WhatsAppUserLookupValidationError
+} from "../server/whatsapp/whatsappUserLookup.js";
+import {
   createWhatsAppN8nEventsService,
   validateNormalizedWhatsAppN8nEvent,
   verifyWhatsAppN8nEventsAuthorization,
@@ -431,6 +437,26 @@ assert.equal(optOut.phoneHash.length, 64);
 assert.throws(() => validateWhatsAppOptOutPayload({ phoneNumber: "5511999999999", source: "invalid", reason: "user_requested_opt_out" }), WhatsAppOptOutValidationError);
 assert.throws(() => validateWhatsAppOptOutPayload({ phoneNumber: "5511999999999", source: "n8n", reason: "free text" }), WhatsAppOptOutValidationError);
 assert.throws(() => validateWhatsAppOptOutPayload({ phoneNumber: "5511999999999", source: "n8n", reason: "x", extra: true }), WhatsAppOptOutValidationError);
+assert.equal(verifyWhatsAppUserLookupAuthorization("Bearer lookup-secret", "lookup-secret"), true);
+assert.equal(verifyWhatsAppUserLookupAuthorization("Bearer wrong", "lookup-secret"), false);
+assert.equal(verifyWhatsAppUserLookupAuthorization(undefined, "lookup-secret"), false);
+assert.equal(verifyWhatsAppUserLookupAuthorization("Bearer lookup-secret", ""), false);
+assert.equal(validateWhatsAppUserLookupPayload({ phoneNumber: "+55 (11) 99999-9999" }).phoneNumber, "5511999999999");
+assert.throws(() => validateWhatsAppUserLookupPayload({ phoneNumber: "123" }), WhatsAppUserLookupValidationError);
+assert.throws(() => validateWhatsAppUserLookupPayload([]), WhatsAppUserLookupValidationError);
+assert.throws(() => validateWhatsAppUserLookupPayload({ phoneNumber: "5511999999999", extra: true }), WhatsAppUserLookupValidationError);
+assert.throws(() => validateWhatsAppUserLookupPayload({}), WhatsAppUserLookupValidationError);
+
+const lookupDependencies = (userIds: string[], profile: { fullName: string | null; email: string | null } | null, authUser: { id: string; email: string | null; userMetadata: Record<string, unknown> | null } | null) => ({
+  findUserIdsByPhone: async () => userIds,
+  findProfileByUserId: async () => profile,
+  getAuthUserById: async () => authUser
+});
+assert.deepEqual(await lookupWhatsAppUser("5511999999999", lookupDependencies([], null, null)), { registered: false, matchStatus: "not_found", user: null });
+assert.deepEqual(await lookupWhatsAppUser("5511999999999", lookupDependencies(["one", "two"], null, null)), { registered: false, matchStatus: "conflict", user: null });
+assert.deepEqual(await lookupWhatsAppUser("5511999999999", lookupDependencies(["user-1"], { fullName: "Nome Canônico", email: "canonic@example.test" }, { id: "user-1", email: "auth@example.test", userMetadata: { full_name: "Nome do Auth" } })), { registered: true, matchStatus: "found", user: { id: "user-1", name: "Nome Canônico", email: "canonic@example.test" } });
+assert.deepEqual(await lookupWhatsAppUser("5511999999999", lookupDependencies(["user-1"], { fullName: null, email: null }, { id: "user-1", email: null, userMetadata: { display_name: "Nome alternativo" } })), { registered: true, matchStatus: "found", user: { id: "user-1", name: "Nome alternativo", email: null } });
+assert.deepEqual(await lookupWhatsAppUser("5511999999999", lookupDependencies(["removed-user"], null, null)), { registered: false, matchStatus: "not_found", user: null });
 const n8nEndpointStart = serverSource.indexOf('app.post("/api/integrations/whatsapp/events"');
 const n8nEndpointEnd = serverSource.indexOf('app.get("/api/debug-env"', n8nEndpointStart);
 const n8nEndpointSource = serverSource.slice(n8nEndpointStart, n8nEndpointEnd);
@@ -445,6 +471,17 @@ const optOutEndpointSource = serverSource.slice(optOutEndpointStart, serverSourc
 assert.match(optOutEndpointSource, /verifyWhatsAppOptOutAuthorization/);
 assert.match(optOutEndpointSource, /process_whatsapp_opt_out/);
 assert.doesNotMatch(optOutEndpointSource, /phoneNumber.*json\(/);
+const userLookupEndpointStart = serverSource.indexOf('app.post("/api/integrations/whatsapp/user-lookup"');
+assert.ok(userLookupEndpointStart >= 0);
+const userLookupEndpointSource = serverSource.slice(userLookupEndpointStart, serverSource.indexOf('app.get("/api/admin/whatsapp/consent-metrics"', userLookupEndpointStart));
+assert.match(userLookupEndpointSource, /verifyWhatsAppUserLookupAuthorization/);
+assert.match(userLookupEndpointSource, /whatsappConfig\.userLookupToken/);
+assert.match(userLookupEndpointSource, /\.eq\("whatsapp_number", phoneNumber\)\.limit\(2\)/);
+assert.match(userLookupEndpointSource, /Cache-Control", "no-store/);
+assert.doesNotMatch(userLookupEndpointSource, /phoneNumber.*json\(/);
+assert.match(serverSource, /express\.json\(\{ limit: "2kb" \}\)/);
+assert.match(serverSource, /status\(413\)\.json\(\{ error: "Payload excede o limite permitido\." \}\)/);
+assert.match(serverSource, /Payload JSON inválido/);
 
 const n8nAdminEventsStart = serverSource.indexOf('app.get("/api/admin/whatsapp/integration-events"');
 const n8nAdminEventsEnd = serverSource.indexOf('app.get("/api/debug-env"', n8nAdminEventsStart);
@@ -456,6 +493,7 @@ assert.match(n8nAdminEventsSource, /app\.delete\("\/api\/admin\/whatsapp\/integr
 assert.doesNotMatch(n8nAdminEventsSource, /raw_value/);
 
 const whatsappAdminSource = readFileSync("src/pages/AdminPanel.tsx", "utf8");
+assert.doesNotMatch(whatsappAdminSource, /WHATSAPP_USER_LOOKUP_TOKEN|user-lookup/);
 assert.match(whatsappAdminSource, /\/api\/integrations\/whatsapp\/events/);
 assert.match(whatsappAdminSource, /Webhook de descadastramento/);
 assert.match(whatsappAdminSource, /SEU_TOKEN_CONFIGURADO/);

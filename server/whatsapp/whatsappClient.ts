@@ -38,6 +38,7 @@ export function getWhatsAppConfigFromEnv(
     webhookVerifyToken: String(env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || "").trim(),
     n8nEventsToken: String(env.WHATSAPP_N8N_EVENTS_TOKEN || "").trim(),
     optOutWebhookToken: String(env.WHATSAPP_OPT_OUT_WEBHOOK_TOKEN || "").trim(),
+    userLookupToken: String(env.WHATSAPP_USER_LOOKUP_TOKEN || "").trim(),
     allowUnsignedWebhooks:
       env.NODE_ENV !== "production" &&
       String(env.WHATSAPP_ALLOW_UNSIGNED_WEBHOOKS || "false").toLowerCase() === "true"
