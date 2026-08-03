@@ -551,7 +551,7 @@ export default function AdminPanel() {
       void loadWhatsappLeads(whatsappLeadsPage, whatsappLeadsSearch);
     } catch (e) {
       console.error("Erro ao deletar lead:", e);
-      void showAlert("Erro ao deletar lead.", { title: "Erro", variant: "error" });
+      void showAlert("Erro ao deletar lead.", { title: "Erro", variant: "danger" });
     } finally {
       setDeletingLeadId(null);
     }
@@ -602,7 +602,7 @@ export default function AdminPanel() {
       document.body.removeChild(link);
     } catch (e) {
       console.error("Erro ao exportar leads:", e);
-      void showAlert("Erro ao exportar leads. Tente novamente.", { title: "Erro", variant: "error" });
+      void showAlert("Erro ao exportar leads. Tente novamente.", { title: "Erro", variant: "danger" });
     }
   };
 
