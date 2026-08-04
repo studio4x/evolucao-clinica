@@ -5248,24 +5248,35 @@ app.post("/api/notifications/test-whatsapp", requireAuth, async (req: any, res) 
       return res.status(403).json({ error: "Nao autorizado. Apenas administradores podem testar o envio do WhatsApp." });
     }
 
-    const { toPhone } = req.body || {};
+    const { toPhone, testTemplate = "account_access_granted" } = req.body || {};
     
     if (!toPhone) {
       return res.status(400).json({ error: "Número de telefone de destino é obrigatório." });
     }
 
-    const templateName = String(process.env.WHATSAPP_TEMPLATE_ACCOUNT_ACCESS || "").trim();
-    if (!templateName) {
-      return res.status(503).json({ error: "WHATSAPP_TEMPLATE_ACCOUNT_ACCESS não configurado. O teste padrão exige um template aprovado." });
+    const testNotifications: Record<string, WhatsAppAdministrativeNotification> = {
+      account_access_granted: { key: "account_access_granted", data: { firstName: "Administrador" } },
+      support_ticket_updated: { key: "support_ticket_updated", data: { firstName: "Administrador", protocol: "TESTE-001", status: "Respondido" } },
+      subscription_status_updated: { key: "subscription_status_updated", data: { firstName: "Administrador", status: "Ativa", updatedAt: "Teste interno" } },
+      payment_confirmed: { key: "payment_confirmed", data: { firstName: "Administrador", reference: "TESTE-001", status: "Confirmado" } },
+      payment_failed: { key: "payment_failed", data: { firstName: "Administrador", reference: "TESTE-001", status: "Não concluído" } },
+      account_security_notice: { key: "account_security_notice", data: { firstName: "Administrador", event: "Novo acesso à conta", occurredAt: "Teste interno" } }
+    };
+    const notification = testNotifications[String(testTemplate)];
+    if (!notification) return res.status(400).json({ error: "Template de teste inválido." });
+
+    const resolved = resolveWhatsAppAdministrativeTemplate(notification);
+    if (!resolved.allowed) {
+      return res.status(503).json({ error: "O template selecionado não está configurado ou não pode ser usado para teste." });
     }
     const result = await whatsappClient.sendTemplate({
       userId: req.user.id,
       lifecycleDispatchId: null,
       recipientPhone: String(toPhone),
       type: "template",
-      templateName,
-      languageCode: String(process.env.WHATSAPP_TEMPLATE_LANGUAGE || "pt_BR").trim(),
-      components: [{ type: "body", parameters: [{ type: "text", text: "Administrador" }] }]
+      templateName: resolved.templateName,
+      languageCode: resolved.languageCode,
+      components: resolved.components
     });
 
     const responsePayload = {

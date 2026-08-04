@@ -1143,6 +1143,7 @@ export default function AdminPanel() {
 
   // Estados de Configuração da API do WhatsApp Cloud
   const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('');
+  const [adminWhatsappTestTemplate, setAdminWhatsappTestTemplate] = useState('account_access_granted');
   const [adminWhatsappWebhookCopied, setAdminWhatsappWebhookCopied] = useState(false);
   const [adminWhatsappN8nEventsCopied, setAdminWhatsappN8nEventsCopied] = useState(false);
   const [adminWhatsappTestLoading, setAdminWhatsappTestLoading] = useState(false);
@@ -1749,7 +1750,8 @@ export default function AdminPanel() {
           'Authorization': `Bearer ${sessionData.session?.access_token || ''}`
         },
         body: JSON.stringify({
-          toPhone: adminWhatsappTestNumber
+          toPhone: adminWhatsappTestNumber,
+          testTemplate: adminWhatsappTestTemplate
         })
       });
 
@@ -7323,73 +7325,21 @@ export default function AdminPanel() {
                   </div>
                 </div>
 
-                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
-                  <div className="flex items-center space-x-3 mb-6">
-                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
-                      <Send className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">
-                        Testar Conexão do WhatsApp
-                      </h2>
-                      <p className="text-xs text-brand-text-muted mt-0.5">
-                        Envie uma mensagem de teste para verificar se as credenciais configuradas estão corretas e válidas na Meta.
-                      </p>
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleTestWhatsapp} className="space-y-6">
-                    {adminWhatsappTestError && (
-                      <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm flex items-center gap-2">
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                        <span>{adminWhatsappTestError}</span>
-                      </div>
-                    )}
-
-                    {adminWhatsappTestSuccess && (
-                      <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-xl text-sm flex items-center gap-2 animate-fadeIn">
-                        <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        <span>Mensagem de teste aceita pela Meta. A entrega final dependerá dos eventos de status do WhatsApp.</span>
-                      </div>
-                    )}
-
-                    <div className="block">
-                      <span className="text-sm font-semibold text-brand-text">Número de Telefone de Destino</span>
-                      <input
-                        type="text"
-                        value={adminWhatsappTestNumber}
-                        onChange={(e) => setAdminWhatsappTestNumber(e.target.value)}
-                        placeholder="E.g. +55 (11) 99999-9999"
-                        className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all"
-                      />
-                      <p className="text-xs text-brand-text-muted mt-1.5">
-                        Insira o número com DDI (55) e DDD para o recebimento do teste (apenas números serão considerados).
-                      </p>
-                    </div>
-
-                    <div className="flex justify-end pt-4">
-                      <button
-                        type="submit"
-                        disabled={adminWhatsappTestLoading}
-                        className="btn-outline px-6 py-2.5 flex items-center space-x-2 cursor-pointer"
-                      >
-                        {adminWhatsappTestLoading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            <span>Enviando Teste...</span>
-                          </>
-                        ) : (
-                          <>
-                            <Send className="w-4 h-4" />
-                            <span>Enviar Mensagem de Teste</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                </div>
               </div>
                 ) : (
+                  <div className="space-y-6">
+                  <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                    <div className="flex items-center space-x-3 mb-6"><div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary"><Send className="w-6 h-6" /></div><div><h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">Testar Conexão do WhatsApp</h2><p className="text-xs text-brand-text-muted mt-0.5">Envie um template aprovado para validar as credenciais e o modelo selecionado.</p></div></div>
+                    <form onSubmit={handleTestWhatsapp} className="space-y-6">
+                      {adminWhatsappTestError && <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" /><span>{adminWhatsappTestError}</span></div>}
+                      {adminWhatsappTestSuccess && <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-xl text-sm flex items-center gap-2 animate-fadeIn"><CheckCircle2 className="h-4 w-4 shrink-0" /><span>Mensagem de teste aceita pela Meta. A entrega final dependerá dos eventos de status do WhatsApp.</span></div>}
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div><label className="block text-sm font-semibold text-brand-text">Template para teste</label><select value={adminWhatsappTestTemplate} onChange={(e) => setAdminWhatsappTestTemplate(e.target.value)} className="mt-1 w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:border-brand-primary focus:outline-none"><option value="account_access_granted">Acesso à conta liberado</option><option value="support_ticket_updated">Atualização de suporte</option><option value="subscription_status_updated">Status da assinatura</option><option value="payment_confirmed">Pagamento confirmado</option><option value="payment_failed">Pagamento não concluído</option><option value="account_security_notice">Aviso de segurança</option></select><p className="mt-1.5 text-xs text-brand-text-muted">Apenas templates administrativos permitidos e configurados no servidor são exibidos.</p></div>
+                        <div><label className="block text-sm font-semibold text-brand-text">Número de Telefone de Destino</label><input type="text" value={adminWhatsappTestNumber} onChange={(e) => setAdminWhatsappTestNumber(e.target.value)} placeholder="Ex.: +55 (11) 99999-9999" className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all" /><p className="mt-1.5 text-xs text-brand-text-muted">Informe DDI e DDD; somente números serão considerados.</p></div>
+                      </div>
+                      <div className="flex justify-end pt-1"><button type="submit" disabled={adminWhatsappTestLoading} className="btn-outline px-6 py-2.5 flex items-center space-x-2 cursor-pointer">{adminWhatsappTestLoading ? <><Loader2 className="w-4 h-4 animate-spin" /><span>Enviando Teste...</span></> : <><Send className="w-4 h-4" /><span>Enviar Mensagem de Teste</span></>}</button></div>
+                    </form>
+                  </div>
                   <div className="card overflow-hidden border-brand-border bg-white animate-fadeIn">
                     <div className="flex flex-col gap-3 border-b border-brand-border p-6 md:flex-row md:items-center md:justify-between">
                       <div className="flex items-start gap-3"><div className="rounded-xl bg-emerald-50 p-3 text-emerald-600"><Send className="h-5 w-5" /></div><div><h2 className="text-xl font-display font-bold text-brand-primary">Envios realizados pela plataforma</h2><p className="mt-0.5 text-xs text-brand-text-muted">{whatsappDeliveriesTotal} envio{whatsappDeliveriesTotal === 1 ? '' : 's'} registrado{whatsappDeliveriesTotal === 1 ? '' : 's'}. O número do destinatário é exibido de forma protegida.</p></div></div>
@@ -7404,6 +7354,7 @@ export default function AdminPanel() {
                       })}
                     </tbody></table></div>
                     <div className="flex items-center justify-between gap-3 border-t border-emerald-100 p-4 text-xs text-emerald-900/80"><span>Página {whatsappDeliveriesPage} de {whatsappDeliveriesTotalPages}</span><div className="flex gap-2"><button type="button" onClick={() => setWhatsappDeliveriesPage((page) => Math.max(1, page - 1))} disabled={whatsappDeliveriesPage === 1 || whatsappDeliveriesLoading} className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">Anterior</button><button type="button" onClick={() => setWhatsappDeliveriesPage((page) => Math.min(whatsappDeliveriesTotalPages, page + 1))} disabled={whatsappDeliveriesPage >= whatsappDeliveriesTotalPages || whatsappDeliveriesLoading} className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">Próxima</button></div></div>
+                  </div>
                   </div>
                 )}
               </div>
