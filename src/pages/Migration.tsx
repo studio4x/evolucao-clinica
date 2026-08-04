@@ -172,7 +172,7 @@ export default function Migration() {
             <span>Migração de Prontuários</span>
           </h2>
           <p className="text-brand-text-muted text-sm mt-1">
-            Migre todo o histórico do seu consultório de forma prática e 100% segura.
+            Solicite a migração do histórico do seu consultório com apoio da nossa equipe.
           </p>
         </div>
 
@@ -188,9 +188,9 @@ export default function Migration() {
               <div className="flex items-start space-x-3">
                 <div className="p-2 bg-brand-bg rounded-lg mt-0.5 text-brand-primary font-bold">1</div>
                 <div>
-                  <h4 className="text-sm font-semibold text-brand-text">Você nos envia os arquivos</h4>
+                  <h4 className="text-sm font-semibold text-brand-text">Você envia os arquivos pela plataforma</h4>
                   <p className="text-xs text-brand-text-muted mt-0.5">
-                    Planilhas de pacientes, documentos do Word, prontuários exportados em PDF de outros sistemas ou até fotos de fichas em papel.
+                    Planilhas de pacientes, documentos do Word, prontuários exportados em PDF de outros sistemas ou fotos de fichas em papel.
                   </p>
                 </div>
               </div>
@@ -198,9 +198,9 @@ export default function Migration() {
               <div className="flex items-start space-x-3">
                 <div className="p-2 bg-brand-bg rounded-lg mt-0.5 text-brand-primary font-bold">2</div>
                 <div>
-                  <h4 className="text-sm font-semibold text-brand-text">Nosso time técnico organiza</h4>
+                  <h4 className="text-sm font-semibold text-brand-text">A equipe responsável organiza os dados</h4>
                   <p className="text-xs text-brand-text-muted mt-0.5">
-                    Processamos, estruturamos os dados dos seus pacientes e criamos as linhas do tempo de evolução correspondentes na plataforma.
+                    Os arquivos são processados e estruturados para criar os registros correspondentes na plataforma.
                   </p>
                 </div>
               </div>
@@ -208,9 +208,9 @@ export default function Migration() {
               <div className="flex items-start space-x-3">
                 <div className="p-2 bg-brand-bg rounded-lg mt-0.5 text-brand-primary font-bold">3</div>
                 <div>
-                  <h4 className="text-sm font-semibold text-brand-text">Acesso Liberado instantaneamente</h4>
+                  <h4 className="text-sm font-semibold text-brand-text">Os registros ficam disponíveis após a conclusão</h4>
                   <p className="text-xs text-brand-text-muted mt-0.5">
-                    Você entra na sua conta e já encontra todos os prontuários perfeitamente cadastrados no sistema, prontos para a inteligência artificial.
+                    Após o processamento, os registros importados ficam disponíveis na sua conta para conferência e revisão antes do uso.
                   </p>
                 </div>
               </div>
@@ -220,8 +220,8 @@ export default function Migration() {
               <div className="bg-sky-50 text-sky-800 rounded-2xl p-4 text-xs flex items-start gap-3">
                 <Shield className="shrink-0 text-sky-600 mt-0.5" size={16} />
                 <div>
-                  <span className="font-bold block mb-0.5">Segurança & LGPD:</span>
-                  Suas informações médicas são protegidas por criptografia ponta a ponta e o tratamento dos dados segue rígidos padrões legais de sigilo médico.
+                  <span className="font-bold block mb-0.5">Proteção de dados:</span>
+                  Os arquivos são tratados pela equipe responsável pela migração conforme os controles técnicos e procedimentos aplicáveis ao serviço. Evite compartilhar documentos clínicos fora do canal de migração da plataforma.
                 </div>
               </div>
             </div>
@@ -244,15 +244,15 @@ export default function Migration() {
               <div className="bg-amber-50 border border-amber-200/50 rounded-2xl p-4 text-left space-y-2.5">
                 <div className="flex items-center text-xs text-amber-900 font-semibold gap-2">
                   <CheckCircle2 size={14} className="text-amber-600 shrink-0" />
-                  <span>Sem limites de prontuários</span>
+                  <span>Solicitações organizadas por paciente</span>
                 </div>
                 <div className="flex items-center text-xs text-amber-900 font-semibold gap-2">
                   <CheckCircle2 size={14} className="text-amber-600 shrink-0" />
-                  <span>Suporte direto dos programadores</span>
+                  <span>Acompanhamento pela equipe responsável</span>
                 </div>
                 <div className="flex items-center text-xs text-amber-900 font-semibold gap-2">
                   <CheckCircle2 size={14} className="text-amber-600 shrink-0" />
-                  <span>Economia de horas de digitação manual</span>
+                  <span>Redução do trabalho de digitação manual</span>
                 </div>
               </div>
             </div>
@@ -438,7 +438,7 @@ export default function Migration() {
               ) : (
                 <>
                   <Database size={16} />
-                  <span>Solicitar Importação VIP</span>
+                  <span>Solicitar migração</span>
                 </>
               )}
             </button>
