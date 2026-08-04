@@ -31,11 +31,11 @@ export default function TrialBanner() {
         <span>
           Você está utilizando o <strong>teste gratuito de 7 dias</strong>.{' '}
           {daysRemaining === 1 ? (
-            <span>Resta apenas <strong>1 dia</strong> antes do fim do trial.</span>
+            <span>Resta apenas <strong>1 dia</strong> para conhecer as funcionalidades disponíveis no período de avaliação.</span>
           ) : daysRemaining === 0 ? (
             <span>Seu teste gratuito <strong>termina hoje</strong>!</span>
           ) : (
-            <span>Restam <strong>{daysRemaining} dias</strong> de acesso completo.</span>
+            <span>Restam <strong>{daysRemaining} dias</strong> para conhecer as funcionalidades disponíveis no período de avaliação.</span>
           )}
         </span>
       </div>
