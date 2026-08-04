@@ -56,9 +56,9 @@ android {
     defaultConfig {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 23
-        targetSdkVersion 35
-        versionCode 62
-        versionName "62"
+        targetSdkVersion 36
+        versionCode 63
+        versionName "63"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name

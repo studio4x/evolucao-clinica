@@ -165,6 +165,7 @@ function applyFixes(pinnedVersion) {
   
   // Set compileSdkVersion to 36
   buildGradleContent = buildGradleContent.replace(/compileSdkVersion\s+\d+/, 'compileSdkVersion 36');
+  buildGradleContent = buildGradleContent.replace(/targetSdkVersion\s+\d+/, 'targetSdkVersion 36');
   buildGradleContent = buildGradleContent.replace(/minSdkVersion\s+\d+/, 'minSdkVersion 23');
   buildGradleContent = buildGradleContent.replace(/versionCode\s+\d+/, `versionCode ${pinnedVersion.code}`);
   buildGradleContent = buildGradleContent.replace(/versionName\s+"[^"]+"/, `versionName "${pinnedVersion.name}"`);
@@ -293,9 +294,6 @@ async function main() {
     // Step 2: Apply gradle configuration overrides
     console.log('=== STEP 2: APPLYING OVERRIDES ===');
     applyFixes(pinnedVersion);
-
-    // Restaura o LauncherActivity.java customizado mesmo que o Bubblewrap tenha removido o arquivo.
-    if (launcherActivityBackup) {
 
     // Restaura o LauncherActivity.java customizado mesmo que o Bubblewrap tenha removido o arquivo.
     if (launcherActivityBackup) {
