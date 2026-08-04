@@ -1142,7 +1142,7 @@ export default function AdminPanel() {
   const [adminSmtpSuccess, setAdminSmtpSuccess] = useState(false);
 
   // Estados de Configuração da API do WhatsApp Cloud
-  const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('');
+  const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('+5511942919276');
   const [adminWhatsappTestTemplate, setAdminWhatsappTestTemplate] = useState('account_access_granted');
   const [adminWhatsappWebhookCopied, setAdminWhatsappWebhookCopied] = useState(false);
   const [adminWhatsappN8nEventsCopied, setAdminWhatsappN8nEventsCopied] = useState(false);
