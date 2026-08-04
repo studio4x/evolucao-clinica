@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Download, X } from 'lucide-react';
 import { useSiteConfig } from '../../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandInstallLogoUrl } from '../../utils/brandAssets';
+import { isAndroidDevice, redirectToGooglePlay } from '../../utils/googlePlay';
 import { showAlert } from '../../store/modalStore';
 
 export const InstallPrompt = () => {
@@ -76,6 +77,11 @@ export const InstallPrompt = () => {
   };
 
   const handleInstallClick = async () => {
+    if (isAndroidDevice()) {
+      redirectToGooglePlay();
+      return;
+    }
+
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;

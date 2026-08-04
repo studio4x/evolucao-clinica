@@ -10,6 +10,7 @@ import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
 import TrialBanner from './layout/TrialBanner';
 import { runAutoBackupIfNeeded } from '../services/backupService';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { isAndroidDevice, redirectToGooglePlay } from '../utils/googlePlay';
 import { showAlert } from '../store/modalStore';
 
 export default function Layout() {
@@ -130,6 +131,11 @@ export default function Layout() {
   }, [isMobileMenuOpen]);
 
   const handleInstallClick = async () => {
+    if (isAndroidDevice()) {
+      redirectToGooglePlay();
+      return;
+    }
+
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
