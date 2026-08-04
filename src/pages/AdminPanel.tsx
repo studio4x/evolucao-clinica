@@ -1757,7 +1757,11 @@ export default function AdminPanel() {
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.error || 'Falha ao enviar mensagem de teste via API do WhatsApp Cloud.');
+        const apiError = payload.error;
+        const errorMessage = typeof apiError === 'string'
+          ? apiError
+          : [apiError?.title, apiError?.message].filter(Boolean).join(': ');
+        throw new Error(errorMessage || 'Falha ao enviar mensagem de teste via API do WhatsApp Cloud.');
       }
 
       setAdminWhatsappTestSuccess(true);
