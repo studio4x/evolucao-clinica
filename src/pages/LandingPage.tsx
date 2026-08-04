@@ -30,7 +30,11 @@ import {
   Database,
   AlertCircle,
   ChevronUp,
-  Loader2
+  Loader2,
+  Smartphone,
+  Download,
+  ArrowUpRight,
+  Share2
 } from 'lucide-react';
 import { APP_VERSION, PLAY_STORE_VERSION } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -1052,6 +1056,205 @@ export default function LandingPage() {
                   <span><strong>Soberania absoluta</strong>. Todos os documentos salvos na sua própria conta do Google Docs.</span>
                 </li>
               </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SEÇÃO DA GOOGLE PLAY STORE / APLICATIVO OFICIAL */}
+      <section id="app-download" className="py-24 bg-white relative overflow-hidden border-t border-brand-border">
+        {/* Efeitos de fundo sutis */}
+        <div className="absolute top-0 right-1/4 w-96 h-96 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-1/4 w-96 h-96 bg-brand-accent/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-brand-primary rounded-3xl overflow-hidden shadow-2xl border border-slate-700/50 p-8 md:p-12 lg:p-16 relative">
+            
+            {/* Decorações do Container */}
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-2xl pointer-events-none -mr-20 -mt-20" />
+            
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
+              {/* Lado do Texto (7 colunas) */}
+              <div className="lg:col-span-7 space-y-6 text-left">
+                {/* Badge */}
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-white/10 rounded-full text-brand-accent text-xs font-bold uppercase tracking-wider">
+                  <Smartphone size={14} className="text-brand-accent" /> Aplicativo Oficial Android
+                </div>
+
+                {/* Título */}
+                <h2 className="text-3xl sm:text-4xl font-display font-extrabold text-white leading-tight">
+                  Toda a inteligência do <br />
+                  <span className="bg-gradient-to-r from-brand-accent to-emerald-400 bg-clip-text text-transparent">
+                    Evolução Clínica no seu bolso
+                  </span>
+                </h2>
+
+                {/* Descrição */}
+                <p className="text-slate-300 text-sm sm:text-base leading-relaxed font-normal">
+                  Instale o nosso aplicativo oficial diretamente da Google Play Store. Grave áudios, consulte e assine prontuários de forma nativa e rápida no seu celular, com sincronização automática e em tempo real na sua conta do Google Drive.
+                </p>
+
+                {/* Características em grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-brand-accent mt-0.5 flex-shrink-0">
+                      <Mic size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">Gravação Rápida</h4>
+                      <p className="text-slate-400 text-xs mt-0.5">Inicie e pause gravações de áudio com um toque no seu dispositivo móvel.</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-brand-accent mt-0.5 flex-shrink-0">
+                      <Share2 size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">Integração WhatsApp</h4>
+                      <p className="text-slate-400 text-xs mt-0.5">Compartilhe qualquer áudio do WhatsApp direto para o app para transcrever.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-brand-accent mt-0.5 flex-shrink-0">
+                      <ShieldCheck size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">Privacidade Certificada</h4>
+                      <p className="text-slate-400 text-xs mt-0.5">Acesso biométrico seguro e conformidade rigorosa com a LGPD móvel.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-brand-accent mt-0.5 flex-shrink-0">
+                      <Database size={16} />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider">Sincronia Total</h4>
+                      <p className="text-slate-400 text-xs mt-0.5">Acesse o painel web ou o app e veja seus prontuários no Google Docs atualizados.</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Google Play Badge Button */}
+                <div className="flex flex-col sm:flex-row items-center gap-4 pt-6">
+                  <a 
+                    href="https://play.google.com/store/apps/details?id=com.evolucaoclinica.app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-3 bg-black hover:bg-slate-950 text-white px-6 py-3 rounded-xl border border-slate-800 transition-all shadow-lg hover:shadow-xl hover:shadow-brand-accent/5 hover:-translate-y-0.5 cursor-pointer select-none group"
+                  >
+                    {/* SVG do ícone da Google Play */}
+                    <svg className="w-6 h-6 flex-shrink-0" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3.2509 2.5009C3.0768 2.6583 2.9785 2.9238 2.9785 3.2558V20.7441C2.9785 21.0761 3.0768 21.3416 3.2509 21.499L3.3323 21.5721L13.8824 11.022V10.978L3.3323 2.42773L3.2509 2.5009Z" fill="#00E5FF"/>
+                      <path d="M17.3789 14.5186L13.8828 11.022V10.978L17.3793 7.48135L17.4623 7.52865L21.597 9.87825C22.7712 10.5451 22.7712 11.6338 21.597 12.3006L17.4623 14.6503L17.3789 14.5186Z" fill="#FFC107"/>
+                      <path d="M3.33203 21.5723L13.8821 11.0222L17.3791 14.5192L3.33203 22.5003C2.81243 22.7954 2.55163 22.285 3.33203 21.5723Z" fill="#FF3D00"/>
+                      <path d="M3.33203 2.42773L17.3791 10.4808L13.8821 13.9778L3.33203 2.42773C2.55163 1.71493 2.81243 1.20453 3.33203 1.49963L3.33203 2.42773Z" fill="#4CAF50"/>
+                    </svg>
+                    <div className="text-left">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none">Disponível no</p>
+                      <p className="text-sm font-extrabold font-display leading-none mt-0.5">Google Play</p>
+                    </div>
+                    <ArrowUpRight size={14} className="text-slate-400 group-hover:text-white transition-colors ml-1" />
+                  </a>
+                  
+                  <div className="text-xs text-slate-400 text-center sm:text-left">
+                    <p className="font-bold text-slate-300">Versão do App: v{PLAY_STORE_VERSION}</p>
+                    <p className="mt-0.5">Compatível com smartphones Android</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lado do Mockup do Celular (5 colunas) */}
+              <div className="lg:col-span-5 flex justify-center items-center">
+                {/* Smartphone Container */}
+                <div className="relative group/phone">
+                  {/* Sombra e Brilho atrás */}
+                  <div className="absolute inset-0 bg-gradient-to-tr from-brand-accent/30 to-emerald-400/30 rounded-[40px] blur-2xl opacity-60 scale-95 transition-all duration-500 group-hover/phone:scale-105" />
+                  
+                  {/* Smartphone Frame em CSS */}
+                  <div className="relative w-[280px] h-[550px] bg-slate-950 rounded-[44px] p-3 shadow-2xl border-4 border-slate-800 transition-all duration-500 transform group-hover/phone:scale-102 group-hover/phone:-translate-y-1">
+                    
+                    {/* Speaker e Câmera Punch-hole */}
+                    <div className="absolute top-5 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-slate-950 rounded-full z-30 flex items-center justify-center">
+                      <div className="w-12 h-1 bg-slate-800 rounded-full" />
+                      <div className="w-2.5 h-2.5 bg-slate-900 rounded-full border border-slate-800 ml-4" />
+                    </div>
+
+                    {/* Botões laterais */}
+                    <div className="absolute -left-1 top-28 w-1 h-12 bg-slate-800 rounded-r-lg" />
+                    <div className="absolute -right-1 top-24 w-1 h-16 bg-slate-800 rounded-l-lg" />
+                    <div className="absolute -right-1 top-44 w-1 h-12 bg-slate-800 rounded-l-lg" />
+
+                    {/* Tela Interna */}
+                    <div className="w-full h-full bg-slate-900 rounded-[34px] overflow-hidden border border-slate-950 relative flex flex-col justify-between p-4 pt-10 select-none">
+                      
+                      {/* Top Bar da Interface do App */}
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 border-b border-slate-800 pb-2.5">
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-4 rounded bg-brand-primary flex items-center justify-center text-[8px] text-white font-bold">EC</div>
+                          <span className="font-bold text-slate-300">Evolução Clínica</span>
+                        </div>
+                        <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full font-bold flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" /> Online
+                        </span>
+                      </div>
+
+                      {/* Conteúdo Principal do App (Gravação de Prontuário) */}
+                      <div className="flex-1 flex flex-col justify-center items-center py-6 space-y-6">
+                        
+                        {/* Paciente Ativo no App */}
+                        <div className="w-full bg-slate-800/80 border border-slate-700/40 rounded-2xl p-3 text-center">
+                          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Paciente em Sessão</p>
+                          <p className="text-xs font-bold text-white mt-0.5">Eduardo Mendes da Silva</p>
+                        </div>
+
+                        {/* Animação Circular de Gravação */}
+                        <div className="relative flex items-center justify-center">
+                          {/* Ondas pulsantes de fundo */}
+                          <div className="absolute w-24 h-24 rounded-full bg-emerald-500/10 animate-ping" />
+                          <div className="absolute w-20 h-20 rounded-full bg-emerald-500/20 animate-pulse" />
+                          
+                          {/* Botão de gravação */}
+                          <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
+                            <Mic size={24} className="animate-pulse" />
+                          </div>
+                        </div>
+
+                        {/* Cronômetro e Legenda */}
+                        <div className="text-center space-y-1">
+                          <p className="text-base font-mono font-bold text-white tracking-widest">08:14</p>
+                          <p className="text-[9px] text-slate-400">Gravando e analisando termo clínico...</p>
+                        </div>
+
+                        {/* Ondas Sonoras de Volume do Áudio */}
+                        <div className="flex items-center justify-center gap-1.5 h-8 w-full px-4">
+                          <div className="w-1 h-3 bg-emerald-500 rounded-full animate-pulse" />
+                          <div className="w-1 h-5 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                          <div className="w-1 h-7 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                          <div className="w-1 h-4 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-1 h-6 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+                          <div className="w-1 h-3 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+                          <div className="w-1 h-5 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.25s' }} />
+                          <div className="w-1 h-2 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.05s' }} />
+                        </div>
+                      </div>
+
+                      {/* Rodapé da Interface (Google Drive Confirm) */}
+                      <div className="bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/30 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+                          <ShieldCheck size={14} />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-[8px] text-slate-400 leading-none">Destino do Prontuário</p>
+                          <p className="text-[9px] font-bold text-white mt-0.5 leading-none font-sans">Google Drive Conectado</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
