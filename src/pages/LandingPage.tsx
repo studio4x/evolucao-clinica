@@ -1188,69 +1188,12 @@ export default function LandingPage() {
                     <div className="absolute -right-1 top-44 w-1 h-12 bg-slate-800 rounded-l-lg" />
 
                     {/* Tela Interna */}
-                    <div className="w-full h-full bg-slate-900 rounded-[34px] overflow-hidden border border-slate-950 relative flex flex-col justify-between p-4 pt-10 select-none">
-                      
-                      {/* Top Bar da Interface do App */}
-                      <div className="flex justify-between items-center text-[10px] text-slate-400 border-b border-slate-800 pb-2.5">
-                        <div className="flex items-center gap-1">
-                          <div className="w-4 h-4 rounded bg-brand-primary flex items-center justify-center text-[8px] text-white font-bold">EC</div>
-                          <span className="font-bold text-slate-300">Evolução Clínica</span>
-                        </div>
-                        <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-full font-bold flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping" /> Online
-                        </span>
-                      </div>
-
-                      {/* Conteúdo Principal do App (Gravação de Prontuário) */}
-                      <div className="flex-1 flex flex-col justify-center items-center py-6 space-y-6">
-                        
-                        {/* Paciente Ativo no App */}
-                        <div className="w-full bg-slate-800/80 border border-slate-700/40 rounded-2xl p-3 text-center">
-                          <p className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">Paciente em Sessão</p>
-                          <p className="text-xs font-bold text-white mt-0.5">Eduardo Mendes da Silva</p>
-                        </div>
-
-                        {/* Animação Circular de Gravação */}
-                        <div className="relative flex items-center justify-center">
-                          {/* Ondas pulsantes de fundo */}
-                          <div className="absolute w-24 h-24 rounded-full bg-emerald-500/10 animate-ping" />
-                          <div className="absolute w-20 h-20 rounded-full bg-emerald-500/20 animate-pulse" />
-                          
-                          {/* Botão de gravação */}
-                          <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/30">
-                            <Mic size={24} className="animate-pulse" />
-                          </div>
-                        </div>
-
-                        {/* Cronômetro e Legenda */}
-                        <div className="text-center space-y-1">
-                          <p className="text-base font-mono font-bold text-white tracking-widest">08:14</p>
-                          <p className="text-[9px] text-slate-400">Gravando e analisando termo clínico...</p>
-                        </div>
-
-                        {/* Ondas Sonoras de Volume do Áudio */}
-                        <div className="flex items-center justify-center gap-1.5 h-8 w-full px-4">
-                          <div className="w-1 h-3 bg-emerald-500 rounded-full animate-pulse" />
-                          <div className="w-1 h-5 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-                          <div className="w-1 h-7 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-                          <div className="w-1 h-4 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-1 h-6 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
-                          <div className="w-1 h-3 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
-                          <div className="w-1 h-5 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.25s' }} />
-                          <div className="w-1 h-2 bg-emerald-500 rounded-full animate-pulse" style={{ animationDelay: '0.05s' }} />
-                        </div>
-                      </div>
-
-                      {/* Rodapé da Interface (Google Drive Confirm) */}
-                      <div className="bg-slate-800/60 rounded-xl p-2.5 border border-slate-700/30 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
-                          <ShieldCheck size={14} />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-[8px] text-slate-400 leading-none">Destino do Prontuário</p>
-                          <p className="text-[9px] font-bold text-white mt-0.5 leading-none font-sans">Google Drive Conectado</p>
-                        </div>
-                      </div>
+                    <div className="w-full h-full bg-slate-900 rounded-[34px] overflow-hidden border border-slate-950 relative select-none">
+                      <img 
+                        src="/screenshot-playstore.jpg" 
+                        alt="Screenshot do aplicativo oficial do Evolução Clínica gravando áudio" 
+                        className="w-full h-full object-cover object-top"
+                      />
                     </div>
                   </div>
                 </div>
