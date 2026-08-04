@@ -1722,6 +1722,50 @@ app.delete("/api/admin/whatsapp/integration-events", requireAuth, requireAdmin, 
   }
 });
 
+// Histórico administrativo de mensagens originadas pela própria plataforma.
+// Nunca retorna payloads nem o número completo do destinatário ao navegador.
+app.get("/api/admin/whatsapp/deliveries", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const requestedPage = Number.parseInt(String(req.query.page || "1"), 10);
+    const requestedPageSize = Number.parseInt(String(req.query.pageSize || "20"), 10);
+    const page = Number.isFinite(requestedPage) ? Math.max(1, requestedPage) : 1;
+    const pageSize = Number.isFinite(requestedPageSize)
+      ? Math.min(100, Math.max(1, requestedPageSize))
+      : 20;
+    const from = (page - 1) * pageSize;
+
+    const { data, error, count } = await supabaseAdmin
+      .from("whatsapp_message_deliveries")
+      .select("id, recipient_phone, message_type, template_name, status, error_code, error_title, error_message, attempt_count, accepted_at, sent_at, delivered_at, read_at, failed_at, created_at", { count: "exact" })
+      .order("created_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message || "Não foi possível carregar os envios do WhatsApp.");
+
+    const maskPhone = (phone: unknown) => {
+      const digits = String(phone || "").replace(/\D/g, "");
+      if (digits.length <= 4) return "••••";
+      return `${"•".repeat(Math.max(4, digits.length - 4))}${digits.slice(-4)}`;
+    };
+
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    return res.json({
+      deliveries: (data || []).map((delivery: any) => ({
+        ...delivery,
+        recipient_phone: maskPhone(delivery.recipient_phone)
+      })),
+      pagination: {
+        page,
+        pageSize,
+        total: count || 0,
+        totalPages: Math.max(1, Math.ceil((count || 0) / pageSize))
+      }
+    });
+  } catch (error: any) {
+    console.error("[Admin WhatsApp] Erro ao listar envios:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar os envios do WhatsApp." });
+  }
+});
+
 app.get("/api/debug-env", (req, res) => {
   const envs = {
     NODE_ENV: process.env.NODE_ENV,

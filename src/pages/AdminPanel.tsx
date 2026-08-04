@@ -114,6 +114,24 @@ interface WhatsAppIntegrationEvent {
   created_at: string;
 }
 
+interface WhatsAppDelivery {
+  id: string;
+  recipient_phone: string;
+  message_type: string;
+  template_name: string | null;
+  status: 'pending' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed';
+  error_code: string | null;
+  error_title: string | null;
+  error_message: string | null;
+  attempt_count: number;
+  accepted_at: string | null;
+  sent_at: string | null;
+  delivered_at: string | null;
+  read_at: string | null;
+  failed_at: string | null;
+  created_at: string;
+}
+
 interface BrevoSyncLog {
   id: string;
   started_at: string;
@@ -1130,6 +1148,7 @@ export default function AdminPanel() {
   const [adminWhatsappTestLoading, setAdminWhatsappTestLoading] = useState(false);
   const [adminWhatsappTestSuccess, setAdminWhatsappTestSuccess] = useState(false);
   const [adminWhatsappTestError, setAdminWhatsappTestError] = useState('');
+  const [whatsappAdminSection, setWhatsappAdminSection] = useState<'settings' | 'deliveries'>('settings');
   const [whatsappIntegrationEvents, setWhatsappIntegrationEvents] = useState<WhatsAppIntegrationEvent[]>([]);
   const [whatsappIntegrationEventsPage, setWhatsappIntegrationEventsPage] = useState(1);
   const [whatsappIntegrationEventsTotal, setWhatsappIntegrationEventsTotal] = useState(0);
@@ -1137,6 +1156,12 @@ export default function AdminPanel() {
   const [whatsappIntegrationEventsLoading, setWhatsappIntegrationEventsLoading] = useState(false);
   const [whatsappIntegrationEventsError, setWhatsappIntegrationEventsError] = useState('');
   const [whatsappIntegrationEventsClearing, setWhatsappIntegrationEventsClearing] = useState(false);
+  const [whatsappDeliveries, setWhatsappDeliveries] = useState<WhatsAppDelivery[]>([]);
+  const [whatsappDeliveriesPage, setWhatsappDeliveriesPage] = useState(1);
+  const [whatsappDeliveriesTotal, setWhatsappDeliveriesTotal] = useState(0);
+  const [whatsappDeliveriesTotalPages, setWhatsappDeliveriesTotalPages] = useState(1);
+  const [whatsappDeliveriesLoading, setWhatsappDeliveriesLoading] = useState(false);
+  const [whatsappDeliveriesError, setWhatsappDeliveriesError] = useState('');
   const [whatsappConsentMetrics, setWhatsappConsentMetrics] = useState<{ enabled: number; optedIn: number; numberWithoutConsent: number; optOutProcessed: number; lastOptOutAt: string | null; tokenConfigured: boolean } | null>(null);
 
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
@@ -1620,6 +1645,30 @@ export default function AdminPanel() {
     }
   };
 
+  const loadWhatsappDeliveries = async (page = whatsappDeliveriesPage) => {
+    setWhatsappDeliveriesLoading(true);
+    setWhatsappDeliveriesError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const response = await fetch(`/api/admin/whatsapp/deliveries?page=${page}&pageSize=20`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os envios do WhatsApp.');
+
+      setWhatsappDeliveries(payload.deliveries || []);
+      setWhatsappDeliveriesTotal(Number(payload.pagination?.total || 0));
+      setWhatsappDeliveriesTotalPages(Math.max(1, Number(payload.pagination?.totalPages || 1)));
+    } catch (error: any) {
+      setWhatsappDeliveriesError(error.message || 'Não foi possível carregar os envios do WhatsApp.');
+    } finally {
+      setWhatsappDeliveriesLoading(false);
+    }
+  };
+
   const loadWhatsappConsentMetrics = async () => {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1636,8 +1685,9 @@ export default function AdminPanel() {
     if (activeTab === 'whatsapp_config') {
       void loadWhatsappIntegrationEvents(whatsappIntegrationEventsPage);
       void loadWhatsappConsentMetrics();
+      if (whatsappAdminSection === 'deliveries') void loadWhatsappDeliveries(whatsappDeliveriesPage);
     }
-  }, [activeTab, whatsappIntegrationEventsPage]);
+  }, [activeTab, whatsappIntegrationEventsPage, whatsappAdminSection, whatsappDeliveriesPage]);
 
   const handleClearWhatsappIntegrationEvents = async () => {
     if (whatsappIntegrationEventsClearing) return;
@@ -7034,6 +7084,13 @@ export default function AdminPanel() {
             ) : activeTab === 'whatsapp_config' ? (
               /* Aba de Configuração do WhatsApp Cloud API [NEW] */
               <div className="space-y-6 max-w-4xl">
+                <div className="flex w-full gap-1 rounded-xl border border-brand-border bg-white p-1 sm:w-fit">
+                  <button type="button" onClick={() => setWhatsappAdminSection('settings')} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${whatsappAdminSection === 'settings' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted hover:bg-brand-primary/5 hover:text-brand-primary'}`}>Configurações</button>
+                  <button type="button" onClick={() => setWhatsappAdminSection('deliveries')} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${whatsappAdminSection === 'deliveries' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted hover:bg-brand-primary/5 hover:text-brand-primary'}`}>Envios da plataforma</button>
+                </div>
+
+                {whatsappAdminSection === 'settings' ? (
+                <div className="space-y-6">
                 <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
@@ -7331,6 +7388,24 @@ export default function AdminPanel() {
                     </div>
                   </form>
                 </div>
+              </div>
+                ) : (
+                  <div className="card overflow-hidden border-brand-border bg-white animate-fadeIn">
+                    <div className="flex flex-col gap-3 border-b border-brand-border p-6 md:flex-row md:items-center md:justify-between">
+                      <div className="flex items-start gap-3"><div className="rounded-xl bg-emerald-50 p-3 text-emerald-600"><Send className="h-5 w-5" /></div><div><h2 className="text-xl font-display font-bold text-brand-primary">Envios realizados pela plataforma</h2><p className="mt-0.5 text-xs text-brand-text-muted">{whatsappDeliveriesTotal} envio{whatsappDeliveriesTotal === 1 ? '' : 's'} registrado{whatsappDeliveriesTotal === 1 ? '' : 's'}. O número do destinatário é exibido de forma protegida.</p></div></div>
+                      <button type="button" onClick={() => void loadWhatsappDeliveries(whatsappDeliveriesPage)} disabled={whatsappDeliveriesLoading} className="btn-outline flex items-center justify-center gap-1.5 px-3 py-2 text-xs cursor-pointer disabled:cursor-not-allowed"><RefreshCw className={`h-3.5 w-3.5 ${whatsappDeliveriesLoading ? 'animate-spin' : ''}`} />Atualizar</button>
+                    </div>
+                    {whatsappDeliveriesError && <div className="m-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{whatsappDeliveriesError}</div>}
+                    <div className="overflow-x-auto"><table className="min-w-full text-left text-xs"><thead className="bg-emerald-50 text-[10px] uppercase tracking-wide text-emerald-800"><tr><th className="px-4 py-3 font-bold">Enviado em</th><th className="px-4 py-3 font-bold">Destinatário</th><th className="px-4 py-3 font-bold">Mensagem</th><th className="px-4 py-3 font-bold">Status</th><th className="px-4 py-3 font-bold">Detalhe</th></tr></thead><tbody className="divide-y divide-emerald-100 text-brand-text">
+                      {whatsappDeliveriesLoading ? <tr><td colSpan={5} className="px-4 py-10 text-center text-emerald-800"><Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />Carregando envios...</td></tr> : whatsappDeliveries.length === 0 ? <tr><td colSpan={5} className="px-4 py-10 text-center text-emerald-800">Nenhum envio da plataforma foi registrado.</td></tr> : whatsappDeliveries.map((delivery) => {
+                        const completedAt = delivery.read_at || delivery.delivered_at || delivery.sent_at || delivery.accepted_at || delivery.failed_at;
+                        const statusClass = delivery.status === 'failed' ? 'bg-red-100 text-red-700' : delivery.status === 'read' ? 'bg-violet-100 text-violet-700' : delivery.status === 'delivered' ? 'bg-emerald-100 text-emerald-700' : delivery.status === 'pending' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-700';
+                        return <tr key={delivery.id} className="align-top"><td className="whitespace-nowrap px-4 py-3 text-brand-text-muted">{formatDate(delivery.created_at)}</td><td className="px-4 py-3 font-mono text-[11px]">{delivery.recipient_phone}</td><td className="px-4 py-3"><strong className="block font-medium">{delivery.template_name || delivery.message_type}</strong><span className="mt-1 block text-[10px] text-brand-text-muted">Tipo: {delivery.message_type} · Tentativa {delivery.attempt_count}</span></td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${statusClass}`}>{delivery.status}</span>{completedAt && <span className="mt-1 block whitespace-nowrap text-[10px] text-brand-text-muted">{formatDate(completedAt)}</span>}</td><td className="max-w-[260px] px-4 py-3 text-[10px] text-brand-text-muted">{delivery.status === 'failed' ? (delivery.error_message || delivery.error_title || delivery.error_code || 'Falha sem detalhes retornados.') : delivery.status === 'accepted' ? 'Aceita pela Meta; a entrega final depende do evento de status.' : '—'}</td></tr>;
+                      })}
+                    </tbody></table></div>
+                    <div className="flex items-center justify-between gap-3 border-t border-emerald-100 p-4 text-xs text-emerald-900/80"><span>Página {whatsappDeliveriesPage} de {whatsappDeliveriesTotalPages}</span><div className="flex gap-2"><button type="button" onClick={() => setWhatsappDeliveriesPage((page) => Math.max(1, page - 1))} disabled={whatsappDeliveriesPage === 1 || whatsappDeliveriesLoading} className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">Anterior</button><button type="button" onClick={() => setWhatsappDeliveriesPage((page) => Math.min(whatsappDeliveriesTotalPages, page + 1))} disabled={whatsappDeliveriesPage >= whatsappDeliveriesTotalPages || whatsappDeliveriesLoading} className="btn-outline px-3 py-1.5 text-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">Próxima</button></div></div>
+                  </div>
+                )}
               </div>
 ) : activeTab === 'whatsapp_widget' ? (
               /* Aba de Widget do WhatsApp [NEW] */
