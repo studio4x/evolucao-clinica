@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User, Shield, Printer, Download, CloudOff, ExternalLink, MoreVertical } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { transcribeAudio } from '../services/aiTranscription';
+import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { appendToGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -415,11 +416,24 @@ export default function History() {
         if (!audioResponse.ok) throw new Error("Falha ao baixar áudio para reprocessamento.");
         const audioBlob = await audioResponse.blob();
         
-        const transcription = await transcribeAudio({
+        const originalTranscription = await transcribeAudio({
           audioBlob,
           mimeType: audioBlob.type || 'audio/webm',
           audioDuration: evo.audio_duration_seconds || 0
         });
+
+        const { error: originalSaveError } = await supabase
+          .from('evolutions')
+          .update({
+            original_transcription_text: originalTranscription,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', evo.id);
+        if (originalSaveError) throw originalSaveError;
+
+        const transcription = evo.template_id
+          ? await convertEvolutionToTemplate(originalTranscription, evo.template_id)
+          : originalTranscription;
 
         console.log("Transcrição concluída. Inserindo no Google Docs...");
 
@@ -441,6 +455,7 @@ export default function History() {
           .update({
             transcription_status: 'completed',
             transcription_text: transcription,
+            original_transcription_text: originalTranscription,
             google_doc_append_status: 'completed',
             google_doc_append_at: new Date().toISOString(),
             error_message: null,

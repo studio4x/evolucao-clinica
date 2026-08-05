@@ -1,6 +1,10 @@
 import { supabase } from '../supabaseClient';
 
 export async function convertEvolutionToTemplate(text: string, templateId: string | null): Promise<string> {
+  // "Sem template" significa restaurar a transcrição recebida exatamente como
+  // foi registrada, sem envolver IA nem tentar reescrever o conteúdo.
+  if (!templateId) return text;
+
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error('Sua sessão expirou. Faça login novamente.');
 

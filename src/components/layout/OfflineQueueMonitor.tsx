@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getPendingEvolutions, removePendingEvolution, PendingEvolution } from '../../services/offlineQueue';
 import { transcribeAudio } from '../../services/aiTranscription';
+import { convertEvolutionToTemplate } from '../../services/evolutionTemplateConversion';
 import { appendToGoogleDoc } from '../../services/googleDocs';
 import { getPendingEvolutionAudioBlobs } from '../../services/evolutionAudio';
 import { supabase } from '../../supabaseClient';
@@ -118,14 +119,32 @@ export function OfflineQueueMonitor() {
           transcriptions.push(transcription.trim());
         }
 
-        const mergedTranscription = transcriptions.join('\n\n');
+        const originalTranscription = transcriptions.join('\n\n');
+        const templateId = typeof item.evolutionData?.template_id === 'string' && item.evolutionData.template_id
+          ? item.evolutionData.template_id
+          : null;
+
+        const { error: originalSaveError } = await supabase
+          .from('evolutions')
+          .upsert({
+            ...item.evolutionData,
+            transcription_status: 'processing',
+            transcription_text: '',
+            original_transcription_text: originalTranscription,
+            updated_at: new Date().toISOString()
+          });
+        if (originalSaveError) throw originalSaveError;
+
+        const evolutionText = templateId
+          ? await convertEvolutionToTemplate(originalTranscription, templateId)
+          : originalTranscription;
 
         setSyncStatus(`Inserindo ${item.patientName} no Google Docs...`);
         await appendToGoogleDoc(
           googleAccessToken,
           item.googleDocId,
           item.sessionDate,
-          mergedTranscription,
+          evolutionText,
           {
             sessionTime: item.sessionTime || (item.evolutionData?.session_time) || undefined,
             evolutionId: item.id
@@ -138,7 +157,8 @@ export function OfflineQueueMonitor() {
           .upsert({
             ...item.evolutionData,
             transcription_status: 'completed',
-            transcription_text: mergedTranscription,
+            transcription_text: evolutionText,
+            original_transcription_text: originalTranscription,
             google_doc_append_status: 'completed',
             google_doc_append_at: new Date().toISOString(),
             updated_at: new Date().toISOString()

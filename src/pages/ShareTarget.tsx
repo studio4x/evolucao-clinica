@@ -325,6 +325,15 @@ export default function ShareTarget() {
 
       if (!transcription) throw new Error("A IA retornou um texto vazio.");
 
+      const { error: originalSaveError } = await supabase
+        .from('evolutions')
+        .update({
+          original_transcription_text: transcription,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evolutionId);
+      if (originalSaveError) throw originalSaveError;
+
       // 3. Append to Google Docs
       setErrorMessage("Etapa 3/4: Inserindo no prontuário (Google Docs)...");
       await appendToGoogleDoc(
@@ -345,6 +354,7 @@ export default function ShareTarget() {
         .update({
           transcription_status: 'completed',
           transcription_text: transcription,
+          original_transcription_text: transcription,
           google_doc_append_status: 'completed',
           google_doc_append_at: new Date().toISOString(),
           updated_at: new Date().toISOString()

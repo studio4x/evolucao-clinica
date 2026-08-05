@@ -2067,22 +2067,24 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
 
 app.post("/api/ai/convert-evolution-template", requireAuth, async (req: any, res) => {
   try {
-    const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+    const sourceText = typeof req.body?.text === 'string' ? req.body.text : '';
+    const text = sourceText.trim();
     const templateId = typeof req.body?.templateId === 'string' && req.body.templateId.trim() ? req.body.templateId.trim() : null;
     if (!text) return res.status(400).json({ error: 'O texto da evolução é obrigatório.' });
     if (text.length > 60_000) return res.status(400).json({ error: 'A evolução excede o tamanho máximo para conversão.' });
 
-    let templateInstruction = 'Reescreva o conteúdo como uma evolução clínica narrativa, contínua e clara, sem títulos de modelo. Preserve integralmente os fatos clínicos e não invente informações.';
-    if (templateId) {
-      const { data: template, error } = await supabaseAdmin
-        .from('evolution_templates')
-        .select('system_prompt_instruction')
-        .eq('id', templateId)
-        .or(`professional_id.is.null,professional_id.eq.${req.user.id}`)
-        .maybeSingle();
-      if (error || !template) return res.status(404).json({ error: 'Modelo de evolução não encontrado ou sem permissão de uso.' });
-      templateInstruction = template.system_prompt_instruction;
-    }
+    // A ausência de template não é uma conversão. Retornar a fonte recebida
+    // impede que a IA fabrique uma versão narrativa ao restaurar o texto puro.
+    if (!templateId) return res.json({ text: sourceText, templateId: null });
+
+    const { data: template, error } = await supabaseAdmin
+      .from('evolution_templates')
+      .select('system_prompt_instruction')
+      .eq('id', templateId)
+      .or(`professional_id.is.null,professional_id.eq.${req.user.id}`)
+      .maybeSingle();
+    if (error || !template) return res.status(404).json({ error: 'Modelo de evolução não encontrado ou sem permissão de uso.' });
+    const templateInstruction = template.system_prompt_instruction;
 
     const { apiKey, modelName } = await getGeminiSettings();
     if (!apiKey) return res.status(500).json({ error: 'Chave do Gemini não configurada no servidor.' });

@@ -232,6 +232,7 @@ export default function PatientDetail() {
   // Estados para Assinatura Digital e Edição de Evolução
   const [editingEvolutionId, setEditingEvolutionId] = useState<string | null>(null);
   const [editingEvolutionText, setEditingEvolutionText] = useState('');
+  const [editingEvolutionOriginalText, setEditingEvolutionOriginalText] = useState('');
   const [editingEvolutionTemplateId, setEditingEvolutionTemplateId] = useState<string>('');
   const [savingEvolutionId, setSavingEvolutionId] = useState<string | null>(null);
   const [convertingEvolutionId, setConvertingEvolutionId] = useState<string | null>(null);
@@ -452,6 +453,7 @@ export default function PatientDetail() {
 
       setEditingEvolutionId(null);
       setEditingEvolutionText('');
+      setEditingEvolutionOriginalText('');
       setEditingEvolutionTemplateId('');
       await fetchData();
       alert("Evolução atualizada com sucesso!");
@@ -465,9 +467,13 @@ export default function PatientDetail() {
 
   const handleConvertEditedEvolution = async (templateId: string) => {
     if (!editingEvolutionId || !editingEvolutionText.trim()) return;
+    if (!editingEvolutionOriginalText.trim()) {
+      alert('A transcrição original não está disponível para esta evolução antiga. O sistema não irá gerar um texto fictício para substituí-la.');
+      return;
+    }
     setConvertingEvolutionId(editingEvolutionId);
     try {
-      const convertedText = await convertEvolutionToTemplate(editingEvolutionText, templateId || null);
+      const convertedText = await convertEvolutionToTemplate(editingEvolutionOriginalText, templateId || null);
       setEditingEvolutionText(convertedText);
       setEditingEvolutionTemplateId(templateId);
     } catch (error: any) {
@@ -1727,11 +1733,24 @@ export default function PatientDetail() {
         if (!audioResponse.ok) throw new Error("Falha ao baixar áudio para reprocessamento.");
         const audioBlob = await audioResponse.blob();
         
-        const transcription = await transcribeAudio({
+        const originalTranscription = await transcribeAudio({
           audioBlob,
           mimeType: audioBlob.type || 'audio/webm',
           audioDuration: evo.audio_duration_seconds || 0
         });
+
+        const { error: originalSaveError } = await supabase
+          .from('evolutions')
+          .update({
+            original_transcription_text: originalTranscription,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', evo.id);
+        if (originalSaveError) throw originalSaveError;
+
+        const transcription = evo.template_id
+          ? await convertEvolutionToTemplate(originalTranscription, evo.template_id)
+          : originalTranscription;
 
         console.log("Transcrição concluída. Inserindo no Google Docs...");
 
@@ -1753,6 +1772,7 @@ export default function PatientDetail() {
           .update({
             transcription_status: 'completed',
             transcription_text: transcription,
+            original_transcription_text: originalTranscription,
             google_doc_append_status: 'completed',
             google_doc_append_at: new Date().toISOString(),
             error_message: null,
@@ -2637,6 +2657,9 @@ export default function PatientDetail() {
                                   onClick={() => {
                                     setEditingEvolutionId(evo.id);
                                     setEditingEvolutionText(evo.transcription_text || '');
+                                    setEditingEvolutionOriginalText(
+                                      evo.original_transcription_text || (!evo.template_id ? evo.transcription_text || '' : '')
+                                    );
                                     setEditingEvolutionTemplateId(evo.template_id || '');
                                   }}
                                   className="btn-outline py-1 px-2.5 text-[11px] flex items-center space-x-1 border-brand-primary/20 text-brand-primary hover:bg-brand-primary/5 cursor-pointer"
@@ -4033,27 +4056,27 @@ export default function PatientDetail() {
           <div className="flex max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[90vh] sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-brand-border px-5 py-4">
               <div className="min-w-0"><h3 className="text-lg font-bold text-brand-primary">Editar Evolução</h3><p className="truncate text-xs text-brand-text-muted">{patient?.full_name}</p></div>
-              <button type="button" onClick={() => { setEditingEvolutionId(null); setEditingEvolutionText(''); setEditingEvolutionTemplateId(''); }} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg"><X size={20} /></button>
+              <button type="button" onClick={() => { setEditingEvolutionId(null); setEditingEvolutionText(''); setEditingEvolutionOriginalText(''); setEditingEvolutionTemplateId(''); }} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg"><X size={20} /></button>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
               <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
                 <label className="mb-1 block text-xs font-semibold text-brand-text">Converter para outro modelo</label>
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <select value={editingEvolutionTemplateId} onChange={(event) => setEditingEvolutionTemplateId(event.target.value)} disabled={convertingEvolutionId === editingEvolutionId || savingEvolutionId === editingEvolutionId} className="input-field min-w-0 flex-1 py-2 text-sm">
-                    <option value="">Sem template (narrativa livre)</option>
+                    <option value="">Sem template (transcrição original)</option>
                     {evolutionTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
                   </select>
                   <button type="button" onClick={() => void handleConvertEditedEvolution(editingEvolutionTemplateId)} disabled={convertingEvolutionId === editingEvolutionId || savingEvolutionId === editingEvolutionId} className="btn-outline shrink-0 border-brand-primary/30 text-brand-primary disabled:opacity-50">
                     {convertingEvolutionId === editingEvolutionId ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}<span>{convertingEvolutionId === editingEvolutionId ? 'Convertendo...' : 'Converter'}</span>
                   </button>
                 </div>
-                <p className="mt-2 text-[11px] leading-relaxed text-brand-text-muted">A conversão usa o texto atual, sem reenviar ou transcrever o áudio.</p>
+                <p className="mt-2 text-[11px] leading-relaxed text-brand-text-muted">Os modelos são aplicados sobre a transcrição original. Ao escolher sem template, o texto original é restaurado sem usar IA.</p>
               </div>
               <RichTextEditor value={editingEvolutionText} onChange={setEditingEvolutionText} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} label="Conteúdo da evolução" />
               <p className="text-[11px] text-brand-text-muted">Negrito, itálico, sublinhado, títulos e listas são mantidos ao salvar no Google Docs.</p>
             </div>
             <div className="flex flex-col-reverse gap-2 border-t border-brand-border bg-stone-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end">
-              <button type="button" onClick={() => { setEditingEvolutionId(null); setEditingEvolutionText(''); setEditingEvolutionTemplateId(''); }} disabled={savingEvolutionId === editingEvolutionId} className="btn-outline">Cancelar</button>
+              <button type="button" onClick={() => { setEditingEvolutionId(null); setEditingEvolutionText(''); setEditingEvolutionOriginalText(''); setEditingEvolutionTemplateId(''); }} disabled={savingEvolutionId === editingEvolutionId} className="btn-outline">Cancelar</button>
               <button type="button" onClick={() => void handleSaveEditedEvolution(editingEvolutionId)} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="btn-primary disabled:opacity-50">
                 {savingEvolutionId === editingEvolutionId ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}<span>{savingEvolutionId === editingEvolutionId ? 'Salvando...' : 'Salvar alterações'}</span>
               </button>

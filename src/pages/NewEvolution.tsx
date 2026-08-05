@@ -264,6 +264,7 @@ export default function NewEvolution() {
   // Estados para edição da evolução recém-processada no modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalText, setModalText] = useState('');
+  const [modalOriginalTranscription, setModalOriginalTranscription] = useState('');
   const [modalEvolutionId, setModalEvolutionId] = useState<string | null>(null);
   const [modalTemplateId, setModalTemplateId] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
@@ -879,10 +880,14 @@ export default function NewEvolution() {
 
   const handleConvertModalEvolution = async () => {
     if (!modalText.trim()) return;
+    if (!modalOriginalTranscription.trim()) {
+      setModalError('A transcrição original desta evolução não está disponível para conversão.');
+      return;
+    }
     setModalConverting(true);
     setModalError('');
     try {
-      const converted = await convertEvolutionToTemplate(modalText, modalTemplateId || null);
+      const converted = await convertEvolutionToTemplate(modalOriginalTranscription, modalTemplateId || null);
       setModalText(converted);
     } catch (err: any) {
       setModalError(err.message || 'Não foi possível converter a evolução para o modelo escolhido.');
@@ -1169,9 +1174,6 @@ export default function NewEvolution() {
     const totalAudioDuration = getTotalAudioDuration(items);
     const audioBlobs = items.map(item => item.blob);
 
-    const activeTemplate = templates.find(t => t.id === selectedTemplateId);
-    const customPrompt = activeTemplate?.system_prompt_instruction;
-
     const evolutionData = {
       id: evolutionId,
       professional_id: user.id,
@@ -1201,7 +1203,6 @@ export default function NewEvolution() {
           audioBlob: item.blob,
           mimeType: item.blob.type || 'audio/webm',
           audioDuration: item.duration,
-          customPrompt: customPrompt || undefined,
           onRetry: (attempt, delay, isFallback) => {
             console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
           }
@@ -1227,7 +1228,22 @@ export default function NewEvolution() {
         .upsert(evolutionData);
       if (insertError) throw insertError;
 
-      const transcription = await transcribeAllAudios();
+      const originalTranscription = await transcribeAllAudios();
+
+      const { error: originalSaveError } = await supabase
+        .from('evolutions')
+        .update({
+          original_transcription_text: originalTranscription,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', evolutionId);
+      if (originalSaveError) throw originalSaveError;
+
+      let evolutionText = originalTranscription;
+      if (selectedTemplateId) {
+        setProcessingMessage('Aplicando o modelo de evolução selecionado...');
+        evolutionText = await convertEvolutionToTemplate(originalTranscription, selectedTemplateId);
+      }
 
       console.log("Transcrição concluída. Inserindo no Google Docs...");
 
@@ -1235,7 +1251,7 @@ export default function NewEvolution() {
         googleAccessToken,
         patient.google_doc_id,
         sessionDate,
-        transcription,
+        evolutionText,
         {
           sessionTime,
           evolutionId
@@ -1246,7 +1262,8 @@ export default function NewEvolution() {
         .from('evolutions')
         .update({
           transcription_status: 'completed',
-          transcription_text: transcription,
+          transcription_text: evolutionText,
+          original_transcription_text: originalTranscription,
           google_doc_append_status: 'completed',
           google_doc_append_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -1255,7 +1272,8 @@ export default function NewEvolution() {
       if (updateError) throw updateError;
 
       setModalEvolutionId(evolutionId);
-      setModalText(transcription);
+      setModalText(evolutionText);
+      setModalOriginalTranscription(originalTranscription);
       setModalTemplateId(selectedTemplateId);
       setStatus('success');
       setProcessingMessage('');
@@ -1880,7 +1898,7 @@ export default function NewEvolution() {
                         disabled={modalSaving || modalConverting}
                         className="input-field min-w-0 flex-1 py-2 text-sm"
                       >
-                        <option value="">Sem template (narrativa livre)</option>
+                        <option value="">Sem template (transcrição original)</option>
                         {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
                       </select>
                       <button
@@ -1893,7 +1911,7 @@ export default function NewEvolution() {
                         <span>{modalConverting ? 'Convertendo...' : 'Converter'}</span>
                       </button>
                     </div>
-                    <p className="mt-2 text-[11px] text-brand-text-muted">Converte a evolução atual sem nova gravação ou processamento do áudio.</p>
+                    <p className="mt-2 text-[11px] text-brand-text-muted">Os modelos são aplicados sobre a transcrição original. Ao escolher sem template, o texto original é restaurado sem usar IA.</p>
                   </div>
                   <RichTextEditor
                     value={modalText}
