@@ -816,8 +816,31 @@ public class LauncherActivity extends ComponentActivity {
                 if (filePathCallback != null) filePathCallback.onReceiveValue(null);
                 filePathCallback = callback;
                 Intent intent = params.createIntent();
-                intent.setType("audio/*");
-                intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+                String[] requestedTypes = params.getAcceptTypes();
+                ArrayList<String> acceptedMimeTypes = new ArrayList<>();
+                if (requestedTypes != null) {
+                    for (String requestedType : requestedTypes) {
+                        if (requestedType != null && requestedType.contains("/")) {
+                            acceptedMimeTypes.add(requestedType);
+                        }
+                    }
+                }
+
+                if (acceptedMimeTypes.isEmpty()) {
+                    // Campos sem filtro, como o anexo de suporte, devem permitir qualquer arquivo.
+                    intent.setType("*/*");
+                } else if (acceptedMimeTypes.size() == 1) {
+                    intent.setType(acceptedMimeTypes.get(0));
+                } else {
+                    intent.setType("*/*");
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, acceptedMimeTypes.toArray(new String[0]));
+                }
+
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.putExtra(
+                        Intent.EXTRA_ALLOW_MULTIPLE,
+                        params.getMode() == FileChooserParams.MODE_OPEN_MULTIPLE
+                );
                 try {
                     startActivityForResult(intent, REQUEST_FILE_CHOOSER);
                 } catch (Exception exception) {
