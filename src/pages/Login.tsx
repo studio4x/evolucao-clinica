@@ -122,7 +122,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-[#edf4fa] md:bg-slate-900/10 flex items-center justify-center p-0 md:p-4 font-sans select-none">
+    <div className="w-full min-h-screen bg-[#edf4fa] flex flex-col justify-between relative overflow-hidden font-sans select-none">
       {/* Definidor de Animações CSS Customizadas */}
       <style>{`
         @keyframes floatCard {
@@ -162,161 +162,159 @@ export default function Login() {
         }
       `}</style>
 
-      {/* Container Principal Simulador de Celular no Desktop, Tela Cheia em Telas Móveis */}
-      <div className="w-full min-h-screen md:min-h-[780px] md:max-h-[840px] md:h-[92vh] md:max-w-[420px] md:rounded-[36px] md:shadow-2xl md:border md:border-slate-200/60 bg-[#edf4fa] flex flex-col justify-between relative overflow-hidden">
+      {/* Elementos Decorativos Vetoriais no Fundo (Grid de Pontos + Nuvenzinha com Animação) */}
+      <div className={`absolute top-12 left-6 md:left-12 grid grid-cols-4 gap-1.5 opacity-30 pointer-events-none transition-all duration-1000 ${isLoaded ? 'translate-y-0 opacity-30' : '-translate-y-4 opacity-0'}`}>
+        {[...Array(12)].map((_, i) => (
+          <div key={i} className="w-1 h-1 rounded-full bg-[#0b5cad]" />
+        ))}
+      </div>
+      <div className={`absolute top-16 right-6 md:right-12 opacity-25 pointer-events-none transition-all duration-1000 delay-200 ${isLoaded ? 'translate-x-0 opacity-25' : 'translate-x-4 opacity-0'}`}>
+        <svg className="w-12 h-12 md:w-16 md:h-16 text-[#0b5cad]" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
+        </svg>
+      </div>
 
-        {/* Elementos Decorativos Vetoriais no Fundo (Grid de Pontos + Nuvenzinha com Animação) */}
-        <div className={`absolute top-12 left-6 grid grid-cols-4 gap-1.5 opacity-30 pointer-events-none transition-all duration-1000 ${isLoaded ? 'translate-y-0 opacity-30' : '-translate-y-4 opacity-0'}`}>
-          {[...Array(12)].map((_, i) => (
-            <div key={i} className="w-1 h-1 rounded-full bg-[#0b5cad]" />
+      {/* Cabeçalho com Logotipo (Fundo transparente / mix-blend-multiply para eliminar fundo branco) */}
+      <div className={`pt-10 md:pt-14 pb-2 flex justify-center relative z-10 transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : '-translate-y-6 opacity-0'}`}>
+        {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
+          <img
+            src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
+            alt="Evolução Clínica"
+            className="h-16 md:h-20 w-auto object-contain mix-blend-multiply bg-transparent hover:scale-105 transition-transform duration-300"
+          />
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-gradient-to-tr from-[#0b5cad] to-[#0daba4] flex items-center justify-center text-white font-bold shadow-md">
+              EC
+            </div>
+            <span className="text-2xl md:text-3xl font-bold text-[#0b5cad] tracking-tight">
+              {siteConfig.pwa_app_name || "Evolução Clínica"}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Ilustração Visual do Fluxo de IA com Animações de Transição */}
+      <div className={`flex-1 flex flex-col items-center justify-center px-4 max-w-2xl mx-auto w-full relative z-10 transition-all duration-1000 delay-150 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
+        <div className="w-full flex items-center justify-center gap-2 md:gap-4 py-4 md:py-8">
+          {/* Ícone de Microfone com efeito de respiro de gravação */}
+          <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white shadow-lg shadow-blue-500/10 border border-slate-100 flex items-center justify-center flex-shrink-0 hover:scale-105 transition-transform">
+            <Mic className="w-6 h-6 md:w-7 md:h-7 text-[#0b5cad] animate-pulse" />
+          </div>
+
+          {/* Onda Sonora de Áudio com Barras Animadas estilo Equalizador Real */}
+          <div className="flex items-center gap-0.5 md:gap-1 text-[#0daba4]">
+            <span className="text-xs opacity-40">•</span>
+            <span className="w-0.5 md:w-1 bg-[#0daba4] rounded-full animate-wave-1"></span>
+            <span className="w-0.5 md:w-1 bg-[#0daba4] rounded-full animate-wave-2"></span>
+            <span className="w-0.5 md:w-1 bg-[#0daba4] rounded-full animate-wave-1"></span>
+            <span className="w-0.5 md:w-1 bg-[#0daba4] rounded-full animate-wave-3"></span>
+            <span className="w-0.5 md:w-1 bg-[#0daba4] rounded-full animate-wave-2"></span>
+            <span className="text-xs md:text-sm font-bold text-[#0daba4] ml-0.5">+</span>
+          </div>
+
+          {/* Círculo IA com brilho de néon pulsante */}
+          <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white shadow-lg border-2 border-[#0daba4] flex items-center justify-center flex-shrink-0 animate-glow-ia">
+            <span className="text-lg md:text-xl font-black text-[#0daba4] tracking-tight">IA</span>
+          </div>
+
+          {/* Seta de Transição */}
+          <div className="flex items-center text-[#0daba4] gap-0.5">
+            <span className="text-xs md:text-sm font-bold">+</span>
+            <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-[#0daba4] translate-x-0 animate-pulse" />
+          </div>
+
+          {/* Cartão de Prontuário Flutuante com Animação Orgânica 'float' */}
+          <div className="w-36 md:w-44 bg-white rounded-2xl shadow-xl shadow-blue-900/5 border border-slate-100 p-2.5 md:p-3 relative flex-shrink-0 text-left animate-float-card">
+            {/* Cabeçalho do Card */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-5 h-5 md:w-6 md:h-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <User className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                </div>
+                <span className="text-[11px] md:text-xs font-bold text-emerald-800">Consulta</span>
+              </div>
+              <CheckCircle2 className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-500" />
+            </div>
+
+            {/* Rótulos & Barras Skeleton */}
+            <div className="space-y-1.5 text-[9px] md:text-[10px] text-slate-500">
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-slate-600 w-12 md:w-14">Anamnese</span>
+                <div className="h-1.5 bg-slate-100 rounded-full flex-1"></div>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-slate-600 w-12 md:w-14">Conduta</span>
+                <div className="h-1.5 bg-slate-100 rounded-full flex-1 max-w-[60%]"></div>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-semibold text-slate-600 w-12 md:w-14">CID</span>
+                <div className="h-1.5 bg-slate-100 rounded-full flex-1 max-w-[40%]"></div>
+              </div>
+            </div>
+
+            {/* Rodapé do Card com Rubrica & Badge Verde */}
+            <div className="mt-2.5 pt-1 border-t border-slate-50 flex items-center justify-between">
+              <div className="flex gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+              </div>
+              <span className="text-[10px] md:text-xs italic font-serif text-[#0b5cad]">Der</span>
+            </div>
+
+            {/* Badge Verde Check Sobressaindo no Canto */}
+            <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 md:w-6 md:h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md animate-bounce">
+              <CheckCircle2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            </div>
+          </div>
+        </div>
+
+        {/* Carrossel de Texto com Transição Horizontal e Opacidade Suave */}
+        <div className="mt-4 w-full px-6 text-center min-h-[90px] md:min-h-[110px] flex flex-col items-center justify-center overflow-hidden">
+          {slides.map((slide, index) => {
+            const isActive = index === currentSlide;
+            return (
+              <div
+                key={slide.id}
+                className={`transition-all duration-500 ease-in-out transform ${
+                  isActive
+                    ? 'opacity-100 translate-x-0 relative'
+                    : 'opacity-0 translate-x-8 absolute pointer-events-none'
+                }`}
+              >
+                <h3 className="text-xl md:text-2xl font-bold text-[#0b5cad] mb-2 tracking-tight">
+                  {slide.titlePre}
+                  <span className="text-[#0daba4]">{slide.titleHighlight}</span>
+                  {slide.titlePost}
+                </h3>
+                <p className="text-xs md:text-sm text-slate-600 leading-relaxed max-w-sm md:max-w-md mx-auto font-normal">
+                  {slide.description}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Indicadores de Progresso (4 Dots com Transição de Largura) */}
+        <div className="flex justify-center items-center gap-1.5 mt-2 md:mt-4 mb-4">
+          {slides.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setCurrentSlide(index)}
+              className={`transition-all duration-500 ${
+                index === currentSlide
+                  ? 'w-6 h-1.5 bg-[#0b5cad] rounded-full shadow-sm'
+                  : 'w-1.5 h-1.5 bg-[#b2d1e8] rounded-full hover:bg-[#0b5cad]/50'
+              }`}
+              aria-label={`Slide ${index + 1}`}
+            />
           ))}
         </div>
-        <div className={`absolute top-16 right-6 opacity-25 pointer-events-none transition-all duration-1000 delay-200 ${isLoaded ? 'translate-x-0 opacity-25' : 'translate-x-4 opacity-0'}`}>
-          <svg className="w-12 h-12 text-[#0b5cad]" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
-          </svg>
-        </div>
+      </div>
 
-        {/* Cabeçalho com Logotipo (Animado na entrada) */}
-        <div className={`pt-10 pb-2 flex justify-center relative z-10 transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : '-translate-y-6 opacity-0'}`}>
-          {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
-            <img
-              src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-              alt="Evolução Clínica"
-              className="h-16 w-auto object-contain hover:scale-105 transition-transform duration-300"
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#0b5cad] to-[#0daba4] flex items-center justify-center text-white font-bold shadow-md">
-                EC
-              </div>
-              <span className="text-2xl font-bold text-[#0b5cad] tracking-tight">
-                {siteConfig.pwa_app_name || "Evolução Clínica"}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Ilustração Visual do Fluxo de IA com Animações de Transição */}
-        <div className={`flex-1 flex flex-col items-center justify-center px-4 relative z-10 transition-all duration-1000 delay-150 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
-          <div className="w-full flex items-center justify-center gap-2 py-4">
-            {/* Ícone de Microfone com efeito de respiro de gravação */}
-            <div className="w-14 h-14 rounded-full bg-white shadow-lg shadow-blue-500/10 border border-slate-100 flex items-center justify-center flex-shrink-0 hover:scale-105 transition-transform">
-              <Mic className="w-6 h-6 text-[#0b5cad] animate-pulse" />
-            </div>
-
-            {/* Onda Sonora de Áudio com Barras Animadas estilo Equalizador Real */}
-            <div className="flex items-center gap-0.5 text-[#0daba4]">
-              <span className="text-xs opacity-40">•</span>
-              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-1"></span>
-              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-2"></span>
-              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-1"></span>
-              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-3"></span>
-              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-2"></span>
-              <span className="text-xs font-bold text-[#0daba4] ml-0.5">+</span>
-            </div>
-
-            {/* Círculo IA com brilho de néon pulsante */}
-            <div className="w-14 h-14 rounded-full bg-white shadow-lg border-2 border-[#0daba4] flex items-center justify-center flex-shrink-0 animate-glow-ia">
-              <span className="text-lg font-black text-[#0daba4] tracking-tight">IA</span>
-            </div>
-
-            {/* Seta de Transição */}
-            <div className="flex items-center text-[#0daba4] gap-0.5">
-              <span className="text-xs font-bold">+</span>
-              <ArrowRight className="w-4 h-4 text-[#0daba4] translate-x-0 animate-pulse" />
-            </div>
-
-            {/* Cartão de Prontuário Flutuante com Animação Orgânica 'float' */}
-            <div className="w-36 bg-white rounded-2xl shadow-xl shadow-blue-900/5 border border-slate-100 p-2.5 relative flex-shrink-0 text-left animate-float-card">
-              {/* Cabeçalho do Card */}
-              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-2">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                    <User className="w-3 h-3" />
-                  </div>
-                  <span className="text-[11px] font-bold text-emerald-800">Consulta</span>
-                </div>
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              </div>
-
-              {/* Rótulos & Barras Skeleton */}
-              <div className="space-y-1.5 text-[9px] text-slate-500">
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold text-slate-600 w-12">Anamnese</span>
-                  <div className="h-1.5 bg-slate-100 rounded-full flex-1"></div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold text-slate-600 w-12">Conduta</span>
-                  <div className="h-1.5 bg-slate-100 rounded-full flex-1 max-w-[60%]"></div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span className="font-semibold text-slate-600 w-12">CID</span>
-                  <div className="h-1.5 bg-slate-100 rounded-full flex-1 max-w-[40%]"></div>
-                </div>
-              </div>
-
-              {/* Rodapé do Card com Rubrica & Badge Verde */}
-              <div className="mt-2.5 pt-1 border-t border-slate-50 flex items-center justify-between">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                  <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
-                </div>
-                <span className="text-[10px] italic font-serif text-[#0b5cad]">Der</span>
-              </div>
-
-              {/* Badge Verde Check Sobressaindo no Canto */}
-              <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md animate-bounce">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-              </div>
-            </div>
-          </div>
-
-          {/* Carrossel de Texto com Transição Horizontal e Opacidade Suave */}
-          <div className="mt-4 w-full px-6 text-center min-h-[100px] flex flex-col items-center justify-center overflow-hidden">
-            {slides.map((slide, index) => {
-              const isActive = index === currentSlide;
-              return (
-                <div
-                  key={slide.id}
-                  className={`transition-all duration-500 ease-in-out transform ${
-                    isActive
-                      ? 'opacity-100 translate-x-0 relative'
-                      : 'opacity-0 translate-x-8 absolute pointer-events-none'
-                  }`}
-                >
-                  <h3 className="text-xl font-bold text-[#0b5cad] mb-2 tracking-tight">
-                    {slide.titlePre}
-                    <span className="text-[#0daba4]">{slide.titleHighlight}</span>
-                    {slide.titlePost}
-                  </h3>
-                  <p className="text-xs text-slate-600 leading-relaxed max-w-[300px] mx-auto font-normal">
-                    {slide.description}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Indicadores de Progresso (4 Dots com Transição de Largura) */}
-          <div className="flex justify-center items-center gap-1.5 mt-4">
-            {slides.map((_, index) => (
-              <button
-                key={index}
-                onClick={() => setCurrentSlide(index)}
-                className={`transition-all duration-500 ${
-                  index === currentSlide
-                    ? 'w-6 h-1.5 bg-[#0b5cad] rounded-full shadow-sm'
-                    : 'w-1.5 h-1.5 bg-[#b2d1e8] rounded-full hover:bg-[#0b5cad]/50'
-                }`}
-                aria-label={`Slide ${index + 1}`}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Gaveta Inferior (Bottom Sheet Branco com Transição de Subida) */}
-        <div className={`w-full bg-white rounded-t-[36px] shadow-[0_-10px_30px_rgba(0,0,0,0.03)] border-t border-slate-100 p-6 flex flex-col items-center z-20 transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
+      {/* Gaveta Inferior (Bottom Sheet Branco Ocupando a Tela Toda de Ponta a Ponta) */}
+      <div className={`w-full bg-white rounded-t-[36px] md:rounded-t-[44px] shadow-[0_-10px_30px_rgba(0,0,0,0.03)] border-t border-slate-100 p-6 md:p-8 flex flex-col items-center z-20 transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
+        <div className="max-w-md w-full flex flex-col items-center">
           {/* Puxador da Gaveta */}
           <div className="w-12 h-1 bg-slate-300/80 rounded-full mb-5" />
 
@@ -382,7 +380,6 @@ export default function Login() {
             </Link>
           </div>
         </div>
-
       </div>
 
       <GoogleSecurityModal
