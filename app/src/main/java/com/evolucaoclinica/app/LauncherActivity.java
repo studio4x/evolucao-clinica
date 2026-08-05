@@ -680,6 +680,15 @@ public class LauncherActivity extends ComponentActivity {
                 return "{}";
             }
         }
+
+        @android.webkit.JavascriptInterface
+        public void setPullToRefreshEnabled(boolean enabled) {
+            runOnUiThread(() -> {
+                if (swipeRefreshLayout == null) return;
+                swipeRefreshLayout.setEnabled(enabled);
+                if (!enabled) swipeRefreshLayout.setRefreshing(false);
+            });
+        }
     }
 
     private final class NativePushBridge {

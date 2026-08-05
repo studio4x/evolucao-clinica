@@ -372,9 +372,13 @@ export default function NewEvolution() {
   useEffect(() => {
     const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
     const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
+    const nativeAppInfoBridge = (window as typeof window & {
+      NativeAppInfoBridge?: { setPullToRefreshEnabled?: (enabled: boolean) => void };
+    }).NativeAppInfoBridge;
     let touchStartY = 0;
     document.documentElement.style.overscrollBehaviorY = 'none';
     document.body.style.overscrollBehaviorY = 'none';
+    nativeAppInfoBridge?.setPullToRefreshEnabled?.(false);
 
     const getScrollableAncestor = (target: EventTarget | null) => {
       let element = target instanceof Element ? target : null;
@@ -411,6 +415,7 @@ export default function NewEvolution() {
     document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
 
     return () => {
+      nativeAppInfoBridge?.setPullToRefreshEnabled?.(true);
       document.removeEventListener('touchstart', onTouchStart, true);
       document.removeEventListener('touchmove', onTouchMove, true);
       document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
