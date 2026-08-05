@@ -73,7 +73,7 @@ public class LauncherActivity extends ComponentActivity {
     private static final int REQUEST_PERMISSIONS = 1001;
     private static final int REQUEST_FILE_CHOOSER = 1002;
     private static final String DOWNLOAD_NOTIFICATION_CHANNEL_ID = "file_downloads";
-    private static final String APP_URL = "https://www.evolucaoclinica.app.br/?utm_source=pwa";
+    private static final String APP_URL = "https://www.evolucaoclinica.app.br/login?utm_source=pwa";
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
     private static final String SUPABASE_HOST = "kvxboovgrrhhttaqinld.supabase.co";
     private WebView webView;
