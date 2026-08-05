@@ -20,6 +20,7 @@ export default function Login() {
   const fromPlan = searchParams.get('from_plan');
 
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const slides = [
     {
@@ -53,6 +54,7 @@ export default function Login() {
   ];
 
   useEffect(() => {
+    setIsLoaded(true);
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 4500);
@@ -121,28 +123,67 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#edf4fa] md:bg-slate-900/10 flex items-center justify-center p-0 md:p-4 font-sans select-none">
+      {/* Definidor de Animações CSS Customizadas */}
+      <style>{`
+        @keyframes floatCard {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-7px); }
+        }
+        @keyframes pulseGlowIa {
+          0%, 100% { box-shadow: 0 0 12px rgba(13, 171, 168, 0.25); border-color: #0daba4; }
+          50% { box-shadow: 0 0 24px rgba(13, 171, 168, 0.55); border-color: #00c2b2; }
+        }
+        @keyframes waveHeight1 {
+          0%, 100% { height: 10px; }
+          50% { height: 22px; }
+        }
+        @keyframes waveHeight2 {
+          0%, 100% { height: 26px; }
+          50% { height: 12px; }
+        }
+        @keyframes waveHeight3 {
+          0%, 100% { height: 16px; }
+          50% { height: 28px; }
+        }
+        .animate-float-card {
+          animation: floatCard 4s ease-in-out infinite;
+        }
+        .animate-glow-ia {
+          animation: pulseGlowIa 3s ease-in-out infinite;
+        }
+        .animate-wave-1 {
+          animation: waveHeight1 1.2s ease-in-out infinite;
+        }
+        .animate-wave-2 {
+          animation: waveHeight2 1.4s ease-in-out infinite;
+        }
+        .animate-wave-3 {
+          animation: waveHeight3 1.1s ease-in-out infinite;
+        }
+      `}</style>
+
       {/* Container Principal Simulador de Celular no Desktop, Tela Cheia em Telas Móveis */}
       <div className="w-full min-h-screen md:min-h-[780px] md:max-h-[840px] md:h-[92vh] md:max-w-[420px] md:rounded-[36px] md:shadow-2xl md:border md:border-slate-200/60 bg-[#edf4fa] flex flex-col justify-between relative overflow-hidden">
 
-        {/* Elementos Decorativos Vetoriais no Fundo (Grid de Pontos + Nuvenzinha) */}
-        <div className="absolute top-12 left-6 grid grid-cols-4 gap-1.5 opacity-30 pointer-events-none">
+        {/* Elementos Decorativos Vetoriais no Fundo (Grid de Pontos + Nuvenzinha com Animação) */}
+        <div className={`absolute top-12 left-6 grid grid-cols-4 gap-1.5 opacity-30 pointer-events-none transition-all duration-1000 ${isLoaded ? 'translate-y-0 opacity-30' : '-translate-y-4 opacity-0'}`}>
           {[...Array(12)].map((_, i) => (
             <div key={i} className="w-1 h-1 rounded-full bg-[#0b5cad]" />
           ))}
         </div>
-        <div className="absolute top-16 right-6 opacity-25 pointer-events-none">
+        <div className={`absolute top-16 right-6 opacity-25 pointer-events-none transition-all duration-1000 delay-200 ${isLoaded ? 'translate-x-0 opacity-25' : 'translate-x-4 opacity-0'}`}>
           <svg className="w-12 h-12 text-[#0b5cad]" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
           </svg>
         </div>
 
-        {/* Cabeçalho com Logotipo */}
-        <div className="pt-10 pb-2 flex justify-center relative z-10">
+        {/* Cabeçalho com Logotipo (Animado na entrada) */}
+        <div className={`pt-10 pb-2 flex justify-center relative z-10 transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : '-translate-y-6 opacity-0'}`}>
           {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
             <img
               src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
               alt="Evolução Clínica"
-              className="h-16 w-auto object-contain"
+              className="h-16 w-auto object-contain hover:scale-105 transition-transform duration-300"
             />
           ) : (
             <div className="flex items-center gap-2">
@@ -156,38 +197,38 @@ export default function Login() {
           )}
         </div>
 
-        {/* Ilustração Visual do Fluxo de IA (Idêntica à Imagem de Referência) */}
-        <div className="flex-1 flex flex-col items-center justify-center px-4 relative z-10">
+        {/* Ilustração Visual do Fluxo de IA com Animações de Transição */}
+        <div className={`flex-1 flex flex-col items-center justify-center px-4 relative z-10 transition-all duration-1000 delay-150 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
           <div className="w-full flex items-center justify-center gap-2 py-4">
-            {/* Ícone de Microfone */}
-            <div className="w-14 h-14 rounded-full bg-white shadow-lg shadow-blue-500/10 border border-slate-100 flex items-center justify-center flex-shrink-0">
-              <Mic className="w-6 h-6 text-[#0b5cad]" />
+            {/* Ícone de Microfone com efeito de respiro de gravação */}
+            <div className="w-14 h-14 rounded-full bg-white shadow-lg shadow-blue-500/10 border border-slate-100 flex items-center justify-center flex-shrink-0 hover:scale-105 transition-transform">
+              <Mic className="w-6 h-6 text-[#0b5cad] animate-pulse" />
             </div>
 
-            {/* Onda Sonora de Áudio */}
+            {/* Onda Sonora de Áudio com Barras Animadas estilo Equalizador Real */}
             <div className="flex items-center gap-0.5 text-[#0daba4]">
               <span className="text-xs opacity-40">•</span>
-              <span className="w-0.5 h-3 bg-[#0daba4] rounded-full animate-pulse"></span>
-              <span className="w-0.5 h-6 bg-[#0daba4] rounded-full"></span>
-              <span className="w-0.5 h-4 bg-[#0daba4] rounded-full"></span>
-              <span className="w-0.5 h-7 bg-[#0daba4] rounded-full animate-pulse"></span>
-              <span className="w-0.5 h-3 bg-[#0daba4] rounded-full"></span>
+              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-1"></span>
+              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-2"></span>
+              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-1"></span>
+              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-3"></span>
+              <span className="w-0.5 bg-[#0daba4] rounded-full animate-wave-2"></span>
               <span className="text-xs font-bold text-[#0daba4] ml-0.5">+</span>
             </div>
 
-            {/* Círculo IA */}
-            <div className="w-14 h-14 rounded-full bg-white shadow-lg shadow-blue-500/10 border-2 border-[#cbe5f2] flex items-center justify-center flex-shrink-0">
+            {/* Círculo IA com brilho de néon pulsante */}
+            <div className="w-14 h-14 rounded-full bg-white shadow-lg border-2 border-[#0daba4] flex items-center justify-center flex-shrink-0 animate-glow-ia">
               <span className="text-lg font-black text-[#0daba4] tracking-tight">IA</span>
             </div>
 
             {/* Seta de Transição */}
             <div className="flex items-center text-[#0daba4] gap-0.5">
               <span className="text-xs font-bold">+</span>
-              <ArrowRight className="w-4 h-4 text-[#0daba4]" />
+              <ArrowRight className="w-4 h-4 text-[#0daba4] translate-x-0 animate-pulse" />
             </div>
 
-            {/* Cartão de Prontuário Flutuante */}
-            <div className="w-36 bg-white rounded-2xl shadow-xl shadow-blue-900/5 border border-slate-100 p-2.5 relative flex-shrink-0 text-left">
+            {/* Cartão de Prontuário Flutuante com Animação Orgânica 'float' */}
+            <div className="w-36 bg-white rounded-2xl shadow-xl shadow-blue-900/5 border border-slate-100 p-2.5 relative flex-shrink-0 text-left animate-float-card">
               {/* Cabeçalho do Card */}
               <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-2">
                 <div className="flex items-center gap-1.5">
@@ -225,18 +266,25 @@ export default function Login() {
               </div>
 
               {/* Badge Verde Check Sobressaindo no Canto */}
-              <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+              <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md animate-bounce">
                 <CheckCircle2 className="w-3.5 h-3.5" />
               </div>
             </div>
           </div>
 
-          {/* Carrossel de Texto */}
-          <div className="mt-4 w-full px-6 text-center min-h-[100px] flex flex-col items-center justify-center">
+          {/* Carrossel de Texto com Transição Horizontal e Opacidade Suave */}
+          <div className="mt-4 w-full px-6 text-center min-h-[100px] flex flex-col items-center justify-center overflow-hidden">
             {slides.map((slide, index) => {
-              if (index !== currentSlide) return null;
+              const isActive = index === currentSlide;
               return (
-                <div key={slide.id} className="animate-fadeIn transition-all duration-300">
+                <div
+                  key={slide.id}
+                  className={`transition-all duration-500 ease-in-out transform ${
+                    isActive
+                      ? 'opacity-100 translate-x-0 relative'
+                      : 'opacity-0 translate-x-8 absolute pointer-events-none'
+                  }`}
+                >
                   <h3 className="text-xl font-bold text-[#0b5cad] mb-2 tracking-tight">
                     {slide.titlePre}
                     <span className="text-[#0daba4]">{slide.titleHighlight}</span>
@@ -250,15 +298,15 @@ export default function Login() {
             })}
           </div>
 
-          {/* Indicadores de Progresso (4 Dots) */}
+          {/* Indicadores de Progresso (4 Dots com Transição de Largura) */}
           <div className="flex justify-center items-center gap-1.5 mt-4">
             {slides.map((_, index) => (
               <button
                 key={index}
                 onClick={() => setCurrentSlide(index)}
-                className={`transition-all duration-300 ${
+                className={`transition-all duration-500 ${
                   index === currentSlide
-                    ? 'w-6 h-1.5 bg-[#0b5cad] rounded-full'
+                    ? 'w-6 h-1.5 bg-[#0b5cad] rounded-full shadow-sm'
                     : 'w-1.5 h-1.5 bg-[#b2d1e8] rounded-full hover:bg-[#0b5cad]/50'
                 }`}
                 aria-label={`Slide ${index + 1}`}
@@ -267,8 +315,8 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Gaveta Inferior (Bottom Sheet Branco) */}
-        <div className="w-full bg-white rounded-t-[36px] shadow-[0_-10px_30px_rgba(0,0,0,0.03)] border-t border-slate-100 p-6 flex flex-col items-center z-20">
+        {/* Gaveta Inferior (Bottom Sheet Branco com Transição de Subida) */}
+        <div className={`w-full bg-white rounded-t-[36px] shadow-[0_-10px_30px_rgba(0,0,0,0.03)] border-t border-slate-100 p-6 flex flex-col items-center z-20 transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
           {/* Puxador da Gaveta */}
           <div className="w-12 h-1 bg-slate-300/80 rounded-full mb-5" />
 
@@ -276,7 +324,7 @@ export default function Login() {
           <button
             onClick={() => setIsSecurityModalOpen(true)}
             disabled={loading}
-            className="w-full bg-[#0b5cad] hover:bg-[#094c8f] active:bg-[#073d74] text-white font-semibold text-base py-3.5 px-4 rounded-2xl shadow-md shadow-blue-900/10 flex items-center justify-center gap-3 transition-all cursor-pointer"
+            className="w-full bg-[#0b5cad] hover:bg-[#094c8f] active:bg-[#073d74] text-white font-semibold text-base py-3.5 px-4 rounded-2xl shadow-md shadow-blue-900/10 flex items-center justify-center gap-3 transition-all cursor-pointer hover:shadow-lg"
           >
             {loading ? (
               <span className="flex items-center space-x-2">
