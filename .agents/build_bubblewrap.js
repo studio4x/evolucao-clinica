@@ -147,6 +147,12 @@ function applyFixes(pinnedVersion) {
     /com\.android\.tools\.build:gradle:[^']+/,
     'com.android.tools.build:gradle:8.13.2'
   );
+  if (!rootBuildGradleContent.includes("com.google.gms:google-services:4.4.4")) {
+    rootBuildGradleContent = rootBuildGradleContent.replace(
+      "classpath 'com.android.tools.build:gradle:8.13.2'",
+      "classpath 'com.android.tools.build:gradle:8.13.2'\n        classpath 'com.google.gms:google-services:4.4.4'"
+    );
+  }
   fs.writeFileSync(rootBuildGradlePath, rootBuildGradleContent, 'utf8');
   console.log('- Android Gradle Plugin 8.13.2 configured for Kotlin 2.3 metadata.');
 
@@ -162,6 +168,12 @@ function applyFixes(pinnedVersion) {
   // 4. Update app/build.gradle
   const buildGradlePath = path.join(projectDir, 'app', 'build.gradle');
   let buildGradleContent = fs.readFileSync(buildGradlePath, 'utf8');
+  if (!buildGradleContent.includes("id 'com.google.gms.google-services'")) {
+    buildGradleContent = buildGradleContent.replace(
+      "id 'com.android.application'",
+      "id 'com.android.application'\n    id 'com.google.gms.google-services'"
+    );
+  }
   
   // Set compileSdkVersion to 36
   buildGradleContent = buildGradleContent.replace(/compileSdkVersion\s+\d+/, 'compileSdkVersion 36');
@@ -228,6 +240,15 @@ function applyFixes(pinnedVersion) {
       console.log('- Google Pay API enabled for Stripe PaymentSheet.');
     }
 
+    if (!manifestContent.includes('NativeFirebaseMessagingService')) {
+      manifestContent = manifestContent.replace(
+        '<activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />',
+        '<activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />\n\n        <service\n            android:name=".NativeFirebaseMessagingService"\n            android:exported="false">\n            <intent-filter>\n                <action android:name="com.google.firebase.MESSAGING_EVENT" />\n            </intent-filter>\n        </service>'
+      );
+      modified = true;
+      console.log('- Native Firebase Messaging service registered.');
+    }
+
     const launcherActivityMatch = manifestContent.match(/<activity android:name="LauncherActivity"[\s\S]*?android:exported="true">/);
     if (launcherActivityMatch) {
       const originalActivityTag = launcherActivityMatch[0];
@@ -275,10 +296,22 @@ async function main() {
 
     // Realiza backup do LauncherActivity.java customizado para evitar que o Bubblewrap o sobrescreva com o template padrão de TWA
     const launcherActivityPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'evolucaoclinica', 'app', 'LauncherActivity.java');
+    const firebaseMessagingServicePath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'evolucaoclinica', 'app', 'NativeFirebaseMessagingService.java');
+    const googleServicesPath = path.join(projectDir, 'app', 'google-services.json');
     let launcherActivityBackup = null;
+    let firebaseMessagingServiceBackup = null;
+    let googleServicesBackup = null;
     if (fs.existsSync(launcherActivityPath)) {
       launcherActivityBackup = fs.readFileSync(launcherActivityPath, 'utf8');
       console.log('- Custom LauncherActivity.java backed up.');
+    }
+    if (fs.existsSync(firebaseMessagingServicePath)) {
+      firebaseMessagingServiceBackup = fs.readFileSync(firebaseMessagingServicePath, 'utf8');
+      console.log('- NativeFirebaseMessagingService.java backed up.');
+    }
+    if (fs.existsSync(googleServicesPath)) {
+      googleServicesBackup = fs.readFileSync(googleServicesPath, 'utf8');
+      console.log('- app/google-services.json backed up.');
     }
 
     // Step 1: Run update to apply manifest changes (and download new icons)
@@ -301,6 +334,16 @@ async function main() {
       fs.writeFileSync(launcherActivityPath, launcherActivityBackup, 'utf8');
       console.log('- LauncherActivity.java restored from backup (preventing Bubblewrap overwrite).');
     }
+    if (firebaseMessagingServiceBackup) {
+      fs.mkdirSync(path.dirname(firebaseMessagingServicePath), { recursive: true });
+      fs.writeFileSync(firebaseMessagingServicePath, firebaseMessagingServiceBackup, 'utf8');
+      console.log('- NativeFirebaseMessagingService.java restored from backup.');
+    }
+    if (googleServicesBackup) {
+      fs.mkdirSync(path.dirname(googleServicesPath), { recursive: true });
+      fs.writeFileSync(googleServicesPath, googleServicesBackup, 'utf8');
+      console.log('- app/google-services.json restored from backup.');
+    }
 
     // Step 3: Run build and sign
     console.log('=== STEP 3: RUNNING BUBBLEWRAP BUILD ===');
@@ -313,17 +356,13 @@ async function main() {
       { pattern: /Password for the Key\b(?! Store):/i, response: 'evolucao123\n' }
     ]);
 
-    // Step 4: Sign AAB explicitly with jarsigner
-    console.log('=== STEP 4: SIGNING AAB WITH JARSIGNER ===');
+    // Step 4: Bubblewrap já assina o AAB. Verificamos a assinatura sem repetir
+    // o comando com caminho absoluto (que quebra em diretórios com espaços no Windows).
+    console.log('=== STEP 4: VERIFYING AAB SIGNATURE ===');
     const aabPath = path.join(projectDir, 'app-release-bundle.aab');
     if (fs.existsSync(aabPath)) {
-      await runCommand('jarsigner', [
-        '-keystore', 'android.keystore',
-        '-storepass', 'evolucao123',
-        '-keypass', 'evolucao123',
-        aabPath, 'android'
-      ], []);
-      console.log('- app-release-bundle.aab signed successfully with jarsigner.');
+      await runCommand('jarsigner', ['-verify', '-certs', 'app-release-bundle.aab'], []);
+      console.log('- app-release-bundle.aab signature verified successfully.');
     }
 
     console.log('\n=== BUILD COMPLETE AND SIGNED! ===');

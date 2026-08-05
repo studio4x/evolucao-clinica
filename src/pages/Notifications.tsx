@@ -43,6 +43,7 @@ export default function Notifications() {
 
   // Push states
   const [isPushSupported, setIsPushSupported] = useState(false);
+  const [isNativePushApp, setIsNativePushApp] = useState(false);
   const [isPushSubscribed, setIsPushSubscribed] = useState(false);
   const [pushPermission, setPushPermission] = useState<NotificationPermission>('default');
   const [pushLoading, setPushLoading] = useState(false);
@@ -154,6 +155,7 @@ export default function Notifications() {
   // Checar suporte e estado de Push
   const checkPushSubscription = async () => {
     const nativePush = window.NativePushBridge;
+    setIsNativePushApp(Boolean(nativePush));
     if (nativePush?.isAvailable?.()) {
       setIsPushSupported(true);
       setPushPermission(nativePush.isPermissionGranted?.() ? 'granted' : 'denied');
@@ -652,22 +654,24 @@ export default function Notifications() {
           <div className="bg-white rounded-2xl border border-brand-border/60 shadow-sm p-6 space-y-5">
             <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
               <Bell className="text-brand-primary w-5 h-5" />
-              <span>Notificações no Navegador</span>
+              <span>{isNativePushApp ? 'Notificações do Aplicativo' : 'Notificações no Navegador'}</span>
             </h3>
             
             {!isPushSupported ? (
               <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl flex gap-3 text-amber-800">
                 <AlertTriangle className="flex-shrink-0 mt-0.5" size={18} />
                 <div className="text-xs space-y-1">
-                  <p className="font-semibold">Navegador não suportado</p>
-                  <p>Seu navegador atual ou modo de navegação privada não possui suporte a notificações push nativas.</p>
+                  <p className="font-semibold">{isNativePushApp ? 'Notificações nativas indisponíveis' : 'Navegador não suportado'}</p>
+                  <p>{isNativePushApp
+                    ? 'Atualize o aplicativo para ativar as notificações nativas pelo Firebase.'
+                    : 'Seu navegador atual ou modo de navegação privada não possui suporte a notificações push nativas.'}</p>
                 </div>
               </div>
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center justify-between bg-brand-bg/50 p-4 rounded-xl border border-brand-border/40">
                   <div>
-                    <p className="text-xs font-semibold text-brand-text">Status do Browser</p>
+                    <p className="text-xs font-semibold text-brand-text">{isNativePushApp ? 'Status do aplicativo' : 'Status do navegador'}</p>
                     <p className="text-xs text-brand-text-muted mt-0.5">
                       {pushPermission === 'granted' ? 'Permitido ✅' :
                        pushPermission === 'denied' ? 'Bloqueado ❌' : 'Não Solicitado 🔔'}

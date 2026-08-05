@@ -1285,6 +1285,7 @@ export default function AdminPanel() {
   const [notifSendSuccess, setNotifSendSuccess] = useState(false);
   const [notifSendError, setNotifSendError] = useState('');
   const [notifWhatsappSummary, setNotifWhatsappSummary] = useState<string | null>(null);
+  const [notifPushSummary, setNotifPushSummary] = useState<string | null>(null);
 
   const [manualPushNotifications, setManualPushNotifications] = useState<any[]>([]);
   const [platformPushNotifications, setPlatformPushNotifications] = useState<any[]>([]);
@@ -1930,6 +1931,7 @@ export default function AdminPanel() {
     setNotifSendSuccess(false);
     setNotifSendError('');
     setNotifWhatsappSummary(null);
+    setNotifPushSummary(null);
 
     try {
       const session = await supabase.auth.getSession();
@@ -1952,6 +1954,7 @@ export default function AdminPanel() {
       let whatsappAcceptedCount = 0;
       let whatsappSkippedCount = 0;
       let whatsappFailedCount = 0;
+      let pushAcceptedCount = 0;
 
       for (const targetId of targets) {
         try {
@@ -1976,6 +1979,7 @@ export default function AdminPanel() {
           if (res.ok) {
             const resData = await res.json().catch(() => ({}));
             addStoredManualPushNotificationId(resData?.notification?.id);
+            if (resData?.push?.accepted === true) pushAcceptedCount++;
             if (notifSendWhatsapp) {
               const whatsappStatus = String(resData?.whatsapp?.status || 'not_sent');
               if (whatsappStatus === 'accepted') whatsappAcceptedCount++;
@@ -1994,6 +1998,7 @@ export default function AdminPanel() {
 
       if (successCount > 0) {
         setNotifSendSuccess(true);
+        setNotifPushSummary(`Push: ${pushAcceptedCount} aceita(s) pelo provedor para ${successCount} destinatário(s). Aceita não significa entregue.`);
         if (notifSendWhatsapp) {
           setNotifWhatsappSummary(`WhatsApp: ${whatsappAcceptedCount} aceita(s) pela Meta, ${whatsappSkippedCount} sem envio e ${whatsappFailedCount} com falha. Aceita não significa entregue.`);
         }
@@ -5160,6 +5165,7 @@ export default function AdminPanel() {
                             <Check className="flex-shrink-0 text-emerald-600" size={16} />
                             <span>
                               Notificação disparada pelos canais disponíveis.
+                              {notifPushSummary && <span className="mt-1 block">{notifPushSummary}</span>}
                               {notifWhatsappSummary && <span className="mt-1 block">{notifWhatsappSummary}</span>}
                             </span>
                           </div>

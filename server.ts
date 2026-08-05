@@ -3847,6 +3847,9 @@ async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: 
     const parsed = JSON.parse(payload) as { title: string; body: string; link?: string; image?: string; icon?: string; badge?: string };
     await messaging.send({
       token: String(sub.keys?.token || sub.endpoint.slice(4)),
+      android: {
+        priority: "high"
+      },
       data: {
         title: parsed.title,
         body: parsed.body,
@@ -4139,6 +4142,10 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
         sent: result.emailSent,
         to: result.emailTo,
         error: result.emailError
+      },
+      push: {
+        // A aceitação pelo FCM/Web Push não confirma a entrega no aparelho.
+        accepted: result.pushSent
       },
       whatsapp: {
         accepted: result.whatsappResult?.status === "accepted",
