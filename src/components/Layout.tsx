@@ -212,7 +212,10 @@ export default function Layout() {
 
       {/* Sidebar */}
       <div
-        onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest('a, button, input, select, textarea, [role="button"]')) return;
+          setIsCollapsed((collapsed) => !collapsed);
+        }}
         className={`
         hidden md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
         z-40 self-stretch shadow-sm
