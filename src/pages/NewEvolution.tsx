@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, HelpCircle, Play, Pause } from 'lucide-react';
+import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, Play, Pause, BookOpen, ChevronRight } from 'lucide-react';
 import { appendToGoogleDoc, replaceEvolutionInGoogleDoc } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
@@ -1467,7 +1467,7 @@ export default function NewEvolution() {
               onChange={e => setSelectedTemplateId(e.target.value)}
               className="input-field p-2"
             >
-              <option value="">Sem template padrão (Formatação Geral)</option>
+              <option value="">Sem template (transcrição original)</option>
               {templates.map(t => (
                 <option key={t.id} value={t.id}>
                   {t.name}
@@ -1481,10 +1481,16 @@ export default function NewEvolution() {
                   setIsTemplateHelpOpen(true);
                 }
               }}
-              className="mt-1.5 text-xs text-brand-primary hover:text-brand-primary-hover hover:underline flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0"
+              className="group mt-3 flex w-full items-center gap-3 rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-3 py-2.5 text-left transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
             >
-              <HelpCircle className="w-3.5 h-3.5" />
-              Não sabe qual escolher? Ver diferenças dos templates
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-primary shadow-sm ring-1 ring-brand-primary/10">
+                <BookOpen className="h-4 w-4" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-semibold text-brand-text">Compare os modelos de evolução</span>
+                <span className="mt-0.5 block text-[11px] leading-snug text-brand-text-muted">Entenda qual estrutura combina melhor com o seu atendimento.</span>
+              </span>
+              <ChevronRight className="h-4 w-4 shrink-0 text-brand-primary transition-transform group-hover:translate-x-0.5" />
             </button>
           </div>
         </div>
