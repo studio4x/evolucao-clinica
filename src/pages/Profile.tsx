@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { UserAvatar } from '../components/common/UserAvatar';
-import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle } from 'lucide-react';
+import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle, User } from 'lucide-react';
 import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
 import { showConfirm } from '../store/modalStore';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -460,14 +461,12 @@ export default function Profile() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Cabeçalho */}
-      <div className="border-b border-brand-border/60 pb-5">
-        <h1 className="text-3xl font-display font-bold text-brand-primary">Meu Perfil</h1>
-        <p className="text-sm text-brand-text-muted mt-1">
-          Gerencie suas informações pessoais e visualize seus detalhes de acesso.
-        </p>
-      </div>
+    <div className="w-full space-y-6">
+      <PanelPageHeader
+        icon={User}
+        title="Meu Perfil"
+        description="Gerencie suas informações pessoais e visualize seus detalhes de acesso."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
         {/* Card Lateral do Avatar */}

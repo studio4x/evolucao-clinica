@@ -11,6 +11,7 @@ import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 declare global {
   interface Window {
@@ -774,10 +775,12 @@ export default function PatientForm() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <h1 className="text-2xl font-display font-semibold text-brand-primary">
-        {id ? 'Editar Paciente' : 'Novo Paciente'}
-      </h1>
+    <div className="w-full space-y-6">
+      <PanelPageHeader
+        icon={FileText}
+        title={id ? 'Editar Paciente' : 'Novo Paciente'}
+        description={id ? 'Atualize os dados cadastrais e as preferências do paciente.' : 'Cadastre as informações necessárias para iniciar o acompanhamento.'}
+      />
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-6">
         <div>

@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 export default function Tutorial() {
   const navigate = useNavigate();
@@ -118,17 +119,13 @@ export default function Tutorial() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12 pb-16">
+    <div className="w-full space-y-12 pb-16">
       {/* Cabeçalho */}
-      <div className="text-center space-y-4">
-        <div className="inline-flex items-center justify-center p-3 bg-brand-primary/10 rounded-2xl text-brand-primary mb-2">
-          <BookOpen size={36} />
-        </div>
-        <h1 className="text-4xl font-display font-bold text-brand-primary">Guia de Uso & Dúvidas</h1>
-        <p className="text-brand-text-muted text-lg max-w-2xl mx-auto">
-          Aprenda o fluxo atual do aplicativo e tire suas dúvidas sobre a operação, segurança e integração.
-        </p>
-      </div>
+      <PanelPageHeader
+        icon={BookOpen}
+        title="Guia de Uso & Dúvidas"
+        description="Aprenda o fluxo atual do aplicativo e tire suas dúvidas sobre a operação, segurança e integração."
+      />
 
       {/* Seção 1: Guia de Uso Passo a Passo */}
       <div className="space-y-6">

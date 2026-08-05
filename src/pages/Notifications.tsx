@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 import { 
@@ -522,11 +523,11 @@ export default function Notifications() {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-display font-bold text-brand-primary">Central de Notificações</h1>
-        <p className="text-brand-text-muted mt-1">Gerencie seus alertas na plataforma, notificações push e configurações de e-mail.</p>
-      </div>
+      <PanelPageHeader
+        icon={Bell}
+        title="Central de Notificações"
+        description="Gerencie seus alertas na plataforma, notificações push e configurações de e-mail."
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         

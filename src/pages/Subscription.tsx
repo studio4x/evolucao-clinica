@@ -6,6 +6,7 @@ import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, Aler
 import { StripeSubscriptionButton, type ConfirmedBillingResult } from '../components/payments/StripeSubscriptionButton';
 import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { createStripeCustomerPortalSession, hasNativeBillingBridge } from '../services/billing';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
 
@@ -569,20 +570,13 @@ export default function Subscription() {
   };
 
   return (
-    <div className="space-y-8 max-w-4xl mx-auto pb-12">
+    <div className="w-full space-y-8 pb-12">
       {/* Header */}
-      <div className="text-center space-y-3">
-        <div className="inline-flex items-center space-x-2 bg-brand-primary/10 text-brand-primary px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Assinatura e Renovação</span>
-        </div>
-        <h1 className="text-3xl font-display font-bold text-brand-primary tracking-tight md:text-4xl">
-          Planos e Assinatura
-        </h1>
-        <p className="text-brand-text-muted text-base max-w-xl mx-auto">
-          Escolha o plano ideal para automatizar seus prontuários e evoluções clínicas com inteligência artificial de ponta.
-        </p>
-      </div>
+      <PanelPageHeader
+        icon={Sparkles}
+        title="Planos e Assinatura"
+        description="Escolha o plano ideal para automatizar seus prontuários e evoluções clínicas com inteligência artificial de ponta."
+      />
 
       {/* Card de Notificação de Assinatura Cancelada */}
       {isCanceled && (

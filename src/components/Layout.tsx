@@ -386,7 +386,7 @@ export default function Layout() {
       {/* Main Content */}
       <div className="flex-1 overflow-x-hidden flex flex-col pb-16 md:pb-0">
         <TrialBanner />
-        <main className="p-4 md:p-8 w-full md:w-[90%] max-w-none mx-auto flex-1">
+        <main className="w-full max-w-[1440px] p-4 md:p-8 mx-auto flex-1 [&>div]:w-full [&>div]:max-w-none">
           <Outlet />
         </main>
       </div>

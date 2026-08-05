@@ -3,6 +3,7 @@ import { MessageSquare, Star, Send, CheckCircle2, ShieldAlert, Lightbulb, ArrowL
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 export default function Feedback() {
   const { user } = useAuthStore();
@@ -86,7 +87,7 @@ export default function Feedback() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-16">
+    <div className="w-full space-y-6 pb-16">
       {/* Botão Voltar & Cabeçalho */}
       <div className="flex flex-col space-y-4">
         <button
@@ -97,15 +98,11 @@ export default function Feedback() {
           Voltar para o Painel
         </button>
 
-        <div className="space-y-1">
-          <h1 className="text-3xl font-display font-bold text-brand-primary flex items-center gap-2.5">
-            <Lightbulb className="w-8 h-8 text-amber-500 shrink-0" />
-            Sugestões & Avaliações
-          </h1>
-          <p className="text-brand-text-muted text-sm max-w-xl">
-            Sua opinião é fundamental para a evolução do aplicativo. Compartilhe sugestões, ideias de novas funções ou relate problemas.
-          </p>
-        </div>
+        <PanelPageHeader
+          icon={Lightbulb}
+          title="Sugestões & Avaliações"
+          description="Sua opinião é fundamental para a evolução do aplicativo. Compartilhe sugestões, ideias de novas funções ou relate problemas."
+        />
       </div>
 
       {success ? (

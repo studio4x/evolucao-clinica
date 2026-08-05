@@ -9,6 +9,7 @@ import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink } from 'lucide-react';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 // Simple IndexedDB wrapper for the shared file
 const getSharedFile = (): Promise<File | null> => {
@@ -435,16 +436,14 @@ export default function ShareTarget() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="w-full">
+      <PanelPageHeader
+        icon={Mic}
+        title="Áudio Recebido"
+        description="Selecione o paciente para processar este áudio."
+      />
       <div className="card overflow-hidden">
-        <div className="p-6 border-b border-brand-border bg-brand-bg/50">
-          <h2 className="text-xl font-display font-semibold text-brand-primary">Áudio Recebido</h2>
-          <p className="text-sm text-brand-text-muted mt-1">
-            Selecione o paciente para processar este áudio.
-          </p>
-        </div>
-
-        <div className="p-6 space-y-6">
+        <div className="mt-6 p-6 space-y-6">
           {status === 'success' ? (
             <div className="text-center py-8">
               <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-brand-accent/20 mb-4">

@@ -10,6 +10,7 @@ import { appendToGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDoc
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
@@ -600,9 +601,10 @@ export default function History() {
   return (
     <>
       <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-display font-semibold text-brand-primary">Histórico de Evoluções</h1>
-        {evolutions.length > 0 && (
+      <PanelPageHeader
+        icon={Clock}
+        title="Histórico de Evoluções"
+        actions={evolutions.length > 0 && (
           <button 
             onClick={() => setShowClearConfirm(true)}
             className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
@@ -611,7 +613,7 @@ export default function History() {
             <span>Limpar Histórico</span>
           </button>
         )}
-      </div>
+      />
 
       {showClearConfirm && (
         <div className="bg-red-50 border rounded-2xl p-6 border-red-100 shadow-sm">

@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { Activity, Bell, Calendar, FileText, MessageCircle, Plus, Search } from 'lucide-react';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 type PatientEvolution = {
   patient_id: string;
@@ -136,16 +137,17 @@ export default function Patients() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h1 className="text-2xl font-display font-semibold text-brand-primary">Pacientes</h1>
-        <Link 
+      <PanelPageHeader
+        icon={Activity}
+        title="Pacientes"
+        actions={<Link
           to="/painel/patients/new" 
-          className="btn-primary w-full sm:w-auto"
+          className="btn-primary"
         >
           <Plus size={20} className="mr-2" />
           <span>Novo Paciente</span>
-        </Link>
-      </div>
+        </Link>}
+      />
 
       <div className="card p-4">
         <div className="relative">

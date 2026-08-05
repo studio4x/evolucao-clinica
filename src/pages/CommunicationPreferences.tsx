@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Check, Loader2, Mail, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 type Preferences = {
   product_education_enabled: boolean;
@@ -92,19 +93,16 @@ export default function CommunicationPreferences() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="w-full space-y-6 animate-fade-in pb-12">
+        <PanelPageHeader
+          icon={Mail}
+          title="Preferências de comunicação"
+          description="Escolha quais mensagens de relacionamento deseja receber."
+        />
         
         {/* Card 1: Preferências de comunicação */}
         <div className="bg-white rounded-2xl border border-brand-border shadow-sm p-6 md:p-8">
-          <div className="flex items-start gap-3 mb-6">
-            <div className="p-3 rounded-xl bg-brand-primary/10 text-brand-primary">
-              <Mail size={22} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-brand-text">Preferências de comunicação</h1>
-              <p className="text-sm text-brand-text-muted mt-1">Escolha quais mensagens de relacionamento deseja receber.</p>
-            </div>
-          </div>
+          <h2 className="mb-6 text-lg font-semibold text-brand-text">Canais de comunicação</h2>
 
           {preferences.unsubscribed_at ? (
             <div className="bg-amber-50 border border-amber-200/80 p-4 rounded-xl flex gap-3 text-amber-800 mb-6 animate-fade-in">

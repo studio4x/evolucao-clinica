@@ -19,6 +19,7 @@ import { getReportBodyContent } from '../utils/reportContent';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { showAlert } from '../store/modalStore';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -1857,16 +1858,11 @@ export default function PatientDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-display font-semibold text-brand-primary">{patient.full_name}</h1>
-          <div className="flex items-center space-x-2 mt-2">
-            <span className={`px-2 py-1 text-xs rounded-full ${patient.status === 'active' ? 'bg-brand-accent/20 text-brand-primary' : 'bg-gray-100 text-gray-700'}`}>
-              {patient.status === 'active' ? 'Ativo' : 'Inativo'}
-            </span>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
+      <PanelPageHeader
+        icon={User}
+        title={patient.full_name}
+        description={patient.status === 'active' ? 'Paciente ativo' : 'Paciente inativo'}
+        actions={<>
           <button 
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
@@ -1888,8 +1884,8 @@ export default function PatientDetail() {
             <Plus size={20} className="mr-2" />
             <span>Nova Evolução</span>
           </Link>
-        </div>
-      </div>
+        </>}
+      />
 
       {showDeleteConfirm && (
         <div className="p-6 bg-red-50 border border-red-100 rounded-2xl shadow-sm space-y-3">

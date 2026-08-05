@@ -17,6 +17,7 @@ import { sendNotification } from '../services/notificationHelper';
 import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
 import { getAudioDurationFromBlob } from '../utils/audioDuration';
 import { showAlert, showConfirm } from '../store/modalStore';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 type AudioEvolutionItem = {
   id: string;
@@ -1262,7 +1263,7 @@ export default function NewEvolution() {
   if (!patient) return <div>Carregando...</div>;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
@@ -1272,7 +1273,7 @@ export default function NewEvolution() {
           >
             <ArrowLeft size={18} />
           </Link>
-          <h1 className="text-2xl font-display font-semibold text-brand-primary">Nova Evolução</h1>
+          <PanelPageHeader title="Nova Evolução" />
         </div>
         <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">
           {patient.full_name}

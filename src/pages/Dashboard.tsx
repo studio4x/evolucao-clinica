@@ -6,6 +6,7 @@ import { Users, FileAudio, AlertCircle, Plus, BookOpen, Mic, FileText, CheckCirc
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { getDraftEvolutions, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { showAlert, showConfirm } from '../store/modalStore';
 const normalizeText = (text: string): string => {
@@ -431,14 +432,11 @@ export default function Dashboard() {
     <div className="space-y-8 animate-in fade-in duration-700">
       {/* Welcome Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-display font-bold text-brand-primary">
-            Olá, {user?.user_metadata?.full_name?.split(' ')[0] || 'Terapeuta'}!
-          </h1>
-          <p className="text-brand-text-muted mt-1">
-            Aqui está o resumo dos seus atendimentos clínicos.
-          </p>
-        </div>
+        <PanelPageHeader
+          icon={Users}
+          title={<>Olá, {user?.user_metadata?.full_name?.split(' ')[0] || 'Terapeuta'}!</>}
+          description="Aqui está o resumo dos seus atendimentos clínicos."
+        />
         <div className="flex items-center gap-3">
           <Link 
             to="/painel/tutorial" 
