@@ -703,13 +703,13 @@ export default function Profile() {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-brand-primary/5 to-brand-accent/10 border border-brand-primary/15 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start space-x-3">
+            <div className="bg-gradient-to-br from-brand-primary/5 to-brand-accent/10 border border-brand-primary/15 rounded-2xl p-4 sm:p-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-start space-x-3">
                 <div className="p-2 bg-white rounded-xl border border-brand-primary/10 text-brand-primary flex-shrink-0 shadow-sm">
                   <Sparkles size={18} />
                 </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
+                <div className="min-w-0 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <h4 className="text-sm font-semibold text-brand-primary">Reiniciar onboarding</h4>
                     {onboardingCompleted !== null && (
                       onboardingCompleted ? (
@@ -734,7 +734,7 @@ export default function Profile() {
                 type="button"
                 onClick={handleRestartOnboarding}
                 disabled={resettingOnboarding}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-primary/20 bg-white px-4 py-2.5 text-sm font-semibold text-brand-primary hover:bg-brand-primary/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                className="inline-flex w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-brand-primary/20 bg-white px-4 py-2.5 text-sm font-semibold text-brand-primary hover:bg-brand-primary/5 transition-colors disabled:opacity-60 disabled:cursor-not-allowed lg:w-auto"
               >
                 {resettingOnboarding ? (
                   <>
@@ -750,12 +750,12 @@ export default function Profile() {
               </button>
             </div>
 
-            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 sm:p-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-start space-x-3">
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 sm:p-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-start space-x-3">
                 <div className="p-2 bg-white rounded-xl border border-red-200 text-red-600 flex-shrink-0 shadow-sm">
                   <Trash2 size={18} />
                 </div>
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-1">
                   <h4 className="text-sm font-semibold text-red-700">Excluir conta definitivamente</h4>
                   <p className="text-xs text-red-700/90 leading-relaxed max-w-xl">
                     Esta ação remove seu acesso ao aplicativo, revoga a vinculação com o Google quando possível e apaga
@@ -767,7 +767,7 @@ export default function Profile() {
               <button
                 type="button"
                 onClick={openDeleteAccountModal}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors"
+                className="inline-flex w-full shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-red-300 bg-white px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 transition-colors lg:w-auto"
               >
                 <Trash2 className="h-4 w-4" />
                 Excluir minha conta
