@@ -710,7 +710,18 @@ export default function Subscription() {
       </div>
 
       {/* Cartões dos Planos de Assinatura */}
-      <div id="subscription-plans" className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-4 scroll-mt-6">
+      <div className="hidden md:flex xl:hidden items-center justify-between gap-4 mt-4 rounded-2xl border border-brand-primary/15 bg-brand-primary/5 px-4 py-3 text-sm text-brand-primary">
+        <div className="flex items-center gap-2 font-semibold">
+          <ArrowRight className="h-4 w-4 shrink-0" />
+          <span>Deslize lateralmente para comparar os planos</span>
+        </div>
+        <div className="flex items-center gap-1.5" aria-hidden="true">
+          {(plans.length > 0 ? plans : DEFAULT_PLANS).map((plan, index) => (
+            <span key={plan.id} className={`h-2 rounded-full ${index === 0 ? 'w-5 bg-brand-primary' : 'w-2 bg-brand-primary/30'}`} />
+          ))}
+        </div>
+      </div>
+      <div id="subscription-plans" className="grid grid-cols-1 gap-8 mt-4 scroll-mt-6 md:flex md:gap-6 md:overflow-x-auto md:overscroll-x-contain md:snap-x md:snap-mandatory md:scroll-px-1 md:pb-4 xl:grid xl:grid-cols-2 xl:gap-8 xl:overflow-visible xl:pb-0">
           {(plans.length > 0 ? plans : DEFAULT_PLANS).map((plan) => {
             const isCurrentPlan = subscriptionPlan === plan.id && !isExpired;
             const isYearly = plan.id === 'yearly';
@@ -721,7 +732,7 @@ export default function Subscription() {
             const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
             
             return (
-              <div key={plan.id} className={`card border bg-white rounded-3xl p-8 flex flex-col justify-between relative shadow-xl overflow-visible ${
+              <div key={plan.id} className={`card border bg-white rounded-3xl p-8 flex flex-col justify-between relative shadow-xl overflow-visible md:min-w-[calc(100%-3rem)] md:snap-center xl:min-w-0 ${
                 isCurrentPlan
                   ? 'border-brand-primary shadow-brand-primary/10 ring-2 ring-brand-primary/10' 
                   : 'border-brand-primary/10 shadow-brand-primary/5 hover:border-brand-primary/25 transition-all'
