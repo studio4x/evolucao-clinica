@@ -2,7 +2,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Mic, Lock, ArrowRight, CheckCircle2, User, KeyRound, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Mic, Lock, ArrowRight, CheckCircle2, User, ArrowLeft } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
@@ -367,17 +367,13 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Links Secundários e Versão (Acesso Admin / Voltar) */}
+          {/* Links Secundários e Versão (Site / Build) */}
           <div className="mt-4 pt-3 border-t border-slate-100 w-full flex items-center justify-between px-1 text-[11px] text-slate-400">
-            <Link to="/admin" className="flex items-center gap-1 hover:text-[#0b5cad] transition-colors">
-              <KeyRound size={12} />
-              <span>Login Admin</span>
-            </Link>
-            <AppVersion />
             <Link to="/" className="flex items-center gap-1 hover:text-[#0b5cad] transition-colors">
               <ArrowLeft size={12} />
               <span>Site</span>
             </Link>
+            <AppVersion />
           </div>
         </div>
       </div>
