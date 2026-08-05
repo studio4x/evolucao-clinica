@@ -57,6 +57,7 @@ import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
+import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
 
 const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
@@ -643,6 +644,7 @@ export default function App() {
       <PermissionNotice />
       <CustomModalContainer />
       <NativeBillingRestore />
+      <PushPermissionPrompt />
       <SpeedInsights />
       
       <ChunkLoadErrorBoundary>
