@@ -2,7 +2,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Zap, Sparkles, Files, ArrowLeft, KeyRound } from 'lucide-react';
+import { ShieldCheck, Zap, Files, ArrowLeft, KeyRound } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
@@ -18,6 +18,35 @@ export default function Login() {
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [searchParams] = useSearchParams();
   const fromPlan = searchParams.get('from_plan');
+
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const slides = [
+    {
+      id: 'slide-audio',
+      icon: <Zap className="w-6 h-6 text-brand-primary" />,
+      title: "Transcrições com IA",
+      description: "Grave o áudio das consultas e nossa Inteligência Artificial gera prontuários estruturados em segundos."
+    },
+    {
+      id: 'slide-google',
+      icon: <Files className="w-6 h-6 text-brand-primary" />,
+      title: "Google Docs Integrado",
+      description: "Organização automatizada direto na sua conta do Google Docs, acessível de qualquer dispositivo."
+    },
+    {
+      id: 'slide-secure',
+      icon: <ShieldCheck className="w-6 h-6 text-brand-primary" />,
+      title: "Prontuários Seguros",
+      description: "Privacidade garantida com dados criptografados e estruturados com segurança de nível médico."
+    }
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 4500);
+    return () => clearInterval(timer);
+  }, [slides.length]);
 
   useEffect(() => {
     if (fromPlan === 'monthly' || fromPlan === 'yearly' || fromPlan === '1') {
@@ -80,61 +109,87 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-brand-bg flex flex-col justify-center py-12 px-6 sm:px-6 lg:px-8 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 md:bg-slate-900/5 flex items-center justify-center p-0 md:p-4">
+      {/* Moldura de Smartphone para Desktop, Tela Cheia Imersiva no Mobile */}
+      <div className="w-full min-h-screen md:min-h-[760px] md:max-h-[820px] md:h-[90vh] md:max-w-md md:rounded-[32px] md:shadow-2xl md:border md:border-brand-border/50 bg-brand-bg flex flex-col justify-between relative overflow-hidden transition-all">
+        
+        {/* Elementos de Brilho Orgânicos (Glow Background) */}
+        <div className="absolute top-[-10%] left-[-20%] w-[80%] h-[40%] bg-brand-primary/10 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-[20%] right-[-30%] w-[80%] h-[40%] bg-brand-accent/15 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Elementos decorativos de fundo */}
-      <div className="absolute top-0 left-0 w-full h-64 bg-gradient-to-b from-brand-primary/10 to-transparent pointer-events-none" />
-      <div className="absolute -top-24 -right-24 w-96 h-96 bg-brand-accent/5 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="flex justify-center mb-6">
-          {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
-            <div className="p-3 bg-white rounded-3xl shadow-xl shadow-brand-primary/10 border border-brand-primary/5">
-              <img
-                src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-                alt="Evolução Clínica"
-                className="h-24 w-auto object-contain p-2"
-              />
-            </div>
-          ) : (
-            <h2 className="text-3xl font-display font-extrabold text-brand-primary text-center">
-              {siteConfig.pwa_app_name || "Evolução Clínica"}
-            </h2>
-          )}
-        </div>
-        <p className="mt-3 text-center text-base text-brand-text-muted max-w-[280px] mx-auto leading-relaxed">
-          Sua prática clínica automatizada com <span className="text-brand-primary font-semibold">Inteligência Artificial</span>
-        </p>
-      </div>
-
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="card shadow-2xl shadow-brand-primary/5 py-10 px-6 sm:px-12 bg-white/80 backdrop-blur-sm border-brand-primary/10">
-          <div className="space-y-6 mb-8">
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-brand-accent/10 rounded-xl flex items-center justify-center">
-                <Zap className="w-5 h-5 text-brand-primary" />
+        {/* Seção Superior: Logo e Carrossel */}
+        <div className="flex-1 flex flex-col items-center justify-center pt-8 pb-4 relative z-10 w-full">
+          {/* Logo */}
+          <div className="mb-6 flex justify-center">
+            {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
+              <div className="p-3 bg-white rounded-2xl shadow-lg shadow-brand-primary/5 border border-brand-primary/5">
+                <img
+                  src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
+                  alt="Evolução Clínica"
+                  className="h-14 w-auto object-contain"
+                />
               </div>
-              <p className="text-sm font-medium text-brand-text">Transcreve áudios instantaneamente</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-brand-accent/10 rounded-xl flex items-center justify-center">
-                <Files className="w-5 h-5 text-brand-primary" />
-              </div>
-              <p className="text-sm font-medium text-brand-text">Organiza tudo no seu Google Docs</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex-shrink-0 w-10 h-10 bg-brand-accent/10 rounded-xl flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-brand-primary" />
-              </div>
-              <p className="text-sm font-medium text-brand-text">Prontuários seguros e estruturados</p>
-            </div>
+            ) : (
+              <h2 className="text-2xl font-display font-extrabold text-brand-primary text-center tracking-tight">
+                {siteConfig.pwa_app_name || "Evolução Clínica"}
+              </h2>
+            )}
           </div>
 
+          {/* Carrossel de Onboarding */}
+          <div className="w-full relative">
+            <div className="relative w-full h-[180px] flex items-center justify-center overflow-hidden">
+              {slides.map((slide, index) => {
+                const isActive = index === currentSlide;
+                return (
+                  <div
+                    key={slide.id}
+                    className={`absolute w-full px-8 text-center flex flex-col items-center transition-all duration-700 ease-in-out transform ${
+                      isActive 
+                        ? 'opacity-100 translate-x-0 scale-100' 
+                        : 'opacity-0 pointer-events-none translate-x-12 scale-95'
+                    }`}
+                  >
+                    <div className="w-12 h-12 bg-white rounded-2xl shadow-md border border-brand-primary/5 flex items-center justify-center mb-3 text-brand-primary">
+                      {slide.icon}
+                    </div>
+                    <h3 className="text-lg font-bold text-brand-text mb-1.5 tracking-tight">
+                      {slide.title}
+                    </h3>
+                    <p className="text-xs text-brand-text-muted leading-relaxed max-w-[280px]">
+                      {slide.description}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Dots Indicadores */}
+            <div className="flex justify-center space-x-1.5 mt-2">
+              {slides.map((_, index) => (
+                <button
+                  key={index}
+                  onClick={() => setCurrentSlide(index)}
+                  className={`h-1.5 rounded-full transition-all duration-300 ${
+                    index === currentSlide 
+                      ? 'w-6 bg-brand-primary' 
+                      : 'w-1.5 bg-brand-primary/20'
+                  }`}
+                  aria-label={`Ir para slide ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Seção Inferior: Gaveta (Bottom Sheet) de Ação */}
+        <div className="w-full bg-white rounded-t-[32px] shadow-[0_-8px_30px_rgb(0,0,0,0.04)] border-t border-brand-border/40 p-6 md:p-8 flex flex-col items-center z-10">
+          <div className="w-12 h-1 bg-slate-200 rounded-full mb-6 pointer-events-none md:hidden" />
+          
           <button
             onClick={() => setIsSecurityModalOpen(true)}
             disabled={loading}
-            className="btn-primary w-full py-4 text-lg font-semibold tracking-wide shadow-lg shadow-brand-primary/20 hover:shadow-xl hover:shadow-brand-primary/30 transform transition-all hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center space-x-3"
+            className="btn-primary w-full py-4 text-base font-semibold tracking-wide shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all active:translate-y-0.5 flex items-center justify-center space-x-3 rounded-2xl"
           >
             {loading ? (
               <span className="flex items-center space-x-2">
@@ -159,38 +214,38 @@ export default function Login() {
 
           <Link
             to="/admin"
-            className="mt-3.5 w-full py-2.5 px-4 text-xs font-semibold text-brand-text-muted hover:text-brand-primary bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+            className="mt-3 w-full py-3 px-4 text-xs font-semibold text-brand-text-muted hover:text-brand-primary bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm"
           >
             <KeyRound size={14} className="opacity-70" />
             <span>Entrar com e-mail e senha</span>
           </Link>
           
-          <p className="mt-5 text-center text-[11px] text-brand-text-muted leading-relaxed">
+          <p className="mt-4 text-center text-[10px] text-brand-text-muted leading-relaxed max-w-[320px]">
             No primeiro acesso pedimos só o básico para entrar. As permissões do Drive, prontuário e agenda são solicitadas depois, apenas quando você chegar em cada etapa.
           </p>
+
+          {/* Botão Voltar para a Home */}
+          <div className="mt-5 w-full flex justify-center">
+            <Link 
+              to="/" 
+              className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-brand-text-muted hover:text-brand-primary rounded-xl border border-brand-border shadow-sm transition-all text-xs font-semibold"
+            >
+              <ArrowLeft size={14} />
+              Voltar para o site
+            </Link>
+          </div>
+
+          {/* Versão e Links de Rodapé */}
+          <div className="mt-6 w-full text-center flex flex-col items-center gap-2 border-t border-slate-100 pt-5">
+            <AppVersion />
+            <div className="flex gap-3 text-[10px] font-medium text-brand-text-muted">
+              <Link to="/privacy" className="hover:text-brand-primary transition-colors">Política de Privacidade</Link>
+              <span className="text-slate-200">|</span>
+              <Link to="/terms" className="hover:text-brand-primary transition-colors">Termos de Serviço</Link>
+            </div>
+          </div>
         </div>
 
-        {/* Botão Voltar para a Home */}
-        <div className="mt-6 flex justify-center">
-          <Link 
-            to="/" 
-            className="flex items-center gap-2 px-4 py-2 bg-white/80 hover:bg-white text-brand-text-muted hover:text-brand-primary rounded-xl border border-brand-primary/10 shadow-sm transition-all text-xs font-semibold"
-          >
-            <ArrowLeft size={14} />
-            Voltar para o site
-          </Link>
-        </div>
-      </div>
-      
-      <div className="mt-auto pt-12 relative z-10 text-center flex flex-col items-center gap-3">
-        <div className="inline-block px-4 py-1.5 bg-white/50 backdrop-blur-md rounded-full border border-brand-primary/5 shadow-sm">
-          <AppVersion />
-        </div>
-        <div className="flex gap-4 text-xs font-medium text-brand-text-muted">
-          <Link to="/privacy" className="hover:text-brand-primary transition-colors">Política de Privacidade</Link>
-          <span className="text-brand-border">|</span>
-          <Link to="/terms" className="hover:text-brand-primary transition-colors">Termos de Serviço</Link>
-        </div>
       </div>
 
       <GoogleSecurityModal
