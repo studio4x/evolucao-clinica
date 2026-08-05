@@ -2296,7 +2296,7 @@ export default function PatientDetail() {
             )}
           </div>
 
-          <div className="card order-5 md:order-none">
+          <div className="card order-5 xl:order-none">
             <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
               <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
               {evolutions.length > 0 && (
@@ -2650,7 +2650,7 @@ export default function PatientDetail() {
           </div>
 
           {/* Seção Unificada de Relatórios Clínicos */}
-          <div className="card order-7 md:order-none">
+          <div className="card order-7 xl:order-none">
             <div className="px-6 py-4 border-b border-brand-border bg-brand-bg/50 flex flex-col gap-4 rounded-t-2xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center space-x-2">
