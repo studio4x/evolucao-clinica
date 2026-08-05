@@ -4,6 +4,7 @@ import { getAudioDurationFromBlob } from "../utils/audioDuration";
 export interface TranscriptionOptions {
   audioBlob: Blob;
   mimeType: string;
+  fileName?: string;
   onRetry?: (attempt: number, delay: number, isFallback: boolean) => void;
   audioDuration?: number; // em segundos
   customPrompt?: string;
@@ -13,15 +14,35 @@ const MAX_AUDIO_DURATION_SECONDS = 20 * 60;
 const MAX_AUDIO_SIZE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_TRANSCRIPTION_PROMPT = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Retorne somente a transcrição final em texto corrido, sem títulos, sem cabeçalhos, sem resumos, sem contexto adicional, sem explicações, sem listas e sem qualquer frase de abertura ou encerramento.`;
 
-const normalizeMimeType = (mimeType?: string): string => {
-  let normalizedMimeType = mimeType || 'audio/webm';
+export const resolveAudioMimeType = (mimeType?: string, fileName?: string): string => {
+  let normalizedMimeType = (mimeType || '').toLowerCase();
 
   if (normalizedMimeType.includes(';')) {
     normalizedMimeType = normalizedMimeType.split(';')[0].trim();
   }
 
-  if (normalizedMimeType === 'application/ogg' || normalizedMimeType === 'application/octet-stream') {
+  const extension = String(fileName || '').trim().toLowerCase().split('.').pop();
+  if (
+    extension === 'ogg' ||
+    extension === 'oga' ||
+    extension === 'opus' ||
+    normalizedMimeType === 'audio/ogg' ||
+    normalizedMimeType === 'audio/x-ogg' ||
+    normalizedMimeType === 'application/ogg' ||
+    normalizedMimeType === 'application/x-ogg' ||
+    normalizedMimeType === 'audio/opus'
+  ) {
     return 'audio/ogg';
+  }
+
+  if (extension === 'mp3') return 'audio/mpeg';
+  if (extension === 'wav') return 'audio/wav';
+  if (extension === 'm4a' || extension === 'mp4') return 'audio/mp4';
+  if (extension === 'aac') return 'audio/aac';
+  if (extension === 'webm' || extension === 'weba') return 'audio/webm';
+
+  if (!normalizedMimeType || normalizedMimeType === 'application/octet-stream') {
+    return 'audio/webm';
   }
 
   return normalizedMimeType;
@@ -83,10 +104,10 @@ const isHardLimitError = (message: string): boolean => {
 };
 
 export const transcribeAudio = async (options: TranscriptionOptions): Promise<string> => {
-  const { audioBlob, mimeType, onRetry, audioDuration, customPrompt } = options;
+  const { audioBlob, mimeType, fileName, onRetry, audioDuration, customPrompt } = options;
   const maxRetries = 3;
   let retryCount = 0;
-  const normalizedMimeType = normalizeMimeType(mimeType || audioBlob.type);
+  const normalizedMimeType = resolveAudioMimeType(mimeType || audioBlob.type, fileName);
   const prompt = customPrompt || DEFAULT_TRANSCRIPTION_PROMPT;
 
   if (typeof audioDuration === 'number' && Number.isFinite(audioDuration) && audioDuration > MAX_AUDIO_DURATION_SECONDS) {

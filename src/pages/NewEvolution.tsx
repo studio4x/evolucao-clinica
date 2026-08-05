@@ -10,7 +10,7 @@ import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { rememberMicrophonePermission } from '../utils/microphonePermission';
 
-import { transcribeAudio } from '../services/aiTranscription';
+import { resolveAudioMimeType, transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
@@ -28,6 +28,7 @@ type AudioEvolutionItem = {
   duration: number;
   source: 'recording' | 'upload' | 'draft';
   name: string;
+  mimeType: string;
 };
 
 let activeAudioStopper: (() => void) | null = null;
@@ -511,17 +512,22 @@ export default function NewEvolution() {
   };
 
   const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string, fallbackDuration = 0) => {
-    const url = URL.createObjectURL(blob);
-    const detectedDuration = await getAudioDurationFromBlob(blob);
+    const mimeType = resolveAudioMimeType(blob.type, name);
+    // Alguns gerenciadores Android não informam o MIME de um .ogg. Recriamos
+    // o Blob com o tipo inferido pelo nome antes de medir, salvar e transcrever.
+    const normalizedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
+    const url = URL.createObjectURL(normalizedBlob);
+    const detectedDuration = await getAudioDurationFromBlob(normalizedBlob);
     const duration = detectedDuration > 0 ? detectedDuration : fallbackDuration;
 
     return {
       id: uuidv4(),
-      blob,
+      blob: normalizedBlob,
       url,
       duration: Number.isFinite(duration) ? duration : 0,
       source,
-      name
+      name,
+      mimeType
     } as AudioEvolutionItem;
   };
 
@@ -1201,7 +1207,8 @@ export default function NewEvolution() {
 
         const transcription = await transcribeAudio({
           audioBlob: item.blob,
-          mimeType: item.blob.type || 'audio/webm',
+          mimeType: item.mimeType,
+          fileName: item.name,
           audioDuration: item.duration,
           onRetry: (attempt, delay, isFallback) => {
             console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);

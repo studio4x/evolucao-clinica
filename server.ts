@@ -236,17 +236,32 @@ function isQuotaRelatedError(err: any): boolean {
 }
 
 function normalizeAudioMimeType(mimeType?: string): string {
-  let normalizedMimeType = mimeType || "audio/webm";
+  let normalizedMimeType = (mimeType || "").toLowerCase();
 
   if (normalizedMimeType.includes(";")) {
     normalizedMimeType = normalizedMimeType.split(";")[0].trim();
   }
 
-  if (normalizedMimeType === "application/ogg" || normalizedMimeType === "application/octet-stream") {
+  if (
+    normalizedMimeType === "audio/ogg" ||
+    normalizedMimeType === "audio/x-ogg" ||
+    normalizedMimeType === "application/ogg" ||
+    normalizedMimeType === "application/x-ogg" ||
+    normalizedMimeType === "audio/opus"
+  ) {
     return "audio/ogg";
   }
 
-  return normalizedMimeType;
+  return normalizedMimeType || "audio/webm";
+}
+
+function resolveAudioMimeTypeFromContent(mimeType: string, audioBuffer: Buffer): string {
+  // A assinatura OggS é inequívoca e prevalece sobre MIME vazio ou incorreto
+  // que alguns gerenciadores de arquivos Android fornecem ao WebView.
+  if (audioBuffer.length >= 4 && audioBuffer.subarray(0, 4).toString("ascii") === "OggS") {
+    return "audio/ogg";
+  }
+  return normalizeAudioMimeType(mimeType);
 }
 
 function resolveTranscriptionModel(configuredModel?: string): string {
@@ -1948,7 +1963,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     audioPathToCleanup = audioPath;
     storageAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const normalizedMimeType = normalizeAudioMimeType(mimeType);
+    const requestedMimeType = normalizeAudioMimeType(mimeType);
     const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Retorne somente a transcrição final em texto corrido, sem títulos, sem cabeçalhos, sem resumos, sem contexto adicional, sem explicações, sem listas e sem qualquer frase de abertura ou encerramento.`;
     const usageMonth = getCurrentUsageMonth();
     const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(req.user.id, usageMonth);
@@ -1988,6 +2003,8 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     if (audioBuffer.byteLength > TRANSCRIPTION_MAX_FILE_BYTES) {
       return res.status(400).json({ error: "O áudio excede o tamanho máximo permitido de 20 MB por evolução." });
     }
+
+    const normalizedMimeType = resolveAudioMimeTypeFromContent(requestedMimeType, audioBuffer);
 
     const audioBase64 = audioBuffer.toString("base64");
 
