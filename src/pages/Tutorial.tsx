@@ -30,6 +30,7 @@ export default function Tutorial() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'workflow' | 'faq'>('workflow');
 
   const steps = [
     {
@@ -127,8 +128,39 @@ export default function Tutorial() {
         description="Aprenda o fluxo atual do aplicativo e tire suas dúvidas sobre a operação, segurança e integração."
       />
 
+      <div className="inline-flex w-full rounded-2xl border border-brand-border bg-white p-1.5 sm:w-auto" role="tablist" aria-label="Conteúdos do tutorial">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'workflow'}
+          onClick={() => setActiveTab('workflow')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all sm:flex-none ${
+            activeTab === 'workflow'
+              ? 'bg-brand-primary text-white shadow-sm'
+              : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+          }`}
+        >
+          <FileText size={18} />
+          Fluxo de Trabalho Clínico
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'faq'}
+          onClick={() => setActiveTab('faq')}
+          className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all sm:flex-none ${
+            activeTab === 'faq'
+              ? 'bg-brand-primary text-white shadow-sm'
+              : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+          }`}
+        >
+          <HelpCircle size={18} />
+          Perguntas Frequentes
+        </button>
+      </div>
+
       {/* Seção 1: Guia de Uso Passo a Passo */}
-      <div className="space-y-6">
+      {activeTab === 'workflow' && <div className="space-y-6">
         <h2 className="text-2xl font-display font-bold text-brand-text flex items-center gap-2 border-b border-brand-border pb-3">
           <span className="text-brand-primary font-extrabold">1.</span>
           Fluxo de Trabalho Clínico
@@ -154,10 +186,10 @@ export default function Tutorial() {
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {/* Seção 2: FAQ interativo */}
-      <div className="space-y-6 pt-6">
+      {activeTab === 'faq' && <div className="space-y-6">
         <h2 className="text-2xl font-display font-bold text-brand-text flex items-center gap-2 border-b border-brand-border pb-3">
           <span className="text-brand-primary font-extrabold">2.</span>
           Perguntas Frequentes (FAQ)
@@ -266,7 +298,7 @@ export default function Tutorial() {
             </p>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* CTA Final */}
       <div className="card p-8 bg-brand-primary text-white text-center space-y-6 overflow-hidden relative rounded-2xl">
