@@ -211,12 +211,15 @@ export default function Layout() {
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
 
       {/* Sidebar */}
-      <div className={`
+      <div
+        onClick={isCollapsed ? () => setIsCollapsed(false) : undefined}
+        className={`
         hidden md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
         z-40 self-stretch shadow-sm
         transition-all duration-300 md:relative overflow-y-auto md:overflow-y-visible
-        ${isCollapsed ? 'w-20' : 'w-64'}
-      `}>
+        ${isCollapsed ? 'w-20 cursor-pointer' : 'w-64'}
+      `}
+      >
         {/* Toggle Collapse Button - Only visible on desktop/tablet (md) */}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
