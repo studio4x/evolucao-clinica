@@ -287,7 +287,7 @@ export default function Tutorial() {
       </div>
 
       {/* Seção de Suporte */}
-      <div className="card p-6 md:p-8 bg-gradient-to-r from-brand-bg to-brand-primary/5 border border-brand-border rounded-2xl flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-md transition-all">
+      <div className="card p-6 md:p-8 bg-gradient-to-r from-brand-bg to-brand-primary/5 border border-brand-border rounded-2xl flex flex-col xl:flex-row items-center justify-between gap-6 hover:shadow-md transition-all">
         <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
           <div className="p-3 bg-brand-primary/10 rounded-2xl text-brand-primary">
             <LifeBuoy size={32} className="animate-spin-slow" />
@@ -301,7 +301,7 @@ export default function Tutorial() {
         </div>
         <button
           onClick={() => navigate('/painel/support')}
-          className="btn-outline px-6 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white cursor-pointer bg-white"
+          className="btn-outline w-full xl:w-auto justify-center px-6 py-3 rounded-xl font-bold transition-all flex items-center space-x-2 border-brand-primary text-brand-primary hover:bg-brand-primary hover:text-white cursor-pointer bg-white"
         >
           <span>Acessar Canal de Suporte</span>
           <ArrowRight size={16} />
