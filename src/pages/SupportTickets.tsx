@@ -213,8 +213,63 @@ export default function SupportTickets() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-sm">
+          <>
+            <div className="divide-y divide-brand-border md:hidden">
+              {tickets.map((ticket) => (
+                <article
+                  key={ticket.id}
+                  className={`p-5 ${
+                    ticket.priority === 'high' || ticket.priority === 'urgent' ? 'bg-amber-500/[0.01]' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h4 className="font-bold text-brand-text break-words">{ticket.subject}</h4>
+                      <p className="text-xs text-brand-text-muted mt-1">
+                        Aberto em {formatDateTime(ticket.createdAt)}
+                      </p>
+                    </div>
+                    <TicketStatusBadge status={ticket.status} />
+                  </div>
+
+                  {isSupportTicketUnread(ticket, 'user') && ticket.latestMessageSenderRole === 'admin' && (
+                    <span className="mt-3 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-primary/10 text-brand-primary border border-brand-primary/15 text-[10px] font-bold">
+                      <MessageSquare size={12} />
+                      Nova resposta
+                    </span>
+                  )}
+
+                  <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <span className="block text-brand-text-muted mb-1">Categoria</span>
+                      <span className="inline-flex bg-gray-50 border border-gray-200 text-gray-700 px-2.5 py-1 rounded-full font-medium leading-4">
+                        {getCategoryLabel(ticket.category)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-brand-text-muted mb-1">SLA</span>
+                      <TicketSlaBadge status={ticket.slaStatus} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-brand-bg px-3 py-2.5 text-xs text-brand-text-muted leading-relaxed">
+                    <span className="font-semibold text-brand-text">{ticket.firstResponseAt ? 'Primeira resposta' : 'Prazo limite'}: </span>
+                    {ticket.firstResponseAt ? formatDateTime(ticket.firstResponseAt) : formatDateTime(ticket.firstResponseDueAt)}
+                  </div>
+
+                  <Link
+                    to={`/painel/support/${ticket.id}`}
+                    className="mt-4 inline-flex w-full items-center justify-center rounded-xl bg-brand-primary/10 px-3 py-2.5 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary hover:text-white"
+                  >
+                    <span>Acessar conversa</span>
+                    <ArrowRight size={14} className="ml-1" />
+                  </Link>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full text-left border-collapse text-sm">
               <thead>
                 <tr className="bg-brand-bg text-brand-text font-semibold text-xs border-b border-brand-border">
                   <th className="px-6 py-4">Assunto / Data</th>
@@ -282,7 +337,8 @@ export default function SupportTickets() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </>
         )}
       </div>
 
