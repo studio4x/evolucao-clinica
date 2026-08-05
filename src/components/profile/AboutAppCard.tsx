@@ -35,7 +35,7 @@ export function AboutAppCard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_0.9fr] gap-4">
           <div className="rounded-2xl border border-brand-border/70 bg-brand-bg/30 p-5 space-y-4">
             <div className="flex items-center gap-2">
               {isAndroid ? (
