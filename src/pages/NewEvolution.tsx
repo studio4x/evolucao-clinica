@@ -376,11 +376,17 @@ export default function NewEvolution() {
       if (audioContext.state === 'suspended') await audioContext.resume();
 
       const source = audioContext.createMediaStreamSource(stream);
+      const highPassFilter = audioContext.createBiquadFilter();
       const gain = audioContext.createGain();
       const compressor = audioContext.createDynamicsCompressor();
+      const limiter = audioContext.createDynamicsCompressor();
       const destination = audioContext.createMediaStreamDestination();
 
-      // Eleva a voz capturada e reduz picos para evitar distorção nos aparelhos.
+      // Remove ruídos graves antes de elevar a voz. Mantemos o ganho percebido
+      // sem depender do ganho automático do dispositivo, que pode oscilar e gerar chiados.
+      highPassFilter.type = 'highpass';
+      highPassFilter.frequency.value = 90;
+      highPassFilter.Q.value = 0.7;
       gain.gain.value = 1.7;
       compressor.threshold.value = -24;
       compressor.knee.value = 18;
@@ -388,9 +394,19 @@ export default function NewEvolution() {
       compressor.attack.value = 0.003;
       compressor.release.value = 0.25;
 
-      source.connect(gain);
+      // Última proteção contra picos após o ganho: evita saturação no encoder
+      // sem baixar o volume normal da fala.
+      limiter.threshold.value = -4;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0.001;
+      limiter.release.value = 0.1;
+
+      source.connect(highPassFilter);
+      highPassFilter.connect(gain);
       gain.connect(compressor);
-      compressor.connect(destination);
+      compressor.connect(limiter);
+      limiter.connect(destination);
       recordingAudioContextRef.current = audioContext;
 
       return destination.stream;
@@ -815,7 +831,9 @@ export default function NewEvolution() {
       isDiscardingRef.current = false;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          autoGainControl: true,
+          // O ganho é controlado de forma estável pela cadeia Web Audio abaixo.
+          // Evita que o AGC do tablet amplifique ruído entre as falas.
+          autoGainControl: false,
           echoCancellation: true,
           noiseSuppression: true,
         },
