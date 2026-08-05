@@ -723,6 +723,29 @@ public class LauncherActivity extends ComponentActivity {
             });
         }
 
+        /**
+         * Recria o token FCM antes de concluir a ativação iniciada pelo convite
+         * web. Isso evita persistir uma inscrição antiga que pode estar inválida
+         * no Firebase, sem exigir que o usuário desligue e ligue o push manualmente.
+         */
+        @android.webkit.JavascriptInterface
+        public void refreshToken() {
+            if (!isAvailable()) return;
+            FirebaseMessaging.getInstance().deleteToken()
+                    .continueWithTask(task -> FirebaseMessaging.getInstance().getToken())
+                    .addOnCompleteListener(task -> {
+                        if (!task.isSuccessful() || task.getResult() == null || webView == null) {
+                            Log.w(LOG_TAG, "Não foi possível renovar o token FCM", task.getException());
+                            return;
+                        }
+                        String token = JSONObject.quote(task.getResult());
+                        runOnUiThread(() -> webView.evaluateJavascript(
+                                "window.dispatchEvent(new CustomEvent('native-push-token',{detail:{token:" + token + "}}));",
+                                null
+                        ));
+                    });
+        }
+
         @android.webkit.JavascriptInterface
         public void deleteToken() {
             if (!isAvailable()) return;

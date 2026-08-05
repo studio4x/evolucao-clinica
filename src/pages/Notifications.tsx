@@ -26,6 +26,7 @@ interface NativePushBridge {
   isAvailable?: () => boolean;
   isPermissionGranted?: () => boolean;
   requestToken?: () => void;
+  refreshToken?: () => void;
   deleteToken?: () => void;
 }
 
@@ -614,7 +615,9 @@ export default function Notifications() {
                             <img
                               src={item.image_url}
                               alt="Capa da notificação"
-                              className="block w-full h-auto max-h-64 object-cover md:max-h-72"
+                              referrerPolicy="no-referrer"
+                              loading="eager"
+                              className="block aspect-[16/9] w-full max-h-64 object-cover md:max-h-72"
                             />
                           </div>
                         )}

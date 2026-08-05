@@ -58,8 +58,8 @@ android {
         applicationId "com.evolucaoclinica.app"
         minSdkVersion 23
         targetSdkVersion 36
-        versionCode 68
-        versionName "68"
+        versionCode 69
+        versionName "69"
 
         // The name for the application
         resValue "string", "appName", twaManifest.name

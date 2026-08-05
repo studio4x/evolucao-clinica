@@ -8,6 +8,7 @@ interface NativePushBridge {
   isAvailable?: () => boolean;
   isPermissionGranted?: () => boolean;
   requestToken?: () => void;
+  refreshToken?: () => void;
   deleteToken?: () => void;
 }
 
@@ -111,7 +112,10 @@ export const PushPermissionPrompt = () => {
       },
       body: JSON.stringify({ provider: 'fcm', token })
     });
-    if (!response.ok) throw new Error('Não foi possível registrar este dispositivo para notificações.');
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.success !== true) {
+      throw new Error(payload?.error || 'Não foi possível registrar este dispositivo para notificações.');
+    }
     window.localStorage.setItem(NATIVE_PUSH_ENABLED_KEY, 'true');
   };
 
@@ -140,7 +144,18 @@ export const PushPermissionPrompt = () => {
             void registerNativeToken(token).then(resolve).catch(reject);
           };
           window.addEventListener('native-push-token', onToken);
-          nativePush.requestToken?.();
+          // O convite pode ser exibido antes de o usuário acessar a central de
+          // notificações. Nessa situação, renova o token FCM para não marcar o
+          // dispositivo como ativo com um token antigo que já não recebe push.
+          if (nativePush.refreshToken) {
+            nativePush.refreshToken();
+          } else if (nativePush.requestToken) {
+            nativePush.requestToken();
+          } else {
+            window.clearTimeout(timeout);
+            window.removeEventListener('native-push-token', onToken);
+            reject(new Error('Não foi possível preparar o dispositivo para notificações.'));
+          }
         });
       } else {
         const permission = await Notification.requestPermission();
