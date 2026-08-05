@@ -1921,9 +1921,9 @@ export default function PatientDetail() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="contents md:block md:col-span-1 md:space-y-6">
-          <div className="card p-6 order-2 md:order-none">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="contents xl:block xl:col-span-1 xl:space-y-6">
+          <div className="card p-6 order-2 xl:order-none">
             <h3 className="font-semibold text-brand-text mb-4">Prontuário</h3>
             <div className="space-y-3">
               {patient.google_doc_id ? (
@@ -1972,7 +1972,7 @@ export default function PatientDetail() {
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}
-          <div className="card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-3 md:order-none">
+          <div className="card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-3 xl:order-none">
             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/20 to-transparent pointer-events-none" />
             
             <div className="flex items-center justify-between mb-3">
@@ -2001,7 +2001,7 @@ export default function PatientDetail() {
             />
           </div>
 
-          <div className="card p-6 space-y-4 order-6 md:order-none">
+          <div className="card p-6 space-y-4 order-6 xl:order-none">
             <div className="flex items-center space-x-2 text-brand-primary">
               <Bell size={20} className="text-brand-primary" />
               <h3 className="font-semibold text-brand-text mb-0">Lembretes de Evolução</h3>
@@ -2108,9 +2108,9 @@ export default function PatientDetail() {
           </div>
         </div>
 
-        <div className="contents md:block md:col-span-2 md:space-y-6">
+        <div className="contents xl:block xl:col-span-2 xl:space-y-6">
           {/* Card de Busca Semântica (Pesquisa Inteligente) */}
-          <div className="card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-4 md:order-none">
+          <div className="card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-4 xl:order-none">
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
