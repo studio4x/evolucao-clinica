@@ -10,6 +10,7 @@ import { cert, getApps, initializeApp, type App as FirebaseAdminApp } from "fire
 import { getMessaging } from "firebase-admin/messaging";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
+import { createHash } from "crypto";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const mammoth = require("mammoth");
@@ -106,6 +107,10 @@ const TRANSCRIPTION_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const TRANSCRIPTION_MONTHLY_LIMIT_SECONDS = 20 * 60 * 60;
 const TRANSCRIPTION_USAGE_RESOURCE = "audio_transcription";
 const APP_TIMEZONE = "America/Sao_Paulo";
+const NOTIFICATION_IMAGE_BUCKET = "notifications";
+const NOTIFICATION_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const NOTIFICATION_IMAGE_MAX_WIDTH = 1600;
+const NOTIFICATION_IMAGE_MAX_HEIGHT = 900;
 const transcriptionRateLimitStore = new Map<string, number[]>();
 let hasWarnedAboutMissingUsageTrackingTable = false;
 
@@ -3868,6 +3873,105 @@ async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: 
   );
 }
 
+function isPlatformNotificationImageUrl(imageUrl: string) {
+  return imageUrl.startsWith(`${supabaseUrl}/storage/v1/object/public/${NOTIFICATION_IMAGE_BUCKET}/`);
+}
+
+/**
+ * Importa capas externas para o bucket público da plataforma e as normaliza
+ * como JPEG. Assim, o card in-app e o push nativo não dependem do servidor
+ * externo continuar disponível ou de regras de hotlink/referrer do WebView.
+ */
+async function persistNotificationImage(imageUrl?: string): Promise<string | undefined> {
+  const source = String(imageUrl || "").trim();
+  if (!source || isPlatformNotificationImageUrl(source)) return source || undefined;
+
+  let sourceUrl: URL;
+  try {
+    sourceUrl = new URL(source);
+  } catch {
+    throw new Error("A imagem de capa deve usar uma URL válida.");
+  }
+
+  if (sourceUrl.protocol !== "https:") {
+    throw new Error("A imagem de capa deve usar uma URL HTTPS segura.");
+  }
+
+  const hostname = sourceUrl.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname.endsWith(".local") || hostname === "127.0.0.1" || hostname === "::1") {
+    throw new Error("A imagem de capa não pode apontar para um endereço local.");
+  }
+
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), 12_000);
+  let response: Response;
+  try {
+    response = await fetch(sourceUrl, {
+      signal: abortController.signal,
+      redirect: "error"
+    });
+  } catch {
+    throw new Error("Não foi possível baixar a imagem de capa informada.");
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if (!response.ok) {
+    throw new Error("A imagem de capa não está disponível para download.");
+  }
+
+  const contentType = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase() || "";
+  if (!contentType.startsWith("image/")) {
+    throw new Error("A URL informada não contém uma imagem válida.");
+  }
+
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > NOTIFICATION_IMAGE_MAX_BYTES) {
+    throw new Error("A imagem de capa excede o limite de 8 MB.");
+  }
+
+  const downloaded = Buffer.from(await response.arrayBuffer());
+  if (!downloaded.length || downloaded.length > NOTIFICATION_IMAGE_MAX_BYTES) {
+    throw new Error("A imagem de capa está vazia ou excede o limite de 8 MB.");
+  }
+
+  let normalizedImage: Buffer;
+  try {
+    normalizedImage = await sharp(downloaded, { limitInputPixels: 40_000_000 })
+      .rotate()
+      .resize({
+        width: NOTIFICATION_IMAGE_MAX_WIDTH,
+        height: NOTIFICATION_IMAGE_MAX_HEIGHT,
+        fit: "inside",
+        withoutEnlargement: true
+      })
+      .flatten({ background: "#ffffff" })
+      .jpeg({ quality: 86, mozjpeg: true })
+      .toBuffer();
+  } catch {
+    throw new Error("Não foi possível preparar a imagem de capa para a notificação.");
+  }
+
+  const checksum = createHash("sha256").update(normalizedImage).digest("hex");
+  const storagePath = `notif-covers/imported/${checksum}.jpg`;
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from(NOTIFICATION_IMAGE_BUCKET)
+    .upload(storagePath, normalizedImage, {
+      contentType: "image/jpeg",
+      cacheControl: "31536000",
+      upsert: false
+    });
+
+  if (uploadError && uploadError.statusCode !== "409") {
+    console.error("[Notifications] Falha ao salvar a imagem de capa:", uploadError.message);
+    throw new Error("Não foi possível salvar a imagem de capa na plataforma.");
+  }
+
+  const { data } = supabaseAdmin.storage.from(NOTIFICATION_IMAGE_BUCKET).getPublicUrl(storagePath);
+  if (!data?.publicUrl) throw new Error("Não foi possível preparar a imagem de capa da notificação.");
+  return data.publicUrl;
+}
+
 // Helper para enviar notificação (In-App, Push, E-mail e WhatsApp)
 async function sendNotificationInternal(
   targetUserId: string,
@@ -3880,13 +3984,14 @@ async function sendNotificationInternal(
   channels: NotificationChannels = {},
   _notificationKey?: never
 ) {
+  const persistentImageUrl = await persistNotificationImage(imageUrl);
   const notificationRecord = {
     user_id: targetUserId,
     title,
     message: content, // Ajustado ao banco existente
     type,
     link,
-    image_url: imageUrl
+    image_url: persistentImageUrl
   };
 
   // A. Criar no banco (In-App)
@@ -3905,7 +4010,7 @@ async function sendNotificationInternal(
   // B. Enviar Push Notification (se houver inscrições)
   let pushSent = false;
   if (channels.push !== false) try {
-    pushSent = await sendPushNotificationInternal(targetUserId, title, content, link, imageUrl);
+    pushSent = await sendPushNotificationInternal(targetUserId, title, content, link, persistentImageUrl);
   } catch (pushGeneralError: any) {
     console.error("Erro geral no disparo de Push:", pushGeneralError.message);
   }
@@ -3946,7 +4051,7 @@ async function sendNotificationInternal(
         const theme = await getEmailTheme();
         const safeTitle = escapeHtml(title);
         const safeContent = escapeHtml(content);
-        const safeImageUrl = imageUrl ? escapeHtml(imageUrl) : "";
+        const safeImageUrl = persistentImageUrl ? escapeHtml(persistentImageUrl) : "";
         const recipientName = String(profData?.full_name || "").trim();
         const greetingText = recipientName ? `Olá, ${recipientName}!` : "Olá!";
         const greetingHtml = escapeHtml(greetingText);
