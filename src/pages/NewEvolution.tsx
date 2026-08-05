@@ -367,6 +367,20 @@ export default function NewEvolution() {
 
   useEffect(() => () => stopWaveform(), []);
 
+  // A evolução pode conter uma gravação ou edição ainda não salva. Em Android,
+  // impedir o pull-to-refresh evita que esse conteúdo seja descartado por acidente.
+  useEffect(() => {
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
+    const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
+    document.documentElement.style.overscrollBehaviorY = 'none';
+    document.body.style.overscrollBehaviorY = 'none';
+
+    return () => {
+      document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
+      document.body.style.overscrollBehaviorY = previousBodyOverscroll;
+    };
+  }, []);
+
   useEffect(() => {
     if (isRecording && !isPaused && recordingStreamRef.current) {
       startWaveform(recordingStreamRef.current);
@@ -1765,7 +1779,7 @@ export default function NewEvolution() {
 
       {/* Modal de visualização/edição */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-stone-900/60 p-4 transition-opacity sm:flex sm:items-center sm:justify-center">
+        <div className="fixed inset-0 z-[90] overflow-y-auto overscroll-y-contain bg-stone-900/60 p-4 transition-opacity sm:flex sm:items-center sm:justify-center">
           <div className="relative z-[91] mx-auto my-2 flex min-h-[70vh] max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-2xl border border-brand-border bg-white shadow-xl animate-in fade-in zoom-in-95 duration-200 sm:my-0 sm:max-h-[85vh]">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border">

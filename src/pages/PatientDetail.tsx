@@ -240,6 +240,20 @@ export default function PatientDetail() {
   const [expandedEvoIds, setExpandedEvoIds] = useState<Record<string, boolean>>({});
   const [printSignatureInfo, setPrintSignatureInfo] = useState<any>(null);
 
+  useEffect(() => {
+    if (!editingEvolutionId) return;
+
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
+    const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
+    document.documentElement.style.overscrollBehaviorY = 'none';
+    document.body.style.overscrollBehaviorY = 'none';
+
+    return () => {
+      document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
+      document.body.style.overscrollBehaviorY = previousBodyOverscroll;
+    };
+  }, [editingEvolutionId]);
+
   const requestConfirmation = (options: Omit<ConfirmationDialogState, 'resolve'>) => {
     return new Promise<boolean>((resolve) => {
       setConfirmationDialog({ ...options, resolve });
@@ -4015,7 +4029,7 @@ export default function PatientDetail() {
 
 
       {editingEvolutionId && (
-        <div className="fixed inset-0 z-[90] flex items-end bg-stone-900/60 p-0 sm:items-center sm:justify-center sm:p-4">
+        <div className="fixed inset-0 z-[90] flex items-end overscroll-y-contain bg-stone-900/60 p-0 sm:items-center sm:justify-center sm:p-4">
           <div className="flex max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[90vh] sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-brand-border px-5 py-4">
               <div className="min-w-0"><h3 className="text-lg font-bold text-brand-primary">Editar Evolução</h3><p className="truncate text-xs text-brand-text-muted">{patient?.full_name}</p></div>
