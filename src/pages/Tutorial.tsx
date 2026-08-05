@@ -211,7 +211,7 @@ export default function Tutorial() {
             <span className="ml-2 text-sm text-brand-text-muted">Carregando perguntas...</span>
           </div>
         ) : filteredQuestions.length > 0 ? (
-          <div className="space-y-3">
+          <div className={selectedCategoryId === 'all' ? 'space-y-3 xl:grid xl:grid-cols-3 xl:gap-3 xl:space-y-0' : 'space-y-3'}>
             {filteredQuestions.map((q) => {
               const isExpanded = expandedQuestionId === q.id;
               const categoryName = categories.find(c => c.id === q.category_id)?.name || '';
