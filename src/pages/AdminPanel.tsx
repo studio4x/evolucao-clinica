@@ -1260,7 +1260,8 @@ export default function AdminPanel() {
           type: notification.type,
           link: notification.link || undefined,
           imageUrl: notification.image_url || undefined,
-          source: 'manual'
+          source: 'manual-push',
+          channels: { inApp: true, push: true, email: false, whatsapp: false }
         })
       });
 
@@ -1971,8 +1972,8 @@ export default function AdminPanel() {
               type: notifType,
               link: notifLink || undefined,
               imageUrl: notifImageUrl || undefined,
-              source: 'manual',
-              channels: { inApp: true, push: true, email: true, whatsapp: false }
+              source: 'manual-push',
+              channels: { inApp: true, push: true, email: false, whatsapp: false }
           })
         });
 
@@ -2123,7 +2124,8 @@ export default function AdminPanel() {
               title: notifTitle,
               content: notifContent,
               type: 'info',
-              source: 'manual'
+              source: 'manual-email',
+              channels: { inApp: true, push: false, email: true, whatsapp: false }
             })
           });
 

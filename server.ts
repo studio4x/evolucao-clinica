@@ -1141,7 +1141,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 
 type EmailProvider = "smtp" | "brevo";
 type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend";
-type NotificationOrigin = "platform" | "manual";
+type NotificationOrigin = "platform" | "manual-push" | "manual-email";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean; whatsapp?: boolean };
 type NotificationWhatsAppResult = WhatsAppSendResult | {
   success: false;
@@ -3892,7 +3892,7 @@ async function sendNotificationInternal(
   // A. Criar no banco (In-App)
   const notification = await insertNotificationRecord(notificationRecord);
 
-  if (source === "manual") {
+  if (source === "manual-push") {
     try {
       await appendManualPushNotificationId(notification.id);
     } catch (markError) {
@@ -4008,6 +4008,9 @@ async function sendNotificationInternal(
       emailError = emailErr.message || "Erro desconhecido no envio SMTP";
       console.error("Erro ao enviar e-mail via provedor configurado:", emailErr.message);
     }
+  } else if (channels.email === false) {
+    emailError = "Envio por e-mail não solicitado para esta notificação.";
+    console.log(`[Notifications] E-mail suprimido para o usuario ${targetUserId}: canal desativado.`);
   } else {
     emailError = "Nenhum provedor de e-mail configurado no painel admin.";
     console.log(`[Notifications] Nenhum provedor configurado. Notificacao de e-mail suprimida para o usuario ${targetUserId}.`);
@@ -4095,17 +4098,23 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
   });
 }
 
-// 4. Enviar Notificação (In-App, Push e E-mail)
+// 4. Enviar Notificação (In-App, Push ou E-mail)
 app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   const { userId, title, content, type = "info", link, imageUrl } = req.body;
-  const notificationSource: NotificationOrigin = req.body.source === "platform" ? "platform" : "manual";
+  const notificationSource: NotificationOrigin = req.body.source === "platform"
+    ? "platform"
+    : req.body.source === "manual-email"
+      ? "manual-email"
+      : "manual-push";
   const requestedChannels = req.body?.channels || {};
   const channels: NotificationChannels = {
     inApp: requestedChannels.inApp !== false,
-    push: requestedChannels.push !== false,
-    // Notificações manuais do sistema sempre devem acompanhar o push por e-mail.
-    // Isso também protege clientes/PWAs antigos que ainda enviam email: false.
-    email: notificationSource === "manual" || requestedChannels.email !== false,
+    // O envio manual de notificação é in-app + push. E-mail permanece restrito
+    // à aba específica de disparo de e-mail para não duplicar o alerta.
+    push: notificationSource !== "manual-email" && requestedChannels.push !== false,
+    email: notificationSource === "manual-email" || (
+      notificationSource === "platform" && requestedChannels.email !== false
+    ),
     whatsapp: false
   };
   
