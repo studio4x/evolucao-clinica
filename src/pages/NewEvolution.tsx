@@ -372,10 +372,47 @@ export default function NewEvolution() {
   useEffect(() => {
     const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
     const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
+    let touchStartY = 0;
     document.documentElement.style.overscrollBehaviorY = 'none';
     document.body.style.overscrollBehaviorY = 'none';
 
+    const getScrollableAncestor = (target: EventTarget | null) => {
+      let element = target instanceof Element ? target : null;
+      while (element && element !== document.body) {
+        const overflowY = window.getComputedStyle(element).overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && element.scrollHeight > element.clientHeight) {
+          return element;
+        }
+        element = element.parentElement;
+      }
+      return null;
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      touchStartY = event.touches[0]?.clientY || 0;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY || 0;
+      const isPullingDown = currentY > touchStartY;
+      const pageAtTop = Math.max(window.scrollY, document.documentElement.scrollTop, document.body.scrollTop) <= 0;
+      const scrollableAncestor = getScrollableAncestor(event.target);
+      const innerContentCanScrollUp = Boolean(scrollableAncestor && scrollableAncestor.scrollTop > 0);
+
+      // Alguns Android WebViews ignoram overscroll-behavior. Cancelar o gesto no
+      // topo impede o pull-to-refresh nativo, mas libera a rolagem normal quando
+      // o usuário está dentro de um conteúdo que ainda pode subir.
+      if (isPullingDown && pageAtTop && !innerContentCanScrollUp && event.cancelable) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+
     return () => {
+      document.removeEventListener('touchstart', onTouchStart, true);
+      document.removeEventListener('touchmove', onTouchMove, true);
       document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
       document.body.style.overscrollBehaviorY = previousBodyOverscroll;
     };
