@@ -2,7 +2,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Zap, Files, ArrowLeft, KeyRound } from 'lucide-react';
+import { ShieldCheck, Mic, Lock, ArrowRight, CheckCircle2, User, KeyRound, ArrowLeft } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
@@ -20,24 +20,35 @@ export default function Login() {
   const fromPlan = searchParams.get('from_plan');
 
   const [currentSlide, setCurrentSlide] = useState(0);
+
   const slides = [
     {
-      id: 'slide-audio',
-      icon: <Zap className="w-6 h-6 text-brand-primary" />,
-      title: "Transcrições com IA",
-      description: "Grave o áudio das consultas e nossa Inteligência Artificial gera prontuários estruturados em segundos."
+      id: 'transcriptions',
+      titleHighlight: 'IA',
+      titlePre: 'Transcrições com ',
+      titlePost: '',
+      description: 'Grave suas consultas e nossa Inteligência Artificial transforma o áudio em prontuários completos em segundos.'
     },
     {
-      id: 'slide-google',
-      icon: <Files className="w-6 h-6 text-brand-primary" />,
-      title: "Google Docs Integrado",
-      description: "Organização automatizada direto na sua conta do Google Docs, acessível de qualquer dispositivo."
+      id: 'docs',
+      titleHighlight: 'Integrado',
+      titlePre: 'Google Docs ',
+      titlePost: '',
+      description: 'Organização automatizada direto na sua conta do Google Docs, acessível de qualquer dispositivo.'
     },
     {
-      id: 'slide-secure',
-      icon: <ShieldCheck className="w-6 h-6 text-brand-primary" />,
-      title: "Prontuários Seguros",
-      description: "Privacidade garantida com dados criptografados e estruturados com segurança de nível médico."
+      id: 'security',
+      titleHighlight: 'Seguros',
+      titlePre: 'Prontuários ',
+      titlePost: '',
+      description: 'Privacidade garantida com dados criptografados e estruturados com segurança de nível médico.'
+    },
+    {
+      id: 'automation',
+      titleHighlight: 'Clínica',
+      titlePre: 'Automatização ',
+      titlePost: '',
+      description: 'Ganhe tempo em cada atendimento e foque no que realmente importa: o cuidado com seu paciente.'
     }
   ];
 
@@ -109,87 +120,163 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 md:bg-slate-900/5 flex items-center justify-center p-0 md:p-4">
-      {/* Moldura de Smartphone para Desktop, Tela Cheia Imersiva no Mobile */}
-      <div className="w-full min-h-screen md:min-h-[760px] md:max-h-[820px] md:h-[90vh] md:max-w-md md:rounded-[32px] md:shadow-2xl md:border md:border-brand-border/50 bg-brand-bg flex flex-col justify-between relative overflow-hidden transition-all">
-        
-        {/* Elementos de Brilho Orgânicos (Glow Background) */}
-        <div className="absolute top-[-10%] left-[-20%] w-[80%] h-[40%] bg-brand-primary/10 rounded-full blur-[80px] pointer-events-none" />
-        <div className="absolute top-[20%] right-[-30%] w-[80%] h-[40%] bg-brand-accent/15 rounded-full blur-[100px] pointer-events-none" />
+    <div className="min-h-screen bg-[#edf4fa] md:bg-slate-900/10 flex items-center justify-center p-0 md:p-4 font-sans select-none">
+      {/* Container Principal Simulador de Celular no Desktop, Tela Cheia em Telas Móveis */}
+      <div className="w-full min-h-screen md:min-h-[780px] md:max-h-[840px] md:h-[92vh] md:max-w-[420px] md:rounded-[36px] md:shadow-2xl md:border md:border-slate-200/60 bg-[#edf4fa] flex flex-col justify-between relative overflow-hidden">
 
-        {/* Seção Superior: Logo e Carrossel */}
-        <div className="flex-1 flex flex-col items-center justify-center pt-8 pb-4 relative z-10 w-full">
-          {/* Logo */}
-          <div className="mb-6 flex justify-center">
-            {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
-              <div className="p-3 bg-white rounded-2xl shadow-lg shadow-brand-primary/5 border border-brand-primary/5">
-                <img
-                  src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
-                  alt="Evolução Clínica"
-                  className="h-14 w-auto object-contain"
-                />
+        {/* Elementos Decorativos Vetoriais no Fundo (Grid de Pontos + Nuvenzinha) */}
+        <div className="absolute top-12 left-6 grid grid-cols-4 gap-1.5 opacity-30 pointer-events-none">
+          {[...Array(12)].map((_, i) => (
+            <div key={i} className="w-1 h-1 rounded-full bg-[#0b5cad]" />
+          ))}
+        </div>
+        <div className="absolute top-16 right-6 opacity-25 pointer-events-none">
+          <svg className="w-12 h-12 text-[#0b5cad]" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z" />
+          </svg>
+        </div>
+
+        {/* Cabeçalho com Logotipo */}
+        <div className="pt-10 pb-2 flex justify-center relative z-10">
+          {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
+            <img
+              src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
+              alt="Evolução Clínica"
+              className="h-16 w-auto object-contain"
+            />
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#0b5cad] to-[#0daba4] flex items-center justify-center text-white font-bold shadow-md">
+                EC
               </div>
-            ) : (
-              <h2 className="text-2xl font-display font-extrabold text-brand-primary text-center tracking-tight">
+              <span className="text-2xl font-bold text-[#0b5cad] tracking-tight">
                 {siteConfig.pwa_app_name || "Evolução Clínica"}
-              </h2>
-            )}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Ilustração Visual do Fluxo de IA (Idêntica à Imagem de Referência) */}
+        <div className="flex-1 flex flex-col items-center justify-center px-4 relative z-10">
+          <div className="w-full flex items-center justify-center gap-2 py-4">
+            {/* Ícone de Microfone */}
+            <div className="w-14 h-14 rounded-full bg-white shadow-lg shadow-blue-500/10 border border-slate-100 flex items-center justify-center flex-shrink-0">
+              <Mic className="w-6 h-6 text-[#0b5cad]" />
+            </div>
+
+            {/* Onda Sonora de Áudio */}
+            <div className="flex items-center gap-0.5 text-[#0daba4]">
+              <span className="text-xs opacity-40">•</span>
+              <span className="w-0.5 h-3 bg-[#0daba4] rounded-full animate-pulse"></span>
+              <span className="w-0.5 h-6 bg-[#0daba4] rounded-full"></span>
+              <span className="w-0.5 h-4 bg-[#0daba4] rounded-full"></span>
+              <span className="w-0.5 h-7 bg-[#0daba4] rounded-full animate-pulse"></span>
+              <span className="w-0.5 h-3 bg-[#0daba4] rounded-full"></span>
+              <span className="text-xs font-bold text-[#0daba4] ml-0.5">+</span>
+            </div>
+
+            {/* Círculo IA */}
+            <div className="w-14 h-14 rounded-full bg-white shadow-lg shadow-blue-500/10 border-2 border-[#cbe5f2] flex items-center justify-center flex-shrink-0">
+              <span className="text-lg font-black text-[#0daba4] tracking-tight">IA</span>
+            </div>
+
+            {/* Seta de Transição */}
+            <div className="flex items-center text-[#0daba4] gap-0.5">
+              <span className="text-xs font-bold">+</span>
+              <ArrowRight className="w-4 h-4 text-[#0daba4]" />
+            </div>
+
+            {/* Cartão de Prontuário Flutuante */}
+            <div className="w-36 bg-white rounded-2xl shadow-xl shadow-blue-900/5 border border-slate-100 p-2.5 relative flex-shrink-0 text-left">
+              {/* Cabeçalho do Card */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-1.5 mb-2">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <User className="w-3 h-3" />
+                  </div>
+                  <span className="text-[11px] font-bold text-emerald-800">Consulta</span>
+                </div>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+              </div>
+
+              {/* Rótulos & Barras Skeleton */}
+              <div className="space-y-1.5 text-[9px] text-slate-500">
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold text-slate-600 w-12">Anamnese</span>
+                  <div className="h-1.5 bg-slate-100 rounded-full flex-1"></div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold text-slate-600 w-12">Conduta</span>
+                  <div className="h-1.5 bg-slate-100 rounded-full flex-1 max-w-[60%]"></div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="font-semibold text-slate-600 w-12">CID</span>
+                  <div className="h-1.5 bg-slate-100 rounded-full flex-1 max-w-[40%]"></div>
+                </div>
+              </div>
+
+              {/* Rodapé do Card com Rubrica & Badge Verde */}
+              <div className="mt-2.5 pt-1 border-t border-slate-50 flex items-center justify-between">
+                <div className="flex gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-200"></div>
+                </div>
+                <span className="text-[10px] italic font-serif text-[#0b5cad]">Der</span>
+              </div>
+
+              {/* Badge Verde Check Sobressaindo no Canto */}
+              <div className="absolute -bottom-1.5 -right-1.5 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-md">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </div>
+            </div>
           </div>
 
-          {/* Carrossel de Onboarding */}
-          <div className="w-full relative">
-            <div className="relative w-full h-[180px] flex items-center justify-center overflow-hidden">
-              {slides.map((slide, index) => {
-                const isActive = index === currentSlide;
-                return (
-                  <div
-                    key={slide.id}
-                    className={`absolute w-full px-8 text-center flex flex-col items-center transition-all duration-700 ease-in-out transform ${
-                      isActive 
-                        ? 'opacity-100 translate-x-0 scale-100' 
-                        : 'opacity-0 pointer-events-none translate-x-12 scale-95'
-                    }`}
-                  >
-                    <div className="w-12 h-12 bg-white rounded-2xl shadow-md border border-brand-primary/5 flex items-center justify-center mb-3 text-brand-primary">
-                      {slide.icon}
-                    </div>
-                    <h3 className="text-lg font-bold text-brand-text mb-1.5 tracking-tight">
-                      {slide.title}
-                    </h3>
-                    <p className="text-xs text-brand-text-muted leading-relaxed max-w-[280px]">
-                      {slide.description}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+          {/* Carrossel de Texto */}
+          <div className="mt-4 w-full px-6 text-center min-h-[100px] flex flex-col items-center justify-center">
+            {slides.map((slide, index) => {
+              if (index !== currentSlide) return null;
+              return (
+                <div key={slide.id} className="animate-fadeIn transition-all duration-300">
+                  <h3 className="text-xl font-bold text-[#0b5cad] mb-2 tracking-tight">
+                    {slide.titlePre}
+                    <span className="text-[#0daba4]">{slide.titleHighlight}</span>
+                    {slide.titlePost}
+                  </h3>
+                  <p className="text-xs text-slate-600 leading-relaxed max-w-[300px] mx-auto font-normal">
+                    {slide.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
 
-            {/* Dots Indicadores */}
-            <div className="flex justify-center space-x-1.5 mt-2">
-              {slides.map((_, index) => (
-                <button
-                  key={index}
-                  onClick={() => setCurrentSlide(index)}
-                  className={`h-1.5 rounded-full transition-all duration-300 ${
-                    index === currentSlide 
-                      ? 'w-6 bg-brand-primary' 
-                      : 'w-1.5 bg-brand-primary/20'
-                  }`}
-                  aria-label={`Ir para slide ${index + 1}`}
-                />
-              ))}
-            </div>
+          {/* Indicadores de Progresso (4 Dots) */}
+          <div className="flex justify-center items-center gap-1.5 mt-4">
+            {slides.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => setCurrentSlide(index)}
+                className={`transition-all duration-300 ${
+                  index === currentSlide
+                    ? 'w-6 h-1.5 bg-[#0b5cad] rounded-full'
+                    : 'w-1.5 h-1.5 bg-[#b2d1e8] rounded-full hover:bg-[#0b5cad]/50'
+                }`}
+                aria-label={`Slide ${index + 1}`}
+              />
+            ))}
           </div>
         </div>
 
-        {/* Seção Inferior: Gaveta (Bottom Sheet) de Ação */}
-        <div className="w-full bg-white rounded-t-[32px] shadow-[0_-8px_30px_rgb(0,0,0,0.04)] border-t border-brand-border/40 p-6 md:p-8 flex flex-col items-center z-10">
-          <div className="w-12 h-1 bg-slate-200 rounded-full mb-6 pointer-events-none md:hidden" />
-          
+        {/* Gaveta Inferior (Bottom Sheet Branco) */}
+        <div className="w-full bg-white rounded-t-[36px] shadow-[0_-10px_30px_rgba(0,0,0,0.03)] border-t border-slate-100 p-6 flex flex-col items-center z-20">
+          {/* Puxador da Gaveta */}
+          <div className="w-12 h-1 bg-slate-300/80 rounded-full mb-5" />
+
+          {/* Botão Acessar com Google */}
           <button
             onClick={() => setIsSecurityModalOpen(true)}
             disabled={loading}
-            className="btn-primary w-full py-4 text-base font-semibold tracking-wide shadow-lg shadow-brand-primary/10 hover:shadow-xl hover:shadow-brand-primary/20 transform transition-all active:translate-y-0.5 flex items-center justify-center space-x-3 rounded-2xl"
+            className="w-full bg-[#0b5cad] hover:bg-[#094c8f] active:bg-[#073d74] text-white font-semibold text-base py-3.5 px-4 rounded-2xl shadow-md shadow-blue-900/10 flex items-center justify-center gap-3 transition-all cursor-pointer"
           >
             {loading ? (
               <span className="flex items-center space-x-2">
@@ -201,7 +288,7 @@ export default function Login() {
               </span>
             ) : (
               <>
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg">
                   <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                   <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                   <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
@@ -212,37 +299,39 @@ export default function Login() {
             )}
           </button>
 
-          <Link
-            to="/admin"
-            className="mt-3 w-full py-3 px-4 text-xs font-semibold text-brand-text-muted hover:text-brand-primary bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-2xl transition-all flex items-center justify-center gap-2 shadow-sm"
-          >
-            <KeyRound size={14} className="opacity-70" />
-            <span>Entrar com e-mail e senha</span>
-          </Link>
-          
-          <p className="mt-4 text-center text-[10px] text-brand-text-muted leading-relaxed max-w-[320px]">
-            No primeiro acesso pedimos só o básico para entrar. As permissões do Drive, prontuário e agenda são solicitadas depois, apenas quando você chegar em cada etapa.
-          </p>
-
-          {/* Botão Voltar para a Home */}
-          <div className="mt-5 w-full flex justify-center">
-            <Link 
-              to="/" 
-              className="flex items-center gap-2 px-4 py-2 bg-slate-50 hover:bg-slate-100 text-brand-text-muted hover:text-brand-primary rounded-xl border border-brand-border shadow-sm transition-all text-xs font-semibold"
-            >
-              <ArrowLeft size={14} />
-              Voltar para o site
-            </Link>
+          {/* Card de Esclarecimento de Permissões */}
+          <div className="w-full bg-[#f4f8fb] border border-[#e1edf5] rounded-2xl p-3.5 flex items-start gap-3 mt-3.5">
+            <ShieldCheck className="w-6 h-6 text-[#0daba4] flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-slate-600 leading-relaxed font-normal text-left">
+              No primeiro acesso pedimos só o básico para entrar. As permissões do Drive, prontuário e agenda são solicitadas depois, apenas quando você chegar em cada etapa.
+            </p>
           </div>
 
-          {/* Versão e Links de Rodapé */}
-          <div className="mt-6 w-full text-center flex flex-col items-center gap-2 border-t border-slate-100 pt-5">
-            <AppVersion />
-            <div className="flex gap-3 text-[10px] font-medium text-brand-text-muted">
-              <Link to="/privacy" className="hover:text-brand-primary transition-colors">Política de Privacidade</Link>
-              <span className="text-slate-200">|</span>
-              <Link to="/terms" className="hover:text-brand-primary transition-colors">Termos de Serviço</Link>
+          {/* Rodapé de Segurança e Termos */}
+          <div className="mt-4 flex flex-col items-center text-center gap-1.5 w-full">
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+              <Lock className="w-3 h-3 text-slate-400" />
+              <span>Seus dados estão protegidos com segurança de ponta a ponta.</span>
             </div>
+
+            <div className="flex items-center justify-center gap-3 text-xs font-semibold text-[#0b5cad] mt-1">
+              <Link to="/privacy" className="hover:underline">Política de Privacidade</Link>
+              <span className="text-slate-300 font-normal">|</span>
+              <Link to="/terms" className="hover:underline">Termos de Serviço</Link>
+            </div>
+          </div>
+
+          {/* Links Secundários e Versão (Acesso Admin / Voltar) */}
+          <div className="mt-4 pt-3 border-t border-slate-100 w-full flex items-center justify-between px-1 text-[11px] text-slate-400">
+            <Link to="/admin" className="flex items-center gap-1 hover:text-[#0b5cad] transition-colors">
+              <KeyRound size={12} />
+              <span>Login Admin</span>
+            </Link>
+            <AppVersion />
+            <Link to="/" className="flex items-center gap-1 hover:text-[#0b5cad] transition-colors">
+              <ArrowLeft size={12} />
+              <span>Site</span>
+            </Link>
           </div>
         </div>
 
