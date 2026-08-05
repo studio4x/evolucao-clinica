@@ -356,13 +356,13 @@ export default function Layout() {
                 const text = "Olá! Estou usando o aplicativo Evolução Clínica para gerenciar meus prontuários com IA e achei fantástico. Facilita muito o dia a dia! Dá uma olhada: " + window.location.origin;
                 window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
               }}
-              title={isCollapsed ? "Compartilhar App" : undefined}
+              title={isCollapsed ? "Indique o App" : undefined}
               className={`flex items-center rounded-xl text-brand-primary hover:bg-brand-primary/10 hover:text-brand-primary-hover transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer relative group ${
                 isCollapsed ? 'justify-center p-2.5 w-full' : 'space-x-3 px-4 py-2.5 w-full'
               }`}
             >
               <Share2 size={20} className="flex-shrink-0" />
-              {!isCollapsed && <span className="font-medium">Compartilhar App</span>}
+              {!isCollapsed && <span className="font-medium">Indique o App</span>}
             </button>
             {!isCollapsed && (
               <span className="text-[10px] text-brand-text-muted pl-12 block -mt-1 mb-2">
@@ -499,7 +499,7 @@ export default function Layout() {
               className="flex items-center space-x-3 px-4 py-2.5 w-full rounded-xl text-brand-primary hover:bg-brand-bg transition-all duration-200 cursor-pointer animate-none"
             >
               <Share2 size={20} className="flex-shrink-0" />
-              <span className="font-medium text-sm">Compartilhar App</span>
+              <span className="font-medium text-sm">Indique o App</span>
             </button>
             <button
               onClick={handleLogout}
