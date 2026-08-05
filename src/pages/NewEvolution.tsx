@@ -1575,7 +1575,7 @@ export default function NewEvolution() {
                 <span>Escolher Arquivos</span>
                 <input
                   type="file"
-                  accept="audio/*"
+                  accept="audio/*,audio/ogg,application/ogg,.ogg,.oga,.opus,.mp3,.m4a,.wav,.webm"
                   multiple
                   className="hidden"
                   onChange={handleFileUpload}

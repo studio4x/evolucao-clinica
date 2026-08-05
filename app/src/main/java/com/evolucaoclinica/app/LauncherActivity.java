@@ -72,6 +72,13 @@ public class LauncherActivity extends ComponentActivity {
     private static final String LOG_TAG = "EvolucaoAudio";
     private static final int REQUEST_PERMISSIONS = 1001;
     private static final int REQUEST_FILE_CHOOSER = 1002;
+    private static final String[] AUDIO_FILE_CHOOSER_MIME_TYPES = {
+            "audio/*",
+            "audio/ogg",
+            "audio/x-ogg",
+            "application/ogg",
+            "application/octet-stream"
+    };
     private static final String DOWNLOAD_NOTIFICATION_CHANNEL_ID = "file_downloads";
     private static final String APP_URL = "https://www.evolucaoclinica.app.br/login?utm_source=pwa";
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
@@ -858,7 +865,14 @@ public class LauncherActivity extends ComponentActivity {
                     }
                 }
 
-                if (acceptedMimeTypes.isEmpty()) {
+                if (acceptsAudioFiles(requestedTypes)) {
+                    // Alguns gerenciadores Android registram .ogg como
+                    // application/ogg ou application/octet-stream, e não como
+                    // audio/ogg. O filtro explícito impede que esses arquivos
+                    // desapareçam no seletor do tablet/celular.
+                    intent.setType("*/*");
+                    intent.putExtra(Intent.EXTRA_MIME_TYPES, AUDIO_FILE_CHOOSER_MIME_TYPES);
+                } else if (acceptedMimeTypes.isEmpty()) {
                     // Campos sem filtro, como o anexo de suporte, devem permitir qualquer arquivo.
                     intent.setType("*/*");
                 } else if (acceptedMimeTypes.size() == 1) {
@@ -883,6 +897,23 @@ public class LauncherActivity extends ComponentActivity {
                 return true;
             }
         });
+    }
+
+    private boolean acceptsAudioFiles(String[] requestedTypes) {
+        if (requestedTypes == null) return false;
+        for (String requestedType : requestedTypes) {
+            if (requestedType == null) continue;
+            String normalized = requestedType.trim().toLowerCase(java.util.Locale.ROOT);
+            if (normalized.startsWith("audio/")
+                    || normalized.equals("application/ogg")
+                    || normalized.equals("application/octet-stream")
+                    || normalized.endsWith(".ogg")
+                    || normalized.endsWith(".oga")
+                    || normalized.endsWith(".opus")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void refreshWebAppCacheIfNeeded(WebView webView, String url) {
