@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, Star, Send, CheckCircle2, ShieldAlert, Lightbulb, ArrowLeft, Lock } from 'lucide-react';
+import { MessageSquare, Star, Send, CheckCircle2, ShieldAlert, Lightbulb, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
@@ -88,22 +88,11 @@ export default function Feedback() {
 
   return (
     <div className="w-full space-y-6 pb-16">
-      {/* Botão Voltar & Cabeçalho */}
-      <div className="flex flex-col space-y-4">
-        <button
-          onClick={() => navigate('/painel/dashboard')}
-          className="inline-flex items-center text-brand-text-muted hover:text-brand-primary text-xs font-semibold gap-1.5 transition-colors self-start cursor-pointer"
-        >
-          <ArrowLeft size={14} />
-          Voltar para o Painel
-        </button>
-
-        <PanelPageHeader
-          icon={Lightbulb}
-          title="Sugestões & Avaliações"
-          description="Sua opinião é fundamental para a evolução do aplicativo. Compartilhe sugestões, ideias de novas funções ou relate problemas."
-        />
-      </div>
+      <PanelPageHeader
+        icon={Lightbulb}
+        title="Sugestões & Avaliações"
+        description="Sua opinião é fundamental para a evolução do aplicativo. Compartilhe sugestões, ideias de novas funções ou relate problemas."
+      />
 
       {success ? (
         /* Tela de Sucesso */
