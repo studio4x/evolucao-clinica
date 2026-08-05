@@ -18,6 +18,7 @@ import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
 import { getAudioDurationFromBlob } from '../utils/audioDuration';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { RichTextEditor } from '../components/common/RichTextEditor';
 
 type AudioEvolutionItem = {
   id: string;
@@ -1815,19 +1816,14 @@ export default function NewEvolution() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <label className="block text-sm font-medium text-brand-text">
-                    Texto Completo do Prontuário:
-                  </label>
-                  <textarea
+                  <RichTextEditor
                     value={modalText}
-                    onChange={(e) => setModalText(e.target.value)}
-                    rows={12}
-                    className="min-h-[40vh] w-full input-field resize-y rounded-xl border border-brand-border p-3 font-mono text-sm leading-relaxed outline-none focus:ring-1 focus:ring-brand-primary"
-                    placeholder="Conteúdo do prontuário..."
+                    onChange={setModalText}
+                    label="Texto Completo do Prontuário"
                     disabled={modalSaving}
                   />
                   <p className="text-[11px] text-brand-text-muted">
-                    Nota: Ao salvar, todo o conteúdo exibido acima substituirá o texto atual do documento no Google Docs.
+                    Nota: Ao salvar, o conteúdo e suas formatações serão reproduzidos no Google Docs.
                   </p>
                 </div>
               )}

@@ -1,4 +1,22 @@
+import { markdownToGoogleDocsText, textRunToMarkdown, type RichTextStyleRange } from '../utils/richText';
+
 const GOOGLE_API_MAX_ATTEMPTS = 3;
+const EVOLUTION_DIVIDER = "────────────────────────────────────────────────────────";
+
+const buildTextStyleRequests = (styles: RichTextStyleRange[], baseIndex: number) => styles.map((style) => {
+  const textStyle: Record<string, boolean> = {};
+  const fields: string[] = [];
+  if (style.bold) { textStyle.bold = true; fields.push('bold'); }
+  if (style.italic) { textStyle.italic = true; fields.push('italic'); }
+  if (style.underline) { textStyle.underline = true; fields.push('underline'); }
+  return {
+    updateTextStyle: {
+      range: { startIndex: baseIndex + style.start, endIndex: baseIndex + style.end },
+      textStyle,
+      fields: fields.join(','),
+    }
+  };
+});
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -66,10 +84,11 @@ export async function appendToGoogleDoc(
   
   const uniqueId = options?.evolutionId || 'N/A';
   
-  const divider = "────────────────────────────────────────────────────────";
-  const footer = `${divider}\n🔒 REGISTRO DE INSERÇÃO SISTÊMICA\n• Aplicativo: Evolução Clínica\n• Inserido em: ${insertionDate} às ${insertionTime}\n• Chave de autenticidade: ${uniqueId}\n${divider}`;
+  const footer = `${EVOLUTION_DIVIDER}\n🔒 REGISTRO DE INSERÇÃO SISTÊMICA\n• Aplicativo: Evolução Clínica\n• Inserido em: ${insertionDate} às ${insertionTime}\n• Chave de autenticidade: ${uniqueId}\n${EVOLUTION_DIVIDER}`;
   
-  const textToAppend = `${header}\n\nEvolução:\n${transcription}\n\n${footer}\n\n\n`;
+  const prefix = `${header}\n\nEvolução:\n`;
+  const formattedEvolution = markdownToGoogleDocsText(transcription);
+  const textToAppend = `${prefix}${formattedEvolution.text}\n\n${footer}\n\n\n`;
 
   const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
   
@@ -87,6 +106,7 @@ export async function appendToGoogleDoc(
             text: textToAppend,
           },
         },
+        ...buildTextStyleRequests(formattedEvolution.styles, 1 + prefix.length),
       ],
     })
   }, 'Doc append');
@@ -231,7 +251,7 @@ export async function getGoogleDocContent(googleAccessToken: string, googleDocId
       if (element.paragraph) {
         element.paragraph.elements.forEach((el: any) => {
           if (el.textRun && el.textRun.content) {
-            text += el.textRun.content;
+            text += textRunToMarkdown(el.textRun.content, el.textRun.textStyle);
           }
         });
       } else if (element.table) {
@@ -242,7 +262,7 @@ export async function getGoogleDocContent(googleAccessToken: string, googleDocId
                 if (cellElement.paragraph) {
                   cellElement.paragraph.elements.forEach((el: any) => {
                     if (el.textRun && el.textRun.content) {
-                      text += el.textRun.content;
+                        text += textRunToMarkdown(el.textRun.content, el.textRun.textStyle);
                     }
                   });
                 }
@@ -275,6 +295,7 @@ export async function updateGoogleDocContent(
   const lastElement = content[content.length - 1];
   const endIndex = lastElement.endIndex;
 
+  const formattedText = markdownToGoogleDocsText(newText);
   const requests: any[] = [];
 
   // Apaga todo o conteúdo existente entre o índice 1 e o final (menos o \n terminal obrigatório)
@@ -293,9 +314,10 @@ export async function updateGoogleDocContent(
   requests.push({
     insertText: {
       location: { index: 1 },
-      text: newText
+      text: formattedText.text
     }
   });
+  requests.push(...buildTextStyleRequests(formattedText.styles, 1));
 
   const updateUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
   const updateResponse = await googleApiFetch(updateUrl, {
@@ -308,6 +330,51 @@ export async function updateGoogleDocContent(
   }, 'Doc update');
 
   return await updateResponse.json();
+}
+
+export async function replaceEvolutionInGoogleDoc(
+  googleAccessToken: string,
+  googleDocId: string,
+  evolutionId: string,
+  newText: string
+) {
+  const getUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}`;
+  const response = await googleApiFetch(getUrl, { method: 'GET', headers: { Authorization: `Bearer ${googleAccessToken}` } }, 'Doc get for evolution replacement');
+  const doc = await response.json();
+  const runs: Array<{ text: string; startIndex: number }> = [];
+  for (const element of doc.body?.content || []) {
+    for (const part of element.paragraph?.elements || []) {
+      if (part.textRun?.content) runs.push({ text: part.textRun.content, startIndex: part.startIndex });
+    }
+  }
+  const documentText = runs.map((run) => run.text).join('');
+  const markerIndex = documentText.indexOf(`Chave de autenticidade: ${evolutionId}`);
+  if (markerIndex < 0) throw new Error('Não foi possível localizar esta evolução no Google Docs. O texto foi salvo apenas na plataforma.');
+  const label = 'Evolução:\n';
+  const textStart = documentText.lastIndexOf(label, markerIndex) + label.length;
+  const footerStart = documentText.lastIndexOf(EVOLUTION_DIVIDER, markerIndex);
+  const textEnd = documentText.slice(0, footerStart).endsWith('\n\n') ? footerStart - 2 : footerStart;
+  const indexAt = (offset: number) => {
+    let cursor = 0;
+    for (const run of runs) {
+      if (offset >= cursor && offset <= cursor + run.text.length) return run.startIndex + offset - cursor;
+      cursor += run.text.length;
+    }
+    throw new Error('Não foi possível calcular a posição da evolução no Google Docs.');
+  };
+  const startIndex = indexAt(textStart);
+  const endIndex = indexAt(textEnd);
+  const formattedText = markdownToGoogleDocsText(newText);
+  const requests: any[] = [
+    { deleteContentRange: { range: { startIndex, endIndex } } },
+    { insertText: { location: { index: startIndex }, text: formattedText.text } },
+    ...buildTextStyleRequests(formattedText.styles, startIndex),
+  ];
+  const updateUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
+  const updateResponse = await googleApiFetch(updateUrl, {
+    method: 'POST', headers: { Authorization: `Bearer ${googleAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests })
+  }, 'Evolution replacement');
+  return updateResponse.json();
 }
 
 export async function getFolderHierarchy(
