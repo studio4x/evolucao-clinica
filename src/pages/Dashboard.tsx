@@ -537,11 +537,11 @@ export default function Dashboard() {
       )}
 
       {/* Main Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         <Link to="/painel/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <div className="bg-blue-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
                 <Users size={24} />
               </div>
@@ -552,7 +552,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-5xl font-display font-bold text-brand-text/20 group-hover:text-blue-500/40 transition-colors">{stats.totalPatients}</p>
+              <p className="text-4xl xl:text-5xl font-display font-bold text-brand-text/20 group-hover:text-blue-500/40 transition-colors shrink-0 tabular-nums">{stats.totalPatients}</p>
             </div>
           </div>
         </Link>
@@ -560,7 +560,7 @@ export default function Dashboard() {
         <Link to="/painel/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-brand-primary/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <div className="bg-brand-primary w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
                 <FileAudio size={24} />
               </div>
@@ -571,7 +571,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-5xl font-display font-bold text-brand-text/20 group-hover:text-brand-primary/40 transition-colors">{stats.recentEvolutions}</p>
+              <p className="text-4xl xl:text-5xl font-display font-bold text-brand-text/20 group-hover:text-brand-primary/40 transition-colors shrink-0 tabular-nums">{stats.recentEvolutions}</p>
             </div>
           </div>
         </Link>
@@ -579,7 +579,7 @@ export default function Dashboard() {
         <Link to="/painel/history" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col bg-white">
           <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
-            <div className="space-y-1">
+            <div className="space-y-1 min-w-0">
               <div className="bg-purple-500 w-12 h-12 rounded-2xl flex items-center justify-center text-white mb-4 shadow-lg group-hover:scale-110 transition-transform">
                 <Clock size={24} />
               </div>
@@ -590,7 +590,7 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-5xl font-display font-bold text-brand-text/20 group-hover:text-purple-500/40 transition-colors">
+              <p className="text-4xl xl:text-5xl font-display font-bold text-brand-text/20 group-hover:text-purple-500/40 transition-colors shrink-0 tabular-nums">
                 {stats.totalMinutes.toFixed(1)}
               </p>
             </div>

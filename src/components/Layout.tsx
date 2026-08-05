@@ -213,7 +213,7 @@ export default function Layout() {
       {/* Sidebar */}
       <div className={`
         hidden md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
-        sticky top-0 z-40 h-screen shadow-sm
+        z-40 self-stretch shadow-sm
         transition-all duration-300 md:relative overflow-y-auto md:overflow-y-visible
         ${isCollapsed ? 'w-20' : 'w-64'}
       `}>
