@@ -109,8 +109,8 @@ const TRANSCRIPTION_USAGE_RESOURCE = "audio_transcription";
 const APP_TIMEZONE = "America/Sao_Paulo";
 const NOTIFICATION_IMAGE_BUCKET = "notifications";
 const NOTIFICATION_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
-const NOTIFICATION_IMAGE_MAX_WIDTH = 1600;
-const NOTIFICATION_IMAGE_MAX_HEIGHT = 900;
+const NOTIFICATION_IMAGE_MAX_WIDTH = 1200;
+const NOTIFICATION_IMAGE_MAX_HEIGHT = 675;
 const transcriptionRateLimitStore = new Map<string, number[]>();
 let hasWarnedAboutMissingUsageTrackingTable = false;
 
@@ -3873,18 +3873,19 @@ async function sendPushSubscription(sub: { id?: string; endpoint: string; keys: 
   );
 }
 
-function isPlatformNotificationImageUrl(imageUrl: string) {
-  return imageUrl.startsWith(`${supabaseUrl}/storage/v1/object/public/${NOTIFICATION_IMAGE_BUCKET}/`);
+function isOptimizedPlatformNotificationImageUrl(imageUrl: string) {
+  const prefix = `${supabaseUrl}/storage/v1/object/public/${NOTIFICATION_IMAGE_BUCKET}/notif-covers/imported/`;
+  return imageUrl.startsWith(prefix) && imageUrl.split("?")[0].endsWith(".webp");
 }
 
 /**
- * Importa capas externas para o bucket público da plataforma e as normaliza
- * como JPEG. Assim, o card in-app e o push nativo não dependem do servidor
+ * Importa capas para o bucket público da plataforma e as normaliza
+ * como WebP leve. Assim, o card in-app e o push nativo não dependem do servidor
  * externo continuar disponível ou de regras de hotlink/referrer do WebView.
  */
 async function persistNotificationImage(imageUrl?: string): Promise<string | undefined> {
   const source = String(imageUrl || "").trim();
-  if (!source || isPlatformNotificationImageUrl(source)) return source || undefined;
+  if (!source || isOptimizedPlatformNotificationImageUrl(source)) return source || undefined;
 
   let sourceUrl: URL;
   try {
@@ -3946,18 +3947,18 @@ async function persistNotificationImage(imageUrl?: string): Promise<string | und
         withoutEnlargement: true
       })
       .flatten({ background: "#ffffff" })
-      .jpeg({ quality: 86, mozjpeg: true })
+      .webp({ quality: 76, effort: 4, smartSubsample: true })
       .toBuffer();
   } catch {
     throw new Error("Não foi possível preparar a imagem de capa para a notificação.");
   }
 
   const checksum = createHash("sha256").update(normalizedImage).digest("hex");
-  const storagePath = `notif-covers/imported/${checksum}.jpg`;
+  const storagePath = `notif-covers/imported/${checksum}.webp`;
   const { error: uploadError } = await supabaseAdmin.storage
     .from(NOTIFICATION_IMAGE_BUCKET)
     .upload(storagePath, normalizedImage, {
-      contentType: "image/jpeg",
+      contentType: "image/webp",
       cacheControl: "31536000",
       upsert: false
     });
