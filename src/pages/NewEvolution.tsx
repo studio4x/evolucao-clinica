@@ -93,6 +93,16 @@ const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
       setPlaying(true);
     } catch (error) {
       try {
+        // No WebView, uma rejeição tardia de play pode ocorrer embora o player
+        // nativo tenha chegado a iniciar. Interrompemos-o antes do fallback para
+        // que nunca existam duas fontes tocando o mesmo áudio.
+        audio.pause();
+        try {
+          audio.currentTime = 0;
+        } catch {
+          // Alguns WebViews não permitem reposicionar um Blob ainda sem metadados.
+        }
+
         const AudioContextConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
         if (!AudioContextConstructor) throw error;
         const context = fallbackContextRef.current || new AudioContextConstructor();
@@ -829,11 +839,13 @@ export default function NewEvolution() {
   const startRecording = async () => {
     try {
       isDiscardingRef.current = false;
+      const isAndroidDevice = /Android/i.test(navigator.userAgent);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          // O ganho é controlado de forma estável pela cadeia Web Audio abaixo.
-          // Evita que o AGC do tablet amplifique ruído entre as falas.
-          autoGainControl: false,
+          // Em Android, usamos o processamento nativo do dispositivo. Ele evita
+          // a reamostragem da cadeia Web Audio que pode introduzir chiados em
+          // alguns WebViews, preservando volume, supressão de ruído e anti-eco.
+          autoGainControl: isAndroidDevice,
           echoCancellation: true,
           noiseSuppression: true,
         },
@@ -846,10 +858,26 @@ export default function NewEvolution() {
         throw new Error('Este dispositivo não oferece suporte à gravação de áudio.');
       }
       const mimeType = getSupportedRecordingMimeType();
-      const recordingStream = await createProcessedRecordingStream(stream);
-      const mediaRecorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
+      const recordingStream = isAndroidDevice ? stream : await createProcessedRecordingStream(stream);
+      const recordingOptions: MediaRecorderOptions = {
+        audioBitsPerSecond: 128_000,
+        ...(mimeType ? { mimeType } : {}),
+      };
+      let mediaRecorder: MediaRecorder;
+
+      try {
+        mediaRecorder = new MediaRecorder(recordingStream, recordingOptions);
+      } catch (error) {
+        console.warn('[Audio] Taxa de áudio solicitada não foi aceita; usando configuração compatível.', error);
+        mediaRecorder = mimeType ? new MediaRecorder(recordingStream, { mimeType }) : new MediaRecorder(recordingStream);
+      }
       recordingStreamRef.current = recordingStream;
-      console.info('[Audio] Gravador iniciado', { requestedMimeType: mimeType || 'padrão', mimeType: mediaRecorder.mimeType });
+      console.info('[Audio] Gravador iniciado', {
+        requestedMimeType: mimeType || 'padrão',
+        mimeType: mediaRecorder.mimeType,
+        audioBitsPerSecond: mediaRecorder.audioBitsPerSecond,
+        processing: isAndroidDevice ? 'nativo-android' : 'web-audio',
+      });
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
       recordingTimeRef.current = 0;
