@@ -4,7 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, HelpCircle, Play, Pause } from 'lucide-react';
-import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
+import { appendToGoogleDoc, replaceEvolutionInGoogleDoc } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
@@ -19,6 +19,7 @@ import { getAudioDurationFromBlob } from '../utils/audioDuration';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor } from '../components/common/RichTextEditor';
+import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 
 type AudioEvolutionItem = {
   id: string;
@@ -260,11 +261,14 @@ export default function NewEvolution() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
 
-  // Estados para visualização/edição do prontuário no modal
+  // Estados para edição da evolução recém-processada no modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalText, setModalText] = useState('');
+  const [modalEvolutionId, setModalEvolutionId] = useState<string | null>(null);
+  const [modalTemplateId, setModalTemplateId] = useState('');
   const [modalLoading, setModalLoading] = useState(false);
   const [modalSaving, setModalSaving] = useState(false);
+  const [modalConverting, setModalConverting] = useState(false);
   const [modalError, setModalError] = useState('');
 
   // Recuperação de rascunho interrompido
@@ -776,48 +780,28 @@ export default function NewEvolution() {
     setIsModalOpen(true);
     setModalError('');
 
-    if (!patient) {
-      setModalError('O paciente ainda não foi carregado. Tente novamente em instantes.');
-      return;
-    }
-
-    if (!patient.google_doc_id) {
-      setModalError('Este paciente não possui um prontuário Google Docs vinculado.');
-      return;
-    }
-
-    if (!hasClinicalAccess || !googleAccessToken) {
-      setModalError('Sua conexão com o Google expirou ou não possui as permissões clínicas necessárias. Renove a autenticação para editar a transcrição.');
-      return;
-    }
-
-    setModalLoading(true);
-    try {
-      const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
-      setModalText(content);
-    } catch (err: any) {
-      console.error("Erro ao carregar prontuário:", err);
-      let msg = err.message || "Erro desconhecido ao carregar prontuário.";
-      if (msg.includes("INSUFFICIENT_SCOPES")) {
-        msg = "Sua conta Google está conectada, mas ainda não liberou as permissões clínicas completas. Renove a autenticação para aprovar o acesso ao Google Drive e Docs.";
-      } else if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
-        msg = "Sua sessão do Google expirou. Feche o modal e renove a autenticação.";
-        setGoogleAccessToken(null);
-      }
-      setModalError(msg);
-    } finally {
-      setModalLoading(false);
+    if (!modalEvolutionId || !modalText.trim()) {
+      setModalError('A evolução recém-processada não está disponível para edição. Volte ao paciente e abra a evolução desejada.');
     }
   };
 
   const handleSaveModalText = async () => {
-    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
+    if (!patient || !patient.google_doc_id || !modalEvolutionId || !hasClinicalAccess || !googleAccessToken) {
+      setModalError('Renove a conexão com o Google para salvar esta evolução de forma sincronizada.');
+      return;
+    }
     setModalSaving(true);
     setModalError('');
     try {
-      await updateGoogleDocContent(googleAccessToken, patient.google_doc_id, modalText);
-      await showAlert("Texto do prontuário atualizado com sucesso no Google Docs!", {
-        title: "Prontuário Atualizado",
+      const { error } = await supabase.from('evolutions').update({
+        transcription_text: modalText,
+        template_id: modalTemplateId || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', modalEvolutionId);
+      if (error) throw error;
+      await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, modalEvolutionId, modalText);
+      await showAlert("Evolução atualizada com sucesso na plataforma e no Google Docs!", {
+        title: "Evolução Atualizada",
         variant: "success",
         icon: "success"
       });
@@ -834,6 +818,20 @@ export default function NewEvolution() {
       setModalError(msg);
     } finally {
       setModalSaving(false);
+    }
+  };
+
+  const handleConvertModalEvolution = async () => {
+    if (!modalText.trim()) return;
+    setModalConverting(true);
+    setModalError('');
+    try {
+      const converted = await convertEvolutionToTemplate(modalText, modalTemplateId || null);
+      setModalText(converted);
+    } catch (err: any) {
+      setModalError(err.message || 'Não foi possível converter a evolução para o modelo escolhido.');
+    } finally {
+      setModalConverting(false);
     }
   };
 
@@ -1200,6 +1198,9 @@ export default function NewEvolution() {
         .eq('id', evolutionId);
       if (updateError) throw updateError;
 
+      setModalEvolutionId(evolutionId);
+      setModalText(transcription);
+      setModalTemplateId(selectedTemplateId);
       setStatus('success');
       setProcessingMessage('');
 
@@ -1769,9 +1770,7 @@ export default function NewEvolution() {
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border">
               <div>
-                <h3 className="text-lg font-bold font-display text-brand-primary">
-                  Documento de Evolução (Google Docs)
-                </h3>
+                <h3 className="text-lg font-bold font-display text-brand-primary">Editar Evolução Processada</h3>
                 <p className="text-xs text-brand-text-muted mt-0.5">
                   {patient?.full_name}
                 </p>
@@ -1790,7 +1789,7 @@ export default function NewEvolution() {
               {modalLoading ? (
                 <div className="flex flex-col items-center justify-center py-12 space-y-3">
                   <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
-                  <p className="text-sm font-medium text-brand-primary">Carregando prontuário do Google Docs...</p>
+                  <p className="text-sm font-medium text-brand-primary">Carregando evolução...</p>
                 </div>
               ) : modalError ? (
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-center space-y-3">
@@ -1816,14 +1815,38 @@ export default function NewEvolution() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
+                    <label className="mb-1 block text-xs font-semibold text-brand-text">Converter para outro modelo</label>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <select
+                        value={modalTemplateId}
+                        onChange={(event) => setModalTemplateId(event.target.value)}
+                        disabled={modalSaving || modalConverting}
+                        className="input-field min-w-0 flex-1 py-2 text-sm"
+                      >
+                        <option value="">Sem template (narrativa livre)</option>
+                        {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => void handleConvertModalEvolution()}
+                        disabled={modalSaving || modalConverting}
+                        className="btn-outline shrink-0 border-brand-primary/30 text-brand-primary disabled:opacity-50"
+                      >
+                        {modalConverting ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                        <span>{modalConverting ? 'Convertendo...' : 'Converter'}</span>
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-brand-text-muted">Converte a evolução atual sem nova gravação ou processamento do áudio.</p>
+                  </div>
                   <RichTextEditor
                     value={modalText}
                     onChange={setModalText}
-                    label="Texto Completo do Prontuário"
-                    disabled={modalSaving}
+                    label="Conteúdo da evolução"
+                    disabled={modalSaving || modalConverting}
                   />
                   <p className="text-[11px] text-brand-text-muted">
-                    Nota: Ao salvar, o conteúdo e suas formatações serão reproduzidos no Google Docs.
+                    Nota: ao salvar, somente esta evolução e suas formatações serão atualizadas no Google Docs.
                   </p>
                 </div>
               )}
@@ -1835,19 +1858,19 @@ export default function NewEvolution() {
                 <button
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 bg-white border border-brand-border rounded-xl text-sm font-medium text-brand-text hover:bg-stone-100 transition-colors"
-                  disabled={modalSaving}
+                  disabled={modalSaving || modalConverting}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveModalText}
                   className="flex items-center space-x-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-50 text-white rounded-xl text-sm font-medium transition-colors"
-                  disabled={modalSaving}
+                  disabled={modalSaving || modalConverting}
                 >
                   {modalSaving ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Salvando no Google Docs...</span>
+                      <span>Salvando...</span>
                     </>
                   ) : (
                     <>
