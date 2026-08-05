@@ -6643,7 +6643,7 @@ export default function AdminPanel() {
                             <p className="text-xs text-brand-text-muted mt-1">Exibido na barra lateral principal, login, áreas com fundo claro e no cabeçalho dos e-mails.</p>
                           </div>
                           
-                          <div className="flex items-center justify-center p-6 bg-white border border-dashed border-brand-border rounded-xl h-40">
+                          <div className="flex items-center justify-center p-6 bg-[#edf4fa] border border-dashed border-brand-border rounded-xl h-40">
                             {brandLogoLight ? (
                               <img src={brandLogoLight} alt="Logo Light Preview" className="max-h-full max-w-full object-contain" />
                             ) : (
