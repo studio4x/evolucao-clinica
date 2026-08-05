@@ -212,17 +212,20 @@ export default function Layout() {
 
       {/* Sidebar */}
       <div
-        onClick={isCollapsed ? () => setIsCollapsed(false) : undefined}
+        onClick={() => setIsCollapsed((collapsed) => !collapsed)}
         className={`
         hidden md:flex flex-col bg-white border-r border-brand-border flex-shrink-0
         z-40 self-stretch shadow-sm
         transition-all duration-300 md:relative overflow-y-auto md:overflow-y-visible
-        ${isCollapsed ? 'w-20 cursor-pointer' : 'w-64'}
+        ${isCollapsed ? 'w-20' : 'w-64'} cursor-pointer
       `}
       >
         {/* Toggle Collapse Button - Only visible on desktop/tablet (md) */}
         <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
+          onClick={(event) => {
+            event.stopPropagation();
+            setIsCollapsed((collapsed) => !collapsed);
+          }}
           className="hidden md:flex absolute -right-3 top-6 z-50 bg-white border border-brand-border rounded-full p-1 shadow-md hover:bg-brand-bg transition-all cursor-pointer items-center justify-center text-brand-primary"
           title={isCollapsed ? "Expandir menu" : "Recolher menu"}
         >
