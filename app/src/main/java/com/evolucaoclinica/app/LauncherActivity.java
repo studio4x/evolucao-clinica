@@ -97,6 +97,8 @@ public class LauncherActivity extends ComponentActivity {
     private boolean sharedAudioPlayerPrepared;
     private String sharedAudioPlaybackStatus = "idle";
     private String sharedAudioPlaybackError = "";
+    private int sharedAudioPlaybackPositionMs;
+    private int sharedAudioPlaybackDurationMs;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Runnable sharedAudioStateTicker = new Runnable() {
         @Override
@@ -253,7 +255,7 @@ public class LauncherActivity extends ComponentActivity {
 
         if (fileUri == null) return;
 
-        releaseSharedAudioPlayer(false);
+        releaseSharedAudioPlayer(true);
         sharedFileUri = fileUri;
         sharedFileMimeType = intent.getType();
         sharedFileName = queryDisplayName(fileUri);
@@ -291,12 +293,14 @@ public class LauncherActivity extends ComponentActivity {
     private void emitSharedAudioPlaybackState() {
         if (webView == null) return;
 
-        int positionMs = 0;
-        int durationMs = 0;
+        int positionMs = sharedAudioPlaybackPositionMs;
+        int durationMs = sharedAudioPlaybackDurationMs;
         if (sharedAudioPlayer != null && sharedAudioPlayerPrepared) {
             try {
                 positionMs = Math.max(0, sharedAudioPlayer.getCurrentPosition());
                 durationMs = Math.max(0, sharedAudioPlayer.getDuration());
+                sharedAudioPlaybackPositionMs = positionMs;
+                sharedAudioPlaybackDurationMs = durationMs;
             } catch (IllegalStateException exception) {
                 Log.w(LOG_TAG, "Não foi possível consultar o player nativo", exception);
             }
@@ -332,7 +336,10 @@ public class LauncherActivity extends ComponentActivity {
 
         if (sharedAudioPlayer != null && sharedAudioPlayerPrepared) {
             try {
-                if ("completed".equals(sharedAudioPlaybackStatus)) sharedAudioPlayer.seekTo(0);
+                if ("completed".equals(sharedAudioPlaybackStatus)) {
+                    sharedAudioPlaybackPositionMs = 0;
+                    sharedAudioPlayer.seekTo(0);
+                }
                 sharedAudioPlayer.start();
                 sharedAudioPlaybackStatus = "playing";
                 sharedAudioPlaybackError = "";
@@ -361,6 +368,11 @@ public class LauncherActivity extends ComponentActivity {
                 if (sharedAudioPlayer != preparedPlayer) return;
                 sharedAudioPlayerPrepared = true;
                 try {
+                    sharedAudioPlaybackDurationMs = Math.max(0, preparedPlayer.getDuration());
+                    if (sharedAudioPlaybackPositionMs > 0
+                            && sharedAudioPlaybackPositionMs < sharedAudioPlaybackDurationMs) {
+                        preparedPlayer.seekTo(sharedAudioPlaybackPositionMs);
+                    }
                     preparedPlayer.start();
                     sharedAudioPlaybackStatus = "playing";
                     scheduleSharedAudioStateUpdates();
@@ -372,6 +384,8 @@ public class LauncherActivity extends ComponentActivity {
             });
             player.setOnCompletionListener(completedPlayer -> {
                 if (sharedAudioPlayer != completedPlayer) return;
+                sharedAudioPlaybackDurationMs = Math.max(0, completedPlayer.getDuration());
+                sharedAudioPlaybackPositionMs = sharedAudioPlaybackDurationMs;
                 sharedAudioPlaybackStatus = "completed";
                 mainHandler.removeCallbacks(sharedAudioStateTicker);
                 emitSharedAudioPlaybackState();
@@ -397,22 +411,35 @@ public class LauncherActivity extends ComponentActivity {
     }
 
     private void pauseSharedAudio() {
-        if (sharedAudioPlayer == null || !sharedAudioPlayerPrepared) return;
-        try {
-            if (sharedAudioPlayer.isPlaying()) sharedAudioPlayer.pause();
-            sharedAudioPlaybackStatus = "paused";
-        } catch (IllegalStateException exception) {
-            Log.w(LOG_TAG, "Não foi possível pausar o player nativo", exception);
+        if (sharedAudioPlayer != null && sharedAudioPlayerPrepared) {
+            try {
+                sharedAudioPlaybackPositionMs = Math.max(0, sharedAudioPlayer.getCurrentPosition());
+                sharedAudioPlaybackDurationMs = Math.max(0, sharedAudioPlayer.getDuration());
+            } catch (IllegalStateException exception) {
+                Log.w(LOG_TAG, "Não foi possível salvar a posição do player nativo", exception);
+            }
         }
-        mainHandler.removeCallbacks(sharedAudioStateTicker);
+
+        // Alguns aparelhos continuam emitindo áudio após MediaPlayer.pause().
+        // Liberar a instância garante a interrupção; playSharedAudio recria o
+        // player e retoma da posição armazenada acima.
+        releaseSharedAudioPlayer(false);
+        sharedAudioPlaybackStatus = "paused";
+        sharedAudioPlaybackError = "";
         emitSharedAudioPlaybackState();
     }
 
     private void seekSharedAudio(int positionMs) {
-        if (sharedAudioPlayer == null || !sharedAudioPlayerPrepared) return;
+        int durationMs = Math.max(0, sharedAudioPlaybackDurationMs);
+        int targetPositionMs = Math.max(0, Math.min(positionMs, durationMs));
+        sharedAudioPlaybackPositionMs = targetPositionMs;
+
+        if (sharedAudioPlayer == null || !sharedAudioPlayerPrepared) {
+            emitSharedAudioPlaybackState();
+            return;
+        }
         try {
-            int durationMs = Math.max(0, sharedAudioPlayer.getDuration());
-            sharedAudioPlayer.seekTo(Math.max(0, Math.min(positionMs, durationMs)));
+            sharedAudioPlayer.seekTo(targetPositionMs);
             emitSharedAudioPlaybackState();
         } catch (IllegalStateException exception) {
             Log.w(LOG_TAG, "Não foi possível avançar o player nativo", exception);
@@ -433,6 +460,8 @@ public class LauncherActivity extends ComponentActivity {
         if (resetState) {
             sharedAudioPlaybackStatus = "idle";
             sharedAudioPlaybackError = "";
+            sharedAudioPlaybackPositionMs = 0;
+            sharedAudioPlaybackDurationMs = 0;
         }
     }
 
