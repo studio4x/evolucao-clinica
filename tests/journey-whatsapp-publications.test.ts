@@ -74,6 +74,8 @@ assert.doesNotMatch(readFileSync(new URL("../server.ts", import.meta.url), "utf8
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /\/api\/admin\/journey-publication-cron/);
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /verify_supabase_cron_secret/);
 assert.match(readFileSync(new URL("../src/pages/PublicJourneyIndex.tsx", import.meta.url), "utf8"), /lastAutoScrollTargetRef/);
+assert.match(readFileSync(new URL("../src/components/admin/JourneyAdmin.tsx", import.meta.url), "utf8"), /getPublicContentUrl/);
+assert.match(readFileSync(new URL("../src/components/admin/JourneyAdmin.tsx", import.meta.url), "utf8"), /\/#\$\{encodeURIComponent\(contentSlug\)\}/);
 
 const order: string[] = [];
 let updatePayload: Record<string, unknown> | null = null;

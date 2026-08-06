@@ -1106,6 +1106,11 @@ export default function JourneyAdmin() {
     navigate(`/admin/jornada/${selectedJourney?.slug}/conteudos/${content.slug}`);
   };
 
+  const getPublicJourneyUrl = (journeySlug: string) => `/jornada/${encodeURIComponent(journeySlug)}`;
+
+  const getPublicContentUrl = (journeySlug: string, contentSlug: string) =>
+    `${getPublicJourneyUrl(journeySlug)}/#${encodeURIComponent(contentSlug)}`;
+
   // WhatsApp Message "Comece por Aqui" preenchida automaticamente
   const getWhatsappFixedMessage = () => {
     const origin = window.location.origin;
@@ -1545,7 +1550,18 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
           </div>
 
           {/* Ações do Form */}
-          <div className="flex justify-end gap-3 border-t border-brand-border pt-4">
+          <div className="flex flex-wrap justify-end gap-3 border-t border-brand-border pt-4">
+            {selectedJourney && (
+              <a
+                href={getPublicJourneyUrl(selectedJourney.slug)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-brand-primary px-5 py-2.5 text-sm font-semibold text-brand-primary transition-colors hover:bg-brand-primary/5"
+              >
+                <ExternalLink size={16} />
+                Abrir página pública
+              </a>
+            )}
             <button
               type="button"
               onClick={() => setViewMode('list_journeys')}
@@ -1626,18 +1642,18 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
               </div>
             ) : (
               <div>
-                <table className="min-w-[900px] w-full table-fixed text-left border-collapse text-xs">
+                <table className="min-w-[980px] w-full table-fixed text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-brand-border bg-brand-bg text-[10px] font-bold text-brand-text-muted uppercase tracking-wider">
                       <th className="w-[6%] px-1 py-4 text-center">Dia</th>
                       <th className="w-[8%] px-1 py-4 text-center">Capa</th>
-                      <th className="w-[22%] px-2 py-4">Título / Slug</th>
+                      <th className="w-[20%] px-2 py-4">Título / Slug</th>
                       <th className="w-[10%] px-2 py-4">Status</th>
                       <th className="w-[14%] px-2 py-4">Agendamento</th>
                       <th className="w-[8%] px-2 py-4">Formato</th>
                       <th className="w-[12%] px-2 py-4">CTA</th>
                       <th className="w-[7%] px-2 py-4 text-right whitespace-nowrap">Reordenar</th>
-                      <th className="w-[13%] px-2 py-4 text-right whitespace-nowrap">Ações</th>
+                      <th className="w-[15%] px-2 py-4 text-right whitespace-nowrap">Ações</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-brand-border">
@@ -1719,6 +1735,16 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                         </td>
                         <td className="px-2 py-4 text-right whitespace-nowrap">
                           <div className="flex justify-end gap-0.5">
+                            <a
+                              href={getPublicContentUrl(selectedJourney?.slug || item.journey_id, item.slug)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Abrir dia público"
+                              aria-label={`Abrir página pública do Dia ${item.day_number}`}
+                              className="p-1.5 border border-brand-border hover:bg-brand-bg rounded-xl text-brand-primary transition-colors cursor-pointer"
+                            >
+                              <ExternalLink size={14} />
+                            </a>
                             <button
                               onClick={() => handleEditContent(item)}
                               title="Editar conteúdo"
@@ -1781,13 +1807,26 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
       {/* --- FORMULÁRIO DE CONTEÚDO DO DIA --- */}
       {viewMode === 'edit_content' && (
         <form onSubmit={handleSaveContent} className="bg-white border border-brand-border rounded-2xl shadow-sm p-6 space-y-6">
-          <div className="flex justify-between items-center border-b border-brand-border pb-3">
-            <h3 className="text-base font-bold text-brand-primary">
-              {selectedContent ? `Editar Conteúdo - Dia ${contentForm.day_number}` : `Adicionar Conteúdo - Dia ${contentForm.day_number}`}
-            </h3>
-            <span className="text-xs bg-brand-bg px-3 py-1 rounded-xl text-brand-text font-mono">
-              Jornada: {selectedJourney?.title}
-            </span>
+          <div className="flex flex-col gap-3 border-b border-brand-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-base font-bold text-brand-primary">
+                {selectedContent ? `Editar Conteúdo - Dia ${contentForm.day_number}` : `Adicionar Conteúdo - Dia ${contentForm.day_number}`}
+              </h3>
+              <span className="mt-1 inline-block text-xs bg-brand-bg px-3 py-1 rounded-xl text-brand-text font-mono">
+                Jornada: {selectedJourney?.title}
+              </span>
+            </div>
+            {selectedContent && selectedJourney && contentForm.slug && (
+              <a
+                href={getPublicContentUrl(selectedJourney.slug, contentForm.slug)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-primary px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/5"
+              >
+                <ExternalLink size={14} />
+                Abrir dia público
+              </a>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
