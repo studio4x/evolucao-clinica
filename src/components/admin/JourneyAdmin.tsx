@@ -61,7 +61,6 @@ interface JourneyContent {
   publication_time: string | null;
   published_at: string | null;
   sort_order: number;
-  is_featured: boolean;
   allow_indexing: boolean;
   created_at: string;
   updated_at: string;
@@ -151,7 +150,6 @@ export default function JourneyAdmin() {
     publication_status: 'draft',
     publication_date: '',
     publication_time: '08:00',
-    is_featured: false,
     allow_indexing: true,
   });
 
@@ -292,7 +290,6 @@ export default function JourneyAdmin() {
           publication_status: 'draft',
           publication_date: new Date().toISOString().split('T')[0],
           publication_time: '08:00',
-          is_featured: false,
           allow_indexing: true,
         });
         setViewMode('edit_content');
@@ -589,7 +586,6 @@ export default function JourneyAdmin() {
           published_at: null,
           publication_date: null,
           sort_order: c.sort_order,
-          is_featured: c.is_featured,
           allow_indexing: c.allow_indexing,
         }));
 
@@ -690,7 +686,6 @@ export default function JourneyAdmin() {
           published_at: null,
           publication_date: null,
           sort_order: content.sort_order,
-          is_featured: content.is_featured,
           allow_indexing: content.allow_indexing,
         });
 
@@ -1045,7 +1040,6 @@ export default function JourneyAdmin() {
         publication_date: isScheduled ? (contentForm.publication_date || null) : null,
         publication_time: isScheduled ? (contentForm.publication_time || null) : null,
         published_at: contentForm.publication_status === 'published' ? (contentForm.published_at || new Date().toISOString()) : null,
-        is_featured: contentForm.is_featured || false,
         allow_indexing: contentForm.allow_indexing !== false
       };
 
@@ -2159,32 +2153,17 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                   </div>
                 )}
 
-                <div className="flex flex-col gap-2 pt-2 border-t border-brand-border">
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="is_featured"
-                      checked={contentForm.is_featured || false}
-                      onChange={(e) => setContentForm(prev => ({ ...prev, is_featured: e.target.checked }))}
-                      className="rounded text-brand-primary"
-                    />
-                    <label htmlFor="is_featured" className="text-xs font-semibold text-brand-text">
-                      Destacar este conteúdo
-                    </label>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="allow_indexing"
-                      checked={contentForm.allow_indexing !== false}
-                      onChange={(e) => setContentForm(prev => ({ ...prev, allow_indexing: e.target.checked }))}
-                      className="rounded text-brand-primary"
-                    />
-                    <label htmlFor="allow_indexing" className="text-xs font-semibold text-brand-text">
-                      Permitir indexação em mecanismos de busca (SEO)
-                    </label>
-                  </div>
+                <div className="flex items-center gap-2 pt-2 border-t border-brand-border">
+                  <input
+                    type="checkbox"
+                    id="allow_indexing"
+                    checked={contentForm.allow_indexing !== false}
+                    onChange={(e) => setContentForm(prev => ({ ...prev, allow_indexing: e.target.checked }))}
+                    className="rounded text-brand-primary"
+                  />
+                  <label htmlFor="allow_indexing" className="text-xs font-semibold text-brand-text">
+                    Permitir indexação em mecanismos de busca (SEO)
+                  </label>
                 </div>
               </div>
             </div>
