@@ -52,7 +52,7 @@ import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl
 import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
-import { clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
+import { canUseNativeGoogleOAuthCallback, clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
@@ -384,6 +384,7 @@ export default function App() {
           const shouldSilentlyRefreshGoogle =
             sameGoogleUser &&
             hasPersistedGoogleScopes &&
+            canUseNativeGoogleOAuthCallback() &&
             !session.provider_token &&
             (!latestState.googleAccessToken || tokenAge > GOOGLE_ACCESS_TOKEN_MAX_AGE_MS) &&
             !hasSilentGoogleRefreshFlag(session.user.id);

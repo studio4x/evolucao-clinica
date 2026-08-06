@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { getInstalledAppInfo } from '../utils/installedAppInfo';
 
 export const GOOGLE_SCOPES = {
   driveFile: 'https://www.googleapis.com/auth/drive.file',
@@ -17,10 +18,17 @@ export type GoogleScopeSetName = keyof typeof GOOGLE_SCOPE_SETS;
 
 const PENDING_GOOGLE_SCOPES_KEY = 'evolucao-clinica:google-oauth-scopes';
 export const NATIVE_GOOGLE_OAUTH_REDIRECT_URL = 'evolucaoclinica://auth-callback';
+const MIN_NATIVE_GOOGLE_OAUTH_CALLBACK_VERSION = 72;
 
 export const isNativeGoogleOAuthClient = () => (
   typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent)
 );
+
+export const canUseNativeGoogleOAuthCallback = () => {
+  if (!isNativeGoogleOAuthClient()) return true;
+  const { versionCode } = getInstalledAppInfo();
+  return versionCode !== null && versionCode >= MIN_NATIVE_GOOGLE_OAUTH_CALLBACK_VERSION;
+};
 
 const normalizeScopes = (scopes: string[]) => Array.from(new Set(scopes.filter(Boolean)));
 
@@ -104,6 +112,13 @@ export const requestGoogleOAuth = async ({
   prompt,
   loginHint,
 }: RequestGoogleOAuthParams) => {
+  if (isNativeGoogleOAuthClient() && !canUseNativeGoogleOAuthCallback()) {
+    return {
+      data: { provider: 'google', url: null },
+      error: new Error('Atualize o aplicativo pela Play Store para concluir a conexão com o Google neste dispositivo.')
+    } as Awaited<ReturnType<typeof supabase.auth.signInWithOAuth>>;
+  }
+
   const scopes = buildGoogleScopes(requiredScopes, currentGrantedScopes);
   storePendingGoogleScopes(scopes);
   const isLoginOnlyRequest = requiredScopes === 'login';
