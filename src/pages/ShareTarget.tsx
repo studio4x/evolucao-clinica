@@ -9,6 +9,7 @@ import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import { getInstalledAppInfo } from '../utils/installedAppInfo';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink, Play, Pause } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
@@ -196,11 +197,14 @@ export default function ShareTarget() {
   };
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [usesNativeSharedAudio, setUsesNativeSharedAudio] = useState(false);
   const [audioPlaybackError, setAudioPlaybackError] = useState(false);
   const [audioMetadataUnavailable, setAudioMetadataUnavailable] = useState(false);
   const [nativePlayback, setNativePlayback] = useState<NativeAudioPlaybackState>(initialNativePlaybackState);
   const [nativePlaybackRequested, setNativePlaybackRequested] = useState(false);
   const nativePauseRequestedRef = useRef(false);
+  const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const [installedAppInfo] = useState(getInstalledAppInfo);
   const [status, setStatus] = useState<'loading' | 'idle' | 'processing' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
@@ -215,6 +219,9 @@ export default function ShareTarget() {
   const needsGoogleReconnect = !hasClinicalAccess || isGoogleReconnectNeededMessage(errorMessage) || isGoogleReconnectNeededMessage(modalError);
   const nativeShare = getNativeShareBridge();
   const hasNativeAudioPlayback = Boolean(nativeShare && typeof nativeShare.playSharedFile === 'function');
+  const useNativeAudioPlayer = usesNativeSharedAudio && hasNativeAudioPlayback;
+  const needsNativePauseUpdate = installedAppInfo.platform === 'android'
+    && Boolean(installedAppInfo.versionCode && installedAppInfo.versionCode < 75);
 
   useEffect(() => {
     const loadData = async () => {
@@ -243,11 +250,14 @@ export default function ShareTarget() {
         }
 
         // Load shared file
-        const file = (await getSharedFile()) || (await getNativeSharedFile());
+        const localSharedFile = await getSharedFile();
+        const nativeSharedFile = localSharedFile ? null : await getNativeSharedFile();
+        const file = localSharedFile || nativeSharedFile;
         if (file && file.size > 0) {
           const normalizedFile = await normalizeSharedAudioFile(file);
           setAudioFile(normalizedFile);
           setAudioUrl(URL.createObjectURL(normalizedFile));
+          setUsesNativeSharedAudio(Boolean(nativeSharedFile));
           setNativePlayback(initialNativePlaybackState);
           setNativePlaybackRequested(false);
           nativePauseRequestedRef.current = false;
@@ -273,6 +283,38 @@ export default function ShareTarget() {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);
+
+  useEffect(() => {
+    const pauseEveryPlayer = (updateInterface = true) => {
+      const audio = audioElementRef.current;
+      if (audio && !audio.paused) audio.pause();
+      getNativeShareBridge()?.pauseSharedFile?.();
+      nativePauseRequestedRef.current = true;
+      if (updateInterface) {
+        setNativePlaybackRequested(false);
+        setNativePlayback(current => current.status === 'playing' || current.status === 'preparing'
+          ? { ...current, status: 'paused' }
+          : current);
+      }
+    };
+
+    const handlePageHide = () => pauseEveryPlayer();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') pauseEveryPlayer();
+    };
+
+    window.addEventListener('pagehide', handlePageHide);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      pauseEveryPlayer(false);
+      // Ao sair desta rota, liberar a fonte nativa impede que uma instância de
+      // player de versões anteriores continue tocando em segundo plano.
+      getNativeShareBridge()?.clearSharedFile?.();
+    };
+  }, []);
 
   useEffect(() => {
     const handleNativePlaybackState = (event: Event) => {
@@ -681,7 +723,7 @@ export default function ShareTarget() {
               {audioUrl && (
                 <div className="bg-brand-bg p-4 rounded-xl border border-brand-border">
                   <p className="text-sm font-medium text-brand-text mb-2">Áudio Compartilhado:</p>
-                  {audioPlaybackError && hasNativeAudioPlayback ? (
+                  {useNativeAudioPlayer ? (
                     <div className="rounded-xl border border-brand-border bg-white p-3">
                       <div className="flex items-center gap-3">
                         <button
@@ -718,11 +760,15 @@ export default function ShareTarget() {
                           {nativePlayback.error || 'Não foi possível reproduzir este áudio no aparelho.'}
                         </p>
                       ) : (
-                        <p className="mt-2 text-xs text-brand-text-muted">Reprodução otimizada pelo aplicativo Android.</p>
+                        <p className="mt-2 text-xs text-brand-text-muted">
+                          Reprodução nativa do aplicativo Android
+                          {installedAppInfo.displayVersion ? ` · versão ${installedAppInfo.displayVersion}` : ''}.
+                        </p>
                       )}
                     </div>
                   ) : (
                     <audio
+                      ref={audioElementRef}
                       controls
                       preload="metadata"
                       className="w-full"
@@ -733,7 +779,11 @@ export default function ShareTarget() {
                       <source src={audioUrl} type={audioFile?.type} />
                     </audio>
                   )}
-                  {audioPlaybackError && !hasNativeAudioPlayback ? (
+                  {needsNativePauseUpdate && useNativeAudioPlayer ? (
+                    <p className="mt-2 text-xs font-medium text-amber-800">
+                      Atualize o aplicativo para a versão 1.0.75 ou superior para usar a pausa garantida.
+                    </p>
+                  ) : audioPlaybackError && !useNativeAudioPlayer ? (
                     <p className="mt-2 text-xs text-amber-800">
                       Este navegador não conseguiu reproduzir a prévia, mas o áudio recebido continuará disponível para processamento.
                     </p>
