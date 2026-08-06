@@ -51,7 +51,30 @@ export function validateFailPayload(payload: unknown) {
   return { publicationId, errorCode, errorMessage, retryable: input.retryable };
 }
 export function retryDelayMinutes(attempt: number) { return [5, 15, 30, 60][Math.max(0, Math.min(3, attempt - 1))]; }
+export function normalizePublicOrigin(value: string | undefined, fallback = "https://evolucaoclinica.app.br") {
+  const raw = String(value || fallback).trim();
+  const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const parsed = new URL(candidate);
+    if (!/^https?:$/.test(parsed.protocol)) throw new Error("Protocolo público inválido.");
+    return parsed.toString().replace(/\/$/, "");
+  } catch {
+    return normalizePublicOrigin(fallback, "https://evolucaoclinica.app.br");
+  }
+}
+export function resolveProductionOrigin(value: string | undefined, fallback = "https://evolucaoclinica.app.br") {
+  const normalized = normalizePublicOrigin(value, fallback);
+  try {
+    if (new URL(normalized).hostname.toLowerCase().endsWith(".vercel.app")) return normalizePublicOrigin(fallback);
+  } catch { /* normalizePublicOrigin already returned a safe fallback */ }
+  return normalized;
+}
 export function publicJourneyUrls(origin: string, journey: { slug: string; public_url?: string | null }, contentSlug: string) {
-  const centralUrl = journey.public_url || `${origin.replace(/\/$/, "")}/jornada/${encodeURIComponent(journey.slug)}`;
+  const normalizedOrigin = normalizePublicOrigin(origin);
+  const suppliedCentral = String(journey.public_url || "").trim();
+  const centralUrl = suppliedCentral
+    ? (/^https?:\/\//i.test(suppliedCentral) ? normalizePublicOrigin(suppliedCentral) : `${normalizedOrigin}/${suppliedCentral.replace(/^\/+|\/+$/g, "")}`)
+    : `${normalizedOrigin}/jornada/${encodeURIComponent(journey.slug)}`;
+  if (!String(contentSlug || "").trim() || String(contentSlug).includes("/")) throw new Error("contentSlug inválido.");
   return { centralUrl, contentUrl: `${centralUrl.replace(/\/$/, "")}/${encodeURIComponent(contentSlug)}` };
 }

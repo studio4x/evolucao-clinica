@@ -53,10 +53,12 @@ export async function publishDueJourneyContents(supabase: SupabaseClient, now = 
     if (updateError) throw updateError;
     if (!updated) continue;
 
-    // The queue is created only after the editorial publication is committed.
+    publishedCount++;
+  }
+  // The queue is synchronized once, only after all editorial updates committed.
+  if (publishedCount > 0) {
     const { error: queueError } = await supabase.rpc("sync_journey_whatsapp_publications", { p_destination_key: JOURNEY_WHATSAPP_DESTINATION_KEY });
     if (queueError) throw queueError;
-    publishedCount++;
   }
   return { publishedCount };
 }

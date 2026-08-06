@@ -62,7 +62,8 @@ import {
   verifyJourneyPublicationAuthorization,
   JourneyPublicationValidationError,
   retryDelayMinutes,
-  publicJourneyUrls
+  publicJourneyUrls,
+  resolveProductionOrigin
 } from "./server/whatsapp/journeyPublications.js";
 import { publishDueJourneyContents } from "./server/journeys/journeyPublisher.js";
 
@@ -74,7 +75,7 @@ app.disable("x-powered-by");
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
 const DEFAULT_PRODUCTION_ORIGIN = "https://evolucaoclinica.app.br";
-const PRODUCTION_ORIGIN = (process.env.VERCEL_PRODUCTION_URL || DEFAULT_PRODUCTION_ORIGIN).replace(/\/$/, "");
+const PRODUCTION_ORIGIN = resolveProductionOrigin(process.env.PUBLIC_APP_URL, DEFAULT_PRODUCTION_ORIGIN);
 
 // Configuração do Supabase Admin: a Service Role é exclusivamente server-side.
 const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kvxboovgrrhhttaqinld.supabase.co";

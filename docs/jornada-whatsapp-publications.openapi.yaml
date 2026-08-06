@@ -1,0 +1,99 @@
+openapi: 3.0.3
+info:
+  title: Jornada de 15 Dias - fila WhatsApp
+  version: 1.0.0
+  description: Contrato backend-only para o n8n entregar publicações ao WhatsApp operador. A plataforma nunca chama a Evolution API.
+servers:
+  - url: https://evolucaoclinica.app.br
+security:
+  - journeyBearer: []
+components:
+  securitySchemes:
+    journeyBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: WHATSAPP_JOURNEY_PUBLICATION_TOKEN
+  schemas:
+    ClaimRequest:
+      type: object
+      required: [destinationKey, workerId, provider]
+      properties:
+        destinationKey: { type: string, enum: [jornada-15-dias-operador-evolucao-clinica] }
+        workerId: { type: string, example: n8n-publicacao-jornada }
+        provider: { type: string, enum: [manual, evolution] }
+    Publication:
+      type: object
+      required: [publicationId, journeyContentId, journeyId, journeySlug, contentSlug, dayNumber, title, whatsappMessage, hasWhatsappMessage, centralUrl, contentUrl, destinationKey, provider, scheduledAt, contentPublishedAt, claimExpiresAt, attempt]
+      properties:
+        publicationId: { type: string, format: uuid }
+        journeyContentId: { type: string, format: uuid }
+        journeyId: { type: string, format: uuid }
+        journeySlug: { type: string, example: jornada-15-dias }
+        contentSlug: { type: string, example: boas-vindas }
+        dayNumber: { type: integer, example: 1 }
+        title: { type: string }
+        shortDescription: { type: string, nullable: true }
+        whatsappMessage: { type: string, nullable: true }
+        hasWhatsappMessage: { type: boolean }
+        imageUrl: { type: string, format: uri, nullable: true }
+        videoUrl: { type: string, format: uri, nullable: true }
+        contentType: { type: string, nullable: true }
+        ctaText: { type: string, nullable: true }
+        ctaUrl: { type: string, format: uri, nullable: true }
+        centralUrl: { type: string, format: uri }
+        contentUrl: { type: string, format: uri }
+        destinationKey: { type: string }
+        provider: { type: string, enum: [manual, evolution] }
+        scheduledAt: { type: string, format: date-time }
+        contentPublishedAt: { type: string, format: date-time }
+        claimExpiresAt: { type: string, format: date-time }
+        attempt: { type: integer }
+paths:
+  /api/integrations/whatsapp/journey-publications/claim:
+    post:
+      summary: Reserva atomicamente uma publicação vencida
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClaimRequest' }
+            example: { destinationKey: jornada-15-dias-operador-evolucao-clinica, workerId: n8n-publicacao-jornada, provider: evolution }
+      responses:
+        '200':
+          description: Item reservado ou fila vazia
+          content:
+            application/json:
+              examples:
+                empty: { value: { claimed: false, publication: null } }
+                claimed: { value: { claimed: true, publication: { publicationId: uuid, journeyContentId: uuid, journeyId: uuid, journeySlug: jornada-15-dias, contentSlug: boas-vindas, dayNumber: 1, title: Boas-vindas, whatsappMessage: Texto, hasWhatsappMessage: true, imageUrl: null, videoUrl: null, contentType: text, ctaText: Ver conteúdo, ctaUrl: https://evolucaoclinica.app.br/jornada/jornada-15-dias/boas-vindas, centralUrl: https://evolucaoclinica.app.br/jornada/jornada-15-dias, contentUrl: https://evolucaoclinica.app.br/jornada/jornada-15-dias/boas-vindas, destinationKey: jornada-15-dias-operador-evolucao-clinica, provider: evolution, scheduledAt: '2026-08-10T11:00:00Z', contentPublishedAt: '2026-08-10T11:00:01Z', claimExpiresAt: '2026-08-10T11:15:01Z', attempt: 1 } } }
+        '400': { description: Payload inválido }
+        '401': { description: Bearer ausente ou inválido }
+        '500': { description: Token de integração não configurado ou erro interno }
+  /api/integrations/whatsapp/journey-publications/complete:
+    post:
+      summary: Confirma entrega ao WhatsApp operador
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { publicationId: uuid, provider: evolution, providerMessageId: EVOLUTION_MESSAGE_ID, publishedAt: '2026-08-10T11:05:00Z' }
+      responses:
+        '200': { description: Concluído ou idempotentemente já concluído }
+        '400': { description: Payload inválido }
+        '401': { description: Bearer ausente ou inválido }
+        '404': { description: Publicação inexistente }
+        '409': { description: Publicação não está claimed }
+  /api/integrations/whatsapp/journey-publications/fail:
+    post:
+      summary: Registra falha sem despublicar a página
+      requestBody:
+        required: true
+        content:
+          application/json:
+            example: { publicationId: uuid, errorCode: PROVIDER_UNAVAILABLE, errorMessage: Provedor indisponível, retryable: true }
+      responses:
+        '200': { description: Falha registrada com pending ou failed e backoff }
+        '400': { description: Payload inválido }
+        '401': { description: Bearer ausente ou inválido }
+        '404': { description: Publicação inexistente }
+        '409': { description: Item já enviado }
