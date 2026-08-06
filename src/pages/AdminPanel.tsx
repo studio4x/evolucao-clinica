@@ -8,6 +8,7 @@ import { reloadSiteConfig } from '../hooks/useSiteConfig';
 import { defaultColors, type BrandColors } from '../utils/brandConfig';
 import { estimateGeminiTranscriptionCostUsd } from '../utils/geminiPricing';
 import EmailHistory from './EmailHistory';
+import EmailTransactionalTemplates from '../components/admin/EmailTransactionalTemplates';
 import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
@@ -5840,6 +5841,8 @@ export default function AdminPanel() {
                       </div>
                     </div>
                   )}
+
+                  <EmailTransactionalTemplates />
 
                   <EmailHistory
                     embedded

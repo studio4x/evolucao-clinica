@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 
 const adminSource = readFileSync("src/pages/AdminPanel.tsx", "utf8");
 const emailHistorySource = readFileSync("src/pages/EmailHistory.tsx", "utf8");
+const emailTemplatesSource = readFileSync("src/components/admin/EmailTransactionalTemplates.tsx", "utf8");
 const serverSource = readFileSync("server.ts", "utf8");
 const migrationSource = readFileSync(
   "supabase/migrations/20260806233000_classify_onboarding_notifications.sql",
@@ -24,6 +25,10 @@ assert.match(emailHistorySource, /\.not\('source', 'in', EXCLUDED_EMAIL_SOURCES_
 assert.match(emailHistorySource, /ITEMS_PER_PAGE = 20/);
 assert.match(emailHistorySource, /Página anterior/);
 assert.match(emailHistorySource, /Próxima página/);
+assert.match(adminSource, /<EmailTransactionalTemplates\s*\/>/);
+assert.match(emailTemplatesSource, /Modelos de E-mails Transacionais/);
+assert.match(emailTemplatesSource, /\/api\/admin\/lifecycle\/campaigns/);
+assert.match(emailTemplatesSource, /\/api\/admin\/lifecycle\/rules/);
 
 const deliveriesStart = serverSource.indexOf('app.get("/api/admin/whatsapp/deliveries"');
 const deliveriesEnd = serverSource.indexOf('app.get("/api/admin/whatsapp/templates"', deliveriesStart);
