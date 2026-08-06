@@ -1,6 +1,7 @@
 type AudioCompatibleWindow = Window & typeof globalThis & {
   __evolucaoAudioCompatibilityInstalled?: boolean;
   __evolucaoActiveFallbackSources?: Set<AudioBufferSourceNode>;
+  __evolucaoStopAudioFallbackSources?: () => void;
 };
 
 type CompatibleMediaPrototype = typeof HTMLMediaElement.prototype & {
@@ -12,6 +13,17 @@ type CompatibleAudioContextPrototype = typeof AudioContext.prototype & {
 };
 
 const pauseRequestedMedia = new WeakSet<HTMLMediaElement>();
+
+type PauseControlElement = Pick<Element, 'hasAttribute' | 'closest'>;
+
+export const resolveHtmlAudioPauseTarget = (pauseButton: PauseControlElement): HTMLMediaElement | null => {
+  // Controles nativos possuem seu próprio ciclo de vida Android. Nunca impeça
+  // que o clique deles chegue ao React/NativeShareBridge.
+  if (pauseButton.hasAttribute('data-native-audio-control')) return null;
+
+  const audioContainer = pauseButton.closest('.space-y-2');
+  return audioContainer?.querySelector('audio') as HTMLMediaElement | null;
+};
 
 /**
  * Corrige particularidades do elemento de áudio no Android WebView.
@@ -78,6 +90,7 @@ export const installWebViewAudioCompatibility = () => {
       activeFallbackSources.delete(source);
     }
   };
+  compatibleWindow.__evolucaoStopAudioFallbackSources = stopFallbackSources;
 
   const AudioContextConstructor = compatibleWindow.AudioContext
     || (compatibleWindow as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -146,23 +159,21 @@ export const installWebViewAudioCompatibility = () => {
     const pauseButton = target?.closest('button[aria-label="Pausar áudio"]');
     if (!pauseButton) return;
 
+    const audio = resolveHtmlAudioPauseTarget(pauseButton);
+    if (!audio) return;
+
     // Interrompe o handler React antes que ele consulte `audio.paused` e conclua
     // incorretamente que deve iniciar uma nova reprodução.
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
 
-    const audioContainer = pauseButton.closest('.space-y-2');
-    const audio = audioContainer?.querySelector('audio');
+    pauseRequestedMedia.add(audio);
+    audio.pause();
+    audio.dispatchEvent(new Event('ended'));
 
-    if (audio) {
-      pauseRequestedMedia.add(audio);
-      audio.pause();
-      audio.dispatchEvent(new Event('ended'));
-
-      // Evita que uma Promise de play ainda pendente restaure o estado visual.
-      window.setTimeout(() => audio.dispatchEvent(new Event('ended')), 350);
-    }
+    // Evita que uma Promise de play ainda pendente restaure o estado visual.
+    window.setTimeout(() => audio.dispatchEvent(new Event('ended')), 350);
 
     stopFallbackSources();
   }, true);

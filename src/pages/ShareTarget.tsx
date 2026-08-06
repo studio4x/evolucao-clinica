@@ -119,7 +119,13 @@ const initialNativePlaybackState: NativeAudioPlaybackState = {
 
 const getNativeShareBridge = () => (window as any).NativeShare;
 
+const stopWebViewAudioFallbackSources = () => {
+  const audioWindow = window as typeof window & { __evolucaoStopAudioFallbackSources?: () => void };
+  audioWindow.__evolucaoStopAudioFallbackSources?.();
+};
+
 const clearSharedAudioSources = async () => {
+  stopWebViewAudioFallbackSources();
   await clearSharedFileLocal().catch(error => console.warn('Erro ao limpar áudio compartilhado do navegador:', error));
   const nativeShare = getNativeShareBridge();
   if (nativeShare && typeof nativeShare.clearSharedFile === 'function') {
@@ -288,6 +294,7 @@ export default function ShareTarget() {
     const pauseEveryPlayer = (updateInterface = true) => {
       const audio = audioElementRef.current;
       if (audio && !audio.paused) audio.pause();
+      stopWebViewAudioFallbackSources();
       getNativeShareBridge()?.pauseSharedFile?.();
       nativePauseRequestedRef.current = true;
       if (updateInterface) {
@@ -728,6 +735,7 @@ export default function ShareTarget() {
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
+                          data-native-audio-control="true"
                           onClick={handleNativePlaybackToggle}
                           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary text-white"
                           aria-label={nativePlaybackRequested ? 'Pausar áudio' : 'Reproduzir áudio'}
