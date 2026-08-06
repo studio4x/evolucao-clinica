@@ -27,11 +27,21 @@ assert.equal(resolveProductionOrigin("preview.vercel.app"), "https://evolucaocli
 assert.equal(JOURNEY_WHATSAPP_DESTINATION_KEY, "jornada-15-dias-operador-evolucao-clinica");
 assert.equal(JOURNEY_WHATSAPP_TIMEZONE, "America/Sao_Paulo");
 const migration = readFileSync(new URL("../supabase/migrations/20260806100000_create_journey_whatsapp_publications.sql", import.meta.url), "utf8");
+const cronMigration = readFileSync(new URL("../supabase/migrations/20260806150000_standardize_supabase_cron_jobs.sql", import.meta.url), "utf8");
 assert.match(migration, /UNIQUE \(journey_content_id, destination_key\)/);
 assert.match(migration, /FOR UPDATE SKIP LOCKED/);
 assert.match(migration, /America\/Sao_Paulo/);
 assert.match(migration, /ALTER TABLE public\.journey_whatsapp_publications ENABLE ROW LEVEL SECURITY/);
 assert.match(migration, /CHECK \(status IN \('pending', 'claimed', 'sent', 'failed', 'cancelled'\)\)/);
+assert.match(cronMigration, /publish-journey-contents-job/);
+assert.match(cronMigration, /CREATE EXTENSION IF NOT EXISTS pg_cron/);
+assert.match(cronMigration, /CREATE EXTENSION IF NOT EXISTS pg_net/);
+assert.match(cronMigration, /vault\.decrypted_secrets/);
+assert.match(cronMigration, /Authorization.*Bearer/s);
+assert.match(cronMigration, /cron\.unschedule\(job_record\.jobid\)/);
+assert.doesNotMatch(cronMigration, /REPLACE_WITH|jf4a1n|CRON_SECRET\s*=/i);
+assert.doesNotMatch(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"), /"crons"/);
+assert.doesNotMatch(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /buildCronBootstrapSql|bootstrapSupabaseCronJobs/);
 
 const order: string[] = [];
 let updatePayload: Record<string, unknown> | null = null;
