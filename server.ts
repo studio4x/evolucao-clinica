@@ -62,8 +62,9 @@ import {
   verifyJourneyPublicationAuthorization,
   JourneyPublicationValidationError,
   retryDelayMinutes,
-  publicJourneyUrl
+  publicJourneyUrls
 } from "./server/whatsapp/journeyPublications.js";
+import { publishDueJourneyContents } from "./server/journeys/journeyPublisher.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -2114,7 +2115,7 @@ const journeyPublicationLog = (event: string, fields: Record<string, unknown>) =
 
 async function getJourneyPublicationResponse(publication: any) {
   const { data: content, error: contentError } = await supabaseAdmin.from("journey_contents")
-    .select("id, journey_id, day_number, title, short_description, whatsapp_message, image_url, video_url, content_type, cta_text, cta_url, slug")
+    .select("id, journey_id, day_number, title, short_description, whatsapp_message, image_url, video_url, content_type, cta_text, cta_url, slug, published_at")
     .eq("id", publication.journey_content_id).single();
   if (contentError || !content) throw new Error("Conteúdo da publicação não encontrado.");
   const { data: journey, error: journeyError } = await supabaseAdmin.from("journeys")
@@ -2125,8 +2126,8 @@ async function getJourneyPublicationResponse(publication: any) {
     dayNumber: content.day_number, title: content.title, shortDescription: content.short_description,
     whatsappMessage: content.whatsapp_message, hasWhatsappMessage: Boolean(String(content.whatsapp_message || "").trim()),
     imageUrl: content.image_url, videoUrl: content.video_url, contentType: content.content_type, ctaText: content.cta_text,
-    ctaUrl: content.cta_url, publicUrl: publicJourneyUrl(PRODUCTION_ORIGIN, journey), destinationKey: publication.destination_key,
-    destinationJid: publication.destination_jid || null, provider: publication.provider, scheduledAt: publication.scheduled_at,
+    ctaUrl: content.cta_url, ...publicJourneyUrls(PRODUCTION_ORIGIN, journey, content.slug), destinationKey: publication.destination_key,
+    provider: publication.provider, scheduledAt: publication.scheduled_at, contentPublishedAt: content.published_at,
     claimExpiresAt: publication.claim_expires_at, attempt: publication.attempts
   };
 }
@@ -2135,6 +2136,7 @@ app.post("/api/integrations/whatsapp/journey-publications/claim", async (req, re
   if (!verifyJourneyPublicationToken(req, res)) return;
   try {
     const input = validateClaimPayload(req.body);
+    await publishDueJourneyContents(supabaseAdmin);
     const { data, error } = await supabaseAdmin.rpc("claim_journey_whatsapp_publication", {
       p_destination_key: input.destinationKey, p_worker_id: input.workerId, p_provider: input.provider,
       p_claim_minutes: JOURNEY_WHATSAPP_CLAIM_MINUTES
@@ -5160,67 +5162,9 @@ app.get("/api/cron/publish-journey-contents", async (req: any, res) => {
   }
 
   try {
-    const tzOffset = -3;
-    const now = new Date();
-    const brazilTime = new Date(now.getTime() + (tzOffset * 60 * 60 * 1000));
-    const currentDateStr = brazilTime.toISOString().split('T')[0]; // YYYY-MM-DD
-    const currentHour = brazilTime.getUTCHours();
-    const currentMinute = brazilTime.getUTCMinutes();
-    const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}:00`;
-
-    console.log(`[Cron Jornada] Iniciando publicação automática. Horário Brasil: ${currentDateStr} ${currentTimeStr}`);
-
-    // Buscar conteúdos da jornada que estão agendados (scheduled)
-    const { data: contentsToPublish, error: selectError } = await supabaseAdmin
-      .from("journey_contents")
-      .select("id, title, day_number, publication_date, publication_time")
-      .eq("publication_status", "scheduled")
-      .lte("publication_date", currentDateStr);
-
-    if (selectError) {
-      throw selectError;
-    }
-
-    if (!contentsToPublish || contentsToPublish.length === 0) {
-      console.log("[Cron Jornada] Nenhum conteúdo agendado encontrado para a data atual ou anterior.");
-      return res.json({ publishedCount: 0 });
-    }
-
-    // Filtrar os que realmente passaram do horário atual
-    const toPublish = contentsToPublish.filter(c => {
-      if (c.publication_date < currentDateStr) return true;
-      if (c.publication_date === currentDateStr) {
-        return c.publication_time <= currentTimeStr;
-      }
-      return false;
-    });
-
-    if (toPublish.length === 0) {
-      console.log("[Cron Jornada] Nenhum conteúdo agendado passou do horário de publicação ainda.");
-      return res.json({ publishedCount: 0 });
-    }
-
-    console.log(`[Cron Jornada] Publicando ${toPublish.length} conteúdos...`);
-
-    let publishedCount = 0;
-    for (const item of toPublish) {
-      const { error: updateError } = await supabaseAdmin
-        .from("journey_contents")
-        .update({
-          publication_status: "published",
-          published_at: new Date().toISOString()
-        })
-        .eq("id", item.id);
-
-      if (updateError) {
-        console.error(`[Cron Jornada] Erro ao publicar item ${item.title} (Dia ${item.day_number}):`, updateError);
-      } else {
-        console.log(`[Cron Jornada] Publicado com sucesso: ${item.title} (Dia ${item.day_number})`);
-        publishedCount++;
-      }
-    }
-
-    return res.json({ publishedCount });
+    const result = await publishDueJourneyContents(supabaseAdmin);
+    console.log(`[Cron Jornada] Publicações editoriais concluídas: ${result.publishedCount}.`);
+    return res.json(result);
   } catch (error: any) {
     console.error("[Cron Jornada] Erro no job de publicação:", error);
     return res.status(500).json({ error: error.message || "Erro interno" });

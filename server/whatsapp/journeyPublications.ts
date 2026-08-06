@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 
-export const JOURNEY_WHATSAPP_DESTINATION_KEY = "jornada-15-dias-grupo-principal";
+export const JOURNEY_WHATSAPP_DESTINATION_KEY = "jornada-15-dias-operador-evolucao-clinica";
 export const JOURNEY_WHATSAPP_CLAIM_MINUTES = 15;
 export const JOURNEY_WHATSAPP_TIMEZONE = "America/Sao_Paulo";
 export const JOURNEY_WHATSAPP_PROVIDERS = ["manual", "evolution"] as const;
@@ -51,6 +51,7 @@ export function validateFailPayload(payload: unknown) {
   return { publicationId, errorCode, errorMessage, retryable: input.retryable };
 }
 export function retryDelayMinutes(attempt: number) { return [5, 15, 30, 60][Math.max(0, Math.min(3, attempt - 1))]; }
-export function publicJourneyUrl(origin: string, journey: { slug: string; public_url?: string | null }) {
-  return journey.public_url || `${origin.replace(/\/$/, "")}/jornada/${encodeURIComponent(journey.slug)}`;
+export function publicJourneyUrls(origin: string, journey: { slug: string; public_url?: string | null }, contentSlug: string) {
+  const centralUrl = journey.public_url || `${origin.replace(/\/$/, "")}/jornada/${encodeURIComponent(journey.slug)}`;
+  return { centralUrl, contentUrl: `${centralUrl.replace(/\/$/, "")}/${encodeURIComponent(contentSlug)}` };
 }

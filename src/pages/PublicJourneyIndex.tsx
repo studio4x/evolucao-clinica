@@ -229,12 +229,6 @@ export default function PublicJourneyIndex() {
     }
   };
 
-  const isPastPublishTime = (dateStr: string | null, timeStr: string | null) => {
-    if (!dateStr) return false;
-    const publishDateTime = new Date(`${dateStr}T${timeStr || '08:00:00'}-03:00`);
-    return new Date() >= publishDateTime;
-  };
-
   // Processamento e classificação de cada dia (Publicado, Recente, Em breve)
   const getProcessedDays = () => {
     if (!journey) return [];
@@ -263,9 +257,7 @@ export default function PublicJourneyIndex() {
     // Determina o dia publicado mais recente para destacar como "Recente/Atual"
     let maxPublishedDay = 0;
     contents.forEach(c => {
-      const isPub = isAdmin ||
-                    c.publication_status === 'published' || 
-                    (c.publication_status === 'scheduled' && isPastPublishTime(c.publication_date, c.publication_time));
+      const isPub = isAdmin || c.publication_status === 'published';
       if (isPub && c.day_number > maxPublishedDay) {
         maxPublishedDay = c.day_number;
       }
@@ -275,9 +267,7 @@ export default function PublicJourneyIndex() {
       const contentItem = contentsMap.get(d);
 
       if (contentItem) {
-        const isPublished = isAdmin ||
-                            contentItem.publication_status === 'published' || 
-                            (contentItem.publication_status === 'scheduled' && isPastPublishTime(contentItem.publication_date, contentItem.publication_time));
+        const isPublished = isAdmin || contentItem.publication_status === 'published';
 
         if (isPublished) {
           processedList.push({
@@ -680,7 +670,7 @@ export default function PublicJourneyIndex() {
                         Rascunho (Admin Preview)
                       </span>
                     )}
-                    {d.rawContent?.publication_status === 'scheduled' && !isPastPublishTime(d.rawContent.publication_date, d.rawContent.publication_time) && (
+                    {d.rawContent?.publication_status === 'scheduled' && (
                       <span className="px-2.5 py-1 bg-[#105576] text-white rounded-full text-[9px] font-bold uppercase tracking-wider shadow-xs">
                         Agendado (Admin Preview)
                       </span>

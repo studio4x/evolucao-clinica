@@ -6,13 +6,13 @@ Esta etapa adiciona somente a fonte de verdade e a fila segura da plataforma. N�
 
 Migration: `supabase/migrations/20260806100000_create_journey_whatsapp_publications.sql`.
 
-O backend reutiliza `journeys` e `journey_contents`. A chave inicial é `jornada-15-dias-grupo-principal`, centralizada em `server/whatsapp/journeyPublications.ts`. A fila é backend-only, com RLS sem acesso a `anon`/`authenticated`, e Service Role no backend.
+O backend reutiliza `journeys` e `journey_contents`. A chave inicial é `jornada-15-dias-operador-evolucao-clinica`, centralizada em `server/whatsapp/journeyPublications.ts`. Ela representa o WhatsApp operador; não representa o grupo. A fila é backend-only, com RLS sem acesso a `anon`/`authenticated`, e Service Role no backend.
 
 As rotas internas exigem `Authorization: Bearer <WHATSAPP_JOURNEY_PUBLICATION_TOKEN>`:
 
 ```json
 POST /api/integrations/whatsapp/journey-publications/claim
-{"destinationKey":"jornada-15-dias-grupo-principal","workerId":"n8n-publicacao-jornada","provider":"manual"}
+{"destinationKey":"jornada-15-dias-operador-evolucao-clinica","workerId":"n8n-publicacao-jornada","provider":"evolution"}
 ```
 
 Retorna `{ "claimed": false, "publication": null }` quando não há item vencido. Quando há, retorna `publicationId`, conteúdo editorial, `hasWhatsappMessage`, URL pública derivada da jornada, `scheduledAt`, `claimExpiresAt` e `attempt`.
@@ -33,13 +33,15 @@ POST /api/integrations/whatsapp/journey-publications/fail
 
 Falhas retryable usam 5, 15, 30 e 60 minutos; após `max_attempts` tornam-se `failed`. Claims expiram em 15 minutos e são recuperados pela RPC atômica com `FOR UPDATE SKIP LOCKED`. A restrição `(journey_content_id, destination_key)` impede duplicidade.
 
+`journey_contents.published_at` é o momento em que a página pública foi publicada. `journey_whatsapp_publications.published_at` é mantido por compatibilidade e representa a entrega ao WhatsApp operador (`sent`); não representa encaminhamento ao grupo.
+
 ## Ambiente e implantação
 
 Adicionar na Vercel, sem prefixo `VITE_`:
 
 ```text
 WHATSAPP_JOURNEY_PUBLICATION_TOKEN=
-WHATSAPP_JOURNEY_DEFAULT_DESTINATION_KEY=jornada-15-dias-grupo-principal
+WHATSAPP_JOURNEY_DEFAULT_DESTINATION_KEY=jornada-15-dias-operador-evolucao-clinica
 WHATSAPP_JOURNEY_DEFAULT_DESTINATION_JID=
 ```
 

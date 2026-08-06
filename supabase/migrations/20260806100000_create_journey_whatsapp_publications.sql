@@ -51,19 +51,19 @@ BEGIN
     'pending', NULLIF(current_setting('app.journey_destination_jid', true), '')
   FROM public.journey_contents c
   JOIN public.journeys j ON j.id = c.journey_id
-  WHERE j.status = 'active' AND c.publication_status <> 'archived'
+  WHERE j.status = 'active' AND c.publication_status = 'published' AND c.published_at IS NOT NULL
     AND c.publication_date IS NOT NULL AND c.publication_time IS NOT NULL
     AND NULLIF(btrim(c.whatsapp_message), '') IS NOT NULL
   ON CONFLICT (journey_content_id, destination_key) DO UPDATE SET
     scheduled_at = EXCLUDED.scheduled_at,
-    status = CASE WHEN journey_whatsapp_publications.status IN ('sent', 'claimed') THEN journey_whatsapp_publications.status ELSE 'pending' END,
-    next_attempt_at = CASE WHEN journey_whatsapp_publications.status IN ('sent', 'claimed') THEN journey_whatsapp_publications.next_attempt_at ELSE NULL END,
+    status = CASE WHEN journey_whatsapp_publications.status IN ('sent', 'claimed', 'cancelled', 'failed') THEN journey_whatsapp_publications.status ELSE 'pending' END,
+    next_attempt_at = CASE WHEN journey_whatsapp_publications.status IN ('sent', 'claimed', 'failed') THEN journey_whatsapp_publications.next_attempt_at ELSE NULL END,
     updated_at = now();
 
   UPDATE public.journey_whatsapp_publications p SET status = 'cancelled', updated_at = now()
   WHERE p.destination_key = p_destination_key AND p.status IN ('pending', 'failed')
     AND EXISTS (SELECT 1 FROM public.journey_contents c JOIN public.journeys j ON j.id = c.journey_id
-      WHERE c.id = p.journey_content_id AND (j.status <> 'active' OR c.publication_status = 'archived'
+      WHERE c.id = p.journey_content_id AND (j.status <> 'active' OR c.publication_status <> 'published' OR c.published_at IS NULL
         OR c.publication_date IS NULL OR c.publication_time IS NULL OR NULLIF(btrim(c.whatsapp_message), '') IS NULL));
   GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
@@ -79,9 +79,16 @@ BEGIN
     next_attempt_at = NULL, updated_at = now()
   WHERE destination_key = p_destination_key AND status = 'claimed' AND claim_expires_at < now();
   SELECT * INTO v_row FROM public.journey_whatsapp_publications
-  WHERE destination_key = p_destination_key AND status IN ('pending', 'failed')
+  WHERE destination_key = p_destination_key AND status = 'pending'
     AND scheduled_at <= now() AND (next_attempt_at IS NULL OR next_attempt_at <= now()) AND attempts < max_attempts
-  ORDER BY scheduled_at, created_at FOR UPDATE SKIP LOCKED LIMIT 1;
+    AND EXISTS (
+      SELECT 1 FROM public.journey_contents c JOIN public.journeys j ON j.id = c.journey_id
+      WHERE c.id = journey_whatsapp_publications.journey_content_id
+        AND j.status = 'active' AND c.publication_status = 'published' AND c.published_at IS NOT NULL
+        AND NULLIF(btrim(c.whatsapp_message), '') IS NOT NULL
+        AND c.publication_date IS NOT NULL AND c.publication_time IS NOT NULL
+    )
+  ORDER BY scheduled_at, created_at LIMIT 1 FOR UPDATE SKIP LOCKED;
   IF NOT FOUND THEN RETURN jsonb_build_object('claimed', false, 'publication', NULL); END IF;
   UPDATE public.journey_whatsapp_publications SET status = 'claimed', attempts = attempts + 1,
     claimed_at = now(), claim_expires_at = now() + make_interval(mins => p_claim_minutes), claimed_by = p_worker_id,
@@ -93,3 +100,11 @@ REVOKE ALL ON FUNCTION public.sync_journey_whatsapp_publications(text) FROM PUBL
 REVOKE ALL ON FUNCTION public.claim_journey_whatsapp_publication(text, text, text, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.sync_journey_whatsapp_publications(text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.claim_journey_whatsapp_publication(text, text, text, integer) TO service_role;
+
+DROP POLICY IF EXISTS "Allow public read access to active journey contents" ON public.journey_contents;
+CREATE POLICY "Allow public read access to published journey contents"
+ON public.journey_contents FOR SELECT
+USING (
+  EXISTS (SELECT 1 FROM public.journeys j WHERE j.id = journey_id AND j.status = 'active')
+  AND publication_status = 'published'
+);
