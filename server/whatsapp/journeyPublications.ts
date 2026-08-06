@@ -77,5 +77,5 @@ export function publicJourneyUrls(origin: string, journey: { slug: string; publi
     ? (/^https?:\/\//i.test(suppliedCentral) ? normalizePublicOrigin(suppliedCentral) : `${normalizedOrigin}/${suppliedCentral.replace(/^\/+|\/+$/g, "")}`)
     : `${normalizedOrigin}/jornada/${encodeURIComponent(journey.slug)}`;
   if (!String(contentSlug || "").trim() || String(contentSlug).includes("/")) throw new Error("contentSlug inválido.");
-  return { centralUrl, contentUrl: `${centralUrl.replace(/\/$/, "")}/${encodeURIComponent(contentSlug)}` };
+  return { centralUrl, contentUrl: `${centralUrl.replace(/\/+$/, "")}/#${encodeURIComponent(contentSlug)}` };
 }

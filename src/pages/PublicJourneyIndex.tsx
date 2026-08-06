@@ -71,6 +71,7 @@ export default function PublicJourneyIndex() {
   // Rastreamento de UTMs
   const [utmQueryString, setUtmQueryString] = useState('');
   const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
+  const lastAutoScrollTargetRef = useRef<string | null>(null);
 
   // Capturar e reter parâmetros UTM em sessionStorage
   useEffect(() => {
@@ -339,10 +340,13 @@ export default function PublicJourneyIndex() {
       activeContentSlug = journeySlug;
     }
 
-    // 1. Tentar rolar pelo slug do conteúdo
+    // 1. Tentar rolar pelo slug do conteúdo. O alvo só é aplicado uma vez para
+    // não prender a pessoa na mesma posição quando ela tenta navegar pela página.
     if (activeContentSlug) {
       const match = days.find(d => d.slug === activeContentSlug && d.status !== 'coming_soon');
-      if (match) {
+      const targetKey = `route:${activeContentSlug}`;
+      if (match && lastAutoScrollTargetRef.current !== targetKey) {
+        lastAutoScrollTargetRef.current = targetKey;
         setTimeout(() => {
           scrollToElement(`dia-${match.dayNumber}`);
           // Dispara analytics de abertura direta pelo link
@@ -361,7 +365,9 @@ export default function PublicJourneyIndex() {
     if (hash) {
       const targetId = hash.replace('#', '');
       const match = days.find(d => d.slug === targetId && d.status !== 'coming_soon');
-      if (match) {
+      const targetKey = `hash:${targetId}`;
+      if (match && lastAutoScrollTargetRef.current !== targetKey) {
+        lastAutoScrollTargetRef.current = targetKey;
         setTimeout(() => {
           scrollToElement(`dia-${match.dayNumber}`);
         }, 300);

@@ -58,7 +58,7 @@ curl -X POST "$PUBLIC_APP_URL/api/integrations/whatsapp/journey-publications/cla
   -d '{"destinationKey":"jornada-15-dias-operador-evolucao-clinica","workerId":"n8n-publicacao-jornada","provider":"evolution"}'
 ```
 
-O sucesso contém `centralUrl`, `contentUrl`, `contentPublishedAt`, `imageUrl`, `videoUrl`, `hasWhatsappMessage`, `scheduledAt`, `claimExpiresAt` e `attempt`. `imageUrl` e `videoUrl` são opcionais; quando nulos, o n8n publica apenas texto/link. `claimed: false` significa que não há item vencido elegível. O estado `sent` significa somente entrega ao WhatsApp operador, confirmada pelo n8n/Evolution; não confirma encaminhamento ao grupo.
+O sucesso contém `centralUrl`, `contentUrl`, `contentPublishedAt`, `imageUrl`, `videoUrl`, `hasWhatsappMessage`, `scheduledAt`, `claimExpiresAt` e `attempt`. `contentUrl` usa a âncora do conteúdo na página central (por exemplo, `/jornada/jornada-15-dias/#boas-vindas`), permitindo que a pessoa navegue livremente depois da abertura. `imageUrl` e `videoUrl` são opcionais; quando nulos, o n8n publica apenas texto/link. `claimed: false` significa que não há item vencido elegível. O estado `sent` significa somente entrega ao WhatsApp operador, confirmada pelo n8n/Evolution; não confirma encaminhamento ao grupo.
 
 Para concluir, o n8n envia `publicationId`, `provider: "evolution"`, `providerMessageId` retornado pela Evolution e `publishedAt` da entrega. Repetir o complete retorna sucesso idempotente. Em falha, enviar `errorCode`, `errorMessage` sanitizada e `retryable`; a página continua publicada e a fila aplica backoff de 5, 15, 30 e 60 minutos.
 

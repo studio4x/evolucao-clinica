@@ -19,9 +19,9 @@ assert.deepEqual(validateCompletePayload({ publicationId: "id", provider: "manua
 assert.throws(() => validateCompletePayload({ publicationId: "id", provider: "invalid" }));
 assert.deepEqual(validateFailPayload({ publicationId: "id", errorCode: "PROVIDER_UNAVAILABLE", errorMessage: "indisponível", retryable: true }).retryable, true);
 assert.deepEqual([1, 2, 3, 4, 5].map(retryDelayMinutes), [5, 15, 30, 60, 60]);
-assert.deepEqual(publicJourneyUrls("https://example.test", { slug: "jornada-15-dias" }, "boas-vindas"), { centralUrl: "https://example.test/jornada/jornada-15-dias", contentUrl: "https://example.test/jornada/jornada-15-dias/boas-vindas" });
-assert.deepEqual(publicJourneyUrls("preview.vercel.app", { slug: "jornada-15-dias" }, "dia 1"), { centralUrl: "https://preview.vercel.app/jornada/jornada-15-dias", contentUrl: "https://preview.vercel.app/jornada/jornada-15-dias/dia%201" });
-assert.deepEqual(publicJourneyUrls("https://example.test/", { slug: "jornada-15-dias", public_url: "https://example.test/jornada/jornada-15-dias/" }, "boas-vindas"), { centralUrl: "https://example.test/jornada/jornada-15-dias", contentUrl: "https://example.test/jornada/jornada-15-dias/boas-vindas" });
+assert.deepEqual(publicJourneyUrls("https://example.test", { slug: "jornada-15-dias" }, "boas-vindas"), { centralUrl: "https://example.test/jornada/jornada-15-dias", contentUrl: "https://example.test/jornada/jornada-15-dias/#boas-vindas" });
+assert.deepEqual(publicJourneyUrls("preview.vercel.app", { slug: "jornada-15-dias" }, "dia 1"), { centralUrl: "https://preview.vercel.app/jornada/jornada-15-dias", contentUrl: "https://preview.vercel.app/jornada/jornada-15-dias/#dia%201" });
+assert.deepEqual(publicJourneyUrls("https://example.test/", { slug: "jornada-15-dias", public_url: "https://example.test/jornada/jornada-15-dias/" }, "boas-vindas"), { centralUrl: "https://example.test/jornada/jornada-15-dias", contentUrl: "https://example.test/jornada/jornada-15-dias/#boas-vindas" });
 assert.equal(normalizePublicOrigin("https://example.test/"), "https://example.test");
 assert.equal(normalizePublicOrigin("example.test"), "https://example.test");
 assert.equal(normalizePublicOrigin("https://evolucaoclinica.app.br"), "https://www.evolucaoclinica.app.br");
@@ -69,6 +69,7 @@ assert.doesNotMatch(readFileSync(new URL("../vercel.json", import.meta.url), "ut
 assert.doesNotMatch(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /buildCronBootstrapSql|bootstrapSupabaseCronJobs/);
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /\/api\/admin\/journey-publication-cron/);
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /verify_supabase_cron_secret/);
+assert.match(readFileSync(new URL("../src/pages/PublicJourneyIndex.tsx", import.meta.url), "utf8"), /lastAutoScrollTargetRef/);
 
 const order: string[] = [];
 let updatePayload: Record<string, unknown> | null = null;
