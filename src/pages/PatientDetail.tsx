@@ -544,6 +544,7 @@ export default function PatientDetail() {
       return;
     }
     setSigningEvolutionId(evoId);
+    let evolutionSigned = false;
     try {
       // Assina no banco
       const { error } = await supabase
@@ -554,6 +555,14 @@ export default function PatientDetail() {
         .eq('id', evoId);
 
       if (error) throw error;
+      evolutionSigned = true;
+
+      void sendNotification({
+        title: "🔒 Evolução Assinada Digitalmente",
+        content: `A evolução do paciente ${patient?.full_name} foi fechada e assinada com segurança no servidor.`,
+        type: "success",
+        link: `/painel/patients/${patient?.id}`
+      });
 
       // Oferecer salvar o PDF na pasta do Google Drive do paciente
       if (hasClinicalAccess && googleAccessToken && patient?.target_folder_id) {
@@ -584,23 +593,50 @@ export default function PatientDetail() {
               ? evoObj.session_date.split('-').reverse().join('-')
               : new Date(evoObj.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
             const fileName = `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`;
-            
-            await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);
+
+            try {
+              await uploadPdfToGoogleDrive(googleAccessToken, pdfBlob, fileName, patient.target_folder_id);
+            } catch (uploadError) {
+              console.error('A evolução foi assinada, mas não foi possível salvar o PDF no Google Drive:', uploadError);
+
+              if (isGoogleAuthenticationError(uploadError)) {
+                setGoogleAccessToken(null);
+                const shouldReconnectGoogle = await requestConfirmation({
+                  title: 'Evolução assinada; reconectar Google Drive?',
+                  message: 'A assinatura foi concluída com segurança. A sessão do Google neste dispositivo expirou antes de salvar a cópia em PDF.',
+                  warning: 'O PDF ainda não foi salvo. Após reconectar sua conta Google, use o botão “Salvar PDF” nesta evolução para concluir a cópia.',
+                  confirmLabel: 'Reconectar Google',
+                  cancelLabel: 'Agora não',
+                  icon: 'shield',
+                  variant: 'info'
+                });
+
+                if (shouldReconnectGoogle) {
+                  await requestGoogleOAuth({
+                    requiredScopes: 'clinicalDocs',
+                    currentGrantedScopes: googleGrantedScopes,
+                    redirectTo: getCurrentGoogleOAuthRedirectUrl()
+                  });
+                }
+                await fetchData();
+                return;
+              }
+
+              alert('Evolução assinada com sucesso, mas não foi possível salvar a cópia em PDF no Google Drive. Você pode tentar novamente pelo botão “Salvar PDF”.');
+            }
           }
         }
       }
-
-      void sendNotification({
-        title: "🔒 Evolução Assinada Digitalmente",
-        content: `A evolução do paciente ${patient?.full_name} foi fechada e assinada com segurança no servidor.`,
-        type: "success",
-        link: `/painel/patients/${patient?.id}`
-      });
 
       alert(`Evolução assinada com sucesso!`);
       await fetchData();
     } catch (error: any) {
       console.error("Erro ao assinar evolução:", error);
+      if (evolutionSigned) {
+        alert('Evolução assinada com sucesso, mas ocorreu uma falha após a assinatura. Confira a evolução e, se necessário, tente salvar o PDF novamente.');
+        await fetchData();
+        return;
+      }
       alert("Erro ao assinar evolução: " + (error.message || error));
     } finally {
       setSigningEvolutionId(null);
