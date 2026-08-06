@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react';
 import DOMPurify from 'dompurify';
-import { AlertTriangle, Loader2, Mail, Pencil, RefreshCw, Save, X } from 'lucide-react';
+import { AlertTriangle, Bold, Heading2, Italic, Link2, List, ListOrdered, Loader2, Mail, Pencil, RefreshCw, Save, Underline, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 type EmailTemplate = {
@@ -17,7 +17,6 @@ type EmailTemplate = {
 type TemplateDraft = Pick<EmailTemplate, 'subject_template' | 'preheader_template' | 'body_template' | 'cta_label_template'>;
 
 const TOKEN_HELP = 'Use variáveis entre chaves, por exemplo {{nome}}. Elas são substituídas automaticamente no envio.';
-const HTML_HELP = 'Use HTML de e-mail, como <p>, <strong>, <a>, <ul>, <table> e estilos inline. O mesmo HTML é inserido no e-mail enviado.';
 const EMAIL_HTML_TAGS = ['a', 'b', 'blockquote', 'br', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'hr', 'i', 'img', 'li', 'ol', 'p', 'span', 'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'u', 'ul'];
 const EMAIL_HTML_ATTRIBUTES = ['align', 'alt', 'border', 'cellpadding', 'cellspacing', 'class', 'colspan', 'height', 'href', 'rel', 'role', 'rowspan', 'src', 'style', 'target', 'title', 'valign', 'width'];
 const PREVIEW_VARIABLES: Record<string, string> = {
@@ -41,6 +40,76 @@ function sanitizeEmailHtml(value: string) {
 function previewEmailHtml(value: string) {
   const withPreviewVariables = value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => PREVIEW_VARIABLES[key] || `{{${key}}}`);
   return sanitizeEmailHtml(withPreviewVariables);
+}
+
+function HtmlEmailRichEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const lastValueRef = useRef(value);
+
+  useEffect(() => {
+    if (!editorRef.current || lastValueRef.current === value) return;
+    const safeHtml = sanitizeEmailHtml(value);
+    editorRef.current.innerHTML = safeHtml;
+    lastValueRef.current = safeHtml;
+  }, [value]);
+
+  const emitChange = () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const safeHtml = sanitizeEmailHtml(editor.innerHTML);
+    lastValueRef.current = safeHtml;
+    onChange(safeHtml);
+  };
+
+  const format = (command: string, argument?: string) => {
+    editorRef.current?.focus();
+    document.execCommand(command, false, argument);
+    emitChange();
+  };
+
+  const createLink = () => {
+    const url = window.prompt('Informe a URL do link (https://...)');
+    if (!url?.trim()) return;
+    format('createLink', url.trim());
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const html = event.clipboardData.getData('text/html');
+    const text = event.clipboardData.getData('text/plain');
+    const content = html || `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\r?\n/g, '<br/>')}</p>`;
+    document.execCommand('insertHTML', false, sanitizeEmailHtml(content));
+    emitChange();
+  };
+
+  const buttonClass = 'rounded-lg p-2 text-brand-text-muted hover:bg-white hover:text-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/30';
+  const toolbarButton = (title: string, action: () => void, icon: ReactNode) => (
+    <button type="button" title={title} aria-label={title} onMouseDown={(event) => event.preventDefault()} onClick={action} className={buttonClass}>{icon}</button>
+  );
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-brand-border bg-white focus-within:ring-1 focus-within:ring-brand-primary">
+      <div className="flex flex-wrap gap-1 border-b border-brand-border bg-brand-bg/50 p-2" aria-label="Ferramentas do editor">
+        {toolbarButton('Negrito', () => format('bold'), <Bold size={16} />)}
+        {toolbarButton('Itálico', () => format('italic'), <Italic size={16} />)}
+        {toolbarButton('Sublinhado', () => format('underline'), <Underline size={16} />)}
+        {toolbarButton('Título', () => format('formatBlock', 'h2'), <Heading2 size={16} />)}
+        {toolbarButton('Lista com marcadores', () => format('insertUnorderedList'), <List size={16} />)}
+        {toolbarButton('Lista numerada', () => format('insertOrderedList'), <ListOrdered size={16} />)}
+        {toolbarButton('Inserir link', createLink, <Link2 size={16} />)}
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={emitChange}
+        onBlur={emitChange}
+        onPaste={handlePaste}
+        dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(value) }}
+        className="min-h-60 max-h-[520px] overflow-y-auto p-5 text-sm leading-relaxed text-brand-text outline-none [&_a]:text-brand-primary [&_a]:underline [&_h1]:my-3 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:my-3 [&_h2]:text-xl [&_h2]:font-bold [&_h3]:my-2 [&_h3]:text-lg [&_h3]:font-semibold [&_img]:max-w-full [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-0 [&_p+_p]:mt-3 [&_table]:max-w-full [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6"
+      />
+    </div>
+  );
 }
 
 export default function EmailTransactionalTemplates() {
@@ -169,13 +238,10 @@ export default function EmailTransactionalTemplates() {
                     <label className="block text-xs font-semibold text-brand-text">Prévia
                       <input value={draft.preheader_template || ''} onChange={(event) => setDraft({ ...draft, preheader_template: event.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-sm font-normal focus:border-brand-primary focus:outline-none" />
                     </label>
-                    <label className="block text-xs font-semibold text-brand-text">Conteúdo em HTML
-                      <textarea value={draft.body_template} onChange={(event) => setDraft({ ...draft, body_template: event.target.value })} rows={12} spellCheck={false} className="mt-1.5 w-full resize-y rounded-xl border border-brand-border bg-white px-3 py-2 font-mono text-xs font-normal leading-relaxed focus:border-brand-primary focus:outline-none" />
-                    </label>
-                    <p className="text-xs text-brand-text-muted">{HTML_HELP}</p>
-                    <div className="rounded-xl border border-brand-border bg-white p-4">
-                      <span className="text-xs font-semibold text-brand-text">Pré-visualização do conteúdo</span>
-                      <div className="mt-3 border-t border-brand-border/60 pt-3 text-sm leading-relaxed text-brand-text [&_a]:text-brand-primary [&_a]:underline [&_img]:max-w-full [&_table]:max-w-full" dangerouslySetInnerHTML={{ __html: previewEmailHtml(draft.body_template) }} />
+                    <div>
+                      <span className="block text-xs font-semibold text-brand-text">Conteúdo do e-mail</span>
+                      <p className="mt-1 text-xs text-brand-text-muted">Edite visualmente como o conteúdo será exibido no e-mail. O HTML é salvo internamente.</p>
+                      <div className="mt-1.5"><HtmlEmailRichEditor value={draft.body_template} onChange={(body_template) => setDraft({ ...draft, body_template })} /></div>
                     </div>
                     <label className="block text-xs font-semibold text-brand-text">Texto do botão (opcional)
                       <input value={draft.cta_label_template || ''} onChange={(event) => setDraft({ ...draft, cta_label_template: event.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-sm font-normal focus:border-brand-primary focus:outline-none" />
