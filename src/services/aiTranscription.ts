@@ -118,6 +118,16 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
     throw new Error("O áudio excede o tamanho máximo permitido de 20 MB por evolução.");
   }
 
+  // O seletor de arquivos do Android pode devolver um File vinculado a um
+  // content:// URI temporário. O WebView consegue lê-lo, mas pode falhar ao
+  // usá-lo diretamente como corpo de uma segunda requisição. Materializar os
+  // bytes torna o upload independente desse URI e mantém o conteúdo original.
+  const audioBytes = new Uint8Array(await audioBlob.arrayBuffer());
+
+  if (audioBytes.byteLength === 0) {
+    throw new Error("O arquivo de áudio selecionado está vazio ou não pôde ser lido neste dispositivo.");
+  }
+
   const detectedAudioDuration = typeof audioDuration === 'number' && Number.isFinite(audioDuration) && audioDuration > 0
     ? audioDuration
     : await getAudioDurationFromBlob(audioBlob);
@@ -151,7 +161,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
 
       console.log(`[AI-Service] Enviando áudio para transcrição via Storage + backend - Tentativa ${retryCount + 1}`);
 
-      const { error: uploadError } = await supabase.storage.from('temp-audio').upload(audioPath, audioBlob, {
+      const { error: uploadError } = await supabase.storage.from('temp-audio').upload(audioPath, audioBytes, {
         contentType: normalizedMimeType,
         upsert: false,
         cacheControl: '60',
