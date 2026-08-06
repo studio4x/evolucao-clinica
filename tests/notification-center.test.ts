@@ -32,6 +32,8 @@ assert.match(emailHistorySource, /Próxima página/);
 assert.match(adminSource, /<EmailTransactionalTemplates\s*\/>/);
 assert.match(emailTemplatesSource, /Modelos de E-mails Transacionais/);
 assert.match(emailTemplatesSource, /from\('email_templates'\)/);
+assert.match(emailTemplatesSource, /aria-expanded=\{isExpanded\}/);
+assert.match(emailTemplatesSource, /Recolher/);
 assert.match(emailTemplatesSource, /Editar conteúdo/);
 assert.match(emailTemplatesSource, /Edite visualmente como o conteúdo será exibido no e-mail/);
 assert.match(emailTemplatesSource, /HtmlEmailRichEditor/);

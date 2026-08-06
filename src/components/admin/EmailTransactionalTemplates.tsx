@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react';
 import DOMPurify from 'dompurify';
-import { AlertTriangle, Bold, Check, Heading2, Italic, Link2, List, ListOrdered, Loader2, Mail, Pencil, RefreshCw, Save, Send, Underline, X } from 'lucide-react';
+import { AlertTriangle, Bold, Check, ChevronDown, Heading2, Italic, Link2, List, ListOrdered, Loader2, Mail, Pencil, RefreshCw, Save, Send, Underline, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 type EmailTemplate = {
@@ -123,6 +123,7 @@ export default function EmailTransactionalTemplates() {
   const [testRecipient, setTestRecipient] = useState(DEFAULT_TEST_RECIPIENT);
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [testSuccessKey, setTestSuccessKey] = useState<string | null>(null);
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(() => new Set());
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -146,6 +147,7 @@ export default function EmailTransactionalTemplates() {
   }, [loadTemplates]);
 
   const startEditing = (template: EmailTemplate) => {
+    setExpandedKeys((keys) => new Set(keys).add(template.key));
     setEditingKey(template.key);
     setDraft({
       subject_template: template.subject_template,
@@ -158,6 +160,16 @@ export default function EmailTransactionalTemplates() {
   const cancelEditing = () => {
     setEditingKey(null);
     setDraft(null);
+  };
+
+  const toggleExpanded = (key: string) => {
+    if (editingKey === key) return;
+    setExpandedKeys((keys) => {
+      const nextKeys = new Set(keys);
+      if (nextKeys.has(key)) nextKeys.delete(key);
+      else nextKeys.add(key);
+      return nextKeys;
+    });
   };
 
   const saveTemplate = async (template: EmailTemplate) => {
@@ -252,31 +264,46 @@ export default function EmailTransactionalTemplates() {
       ) : templates.length === 0 ? (
         <div className="p-10 text-center text-sm text-brand-text-muted">Nenhum modelo configurado.</div>
       ) : (
-        <div className="divide-y divide-brand-border/30">
+        <div>
           {templates.map((template) => {
             const isEditing = editingKey === template.key;
+            const isExpanded = expandedKeys.has(template.key);
+            const contentId = `email-template-content-${template.key}`;
             return (
-              <div key={template.key} className="p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+              <div key={template.key} className="border-b border-brand-border/30 last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(template.key)}
+                  aria-expanded={isExpanded}
+                  aria-controls={contentId}
+                  className="flex w-full items-start justify-between gap-3 p-5 text-left transition-colors hover:bg-brand-bg/30 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary/30"
+                >
+                  <span>
                     <strong className="text-sm text-brand-text">{template.label}</strong>
                     <p className="mt-1 text-xs text-brand-text-muted">{template.source}</p>
-                  </div>
-                  {!isEditing && (
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => void sendTest(template)} disabled={testingKey === template.key || !testRecipient.trim()} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50">
-                        {testingKey === template.key ? <Loader2 size={14} className="animate-spin" /> : testSuccessKey === template.key ? <Check size={14} /> : <Send size={14} />}
-                        {testingKey === template.key ? 'Enviando teste...' : testSuccessKey === template.key ? 'Teste enviado' : 'Enviar teste'}
-                      </button>
-                      <button type="button" onClick={() => startEditing(template)} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs">
-                        <Pencil size={14} />Editar conteúdo
-                      </button>
-                    </div>
-                  )}
-                </div>
+                  </span>
+                  <span className="flex items-center gap-2 text-xs font-semibold text-brand-primary">
+                    {isExpanded ? 'Recolher' : 'Expandir'}
+                    <ChevronDown size={18} className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                  </span>
+                </button>
 
-                {isEditing && draft ? (
-                  <div className="mt-4 space-y-3 rounded-xl bg-brand-bg/30 p-4">
+                {isExpanded && (
+                  <div id={contentId} className="px-5 pb-5">
+                    {!isEditing && (
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button type="button" onClick={() => void sendTest(template)} disabled={testingKey === template.key || !testRecipient.trim()} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50">
+                          {testingKey === template.key ? <Loader2 size={14} className="animate-spin" /> : testSuccessKey === template.key ? <Check size={14} /> : <Send size={14} />}
+                          {testingKey === template.key ? 'Enviando teste...' : testSuccessKey === template.key ? 'Teste enviado' : 'Enviar teste'}
+                        </button>
+                        <button type="button" onClick={() => startEditing(template)} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs">
+                          <Pencil size={14} />Editar conteúdo
+                        </button>
+                      </div>
+                    )}
+
+                    {isEditing && draft ? (
+                      <div className="mt-4 space-y-3 rounded-xl bg-brand-bg/30 p-4">
                     <p className="text-xs text-brand-text-muted">{TOKEN_HELP}</p>
                     <label className="block text-xs font-semibold text-brand-text">Assunto
                       <input value={draft.subject_template} onChange={(event) => setDraft({ ...draft, subject_template: event.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-sm font-normal focus:border-brand-primary focus:outline-none" />
@@ -298,13 +325,15 @@ export default function EmailTransactionalTemplates() {
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Salvar modelo
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 grid gap-3 rounded-xl bg-brand-bg/30 p-4 text-xs sm:grid-cols-2">
+                      </div>
+                    ) : (
+                      <div className="mt-4 grid gap-3 rounded-xl bg-brand-bg/30 p-4 text-xs sm:grid-cols-2">
                     <div><span className="font-bold uppercase tracking-wide text-brand-text-muted">Assunto</span><p className="mt-1 text-brand-text">{template.subject_template}</p></div>
                     {template.preheader_template && <div><span className="font-bold uppercase tracking-wide text-brand-text-muted">Prévia</span><p className="mt-1 text-brand-text">{template.preheader_template}</p></div>}
                     <div className="sm:col-span-2"><span className="font-bold uppercase tracking-wide text-brand-text-muted">Conteúdo HTML</span><div className="mt-2 rounded-lg border border-brand-border/60 bg-white p-3 text-sm leading-relaxed text-brand-text [&_a]:text-brand-primary [&_a]:underline [&_img]:max-w-full [&_table]:max-w-full" dangerouslySetInnerHTML={{ __html: previewEmailHtml(template.body_template) }} /></div>
                     {template.cta_label_template && <div className="sm:col-span-2"><span className="font-bold uppercase tracking-wide text-brand-text-muted">Botão</span><p className="mt-1 text-brand-text">{template.cta_label_template}</p></div>}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
