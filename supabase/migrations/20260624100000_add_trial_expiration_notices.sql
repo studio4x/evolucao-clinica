@@ -18,7 +18,7 @@ SELECT cron.schedule(
   '0 * * * *',
   $$
   SELECT net.http_get(
-    url := 'https://evolucaoclinica.app.br/api/cron/send-trial-expiration-notices'
+    url := 'https://www.evolucaoclinica.app.br/api/cron/send-trial-expiration-notices'
   );
   $$
 );

@@ -26,7 +26,7 @@ SELECT cron.schedule(
   '*/5 * * * *',
   $$
   SELECT net.http_get(
-    url := 'https://evolucaoclinica.app.br/api/cron/send-daily-push?secret=' ||
+    url := 'https://www.evolucaoclinica.app.br/api/cron/send-daily-push?secret=' ||
       COALESCE((SELECT api_key::jsonb ->> 'secret'
                 FROM public.settings
                 WHERE id = 'daily_push_cron_secret'), '')

@@ -51,18 +51,19 @@ export function validateFailPayload(payload: unknown) {
   return { publicationId, errorCode, errorMessage, retryable: input.retryable };
 }
 export function retryDelayMinutes(attempt: number) { return [5, 15, 30, 60][Math.max(0, Math.min(3, attempt - 1))]; }
-export function normalizePublicOrigin(value: string | undefined, fallback = "https://evolucaoclinica.app.br") {
+export function normalizePublicOrigin(value: string | undefined, fallback = "https://www.evolucaoclinica.app.br") {
   const raw = String(value || fallback).trim();
   const candidate = /^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
   try {
     const parsed = new URL(candidate);
     if (!/^https?:$/.test(parsed.protocol)) throw new Error("Protocolo público inválido.");
+    if (parsed.hostname.toLowerCase() === "evolucaoclinica.app.br") parsed.hostname = "www.evolucaoclinica.app.br";
     return parsed.toString().replace(/\/$/, "");
   } catch {
-    return normalizePublicOrigin(fallback, "https://evolucaoclinica.app.br");
+    return normalizePublicOrigin(fallback, "https://www.evolucaoclinica.app.br");
   }
 }
-export function resolveProductionOrigin(value: string | undefined, fallback = "https://evolucaoclinica.app.br") {
+export function resolveProductionOrigin(value: string | undefined, fallback = "https://www.evolucaoclinica.app.br") {
   const normalized = normalizePublicOrigin(value, fallback);
   try {
     if (new URL(normalized).hostname.toLowerCase().endsWith(".vercel.app")) return normalizePublicOrigin(fallback);

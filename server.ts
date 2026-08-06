@@ -78,7 +78,7 @@ export const app = express();
 app.disable("x-powered-by");
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
-const DEFAULT_PRODUCTION_ORIGIN = "https://evolucaoclinica.app.br";
+const DEFAULT_PRODUCTION_ORIGIN = "https://www.evolucaoclinica.app.br";
 const PRODUCTION_ORIGIN = resolveProductionOrigin(process.env.PUBLIC_APP_URL, DEFAULT_PRODUCTION_ORIGIN);
 
 // Configuração do Supabase Admin: a Service Role é exclusivamente server-side.
@@ -6104,7 +6104,7 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
     }
 
     const theme = await getEmailTheme();
-    const publicLink = reportId ? `${origin || "https://evolucaoclinica.app.br"}/public/reports/${reportId}` : null;
+    const publicLink = reportId ? `${origin || "https://www.evolucaoclinica.app.br"}/public/reports/${reportId}` : null;
 
     // Formatar como HTML (quebrando linhas)
     const formattedHtml = buildEmailShell(theme, {

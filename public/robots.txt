@@ -7,4 +7,4 @@ Disallow: /pending
 Disallow: /share-target
 Disallow: /api/
 
-Sitemap: https://evolucaoclinica.app.br/sitemap.xml
+Sitemap: https://www.evolucaoclinica.app.br/sitemap.xml

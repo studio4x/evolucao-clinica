@@ -42,7 +42,7 @@ Adicionar na Vercel, sem prefixo `VITE_`:
 ```text
 WHATSAPP_JOURNEY_PUBLICATION_TOKEN=
 WHATSAPP_JOURNEY_DEFAULT_DESTINATION_KEY=jornada-15-dias-operador-evolucao-clinica
-PUBLIC_APP_URL=https://evolucaoclinica.app.br
+PUBLIC_APP_URL=https://www.evolucaoclinica.app.br
 ```
 
 Aplicar a migration no Supabase antes de usar as rotas. O JID não é configurado nem retornado pela plataforma; será resolvido posteriormente no n8n. A rota administrativa `GET /api/admin/journey-whatsapp-publications` usa a sessão autenticada e `requireAdmin`; a tela de conteúdos da jornada exibe status editorial e da fila, tentativas, data, erro resumido e ações confirmadas de recolocar/cancelar.

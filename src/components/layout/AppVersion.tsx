@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const APP_VERSION = "v1.10.733";
+export const APP_VERSION = "v1.10.734";
 
 export const PLAY_STORE_VERSION = "1.0.76";
 

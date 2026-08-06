@@ -411,7 +411,7 @@ export default function PublicJourneyIndex() {
 
   // Auxiliares para URLs e UTMs
   const getTrialUrlForDay = (dayNum: number, customCtaUrl?: string) => {
-    const baseUrl = customCtaUrl || journey?.trial_url || 'https://evolucaoclinica.app.br/login';
+    const baseUrl = customCtaUrl || journey?.trial_url || 'https://www.evolucaoclinica.app.br/login';
     const params = new URLSearchParams(utmQueryString);
     params.set('utm_content', `dia_${String(dayNum).padStart(2, '0')}`);
     return `${baseUrl.split('?')[0]}?${params.toString()}`;
@@ -426,7 +426,7 @@ export default function PublicJourneyIndex() {
   };
 
   const getGlobalTrialUrl = () => {
-    const baseUrl = journey?.trial_url || 'https://evolucaoclinica.app.br/login';
+    const baseUrl = journey?.trial_url || 'https://www.evolucaoclinica.app.br/login';
     if (!utmQueryString) return baseUrl;
     return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${utmQueryString.slice(1)}`;
   };

@@ -12,7 +12,7 @@ O projeto Vercel está no plano Hobby, que não aceita cron jobs com execução 
 
 ```sql
 -- Execute uma única vez, com valores mantidos somente no Vault.
-select vault.create_secret('https://evolucaoclinica.app.br', 'lifecycle_origin');
+select vault.create_secret('https://www.evolucaoclinica.app.br', 'lifecycle_origin');
 select vault.create_secret('REPLACE_WITH_THE_VERCEL_CRON_SECRET', 'lifecycle_cron_secret');
 
 do $outer$

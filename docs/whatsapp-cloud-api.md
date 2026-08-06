@@ -155,7 +155,7 @@ O processamento muda exclusivamente `whatsapp_opt_in = false`, `whatsapp_enabled
 
 ## Consulta interna de conta pelo n8n
 
-`POST https://evolucaoclinica.app.br/api/integrations/whatsapp/user-lookup` permite que o workflow interno de atendimento identifique, pelo número internacional, se há uma conta registrada. Ele exige `Authorization: Bearer <WHATSAPP_USER_LOOKUP_TOKEN>` e `Content-Type: application/json`.
+`POST https://www.evolucaoclinica.app.br/api/integrations/whatsapp/user-lookup` permite que o workflow interno de atendimento identifique, pelo número internacional, se há uma conta registrada. Ele exige `Authorization: Bearer <WHATSAPP_USER_LOOKUP_TOKEN>` e `Content-Type: application/json`.
 
 ```json
 {

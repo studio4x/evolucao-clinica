@@ -4,10 +4,10 @@ Plataforma web para registro de evoluções clínicas com áudio, transcrição 
 
 ## Site público
 
-- Homepage: https://evolucaoclinica.app.br/
-- Política de Privacidade: https://evolucaoclinica.app.br/privacy
-- Termos de Serviço: https://evolucaoclinica.app.br/terms
-- Login: https://evolucaoclinica.app.br/login
+- Homepage: https://www.evolucaoclinica.app.br/
+- Política de Privacidade: https://www.evolucaoclinica.app.br/privacy
+- Termos de Serviço: https://www.evolucaoclinica.app.br/terms
+- Login: https://www.evolucaoclinica.app.br/login
 
 ## Resumo para modelos
 

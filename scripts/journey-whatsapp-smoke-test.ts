@@ -6,7 +6,7 @@ const args = new Set(process.argv.slice(2));
 dotenv.config();
 dotenv.config({ path: ".env.local" });
 const mode = args.has("--linked-read-only") ? "linked" : args.has("--production-read-only") ? "production" : "local";
-const origin = normalizePublicOrigin(process.env.PUBLIC_APP_URL || "https://evolucaoclinica.app.br");
+const origin = normalizePublicOrigin(process.env.PUBLIC_APP_URL || "https://www.evolucaoclinica.app.br");
 const required = ["WHATSAPP_JOURNEY_PUBLICATION_TOKEN", "CRON_SECRET", "SUPABASE_SERVICE_ROLE_KEY"];
 
 console.log(`[journey-smoke] mode=${mode} origin=${origin}`);

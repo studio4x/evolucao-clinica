@@ -1512,7 +1512,7 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
                   type="url"
                   value={journeyForm.trial_url || ''}
                   onChange={(e) => setJourneyForm(prev => ({ ...prev, trial_url: e.target.value }))}
-                  placeholder="https://evolucaoclinica.app.br/login?trial=true"
+                  placeholder="https://www.evolucaoclinica.app.br/login?trial=true"
                   className="w-full text-xs border border-brand-border rounded-xl p-3 focus:outline-none focus:border-brand-primary"
                 />
               </div>
