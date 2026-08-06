@@ -41,6 +41,7 @@ assert.match(emailTemplatesSource, /DOMPurify\.sanitize/);
 assert.doesNotMatch(emailTemplatesSource, /\/api\/admin\/lifecycle/);
 assert.match(serverSource, /getEditableEmailTemplate/);
 assert.match(serverSource, /renderEditableEmailTemplateHtml/);
+assert.match(serverSource, /restoreEditableEmailParagraphs/);
 assert.match(serverSource, /platform-notification/);
 assert.match(serverSource, /report-delivery/);
 assert.match(serverSource, /\/api\/admin\/email-templates\/:key\/test/);

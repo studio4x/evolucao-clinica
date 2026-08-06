@@ -1166,9 +1166,19 @@ function renderEditableEmailTemplate(value: string | null | undefined, variables
   return String(value || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => String(variables[key] ?? ""));
 }
 
+function restoreEditableEmailParagraphs(value: string) {
+  return String(value || "").replace(/<p(\s[^>]*)?>([\s\S]*?)<\/p>/gi, (_match, attributes = "", content) => {
+    const openingTag = `<p${attributes}>`;
+    const normalizedContent = String(content)
+      .replace(/(?:\\n|\r?\n){2,}/g, `</p>${openingTag}`)
+      .replace(/\\n|\r?\n/g, "<br/>");
+    return `${openingTag}${normalizedContent}</p>`;
+  });
+}
+
 function normalizeEditableEmailBody(value: string) {
   const body = String(value || "").trim();
-  if (/<\/?[a-z][^>]*>/i.test(body)) return body;
+  if (/<\/?[a-z][^>]*>/i.test(body)) return restoreEditableEmailParagraphs(body);
   return `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.7;">${escapeHtml(body).replace(/\r?\n\r?\n/g, "</p><p style=\"margin:0 0 16px 0; font-size:15px; line-height:1.7;\">").replace(/\r?\n/g, "<br/>")}</p>`;
 }
 
