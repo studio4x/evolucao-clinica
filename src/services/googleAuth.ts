@@ -16,6 +16,11 @@ export const GOOGLE_SCOPE_SETS = {
 export type GoogleScopeSetName = keyof typeof GOOGLE_SCOPE_SETS;
 
 const PENDING_GOOGLE_SCOPES_KEY = 'evolucao-clinica:google-oauth-scopes';
+export const NATIVE_GOOGLE_OAUTH_REDIRECT_URL = 'evolucaoclinica://auth-callback';
+
+export const isNativeGoogleOAuthClient = () => (
+  typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent)
+);
 
 const normalizeScopes = (scopes: string[]) => Array.from(new Set(scopes.filter(Boolean)));
 
@@ -80,6 +85,7 @@ export const clearPendingGoogleScopes = () => {
 
 export const getCurrentGoogleOAuthRedirectUrl = () => {
   if (typeof window === 'undefined') return '';
+  if (isNativeGoogleOAuthClient()) return NATIVE_GOOGLE_OAUTH_REDIRECT_URL;
   return `${window.location.origin}${window.location.pathname}${window.location.search}`;
 };
 
@@ -115,11 +121,17 @@ export const requestGoogleOAuth = async ({
     ...(loginHint ? { login_hint: loginHint } : {}),
   };
 
+  // O WebView Android abre a autorização no navegador do sistema. O deep link
+  // retorna o resultado para o mesmo WebView, inclusive em renovações silenciosas.
+  const resolvedRedirectTo = isNativeGoogleOAuthClient()
+    ? NATIVE_GOOGLE_OAUTH_REDIRECT_URL
+    : redirectTo;
+
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       scopes: scopes.join(' '),
-      redirectTo,
+      redirectTo: resolvedRedirectTo,
       ...(Object.keys(queryParams).length > 0 ? { queryParams } : {}),
     },
   });

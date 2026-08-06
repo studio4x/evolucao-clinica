@@ -167,7 +167,22 @@ public class LauncherActivity extends ComponentActivity {
             Uri linkUri = Uri.parse(link.startsWith("http") ? link : "https://" + TRUSTED_HOST + (link.startsWith("/") ? link : "/" + link));
             if (isTrustedUrl(linkUri)) return linkUri.toString();
         }
+        if (isNativeOAuthCallback(fallbackUri)) return nativeOAuthCallbackUrl(fallbackUri);
         return isTrustedUrl(fallbackUri) ? fallbackUri.toString() : appUrl();
+    }
+
+    private boolean isNativeOAuthCallback(Uri uri) {
+        return uri != null
+                && "evolucaoclinica".equalsIgnoreCase(uri.getScheme())
+                && "auth-callback".equalsIgnoreCase(uri.getHost());
+    }
+
+    private String nativeOAuthCallbackUrl(Uri callbackUri) {
+        String query = callbackUri.getEncodedQuery();
+        String fragment = callbackUri.getEncodedFragment();
+        return "https://" + TRUSTED_HOST + "/auth/callback"
+                + (query == null || query.isEmpty() ? "" : "?" + query)
+                + (fragment == null || fragment.isEmpty() ? "" : "#" + fragment);
     }
 
     private String shareTargetUrl() {

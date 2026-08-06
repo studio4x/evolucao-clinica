@@ -62,7 +62,6 @@ import { PushPermissionPrompt } from './components/notifications/PushPermissionP
 const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 const AUTH_SESSION_TIMEOUT_MS = 15000;
-const isNativeWebView = typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent);
 
 function NativeBillingRestore() {
   const user = useAuthStore((state) => state.user);
@@ -383,7 +382,6 @@ export default function App() {
           const hasPersistedGoogleScopes = latestState.googleGrantedScopes.length > 0;
           const tokenAge = latestState.googleAccessTokenIssuedAt ? Date.now() - latestState.googleAccessTokenIssuedAt : Number.POSITIVE_INFINITY;
           const shouldSilentlyRefreshGoogle =
-            !isNativeWebView &&
             sameGoogleUser &&
             hasPersistedGoogleScopes &&
             !session.provider_token &&
