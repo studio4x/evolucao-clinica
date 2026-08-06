@@ -5572,6 +5572,73 @@ app.post("/api/notifications/test-email", requireAuth, async (req: any, res) => 
   }
 });
 
+const EDITABLE_EMAIL_TEMPLATE_TEST_KEYS = new Set([
+  "welcome-pending",
+  "welcome-active",
+  "platform-notification",
+  "trial-expiration",
+  "subscription-success",
+  "subscription-failure",
+  "report-delivery"
+]);
+
+const EDITABLE_EMAIL_TEMPLATE_TEST_VARIABLES = {
+  assunto: "Relatório de exemplo",
+  conteudo: "Este é um conteúdo de exemplo para a prévia do modelo de e-mail.",
+  data_fim_teste: "31/12/2026",
+  dias_de_teste: 7,
+  forma_de_pagamento: "Google Pay",
+  icone: "ℹ️",
+  motivo_da_falha: "A cobrança não foi aprovada.",
+  nome: "Profissional",
+  paciente: "Paciente de exemplo",
+  plano: "Plano Mensal",
+  titulo: "Título da notificação"
+};
+
+app.post("/api/admin/email-templates/:key/test", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const key = String(req.params.key || "").trim();
+    const recipientEmail = String(req.body?.recipientEmail || "").trim().toLowerCase();
+    if (!EDITABLE_EMAIL_TEMPLATE_TEST_KEYS.has(key)) return res.status(400).json({ error: "Modelo de e-mail inválido para teste." });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail)) return res.status(400).json({ error: "Informe um e-mail de destino válido." });
+
+    const { data: template, error: templateError } = await supabaseAdmin
+      .from("email_templates")
+      .select("label, subject_template, preheader_template, body_template, cta_label_template")
+      .eq("key", key)
+      .maybeSingle();
+    if (templateError) throw templateError;
+    if (!template) return res.status(404).json({ error: "Modelo de e-mail não encontrado." });
+
+    const subject = renderEditableEmailTemplate(template.subject_template, EDITABLE_EMAIL_TEMPLATE_TEST_VARIABLES);
+    const preheader = renderEditableEmailTemplate(template.preheader_template, EDITABLE_EMAIL_TEMPLATE_TEST_VARIABLES);
+    const bodyHtml = renderEditableEmailTemplateHtml(normalizeEditableEmailBody(template.body_template), EDITABLE_EMAIL_TEMPLATE_TEST_VARIABLES);
+    const ctaLabel = renderEditableEmailTemplate(template.cta_label_template, EDITABLE_EMAIL_TEMPLATE_TEST_VARIABLES);
+    const theme = await getEmailTheme();
+    const htmlContent = buildEmailShell(theme, {
+      title: `Teste: ${escapeHtml(template.label)}`,
+      subtitle: preheader || "Pré-visualização do modelo configurado",
+      bodyHtml: `${bodyHtml}${ctaLabel ? `<div style="text-align:center; margin:28px 0 8px 0;">${buildEmailButton(theme, "#", ctaLabel)}</div>` : ""}`,
+      footerHtml: "Este é um e-mail de teste. Nenhum dado real de profissional, paciente ou pagamento foi utilizado."
+    });
+    const result = await sendTransactionalEmail(await getNotificationSettings(), {
+      recipientEmail,
+      recipientName: "Administrador",
+      subject: `[Teste] ${subject || template.label}`,
+      textContent: `${emailHtmlToText(bodyHtml)}${ctaLabel ? `\n\n${ctaLabel}` : ""}`,
+      htmlContent,
+      source: "test-email",
+      allowFallback: true
+    });
+
+    return res.json({ success: true, provider: result.provider, messageId: result.messageId, emailDeliveryId: result.emailDeliveryId });
+  } catch (error: any) {
+    console.error("[EmailTemplates] Falha ao enviar teste:", error?.message || error);
+    return res.status(500).json({ error: error?.message || "Não foi possível enviar o e-mail de teste." });
+  }
+});
+
 app.post("/api/admin/email-deliveries/:id/resend", requireAuth, requireAdmin, async (req: any, res) => {
   try {
     const { data: delivery, error } = await supabaseAdmin

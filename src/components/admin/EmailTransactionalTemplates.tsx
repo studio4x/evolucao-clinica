@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ClipboardEvent, type ReactNode } from 'react';
 import DOMPurify from 'dompurify';
-import { AlertTriangle, Bold, Heading2, Italic, Link2, List, ListOrdered, Loader2, Mail, Pencil, RefreshCw, Save, Underline, X } from 'lucide-react';
+import { AlertTriangle, Bold, Check, Heading2, Italic, Link2, List, ListOrdered, Loader2, Mail, Pencil, RefreshCw, Save, Send, Underline, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 type EmailTemplate = {
@@ -17,6 +17,7 @@ type EmailTemplate = {
 type TemplateDraft = Pick<EmailTemplate, 'subject_template' | 'preheader_template' | 'body_template' | 'cta_label_template'>;
 
 const TOKEN_HELP = 'Use variáveis entre chaves, por exemplo {{nome}}. Elas são substituídas automaticamente no envio.';
+const DEFAULT_TEST_RECIPIENT = 'agenciastudio4x@gmail.com';
 const EMAIL_HTML_TAGS = ['a', 'b', 'blockquote', 'br', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'hr', 'i', 'img', 'li', 'ol', 'p', 'span', 'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'u', 'ul'];
 const EMAIL_HTML_ATTRIBUTES = ['align', 'alt', 'border', 'cellpadding', 'cellspacing', 'class', 'colspan', 'height', 'href', 'rel', 'role', 'rowspan', 'src', 'style', 'target', 'title', 'valign', 'width'];
 const PREVIEW_VARIABLES: Record<string, string> = {
@@ -119,6 +120,9 @@ export default function EmailTransactionalTemplates() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<TemplateDraft | null>(null);
   const [saving, setSaving] = useState(false);
+  const [testRecipient, setTestRecipient] = useState(DEFAULT_TEST_RECIPIENT);
+  const [testingKey, setTestingKey] = useState<string | null>(null);
+  const [testSuccessKey, setTestSuccessKey] = useState<string | null>(null);
 
   const loadTemplates = useCallback(async () => {
     setLoading(true);
@@ -182,6 +186,35 @@ export default function EmailTransactionalTemplates() {
     }
   };
 
+  const sendTest = async (template: EmailTemplate) => {
+    const recipientEmail = testRecipient.trim();
+    if (!recipientEmail) {
+      setError('Informe o e-mail que receberá o teste.');
+      return;
+    }
+    setTestingKey(template.key);
+    setTestSuccessKey(null);
+    setError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch(`/api/admin/email-templates/${template.key}/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sessionData.session?.access_token || ''}`,
+        },
+        body: JSON.stringify({ recipientEmail }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o e-mail de teste.');
+      setTestSuccessKey(template.key);
+    } catch (testError: any) {
+      setError(testError.message || 'Não foi possível enviar o e-mail de teste.');
+    } finally {
+      setTestingKey(null);
+    }
+  };
+
   return (
     <section className="card overflow-hidden border border-brand-border/60 bg-white shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-brand-border/40 p-5">
@@ -198,6 +231,13 @@ export default function EmailTransactionalTemplates() {
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />Atualizar
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-end gap-3 border-b border-brand-border/40 bg-brand-bg/20 px-5 py-4">
+        <label className="min-w-[260px] flex-1 text-xs font-semibold text-brand-text">E-mail para teste
+          <input type="email" value={testRecipient} onChange={(event) => setTestRecipient(event.target.value)} placeholder={DEFAULT_TEST_RECIPIENT} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-sm font-normal focus:border-brand-primary focus:outline-none" />
+        </label>
+        <p className="max-w-md text-xs leading-relaxed text-brand-text-muted">Use o botão “Enviar teste” de cada modelo após salvar as alterações.</p>
       </div>
 
       {error && (
@@ -223,9 +263,15 @@ export default function EmailTransactionalTemplates() {
                     <p className="mt-1 text-xs text-brand-text-muted">{template.source}</p>
                   </div>
                   {!isEditing && (
-                    <button type="button" onClick={() => startEditing(template)} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs">
-                      <Pencil size={14} />Editar conteúdo
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => void sendTest(template)} disabled={testingKey === template.key || !testRecipient.trim()} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50">
+                        {testingKey === template.key ? <Loader2 size={14} className="animate-spin" /> : testSuccessKey === template.key ? <Check size={14} /> : <Send size={14} />}
+                        {testingKey === template.key ? 'Enviando teste...' : testSuccessKey === template.key ? 'Teste enviado' : 'Enviar teste'}
+                      </button>
+                      <button type="button" onClick={() => startEditing(template)} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs">
+                        <Pencil size={14} />Editar conteúdo
+                      </button>
+                    </div>
                   )}
                 </div>
 

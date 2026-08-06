@@ -35,12 +35,16 @@ assert.match(emailTemplatesSource, /from\('email_templates'\)/);
 assert.match(emailTemplatesSource, /Editar conteúdo/);
 assert.match(emailTemplatesSource, /Edite visualmente como o conteúdo será exibido no e-mail/);
 assert.match(emailTemplatesSource, /HtmlEmailRichEditor/);
+assert.match(emailTemplatesSource, /agenciastudio4x@gmail\.com/);
+assert.match(emailTemplatesSource, /Enviar teste/);
 assert.match(emailTemplatesSource, /DOMPurify\.sanitize/);
 assert.doesNotMatch(emailTemplatesSource, /\/api\/admin\/lifecycle/);
 assert.match(serverSource, /getEditableEmailTemplate/);
 assert.match(serverSource, /renderEditableEmailTemplateHtml/);
 assert.match(serverSource, /platform-notification/);
 assert.match(serverSource, /report-delivery/);
+assert.match(serverSource, /\/api\/admin\/email-templates\/:key\/test/);
+assert.match(serverSource, /EDITABLE_EMAIL_TEMPLATE_TEST_KEYS/);
 assert.match(editableEmailTemplatesMigrationSource, /CREATE TABLE IF NOT EXISTS public\.email_templates/);
 assert.match(editableEmailTemplatesMigrationSource, /email_templates_admin_manage/);
 
