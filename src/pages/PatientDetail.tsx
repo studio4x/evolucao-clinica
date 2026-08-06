@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download, CloudOff, MoreVertical } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download, CloudOff, MoreVertical, LayoutDashboard } from 'lucide-react';
 import { transcribeAudio } from '../services/aiTranscription';
 import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
@@ -91,6 +91,15 @@ type ConfirmationDialogState = {
   resolve: (confirmed: boolean) => void;
 };
 
+type PatientMobileTab = 'overview' | 'history' | 'reminders' | 'reports';
+
+const patientMobileTabs: { id: PatientMobileTab; label: string; icon: typeof FileText }[] = [
+  { id: 'overview', label: 'Resumo', icon: LayoutDashboard },
+  { id: 'history', label: 'Histórico', icon: Clock },
+  { id: 'reminders', label: 'Lembretes', icon: Bell },
+  { id: 'reports', label: 'Relatórios', icon: FileText },
+];
+
 
 
 export default function PatientDetail() {
@@ -98,6 +107,7 @@ export default function PatientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [patient, setPatient] = useState<any>(null);
+  const [activeMobileTab, setActiveMobileTab] = useState<PatientMobileTab>('overview');
   const [evolutions, setEvolutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -1966,6 +1976,7 @@ export default function PatientDetail() {
 
   const lastReportObj = reports.find(r => r.id === lastGeneratedReportId);
   const isLastReportSigned = lastReportObj?.status === 'signed';
+  const mobileTabVisibility = (tab: PatientMobileTab) => activeMobileTab === tab ? 'block xl:block' : 'hidden xl:block';
 
   if (loading) return <div>Carregando...</div>;
   if (!patient) return <div>Paciente não encontrado.</div>;
@@ -1976,30 +1987,62 @@ export default function PatientDetail() {
         icon={User}
         title={patient.full_name}
         description={patient.status === 'active' ? 'Paciente ativo' : 'Paciente inativo'}
+        mobileActionsInline
         actions={<>
           <button 
             type="button"
             onClick={() => setShowDeleteConfirm(true)}
-            className="btn-outline border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+            className="btn-outline h-10 w-10 shrink-0 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:h-auto sm:w-auto sm:px-4"
+            title="Excluir paciente"
+            aria-label="Excluir paciente"
           >
-            <Trash2 size={18} className="mr-1.5" />
-            <span>Excluir</span>
+            <Trash2 size={18} className="sm:mr-1.5" />
+            <span className="hidden sm:inline">Excluir</span>
           </button>
           <Link 
             to={`/painel/patients/${id}/edit`}
-            className="btn-outline"
+            className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
+            title="Editar paciente"
+            aria-label="Editar paciente"
           >
-            Editar
+            <Edit3 size={18} className="sm:mr-1.5" />
+            <span className="hidden sm:inline">Editar</span>
           </Link>
           <Link 
             to={`/painel/patients/${id}/evolutions/new`}
-            className="btn-primary"
+            className="btn-primary flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
+            title="Nova evolução"
+            aria-label="Nova evolução"
           >
-            <Plus size={20} className="mr-2" />
-            <span>Nova Evolução</span>
+            <Plus size={20} className="sm:mr-2" />
+            <span className="hidden sm:inline">Nova Evolução</span>
           </Link>
         </>}
       />
+
+      <nav className="xl:hidden -mx-1 overflow-x-auto px-1 pb-1" aria-label="Seções do paciente">
+        <div className="flex min-w-max items-center gap-2 rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur">
+          {patientMobileTabs.map(({ id: tabId, label, icon: Icon }) => {
+            const isActive = activeMobileTab === tabId;
+            return (
+              <button
+                key={tabId}
+                type="button"
+                onClick={() => setActiveMobileTab(tabId)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-semibold transition-all ${
+                  isActive
+                    ? 'bg-brand-primary text-white shadow-sm shadow-brand-primary/25'
+                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                }`}
+              >
+                <Icon size={16} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
       {showDeleteConfirm && (
         <div className="p-6 bg-red-50 border border-red-100 rounded-2xl shadow-sm space-y-3">
@@ -2033,7 +2076,7 @@ export default function PatientDetail() {
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div className="contents xl:block xl:col-span-1 xl:space-y-6">
-          <div className="card p-6 order-2 xl:order-none">
+          <div className={`card p-6 order-2 xl:order-none ${mobileTabVisibility('overview')}`}>
             <h3 className="font-semibold text-brand-text mb-4">Prontuário</h3>
             <div className="space-y-3">
               {patient.google_doc_id ? (
@@ -2082,7 +2125,7 @@ export default function PatientDetail() {
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}
-          <div className="card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-3 xl:order-none">
+          <div className={`card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-3 xl:order-none ${mobileTabVisibility('overview')}`}>
             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/20 to-transparent pointer-events-none" />
             
             <div className="flex items-center justify-between mb-3">
@@ -2111,7 +2154,7 @@ export default function PatientDetail() {
             />
           </div>
 
-          <div className="card p-6 space-y-4 order-6 xl:order-none">
+          <div className={`card p-6 space-y-4 order-6 xl:order-none ${mobileTabVisibility('reminders')}`}>
             <div className="flex items-center space-x-2 text-brand-primary">
               <Bell size={20} className="text-brand-primary" />
               <h3 className="font-semibold text-brand-text mb-0">Lembretes de Evolução</h3>
@@ -2220,7 +2263,7 @@ export default function PatientDetail() {
 
         <div className="contents xl:block xl:col-span-2 xl:space-y-6">
           {/* Card de Busca Semântica (Pesquisa Inteligente) */}
-          <div className="card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-4 xl:order-none">
+          <div className={`card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-4 xl:order-none ${mobileTabVisibility('history')}`}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
@@ -2406,7 +2449,7 @@ export default function PatientDetail() {
             )}
           </div>
 
-          <div className="card order-5 xl:order-none">
+          <div className={`card order-5 xl:order-none ${mobileTabVisibility('history')}`}>
             <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
               <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
               {evolutions.length > 0 && (
@@ -2728,7 +2771,7 @@ export default function PatientDetail() {
           </div>
 
           {/* Seção Unificada de Relatórios Clínicos */}
-          <div className="card order-7 xl:order-none">
+          <div className={`card order-7 xl:order-none ${mobileTabVisibility('reports')}`}>
             <div className="px-6 py-4 border-b border-brand-border bg-brand-bg/50 flex flex-col gap-4 rounded-t-2xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center space-x-2">
