@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
@@ -199,6 +199,8 @@ export default function ShareTarget() {
   const [audioPlaybackError, setAudioPlaybackError] = useState(false);
   const [audioMetadataUnavailable, setAudioMetadataUnavailable] = useState(false);
   const [nativePlayback, setNativePlayback] = useState<NativeAudioPlaybackState>(initialNativePlaybackState);
+  const [nativePlaybackRequested, setNativePlaybackRequested] = useState(false);
+  const nativePauseRequestedRef = useRef(false);
   const [status, setStatus] = useState<'loading' | 'idle' | 'processing' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
@@ -246,6 +248,9 @@ export default function ShareTarget() {
           const normalizedFile = await normalizeSharedAudioFile(file);
           setAudioFile(normalizedFile);
           setAudioUrl(URL.createObjectURL(normalizedFile));
+          setNativePlayback(initialNativePlaybackState);
+          setNativePlaybackRequested(false);
+          nativePauseRequestedRef.current = false;
           setStatus('idle');
         } else if (file) {
           setStatus('error');
@@ -272,7 +277,20 @@ export default function ShareTarget() {
   useEffect(() => {
     const handleNativePlaybackState = (event: Event) => {
       const detail = (event as CustomEvent<NativeAudioPlaybackState>).detail;
-      if (detail?.status) setNativePlayback(detail);
+      if (!detail?.status) return;
+
+      if (detail.status === 'playing' && nativePauseRequestedRef.current) {
+        getNativeShareBridge()?.pauseSharedFile?.();
+        setNativePlayback({ ...detail, status: 'paused' });
+        setNativePlaybackRequested(false);
+        return;
+      }
+
+      if (detail.status === 'paused' || detail.status === 'completed' || detail.status === 'error') {
+        nativePauseRequestedRef.current = false;
+      }
+      setNativePlayback(detail);
+      setNativePlaybackRequested(detail.status === 'playing' || detail.status === 'preparing');
     };
 
     window.addEventListener('native-shared-audio-state', handleNativePlaybackState);
@@ -282,8 +300,34 @@ export default function ShareTarget() {
   const handleNativePlaybackToggle = () => {
     const bridge = getNativeShareBridge();
     if (!bridge) return;
-    if (nativePlayback.status === 'playing') bridge.pauseSharedFile?.();
-    else bridge.playSharedFile?.();
+
+    const shouldPause = nativePlaybackRequested
+      || nativePlayback.status === 'playing'
+      || nativePlayback.status === 'preparing';
+
+    if (shouldPause) {
+      nativePauseRequestedRef.current = true;
+      bridge.pauseSharedFile?.();
+      setNativePlaybackRequested(false);
+      setNativePlayback(current => ({ ...current, status: 'paused' }));
+      return;
+    }
+
+    const accepted = bridge.playSharedFile?.();
+    if (accepted === false) {
+      setNativePlayback({
+        ...initialNativePlaybackState,
+        status: 'error',
+        error: 'O arquivo compartilhado não está mais disponível para reprodução.'
+      });
+      return;
+    }
+
+    // Alguns WebViews atrasam o evento enviado pelo Android. Atualizar o estado
+    // de forma otimista mantém o botão de pausa disponível desde o primeiro toque.
+    nativePauseRequestedRef.current = false;
+    setNativePlaybackRequested(true);
+    setNativePlayback(current => ({ ...current, status: 'playing', error: '' }));
   };
 
   const handleNativePlaybackSeek = (positionMs: number) => {
@@ -298,6 +342,8 @@ export default function ShareTarget() {
   };
 
   const handleCancel = async () => {
+    nativePauseRequestedRef.current = false;
+    setNativePlaybackRequested(false);
     await clearSharedAudioSources();
     navigate('/painel/dashboard');
   };
@@ -641,13 +687,10 @@ export default function ShareTarget() {
                         <button
                           type="button"
                           onClick={handleNativePlaybackToggle}
-                          disabled={nativePlayback.status === 'preparing'}
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary text-white disabled:opacity-60"
-                          aria-label={nativePlayback.status === 'playing' ? 'Pausar áudio' : 'Reproduzir áudio'}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary text-white"
+                          aria-label={nativePlaybackRequested ? 'Pausar áudio' : 'Reproduzir áudio'}
                         >
-                          {nativePlayback.status === 'preparing' ? (
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                          ) : nativePlayback.status === 'playing' ? (
+                          {nativePlaybackRequested ? (
                             <Pause className="h-5 w-5" />
                           ) : (
                             <Play className="h-5 w-5 translate-x-px" />
