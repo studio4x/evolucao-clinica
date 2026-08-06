@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const adminSource = readFileSync("src/pages/AdminPanel.tsx", "utf8");
 const emailHistorySource = readFileSync("src/pages/EmailHistory.tsx", "utf8");
 const emailTemplatesSource = readFileSync("src/components/admin/EmailTransactionalTemplates.tsx", "utf8");
+const pushCasesSource = readFileSync("src/components/admin/PushNotificationCasesManager.tsx", "utf8");
 const serverSource = readFileSync("server.ts", "utf8");
 const migrationSource = readFileSync(
   "supabase/migrations/20260806233000_classify_onboarding_notifications.sql",
@@ -18,6 +19,7 @@ assert.match(adminSource, /Central de Notificações/);
 assert.match(adminSource, /\/admin\/notifications\/email/);
 assert.match(adminSource, /\/admin\/notifications\/whatsapp/);
 assert.match(adminSource, /\/admin\/notifications\/push/);
+assert.match(adminSource, /<PushNotificationCasesManager\s*\/>/);
 assert.doesNotMatch(adminSource, /label: 'Histórico de E-mails'/);
 assert.match(adminSource, /<EmailHistory[\s\S]*embedded/);
 assert.doesNotMatch(adminSource, /<option value="account_access_granted"/);
@@ -48,6 +50,9 @@ assert.match(serverSource, /platform-notification/);
 assert.match(serverSource, /report-delivery/);
 assert.match(serverSource, /\/api\/admin\/email-templates\/:key\/test/);
 assert.match(serverSource, /EDITABLE_EMAIL_TEMPLATE_TEST_KEYS/);
+assert.match(pushCasesSource, /Casos de envio de notificações push/);
+assert.match(pushCasesSource, /role="switch"/);
+assert.match(serverSource, /\/api\/admin\/push-notification-cases/);
 assert.match(editableEmailTemplatesMigrationSource, /CREATE TABLE IF NOT EXISTS public\.email_templates/);
 assert.match(editableEmailTemplatesMigrationSource, /email_templates_admin_manage/);
 

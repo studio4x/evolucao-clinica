@@ -19,6 +19,7 @@ import MigrationRequestsAdmin from '../components/admin/MigrationRequestsAdmin';
 import FeedbackAdmin from '../components/admin/FeedbackAdmin';
 import JourneyAdmin from '../components/admin/JourneyAdmin';
 import DailyPushNotificationManager from '../components/admin/DailyPushNotificationManager';
+import PushNotificationCasesManager from '../components/admin/PushNotificationCasesManager';
 import LifecycleAdmin from '../components/admin/LifecycleAdmin';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
@@ -5206,6 +5207,7 @@ export default function AdminPanel() {
             ) : activeTab === 'push_notifications' ? (
               <div className="space-y-6">
                 <NotificationCenterHeader activeChannel="push" onChange={handleNotificationCenterChannelChange} />
+                <PushNotificationCasesManager />
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"

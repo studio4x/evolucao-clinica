@@ -933,6 +933,31 @@ function isValidVapidPrivateKey(value: unknown) {
   }
 }
 
+const PUSH_NOTIFICATION_CASE_KEYS = ["general", "onboarding", "support", "migration", "session_reminder", "lifecycle"] as const;
+type PushNotificationCase = typeof PUSH_NOTIFICATION_CASE_KEYS[number];
+type PushNotificationCases = Record<PushNotificationCase, boolean>;
+
+const DEFAULT_PUSH_NOTIFICATION_CASES: PushNotificationCases = {
+  general: true,
+  onboarding: true,
+  support: true,
+  migration: true,
+  session_reminder: true,
+  lifecycle: true
+};
+
+function normalizePushNotificationCases(value: unknown): PushNotificationCases {
+  const source = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return PUSH_NOTIFICATION_CASE_KEYS.reduce((cases, key) => {
+    cases[key] = typeof source[key] === "boolean" ? source[key] : DEFAULT_PUSH_NOTIFICATION_CASES[key];
+    return cases;
+  }, {} as PushNotificationCases);
+}
+
+function isPushNotificationCaseEnabled(settings: any, pushCase: PushNotificationCase) {
+  return normalizePushNotificationCases(settings?.push_notification_cases)[pushCase] !== false;
+}
+
 // Helper para obter/gerar configurações de notificações
 async function getNotificationSettings() {
   try {
@@ -977,6 +1002,7 @@ async function getNotificationSettings() {
       ...settings,
       vapid_public_key: String(settings.vapid_public_key || "").trim(),
       vapid_private_key: String(settings.vapid_private_key || "").trim(),
+      push_notification_cases: normalizePushNotificationCases(settings.push_notification_cases),
       manual_push_notification_ids: Array.isArray(settings.manual_push_notification_ids)
         ? settings.manual_push_notification_ids.filter((id: unknown): id is string => typeof id === "string" && id.trim().length > 0)
         : []
@@ -988,6 +1014,7 @@ async function getNotificationSettings() {
       vapid_public_key: keys.publicKey,
       vapid_private_key: keys.privateKey,
       vapid_subject: "mailto:suporte@conexaoseres.com.br",
+      push_notification_cases: DEFAULT_PUSH_NOTIFICATION_CASES,
       manual_push_notification_ids: []
     };
   }
@@ -3282,6 +3309,61 @@ app.post("/api/admin/daily-push-config", requireAuth, requireAdmin, async (req: 
   }
 });
 
+app.get("/api/admin/push-notification-cases", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    const settings = await getNotificationSettings();
+    return res.json({ cases: normalizePushNotificationCases(settings.push_notification_cases) });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Não foi possível carregar os casos de push." });
+  }
+});
+
+app.put("/api/admin/push-notification-cases", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const requestedCases = req.body?.cases;
+    if (!requestedCases || typeof requestedCases !== "object" || Array.isArray(requestedCases)) {
+      return res.status(400).json({ error: "Informe os casos de envio de push." });
+    }
+
+    const { data, error: readError } = await supabaseAdmin
+      .from("settings")
+      .select("api_key")
+      .eq("id", "notification_settings")
+      .maybeSingle();
+    if (readError) throw readError;
+
+    let rawSettings: Record<string, unknown> = {};
+    if (data?.api_key) {
+      try {
+        rawSettings = JSON.parse(data.api_key);
+      } catch {
+        return res.status(500).json({ error: "As configurações de notificação estão inválidas." });
+      }
+    }
+
+    const currentCases = normalizePushNotificationCases(rawSettings.push_notification_cases);
+    const nextCases = { ...currentCases };
+    for (const key of PUSH_NOTIFICATION_CASE_KEYS) {
+      if (typeof requestedCases[key] === "boolean") nextCases[key] = requestedCases[key];
+    }
+
+    const { error: writeError } = await supabaseAdmin
+      .from("settings")
+      .upsert({
+        id: "notification_settings",
+        api_key: JSON.stringify({ ...rawSettings, push_notification_cases: nextCases }),
+        updated_at: new Date().toISOString(),
+        updated_by: req.user?.id || "system"
+      }, { onConflict: "id" });
+    if (writeError) throw writeError;
+
+    return res.json({ success: true, cases: nextCases });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Não foi possível salvar os casos de push." });
+  }
+});
+
 // 6. Testar push diário imediatamente no próprio dispositivo (Apenas Admin)
 app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: any, res) => {
   try {
@@ -3826,7 +3908,7 @@ const lifecycleService = createLifecycleService({
   getAdminRecipients,
   sendPushNotification: async (userId, title, content, link, imageUrl) => {
     try {
-      return await sendPushNotificationInternal(userId, title, content, link, imageUrl);
+      return await sendPushNotificationInternal(userId, title, content, link, imageUrl, undefined, "lifecycle");
     } catch (err) {
       console.error("[Lifecycle Push] Erro ao disparar push:", err);
       return false;
@@ -4069,9 +4151,14 @@ async function sendPushNotificationInternal(
   content: string,
   link?: string,
   imageUrl?: string,
-  iconUrl?: string
+  iconUrl?: string,
+  pushCase: PushNotificationCase = "general"
 ): Promise<boolean> {
   const settings = await getNotificationSettings();
+  if (!isPushNotificationCaseEnabled(settings, pushCase)) {
+    console.info(`[Push] Envio ignorado: caso ${pushCase} está desativado.`);
+    return false;
+  }
   const resolvedIcon = await getResolvedPushNotificationIcon(iconUrl);
 
   webpush.setVapidDetails(
@@ -4254,7 +4341,7 @@ async function sendNotificationInternal(
   imageUrl?: string,
   source: NotificationOrigin = "platform",
   channels: NotificationChannels = {},
-  _notificationKey?: never
+  pushCase?: PushNotificationCase
 ) {
   const persistentImageUrl = await persistNotificationImage(imageUrl);
   const notificationRecord = {
@@ -4283,7 +4370,8 @@ async function sendNotificationInternal(
   // B. Enviar Push Notification (se houver inscrições)
   let pushSent = false;
   if (channels.push !== false) try {
-    pushSent = await sendPushNotificationInternal(targetUserId, title, content, link, persistentImageUrl);
+    const resolvedPushCase = pushCase || (source === "onboarding" ? "onboarding" : "general");
+    pushSent = await sendPushNotificationInternal(targetUserId, title, content, link, persistentImageUrl, undefined, resolvedPushCase);
   } catch (pushGeneralError: any) {
     console.error("Erro geral no disparo de Push:", pushGeneralError.message);
   }
@@ -4633,7 +4721,7 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
       if (admins && admins.length > 0) {
         for (const admin of admins) {
           if (admin.id !== req.user.id) {
-            await sendNotificationInternal(admin.id, title, content, type, link);
+            await sendNotificationInternal(admin.id, title, content, type, link, undefined, "platform", {}, "support");
             notificationsSent++;
           }
         }
@@ -4658,7 +4746,11 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
         "Chamado Criado com Sucesso",
         `Recebemos o seu chamado sobre '${ticket.subject}'. O prazo de resposta para o seu plano (${userPlanLabel}) é de até ${slaLabel}. Obrigado!`,
         "success",
-        link
+        link,
+        undefined,
+        "platform",
+        {},
+        "support"
       );
       notificationsSent++;
 
@@ -4693,7 +4785,11 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
           title,
           content,
           "info",
-          link
+          link,
+          undefined,
+          "platform",
+          {},
+          "support"
         );
         await sendAdministrativeWhatsAppNotification({ userId: ticket.user_id, notification: { key: "support_ticket_updated", data: { firstName: creator?.full_name || "Profissional", protocol: `SUP-${String(ticket.id).slice(0, 8).toUpperCase()}`, status: "Respondido" } } });
         notificationsSent++;
@@ -4715,7 +4811,11 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
             "Chamado Encerrado",
             `Seu chamado sobre '${ticket.subject}' foi finalizado e encerrado pelo suporte.`,
             "success",
-            link
+            link,
+            undefined,
+            "platform",
+            {},
+            "support"
           );
           await sendAdministrativeWhatsAppNotification({ userId: ticket.user_id, notification: { key: "support_ticket_updated", data: { firstName: creator?.full_name || "Profissional", protocol: `SUP-${String(ticket.id).slice(0, 8).toUpperCase()}`, status: "Concluído" } } });
           notificationsSent++;
@@ -4736,7 +4836,11 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
             "Chamado em Atendimento",
             `Seu chamado sobre '${ticket.subject}' agora está em andamento/atendimento pela nossa equipe.`,
             "info",
-            link
+            link,
+            undefined,
+            "platform",
+            {},
+            "support"
           );
           await sendAdministrativeWhatsAppNotification({ userId: ticket.user_id, notification: { key: "support_ticket_updated", data: { firstName: creator?.full_name || "Profissional", protocol: `SUP-${String(ticket.id).slice(0, 8).toUpperCase()}`, status: "Em análise" } } });
           notificationsSent++;
@@ -4814,7 +4918,7 @@ app.post("/api/migrations/notify", requireAuth, async (req: any, res) => {
       if (admins && admins.length > 0) {
         for (const admin of admins) {
           if (admin.id !== req.user.id) {
-            await sendNotificationInternal(admin.id, title, content, type, link);
+            await sendNotificationInternal(admin.id, title, content, type, link, undefined, "platform", {}, "migration");
             notificationsSent++;
           }
         }
@@ -4836,7 +4940,11 @@ app.post("/api/migrations/notify", requireAuth, async (req: any, res) => {
         "Solicitação de Migração Recebida",
         `Sua solicitação de importação de prontuários da plataforma '${platformLabel}' foi recebida. Analisaremos os dados em breve!`,
         "success",
-        link
+        link,
+        undefined,
+        "platform",
+        {},
+        "migration"
       );
       notificationsSent++;
 
@@ -4868,7 +4976,11 @@ app.post("/api/migrations/notify", requireAuth, async (req: any, res) => {
           "Atualização da Migração de Prontuários",
           `Sua solicitação de migração ${statusLabel}. ` + (request.admin_notes ? `Observações do suporte: "${request.admin_notes}"` : ""),
           type,
-          link
+          link,
+          undefined,
+          "platform",
+          {},
+          "migration"
         );
         notificationsSent++;
       }
@@ -5203,7 +5315,11 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
           `🔔 Lembrete de Evolução: ${patient.full_name}`,
           `O atendimento do(a) paciente ${patient.full_name} foi agendado para hoje às ${sessionTimeStr}. Não se esqueça de preencher a evolução clínica correspondente.`,
           "warning",
-          `/painel/patients/${patient.id}`
+          `/painel/patients/${patient.id}`,
+          undefined,
+          "platform",
+          {},
+          "session_reminder"
         );
         
         notificationsSentCount++;
