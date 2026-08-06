@@ -7,12 +7,14 @@ import { transcribeAudio } from '../services/aiTranscription';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
-import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent, validateGoogleDocAccess } from '../services/googleDocs';
+import { appendToGoogleDoc, replaceEvolutionInGoogleDoc, validateGoogleDocAccess } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
 import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink, Play, Pause } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { RichTextEditor } from '../components/common/RichTextEditor';
+import { showAlert } from '../store/modalStore';
 
 // Simple IndexedDB wrapper for the shared file
 const getSharedFile = (): Promise<File | null> => {
@@ -243,11 +245,14 @@ export default function ShareTarget() {
   const [errorMessage, setErrorMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
 
-  // Estados para visualização/edição do prontuário no modal
+  // Estados para edição da evolução recém-processada no modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalText, setModalText] = useState('');
-  const [modalLoading, setModalLoading] = useState(false);
+  const [modalOriginalTranscription, setModalOriginalTranscription] = useState('');
+  const [modalEvolutionId, setModalEvolutionId] = useState<string | null>(null);
+  const [modalTemplateId, setModalTemplateId] = useState('');
   const [modalSaving, setModalSaving] = useState(false);
+  const [modalConverting, setModalConverting] = useState(false);
   const [modalError, setModalError] = useState('');
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const hasFreshClinicalAccess = hasClinicalAccess && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
@@ -263,6 +268,59 @@ export default function ShareTarget() {
       sessionStorage.removeItem(SHARE_TARGET_AUTH_RECOVERY_KEY);
     }
   }, [hasFreshClinicalAccess]);
+
+  // O áudio compartilhado e seus dados de processamento ainda podem estar em
+  // memória. Impedir o pull-to-refresh evita que sejam perdidos acidentalmente.
+  useEffect(() => {
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehaviorY;
+    const previousBodyOverscroll = document.body.style.overscrollBehaviorY;
+    const nativeAppInfoBridge = (window as typeof window & {
+      NativeAppInfoBridge?: { setPullToRefreshEnabled?: (enabled: boolean) => void };
+    }).NativeAppInfoBridge;
+    let touchStartY = 0;
+    document.documentElement.style.overscrollBehaviorY = 'none';
+    document.body.style.overscrollBehaviorY = 'none';
+    nativeAppInfoBridge?.setPullToRefreshEnabled?.(false);
+
+    const getScrollableAncestor = (target: EventTarget | null) => {
+      let element = target instanceof Element ? target : null;
+      while (element && element !== document.body) {
+        const overflowY = window.getComputedStyle(element).overflowY;
+        if ((overflowY === 'auto' || overflowY === 'scroll') && element.scrollHeight > element.clientHeight) {
+          return element;
+        }
+        element = element.parentElement;
+      }
+      return null;
+    };
+
+    const onTouchStart = (event: TouchEvent) => {
+      touchStartY = event.touches[0]?.clientY || 0;
+    };
+
+    const onTouchMove = (event: TouchEvent) => {
+      const currentY = event.touches[0]?.clientY || 0;
+      const isPullingDown = currentY > touchStartY;
+      const pageAtTop = Math.max(window.scrollY, document.documentElement.scrollTop, document.body.scrollTop) <= 0;
+      const scrollableAncestor = getScrollableAncestor(event.target);
+      const innerContentCanScrollUp = Boolean(scrollableAncestor && scrollableAncestor.scrollTop > 0);
+
+      if (isPullingDown && pageAtTop && !innerContentCanScrollUp && event.cancelable) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener('touchstart', onTouchStart, { passive: true, capture: true });
+    document.addEventListener('touchmove', onTouchMove, { passive: false, capture: true });
+
+    return () => {
+      nativeAppInfoBridge?.setPullToRefreshEnabled?.(true);
+      document.removeEventListener('touchstart', onTouchStart, true);
+      document.removeEventListener('touchmove', onTouchMove, true);
+      document.documentElement.style.overscrollBehaviorY = previousHtmlOverscroll;
+      document.body.style.overscrollBehaviorY = previousBodyOverscroll;
+    };
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -460,47 +518,66 @@ export default function ShareTarget() {
     }
   };
 
-  const handleOpenModal = async () => {
-    const patient = patients.find(p => p.id === selectedPatientId);
-    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
+  const handleOpenModal = () => {
     setIsModalOpen(true);
-    setModalLoading(true);
     setModalError('');
-    try {
-      const content = await getGoogleDocContent(googleAccessToken, patient.google_doc_id);
-      setModalText(content);
-    } catch (err: any) {
-      console.error("Erro ao carregar prontuário:", err);
-      let msg = err.message || "Erro desconhecido ao carregar prontuário.";
-      if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
-        msg = "Sua sessão do Google expirou. Feche o modal e renove a autenticação.";
-        setGoogleAccessToken(null);
-      }
-      setModalError(msg);
-    } finally {
-      setModalLoading(false);
+    if (!modalEvolutionId || !modalText.trim()) {
+      setModalError('A evolução recém-processada não está disponível para edição. Volte ao paciente e abra a evolução desejada.');
     }
   };
 
   const handleSaveModalText = async () => {
     const patient = patients.find(p => p.id === selectedPatientId);
-    if (!patient || !patient.google_doc_id || !hasClinicalAccess) return;
+    if (!patient || !patient.google_doc_id || !modalEvolutionId || !hasClinicalAccess || !googleAccessToken) {
+      setModalError('Renove a conexão com o Google para salvar esta evolução de forma sincronizada.');
+      return;
+    }
     setModalSaving(true);
     setModalError('');
     try {
-      await updateGoogleDocContent(googleAccessToken, patient.google_doc_id, modalText);
-      alert("Texto do prontuário atualizado com sucesso no Google Docs!");
+      const { error } = await supabase.from('evolutions').update({
+        transcription_text: modalText,
+        template_id: modalTemplateId || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', modalEvolutionId);
+      if (error) throw error;
+      await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, modalEvolutionId, modalText);
+      await showAlert("Evolução atualizada com sucesso na plataforma e no Google Docs!", {
+        title: "Evolução Atualizada",
+        variant: "success",
+        icon: "success"
+      });
       setIsModalOpen(false);
     } catch (err: any) {
       console.error("Erro ao salvar prontuário:", err);
       let msg = err.message || "Erro desconhecido ao salvar prontuário.";
-      if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
+      if (msg.includes("INSUFFICIENT_SCOPES")) {
+        msg = "Sua conta Google está conectada, mas ainda não liberou as permissões clínicas completas. Renove a autenticação para aprovar o acesso ao Google Drive e Docs.";
+      } else if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
         msg = "Sua sessão do Google expirou. Por favor, renove sua autenticação.";
         setGoogleAccessToken(null);
       }
       setModalError(msg);
     } finally {
       setModalSaving(false);
+    }
+  };
+
+  const handleConvertModalEvolution = async () => {
+    if (!modalText.trim()) return;
+    if (!modalOriginalTranscription.trim()) {
+      setModalError('A transcrição original desta evolução não está disponível para conversão.');
+      return;
+    }
+    setModalConverting(true);
+    setModalError('');
+    try {
+      const converted = await convertEvolutionToTemplate(modalOriginalTranscription, modalTemplateId || null);
+      setModalText(converted);
+    } catch (err: any) {
+      setModalError(err.message || 'Não foi possível converter a evolução para o modelo escolhido.');
+    } finally {
+      setModalConverting(false);
     }
   };
 
@@ -652,6 +729,10 @@ export default function ShareTarget() {
 
       await clearSharedAudioSources();
       sessionStorage.removeItem(SHARE_TARGET_AUTH_RECOVERY_KEY);
+      setModalEvolutionId(evolutionId);
+      setModalText(evolutionText);
+      setModalOriginalTranscription(transcription);
+      setModalTemplateId(selectedTemplateId);
       setStatus('success');
       setErrorMessage('');
 
@@ -834,14 +915,9 @@ export default function ShareTarget() {
                           </div>
                         </div>
                       </div>
-                      {nativePlayback.status === 'error' ? (
+                      {nativePlayback.status === 'error' && (
                         <p className="mt-2 text-xs text-red-700">
                           {nativePlayback.error || 'Não foi possível reproduzir este áudio no aparelho.'}
-                        </p>
-                      ) : (
-                        <p className="mt-2 text-xs text-brand-text-muted">
-                          Reprodução nativa do aplicativo Android
-                          {installedAppInfo.displayVersion ? ` · versão ${installedAppInfo.displayVersion}` : ''}.
                         </p>
                       )}
                     </div>
@@ -1024,13 +1100,13 @@ export default function ShareTarget() {
 
       {/* Modal de visualização/edição */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm transition-opacity">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] border border-brand-border animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-[90] overflow-y-auto overscroll-y-contain bg-stone-900/60 p-4 transition-opacity sm:flex sm:items-center sm:justify-center">
+          <div className="relative z-[91] mx-auto my-2 flex min-h-[70vh] max-h-[calc(100dvh-2rem)] w-full max-w-2xl min-w-0 flex-col overflow-hidden rounded-2xl border border-brand-border bg-white shadow-xl animate-in fade-in zoom-in-95 duration-200 sm:my-0 sm:max-h-[85vh]">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border">
               <div>
                 <h3 className="text-lg font-bold font-display text-brand-primary">
-                  Documento de Evolução (Google Docs)
+                  Editar Evolução Processada
                 </h3>
                 <p className="text-xs text-brand-text-muted mt-0.5">
                   {patients.find(p => p.id === selectedPatientId)?.full_name}
@@ -1039,20 +1115,15 @@ export default function ShareTarget() {
               <button
                 onClick={() => setIsModalOpen(false)}
                 className="p-1.5 rounded-lg text-brand-text-muted hover:bg-stone-100 hover:text-brand-text transition-colors"
-                disabled={modalSaving}
+                disabled={modalSaving || modalConverting}
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {modalLoading ? (
-                <div className="flex flex-col items-center justify-center py-12 space-y-3">
-                  <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
-                  <p className="text-sm font-medium text-brand-primary">Carregando prontuário do Google Docs...</p>
-                </div>
-              ) : modalError ? (
+            <div className="min-h-0 flex-1 overflow-y-auto p-6 space-y-4">
+              {modalError ? (
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-center space-y-3">
                   <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
                   <p className="text-sm text-red-700 font-medium">{modalError}</p>
@@ -1074,44 +1145,63 @@ export default function ShareTarget() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-brand-text">
-                    Texto Completo do Prontuário:
-                  </label>
-                  <textarea
-                    value={modalText}
-                    onChange={(e) => setModalText(e.target.value)}
-                    rows={12}
-                    className="w-full input-field p-3 font-mono text-sm leading-relaxed focus:ring-1 focus:ring-brand-primary border border-brand-border outline-none rounded-xl resize-y"
-                    placeholder="Conteúdo do prontuário..."
-                    disabled={modalSaving}
-                  />
-                  <p className="text-[11px] text-brand-text-muted">
-                    Nota: Ao salvar, todo o conteúdo exibido acima substituirá o texto atual do documento no Google Docs.
-                  </p>
+                  <div className="space-y-3">
+                    <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
+                      <label className="mb-1 block text-xs font-semibold text-brand-text">Converter para outro modelo</label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <select
+                          value={modalTemplateId}
+                          onChange={(event) => setModalTemplateId(event.target.value)}
+                          disabled={modalSaving || modalConverting}
+                          className="input-field min-w-0 flex-1 py-2 text-sm"
+                        >
+                          <option value="">Sem template (transcrição original)</option>
+                          {templates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => void handleConvertModalEvolution()}
+                          disabled={modalSaving || modalConverting}
+                          className="btn-outline shrink-0 border-brand-primary/30 text-brand-primary disabled:opacity-50"
+                        >
+                          {modalConverting ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                          <span>{modalConverting ? 'Convertendo...' : 'Converter'}</span>
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[11px] text-brand-text-muted">Os modelos são aplicados sobre a transcrição original. Ao escolher sem template, o texto original é restaurado sem usar IA.</p>
+                    </div>
+                    <RichTextEditor
+                      value={modalText}
+                      onChange={setModalText}
+                      label="Conteúdo da evolução"
+                      disabled={modalSaving || modalConverting}
+                    />
+                    <p className="text-[11px] text-brand-text-muted">
+                      Nota: ao salvar, somente esta evolução e suas formatações serão atualizadas no Google Docs.
+                    </p>
                 </div>
               )}
             </div>
 
             {/* Modal Footer */}
-            {!modalLoading && !modalError && (
-              <div className="px-6 py-4 border-t border-brand-border flex items-center justify-end space-x-3 bg-stone-50 rounded-b-2xl">
+            {!modalError && (
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-brand-border bg-stone-50 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-nowrap sm:space-x-3 sm:pb-4">
                 <button
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 bg-white border border-brand-border rounded-xl text-sm font-medium text-brand-text hover:bg-stone-100 transition-colors"
-                  disabled={modalSaving}
+                  disabled={modalSaving || modalConverting}
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveModalText}
                   className="flex items-center space-x-2 px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover disabled:opacity-50 text-white rounded-xl text-sm font-medium transition-colors"
-                  disabled={modalSaving}
+                  disabled={modalSaving || modalConverting}
                 >
                   {modalSaving ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Salvando no Google Docs...</span>
+                      <span>Salvando...</span>
                     </>
                   ) : (
                     <>
