@@ -20,10 +20,10 @@ Os horários foram mantidos. A migration `20260806150000_standardize_supabase_cr
 
 Os jobs reutilizam a configuração central já existente no Vault:
 
-- `lifecycle_origin`: `https://evolucaoclinica.app.br`
+- `lifecycle_origin`: `https://www.evolucaoclinica.app.br`
 - `lifecycle_cron_secret`: deve ser exatamente o valor de `CRON_SECRET` no ambiente Production da Vercel
 
-Os valores não devem aparecer em migrations, logs, commits ou relatórios. A migration interrompe a aplicação se esses secrets não estiverem configurados.
+Os valores não devem aparecer em migrations, logs, commits ou relatórios. A migration interrompe a aplicação se esses secrets não estiverem configurados. A origem deve apontar diretamente ao host canônico `www`: o `pg_net` descarta o header `Authorization` quando segue um redirecionamento entre hosts.
 
 O backend valida o Bearer contra o Vault por uma RPC `SECURITY DEFINER` restrita à `service_role`. Isso evita que a execução do cron dependa de uma cópia do secret em uma variável da Vercel e não devolve o valor do Vault em nenhuma resposta.
 
