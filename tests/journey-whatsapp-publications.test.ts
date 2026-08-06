@@ -38,6 +38,7 @@ const cronRpcMigration = readFileSync(new URL("../supabase/migrations/2026080617
 const cronOriginMigration = readFileSync(new URL("../supabase/migrations/20260806180000_point_cron_origin_to_canonical_www.sql", import.meta.url), "utf8");
 const publicUrlMigration = readFileSync(new URL("../supabase/migrations/20260806190000_normalize_public_urls_to_www.sql", import.meta.url), "utf8");
 const publicUrlRepairMigration = readFileSync(new URL("../supabase/migrations/20260806200000_repair_public_urls_to_www.sql", import.meta.url), "utf8");
+const whatsappLinksMigration = readFileSync(new URL("../supabase/migrations/20260806210000_replace_journey_whatsapp_link_placeholders.sql", import.meta.url), "utf8");
 assert.match(migration, /UNIQUE \(journey_content_id, destination_key\)/);
 assert.match(migration, /FOR UPDATE SKIP LOCKED/);
 assert.match(migration, /America\/Sao_Paulo/);
@@ -65,6 +66,9 @@ assert.match(publicUrlMigration, /https:\/\/www\.evolucaoclinica\.app\.br/);
 assert.match(publicUrlRepairMigration, /UPDATE public\.journeys/);
 assert.match(publicUrlRepairMigration, /UPDATE public\.journey_contents/);
 assert.match(publicUrlRepairMigration, /replace\(/);
+assert.match(whatsappLinksMigration, /whatsapp_message/);
+assert.match(whatsappLinksMigration, /https:\/\/www\.evolucaoclinica\.app\.br\/jornada\/jornada-15-dias/);
+assert.match(whatsappLinksMigration, /https:\/\/chat\.whatsapp\.com\/LQul6zmyTRn1C9izuLiYUI/);
 assert.doesNotMatch(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"), /"crons"/);
 assert.doesNotMatch(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /buildCronBootstrapSql|bootstrapSupabaseCronJobs/);
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /\/api\/admin\/journey-publication-cron/);
