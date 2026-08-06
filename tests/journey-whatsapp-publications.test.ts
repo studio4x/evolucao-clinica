@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import {
   JOURNEY_WHATSAPP_DESTINATION_KEY, JOURNEY_WHATSAPP_TIMEZONE,
   retryDelayMinutes, validateClaimPayload, validateCompletePayload, validateFailPayload,
@@ -39,6 +39,7 @@ const cronOriginMigration = readFileSync(new URL("../supabase/migrations/2026080
 const publicUrlMigration = readFileSync(new URL("../supabase/migrations/20260806190000_normalize_public_urls_to_www.sql", import.meta.url), "utf8");
 const publicUrlRepairMigration = readFileSync(new URL("../supabase/migrations/20260806200000_repair_public_urls_to_www.sql", import.meta.url), "utf8");
 const whatsappLinksMigration = readFileSync(new URL("../supabase/migrations/20260806210000_replace_journey_whatsapp_link_placeholders.sql", import.meta.url), "utf8");
+const dispatchMigration = readFileSync(new URL("../supabase/migrations/20260806220000_schedule_journey_whatsapp_operator_dispatch.sql", import.meta.url), "utf8");
 assert.match(migration, /UNIQUE \(journey_content_id, destination_key\)/);
 assert.match(migration, /FOR UPDATE SKIP LOCKED/);
 assert.match(migration, /America\/Sao_Paulo/);
@@ -71,6 +72,17 @@ assert.match(whatsappLinksMigration, /https:\/\/www\.evolucaoclinica\.app\.br\/j
 assert.match(whatsappLinksMigration, /https:\/\/chat\.whatsapp\.com\/LQul6zmyTRn1C9izuLiYUI/);
 assert.doesNotMatch(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"), /"crons"/);
 assert.doesNotMatch(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /buildCronBootstrapSql|bootstrapSupabaseCronJobs/);
+assert.match(dispatchMigration, /journey-whatsapp-operator-dispatch/);
+assert.match(dispatchMigration, /'2-59\/5 \* \* \* \*'/);
+assert.match(dispatchMigration, /CREATE EXTENSION IF NOT EXISTS pg_cron/);
+assert.match(dispatchMigration, /CREATE EXTENSION IF NOT EXISTS pg_net/);
+assert.match(dispatchMigration, /vault\.decrypted_secrets/);
+assert.match(dispatchMigration, /Authorization[\s\S]*Bearer/);
+assert.match(dispatchMigration, /net\.http_post/);
+assert.match(dispatchMigration, /timeout_milliseconds := 60000/);
+assert.equal((dispatchMigration.match(/cron\.schedule\(/g) || []).length, 1);
+assert.doesNotMatch(dispatchMigration, /https:\/\/webhook\.studio4x\.com\.br|WHATSAPP_JOURNEY_PUBLICATION_TOKEN\s*=/);
+assert.equal(existsSync(new URL("../docs/backup-jornada-whatsapp-reset-20260806.md", import.meta.url)), false);
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /\/api\/admin\/journey-publication-cron/);
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /verify_supabase_cron_secret/);
 assert.match(readFileSync(new URL("../src/pages/PublicJourneyIndex.tsx", import.meta.url), "utf8"), /lastAutoScrollTargetRef/);

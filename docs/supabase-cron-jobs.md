@@ -13,8 +13,11 @@ Todos os agendamentos recorrentes são executados pelo Supabase com `pg_cron` e 
 | `lifecycle-process` | `*/5 * * * *` | `/api/cron/process-lifecycle` | POST + Bearer |
 | `lifecycle-schedule` | `*/15 * * * *` | `/api/cron/schedule-lifecycle` | POST + Bearer |
 | `lifecycle-recalculate` | `17 3 * * *` | `/api/cron/recalculate-lifecycle` | POST + Bearer |
+| `journey-whatsapp-operator-dispatch` | `2-59/5 * * * *` | webhook n8n da Jornada | POST `{}` + Bearer |
 
 Os horários foram mantidos. A migration `20260806150000_standardize_supabase_cron_jobs.sql` é idempotente: remove somente esses nomes e os recria uma vez.
+
+O job editorial `publish-journey-contents-job` publica conteúdos em minutos múltiplos de cinco. O acionador da Jornada roda dois minutos depois para que o n8n faça, no máximo, um `claim` e envie somente publicações já elegíveis. Ele não chama a Evolution a partir do Supabase: a responsabilidade segue no workflow n8n, que chama `complete` apenas com `providerMessageId` e `fail` apenas para erro real.
 
 ## Vault
 
@@ -22,6 +25,8 @@ Os jobs reutilizam a configuração central já existente no Vault:
 
 - `lifecycle_origin`: `https://www.evolucaoclinica.app.br`
 - `lifecycle_cron_secret`: deve ser exatamente o valor de `CRON_SECRET` no ambiente Production da Vercel
+- `journey_n8n_webhook_url`: URL HTTPS do webhook de produção n8n da Jornada
+- `journey_n8n_webhook_token`: mesmo valor de `WHATSAPP_JOURNEY_PUBLICATION_TOKEN` na Vercel e no n8n
 
 Os valores não devem aparecer em migrations, logs, commits ou relatórios. A migration interrompe a aplicação se esses secrets não estiverem configurados. A origem deve apontar diretamente ao host canônico `www`: o `pg_net` descarta o header `Authorization` quando segue um redirecionamento entre hosts.
 
@@ -55,3 +60,7 @@ limit 50;
 ```
 
 Não executar claim válido da fila da Jornada durante smoke tests. A publicação editorial e o envio WhatsApp continuam independentes e não são acionados por esta migration.
+
+## Rollback do acionador da Jornada
+
+Para interromper somente a automação da Jornada, remova ou desative `journey-whatsapp-operator-dispatch`, desative o workflow n8n e mantenha os conteúdos em `draft`. Os outros sete jobs devem permanecer ativos.

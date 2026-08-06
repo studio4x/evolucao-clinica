@@ -11,6 +11,9 @@ supabase/.temp/
 
 # Credenciais privadas de contas de serviço
 docs/evolucaoclinica-*.json
+backup-jornada-*.md
+backups/
+*.journey-backup.*
 
 # Android TWA binaries and signing keys
 *.apk

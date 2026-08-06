@@ -1,6 +1,6 @@
 # Fila de publicações da Jornada de 15 Dias
 
-Esta etapa adiciona somente a fonte de verdade e a fila segura da plataforma. Não existe envio para WhatsApp, Evolution API, Cloud API, WAHA, Baileys ou n8n neste repositório.
+Esta etapa mantém a fonte de verdade e a fila segura na plataforma. O envio continua exclusivamente no workflow n8n, acionado pelo Supabase depois da publicação editorial; o frontend e o backend da plataforma não chamam a Evolution nem enviam WhatsApp diretamente.
 
 ## Contrato
 
@@ -45,7 +45,13 @@ WHATSAPP_JOURNEY_DEFAULT_DESTINATION_KEY=jornada-15-dias-operador-evolucao-clini
 PUBLIC_APP_URL=https://www.evolucaoclinica.app.br
 ```
 
-Aplicar as migrations no Supabase antes de usar as rotas. O JID não é configurado nem retornado pela plataforma; será resolvido posteriormente no n8n. A rota administrativa `GET /api/admin/journey-whatsapp-publications` usa a sessão autenticada e `requireAdmin`; a tela de conteúdos da jornada exibe status editorial e da fila, tentativas, data, erro resumido e ações confirmadas de recolocar/cancelar.
+Aplicar as migrations no Supabase antes de usar as rotas. O JID não é configurado nem retornado pela plataforma; é resolvido pelo n8n. A rota administrativa `GET /api/admin/journey-whatsapp-publications` usa a sessão autenticada e `requireAdmin`; a tela de conteúdos da jornada exibe status editorial e da fila, tentativas, data, erro resumido e ações confirmadas de recolocar/cancelar.
+
+## Acionamento automático n8n
+
+O job editorial `publish-journey-contents-job` executa em `*/5 * * * *`. Dois minutos depois, `journey-whatsapp-operator-dispatch` executa em `2-59/5 * * * *` e faz um `POST` vazio ao webhook de produção configurado no Vault. URL e Bearer ficam somente em `journey_n8n_webhook_url` e `journey_n8n_webhook_token`; o segundo tem o mesmo valor de `WHATSAPP_JOURNEY_PUBLICATION_TOKEN` na Vercel e no n8n.
+
+Cada execução do workflow trata no máximo uma publicação: executa `claim`, envia pela Evolution e só chama `complete` depois de receber `providerMessageId`; `fail` é reservado para erro real. Com fila vazia, o resultado esperado é `claimed: false` e nenhuma chamada à Evolution, `complete` ou `fail`. Não há Schedule Trigger no n8n, Vercel Cron ou cron no backend.
 
 ## Reset manual de envio
 
@@ -72,7 +78,7 @@ O smoke test seguro está em `scripts/journey-whatsapp-smoke-test.ts`. Use `npx 
 
 ## Rollback
 
-Antes de remover a migration, interromper o worker externo e preservar/exportar a fila. Como não há envio implementado nesta etapa, o rollback pode remover a tabela e as funções desta migration após retirar as rotas/código da versão anterior. Não apagar conteúdos de `journeys` ou `journey_contents`, nem histórico editorial/público.
+Para interromper os envios automáticos, desative ou remova somente `journey-whatsapp-operator-dispatch`, desative o workflow n8n e mantenha os conteúdos em `draft`. Não remova os outros jobs, migrations, conteúdos de `journeys`/`journey_contents` ou histórico editorial/público.
 
 ## Limitações conhecidas
 
