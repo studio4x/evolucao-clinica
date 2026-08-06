@@ -257,6 +257,18 @@ public class LauncherActivity extends ComponentActivity {
         return "audio-compartilhado.ogg";
     }
 
+    private String resolveSharedAudioMimeType(String fileName, String declaredMimeType) {
+        String name = fileName == null ? "" : fileName.toLowerCase();
+        if (name.endsWith(".opus") || name.endsWith(".ogg")) return "audio/ogg; codecs=opus";
+        if (name.endsWith(".webm")) return "audio/webm; codecs=opus";
+        if (name.endsWith(".m4a")) return "audio/mp4";
+        if (name.endsWith(".mp3")) return "audio/mpeg";
+        if (name.endsWith(".wav")) return "audio/wav";
+
+        String mimeType = declaredMimeType == null ? "" : declaredMimeType.trim();
+        return mimeType.startsWith("audio/") ? mimeType : "audio/ogg; codecs=opus";
+    }
+
     private final class NativeShareBridge {
         @android.webkit.JavascriptInterface
         public synchronized String getSharedFile() {
@@ -276,13 +288,12 @@ public class LauncherActivity extends ComponentActivity {
                 if (mimeType == null || mimeType.trim().isEmpty() || "application/octet-stream".equalsIgnoreCase(mimeType)) {
                     mimeType = getContentResolver().getType(sharedFileUri);
                 }
-                if (mimeType == null || mimeType.trim().isEmpty() || "application/octet-stream".equalsIgnoreCase(mimeType)) {
-                    mimeType = "audio/ogg";
-                }
+                mimeType = resolveSharedAudioMimeType(sharedFileName, mimeType);
 
                 JSONObject payload = new JSONObject();
                 payload.put("name", sharedFileName == null ? "audio-compartilhado.ogg" : sharedFileName);
                 payload.put("type", mimeType);
+                payload.put("size", output.size());
                 payload.put("data", Base64.encodeToString(output.toByteArray(), Base64.NO_WRAP));
                 return payload.toString();
             } catch (Exception exception) {

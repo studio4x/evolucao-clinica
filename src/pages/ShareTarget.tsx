@@ -50,6 +50,32 @@ const clearSharedFileLocal = (): Promise<void> => {
   });
 };
 
+const resolveSharedAudioMimeType = (name: string, declaredType: string, bytes: Uint8Array) => {
+  const normalizedDeclaredType = declaredType.toLowerCase().trim();
+  const normalizedName = name.toLowerCase();
+  const hasPrefix = (...values: number[]) => values.every((value, index) => bytes[index] === value);
+
+  if (hasPrefix(0x4f, 0x67, 0x67, 0x53)) return 'audio/ogg; codecs=opus';
+  if (hasPrefix(0x1a, 0x45, 0xdf, 0xa3)) return 'audio/webm; codecs=opus';
+  if (hasPrefix(0x52, 0x49, 0x46, 0x46) && bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45) return 'audio/wav';
+  if (hasPrefix(0x49, 0x44, 0x33) || (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
+  if (normalizedName.endsWith('.opus') || normalizedName.endsWith('.ogg')) return 'audio/ogg; codecs=opus';
+  if (normalizedName.endsWith('.webm')) return 'audio/webm; codecs=opus';
+  if (normalizedName.endsWith('.m4a')) return 'audio/mp4';
+  if (normalizedName.endsWith('.mp3')) return 'audio/mpeg';
+  if (normalizedDeclaredType.startsWith('audio/')) return normalizedDeclaredType;
+  return 'audio/ogg; codecs=opus';
+};
+
+const normalizeSharedAudioFile = async (file: File) => {
+  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const type = resolveSharedAudioMimeType(file.name, file.type || '', header);
+  return new File([file], file.name || 'audio-compartilhado.ogg', {
+    type,
+    lastModified: file.lastModified || Date.now()
+  });
+};
+
 const getNativeSharedFile = async (): Promise<File | null> => {
   const nativeShare = (window as any).NativeShare;
   if (!nativeShare || typeof nativeShare.getSharedFile !== 'function') return null;
@@ -66,10 +92,11 @@ const getNativeSharedFile = async (): Promise<File | null> => {
     bytes[index] = binary.charCodeAt(index);
   }
 
+  const type = resolveSharedAudioMimeType(payload.name || '', payload.type || '', bytes);
   const file = new File(
     [bytes],
     payload.name || 'audio-compartilhado.ogg',
-    { type: payload.type || 'audio/ogg' }
+    { type }
   );
 
   if (typeof nativeShare.clearSharedFile === 'function') nativeShare.clearSharedFile();
@@ -137,6 +164,8 @@ export default function ShareTarget() {
   };
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioPlaybackError, setAudioPlaybackError] = useState(false);
+  const [audioMetadataUnavailable, setAudioMetadataUnavailable] = useState(false);
   const [status, setStatus] = useState<'loading' | 'idle' | 'processing' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
@@ -168,10 +197,14 @@ export default function ShareTarget() {
 
         // Load shared file
         const file = (await getSharedFile()) || (await getNativeSharedFile());
-        if (file) {
-          setAudioFile(file);
-          setAudioUrl(URL.createObjectURL(file));
+        if (file && file.size > 0) {
+          const normalizedFile = await normalizeSharedAudioFile(file);
+          setAudioFile(normalizedFile);
+          setAudioUrl(URL.createObjectURL(normalizedFile));
           setStatus('idle');
+        } else if (file) {
+          setStatus('error');
+          setErrorMessage('O áudio recebido está vazio. Compartilhe novamente a nota de voz pelo WhatsApp.');
         } else {
           setStatus('error');
           setErrorMessage('Nenhum áudio recebido. Tente compartilhar novamente a partir do WhatsApp.');
@@ -256,6 +289,12 @@ export default function ShareTarget() {
 
   const handleProcess = async () => {
     if (!audioFile || !selectedPatientId) return;
+
+    if (audioFile.size === 0) {
+      setErrorMessage('O áudio recebido está vazio. Compartilhe novamente a nota de voz pelo WhatsApp.');
+      setStatus('error');
+      return;
+    }
 
     const patient = patients.find(p => p.id === selectedPatientId);
     if (!patient || !patient.google_doc_id) {
@@ -509,7 +548,25 @@ export default function ShareTarget() {
               {audioUrl && (
                 <div className="bg-brand-bg p-4 rounded-xl border border-brand-border">
                   <p className="text-sm font-medium text-brand-text mb-2">Áudio Compartilhado:</p>
-                  <audio src={audioUrl} controls className="w-full" />
+                  <audio
+                    controls
+                    preload="metadata"
+                    className="w-full"
+                    onCanPlay={() => setAudioPlaybackError(false)}
+                    onLoadedMetadata={(event) => setAudioMetadataUnavailable(!Number.isFinite(event.currentTarget.duration) || event.currentTarget.duration <= 0)}
+                    onError={() => setAudioPlaybackError(true)}
+                  >
+                    <source src={audioUrl} type={audioFile?.type} />
+                  </audio>
+                  {audioPlaybackError ? (
+                    <p className="mt-2 text-xs text-amber-800">
+                      Este aparelho não conseguiu reproduzir a prévia, mas o áudio recebido continuará disponível para processamento.
+                    </p>
+                  ) : audioMetadataUnavailable ? (
+                    <p className="mt-2 text-xs text-brand-text-muted">
+                      A duração não foi identificada pelo player deste aparelho. Isso não impede o processamento da evolução.
+                    </p>
+                  ) : null}
                 </div>
               )}
 
@@ -645,6 +702,9 @@ export default function ShareTarget() {
                   )}
                 </button>
               </div>
+              {!selectedPatientId && audioFile && (
+                <p className="text-right text-xs text-brand-text-muted">Selecione um paciente para liberar o processamento.</p>
+              )}
             </>
           )}
         </div>

@@ -5,9 +5,9 @@ import path from 'node:path';
 const projectDir = process.cwd();
 const artifactDirectory = path.join(projectDir, 'app', 'build', 'outputs');
 
-function run(command, args) {
+function run(command, args, useShell = process.platform === 'win32') {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd: projectDir, shell: process.platform === 'win32', stdio: 'inherit' });
+    const child = spawn(command, args, { cwd: projectDir, shell: useShell, stdio: 'inherit' });
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) resolve();
@@ -50,9 +50,9 @@ function javaTool(name) {
 
 async function verifyAndPublishArtifact(source, destination) {
   if (!fs.existsSync(source)) throw new Error(`Artefato não encontrado: ${source}`);
-  await run(javaTool('jarsigner'), ['-verify', source]);
+  await run(javaTool('jarsigner'), ['-verify', source], false);
   fs.copyFileSync(source, destination);
-  await run(javaTool('jarsigner'), ['-verify', destination]);
+  await run(javaTool('jarsigner'), ['-verify', destination], false);
   console.log(`Artefato assinado e verificado: ${path.basename(destination)}`);
 }
 
@@ -66,7 +66,7 @@ async function main() {
     ':app:assembleRelease',
     '--no-daemon',
     '--max-workers=1',
-    '-Dorg.gradle.jvmargs=-Xmx1200m -Xms256m -Xss512k',
+    '-Dorg.gradle.jvmargs=-Xmx1200m',
     '-Dcom.android.tools.r8.threadCount=1'
   ];
 
