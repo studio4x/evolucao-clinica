@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
 import { transcribeAudio } from '../services/aiTranscription';
+import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
@@ -178,7 +179,9 @@ export default function ShareTarget() {
   const navigate = useNavigate();
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
   const [patients, setPatients] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
   const [selectedPatientId, setSelectedPatientId] = useState<string>('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
   const [sessionTime, setSessionTime] = useState(() => {
     const saved = localStorage.getItem('evolucao-clinica:default-session-time');
@@ -226,6 +229,16 @@ export default function ShareTarget() {
           patientsData = data || [];
         }
         setPatients(patientsData);
+
+        const { data: templatesData, error: templatesError } = await supabase
+          .from('evolution_templates')
+          .select('id, name')
+          .order('name');
+        if (templatesError) {
+          console.warn('Não foi possível carregar os templates de evolução:', templatesError);
+        } else {
+          setTemplates(templatesData || []);
+        }
 
         // Load shared file
         const file = (await getSharedFile()) || (await getNativeSharedFile());
@@ -276,6 +289,12 @@ export default function ShareTarget() {
   const handleNativePlaybackSeek = (positionMs: number) => {
     getNativeShareBridge()?.seekSharedFile?.(positionMs);
     setNativePlayback(current => ({ ...current, positionMs }));
+  };
+
+  const handlePatientChange = (patientId: string) => {
+    setSelectedPatientId(patientId);
+    const patient = patients.find(item => item.id === patientId);
+    setSelectedTemplateId(patient?.default_template_id || '');
   };
 
   const handleCancel = async () => {
@@ -386,6 +405,7 @@ export default function ShareTarget() {
       transcription_text: '',
       google_doc_append_status: 'pending',
       audio_duration_seconds: safeAudioDuration,
+      template_id: selectedTemplateId || null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -432,13 +452,21 @@ export default function ShareTarget() {
         .eq('id', evolutionId);
       if (originalSaveError) throw originalSaveError;
 
+      let evolutionText = transcription;
+      if (selectedTemplateId) {
+        setErrorMessage('Etapa 3/5: Aplicando o template selecionado...');
+        evolutionText = await convertEvolutionToTemplate(transcription, selectedTemplateId);
+      }
+
       // 3. Append to Google Docs
-      setErrorMessage("Etapa 3/4: Inserindo no prontuário (Google Docs)...");
+      setErrorMessage(selectedTemplateId
+        ? 'Etapa 4/5: Inserindo no prontuário (Google Docs)...'
+        : 'Etapa 3/4: Inserindo no prontuário (Google Docs)...');
       await appendToGoogleDoc(
         googleAccessToken,
         patient.google_doc_id,
         sessionDate,
-        transcription,
+        evolutionText,
         {
           sessionTime,
           evolutionId
@@ -446,12 +474,12 @@ export default function ShareTarget() {
       );
 
       // 4. Update Supabase
-      setErrorMessage("Etapa 4/4: Finalizando...");
+      setErrorMessage(selectedTemplateId ? 'Etapa 5/5: Finalizando...' : 'Etapa 4/4: Finalizando...');
       const { error: updateError } = await supabase
         .from('evolutions')
         .update({
           transcription_status: 'completed',
-          transcription_text: transcription,
+          transcription_text: evolutionText,
           original_transcription_text: transcription,
           google_doc_append_status: 'completed',
           google_doc_append_at: new Date().toISOString(),
@@ -680,7 +708,7 @@ export default function ShareTarget() {
                 </label>
                 <select
                   value={selectedPatientId}
-                  onChange={(e) => setSelectedPatientId(e.target.value)}
+                  onChange={(e) => handlePatientChange(e.target.value)}
                   className="input-field p-2"
                   disabled={status === 'processing'}
                 >
@@ -691,6 +719,28 @@ export default function ShareTarget() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-brand-text mb-1">
+                  Template de Evolução
+                </label>
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) => setSelectedTemplateId(event.target.value)}
+                  className="input-field p-2"
+                  disabled={status === 'processing'}
+                >
+                  <option value="">Sem template (transcrição original)</option>
+                  {templates.map(template => (
+                    <option key={template.id} value={template.id}>
+                      {template.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-brand-text-muted">
+                  O template padrão do paciente é selecionado automaticamente e pode ser alterado antes do processamento.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
