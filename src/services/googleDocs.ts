@@ -59,6 +59,19 @@ async function googleApiFetch(url: string, options: RequestInit, context: string
   throw new Error(`Google Drive API error (${context}): retry limit exceeded.`);
 }
 
+export async function validateGoogleDocAccess(
+  googleAccessToken: string,
+  googleDocId: string
+) {
+  const googleDocsUrl = `https://docs.googleapis.com/v1/documents/${encodeURIComponent(googleDocId)}?fields=documentId`;
+  await googleApiFetch(googleDocsUrl, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`,
+    },
+  }, 'Doc access validation');
+}
+
 export async function appendToGoogleDoc(
   googleAccessToken: string,
   googleDocId: string,

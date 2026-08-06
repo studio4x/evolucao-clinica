@@ -53,13 +53,13 @@ import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } fr
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
 import { canUseNativeGoogleOAuthCallback, clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
+import { isGoogleAccessTokenFresh } from './utils/googleAuthSession';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
 
-const GOOGLE_ACCESS_TOKEN_MAX_AGE_MS = 45 * 60 * 1000;
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 const AUTH_SESSION_TIMEOUT_MS = 15000;
 
@@ -380,13 +380,18 @@ export default function App() {
 
           const sameGoogleUser = latestState.googleAccessUserId === session.user.id;
           const hasPersistedGoogleScopes = latestState.googleGrantedScopes.length > 0;
-          const tokenAge = latestState.googleAccessTokenIssuedAt ? Date.now() - latestState.googleAccessTokenIssuedAt : Number.POSITIVE_INFINITY;
+          const hasNewProviderToken = Boolean(
+            session.provider_token && session.provider_token !== latestState.googleAccessToken
+          );
           const shouldSilentlyRefreshGoogle =
             sameGoogleUser &&
             hasPersistedGoogleScopes &&
             canUseNativeGoogleOAuthCallback() &&
-            !session.provider_token &&
-            (!latestState.googleAccessToken || tokenAge > GOOGLE_ACCESS_TOKEN_MAX_AGE_MS) &&
+            !hasNewProviderToken &&
+            !isGoogleAccessTokenFresh(
+              latestState.googleAccessToken,
+              latestState.googleAccessTokenIssuedAt
+            ) &&
             !hasSilentGoogleRefreshFlag(session.user.id);
 
           if (shouldSilentlyRefreshGoogle) {

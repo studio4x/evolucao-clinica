@@ -165,9 +165,7 @@ public class LauncherActivity extends ComponentActivity {
         swipeRefreshLayout.addView(webView);
         setContentView(swipeRefreshLayout);
 
-        Uri launchUri = getIntent() == null ? null : getIntent().getData();
-        String notificationLink = getIntent() == null ? null : getIntent().getStringExtra("notification_link");
-        webView.loadUrl(hasSharedFile() ? shareTargetUrl() : notificationUrl(notificationLink, launchUri));
+        webView.loadUrl(resolveLaunchUrl(getIntent()));
     }
 
     @Override
@@ -175,11 +173,19 @@ public class LauncherActivity extends ComponentActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         captureShareIntent(intent);
-        Uri callbackUri = intent == null ? null : intent.getData();
         if (webView != null) {
-            String notificationLink = intent == null ? null : intent.getStringExtra("notification_link");
-            webView.loadUrl(hasSharedFile() ? shareTargetUrl() : notificationUrl(notificationLink, callbackUri));
+            webView.loadUrl(resolveLaunchUrl(intent));
         }
+    }
+
+    private String resolveLaunchUrl(Intent intent) {
+        Uri uri = intent == null ? null : intent.getData();
+        // O callback OAuth precisa ser consumido antes de reabrir o áudio. Caso
+        // contrário, o arquivo compartilhado faz o app descartar os tokens novos.
+        if (isNativeOAuthCallback(uri)) return nativeOAuthCallbackUrl(uri);
+        if (hasSharedFile()) return shareTargetUrl();
+        String notificationLink = intent == null ? null : intent.getStringExtra("notification_link");
+        return notificationUrl(notificationLink, uri);
     }
 
     private String notificationUrl(String link, Uri fallbackUri) {

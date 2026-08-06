@@ -7,9 +7,10 @@ import { transcribeAudio } from '../services/aiTranscription';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
-import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
+import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent, validateGoogleDocAccess } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
+import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink, Play, Pause } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
@@ -180,17 +181,44 @@ const isGoogleReconnectNeededMessage = (message: string) => {
   );
 };
 
+const SHARE_TARGET_AUTH_RECOVERY_KEY = 'share-target:resume-after-google-auth';
+
+type ShareTargetAuthRecovery = {
+  patientId: string;
+  templateId: string;
+  sessionDate: string;
+  sessionTime: string;
+};
+
+const readShareTargetAuthRecovery = (): ShareTargetAuthRecovery | null => {
+  try {
+    const raw = sessionStorage.getItem(SHARE_TARGET_AUTH_RECOVERY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ShareTargetAuthRecovery>;
+    if (!parsed.patientId) return null;
+    return {
+      patientId: parsed.patientId,
+      templateId: parsed.templateId || '',
+      sessionDate: parsed.sessionDate || new Date().toISOString().split('T')[0],
+      sessionTime: parsed.sessionTime || '',
+    };
+  } catch {
+    return null;
+  }
+};
 
 
 export default function ShareTarget() {
   const navigate = useNavigate();
-  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleAccessTokenIssuedAt, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const authRecoveryRef = useRef(readShareTargetAuthRecovery());
   const [patients, setPatients] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedPatientId, setSelectedPatientId] = useState<string>(authRecoveryRef.current?.patientId || '');
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>(authRecoveryRef.current?.templateId || '');
+  const [sessionDate, setSessionDate] = useState(authRecoveryRef.current?.sessionDate || new Date().toISOString().split('T')[0]);
   const [sessionTime, setSessionTime] = useState(() => {
+    if (authRecoveryRef.current?.sessionTime) return authRecoveryRef.current.sessionTime;
     const saved = localStorage.getItem('evolucao-clinica:default-session-time');
     if (saved) return saved;
     const now = new Date();
@@ -222,12 +250,19 @@ export default function ShareTarget() {
   const [modalSaving, setModalSaving] = useState(false);
   const [modalError, setModalError] = useState('');
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const hasFreshClinicalAccess = hasClinicalAccess && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
   const needsGoogleReconnect = !hasClinicalAccess || isGoogleReconnectNeededMessage(errorMessage) || isGoogleReconnectNeededMessage(modalError);
   const nativeShare = getNativeShareBridge();
   const hasNativeAudioPlayback = Boolean(nativeShare && typeof nativeShare.playSharedFile === 'function');
   const useNativeAudioPlayer = usesNativeSharedAudio && hasNativeAudioPlayback;
   const needsNativePauseUpdate = installedAppInfo.platform === 'android'
     && Boolean(installedAppInfo.versionCode && installedAppInfo.versionCode < 75);
+
+  useEffect(() => {
+    if (hasFreshClinicalAccess) {
+      sessionStorage.removeItem(SHARE_TARGET_AUTH_RECOVERY_KEY);
+    }
+  }, [hasFreshClinicalAccess]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -393,24 +428,33 @@ export default function ShareTarget() {
   const handleCancel = async () => {
     nativePauseRequestedRef.current = false;
     setNativePlaybackRequested(false);
+    sessionStorage.removeItem(SHARE_TARGET_AUTH_RECOVERY_KEY);
     await clearSharedAudioSources();
     navigate('/painel/dashboard');
   };
 
-  const handleReauthenticate = async () => {
+  const handleReauthenticate = async (prompt: 'none' | 'consent' = 'consent') => {
     setIsReauthenticating(true);
     try {
+      sessionStorage.setItem(SHARE_TARGET_AUTH_RECOVERY_KEY, JSON.stringify({
+        patientId: selectedPatientId,
+        templateId: selectedTemplateId,
+        sessionDate,
+        sessionTime,
+      } satisfies ShareTargetAuthRecovery));
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-        prompt: 'consent',
+        prompt,
         loginHint: user?.email || undefined
       });
       if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
-      alert("Erro ao renovar autenticação. Tente novamente.");
+      setGoogleAccessToken(null);
+      setErrorMessage('Não foi possível renovar automaticamente a autenticação do Google. Use o botão abaixo para conectar novamente.');
+      setStatus('error');
     } finally {
       setIsReauthenticating(false);
     }
@@ -476,8 +520,31 @@ export default function ShareTarget() {
       return;
     }
 
-    if (!hasClinicalAccess) {
-      setErrorMessage('Sua conexão com o Google está ausente, expirada ou sem permissões clínicas completas. Renove a autenticação abaixo.');
+    if (!hasFreshClinicalAccess) {
+      setErrorMessage('');
+      setStatus('idle');
+      const wasPreviouslyConnected = hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+      await handleReauthenticate(wasPreviouslyConnected ? 'none' : 'consent');
+      return;
+    }
+
+    try {
+      // Valida o token antes da transcrição para nunca descobrir a expiração
+      // somente depois do processamento clínico já ter sido executado.
+      if (navigator.onLine) {
+        await validateGoogleDocAccess(googleAccessToken, patient.google_doc_id);
+      }
+    } catch (error: any) {
+      const message = error?.message || String(error);
+      if (isGoogleReconnectNeededMessage(message)) {
+        setGoogleAccessToken(null);
+        setErrorMessage('');
+        setStatus('idle');
+        await handleReauthenticate(message.includes('INSUFFICIENT_SCOPES') ? 'consent' : 'none');
+        return;
+      }
+
+      setErrorMessage(`Não foi possível validar o acesso ao prontuário: ${message}`);
       setStatus('error');
       return;
     }
@@ -584,6 +651,7 @@ export default function ShareTarget() {
       if (updateError) throw updateError;
 
       await clearSharedAudioSources();
+      sessionStorage.removeItem(SHARE_TARGET_AUTH_RECOVERY_KEY);
       setStatus('success');
       setErrorMessage('');
 
@@ -633,13 +701,16 @@ export default function ShareTarget() {
       setErrorMessage(msg);
       setStatus('error');
 
-      // Dispara notificação de erro para áudio compartilhado
-      void sendNotification({
-        title: "Erro no Áudio Compartilhado ⚠️",
-        content: `Falha ao processar áudio compartilhado para ${patient?.full_name || 'Paciente'}: ${msg}`,
-        type: "error",
-        link: `/painel/patients/${selectedPatientId}`
-      });
+      // Uma renovação do Google é um estado recuperável da conexão, não uma
+      // segunda falha que precise gerar outra notificação para a pessoa usuária.
+      if (!isGoogleReconnectNeededMessage(msg)) {
+        void sendNotification({
+          title: "Erro no Áudio Compartilhado ⚠️",
+          content: `Falha ao processar áudio compartilhado para ${patient?.full_name || 'Paciente'}: ${msg}`,
+          type: "error",
+          link: `/painel/patients/${selectedPatientId}`
+        });
+      }
       
       // Update Supabase with error if possible
       try {
@@ -886,7 +957,7 @@ export default function ShareTarget() {
                         Renove antes de processar o áudio.
                       </p>
                       <button
-                        onClick={handleReauthenticate}
+                        onClick={() => handleReauthenticate()}
                         disabled={isReauthenticating}
                         className="mt-3 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-amber-900 bg-amber-100 hover:bg-amber-200 transition-colors disabled:opacity-50"
                       >
@@ -902,7 +973,7 @@ export default function ShareTarget() {
                 </div>
               )}
 
-              {status === 'error' && (
+              {status === 'error' && !needsGoogleReconnect && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-4">
                   <div className="flex">
                     <AlertCircle className="h-5 w-5 text-red-400" />
@@ -911,20 +982,6 @@ export default function ShareTarget() {
                       <div className="mt-2 text-sm text-red-700">
                         <p>{errorMessage}</p>
                       </div>
-                      {needsGoogleReconnect && (
-                        <button
-                          onClick={handleReauthenticate}
-                          disabled={isReauthenticating}
-                          className="mt-3 inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-lg text-red-700 bg-red-100 hover:bg-red-200 transition-colors"
-                        >
-                          {isReauthenticating ? (
-                            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-4 w-4 mr-1.5" />
-                          )}
-                          Renovar Autenticação do Google
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1001,7 +1058,7 @@ export default function ShareTarget() {
                   <p className="text-sm text-red-700 font-medium">{modalError}</p>
                   {needsGoogleReconnect && (
                     <button
-                      onClick={handleReauthenticate}
+                      onClick={() => handleReauthenticate()}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
                     >
                       Renovar Autenticação
