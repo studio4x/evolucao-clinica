@@ -14,6 +14,8 @@ import {
   ShieldAlert,
   Send,
   Pencil,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { showAlert, showConfirm } from '../store/modalStore';
 
@@ -33,6 +35,7 @@ interface NotificationRecord {
 
 const EXCLUDED_EMAIL_SOURCES = ['welcome', 'lifecycle', 'lifecycle-conditional', 'lifecycle-test', 'lifecycle-alert'];
 const EXCLUDED_EMAIL_SOURCES_FILTER = `(${EXCLUDED_EMAIL_SOURCES.join(',')})`;
+const ITEMS_PER_PAGE = 20;
 
 interface EmailHistoryProps {
   embedded?: boolean;
@@ -59,6 +62,7 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [clearingAll, setClearingAll] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -193,6 +197,16 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
     );
   });
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginatedNotifications = filtered.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
+
+  useEffect(() => {
+    if (currentPage > pageCount) setCurrentPage(pageCount);
+  }, [currentPage, pageCount]);
+
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -268,7 +282,10 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
           <input
             type="text"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
             placeholder="Buscar por destinatário, assunto, provedor ou mensagem..."
             className="w-full pl-10 pr-4 py-2.5 text-sm border border-brand-border/60 rounded-xl bg-white focus:outline-none focus:border-brand-primary transition-all"
           />
@@ -350,7 +367,7 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
                 </tr>
               </thead>
               <tbody className="divide-y divide-brand-border/20">
-                {filtered.map((n) => (
+                {paginatedNotifications.map((n) => (
                   <tr
                     key={n.id}
                     className="hover:bg-brand-bg/10 transition-colors group"
@@ -457,16 +474,44 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
             {/* Footer da tabela */}
             <div className="px-4 py-2.5 border-t border-brand-border/30 bg-brand-bg/10 flex items-center justify-between">
               <span className="text-[10px] text-brand-text-muted">
-                Exibindo {filtered.length} de {notifications.length} registros
+                Exibindo {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filtered.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)} de {filtered.length} registros
               </span>
-              {search && filtered.length < notifications.length && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="text-[10px] text-brand-primary hover:underline cursor-pointer"
-                >
-                  Limpar filtro
-                </button>
-              )}
+              <div className="flex items-center gap-3">
+                {search && filtered.length < notifications.length && (
+                  <button
+                    onClick={() => {
+                      setSearch('');
+                      setCurrentPage(1);
+                    }}
+                    className="text-[10px] text-brand-primary hover:underline cursor-pointer"
+                  >
+                    Limpar filtro
+                  </button>
+                )}
+                {pageCount > 1 && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                      disabled={currentPage === 1}
+                      aria-label="Página anterior"
+                      className="p-1.5 rounded-lg border border-brand-border/60 text-brand-text-muted hover:bg-brand-bg/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronLeft size={14} />
+                    </button>
+                    <span className="text-[10px] text-brand-text-muted min-w-[72px] text-center">
+                      Página {currentPage} de {pageCount}
+                    </span>
+                    <button
+                      onClick={() => setCurrentPage(page => Math.min(pageCount, page + 1))}
+                      disabled={currentPage === pageCount}
+                      aria-label="Próxima página"
+                      className="p-1.5 rounded-lg border border-brand-border/60 text-brand-text-muted hover:bg-brand-bg/40 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

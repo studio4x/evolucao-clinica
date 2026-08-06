@@ -21,6 +21,9 @@ for (const source of ["welcome", "lifecycle", "lifecycle-conditional", "lifecycl
   assert.match(emailHistorySource, new RegExp(`['\"]${source}['\"]`));
 }
 assert.match(emailHistorySource, /\.not\('source', 'in', EXCLUDED_EMAIL_SOURCES_FILTER\)/);
+assert.match(emailHistorySource, /ITEMS_PER_PAGE = 20/);
+assert.match(emailHistorySource, /Página anterior/);
+assert.match(emailHistorySource, /Próxima página/);
 
 const deliveriesStart = serverSource.indexOf('app.get("/api/admin/whatsapp/deliveries"');
 const deliveriesEnd = serverSource.indexOf('app.get("/api/admin/whatsapp/templates"', deliveriesStart);
