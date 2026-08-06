@@ -13,7 +13,8 @@ graph TD
     A[1. Alterar versões no código] --> B[2. Executar npm run build]
     B --> C[3. Rodar Script de Build do Android]
     C --> D[4. Testar o APK local via ADB]
-    D --> E[5. Fazer Upload do AAB no Google Play Console]
+    D --> E[5. Preparar as notas da versão]
+    E --> F[6. Enviar AAB e notas ao Google Play Console]
 ```
 
 ---
@@ -70,6 +71,31 @@ Após a conclusão com sucesso do script, dois arquivos principais serão gerado
    * **Uso**: Teste manual nos celulares (instalação via USB ou download direto).
 2. **`app-release-bundle.aab`**: 
    * **Uso**: Envio oficial para o **Google Play Console** (trilhas de Teste Interno, Fechado ou Produção).
+
+---
+
+## 📝 Notas da versão obrigatórias
+
+Sempre que um novo `.aab` for gerado, prepare e envie as notas da versão junto
+com o artefato no Google Play Console. A publicação da versão Android não está
+concluída sem essas notas.
+
+1. Crie ou atualize `docs/RELEASE_NOTES_1.0.<versionCode>.md` com as mudanças
+   visíveis para a pessoa usuária, correções relevantes e eventuais limitações.
+2. Use o texto abaixo no campo de notas da versão do Google Play Console,
+   substituindo somente o conteúdo entre as tags. Mantenha exatamente as tags
+   de idioma `pt-BR`:
+
+```text
+<pt-BR>
+Insira ou cole aqui as notas da versão no idioma pt-BR
+</pt-BR>
+```
+
+3. Não inclua credenciais, tokens, URLs privadas, detalhes de infraestrutura ou
+   dados de pacientes. Prefira linguagem clara, curta e orientada ao benefício.
+4. Copie o mesmo texto final para o arquivo versionado em `docs/`, para que a
+   versão enviada ao Play Console possa ser auditada posteriormente.
 
 ---
 

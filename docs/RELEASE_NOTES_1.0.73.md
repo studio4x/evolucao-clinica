@@ -13,6 +13,10 @@ Build web: v1.10.721
 - Corrigido o redirecionamento de autenticação Google em versões antigas do aplicativo, evitando a abertura de uma página em branco no navegador.
 - Aprimorada a estabilidade da conexão com Google Drive e Google Docs nos dispositivos Android compatíveis.
 
-## Texto curto para o Google Play Console
+## Texto para o Google Play Console
 
+```text
+<pt-BR>
 Corrigimos o compartilhamento de áudios do WhatsApp: notas de voz Ogg/Opus agora são reconhecidas com mais confiabilidade e a duração não identificada não bloqueia o processamento. Também melhoramos a conexão com o Google e evitamos redirecionamentos para páginas em branco em versões antigas do app.
+</pt-BR>
+```
