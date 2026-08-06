@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import DOMPurify from 'dompurify';
 import { AlertTriangle, Loader2, Mail, Pencil, RefreshCw, Save, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
@@ -16,6 +17,31 @@ type EmailTemplate = {
 type TemplateDraft = Pick<EmailTemplate, 'subject_template' | 'preheader_template' | 'body_template' | 'cta_label_template'>;
 
 const TOKEN_HELP = 'Use variáveis entre chaves, por exemplo {{nome}}. Elas são substituídas automaticamente no envio.';
+const HTML_HELP = 'Use HTML de e-mail, como <p>, <strong>, <a>, <ul>, <table> e estilos inline. O mesmo HTML é inserido no e-mail enviado.';
+const EMAIL_HTML_TAGS = ['a', 'b', 'blockquote', 'br', 'div', 'em', 'h1', 'h2', 'h3', 'h4', 'hr', 'i', 'img', 'li', 'ol', 'p', 'span', 'strong', 'table', 'tbody', 'td', 'th', 'thead', 'tr', 'u', 'ul'];
+const EMAIL_HTML_ATTRIBUTES = ['align', 'alt', 'border', 'cellpadding', 'cellspacing', 'class', 'colspan', 'height', 'href', 'rel', 'role', 'rowspan', 'src', 'style', 'target', 'title', 'valign', 'width'];
+const PREVIEW_VARIABLES: Record<string, string> = {
+  assunto: 'Relatório de exemplo',
+  conteudo: 'Conteúdo de exemplo do e-mail.',
+  data_fim_teste: '31/12/2026',
+  dias_de_teste: '7',
+  forma_de_pagamento: 'Google Pay',
+  icone: 'ℹ️',
+  motivo_da_falha: 'A cobrança não foi aprovada.',
+  nome: 'Profissional',
+  paciente: 'Paciente de exemplo',
+  plano: 'Plano Mensal',
+  titulo: 'Título da notificação',
+};
+
+function sanitizeEmailHtml(value: string) {
+  return DOMPurify.sanitize(value, { ALLOWED_TAGS: EMAIL_HTML_TAGS, ALLOWED_ATTR: EMAIL_HTML_ATTRIBUTES });
+}
+
+function previewEmailHtml(value: string) {
+  const withPreviewVariables = value.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => PREVIEW_VARIABLES[key] || `{{${key}}}`);
+  return sanitizeEmailHtml(withPreviewVariables);
+}
 
 export default function EmailTransactionalTemplates() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
@@ -72,7 +98,7 @@ export default function EmailTransactionalTemplates() {
         .update({
           subject_template: draft.subject_template.trim(),
           preheader_template: draft.preheader_template?.trim() || null,
-          body_template: draft.body_template.trim(),
+          body_template: sanitizeEmailHtml(draft.body_template.trim()),
           cta_label_template: draft.cta_label_template?.trim() || null,
           updated_by: sessionData.session?.user.id || null,
         })
@@ -143,9 +169,14 @@ export default function EmailTransactionalTemplates() {
                     <label className="block text-xs font-semibold text-brand-text">Prévia
                       <input value={draft.preheader_template || ''} onChange={(event) => setDraft({ ...draft, preheader_template: event.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-sm font-normal focus:border-brand-primary focus:outline-none" />
                     </label>
-                    <label className="block text-xs font-semibold text-brand-text">Conteúdo
-                      <textarea value={draft.body_template} onChange={(event) => setDraft({ ...draft, body_template: event.target.value })} rows={5} className="mt-1.5 w-full resize-y rounded-xl border border-brand-border bg-white px-3 py-2 text-sm font-normal leading-relaxed focus:border-brand-primary focus:outline-none" />
+                    <label className="block text-xs font-semibold text-brand-text">Conteúdo em HTML
+                      <textarea value={draft.body_template} onChange={(event) => setDraft({ ...draft, body_template: event.target.value })} rows={12} spellCheck={false} className="mt-1.5 w-full resize-y rounded-xl border border-brand-border bg-white px-3 py-2 font-mono text-xs font-normal leading-relaxed focus:border-brand-primary focus:outline-none" />
                     </label>
+                    <p className="text-xs text-brand-text-muted">{HTML_HELP}</p>
+                    <div className="rounded-xl border border-brand-border bg-white p-4">
+                      <span className="text-xs font-semibold text-brand-text">Pré-visualização do conteúdo</span>
+                      <div className="mt-3 border-t border-brand-border/60 pt-3 text-sm leading-relaxed text-brand-text [&_a]:text-brand-primary [&_a]:underline [&_img]:max-w-full [&_table]:max-w-full" dangerouslySetInnerHTML={{ __html: previewEmailHtml(draft.body_template) }} />
+                    </div>
                     <label className="block text-xs font-semibold text-brand-text">Texto do botão (opcional)
                       <input value={draft.cta_label_template || ''} onChange={(event) => setDraft({ ...draft, cta_label_template: event.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2 text-sm font-normal focus:border-brand-primary focus:outline-none" />
                     </label>
@@ -160,7 +191,7 @@ export default function EmailTransactionalTemplates() {
                   <div className="mt-4 grid gap-3 rounded-xl bg-brand-bg/30 p-4 text-xs sm:grid-cols-2">
                     <div><span className="font-bold uppercase tracking-wide text-brand-text-muted">Assunto</span><p className="mt-1 text-brand-text">{template.subject_template}</p></div>
                     {template.preheader_template && <div><span className="font-bold uppercase tracking-wide text-brand-text-muted">Prévia</span><p className="mt-1 text-brand-text">{template.preheader_template}</p></div>}
-                    <div className="sm:col-span-2"><span className="font-bold uppercase tracking-wide text-brand-text-muted">Conteúdo</span><p className="mt-1 whitespace-pre-wrap leading-relaxed text-brand-text">{template.body_template}</p></div>
+                    <div className="sm:col-span-2"><span className="font-bold uppercase tracking-wide text-brand-text-muted">Conteúdo HTML</span><div className="mt-2 rounded-lg border border-brand-border/60 bg-white p-3 text-sm leading-relaxed text-brand-text [&_a]:text-brand-primary [&_a]:underline [&_img]:max-w-full [&_table]:max-w-full" dangerouslySetInnerHTML={{ __html: previewEmailHtml(template.body_template) }} /></div>
                     {template.cta_label_template && <div className="sm:col-span-2"><span className="font-bold uppercase tracking-wide text-brand-text-muted">Botão</span><p className="mt-1 text-brand-text">{template.cta_label_template}</p></div>}
                   </div>
                 )}

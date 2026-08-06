@@ -1166,13 +1166,41 @@ function renderEditableEmailTemplate(value: string | null | undefined, variables
   return String(value || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) => String(variables[key] ?? ""));
 }
 
-function renderEmailTextHtml(value: string, theme: EmailTheme) {
-  return value
-    .split(/\r?\n\s*\r?\n/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean)
-    .map((paragraph) => `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.7; color:${theme.textMuted};">${escapeHtml(paragraph).replace(/\n/g, "<br/>")}</p>`)
-    .join("");
+function normalizeEditableEmailBody(value: string) {
+  const body = String(value || "").trim();
+  if (/<\/?[a-z][^>]*>/i.test(body)) return body;
+  return `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.7;">${escapeHtml(body).replace(/\r?\n\r?\n/g, "</p><p style=\"margin:0 0 16px 0; font-size:15px; line-height:1.7;\">").replace(/\r?\n/g, "<br/>")}</p>`;
+}
+
+function sanitizeEditableEmailHtml(value: string) {
+  return String(value || "")
+    .replace(/<(script|style|iframe|object|embed|form|input|button|link|meta)[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<\/?(script|style|iframe|object|embed|form|input|button|link|meta)[^>]*>/gi, "")
+    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(/\s(?:href|src)\s*=\s*(?:"\s*(?:javascript|vbscript):[^"]*"|'\s*(?:javascript|vbscript):[^']*'|\s*(?:javascript|vbscript):[^\s>]+)/gi, "")
+    .replace(/\sstyle\s*=\s*(?:"[^"]*(?:expression\s*\(|javascript:)[^"]*"|'[^']*(?:expression\s*\(|javascript:)[^']*'|[^\s>]*(?:expression\s*\(|javascript:)[^\s>]*)/gi, "");
+}
+
+function renderEditableEmailTemplateHtml(value: string | null | undefined, variables: Record<string, string | number | null | undefined>) {
+  const rendered = String(value || "").replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key) =>
+    escapeHtml(String(variables[key] ?? "")).replace(/\r?\n/g, "<br/>")
+  );
+  return sanitizeEditableEmailHtml(rendered);
+}
+
+function emailHtmlToText(value: string) {
+  return sanitizeEditableEmailHtml(value)
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|li|h[1-6]|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 async function getEditableEmailTemplate(key: string, fallback: EditableEmailTemplate): Promise<EditableEmailTemplate> {
@@ -1183,16 +1211,16 @@ async function getEditableEmailTemplate(key: string, fallback: EditableEmailTemp
       .eq("key", key)
       .maybeSingle();
     if (error) throw error;
-    if (!data) return fallback;
+    if (!data) return { ...fallback, body: normalizeEditableEmailBody(fallback.body) };
     return {
       subject: String(data.subject_template || fallback.subject),
       preheader: String(data.preheader_template || fallback.preheader),
-      body: String(data.body_template || fallback.body),
+      body: normalizeEditableEmailBody(String(data.body_template || fallback.body)),
       ctaLabel: String(data.cta_label_template || fallback.ctaLabel)
     };
   } catch (error: any) {
     console.warn(`[EmailTemplates] Não foi possível carregar o modelo ${key}; usando conteúdo padrão.`, error?.message || error);
-    return fallback;
+    return { ...fallback, body: normalizeEditableEmailBody(fallback.body) };
   }
 }
 
@@ -3542,7 +3570,8 @@ function buildWelcomeEmailContent(options: {
   const { theme, template } = options;
   const variables = { nome: options.recipientName, login_url: options.loginUrl };
   const statusTitle = renderEditableEmailTemplate(template.preheader, variables);
-  const introText = renderEditableEmailTemplate(template.body, variables);
+  const introHtml = renderEditableEmailTemplateHtml(template.body, variables);
+  const introText = emailHtmlToText(introHtml);
   const ctaLabel = renderEditableEmailTemplate(template.ctaLabel, variables);
 
   const textContent = [
@@ -3560,7 +3589,7 @@ function buildWelcomeEmailContent(options: {
     subtitle: statusTitle,
     bodyHtml: `
       <p style="margin:0 0 16px 0; font-size:16px; line-height:1.7;">Olá, <strong>${escapeHtml(options.recipientName)}</strong>.</p>
-      ${renderEmailTextHtml(introText, theme)}
+      ${introHtml}
       <div style="text-align:center; margin:28px 0 8px 0;">
         ${buildEmailButton(theme, options.loginUrl, ctaLabel)}
       </div>
@@ -4325,7 +4354,7 @@ async function sendNotificationInternal(
         const notificationBodyTemplate = template.body.includes("{{conteudo}}")
           ? template.body
           : `${template.body}\n\n{{conteudo}}`;
-        const renderedBody = renderEditableEmailTemplate(notificationBodyTemplate, templateVariables);
+        const renderedBody = renderEditableEmailTemplateHtml(notificationBodyTemplate, templateVariables);
         const renderedCtaLabel = renderEditableEmailTemplate(template.ctaLabel, templateVariables);
 
         const htmlContent = buildEmailShell(theme, {
@@ -4336,7 +4365,7 @@ async function sendNotificationInternal(
           headerEyebrow: renderEditableEmailTemplate(template.preheader, templateVariables),
           bodyHtml: `
             ${safeImageUrl ? `<div style="margin:0 0 20px 0; border-radius:10px; overflow:hidden; border:1px solid ${theme.border};"><img src="${safeImageUrl}" alt="Imagem" style="display:block; max-width:100%; max-height:240px; object-fit:cover; width:100%;" /></div>` : ""}
-            ${renderEmailTextHtml(renderedBody, theme)}
+            ${renderedBody}
             <div style="text-align:center; margin:28px 0 8px 0;">
               ${buildEmailButton(theme, viewUrl, renderedCtaLabel)}
             </div>
@@ -4348,7 +4377,7 @@ async function sendNotificationInternal(
           recipientEmail: targetEmail,
           recipientName: profData?.full_name || null,
           subject: renderedSubject,
-          textContent: `${renderedBody}\n\n${renderedCtaLabel}: ${viewUrl}\n\nEsta mensagem foi enviada automaticamente pela nossa plataforma.\nPor favor, não responda a este e-mail.\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}\nSuporte: ${supportUrl}`,
+          textContent: `${emailHtmlToText(renderedBody)}\n\n${renderedCtaLabel}: ${viewUrl}\n\nEsta mensagem foi enviada automaticamente pela nossa plataforma.\nPor favor, não responda a este e-mail.\n\nPreferências: ${preferencesUrl}\nDescadastro: ${unsubscribeUrl}\nSuporte: ${supportUrl}`,
           htmlContent,
           source: "notification",
           relatedNotificationId: notification.id,
@@ -4429,7 +4458,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
   };
   const subject = renderEditableEmailTemplate(template.subject, variables);
   const preheader = renderEditableEmailTemplate(template.preheader, variables);
-  const body = renderEditableEmailTemplate(template.body, variables);
+  const body = renderEditableEmailTemplateHtml(template.body, variables);
   const ctaLabel = renderEditableEmailTemplate(template.ctaLabel, variables);
 
   await sendTransactionalEmail(settings, {
@@ -4438,7 +4467,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
     recipientName: professionalName,
     subject,
     textContent: [
-      body,
+      emailHtmlToText(body),
       "",
       `${ctaLabel}: ${subscriptionUrl}`,
       "",
@@ -4448,7 +4477,7 @@ async function sendTrialExpirationEmail(prof: { id: string; full_name: string | 
       title: "Seu teste gratuito terminou",
       subtitle: preheader,
       bodyHtml: `
-        ${renderEmailTextHtml(body, theme)}
+        ${body}
         ${buildEmailCard(theme, "O que fazer agora", `
           <p style="margin:0; font-size:14px; color:${theme.text};">
             Para continuar utilizando prontuários, evoluções, Google Docs e a sincronização da agenda, escolha um dos planos disponíveis no botão abaixo.
@@ -5759,7 +5788,7 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
     };
     const subject = renderEditableEmailTemplate(template.subject, templateVariables);
     const preheader = renderEditableEmailTemplate(template.preheader, templateVariables);
-    const templateBody = renderEditableEmailTemplate(template.body, templateVariables);
+    const templateBody = renderEditableEmailTemplateHtml(template.body, templateVariables);
 
     const transactionLines = [
       `Plano: ${planName}`,
@@ -5786,7 +5815,7 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
 
     const textContent = isSuccess
       ? [
-          templateBody,
+          emailHtmlToText(templateBody),
           amountLabel ? `Valor confirmado: ${amountLabel}.` : null,
           subscriptionId ? `Assinatura Google Pay: ${subscriptionId}.` : null,
           invoiceId ? `Fatura Google Pay: ${invoiceId}.` : null,
@@ -5800,7 +5829,7 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
           "Se precisar de apoio, responda este e-mail ou acesse a área de suporte da plataforma."
         ].filter(Boolean).join("\n")
       : [
-          templateBody,
+          emailHtmlToText(templateBody),
           `Plano selecionado: ${planName}.`,
           amountLabel ? `Valor da tentativa: ${amountLabel}.` : null,
           "",
@@ -5816,7 +5845,7 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
           title: "Assinatura confirmada com sucesso",
           subtitle: preheader,
           bodyHtml: `
-            ${renderEmailTextHtml(templateBody, theme)}
+            ${templateBody}
             ${buildEmailCard(theme, `Boas-vindas ao ${escapeHtml(planName)}`, `
               <p style="margin:0 0 12px 0; font-size:14px; color:${theme.textMuted};">${escapeHtml(planDescription || "Você agora tem acesso ao pacote de recursos selecionado.")}</p>
               <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
@@ -5836,7 +5865,7 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
           title: "Falha ao processar a assinatura",
           subtitle: preheader,
           bodyHtml: `
-            ${renderEmailTextHtml(templateBody, theme)}
+            ${templateBody}
             ${buildEmailCard(theme, "Detalhes da tentativa", `
               <div style="margin:0; color:${theme.text}; font-size:14px; line-height:1.8;">
                 ${transactionRowsHtml}
@@ -6247,7 +6276,7 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
     const reportBodyTemplate = template.body.includes("{{conteudo}}")
       ? template.body
       : `${template.body}\n\n{{conteudo}}`;
-    const renderedBody = renderEditableEmailTemplate(reportBodyTemplate, templateVariables);
+    const renderedBody = renderEditableEmailTemplateHtml(reportBodyTemplate, templateVariables);
     const ctaLabel = renderEditableEmailTemplate(template.ctaLabel, templateVariables);
     const publicLink = reportId ? `${origin || "https://www.evolucaoclinica.app.br"}/public/reports/${reportId}` : null;
 
@@ -6257,7 +6286,7 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
       subtitle: preheader,
       bodyHtml: `
         <div style="padding:0; background:${theme.surface}; color:${theme.text}; line-height:1.7; font-size:15px; white-space:pre-wrap; font-family:inherit;">
-          ${escapeHtml(renderedBody).replace(/\n/g, "<br/>")}
+          ${renderedBody}
         </div>
         ${publicLink ? `
         <div style="margin-top: 30px; text-align: center; border-top: 1px dashed ${theme.border || '#e7e5e4'}; padding-top: 25px;">
@@ -6282,7 +6311,7 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
       recipientEmail: toEmail,
       recipientName: patient.full_name,
       subject: emailSubject,
-      textContent: renderedBody,
+      textContent: emailHtmlToText(renderedBody),
       htmlContent: formattedHtml,
       source: "report",
       allowFallback: true,
