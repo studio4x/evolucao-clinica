@@ -12,10 +12,14 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.media.AudioAttributes;
+import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
@@ -89,6 +93,20 @@ public class LauncherActivity extends ComponentActivity {
     private Uri sharedFileUri;
     private String sharedFileMimeType;
     private String sharedFileName;
+    private MediaPlayer sharedAudioPlayer;
+    private boolean sharedAudioPlayerPrepared;
+    private String sharedAudioPlaybackStatus = "idle";
+    private String sharedAudioPlaybackError = "";
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Runnable sharedAudioStateTicker = new Runnable() {
+        @Override
+        public void run() {
+            emitSharedAudioPlaybackState();
+            if ("playing".equals(sharedAudioPlaybackStatus) || "preparing".equals(sharedAudioPlaybackStatus)) {
+                mainHandler.postDelayed(this, 250);
+            }
+        }
+    };
     private BillingClient billingClient;
     private PaymentSheet paymentSheet;
     private final Map<String, ProductDetails> subscriptionProducts = new HashMap<>();
@@ -235,6 +253,7 @@ public class LauncherActivity extends ComponentActivity {
 
         if (fileUri == null) return;
 
+        releaseSharedAudioPlayer(false);
         sharedFileUri = fileUri;
         sharedFileMimeType = intent.getType();
         sharedFileName = queryDisplayName(fileUri);
@@ -267,6 +286,154 @@ public class LauncherActivity extends ComponentActivity {
 
         String mimeType = declaredMimeType == null ? "" : declaredMimeType.trim();
         return mimeType.startsWith("audio/") ? mimeType : "audio/ogg; codecs=opus";
+    }
+
+    private void emitSharedAudioPlaybackState() {
+        if (webView == null) return;
+
+        int positionMs = 0;
+        int durationMs = 0;
+        if (sharedAudioPlayer != null && sharedAudioPlayerPrepared) {
+            try {
+                positionMs = Math.max(0, sharedAudioPlayer.getCurrentPosition());
+                durationMs = Math.max(0, sharedAudioPlayer.getDuration());
+            } catch (IllegalStateException exception) {
+                Log.w(LOG_TAG, "Não foi possível consultar o player nativo", exception);
+            }
+        }
+
+        try {
+            JSONObject state = new JSONObject();
+            state.put("status", sharedAudioPlaybackStatus);
+            state.put("positionMs", positionMs);
+            state.put("durationMs", durationMs);
+            state.put("error", sharedAudioPlaybackError);
+            webView.evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('native-shared-audio-state',{detail:" + state + "}));",
+                    null
+            );
+        } catch (Exception exception) {
+            Log.w(LOG_TAG, "Não foi possível enviar o estado do player nativo", exception);
+        }
+    }
+
+    private void scheduleSharedAudioStateUpdates() {
+        mainHandler.removeCallbacks(sharedAudioStateTicker);
+        mainHandler.post(sharedAudioStateTicker);
+    }
+
+    private void playSharedAudio() {
+        if (sharedFileUri == null) {
+            sharedAudioPlaybackStatus = "error";
+            sharedAudioPlaybackError = "O arquivo compartilhado não está mais disponível.";
+            emitSharedAudioPlaybackState();
+            return;
+        }
+
+        if (sharedAudioPlayer != null && sharedAudioPlayerPrepared) {
+            try {
+                if ("completed".equals(sharedAudioPlaybackStatus)) sharedAudioPlayer.seekTo(0);
+                sharedAudioPlayer.start();
+                sharedAudioPlaybackStatus = "playing";
+                sharedAudioPlaybackError = "";
+                scheduleSharedAudioStateUpdates();
+                return;
+            } catch (IllegalStateException exception) {
+                Log.w(LOG_TAG, "Recriando o player nativo após estado inválido", exception);
+                releaseSharedAudioPlayer(false);
+            }
+        }
+
+        releaseSharedAudioPlayer(false);
+        sharedAudioPlaybackStatus = "preparing";
+        sharedAudioPlaybackError = "";
+        emitSharedAudioPlaybackState();
+
+        try {
+            MediaPlayer player = new MediaPlayer();
+            sharedAudioPlayer = player;
+            player.setAudioAttributes(new AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build());
+            player.setDataSource(this, sharedFileUri);
+            player.setOnPreparedListener(preparedPlayer -> {
+                if (sharedAudioPlayer != preparedPlayer) return;
+                sharedAudioPlayerPrepared = true;
+                try {
+                    preparedPlayer.start();
+                    sharedAudioPlaybackStatus = "playing";
+                    scheduleSharedAudioStateUpdates();
+                } catch (IllegalStateException exception) {
+                    sharedAudioPlaybackStatus = "error";
+                    sharedAudioPlaybackError = "Não foi possível iniciar a reprodução neste aparelho.";
+                    emitSharedAudioPlaybackState();
+                }
+            });
+            player.setOnCompletionListener(completedPlayer -> {
+                if (sharedAudioPlayer != completedPlayer) return;
+                sharedAudioPlaybackStatus = "completed";
+                mainHandler.removeCallbacks(sharedAudioStateTicker);
+                emitSharedAudioPlaybackState();
+            });
+            player.setOnErrorListener((failedPlayer, what, extra) -> {
+                if (sharedAudioPlayer == failedPlayer) {
+                    sharedAudioPlaybackStatus = "error";
+                    sharedAudioPlaybackError = "O Android não conseguiu decodificar este áudio (" + what + "/" + extra + ").";
+                    mainHandler.removeCallbacks(sharedAudioStateTicker);
+                    emitSharedAudioPlaybackState();
+                }
+                return true;
+            });
+            player.prepareAsync();
+            scheduleSharedAudioStateUpdates();
+        } catch (Exception exception) {
+            Log.e(LOG_TAG, "Não foi possível preparar o áudio compartilhado", exception);
+            sharedAudioPlaybackStatus = "error";
+            sharedAudioPlaybackError = "Não foi possível preparar o áudio para reprodução.";
+            releaseSharedAudioPlayer(false);
+            emitSharedAudioPlaybackState();
+        }
+    }
+
+    private void pauseSharedAudio() {
+        if (sharedAudioPlayer == null || !sharedAudioPlayerPrepared) return;
+        try {
+            if (sharedAudioPlayer.isPlaying()) sharedAudioPlayer.pause();
+            sharedAudioPlaybackStatus = "paused";
+        } catch (IllegalStateException exception) {
+            Log.w(LOG_TAG, "Não foi possível pausar o player nativo", exception);
+        }
+        mainHandler.removeCallbacks(sharedAudioStateTicker);
+        emitSharedAudioPlaybackState();
+    }
+
+    private void seekSharedAudio(int positionMs) {
+        if (sharedAudioPlayer == null || !sharedAudioPlayerPrepared) return;
+        try {
+            int durationMs = Math.max(0, sharedAudioPlayer.getDuration());
+            sharedAudioPlayer.seekTo(Math.max(0, Math.min(positionMs, durationMs)));
+            emitSharedAudioPlaybackState();
+        } catch (IllegalStateException exception) {
+            Log.w(LOG_TAG, "Não foi possível avançar o player nativo", exception);
+        }
+    }
+
+    private void releaseSharedAudioPlayer(boolean resetState) {
+        mainHandler.removeCallbacks(sharedAudioStateTicker);
+        if (sharedAudioPlayer != null) {
+            try {
+                sharedAudioPlayer.release();
+            } catch (Exception exception) {
+                Log.w(LOG_TAG, "Não foi possível liberar o player nativo", exception);
+            }
+        }
+        sharedAudioPlayer = null;
+        sharedAudioPlayerPrepared = false;
+        if (resetState) {
+            sharedAudioPlaybackStatus = "idle";
+            sharedAudioPlaybackError = "";
+        }
     }
 
     private final class NativeShareBridge {
@@ -303,10 +470,31 @@ public class LauncherActivity extends ComponentActivity {
         }
 
         @android.webkit.JavascriptInterface
-        public synchronized void clearSharedFile() {
-            sharedFileUri = null;
-            sharedFileMimeType = null;
-            sharedFileName = null;
+        public boolean playSharedFile() {
+            if (sharedFileUri == null) return false;
+            runOnUiThread(LauncherActivity.this::playSharedAudio);
+            return true;
+        }
+
+        @android.webkit.JavascriptInterface
+        public void pauseSharedFile() {
+            runOnUiThread(LauncherActivity.this::pauseSharedAudio);
+        }
+
+        @android.webkit.JavascriptInterface
+        public void seekSharedFile(int positionMs) {
+            runOnUiThread(() -> seekSharedAudio(positionMs));
+        }
+
+        @android.webkit.JavascriptInterface
+        public void clearSharedFile() {
+            runOnUiThread(() -> {
+                releaseSharedAudioPlayer(true);
+                sharedFileUri = null;
+                sharedFileMimeType = null;
+                sharedFileName = null;
+                emitSharedAudioPlaybackState();
+            });
         }
     }
 
@@ -1061,6 +1249,7 @@ public class LauncherActivity extends ComponentActivity {
 
     @Override
     protected void onDestroy() {
+        releaseSharedAudioPlayer(true);
         if (billingClient != null) billingClient.endConnection();
         if (webView != null) {
             webView.stopLoading();

@@ -8,7 +8,7 @@ import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, getGoogleDocContent, updateGoogleDocContent } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
-import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink } from 'lucide-react';
+import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink, Play, Pause } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 // Simple IndexedDB wrapper for the shared file
@@ -99,8 +99,37 @@ const getNativeSharedFile = async (): Promise<File | null> => {
     { type }
   );
 
-  if (typeof nativeShare.clearSharedFile === 'function') nativeShare.clearSharedFile();
   return file;
+};
+
+type NativeAudioPlaybackState = {
+  status: 'idle' | 'preparing' | 'playing' | 'paused' | 'completed' | 'error';
+  positionMs: number;
+  durationMs: number;
+  error?: string;
+};
+
+const initialNativePlaybackState: NativeAudioPlaybackState = {
+  status: 'idle',
+  positionMs: 0,
+  durationMs: 0
+};
+
+const getNativeShareBridge = () => (window as any).NativeShare;
+
+const clearSharedAudioSources = async () => {
+  await clearSharedFileLocal().catch(error => console.warn('Erro ao limpar áudio compartilhado do navegador:', error));
+  const nativeShare = getNativeShareBridge();
+  if (nativeShare && typeof nativeShare.clearSharedFile === 'function') {
+    nativeShare.clearSharedFile();
+  }
+};
+
+const formatPlaybackTime = (milliseconds: number) => {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 };
 
 const getAudioDurationFromFile = async (file: File): Promise<number> => {
@@ -166,6 +195,7 @@ export default function ShareTarget() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [audioPlaybackError, setAudioPlaybackError] = useState(false);
   const [audioMetadataUnavailable, setAudioMetadataUnavailable] = useState(false);
+  const [nativePlayback, setNativePlayback] = useState<NativeAudioPlaybackState>(initialNativePlaybackState);
   const [status, setStatus] = useState<'loading' | 'idle' | 'processing' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
@@ -178,6 +208,8 @@ export default function ShareTarget() {
   const [modalError, setModalError] = useState('');
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const needsGoogleReconnect = !hasClinicalAccess || isGoogleReconnectNeededMessage(errorMessage) || isGoogleReconnectNeededMessage(modalError);
+  const nativeShare = getNativeShareBridge();
+  const hasNativeAudioPlayback = Boolean(nativeShare && typeof nativeShare.playSharedFile === 'function');
 
   useEffect(() => {
     const loadData = async () => {
@@ -223,6 +255,33 @@ export default function ShareTarget() {
       if (audioUrl) URL.revokeObjectURL(audioUrl);
     };
   }, [audioUrl]);
+
+  useEffect(() => {
+    const handleNativePlaybackState = (event: Event) => {
+      const detail = (event as CustomEvent<NativeAudioPlaybackState>).detail;
+      if (detail?.status) setNativePlayback(detail);
+    };
+
+    window.addEventListener('native-shared-audio-state', handleNativePlaybackState);
+    return () => window.removeEventListener('native-shared-audio-state', handleNativePlaybackState);
+  }, []);
+
+  const handleNativePlaybackToggle = () => {
+    const bridge = getNativeShareBridge();
+    if (!bridge) return;
+    if (nativePlayback.status === 'playing') bridge.pauseSharedFile?.();
+    else bridge.playSharedFile?.();
+  };
+
+  const handleNativePlaybackSeek = (positionMs: number) => {
+    getNativeShareBridge()?.seekSharedFile?.(positionMs);
+    setNativePlayback(current => ({ ...current, positionMs }));
+  };
+
+  const handleCancel = async () => {
+    await clearSharedAudioSources();
+    navigate('/painel/dashboard');
+  };
 
   const handleReauthenticate = async () => {
     setIsReauthenticating(true);
@@ -401,7 +460,7 @@ export default function ShareTarget() {
         .eq('id', evolutionId);
       if (updateError) throw updateError;
 
-      await clearSharedFileLocal().catch(e => console.warn("Erro ao limpar IDB:", e));
+      await clearSharedAudioSources();
       setStatus('success');
       setErrorMessage('');
 
@@ -432,7 +491,7 @@ export default function ShareTarget() {
             evolutionData
           });
           
-          await clearSharedFileLocal().catch(e => console.warn("Erro IDB:", e));
+          await clearSharedAudioSources();
           setStatus('success');
           setErrorMessage('');
           alert("Sem internet! O áudio do WhatsApp foi salvo na sua Fila Offline e será enviado quando a conexão retornar.");
@@ -548,19 +607,64 @@ export default function ShareTarget() {
               {audioUrl && (
                 <div className="bg-brand-bg p-4 rounded-xl border border-brand-border">
                   <p className="text-sm font-medium text-brand-text mb-2">Áudio Compartilhado:</p>
-                  <audio
-                    controls
-                    preload="metadata"
-                    className="w-full"
-                    onCanPlay={() => setAudioPlaybackError(false)}
-                    onLoadedMetadata={(event) => setAudioMetadataUnavailable(!Number.isFinite(event.currentTarget.duration) || event.currentTarget.duration <= 0)}
-                    onError={() => setAudioPlaybackError(true)}
-                  >
-                    <source src={audioUrl} type={audioFile?.type} />
-                  </audio>
-                  {audioPlaybackError ? (
+                  {audioPlaybackError && hasNativeAudioPlayback ? (
+                    <div className="rounded-xl border border-brand-border bg-white p-3">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleNativePlaybackToggle}
+                          disabled={nativePlayback.status === 'preparing'}
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary text-white disabled:opacity-60"
+                          aria-label={nativePlayback.status === 'playing' ? 'Pausar áudio' : 'Reproduzir áudio'}
+                        >
+                          {nativePlayback.status === 'preparing' ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : nativePlayback.status === 'playing' ? (
+                            <Pause className="h-5 w-5" />
+                          ) : (
+                            <Play className="h-5 w-5 translate-x-px" />
+                          )}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <input
+                            type="range"
+                            min={0}
+                            max={Math.max(nativePlayback.durationMs, 1)}
+                            value={Math.min(nativePlayback.positionMs, Math.max(nativePlayback.durationMs, 1))}
+                            onChange={(event) => handleNativePlaybackSeek(Number(event.target.value))}
+                            disabled={nativePlayback.durationMs <= 0}
+                            className="w-full accent-brand-primary"
+                            aria-label="Posição do áudio"
+                          />
+                          <div className="flex justify-between text-xs text-brand-text-muted">
+                            <span>{formatPlaybackTime(nativePlayback.positionMs)}</span>
+                            <span>{formatPlaybackTime(nativePlayback.durationMs)}</span>
+                          </div>
+                        </div>
+                      </div>
+                      {nativePlayback.status === 'error' ? (
+                        <p className="mt-2 text-xs text-red-700">
+                          {nativePlayback.error || 'Não foi possível reproduzir este áudio no aparelho.'}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-xs text-brand-text-muted">Reprodução otimizada pelo aplicativo Android.</p>
+                      )}
+                    </div>
+                  ) : (
+                    <audio
+                      controls
+                      preload="metadata"
+                      className="w-full"
+                      onCanPlay={() => setAudioPlaybackError(false)}
+                      onLoadedMetadata={(event) => setAudioMetadataUnavailable(!Number.isFinite(event.currentTarget.duration) || event.currentTarget.duration <= 0)}
+                      onError={() => setAudioPlaybackError(true)}
+                    >
+                      <source src={audioUrl} type={audioFile?.type} />
+                    </audio>
+                  )}
+                  {audioPlaybackError && !hasNativeAudioPlayback ? (
                     <p className="mt-2 text-xs text-amber-800">
-                      Este aparelho não conseguiu reproduzir a prévia, mas o áudio recebido continuará disponível para processamento.
+                      Este navegador não conseguiu reproduzir a prévia, mas o áudio recebido continuará disponível para processamento.
                     </p>
                   ) : audioMetadataUnavailable ? (
                     <p className="mt-2 text-xs text-brand-text-muted">
@@ -678,7 +782,7 @@ export default function ShareTarget() {
               <div className="pt-4 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => navigate('/painel/dashboard')}
+                  onClick={handleCancel}
                   disabled={status === 'processing'}
                   className="btn-outline disabled:opacity-50"
                 >
