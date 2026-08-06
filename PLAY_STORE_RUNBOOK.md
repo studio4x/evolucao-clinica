@@ -26,7 +26,7 @@ Antes de alterar o frontend, determine o `versionCode` numérico em `app/build.g
 
 1. Defina `PLAY_STORE_VERSION` em [AppVersion.tsx](file:///c:/PLATAFORMAS%20VS%20CODE/EVOLUÇÃO%20CLINICA/evolucao-clinica/src/components/layout/AppVersion.tsx) como `1.0.<versionCode>`.
 2. Mantenha `versionCode` e `versionName` em `app/build.gradle` com o mesmo número.
-3. Ao executar a atualização do Bubblewrap, confira se `twa-manifest.json` ficou com o mesmo `appVersionCode` e `appVersionName`.
+3. Mantenha `appVersionCode`, `appVersionName` e `appVersion` em `twa-manifest.json` com o mesmo número do `versionCode`.
 4. Atualize `APP_VERSION` com a versão exibida no rodapé, seguindo o padrão `v1.10.X` para mudanças pequenas.
 
 Exemplos:
@@ -43,19 +43,22 @@ npm run build
 ```
 *(Certifique-se de que a build completou com sucesso e os arquivos no diretório `dist/` foram atualizados).*
 
-### Passo 3: Executar o Script Automatizado do Android
-Para compilar e assinar o aplicativo Android de forma segura, use o script criado na pasta do projeto:
-```bash
+### Passo 3: Assinar e gerar os artefatos
+
+O build normal **não executa Bubblewrap**. Isso protege as personalizações nativas versionadas, incluindo WebView, FCM, Billing, seletor de arquivos e retorno OAuth do Google.
+
+Configure as credenciais somente no ambiente da sessão de build. Nunca as coloque em `.env`, documentação, código ou Git:
+
+```powershell
+$env:JAVA_HOME = 'C:\Users\medei\.bubblewrap\jdk\jdk-17.0.11+9'
+$env:ANDROID_KEYSTORE_PASSWORD = '<senha segura da chave>'
+$env:ANDROID_KEY_PASSWORD = '<senha segura da chave>'
 node .agents/build_bubblewrap.js
 ```
 
-#### O que este script faz automaticamente por baixo dos panos?
-1. Executa o `npx @bubblewrap/cli update` para baixar novos ícones do servidor e sincronizar configurações do PWA.
-2. Interrompe processos travados no final da atualização (evita loops e travamento de terminal no Windows).
-3. Configura a SDK local no arquivo `local.properties`.
-4. Adiciona a flag `android.overridePathCheck=true` em `gradle.properties` e `app/gradle.properties` (necessário para compilar em computadores cujo caminho de diretório contenha caracteres especiais/acentuação).
-5. Força a compilação do projeto sob a **SDK 36**.
-6. Executa o build final do Android e assina automaticamente o `.apk` e o `.aab` usando o certificado `android.keystore` e a senha cadastrada (`evolucao123`).
+`ANDROID_KEY_ALIAS` é opcional (o padrão é `android`) e `ANDROID_KEYSTORE_PATH` pode apontar para uma chave fora do repositório. O script verifica a sincronização das versões, gera AAB e APK assinados, valida ambos com `jarsigner` e somente então atualiza os artefatos oficiais na raiz.
+
+> Não execute `npx @bubblewrap/cli update` como parte de uma release rotineira. Quando houver necessidade real de atualizar ícones ou metadados gerados pelo Bubblewrap, faça isso em uma branch limpa, revise o diff completo do Android e confirme que as personalizações nativas foram preservadas antes de gerar a release.
 
 ---
 
@@ -70,15 +73,12 @@ Após a conclusão com sucesso do script, dois arquivos principais serão gerado
 
 ---
 
-## 🔑 Informações da Chave de Assinatura
+## 🔑 Proteção da chave de assinatura
 
-* **Arquivo**: `android.keystore` (localizado na raiz do projeto).
-* **Alias da Chave**: `android`
-* **Senha do Keystore**: `evolucao123`
-* **Senha do Alias (Key)**: `evolucao123`
-
-> [!CAUTION]
-> **Nunca perca ou altere este arquivo `android.keystore`.** Se ele for perdido, o Google Play Console não aceitará futuras atualizações do aplicativo e será necessário criar uma nova ficha na loja do zero.
+* A chave e suas senhas são segredos operacionais: mantenha-as em cofre de segredos ou no ambiente protegido de build.
+* Não versione a chave, senhas, aliases privados ou arquivos de configuração local.
+* Faça backup criptografado da chave e teste periodicamente a recuperação em ambiente controlado.
+* A perda da chave de upload pode impedir futuras atualizações; siga o processo de recuperação de chave de upload do Google Play se isso ocorrer.
 
 ---
 

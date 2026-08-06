@@ -1,375 +1,90 @@
-import { spawn } from 'child_process';
-import crypto from 'crypto';
-import fs from 'fs';
-import path from 'path';
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const projectDir = process.cwd();
+const artifactDirectory = path.join(projectDir, 'app', 'build', 'outputs');
 
-function runCommand(command, args, promptHandlers, timeoutDuration = 0) {
+function run(command, args) {
   return new Promise((resolve, reject) => {
-    console.log(`Running: ${command} ${args.join(' ')}`);
-    const child = spawn(command, args, { shell: true, cwd: projectDir });
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-
-    let buffer = '';
-    let timeoutId = null;
-
-    if (timeoutDuration > 0) {
-      timeoutId = setTimeout(() => {
-        console.log(`\n[TIMEOUT] Command exceeded ${timeoutDuration}ms. Terminating process.`);
-        child.kill();
-        resolve(); // Resolve anyway to proceed
-      }, timeoutDuration);
-    }
-
-    child.stdout.on('data', (data) => {
-      process.stdout.write(data);
-      buffer += data;
-      
-      // If we see the success indicator for update, we can resolve early to avoid hanging
-      if (args.includes('update') && buffer.includes('Project updated successfully.')) {
-        console.log('\n[AUTOMATION] Update successful. Terminating early to avoid hang.');
-        if (timeoutId) clearTimeout(timeoutId);
-        child.kill();
-        resolve();
-        return;
-      }
-
-      // Check for prompts
-      for (let i = 0; i < promptHandlers.length; i++) {
-        const handler = promptHandlers[i];
-        if (handler.pattern.test(buffer)) {
-          console.log(`\n[AUTOMATION] Matched prompt: ${handler.pattern}. Sending response.`);
-          child.stdin.write(handler.response);
-          buffer = '';
-          if (!handler.allowMultiple) {
-            promptHandlers.splice(i, 1);
-            i--;
-          }
-          break;
-        }
-      }
-    });
-
-    child.stderr.on('data', (data) => {
-      process.stderr.write(data);
-    });
-
+    const child = spawn(command, args, { cwd: projectDir, shell: process.platform === 'win32', stdio: 'inherit' });
+    child.on('error', reject);
     child.on('close', (code) => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (code === null || code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Command exited with code ${code}`));
-      }
+      if (code === 0) resolve();
+      else reject(new Error(`${command} terminou com código ${code ?? 'desconhecido'}.`));
     });
   });
 }
 
-function ensureOpaqueWebViewTheme() {
-  const valuesDir = path.join(projectDir, 'app', 'src', 'main', 'res', 'values');
-  const stylesPath = path.join(valuesDir, 'styles.xml');
-  const stylesContent = `<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <!--
-        O projeto foi originalmente gerado pelo Bubblewrap para TWA, cujo tema
-        translúcido serve apenas como ponte para o Chrome. O LauncherActivity
-        atual mantém um WebView dentro da própria Activity, portanto precisa de
-        uma janela opaca e acelerada para compor corretamente overlays e modais.
-    -->
-    <style name="EvolucaoClinicaWebViewTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:windowIsTranslucent">false</item>
-        <item name="android:windowBackground">@color/backgroundColor</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowActionModeOverlay">true</item>
-        <item name="android:windowDisablePreview">false</item>
-        <item name="android:windowContentTransitions">false</item>
-        <item name="android:colorAccent">@color/colorPrimary</item>
-        <item name="android:statusBarColor">@color/colorPrimary</item>
-        <item name="android:navigationBarColor">@color/navigationColor</item>
-    </style>
-</resources>
-`;
-
-  fs.mkdirSync(valuesDir, { recursive: true });
-  if (!fs.existsSync(stylesPath) || fs.readFileSync(stylesPath, 'utf8') !== stylesContent) {
-    fs.writeFileSync(stylesPath, stylesContent, 'utf8');
-    console.log('- Opaque WebView activity theme written to app/src/main/res/values/styles.xml.');
+function requireEnvironment(name) {
+  if (!process.env[name]?.trim()) {
+    throw new Error(`Variável obrigatória ausente: ${name}. Configure-a apenas no ambiente de build.`);
   }
 }
 
-function restorePinnedVersion(manifestPath, pinnedVersion) {
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-  manifest.appVersionCode = pinnedVersion.code;
-  manifest.appVersionName = pinnedVersion.name;
-  manifest.appVersion = pinnedVersion.name;
-  manifest.minSdkVersion = Math.max(Number(manifest.minSdkVersion || 0), 23);
+function readReleaseVersion() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(projectDir, 'twa-manifest.json'), 'utf8'));
+  const appVersion = fs.readFileSync(path.join(projectDir, 'src', 'components', 'layout', 'AppVersion.tsx'), 'utf8');
+  const gradle = fs.readFileSync(path.join(projectDir, 'app', 'build.gradle'), 'utf8');
+  const code = Number(manifest.appVersionCode);
+  const name = String(manifest.appVersionName ?? '');
+  const expectedPlayVersion = `1.0.${code}`;
+  const gradleCode = Number(gradle.match(/\bversionCode\s+(\d+)/)?.[1]);
+  const gradleName = gradle.match(/\bversionName\s+"([^"]+)"/)?.[1];
+  const playVersion = appVersion.match(/PLAY_STORE_VERSION\s*=\s*"([^"]+)"/)?.[1];
 
-  const manifestContent = `${JSON.stringify(manifest, null, 2)}\n`;
-  fs.writeFileSync(manifestPath, manifestContent, 'utf8');
-  fs.writeFileSync(
-    path.join(projectDir, 'manifest-checksum.txt'),
-    `${crypto.createHash('sha1').update(manifestContent).digest('hex')}\n`,
-    'utf8'
-  );
-  console.log(`- Play Store version pinned at ${pinnedVersion.name} (versionCode ${pinnedVersion.code}).`);
+  if (!Number.isInteger(code) || code <= 0 || name !== String(code) || String(manifest.appVersion) !== String(code)) {
+    throw new Error('twa-manifest.json possui versões inconsistentes.');
+  }
+  if (gradleCode !== code || gradleName !== String(code) || playVersion !== expectedPlayVersion) {
+    throw new Error(`Versões Android inconsistentes. Esperado versionCode ${code}, versionName ${code} e PLAY_STORE_VERSION ${expectedPlayVersion}.`);
+  }
+  return { code, name };
 }
 
-function applyFixes(pinnedVersion) {
-  console.log('\nApplying custom gradle and WebView fixes to ensure compilation succeeds under SDK 36...');
+function javaTool(name) {
+  const extension = process.platform === 'win32' ? '.exe' : '';
+  const fromJavaHome = process.env.JAVA_HOME && path.join(process.env.JAVA_HOME, 'bin', `${name}${extension}`);
+  return fromJavaHome && fs.existsSync(fromJavaHome) ? fromJavaHome : name;
+}
 
-  // 1. Write local.properties (find user home dir dynamically)
-  const userHome = process.env.USERPROFILE || process.env.HOME || 'C:\\Users\\medei';
-  const sdkDir = path.join(userHome, '.bubblewrap', 'android_sdk');
-  const localPropPath = path.join(projectDir, 'local.properties');
-  fs.writeFileSync(localPropPath, `sdk.dir=${sdkDir.replace(/\\/g, '\\\\')}\n`);
-  console.log(`- local.properties configured with SDK path: ${sdkDir}`);
-
-  // 2. Write app/gradle.properties
-  const appGradlePropPath = path.join(projectDir, 'app', 'gradle.properties');
-  fs.writeFileSync(appGradlePropPath, 'android.overridePathCheck=true\n');
-  console.log('- app/gradle.properties configured.');
-
-  // 3. Update root gradle.properties
-  const rootGradlePropPath = path.join(projectDir, 'gradle.properties');
-  let rootGradleContent = fs.readFileSync(rootGradlePropPath, 'utf8');
-  if (!rootGradleContent.includes('android.overridePathCheck=true')) {
-    rootGradleContent += '\nandroid.overridePathCheck=true\n';
-    fs.writeFileSync(rootGradlePropPath, rootGradleContent);
-    console.log('- root gradle.properties configured.');
-  }
-
-  // Stripe Android 23.0.1 usa metadata Kotlin 2.3.10, que exige R8/AGP 8.13+.
-  const rootBuildGradlePath = path.join(projectDir, 'build.gradle');
-  let rootBuildGradleContent = fs.readFileSync(rootBuildGradlePath, 'utf8');
-  rootBuildGradleContent = rootBuildGradleContent.replace(
-    /com\.android\.tools\.build:gradle:[^']+/,
-    'com.android.tools.build:gradle:8.13.2'
-  );
-  if (!rootBuildGradleContent.includes("com.google.gms:google-services:4.4.4")) {
-    rootBuildGradleContent = rootBuildGradleContent.replace(
-      "classpath 'com.android.tools.build:gradle:8.13.2'",
-      "classpath 'com.android.tools.build:gradle:8.13.2'\n        classpath 'com.google.gms:google-services:4.4.4'"
-    );
-  }
-  fs.writeFileSync(rootBuildGradlePath, rootBuildGradleContent, 'utf8');
-  console.log('- Android Gradle Plugin 8.13.2 configured for Kotlin 2.3 metadata.');
-
-  const gradleWrapperPath = path.join(projectDir, 'gradle', 'wrapper', 'gradle-wrapper.properties');
-  let gradleWrapperContent = fs.readFileSync(gradleWrapperPath, 'utf8');
-  gradleWrapperContent = gradleWrapperContent.replace(
-    /distributionUrl=.*gradle-[^-]+-bin\.zip/,
-    'distributionUrl=https\\://services.gradle.org/distributions/gradle-8.13-bin.zip'
-  );
-  fs.writeFileSync(gradleWrapperPath, gradleWrapperContent, 'utf8');
-  console.log('- Gradle Wrapper 8.13 configured for Android Gradle Plugin 8.13.2.');
-
-  // 4. Update app/build.gradle
-  const buildGradlePath = path.join(projectDir, 'app', 'build.gradle');
-  let buildGradleContent = fs.readFileSync(buildGradlePath, 'utf8');
-  if (!buildGradleContent.includes("id 'com.google.gms.google-services'")) {
-    buildGradleContent = buildGradleContent.replace(
-      "id 'com.android.application'",
-      "id 'com.android.application'\n    id 'com.google.gms.google-services'"
-    );
-  }
-  
-  // Set compileSdkVersion to 36
-  buildGradleContent = buildGradleContent.replace(/compileSdkVersion\s+\d+/, 'compileSdkVersion 36');
-  buildGradleContent = buildGradleContent.replace(/targetSdkVersion\s+\d+/, 'targetSdkVersion 36');
-  buildGradleContent = buildGradleContent.replace(/minSdkVersion\s+\d+/, 'minSdkVersion 23');
-  buildGradleContent = buildGradleContent.replace(/versionCode\s+\d+/, `versionCode ${pinnedVersion.code}`);
-  buildGradleContent = buildGradleContent.replace(/versionName\s+"[^"]+"/, `versionName "${pinnedVersion.name}"`);
-  
-  // Garante a inclusão da dependência SwipeRefreshLayout que o LauncherActivity customizado utiliza
-  if (!buildGradleContent.includes('androidx.swiperefreshlayout:swiperefreshlayout')) {
-    buildGradleContent = buildGradleContent.replace(
-      'dependencies {',
-      "dependencies {\n    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'"
-    );
-  }
-
-  // O WebView usa o AndroidX WebKit para controlar cache e Service Worker.
-  if (!buildGradleContent.includes('androidx.webkit:webkit')) {
-    buildGradleContent = buildGradleContent.replace(
-      'dependencies {',
-      "dependencies {\n    implementation 'androidx.webkit:webkit:1.14.0'"
-    );
-  }
-
-  const requiredBillingDependencies = [
-    "implementation 'androidx.activity:activity:1.10.1'",
-    "implementation 'com.android.billingclient:billing:9.1.0'",
-    "implementation 'com.stripe:stripe-android:23.0.1'",
-    "implementation 'com.google.firebase:firebase-messaging:24.1.0'"
-  ];
-  for (const dependency of requiredBillingDependencies) {
-    if (!buildGradleContent.includes(dependency)) {
-      buildGradleContent = buildGradleContent.replace(
-        'dependencies {',
-        `dependencies {\n    ${dependency}`
-      );
-    }
-  }
-  
-  fs.writeFileSync(buildGradlePath, buildGradleContent);
-  console.log('- app/build.gradle configured.');
-
-  // 5. Restore permissions and the opaque/hardware-accelerated theme after Bubblewrap update.
-  const manifestPath = path.join(projectDir, 'app', 'src', 'main', 'AndroidManifest.xml');
-  if (fs.existsSync(manifestPath)) {
-    let manifestContent = fs.readFileSync(manifestPath, 'utf8');
-    let modified = false;
-    
-    if (!manifestContent.includes('android.permission.RECORD_AUDIO')) {
-      manifestContent = manifestContent.replace(
-        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
-        '<uses-permission android:name="android.permission.INTERNET" />\n        <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n        <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n        <uses-permission android:name="android.permission.RECORD_AUDIO" />\n        <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />'
-      );
-      modified = true;
-      console.log('- RECORD_AUDIO, MODIFY_AUDIO_SETTINGS, INTERNET & ACCESS_NETWORK_STATE permissions added to AndroidManifest.xml');
-    }
-
-    if (!manifestContent.includes('com.google.android.gms.wallet.api.enabled')) {
-      manifestContent = manifestContent.replace(
-        '<meta-data\n            android:name="asset_statements"',
-        '<meta-data\n            android:name="com.google.android.gms.wallet.api.enabled"\n            android:value="true" />\n\n        <meta-data\n            android:name="asset_statements"'
-      );
-      modified = true;
-      console.log('- Google Pay API enabled for Stripe PaymentSheet.');
-    }
-
-    if (!manifestContent.includes('NativeFirebaseMessagingService')) {
-      manifestContent = manifestContent.replace(
-        '<activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />',
-        '<activity android:name="com.google.androidbrowserhelper.trusted.FocusActivity" />\n\n        <service\n            android:name=".NativeFirebaseMessagingService"\n            android:exported="false">\n            <intent-filter>\n                <action android:name="com.google.firebase.MESSAGING_EVENT" />\n            </intent-filter>\n        </service>'
-      );
-      modified = true;
-      console.log('- Native Firebase Messaging service registered.');
-    }
-
-    const launcherActivityMatch = manifestContent.match(/<activity android:name="LauncherActivity"[\s\S]*?android:exported="true">/);
-    if (launcherActivityMatch) {
-      const originalActivityTag = launcherActivityMatch[0];
-      let activityTag = originalActivityTag
-        .replace(/\s+android:theme="[^"]*"/g, '')
-        .replace(/\s+android:hardwareAccelerated="[^"]*"/g, '')
-        .replace(/\s+android:windowSoftInputMode="[^"]*"/g, '');
-
-      activityTag = activityTag.replace(
-        'android:exported="true">',
-        'android:theme="@style/EvolucaoClinicaWebViewTheme"\n            android:hardwareAccelerated="true"\n            android:windowSoftInputMode="adjustResize"\n            android:exported="true">'
-      );
-
-      if (activityTag !== originalActivityTag) {
-        manifestContent = manifestContent.replace(originalActivityTag, activityTag);
-        modified = true;
-        console.log('- LauncherActivity configured with opaque theme and hardware acceleration.');
-      }
-    } else {
-      console.log('WARNING: LauncherActivity declaration not found in AndroidManifest.xml.');
-    }
-    
-    if (modified) {
-      fs.writeFileSync(manifestPath, manifestContent, 'utf8');
-    }
-  } else {
-    console.log('WARNING: AndroidManifest.xml not found at ' + manifestPath);
-  }
-
-  ensureOpaqueWebViewTheme();
-  console.log('All fixes applied successfully!\n');
+async function verifyAndPublishArtifact(source, destination) {
+  if (!fs.existsSync(source)) throw new Error(`Artefato não encontrado: ${source}`);
+  await run(javaTool('jarsigner'), ['-verify', source]);
+  fs.copyFileSync(source, destination);
+  await run(javaTool('jarsigner'), ['-verify', destination]);
+  console.log(`Artefato assinado e verificado: ${path.basename(destination)}`);
 }
 
 async function main() {
-  try {
-    const twaManifestPath = path.join(projectDir, 'twa-manifest.json');
-    const currentManifest = JSON.parse(fs.readFileSync(twaManifestPath, 'utf8'));
-    const pinnedVersion = {
-      code: Number(currentManifest.appVersionCode),
-      name: String(currentManifest.appVersionName)
-    };
-    if (!Number.isInteger(pinnedVersion.code) || pinnedVersion.code <= 0 || !pinnedVersion.name) {
-      throw new Error('twa-manifest.json contém uma versão inválida.');
-    }
+  requireEnvironment('ANDROID_KEYSTORE_PASSWORD');
+  requireEnvironment('ANDROID_KEY_PASSWORD');
+  const version = readReleaseVersion();
+  const gradle = process.platform === 'win32' ? '.\\gradlew.bat' : './gradlew';
+  const gradleArgs = [
+    ':app:bundleRelease',
+    ':app:assembleRelease',
+    '--no-daemon',
+    '--max-workers=1',
+    '-Dorg.gradle.jvmargs=-Xmx1200m -Xms256m -Xss512k',
+    '-Dcom.android.tools.r8.threadCount=1'
+  ];
 
-    // Realiza backup do LauncherActivity.java customizado para evitar que o Bubblewrap o sobrescreva com o template padrão de TWA
-    const launcherActivityPath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'evolucaoclinica', 'app', 'LauncherActivity.java');
-    const firebaseMessagingServicePath = path.join(projectDir, 'app', 'src', 'main', 'java', 'com', 'evolucaoclinica', 'app', 'NativeFirebaseMessagingService.java');
-    const googleServicesPath = path.join(projectDir, 'app', 'google-services.json');
-    let launcherActivityBackup = null;
-    let firebaseMessagingServiceBackup = null;
-    let googleServicesBackup = null;
-    if (fs.existsSync(launcherActivityPath)) {
-      launcherActivityBackup = fs.readFileSync(launcherActivityPath, 'utf8');
-      console.log('- Custom LauncherActivity.java backed up.');
-    }
-    if (fs.existsSync(firebaseMessagingServicePath)) {
-      firebaseMessagingServiceBackup = fs.readFileSync(firebaseMessagingServicePath, 'utf8');
-      console.log('- NativeFirebaseMessagingService.java backed up.');
-    }
-    if (fs.existsSync(googleServicesPath)) {
-      googleServicesBackup = fs.readFileSync(googleServicesPath, 'utf8');
-      console.log('- app/google-services.json backed up.');
-    }
+  console.log(`Gerando release Android ${version.name} (versionCode ${version.code})...`);
+  await run(gradle, gradleArgs);
 
-    // Step 1: Run update to apply manifest changes (and download new icons)
-    console.log('=== STEP 1: RUNNING BUBBLEWRAP UPDATE ===');
-    await runCommand('npx', ['@bubblewrap/cli', 'update'], [
-      { pattern: /Accept\?\s*\(y\/N\)/i, response: 'y\n', allowMultiple: true }
-    ], 30000);
-
-    // O Bubblewrap incrementa a versão durante o update. A versão publicada é
-    // definida explicitamente no repositório e deve permanecer sincronizada.
-    restorePinnedVersion(twaManifestPath, pinnedVersion);
-
-    // Step 2: Apply gradle configuration overrides
-    console.log('=== STEP 2: APPLYING OVERRIDES ===');
-    applyFixes(pinnedVersion);
-
-    // Restaura o LauncherActivity.java customizado mesmo que o Bubblewrap tenha removido o arquivo.
-    if (launcherActivityBackup) {
-      fs.mkdirSync(path.dirname(launcherActivityPath), { recursive: true });
-      fs.writeFileSync(launcherActivityPath, launcherActivityBackup, 'utf8');
-      console.log('- LauncherActivity.java restored from backup (preventing Bubblewrap overwrite).');
-    }
-    if (firebaseMessagingServiceBackup) {
-      fs.mkdirSync(path.dirname(firebaseMessagingServicePath), { recursive: true });
-      fs.writeFileSync(firebaseMessagingServicePath, firebaseMessagingServiceBackup, 'utf8');
-      console.log('- NativeFirebaseMessagingService.java restored from backup.');
-    }
-    if (googleServicesBackup) {
-      fs.mkdirSync(path.dirname(googleServicesPath), { recursive: true });
-      fs.writeFileSync(googleServicesPath, googleServicesBackup, 'utf8');
-      console.log('- app/google-services.json restored from backup.');
-    }
-
-    // Step 3: Run build and sign
-    console.log('=== STEP 3: RUNNING BUBBLEWRAP BUILD ===');
-    await runCommand('npx', ['@bubblewrap/cli', 'build'], [
-      // O projeto já foi atualizado e recebeu novamente as customizações da
-      // WebView no passo anterior. Executar outro update aqui sobrescreve o
-      // LauncherActivity e o gradle.properties, além de incrementar a versão.
-      { pattern: /changes in twa-manifest\.json/i, response: 'n\n' },
-      { pattern: /Password for the Key Store:/i, response: 'evolucao123\n' },
-      { pattern: /Password for the Key\b(?! Store):/i, response: 'evolucao123\n' }
-    ]);
-
-    // Step 4: Bubblewrap já assina o AAB. Verificamos a assinatura sem repetir
-    // o comando com caminho absoluto (que quebra em diretórios com espaços no Windows).
-    console.log('=== STEP 4: VERIFYING AAB SIGNATURE ===');
-    const aabPath = path.join(projectDir, 'app-release-bundle.aab');
-    if (fs.existsSync(aabPath)) {
-      await runCommand('jarsigner', ['-verify', '-certs', 'app-release-bundle.aab'], []);
-      console.log('- app-release-bundle.aab signature verified successfully.');
-    }
-
-    console.log('\n=== BUILD COMPLETE AND SIGNED! ===');
-  } catch (error) {
-    console.error('\nBuild failed:', error.message);
-    process.exit(1);
-  }
+  await verifyAndPublishArtifact(
+    path.join(artifactDirectory, 'bundle', 'release', 'app-release.aab'),
+    path.join(projectDir, 'app-release-bundle.aab')
+  );
+  await verifyAndPublishArtifact(
+    path.join(artifactDirectory, 'apk', 'release', 'app-release.apk'),
+    path.join(projectDir, 'app-release-signed.apk')
+  );
+  console.log('Release concluída. Envie apenas app-release-bundle.aab ao Google Play Console.');
 }
 
-main();
+main().catch((error) => {
+  console.error(`Build Android falhou: ${error.message}`);
+  process.exitCode = 1;
+});

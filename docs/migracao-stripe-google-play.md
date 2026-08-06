@@ -94,6 +94,6 @@ Nas assinaturas Play, o `purchaseToken` identifica a série da assinatura e cada
 4. Configurar e testar os webhooks Stripe.
 5. Concluir Stripe Dashboard, Play Console e Pub/Sub.
 6. Publicar o build web.
-7. Enviar `app-release-bundle.aab` versão 57 ao teste interno.
+7. Enviar `app-release-bundle.aab` com o `versionCode` atual ao teste interno.
 8. Validar cartão aprovado/recusado/3DS, carteiras compatíveis, abandono, duplicidade, atraso de webhook, compra/restauração/cancelamento/reembolso Play e Stripe.
 9. Promover para teste fechado somente após a matriz passar sem checkout dentro do WebView.

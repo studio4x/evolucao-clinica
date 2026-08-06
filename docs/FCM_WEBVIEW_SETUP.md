@@ -24,10 +24,10 @@ O backend atual continuará usando o Web Push para tokens existentes e usará o 
 
 ## 3. Gerar e instalar o app
 
-Com `app/google-services.json` presente:
+Com `app/google-services.json` presente, siga o procedimento de assinatura do [PLAY_STORE_RUNBOOK.md](../PLAY_STORE_RUNBOOK.md). O build exige `ANDROID_KEYSTORE_PASSWORD` e `ANDROID_KEY_PASSWORD` configuradas no ambiente; não use credenciais no código ou em arquivos `.env`.
 
 ```powershell
-./gradlew.bat bundleRelease
+node .agents/build_bubblewrap.js
 ```
 
 O novo `.aab` deve ser enviado ao Google Play Console. Nesse momento, incremente o `versionCode` em `app/build.gradle` e `twa-manifest.json`, atualize `PLAY_STORE_VERSION` em `src/components/layout/AppVersion.tsx` para o mesmo código e gere novamente o bundle.
