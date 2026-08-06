@@ -151,6 +151,7 @@ export type LifecycleDependencies = {
   supabaseAdmin: any;
   productionOrigin: string;
   cronSecret?: string;
+  verifyCronAuthorization?: (authorization: string) => Promise<boolean>;
   getNotificationSettings: () => Promise<any>;
   getEmailTheme: () => Promise<any>;
   buildEmailShell: (theme: any, options: any) => string;

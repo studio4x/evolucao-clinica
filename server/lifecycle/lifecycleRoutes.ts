@@ -15,7 +15,10 @@ function asyncRoute(handler: (req: any, res: any) => Promise<unknown>) {
   });
 }
 
-function cronAuthorized(req: any, deps: LifecycleDependencies): { ok: boolean; missing: boolean } {
+async function cronAuthorized(req: any, deps: LifecycleDependencies): Promise<{ ok: boolean; missing: boolean }> {
+  if (deps.verifyCronAuthorization) {
+    return { ok: await deps.verifyCronAuthorization(String(req.headers.authorization || "")), missing: false };
+  }
   const production = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
   if (production && !deps.cronSecret) return { ok: false, missing: true };
   if (!deps.cronSecret) return { ok: true, missing: false };
@@ -147,31 +150,31 @@ export function createLifecycleService(deps: LifecycleDependencies) {
       app.post("/api/communication/unsubscribe", unsubscribe);
 
       app.post("/api/cron/schedule-lifecycle", asyncRoute(async (req, res) => {
-        const auth = cronAuthorized(req, deps);
+        const auth = await cronAuthorized(req, deps);
         if (auth.missing) return res.status(503).json({ error: "CRON_SECRET é obrigatório em produção." });
         if (!auth.ok) return res.status(401).json({ error: "Não autorizado" });
         return res.json({ success: true, ...(await scheduleLifecycleMessages(deps)) });
       }));
       app.get("/api/cron/schedule-lifecycle", asyncRoute(async (req, res) => {
-        const auth = cronAuthorized(req, deps);
+        const auth = await cronAuthorized(req, deps);
         if (auth.missing) return res.status(503).json({ error: "CRON_SECRET é obrigatório em produção." });
         if (!auth.ok) return res.status(401).json({ error: "Não autorizado" });
         return res.json({ success: true, ...(await scheduleLifecycleMessages(deps)) });
       }));
       app.post("/api/cron/process-lifecycle", asyncRoute(async (req, res) => {
-        const auth = cronAuthorized(req, deps);
+        const auth = await cronAuthorized(req, deps);
         if (auth.missing) return res.status(503).json({ error: "CRON_SECRET é obrigatório em produção." });
         if (!auth.ok) return res.status(401).json({ error: "Não autorizado" });
         return res.json({ success: true, ...(await processLifecycleDispatches(deps, Number(req.body?.batchSize) || undefined)) });
       }));
       app.get("/api/cron/process-lifecycle", asyncRoute(async (req, res) => {
-        const auth = cronAuthorized(req, deps);
+        const auth = await cronAuthorized(req, deps);
         if (auth.missing) return res.status(503).json({ error: "CRON_SECRET é obrigatório em produção." });
         if (!auth.ok) return res.status(401).json({ error: "Não autorizado" });
         return res.json({ success: true, ...(await processLifecycleDispatches(deps)) });
       }));
       app.post("/api/cron/recalculate-lifecycle", asyncRoute(async (req, res) => {
-        const auth = cronAuthorized(req, deps);
+        const auth = await cronAuthorized(req, deps);
         if (auth.missing) return res.status(503).json({ error: "CRON_SECRET é obrigatório em produção." });
         if (!auth.ok) return res.status(401).json({ error: "Não autorizado" });
         const { data: users, error } = await deps.supabaseAdmin.from("professionals").select("id").eq("status", "active").neq("role", "admin").limit(500);
@@ -181,7 +184,7 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ success: true, recalculated });
       }));
       app.get("/api/cron/recalculate-lifecycle", asyncRoute(async (req, res) => {
-        const auth = cronAuthorized(req, deps);
+        const auth = await cronAuthorized(req, deps);
         if (auth.missing) return res.status(503).json({ error: "CRON_SECRET é obrigatório em produção." });
         if (!auth.ok) return res.status(401).json({ error: "Não autorizado" });
         const { data: users, error } = await deps.supabaseAdmin.from("professionals").select("id").eq("status", "active").neq("role", "admin").limit(500);

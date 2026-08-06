@@ -25,6 +25,8 @@ Os jobs reutilizam a configuração central já existente no Vault:
 
 Os valores não devem aparecer em migrations, logs, commits ou relatórios. A migration interrompe a aplicação se esses secrets não estiverem configurados.
 
+O backend valida o Bearer contra o Vault por uma RPC `SECURITY DEFINER` restrita à `service_role`. Isso evita que a execução do cron dependa de uma cópia do secret em uma variável da Vercel e não devolve o valor do Vault em nenhuma resposta.
+
 ## Compatibilidade do endpoint
 
 Os endpoints aceitam `Authorization: Bearer <CRON_SECRET>`. A query string `?secret=` permanece aceita temporariamente para compatibilidade com configurações antigas e deve ser removida depois de confirmada a migração de todos os consumidores.

@@ -33,6 +33,7 @@ assert.equal(getNextJourneyPublicationCronRun("*/5 * * * *", new Date("2026-08-0
 assert.equal(getNextJourneyPublicationCronRun("17 3 * * *", new Date("2026-08-06T13:23:59.999Z")), null);
 const migration = readFileSync(new URL("../supabase/migrations/20260806100000_create_journey_whatsapp_publications.sql", import.meta.url), "utf8");
 const cronMigration = readFileSync(new URL("../supabase/migrations/20260806150000_standardize_supabase_cron_jobs.sql", import.meta.url), "utf8");
+const cronRpcMigration = readFileSync(new URL("../supabase/migrations/20260806170000_add_cron_status_and_vault_verification_rpcs.sql", import.meta.url), "utf8");
 assert.match(migration, /UNIQUE \(journey_content_id, destination_key\)/);
 assert.match(migration, /FOR UPDATE SKIP LOCKED/);
 assert.match(migration, /America\/Sao_Paulo/);
@@ -45,9 +46,16 @@ assert.match(cronMigration, /vault\.decrypted_secrets/);
 assert.match(cronMigration, /Authorization.*Bearer/s);
 assert.match(cronMigration, /cron\.unschedule\(job_record\.jobid\)/);
 assert.doesNotMatch(cronMigration, /REPLACE_WITH|jf4a1n|CRON_SECRET\s*=/i);
+assert.match(cronRpcMigration, /get_journey_publication_cron_status/);
+assert.match(cronRpcMigration, /cron\.job_run_details/);
+assert.match(cronRpcMigration, /verify_supabase_cron_secret/);
+assert.match(cronRpcMigration, /vault\.decrypted_secrets/);
+assert.match(cronRpcMigration, /SECURITY DEFINER/);
+assert.match(cronRpcMigration, /GRANT EXECUTE.*service_role/);
 assert.doesNotMatch(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"), /"crons"/);
 assert.doesNotMatch(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /buildCronBootstrapSql|bootstrapSupabaseCronJobs/);
 assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /\/api\/admin\/journey-publication-cron/);
+assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /verify_supabase_cron_secret/);
 
 const order: string[] = [];
 let updatePayload: Record<string, unknown> | null = null;

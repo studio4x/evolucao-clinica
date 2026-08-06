@@ -468,6 +468,29 @@ const CRON_SECRET = process.env.CRON_SECRET || hashString(
   ].filter(Boolean).join(":")
 );
 
+function getCronRequestSecret(req: any) {
+  const authorization = String(req.headers.authorization || "");
+  if (authorization.startsWith("Bearer ")) return authorization.slice("Bearer ".length).trim();
+  return typeof req.query?.secret === "string" ? req.query.secret.trim() : "";
+}
+
+async function verifySupabaseCronRequest(req: any) {
+  const candidate = getCronRequestSecret(req);
+  if (!candidate) return false;
+  if (candidate === CRON_SECRET) return true;
+
+  const { data, error } = await supabaseAdmin.rpc("verify_supabase_cron_secret", { p_secret: candidate });
+  if (error) {
+    console.error("[Cron] Falha ao verificar o token do Vault:", error.message);
+    return false;
+  }
+  return data === true;
+}
+
+async function verifySupabaseCronAuthorizationHeader(authorization: string) {
+  return verifySupabaseCronRequest({ headers: { authorization }, query: {} });
+}
+
 function appendBrandVersion(url: string, signature: string) {
   if (!url) return "";
   const separator = url.includes("?") ? "&" : "?";
@@ -2156,53 +2179,33 @@ app.post("/api/admin/journey-whatsapp-publications/:id/action", requireAuth, req
 });
 
 app.get("/api/admin/journey-publication-cron", requireAuth, requireAdmin, async (_req, res) => {
-  const connectionString = getPostgresConnectionString();
-  if (!connectionString) {
-    return res.status(503).json({ error: "A consulta operacional do cron não está disponível no servidor." });
-  }
-
-  const client = new PostgresClient({
-    connectionString,
-    ssl: connectionString.includes("sslmode=disable") ? false : { rejectUnauthorized: false }
-  });
-
   try {
-    await client.connect();
-    const jobResult = await client.query(
-      "SELECT jobid, schedule, active FROM cron.job WHERE jobname = $1 LIMIT 1",
-      [JOURNEY_PUBLICATION_CRON_JOB]
-    );
-    const job = jobResult.rows[0] as { jobid: number; schedule: string; active: boolean } | undefined;
+    const { data, error } = await supabaseAdmin.rpc("get_journey_publication_cron_status");
+    if (error) throw error;
+    const job = Array.isArray(data) ? data[0] : null;
 
     if (!job) {
       return res.status(404).json({ error: "O cron de publicação da Jornada não foi encontrado no Supabase." });
     }
 
-    const runResult = await client.query(
-      "SELECT status, start_time, end_time, left(return_message, 160) AS return_message FROM cron.job_run_details WHERE jobid = $1 ORDER BY start_time DESC LIMIT 1",
-      [job.jobid]
-    );
-    const latestRun = runResult.rows[0] as { status: string; start_time: Date | string; end_time: Date | string | null; return_message: string | null } | undefined;
     const nextRunAt = job.active ? getNextJourneyPublicationCronRun(job.schedule) : null;
 
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     return res.json({
-      jobName: JOURNEY_PUBLICATION_CRON_JOB,
+      jobName: job.job_name || JOURNEY_PUBLICATION_CRON_JOB,
       schedule: job.schedule,
       active: job.active,
       nextRunAt,
-      lastRun: latestRun ? {
-        status: latestRun.status,
-        startTime: new Date(latestRun.start_time).toISOString(),
-        endTime: latestRun.end_time ? new Date(latestRun.end_time).toISOString() : null,
-        returnMessage: latestRun.return_message || null
+      lastRun: job.last_start_time ? {
+        status: job.last_status,
+        startTime: new Date(job.last_start_time).toISOString(),
+        endTime: job.last_end_time ? new Date(job.last_end_time).toISOString() : null,
+        returnMessage: job.last_return_message || null
       } : null
     });
   } catch (error: any) {
     console.error("[Admin Journey Cron] Erro ao consultar execução:", error?.message || error);
     return res.status(500).json({ error: "Não foi possível consultar o cron de publicação da Jornada." });
-  } finally {
-    await client.end().catch(() => {});
   }
 });
 
@@ -3683,6 +3686,7 @@ const lifecycleService = createLifecycleService({
   supabaseAdmin,
   productionOrigin: PRODUCTION_ORIGIN,
   cronSecret: process.env.CRON_SECRET || undefined,
+  verifyCronAuthorization: verifySupabaseCronAuthorizationHeader,
   getNotificationSettings,
   getEmailTheme,
   buildEmailShell,
@@ -4922,10 +4926,7 @@ app.post("/api/migrations/import-sessions", requireAuth, async (req: any, res) =
 
 // 4.1. Cron para Enviar Lembretes de Evoluções Clínicas Pendentes
 app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
-  const authHeader = req.headers.authorization;
-  const cronSecret = CRON_SECRET;
-  
-  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+  if (!(await verifySupabaseCronRequest(req))) {
     return res.status(401).json({ error: "Nao autorizado" });
   }
 
@@ -5063,10 +5064,7 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
 
 // 4.2. Cron para enviar e-mail quando o trial gratuito de 7 dias expirar
 app.get("/api/cron/send-trial-expiration-notices", async (req: any, res) => {
-  const authHeader = req.headers.authorization;
-  const cronSecret = CRON_SECRET;
-
-  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+  if (!(await verifySupabaseCronRequest(req))) {
     return res.status(401).json({ error: "Nao autorizado" });
   }
 
@@ -5128,10 +5126,7 @@ app.get("/api/cron/send-trial-expiration-notices", async (req: any, res) => {
 
 // 4.3. Cron para Publicar Conteúdos Agendados da Jornada (America/Sao_Paulo)
 app.get("/api/cron/publish-journey-contents", async (req: any, res) => {
-  const authHeader = req.headers.authorization;
-  const cronSecret = CRON_SECRET;
-
-  if (authHeader !== `Bearer ${cronSecret}` && req.query.secret !== cronSecret) {
+  if (!(await verifySupabaseCronRequest(req))) {
     return res.status(401).json({ error: "Nao autorizado" });
   }
 
@@ -5148,10 +5143,7 @@ app.get("/api/cron/publish-journey-contents", async (req: any, res) => {
 
 // 4.4. Cron para Enviar Notificação Push Diária Global
 app.get("/api/cron/send-daily-push", async (req: any, res) => {
-  const authHeader = req.headers.authorization;
-  const cronSecret = CRON_SECRET;
-
-  let authorized = authHeader === `Bearer ${cronSecret}` || req.query.secret === cronSecret;
+  let authorized = await verifySupabaseCronRequest(req);
   if (!authorized && typeof req.query.secret === "string") {
     const { data: cronConfig } = await supabaseAdmin
       .from("settings")
