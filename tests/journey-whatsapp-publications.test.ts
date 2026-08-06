@@ -6,6 +6,7 @@ import {
   verifyJourneyPublicationAuthorization, publicJourneyUrls, normalizePublicOrigin, resolveProductionOrigin
 } from "../server/whatsapp/journeyPublications.js";
 import { isDueJourneyContent, publishDueJourneyContents } from "../server/journeys/journeyPublisher.js";
+import { getNextJourneyPublicationCronRun, JOURNEY_PUBLICATION_CRON_JOB } from "../server/journeys/journeyPublicationCron.js";
 
 const validClaim = { destinationKey: JOURNEY_WHATSAPP_DESTINATION_KEY, workerId: "n8n-publicacao-jornada", provider: "manual" };
 assert.deepEqual(validateClaimPayload(validClaim), validClaim);
@@ -26,6 +27,10 @@ assert.equal(normalizePublicOrigin("example.test"), "https://example.test");
 assert.equal(resolveProductionOrigin("preview.vercel.app"), "https://evolucaoclinica.app.br");
 assert.equal(JOURNEY_WHATSAPP_DESTINATION_KEY, "jornada-15-dias-operador-evolucao-clinica");
 assert.equal(JOURNEY_WHATSAPP_TIMEZONE, "America/Sao_Paulo");
+assert.equal(JOURNEY_PUBLICATION_CRON_JOB, "publish-journey-contents-job");
+assert.equal(getNextJourneyPublicationCronRun("*/5 * * * *", new Date("2026-08-06T13:20:00.000Z")), "2026-08-06T13:25:00.000Z");
+assert.equal(getNextJourneyPublicationCronRun("*/5 * * * *", new Date("2026-08-06T13:23:59.999Z")), "2026-08-06T13:25:00.000Z");
+assert.equal(getNextJourneyPublicationCronRun("17 3 * * *", new Date("2026-08-06T13:23:59.999Z")), null);
 const migration = readFileSync(new URL("../supabase/migrations/20260806100000_create_journey_whatsapp_publications.sql", import.meta.url), "utf8");
 const cronMigration = readFileSync(new URL("../supabase/migrations/20260806150000_standardize_supabase_cron_jobs.sql", import.meta.url), "utf8");
 assert.match(migration, /UNIQUE \(journey_content_id, destination_key\)/);
@@ -42,6 +47,7 @@ assert.match(cronMigration, /cron\.unschedule\(job_record\.jobid\)/);
 assert.doesNotMatch(cronMigration, /REPLACE_WITH|jf4a1n|CRON_SECRET\s*=/i);
 assert.doesNotMatch(readFileSync(new URL("../vercel.json", import.meta.url), "utf8"), /"crons"/);
 assert.doesNotMatch(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /buildCronBootstrapSql|bootstrapSupabaseCronJobs/);
+assert.match(readFileSync(new URL("../server.ts", import.meta.url), "utf8"), /\/api\/admin\/journey-publication-cron/);
 
 const order: string[] = [];
 let updatePayload: Record<string, unknown> | null = null;

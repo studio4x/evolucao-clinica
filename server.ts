@@ -66,6 +66,10 @@ import {
   resolveProductionOrigin
 } from "./server/whatsapp/journeyPublications.js";
 import { publishDueJourneyContents } from "./server/journeys/journeyPublisher.js";
+import {
+  getNextJourneyPublicationCronRun,
+  JOURNEY_PUBLICATION_CRON_JOB
+} from "./server/journeys/journeyPublicationCron.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -2149,6 +2153,57 @@ app.post("/api/admin/journey-whatsapp-publications/:id/action", requireAuth, req
   const { error } = await supabaseAdmin.from("journey_whatsapp_publications").update(update).eq("id", publication.id);
   if (error) return res.status(500).json({ error: "Não foi possível atualizar a publicação." });
   return res.json({ success: true });
+});
+
+app.get("/api/admin/journey-publication-cron", requireAuth, requireAdmin, async (_req, res) => {
+  const connectionString = getPostgresConnectionString();
+  if (!connectionString) {
+    return res.status(503).json({ error: "A consulta operacional do cron não está disponível no servidor." });
+  }
+
+  const client = new PostgresClient({
+    connectionString,
+    ssl: connectionString.includes("sslmode=disable") ? false : { rejectUnauthorized: false }
+  });
+
+  try {
+    await client.connect();
+    const jobResult = await client.query(
+      "SELECT jobid, schedule, active FROM cron.job WHERE jobname = $1 LIMIT 1",
+      [JOURNEY_PUBLICATION_CRON_JOB]
+    );
+    const job = jobResult.rows[0] as { jobid: number; schedule: string; active: boolean } | undefined;
+
+    if (!job) {
+      return res.status(404).json({ error: "O cron de publicação da Jornada não foi encontrado no Supabase." });
+    }
+
+    const runResult = await client.query(
+      "SELECT status, start_time, end_time, left(return_message, 160) AS return_message FROM cron.job_run_details WHERE jobid = $1 ORDER BY start_time DESC LIMIT 1",
+      [job.jobid]
+    );
+    const latestRun = runResult.rows[0] as { status: string; start_time: Date | string; end_time: Date | string | null; return_message: string | null } | undefined;
+    const nextRunAt = job.active ? getNextJourneyPublicationCronRun(job.schedule) : null;
+
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    return res.json({
+      jobName: JOURNEY_PUBLICATION_CRON_JOB,
+      schedule: job.schedule,
+      active: job.active,
+      nextRunAt,
+      lastRun: latestRun ? {
+        status: latestRun.status,
+        startTime: new Date(latestRun.start_time).toISOString(),
+        endTime: latestRun.end_time ? new Date(latestRun.end_time).toISOString() : null,
+        returnMessage: latestRun.return_message || null
+      } : null
+    });
+  } catch (error: any) {
+    console.error("[Admin Journey Cron] Erro ao consultar execução:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível consultar o cron de publicação da Jornada." });
+  } finally {
+    await client.end().catch(() => {});
+  }
 });
 
 app.post("/api/ai/convert-evolution-template", requireAuth, async (req: any, res) => {

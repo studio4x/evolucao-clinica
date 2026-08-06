@@ -9,7 +9,7 @@ import {
   BarChart3, List, MoveUp, MoveDown, ArrowLeft, ExternalLink, 
   RefreshCw, FileText, Info, AlertTriangle, AlertCircle, Sparkles, 
   CheckCircle2, X, MessageSquare, ChevronRight, Settings, Image as ImageIcon,
-  Layout as LayoutIcon
+  Layout as LayoutIcon, Timer
 } from 'lucide-react';
 
 interface Journey {
@@ -74,6 +74,14 @@ interface JourneyWhatsAppPublication {
   journey_contents?: { day_number: number; title: string; publication_status: string; publication_date: string | null; publication_time: string | null };
 }
 
+interface JourneyPublicationCronStatus {
+  jobName: string;
+  schedule: string;
+  active: boolean;
+  nextRunAt: string | null;
+  lastRun: { status: string; startTime: string; endTime: string | null; returnMessage: string | null } | null;
+}
+
 export default function JourneyAdmin() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,6 +100,9 @@ export default function JourneyAdmin() {
   const [contents, setContents] = useState<JourneyContent[]>([]);
   const [loadingContents, setLoadingContents] = useState(false);
   const [journeyPublications, setJourneyPublications] = useState<JourneyWhatsAppPublication[]>([]);
+  const [journeyCronStatus, setJourneyCronStatus] = useState<JourneyPublicationCronStatus | null>(null);
+  const [loadingJourneyCronStatus, setLoadingJourneyCronStatus] = useState(false);
+  const [journeyCronStatusError, setJourneyCronStatusError] = useState<string | null>(null);
   
   // Feedbacks visuais
   const [saving, setSaving] = useState(false);
@@ -300,6 +311,7 @@ export default function JourneyAdmin() {
         setViewMode('list_contents');
         await fetchContents(foundJourney.id);
         await fetchJourneyPublications(foundJourney.id);
+        await fetchJourneyPublicationCronStatus();
       } else {
         navigate('/admin/jornada');
       }
@@ -409,6 +421,34 @@ export default function JourneyAdmin() {
       if (!response.ok) throw new Error(body.error || 'Não foi possível carregar a fila.');
       setJourneyPublications(body.publications || []);
     } catch (error) { console.error('Erro ao carregar publicações WhatsApp da jornada:', error); }
+  };
+
+  const fetchJourneyPublicationCronStatus = async () => {
+    setLoadingJourneyCronStatus(true);
+    setJourneyCronStatusError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin/journey-publication-cron', {
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token || ''}` }, cache: 'no-store'
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Não foi possível carregar o cron.');
+      setJourneyCronStatus(body);
+    } catch (error: any) {
+      setJourneyCronStatus(null);
+      setJourneyCronStatusError(error?.message || 'Não foi possível carregar o cron.');
+    } finally {
+      setLoadingJourneyCronStatus(false);
+    }
+  };
+
+  const formatCronDateTime = (value: string | null) => {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '—';
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short', timeStyle: 'short', timeZone: 'America/Sao_Paulo'
+    }).format(date);
   };
 
   const handleJourneyPublicationAction = async (publication: JourneyWhatsAppPublication, action: 'requeue' | 'cancel') => {
@@ -1549,6 +1589,28 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
               </div>
             </div>
           </div>
+
+          <section className="bg-white border border-brand-border rounded-2xl shadow-sm p-5" aria-live="polite">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex gap-3">
+                <div className="mt-0.5 rounded-xl bg-brand-primary/10 p-2 text-brand-primary"><Timer size={18} /></div>
+                <div>
+                  <h3 className="text-sm font-bold text-brand-primary">Execuções do cron de publicação</h3>
+                  <p className="text-xs text-brand-text-muted">Supabase · publica somente conteúdos agendados e já vencidos.</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => void fetchJourneyPublicationCronStatus()} disabled={loadingJourneyCronStatus} className="btn-outline px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-60">
+                <RefreshCw size={13} className={`inline mr-1 ${loadingJourneyCronStatus ? 'animate-spin' : ''}`} />Atualizar
+              </button>
+            </div>
+            {journeyCronStatusError ? <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{journeyCronStatusError}</p> : loadingJourneyCronStatus && !journeyCronStatus ? <p className="mt-4 text-xs text-brand-text-muted">Consultando o Supabase…</p> : journeyCronStatus ? (
+              <div className="mt-4 grid gap-3 sm:grid-cols-3 text-xs">
+                <div className="rounded-xl bg-brand-bg p-3"><span className="block text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Última execução</span><strong className="mt-1 block text-brand-text">{formatCronDateTime(journeyCronStatus.lastRun?.startTime || null)}</strong><span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${journeyCronStatus.lastRun?.status === 'succeeded' ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{journeyCronStatus.lastRun?.status || 'Sem registro'}</span></div>
+                <div className="rounded-xl bg-brand-bg p-3"><span className="block text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Próxima execução</span><strong className="mt-1 block text-brand-text">{journeyCronStatus.active ? formatCronDateTime(journeyCronStatus.nextRunAt) : 'Cron inativo'}</strong><span className="mt-1 block text-[10px] text-brand-text-muted">Agenda: {journeyCronStatus.schedule}</span></div>
+                <div className="rounded-xl bg-brand-bg p-3"><span className="block text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Agendador</span><strong className={journeyCronStatus.active ? 'mt-1 block text-green-700' : 'mt-1 block text-red-700'}>{journeyCronStatus.active ? 'Ativo no Supabase' : 'Inativo'}</strong><span className="mt-1 block text-[10px] text-brand-text-muted">{journeyCronStatus.jobName}</span></div>
+              </div>
+            ) : <p className="mt-4 text-xs text-brand-text-muted">O status será carregado ao abrir esta página.</p>}
+          </section>
 
           <div className="bg-white border border-brand-border rounded-2xl shadow-sm overflow-x-auto">
             {loadingContents ? (
