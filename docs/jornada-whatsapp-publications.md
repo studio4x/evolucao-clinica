@@ -45,7 +45,13 @@ WHATSAPP_JOURNEY_DEFAULT_DESTINATION_KEY=jornada-15-dias-operador-evolucao-clini
 PUBLIC_APP_URL=https://www.evolucaoclinica.app.br
 ```
 
-Aplicar a migration no Supabase antes de usar as rotas. O JID não é configurado nem retornado pela plataforma; será resolvido posteriormente no n8n. A rota administrativa `GET /api/admin/journey-whatsapp-publications` usa a sessão autenticada e `requireAdmin`; a tela de conteúdos da jornada exibe status editorial e da fila, tentativas, data, erro resumido e ações confirmadas de recolocar/cancelar.
+Aplicar as migrations no Supabase antes de usar as rotas. O JID não é configurado nem retornado pela plataforma; será resolvido posteriormente no n8n. A rota administrativa `GET /api/admin/journey-whatsapp-publications` usa a sessão autenticada e `requireAdmin`; a tela de conteúdos da jornada exibe status editorial e da fila, tentativas, data, erro resumido e ações confirmadas de recolocar/cancelar.
+
+## Reset manual de envio
+
+Para testar novamente uma publicação `sent`, um administrador pode usar **Resetar envio** na tela `/admin/jornada/:journeySlug/conteudos`. A confirmação exige a frase `RESETAR DIA X`. O reset usa a mesma rota de ações (`POST /api/admin/journey-whatsapp-publications/:id/action`, com `action: reset_sent`) e uma função SQL transacional que bloqueia a linha, valida status, destino e provedor, registra `journey_whatsapp_sent_reset` em `admin_audit_logs` e remove somente a linha operacional. Não altera `journey_contents`, não chama n8n, Evolution, claim, complete ou fail, e a mensagem anterior permanece no WhatsApp.
+
+Com conteúdo em `draft`, o envio fica fora da fila até ser agendado e publicado novamente. Em `scheduled`, fica liberado apenas depois da publicação programada. Em `published` com horário vencido, a próxima sincronização pode recriar a linha como `pending`, permitindo o próximo ciclo automático. Isso difere de **Recolocar na fila**, que recupera uma publicação `failed` existente. A operação exige sessão administrativa, é individual e não possui reset em massa. Para rollback, interrompa a automação externa, preserve/exporte a auditoria e a fila, reverta código/migration e não remova conteúdos editoriais.
 
 ## Contrato final do claim
 

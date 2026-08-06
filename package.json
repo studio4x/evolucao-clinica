@@ -14,7 +14,7 @@
     "test:whatsapp": "tsx tests/whatsapp.test.ts",
     "test:chunk-recovery": "tsx tests/chunk-recovery.test.ts",
     "test:whatsapp-opt-in": "tsx tests/whatsapp-opt-in.test.ts",
-    "test:journey-whatsapp": "tsx tests/journey-whatsapp-publications.test.ts",
+    "test:journey-whatsapp": "tsx tests/journey-whatsapp-publications.test.ts && tsx tests/journey-whatsapp-reset.test.ts",
     "test:audio-webview": "tsx tests/audio-webview-compatibility.test.ts",
     "test:google-auth": "tsx tests/google-auth-recovery.test.ts",
     "test:share-target": "tsx tests/share-target-experience.test.ts"

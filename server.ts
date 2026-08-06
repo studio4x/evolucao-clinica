@@ -2164,9 +2164,22 @@ app.post("/api/admin/journey-whatsapp-publications/sync", requireAuth, requireAd
   return res.json({ success: true, cancelled: data || 0 });
 });
 
-app.post("/api/admin/journey-whatsapp-publications/:id/action", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/journey-whatsapp-publications/:id/action", requireAuth, requireAdmin, async (req: any, res) => {
   const action = String(req.body?.action || "");
-  if (!["requeue", "cancel"].includes(action)) return res.status(400).json({ error: "Ação inválida." });
+  if (!["requeue", "cancel", "reset_sent"].includes(action)) return res.status(400).json({ error: "Ação inválida." });
+  if (action === "reset_sent") {
+    const { data, error } = await supabaseAdmin.rpc("reset_journey_whatsapp_sent_publication", { p_publication_id: req.params.id, p_actor_id: req.user.id });
+    if (error) { console.error("[Admin Journey WhatsApp] Erro ao resetar publicação:", error.message); return res.status(500).json({ error: "Não foi possível resetar o envio." }); }
+    const resetErrors: Record<string, { status: number; error: string }> = {
+      not_found: { status: 404, error: "Publicação não encontrada ou já resetada." }, invalid_status: { status: 409, error: "Somente publicações enviadas podem ter o envio resetado." },
+      invalid_destination: { status: 409, error: "A publicação não pertence ao destino suportado." }, invalid_provider: { status: 409, error: "O provedor da publicação não é suportado para reset." },
+      active_claim: { status: 409, error: "A publicação está em uma operação concorrente." }, invalid_content: { status: 409, error: "O conteúdo da publicação não está disponível." }, invalid_journey: { status: 409, error: "A jornada da publicação não está disponível." }
+    };
+    const failure = resetErrors[data?.code];
+    if (failure) return res.status(failure.status).json({ error: failure.error });
+    if (data?.code !== "reset") return res.status(409).json({ error: "Não foi possível resetar o envio." });
+    return res.json({ success: true, editorialStatus: data.editorial_status, dayNumber: data.day_number, previousMessagePreserved: true });
+  }
   const { data: publication, error: findError } = await supabaseAdmin.from("journey_whatsapp_publications").select("id, status, journey_content_id").eq("id", req.params.id).maybeSingle();
   if (findError) return res.status(500).json({ error: "Não foi possível localizar a publicação." });
   if (!publication) return res.status(404).json({ error: "Publicação não encontrada." });

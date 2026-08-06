@@ -23,6 +23,7 @@ export const CustomModalContainer: React.FC = () => {
     variant, 
     icon, 
     inputValue, 
+    requiredValue,
     setInputValue, 
     placeholder, 
     close 
@@ -154,7 +155,7 @@ export const CustomModalContainer: React.FC = () => {
               autoFocus
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
-                  close(true);
+                  if (!requiredValue || inputValue === requiredValue) close(true);
                 }
               }}
             />
@@ -175,6 +176,7 @@ export const CustomModalContainer: React.FC = () => {
           <button
             type="button"
             autoFocus={type !== 'prompt'}
+            disabled={type === 'prompt' && Boolean(requiredValue) && inputValue !== requiredValue}
             onClick={() => close(true)}
             className={`min-h-11 rounded-xl px-5 py-2.5 text-sm font-semibold shadow-sm transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-2 ${colors.btnConfirm}`}
           >

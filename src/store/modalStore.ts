@@ -8,6 +8,7 @@ export interface ModalOptions {
   icon?: 'info' | 'question' | 'warning' | 'success' | 'shield' | 'download' | 'copy' | 'trash' | 'check';
   defaultValue?: string;
   placeholder?: string;
+  requiredValue?: string;
 }
 
 interface ModalState {
@@ -21,6 +22,7 @@ interface ModalState {
   icon: 'info' | 'question' | 'warning' | 'success' | 'shield' | 'download' | 'copy' | 'trash' | 'check';
   defaultValue: string;
   placeholder: string;
+  requiredValue: string;
   inputValue: string;
   setInputValue: (val: string) => void;
   resolve: ((value: any) => void) | null;
@@ -42,6 +44,7 @@ export const useModalStore = create<ModalState>((set, get) => ({
   icon: 'info',
   defaultValue: '',
   placeholder: '',
+  requiredValue: '',
   inputValue: '',
   setInputValue: (inputValue) => set({ inputValue }),
   resolve: null,
@@ -91,6 +94,7 @@ export const useModalStore = create<ModalState>((set, get) => ({
         icon: options?.icon || 'question',
         defaultValue: options?.defaultValue || '',
         placeholder: options?.placeholder || '',
+        requiredValue: options?.requiredValue || '',
         inputValue: options?.defaultValue || '',
         resolve,
       });
@@ -117,6 +121,7 @@ export const useModalStore = create<ModalState>((set, get) => ({
       icon: 'info',
       defaultValue: '',
       placeholder: '',
+      requiredValue: '',
       inputValue: '',
       resolve: null,
     });
