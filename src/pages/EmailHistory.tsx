@@ -10,12 +10,11 @@ import {
   User,
   CalendarDays,
   Search,
-  ChevronLeft,
   Inbox,
   ShieldAlert,
   Send,
+  Pencil,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { showAlert, showConfirm } from '../store/modalStore';
 
 interface NotificationRecord {
@@ -32,6 +31,14 @@ interface NotificationRecord {
   created_at: string;
 }
 
+const EXCLUDED_EMAIL_SOURCES = ['welcome', 'lifecycle', 'lifecycle-conditional', 'lifecycle-test', 'lifecycle-alert'];
+const EXCLUDED_EMAIL_SOURCES_FILTER = `(${EXCLUDED_EMAIL_SOURCES.join(',')})`;
+
+interface EmailHistoryProps {
+  embedded?: boolean;
+  onEdit?: (notification: NotificationRecord) => void;
+}
+
 function isMissingEmailDeliveriesTableError(error: any) {
   const message = String(error?.message || error?.details || error?.hint || '');
   return (
@@ -41,9 +48,7 @@ function isMissingEmailDeliveriesTableError(error: any) {
   );
 }
 
-export default function EmailHistory() {
-  const navigate = useNavigate();
-
+export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryProps) {
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -63,6 +68,7 @@ export default function EmailHistory() {
       const { data, error: fetchError } = await supabase
         .from('email_deliveries')
         .select('*')
+        .not('source', 'in', EXCLUDED_EMAIL_SOURCES_FILTER)
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -159,6 +165,7 @@ export default function EmailHistory() {
       const { error } = await supabase
         .from('email_deliveries')
         .delete()
+        .not('source', 'in', EXCLUDED_EMAIL_SOURCES_FILTER)
         .neq('id', '00000000-0000-0000-0000-000000000000'); // deleta tudo
       if (error) throw error;
       setNotifications([]);
@@ -200,20 +207,14 @@ export default function EmailHistory() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/admin/email-notifications')}
-            className="p-2 rounded-xl hover:bg-brand-border/30 text-brand-text-muted transition-colors cursor-pointer"
-            title="Voltar para E-mail Notifications"
-          >
-            <ChevronLeft size={20} />
-          </button>
+          {!embedded && <span className="rounded-xl bg-brand-primary/10 p-2 text-brand-primary"><Clock size={20} /></span>}
           <div>
           <h2 className="text-xl font-bold text-brand-text flex items-center gap-2">
               <Clock size={20} className="text-brand-primary" />
               Histórico de E-mails Enviados
             </h2>
             <p className="text-xs text-brand-text-muted mt-0.5">
-              {notifications.length} registro{notifications.length !== 1 ? 's' : ''} no total
+              {notifications.length} registro{notifications.length !== 1 ? 's' : ''} da plataforma; onboarding e Jornada não são exibidos
             </p>
           </div>
         </div>
@@ -416,6 +417,15 @@ export default function EmailHistory() {
 
                     {/* Ação */}
                     <td className="py-3 px-4 text-right">
+                      {onEdit && (
+                        <button
+                          onClick={() => onEdit(n)}
+                          title="Editar conteúdo e preparar novo envio"
+                          className="p-1.5 text-brand-primary hover:text-brand-primary-hover hover:bg-brand-primary/10 rounded-lg transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleResend(n)}
                         disabled={resendingId === n.id}
@@ -467,8 +477,7 @@ export default function EmailHistory() {
         <div className="flex items-start gap-2.5 p-3.5 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
           <ShieldAlert size={15} className="flex-shrink-0 text-amber-500 mt-0.5" />
           <span>
-            <strong>Atenção:</strong> O histórico contém todas as notificações in-app e de e-mail enviadas pela plataforma.
-            A exclusão é permanente e não pode ser desfeita.
+            <strong>Atenção:</strong> Este histórico não inclui e-mails de onboarding ou da Jornada. A exclusão é permanente e não pode ser desfeita.
           </span>
         </div>
       )}

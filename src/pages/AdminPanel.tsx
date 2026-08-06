@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -57,9 +57,18 @@ interface Professional {
   };
 }
 
-type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'email_history' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
+type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
 type AdminNavItem = { key: AdminTab; label: string; icon: typeof Users };
 type AdminNavGroup = { title: string; items: AdminNavItem[] };
+type NotificationCenterChannel = 'email' | 'whatsapp' | 'push';
+
+interface WhatsAppTemplateStatus {
+  key: string;
+  label: string;
+  templateName: string | null;
+  languageCode: string;
+  status: 'configured' | 'missing';
+}
 
 interface UsageLog {
   id: string;
@@ -191,6 +200,56 @@ const addStoredManualPushNotificationId = (notificationId?: string | null) => {
   storeManualPushNotificationIds([...currentIds, notificationId]);
 };
 
+function NotificationCenterHeader({
+  activeChannel,
+  onChange
+}: {
+  activeChannel: NotificationCenterChannel;
+  onChange: (channel: NotificationCenterChannel) => void;
+}) {
+  const tabs: Array<{ key: NotificationCenterChannel; label: string; icon: typeof Mail }> = [
+    { key: 'email', label: 'E-mail', icon: Mail },
+    { key: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
+    { key: 'push', label: 'Notificação push', icon: Bell }
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-display font-bold text-brand-primary">Central de Notificações</h1>
+        <p className="mt-1 text-sm text-brand-text-muted">
+          Consulte configurações, edite conteúdos reutilizáveis e acompanhe os envios de cada canal em um só lugar.
+        </p>
+      </div>
+      <div className="rounded-2xl border border-brand-border bg-white p-1.5 shadow-sm">
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3" role="tablist" aria-label="Canais de notificação">
+          {tabs.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={activeChannel === key}
+              onClick={() => onChange(key)}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors ${
+                activeChannel === key
+                  ? 'bg-brand-primary text-white shadow-sm'
+                  : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-900">
+        <Info size={15} className="mt-0.5 shrink-0" />
+        <span>Os e-mails e as mensagens de WhatsApp de onboarding e da Jornada não aparecem nesta central; eles permanecem nos módulos próprios.</span>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const { user, profileRole, setUser, setProfileInfo } = useAuthStore();
   const navigate = useNavigate();
@@ -206,8 +265,14 @@ export default function AdminPanel() {
   useEffect(() => {
     if (normalizedPath === '/admin') {
       navigate('/admin/professionals', { replace: true });
-    } else if (normalizedPath.endsWith('/notifications-config')) {
-      navigate('/admin/push-notifications', { replace: true });
+    } else if (['/admin/notifications-config', '/admin/push-notifications'].includes(normalizedPath)) {
+      navigate('/admin/notifications/push', { replace: true });
+    } else if (['/admin/email-notifications', '/admin/email-history'].includes(normalizedPath)) {
+      navigate('/admin/notifications/email', { replace: true });
+    } else if (normalizedPath === '/admin/whatsapp') {
+      navigate('/admin/notifications/whatsapp', { replace: true });
+    } else if (normalizedPath === '/admin/notifications') {
+      navigate('/admin/notifications/email', { replace: true });
     } else if (normalizedPath.endsWith('/gemini-config')) {
       navigate(tokenUsageGeneralPath, { replace: true });
     } else if (normalizedPath === tokenUsageBasePath) {
@@ -222,9 +287,9 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/plans')) return 'plans';
     if (normalizedPath.endsWith('/transactions')) return 'transactions';
     if (normalizedPath.endsWith('/migrations')) return 'migrations';
-    if (normalizedPath.endsWith('/push-notifications')) return 'push_notifications';
-    if (normalizedPath.endsWith('/email-notifications')) return 'email_notifications';
-    if (normalizedPath.endsWith('/email-history')) return 'email_history';
+    if (normalizedPath === '/admin/notifications/push') return 'push_notifications';
+    if (normalizedPath === '/admin/notifications/email') return 'email_notifications';
+    if (normalizedPath === '/admin/notifications/whatsapp') return 'whatsapp_config';
     if (normalizedPath.endsWith('/vapid-keys')) return 'vapid_keys';
     if (normalizedPath.includes('/support/')) return 'support';
     if (normalizedPath.endsWith('/support')) return 'support';
@@ -235,7 +300,6 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/feedback')) return 'feedback';
     if (normalizedPath.endsWith('/jornada') || normalizedPath.includes('/jornada/')) return 'jornada';
     if (normalizedPath.endsWith('/lifecycle') || normalizedPath.includes('/lifecycle/')) return 'lifecycle';
-    if (normalizedPath.endsWith('/whatsapp')) return 'whatsapp_config';
     if (normalizedPath.endsWith('/whatsapp-widget')) return 'whatsapp_widget';
     return 'professionals'; // default
   };
@@ -266,9 +330,7 @@ export default function AdminPanel() {
       items: [
         { key: 'jornada', label: 'Jornada 15 dias', icon: Calendar },
         { key: 'lifecycle', label: 'Onboarding dos Usuários', icon: Activity },
-        { key: 'push_notifications', label: 'Notificações Push', icon: Bell },
-        { key: 'email_notifications', label: 'E-mails do Sistema', icon: Mail },
-        { key: 'email_history', label: 'Histórico de E-mails', icon: Clock }
+        { key: 'push_notifications', label: 'Central de Notificações', icon: Bell }
       ]
     },
     {
@@ -276,7 +338,6 @@ export default function AdminPanel() {
       items: [
         { key: 'token_usage', label: 'Consumo & Chaves IA', icon: BarChart3 },
         { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
-        { key: 'whatsapp_config', label: 'API do WhatsApp', icon: MessageCircle },
         { key: 'whatsapp_widget', label: 'Widget do WhatsApp', icon: MessageSquare },
         { key: 'brand', label: 'Identidade Visual', icon: Globe },
         { key: 'tracking', label: 'Rastreamento', icon: Code },
@@ -294,9 +355,8 @@ export default function AdminPanel() {
     else if (tab === 'profile') navigate('/admin/profile');
     else if (tab === 'transactions') navigate('/admin/transactions');
     else if (tab === 'migrations') navigate('/admin/migrations');
-    else if (tab === 'push_notifications') navigate('/admin/push-notifications');
-    else if (tab === 'email_notifications') navigate('/admin/email-notifications');
-    else if (tab === 'email_history') navigate('/admin/email-history');
+    else if (tab === 'push_notifications') navigate('/admin/notifications/push');
+    else if (tab === 'email_notifications') navigate('/admin/notifications/email');
     else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
     else if (tab === 'support') navigate('/admin/support');
     else if (tab === 'brand') navigate('/admin/brand');
@@ -305,8 +365,20 @@ export default function AdminPanel() {
     else if (tab === 'feedback') navigate('/admin/feedback');
     else if (tab === 'jornada') navigate('/admin/jornada');
     else if (tab === 'lifecycle') navigate('/admin/lifecycle');
-    else if (tab === 'whatsapp_config') navigate('/admin/whatsapp');
+    else if (tab === 'whatsapp_config') navigate('/admin/notifications/whatsapp');
     else if (tab === 'whatsapp_widget') navigate('/admin/whatsapp-widget');
+  };
+
+  const notificationCenterChannel: NotificationCenterChannel | null = activeTab === 'email_notifications'
+    ? 'email'
+    : activeTab === 'whatsapp_config'
+      ? 'whatsapp'
+      : activeTab === 'push_notifications'
+        ? 'push'
+        : null;
+  const notificationCenterNavActive = notificationCenterChannel !== null;
+  const handleNotificationCenterChannelChange = (channel: NotificationCenterChannel) => {
+    navigate(`/admin/notifications/${channel}`);
   };
 
   // Estados de configuração pública de cobrança Stripe e Google Play.
@@ -1143,7 +1215,7 @@ export default function AdminPanel() {
 
   // Estados de Configuração da API do WhatsApp Cloud
   const [adminWhatsappTestNumber, setAdminWhatsappTestNumber] = useState('+5511942919276');
-  const [adminWhatsappTestTemplate, setAdminWhatsappTestTemplate] = useState('account_access_granted');
+  const [adminWhatsappTestTemplate, setAdminWhatsappTestTemplate] = useState('support_ticket_updated');
   const [adminWhatsappWebhookCopied, setAdminWhatsappWebhookCopied] = useState(false);
   const [adminWhatsappN8nEventsCopied, setAdminWhatsappN8nEventsCopied] = useState(false);
   const [adminWhatsappTestLoading, setAdminWhatsappTestLoading] = useState(false);
@@ -1163,6 +1235,9 @@ export default function AdminPanel() {
   const [whatsappDeliveriesTotalPages, setWhatsappDeliveriesTotalPages] = useState(1);
   const [whatsappDeliveriesLoading, setWhatsappDeliveriesLoading] = useState(false);
   const [whatsappDeliveriesError, setWhatsappDeliveriesError] = useState('');
+  const [whatsappTemplateStatuses, setWhatsappTemplateStatuses] = useState<WhatsAppTemplateStatus[]>([]);
+  const [whatsappTemplatesLoading, setWhatsappTemplatesLoading] = useState(false);
+  const [whatsappTemplatesError, setWhatsappTemplatesError] = useState('');
   const [whatsappConsentMetrics, setWhatsappConsentMetrics] = useState<{ enabled: number; optedIn: number; numberWithoutConsent: number; optOutProcessed: number; lastOptOutAt: string | null; tokenConfigured: boolean } | null>(null);
 
   const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
@@ -1335,7 +1410,7 @@ export default function AdminPanel() {
       }
 
       const manualIdSet = new Set([...manualIds, ...readStoredManualPushNotificationIds()]);
-      const records = data || [];
+      const records = (data || []).filter((notification: any) => notification.source !== 'onboarding');
       setManualPushNotifications(records.filter((notification: any) => manualIdSet.has(notification.id)));
       setPlatformPushNotifications(records.filter((notification: any) => !manualIdSet.has(notification.id)));
     } catch (err) {
@@ -1684,10 +1759,29 @@ export default function AdminPanel() {
     }
   };
 
+  const loadWhatsappTemplateStatuses = async () => {
+    setWhatsappTemplatesLoading(true);
+    setWhatsappTemplatesError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch('/api/admin/whatsapp/templates', {
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token || ''}` }
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os templates configurados.');
+      setWhatsappTemplateStatuses(payload.templates || []);
+    } catch (error: any) {
+      setWhatsappTemplatesError(error.message || 'Não foi possível carregar os templates configurados.');
+    } finally {
+      setWhatsappTemplatesLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (activeTab === 'whatsapp_config') {
       void loadWhatsappIntegrationEvents(whatsappIntegrationEventsPage);
       void loadWhatsappConsentMetrics();
+      void loadWhatsappTemplateStatuses();
       if (whatsappAdminSection === 'deliveries') void loadWhatsappDeliveries(whatsappDeliveriesPage);
     }
   }, [activeTab, whatsappIntegrationEventsPage, whatsappAdminSection, whatsappDeliveriesPage]);
@@ -3433,7 +3527,9 @@ export default function AdminPanel() {
                 <span>Menu de Administração</span>
               </div>
               <span className="text-xs bg-brand-bg px-2.5 py-1 rounded-lg border border-brand-border text-brand-text font-medium">
-                {adminNavGroups.flatMap((g) => g.items).find((i) => i.key === activeTab)?.label || 'Selecionar...'}
+                {notificationCenterNavActive
+                  ? 'Central de Notificações'
+                  : adminNavGroups.flatMap((g) => g.items).find((i) => i.key === activeTab)?.label || 'Selecionar...'}
               </span>
             </button>
 
@@ -3449,7 +3545,7 @@ export default function AdminPanel() {
                       <div className="flex flex-col gap-0.5 mt-1">
                         {group.items.map((item) => {
                           const Icon = item.icon;
-                          const isActive = activeTab === item.key;
+                          const isActive = activeTab === item.key || (item.key === 'push_notifications' && notificationCenterNavActive);
 
                           return (
                             <button
@@ -3488,7 +3584,7 @@ export default function AdminPanel() {
                   <div className="flex flex-col gap-0.5 mt-1">
                     {group.items.map((item) => {
                       const Icon = item.icon;
-                      const isActive = activeTab === item.key;
+                      const isActive = activeTab === item.key || (item.key === 'push_notifications' && notificationCenterNavActive);
 
                       return (
                         <button
@@ -5108,6 +5204,7 @@ export default function AdminPanel() {
               </div>
             ) : activeTab === 'push_notifications' ? (
               <div className="space-y-6">
+                <NotificationCenterHeader activeChannel="push" onChange={handleNotificationCenterChannelChange} />
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -5425,9 +5522,9 @@ export default function AdminPanel() {
                                     <button
                                       onClick={() => handleCopyNotification(n)}
                                       className="p-1 text-brand-primary hover:bg-brand-bg rounded transition-colors mr-1 cursor-pointer"
-                                      title="Reaproveitar Conteúdo (Copiar)"
+                                      title="Editar conteúdo e preparar novo envio"
                                     >
-                                      <Copy size={15} />
+                                      <Pencil size={15} />
                                     </button>
                                     <button
                                       onClick={() => handleResendNotification(n)}
@@ -5551,9 +5648,9 @@ export default function AdminPanel() {
                                   <button
                                     onClick={() => handleCopyNotification(n)}
                                     className="p-1 text-brand-primary hover:bg-brand-bg rounded transition-colors mr-1 cursor-pointer"
-                                    title="Reaproveitar Conteúdo (Copiar)"
+                                    title="Editar conteúdo e preparar novo envio"
                                   >
-                                    <Copy size={15} />
+                                    <Pencil size={15} />
                                   </button>
                                   <button
                                     onClick={() => handleResendNotification(n)}
@@ -5584,8 +5681,9 @@ export default function AdminPanel() {
               </div>
             ) : activeTab === 'email_notifications' ? (
               <div className="space-y-6">
+                  <NotificationCenterHeader activeChannel="email" onChange={handleNotificationCenterChannelChange} />
                   {/* Formulário de Envio de E-mail */}
-                  <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
+                  <div id="notification-email-editor" className="card p-6 bg-white shadow-sm border border-brand-border/60">
                     <div className="flex items-center space-x-3 mb-6">
                       <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
                         <Mail className="w-6 h-6" />
@@ -5743,29 +5841,14 @@ export default function AdminPanel() {
                     </div>
                   )}
 
-                  {/* Acesso ao Histórico de E-mails */}
-                  <button
-                    onClick={() => setActiveTab('email_history')}
-                    className="w-full card p-5 bg-white shadow-sm border border-brand-border/60 flex items-center justify-between hover:border-brand-primary/40 hover:shadow-md transition-all duration-200 cursor-pointer group text-left"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 rounded-xl bg-brand-primary/10 group-hover:bg-brand-primary/20 transition-colors">
-                        <Clock size={22} className="text-brand-primary" />
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-bold text-brand-text">Histórico de E-mails Enviados</h3>
-                        <p className="text-xs text-brand-text-muted mt-0.5">
-                          Visualize, pesquise e gerencie todos os registros de notificações enviadas pela plataforma.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex-shrink-0 ml-4 flex items-center gap-1.5 text-xs font-semibold text-brand-primary group-hover:gap-2.5 transition-all">
-                      <span>Ver histórico</span>
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="transition-transform group-hover:translate-x-0.5">
-                        <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                  </button>
+                  <EmailHistory
+                    embedded
+                    onEdit={(notification) => {
+                      setNotifTitle(notification.subject || '');
+                      setNotifContent(notification.message || '');
+                      document.getElementById('notification-email-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                  />
 
                   {/* SMTP Config */}
                   <form onSubmit={handleSaveAdminSmtp} className="card p-6 bg-white shadow-sm border border-brand-border/60 space-y-4">
@@ -6145,8 +6228,6 @@ export default function AdminPanel() {
               </div>
             ) : activeTab === 'migrations' ? (
               <MigrationRequestsAdmin />
-            ) : activeTab === 'email_history' ? (
-              <EmailHistory />
             ) : activeTab === 'support' ? (
               <div className="space-y-6">
                 <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
@@ -7097,7 +7178,8 @@ export default function AdminPanel() {
               </div>
             ) : activeTab === 'whatsapp_config' ? (
               /* Aba de Configuração do WhatsApp Cloud API [NEW] */
-              <div className="space-y-6 max-w-4xl">
+              <div className="space-y-6 max-w-6xl">
+                <NotificationCenterHeader activeChannel="whatsapp" onChange={handleNotificationCenterChannelChange} />
                 <div className="flex w-full gap-1 rounded-xl border border-brand-border bg-white p-1 sm:w-fit">
                   <button type="button" onClick={() => setWhatsappAdminSection('settings')} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${whatsappAdminSection === 'settings' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted hover:bg-brand-primary/5 hover:text-brand-primary'}`}>Configurações</button>
                   <button type="button" onClick={() => setWhatsappAdminSection('deliveries')} className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${whatsappAdminSection === 'deliveries' ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted hover:bg-brand-primary/5 hover:text-brand-primary'}`}>Envios da plataforma</button>
@@ -7105,6 +7187,43 @@ export default function AdminPanel() {
 
                 {whatsappAdminSection === 'settings' ? (
                 <div className="space-y-6">
+                <div className="card overflow-hidden border-brand-border bg-white animate-fadeIn">
+                  <div className="flex flex-col gap-3 border-b border-brand-border p-5 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-emerald-50 p-3 text-emerald-700"><MessageCircle className="h-5 w-5" /></div>
+                      <div>
+                        <h2 className="text-lg font-display font-bold text-brand-primary">Notificações configuradas</h2>
+                        <p className="mt-0.5 text-xs text-brand-text-muted">Templates administrativos da plataforma. Onboarding e Jornada não são listados.</p>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => void loadWhatsappTemplateStatuses()} disabled={whatsappTemplatesLoading} className="btn-outline inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs disabled:opacity-50">
+                      <RefreshCw className={`h-3.5 w-3.5 ${whatsappTemplatesLoading ? 'animate-spin' : ''}`} />Atualizar
+                    </button>
+                  </div>
+                  {whatsappTemplatesError && <div className="m-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">{whatsappTemplatesError}</div>}
+                  {whatsappTemplatesLoading && whatsappTemplateStatuses.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 p-10 text-sm text-brand-text-muted"><Loader2 className="h-5 w-5 animate-spin" />Carregando templates...</div>
+                  ) : whatsappTemplateStatuses.length === 0 ? (
+                    <div className="p-10 text-center text-sm text-brand-text-muted">Nenhum template administrativo disponível.</div>
+                  ) : (
+                    <div className="divide-y divide-brand-border">
+                      {whatsappTemplateStatuses.map((template) => (
+                        <div key={template.key} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <strong className="text-sm text-brand-text">{template.label}</strong>
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${template.status === 'configured' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>{template.status === 'configured' ? 'Configurada' : 'Não configurada'}</span>
+                            </div>
+                            <p className="mt-1 truncate font-mono text-[11px] text-brand-text-muted">{template.templateName || 'Variável de ambiente ausente'} · {template.languageCode}</p>
+                          </div>
+                          <a href="https://business.facebook.com/wa/manage/message-templates/" target="_blank" rel="noopener noreferrer" className="btn-outline inline-flex shrink-0 items-center justify-center gap-1.5 px-3 py-2 text-xs">
+                            <Pencil size={13} />Editar na Meta<ExternalLink size={12} />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
                   <div className="flex items-center space-x-3 mb-6">
                     <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
@@ -7346,7 +7465,7 @@ export default function AdminPanel() {
                       {adminWhatsappTestError && <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 shrink-0" /><span>{adminWhatsappTestError}</span></div>}
                       {adminWhatsappTestSuccess && <div className="p-3 bg-green-50 border border-green-200 text-green-600 rounded-xl text-sm flex items-center gap-2 animate-fadeIn"><CheckCircle2 className="h-4 w-4 shrink-0" /><span>Mensagem de teste aceita pela Meta. A entrega final dependerá dos eventos de status do WhatsApp.</span></div>}
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div><label className="block text-sm font-semibold text-brand-text">Template para teste</label><select value={adminWhatsappTestTemplate} onChange={(e) => setAdminWhatsappTestTemplate(e.target.value)} className="mt-1 w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:border-brand-primary focus:outline-none"><option value="account_access_granted">Acesso à conta liberado</option><option value="support_ticket_updated">Atualização de suporte</option><option value="subscription_status_updated">Status da assinatura</option><option value="payment_confirmed">Pagamento confirmado</option><option value="payment_failed">Pagamento não concluído</option><option value="account_security_notice">Aviso de segurança</option></select><p className="mt-1.5 text-xs text-brand-text-muted">Apenas templates administrativos permitidos e configurados no servidor são exibidos.</p></div>
+                        <div><label className="block text-sm font-semibold text-brand-text">Template para teste</label><select value={adminWhatsappTestTemplate} onChange={(e) => setAdminWhatsappTestTemplate(e.target.value)} className="mt-1 w-full rounded-xl border border-brand-border bg-white px-3.5 py-2.5 text-sm text-brand-text focus:border-brand-primary focus:outline-none"><option value="support_ticket_updated">Atualização de suporte</option><option value="subscription_status_updated">Status da assinatura</option><option value="payment_confirmed">Pagamento confirmado</option><option value="payment_failed">Pagamento não concluído</option><option value="account_security_notice">Aviso de segurança</option></select><p className="mt-1.5 text-xs text-brand-text-muted">Apenas templates administrativos permitidos e configurados no servidor são exibidos.</p></div>
                         <div><label className="block text-sm font-semibold text-brand-text">Número de Telefone de Destino</label><input type="text" value={adminWhatsappTestNumber} onChange={(e) => setAdminWhatsappTestNumber(e.target.value)} placeholder="Ex.: +55 (11) 99999-9999" className="mt-1 w-full rounded-xl border border-brand-border px-3.5 py-2.5 focus:border-brand-primary focus:outline-none text-sm transition-all" /><p className="mt-1.5 text-xs text-brand-text-muted">Informe DDI e DDD; somente números serão considerados.</p></div>
                       </div>
                       <div className="flex justify-end pt-1"><button type="submit" disabled={adminWhatsappTestLoading} className="btn-outline px-6 py-2.5 flex items-center space-x-2 cursor-pointer">{adminWhatsappTestLoading ? <><Loader2 className="w-4 h-4 animate-spin" /><span>Enviando Teste...</span></> : <><Send className="w-4 h-4" /><span>Enviar Mensagem de Teste</span></>}</button></div>

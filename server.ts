@@ -716,6 +716,7 @@ async function insertNotificationRecord(record: {
   type: string;
   link?: string | null;
   image_url?: string | null;
+  source?: NotificationOrigin;
 }) {
   const { data, error } = await supabaseAdmin
     .from("notifications")
@@ -725,7 +726,8 @@ async function insertNotificationRecord(record: {
       message: record.message,
       type: record.type,
       link: record.link ?? null,
-      image_url: record.image_url ?? null
+      image_url: record.image_url ?? null,
+      source: record.source || "platform"
     })
     .select("*")
     .single();
@@ -1119,7 +1121,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 
 type EmailProvider = "smtp" | "brevo";
 type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend";
-type NotificationOrigin = "platform" | "manual-push" | "manual-email";
+type NotificationOrigin = "platform" | "manual-push" | "manual-email" | "onboarding";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean; whatsapp?: boolean };
 type NotificationWhatsAppResult = WhatsAppSendResult | {
   success: false;
@@ -1712,9 +1714,20 @@ app.get("/api/admin/whatsapp/deliveries", requireAuth, requireAdmin, async (req,
       : 20;
     const from = (page - 1) * pageSize;
 
-    const { data, error, count } = await supabaseAdmin
+    let deliveriesQuery = supabaseAdmin
       .from("whatsapp_message_deliveries")
       .select("id, recipient_phone, message_type, template_name, status, error_code, error_title, error_message, attempt_count, accepted_at, sent_at, delivered_at, read_at, failed_at, created_at", { count: "exact" })
+      .is("lifecycle_dispatch_id", null);
+
+    const onboardingTemplate = resolveWhatsAppAdministrativeTemplate({
+      key: "account_access_granted",
+      data: { firstName: "Profissional" }
+    });
+    if (onboardingTemplate.allowed) {
+      deliveriesQuery = deliveriesQuery.or(`template_name.is.null,template_name.neq.${onboardingTemplate.templateName}`);
+    }
+
+    const { data, error, count } = await deliveriesQuery
       .order("created_at", { ascending: false })
       .range(from, from + pageSize - 1);
     if (error) throw new Error(error.message || "Não foi possível carregar os envios do WhatsApp.");
@@ -2096,6 +2109,35 @@ app.post("/api/integrations/whatsapp/journey-publications/claim", async (req, re
     if (error instanceof JourneyPublicationValidationError) return res.status(400).json({ error: error.message });
     console.error("[Journey WhatsApp] Erro ao reservar publicação:", error?.message || error);
     return res.status(500).json({ error: "Não foi possível reservar a publicação." });
+  }
+});
+
+app.get("/api/admin/whatsapp/templates", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const definitions: Array<{ label: string; notification: WhatsAppAdministrativeNotification }> = [
+      { label: "Atualização de suporte", notification: { key: "support_ticket_updated", data: { firstName: "Profissional", protocol: "SUP-EXEMPLO", status: "Respondido" } } },
+      { label: "Status da assinatura", notification: { key: "subscription_status_updated", data: { firstName: "Profissional", status: "Ativa", updatedAt: "Hoje" } } },
+      { label: "Pagamento confirmado", notification: { key: "payment_confirmed", data: { firstName: "Profissional", reference: "Pagamento", status: "Confirmado" } } },
+      { label: "Pagamento não concluído", notification: { key: "payment_failed", data: { firstName: "Profissional", reference: "Pagamento", status: "Não concluído" } } },
+      { label: "Aviso de segurança", notification: { key: "account_security_notice", data: { firstName: "Profissional", event: "Novo acesso à conta", occurredAt: "Hoje" } } }
+    ];
+    const languageCode = String(process.env.WHATSAPP_TEMPLATE_LANGUAGE || "pt_BR").trim() || "pt_BR";
+    const templates = definitions.map(({ label, notification }) => {
+      const resolved = resolveWhatsAppAdministrativeTemplate(notification);
+      return {
+        key: notification.key,
+        label,
+        templateName: resolved.allowed ? resolved.templateName : null,
+        languageCode: resolved.allowed ? resolved.languageCode : languageCode,
+        status: resolved.allowed ? "configured" : "missing"
+      };
+    });
+
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    return res.json({ templates });
+  } catch (error: any) {
+    console.error("[Admin WhatsApp] Erro ao listar templates:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar os templates do WhatsApp." });
   }
 });
 
@@ -3617,7 +3659,9 @@ async function sendOnboardingPendingNotice(user: any) {
     "Cadastro recebido e em análise",
     "Seu cadastro foi criado com sucesso e agora está aguardando a liberação de um administrador.",
     "warning",
-    "/pending"
+    "/pending",
+    undefined,
+    "onboarding"
   );
 
   for (const admin of adminRecipients) {
@@ -3627,7 +3671,9 @@ async function sendOnboardingPendingNotice(user: any) {
         "Novo cadastro aguardando aprovação",
         `O profissional ${userLabel} realizou o cadastro e está aguardando aprovação no painel administrativo.`,
         "info",
-        "/admin/professionals"
+        "/admin/professionals",
+        undefined,
+        "onboarding"
       );
     } catch (err) {
       console.error("[Onboarding] Erro ao notificar admin sobre cadastro pendente:", err);
@@ -3672,7 +3718,9 @@ async function sendOnboardingAccessGrantedNotice(
     options.title || "Acesso liberado",
     options.content || "Seu cadastro foi liberado. Você já pode acessar a plataforma normalmente.",
     options.type || "success",
-    options.link || "/painel/dashboard"
+    options.link || "/painel/dashboard",
+    undefined,
+    "onboarding"
   );
   const whatsappResult = await sendAdministrativeWhatsAppNotification({
     userId: targetUserId,
@@ -4145,7 +4193,8 @@ async function sendNotificationInternal(
     message: content, // Ajustado ao banco existente
     type,
     link,
-    image_url: persistentImageUrl
+    image_url: persistentImageUrl,
+    source
   };
 
   // A. Criar no banco (In-App)
