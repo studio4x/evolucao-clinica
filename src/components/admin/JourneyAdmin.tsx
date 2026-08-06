@@ -68,6 +68,11 @@ interface JourneyContent {
 }
 
 type ViewMode = 'list_journeys' | 'edit_journey' | 'list_contents' | 'edit_content' | 'whatsapp_fixed';
+interface JourneyWhatsAppPublication {
+  id: string; journey_content_id: string; destination_key: string; scheduled_at: string; status: string;
+  attempts: number; published_at: string | null; last_error_code: string | null; last_error_message: string | null;
+  journey_contents?: { day_number: number; title: string; publication_status: string; publication_date: string | null; publication_time: string | null };
+}
 
 export default function JourneyAdmin() {
   const navigate = useNavigate();
@@ -86,6 +91,7 @@ export default function JourneyAdmin() {
   // Lista de conteúdos
   const [contents, setContents] = useState<JourneyContent[]>([]);
   const [loadingContents, setLoadingContents] = useState(false);
+  const [journeyPublications, setJourneyPublications] = useState<JourneyWhatsAppPublication[]>([]);
   
   // Feedbacks visuais
   const [saving, setSaving] = useState(false);
@@ -293,6 +299,7 @@ export default function JourneyAdmin() {
         setSelectedJourney(foundJourney);
         setViewMode('list_contents');
         await fetchContents(foundJourney.id);
+        await fetchJourneyPublications(foundJourney.id);
       } else {
         navigate('/admin/jornada');
       }
@@ -390,6 +397,40 @@ export default function JourneyAdmin() {
     } finally {
       setLoadingContents(false);
     }
+  };
+
+  const fetchJourneyPublications = async (journeyId: string) => {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const response = await fetch(`/api/admin/journey-whatsapp-publications?journeyId=${encodeURIComponent(journeyId)}`, {
+        headers: { Authorization: `Bearer ${sessionData.session?.access_token || ''}` }, cache: 'no-store'
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Não foi possível carregar a fila.');
+      setJourneyPublications(body.publications || []);
+    } catch (error) { console.error('Erro ao carregar publicações WhatsApp da jornada:', error); }
+  };
+
+  const handleJourneyPublicationAction = async (publication: JourneyWhatsAppPublication, action: 'requeue' | 'cancel') => {
+    const label = action === 'requeue' ? 'recolocar na fila' : 'cancelar';
+    const confirmed = await showConfirm(`Deseja ${label} esta publicação do WhatsApp?`, { title: 'Confirmar ação', confirmLabel: 'Confirmar', cancelLabel: 'Cancelar', variant: 'info', icon: 'question' });
+    if (!confirmed) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch(`/api/admin/journey-whatsapp-publications/${publication.id}/action`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token || ''}` }, body: JSON.stringify({ action }) });
+    const body = await response.json();
+    if (!response.ok) { await showAlert(body.error || 'Não foi possível atualizar a publicação.'); return; }
+    if (selectedJourney) await fetchJourneyPublications(selectedJourney.id);
+  };
+
+  const handleSyncJourneyPublications = async () => {
+    if (!selectedJourney) return;
+    const confirmed = await showConfirm('Deseja atualizar a programação do WhatsApp usando a data e o horário dos conteúdos?', { title: 'Atualizar programação', confirmLabel: 'Atualizar', cancelLabel: 'Cancelar', variant: 'info', icon: 'question' });
+    if (!confirmed) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch('/api/admin/journey-whatsapp-publications/sync', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token || ''}` }, body: JSON.stringify({}) });
+    const body = await response.json();
+    if (!response.ok) { await showAlert(body.error || 'Não foi possível atualizar a programação.'); return; }
+    await fetchJourneyPublications(selectedJourney.id);
   };
 
   // Gerar Slug Automaticamente
@@ -1663,6 +1704,15 @@ Você pode acompanhar no seu próprio ritmo. Uma nova mensagem será publicada d
               </div>
             )}
           </div>
+          <section className="bg-white border border-brand-border rounded-2xl shadow-sm p-5 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div><h3 className="text-sm font-bold text-brand-primary">Publicação no WhatsApp</h3><p className="text-xs text-brand-text-muted">Fila operacional da Jornada de 15 Dias · America/Sao_Paulo</p></div>
+              <div className="flex gap-2"><button type="button" onClick={handleSyncJourneyPublications} className="btn-outline px-3 py-1.5 text-xs">Atualizar programação</button><button type="button" onClick={() => selectedJourney && fetchJourneyPublications(selectedJourney.id)} className="btn-outline px-3 py-1.5 text-xs"><RefreshCw size={13} className="inline mr-1" />Atualizar</button></div>
+            </div>
+            {journeyPublications.length === 0 ? <p className="text-xs text-brand-text-muted">Ainda não há publicações programadas com mensagem WhatsApp utilizável.</p> : (
+              <div className="overflow-x-auto"><table className="min-w-[760px] w-full text-xs"><thead><tr className="border-b border-brand-border text-left text-[10px] uppercase text-brand-text-muted"><th className="py-2">Dia / título</th><th>Programação</th><th>Status</th><th>Tentativas</th><th>Publicação</th><th>Erro</th><th /></tr></thead><tbody className="divide-y divide-brand-border">{journeyPublications.map((publication) => { const content = publication.journey_contents; const labels: Record<string, string> = { pending: 'Pendente', claimed: 'Reservado', sent: 'Enviado', failed: 'Falhou', cancelled: 'Cancelado' }; return <tr key={publication.id}><td className="py-3 pr-3"><strong>Dia {content?.day_number ?? '?'}</strong><span className="block text-brand-text-muted">{content?.title || 'Conteúdo'}</span></td><td>{content?.publication_date || new Date(publication.scheduled_at).toLocaleDateString('pt-BR')} {content?.publication_time?.slice(0, 5) || new Date(publication.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</td><td><span className="rounded-full bg-brand-bg px-2 py-1 font-semibold">{labels[publication.status] || publication.status}</span></td><td>{publication.attempts}</td><td>{publication.published_at ? new Date(publication.published_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—'}</td><td className="max-w-[180px] truncate text-red-700" title={publication.last_error_message || ''}>{publication.last_error_code || publication.last_error_message || '—'}</td><td className="whitespace-nowrap text-right">{publication.status === 'failed' && <button type="button" onClick={() => handleJourneyPublicationAction(publication, 'requeue')} className="mr-2 text-brand-primary underline">Recolocar na fila</button>}{publication.status !== 'sent' && publication.status !== 'cancelled' && <button type="button" onClick={() => handleJourneyPublicationAction(publication, 'cancel')} className="text-red-700 underline">Cancelar</button>}</td></tr>; })}</tbody></table></div>
+            )}
+          </section>
         </div>
       )}
 

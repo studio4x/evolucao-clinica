@@ -53,6 +53,17 @@ import {
   verifyWhatsAppN8nEventsAuthorization,
   WhatsAppN8nEventValidationError
 } from "./server/whatsapp/whatsappN8nEvents.js";
+import {
+  JOURNEY_WHATSAPP_DESTINATION_KEY,
+  JOURNEY_WHATSAPP_CLAIM_MINUTES,
+  validateClaimPayload,
+  validateCompletePayload,
+  validateFailPayload,
+  verifyJourneyPublicationAuthorization,
+  JourneyPublicationValidationError,
+  retryDelayMinutes,
+  publicJourneyUrl
+} from "./server/whatsapp/journeyPublications.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -2085,6 +2096,138 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
       }
     }
   }
+});
+
+const journeyPublicationToken = () => String(process.env.WHATSAPP_JOURNEY_PUBLICATION_TOKEN || "").trim();
+const verifyJourneyPublicationToken = (req: any, res: any) => {
+  const configured = journeyPublicationToken();
+  if (!configured) { res.status(500).json({ error: "WHATSAPP_JOURNEY_PUBLICATION_TOKEN não configurado." }); return false; }
+  if (!verifyJourneyPublicationAuthorization(req.headers.authorization, configured)) {
+    res.status(401).json({ error: "Token de integração ausente ou inválido." }); return false;
+  }
+  return true;
+};
+const journeyPublicationLog = (event: string, fields: Record<string, unknown>) => {
+  const safe = Object.entries(fields).map(([key, value]) => `${key}=${String(value ?? "none").slice(0, 120)}`).join(" ");
+  console.info(`[Journey WhatsApp] ${event} ${safe}`);
+};
+
+async function getJourneyPublicationResponse(publication: any) {
+  const { data: content, error: contentError } = await supabaseAdmin.from("journey_contents")
+    .select("id, journey_id, day_number, title, short_description, whatsapp_message, image_url, video_url, content_type, cta_text, cta_url, slug")
+    .eq("id", publication.journey_content_id).single();
+  if (contentError || !content) throw new Error("Conteúdo da publicação não encontrado.");
+  const { data: journey, error: journeyError } = await supabaseAdmin.from("journeys")
+    .select("id, slug, public_url, timezone").eq("id", content.journey_id).single();
+  if (journeyError || !journey) throw new Error("Jornada da publicação não encontrada.");
+  return {
+    publicationId: publication.id, journeyContentId: content.id, journeyId: journey.id, journeySlug: journey.slug,
+    dayNumber: content.day_number, title: content.title, shortDescription: content.short_description,
+    whatsappMessage: content.whatsapp_message, hasWhatsappMessage: Boolean(String(content.whatsapp_message || "").trim()),
+    imageUrl: content.image_url, videoUrl: content.video_url, contentType: content.content_type, ctaText: content.cta_text,
+    ctaUrl: content.cta_url, publicUrl: publicJourneyUrl(PRODUCTION_ORIGIN, journey), destinationKey: publication.destination_key,
+    destinationJid: publication.destination_jid || null, provider: publication.provider, scheduledAt: publication.scheduled_at,
+    claimExpiresAt: publication.claim_expires_at, attempt: publication.attempts
+  };
+}
+
+app.post("/api/integrations/whatsapp/journey-publications/claim", async (req, res) => {
+  if (!verifyJourneyPublicationToken(req, res)) return;
+  try {
+    const input = validateClaimPayload(req.body);
+    const { data, error } = await supabaseAdmin.rpc("claim_journey_whatsapp_publication", {
+      p_destination_key: input.destinationKey, p_worker_id: input.workerId, p_provider: input.provider,
+      p_claim_minutes: JOURNEY_WHATSAPP_CLAIM_MINUTES
+    });
+    if (error) throw error;
+    if (!data?.claimed) return res.status(200).json({ claimed: false, publication: null });
+    const publication = await getJourneyPublicationResponse(data.publication);
+    journeyPublicationLog("claimed", { publicationId: publication.publicationId, journeyContentId: publication.journeyContentId, destinationKey: publication.destinationKey, provider: publication.provider, attempt: publication.attempt });
+    return res.status(200).json({ claimed: true, publication });
+  } catch (error: any) {
+    if (error instanceof JourneyPublicationValidationError) return res.status(400).json({ error: error.message });
+    console.error("[Journey WhatsApp] Erro ao reservar publicação:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível reservar a publicação." });
+  }
+});
+
+app.post("/api/integrations/whatsapp/journey-publications/complete", async (req, res) => {
+  if (!verifyJourneyPublicationToken(req, res)) return;
+  try {
+    const input = validateCompletePayload(req.body);
+    const { data: current, error: currentError } = await supabaseAdmin.from("journey_whatsapp_publications").select("id, status, provider_message_id").eq("id", input.publicationId).maybeSingle();
+    if (currentError) throw currentError;
+    if (!current) return res.status(404).json({ error: "Publicação não encontrada." });
+    if (current.status === "sent") return res.json({ success: true, alreadyCompleted: true });
+    if (current.status !== "claimed") return res.status(409).json({ error: "A publicação não está reservada." });
+    const { error } = await supabaseAdmin.from("journey_whatsapp_publications").update({ status: "sent", published_at: input.publishedAt, provider: input.provider, provider_message_id: input.providerMessageId, claimed_at: null, claim_expires_at: null, claimed_by: null, next_attempt_at: null }).eq("id", input.publicationId).eq("status", "claimed");
+    if (error) throw error;
+    journeyPublicationLog("sent", { publicationId: input.publicationId, provider: input.provider });
+    return res.json({ success: true, alreadyCompleted: false });
+  } catch (error: any) {
+    if (error instanceof JourneyPublicationValidationError) return res.status(400).json({ error: error.message });
+    console.error("[Journey WhatsApp] Erro ao concluir publicação:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível concluir a publicação." });
+  }
+});
+
+app.post("/api/integrations/whatsapp/journey-publications/fail", async (req, res) => {
+  if (!verifyJourneyPublicationToken(req, res)) return;
+  try {
+    const input = validateFailPayload(req.body);
+    const { data: current, error: currentError } = await supabaseAdmin.from("journey_whatsapp_publications").select("id, status, attempts, max_attempts").eq("id", input.publicationId).maybeSingle();
+    if (currentError) throw currentError;
+    if (!current) return res.status(404).json({ error: "Publicação não encontrada." });
+    if (current.status === "sent") return res.status(409).json({ error: "Uma publicação enviada não pode ser marcada como falha." });
+    const retry = input.retryable && current.attempts < current.max_attempts;
+    const nextAttemptAt = retry ? new Date(Date.now() + retryDelayMinutes(current.attempts) * 60_000).toISOString() : null;
+    const { error } = await supabaseAdmin.from("journey_whatsapp_publications").update({ status: retry ? "pending" : "failed", next_attempt_at: nextAttemptAt, last_error_code: input.errorCode, last_error_message: input.errorMessage, claimed_at: null, claim_expires_at: null, claimed_by: null }).eq("id", input.publicationId).eq("status", "claimed");
+    if (error) throw error;
+    journeyPublicationLog("failed", { publicationId: input.publicationId, provider: "unknown", attempt: current.attempts, errorCode: input.errorCode, status: retry ? "pending" : "failed" });
+    return res.json({ success: true, status: retry ? "pending" : "failed", nextAttemptAt });
+  } catch (error: any) {
+    if (error instanceof JourneyPublicationValidationError) return res.status(400).json({ error: error.message });
+    console.error("[Journey WhatsApp] Erro ao registrar falha:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível registrar a falha." });
+  }
+});
+
+app.get("/api/admin/journey-whatsapp-publications", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    let query = supabaseAdmin.from("journey_whatsapp_publications").select("*, journey_contents!inner(journey_id, day_number, title, publication_status, publication_date, publication_time, published_at, journeys!inner(id, slug, title))").order("scheduled_at", { ascending: true });
+    if (req.query.journeyId) query = query.eq("journey_contents.journey_id", String(req.query.journeyId));
+    if (req.query.status) query = query.eq("status", String(req.query.status));
+    if (req.query.destinationKey) query = query.eq("destination_key", String(req.query.destinationKey));
+    const { data, error } = await query.limit(200);
+    if (error) throw error;
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    return res.json({ publications: data || [] });
+  } catch (error: any) {
+    console.error("[Admin Journey WhatsApp] Erro ao listar:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar a fila da jornada." });
+  }
+});
+
+app.post("/api/admin/journey-whatsapp-publications/sync", requireAuth, requireAdmin, async (req, res) => {
+  const destinationKey = String(req.body?.destinationKey || JOURNEY_WHATSAPP_DESTINATION_KEY).trim();
+  if (destinationKey !== JOURNEY_WHATSAPP_DESTINATION_KEY) return res.status(400).json({ error: "destinationKey não suportado." });
+  const { data, error } = await supabaseAdmin.rpc("sync_journey_whatsapp_publications", { p_destination_key: destinationKey });
+  if (error) { console.error("[Admin Journey WhatsApp] Erro ao sincronizar:", error.message); return res.status(500).json({ error: "Não foi possível atualizar a programação." }); }
+  return res.json({ success: true, cancelled: data || 0 });
+});
+
+app.post("/api/admin/journey-whatsapp-publications/:id/action", requireAuth, requireAdmin, async (req, res) => {
+  const action = String(req.body?.action || "");
+  if (!["requeue", "cancel"].includes(action)) return res.status(400).json({ error: "Ação inválida." });
+  const { data: publication, error: findError } = await supabaseAdmin.from("journey_whatsapp_publications").select("id, status, journey_content_id").eq("id", req.params.id).maybeSingle();
+  if (findError) return res.status(500).json({ error: "Não foi possível localizar a publicação." });
+  if (!publication) return res.status(404).json({ error: "Publicação não encontrada." });
+  if (action === "requeue" && publication.status !== "failed") return res.status(409).json({ error: "Só publicações com falha podem voltar à fila." });
+  if (action === "cancel" && publication.status === "sent") return res.status(409).json({ error: "Publicação enviada não pode ser cancelada." });
+  const update = action === "requeue" ? { status: "pending", next_attempt_at: null, last_error_code: null, last_error_message: null, claimed_at: null, claim_expires_at: null, claimed_by: null } : { status: "cancelled", claimed_at: null, claim_expires_at: null, claimed_by: null };
+  const { error } = await supabaseAdmin.from("journey_whatsapp_publications").update(update).eq("id", publication.id);
+  if (error) return res.status(500).json({ error: "Não foi possível atualizar a publicação." });
+  return res.json({ success: true });
 });
 
 app.post("/api/ai/convert-evolution-template", requireAuth, async (req: any, res) => {
