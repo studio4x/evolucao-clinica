@@ -513,16 +513,16 @@ export default function NewEvolution() {
 
   const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string, fallbackDuration = 0) => {
     const mimeType = resolveAudioMimeType(blob.type, name);
-    // Alguns gerenciadores Android não informam o MIME de um .ogg. Recriamos
-    // o Blob com o tipo inferido pelo nome antes de medir, salvar e transcrever.
-    const normalizedBlob = blob.type === mimeType ? blob : new Blob([blob], { type: mimeType });
-    const url = URL.createObjectURL(normalizedBlob);
-    const detectedDuration = await getAudioDurationFromBlob(normalizedBlob);
+    // Mantemos o Blob/File original. Alguns WebViews Android falham ao reenviar
+    // um Blob recriado a partir de um URI do seletor de arquivos. O MIME corrigido
+    // é enviado separadamente ao Storage e ao backend.
+    const url = URL.createObjectURL(blob);
+    const detectedDuration = await getAudioDurationFromBlob(blob);
     const duration = detectedDuration > 0 ? detectedDuration : fallbackDuration;
 
     return {
       id: uuidv4(),
-      blob: normalizedBlob,
+      blob,
       url,
       duration: Number.isFinite(duration) ? duration : 0,
       source,

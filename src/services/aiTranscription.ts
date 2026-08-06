@@ -133,6 +133,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
   const audioDurationSeconds = Math.max(1, Math.ceil(detectedAudioDuration));
 
   const attemptTranscription = async (): Promise<string> => {
+    let requestStage: 'upload' | 'transcription' = 'upload';
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
@@ -164,6 +165,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         throw uploadError;
       }
 
+      requestStage = 'transcription';
       const response = await fetch('/api/ai/transcribe', {
         method: 'POST',
         headers: {
@@ -232,6 +234,13 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
 
       if (isModelError) {
         throw new Error(`${errorContent} (O modelo configurado para transcrição não é compatível com este endpoint)`);
+      }
+
+      if (normalizedErrorContent.includes('failed to fetch') || normalizedErrorContent.includes('networkerror')) {
+        const stageDescription = requestStage === 'upload'
+          ? 'Não foi possível enviar o arquivo de áudio selecionado para o armazenamento seguro.'
+          : 'A conexão foi interrompida enquanto o áudio era enviado para transcrição.';
+        throw new Error(`${stageDescription} Verifique a conexão e tente novamente.`);
       }
 
       throw new Error(`${errorContent} (Erro na comunicação com o backend de transcrição)`);
