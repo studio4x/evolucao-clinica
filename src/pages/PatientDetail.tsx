@@ -1983,66 +1983,68 @@ export default function PatientDetail() {
 
   return (
     <div className="space-y-6">
-      <PanelPageHeader
-        icon={User}
-        title={patient.full_name}
-        description={patient.status === 'active' ? 'Paciente ativo' : 'Paciente inativo'}
-        mobileActionsInline
-        actions={<>
-          <button 
-            type="button"
-            onClick={() => setShowDeleteConfirm(true)}
-            className="btn-outline h-10 w-10 shrink-0 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:h-auto sm:w-auto sm:px-4"
-            title="Excluir paciente"
-            aria-label="Excluir paciente"
-          >
-            <Trash2 size={18} className="sm:mr-1.5" />
-            <span className="hidden sm:inline">Excluir</span>
-          </button>
-          <Link 
-            to={`/painel/patients/${id}/edit`}
-            className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
-            title="Editar paciente"
-            aria-label="Editar paciente"
-          >
-            <Edit3 size={18} className="sm:mr-1.5" />
-            <span className="hidden sm:inline">Editar</span>
-          </Link>
-          <Link 
-            to={`/painel/patients/${id}/evolutions/new`}
-            className="btn-primary flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
-            title="Nova evolução"
-            aria-label="Nova evolução"
-          >
-            <Plus size={20} className="sm:mr-2" />
-            <span className="hidden sm:inline">Nova Evolução</span>
-          </Link>
-        </>}
-      />
+      <div className="sticky top-0 z-30 -mx-1 space-y-3 bg-brand-bg/95 px-1 pb-3 pt-1 backdrop-blur-xl xl:static xl:mx-0 xl:space-y-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:backdrop-blur-none">
+        <PanelPageHeader
+          icon={User}
+          title={patient.full_name}
+          description={patient.status === 'active' ? 'Paciente ativo' : 'Paciente inativo'}
+          mobileActionsInline
+          actions={<>
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="btn-outline h-10 w-10 shrink-0 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:h-auto sm:w-auto sm:px-4"
+              title="Excluir paciente"
+              aria-label="Excluir paciente"
+            >
+              <Trash2 size={18} className="sm:mr-1.5" />
+              <span className="hidden sm:inline">Excluir</span>
+            </button>
+            <Link
+              to={`/painel/patients/${id}/edit`}
+              className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
+              title="Editar paciente"
+              aria-label="Editar paciente"
+            >
+              <Edit3 size={18} className="sm:mr-1.5" />
+              <span className="hidden sm:inline">Editar</span>
+            </Link>
+            <Link
+              to={`/painel/patients/${id}/evolutions/new`}
+              className="btn-primary flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
+              title="Nova evolução"
+              aria-label="Nova evolução"
+            >
+              <Plus size={20} className="sm:mr-2" />
+              <span className="hidden sm:inline">Nova Evolução</span>
+            </Link>
+          </>}
+        />
 
-      <nav className="xl:hidden -mx-1 overflow-x-auto px-1 pb-1" aria-label="Seções do paciente">
-        <div className="flex min-w-max items-center gap-2 rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur">
-          {patientMobileTabs.map(({ id: tabId, label, icon: Icon }) => {
-            const isActive = activeMobileTab === tabId;
-            return (
-              <button
-                key={tabId}
-                type="button"
-                onClick={() => setActiveMobileTab(tabId)}
-                aria-current={isActive ? 'page' : undefined}
-                className={`flex min-h-11 items-center gap-2 rounded-xl px-3 text-xs font-semibold transition-all ${
-                  isActive
-                    ? 'bg-brand-primary text-white shadow-sm shadow-brand-primary/25'
-                    : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
-                }`}
-              >
-                <Icon size={16} aria-hidden="true" />
-                <span>{label}</span>
-              </button>
-            );
-          })}
-        </div>
-      </nav>
+        <nav className="xl:hidden w-full overflow-hidden" aria-label="Seções do paciente">
+          <div className="grid w-full grid-cols-4 items-stretch rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur">
+            {patientMobileTabs.map(({ id: tabId, label, icon: Icon }) => {
+              const isActive = activeMobileTab === tabId;
+              return (
+                <button
+                  key={tabId}
+                  type="button"
+                  onClick={() => setActiveMobileTab(tabId)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold leading-none transition-all ${
+                    isActive
+                      ? 'bg-brand-primary text-white shadow-sm shadow-brand-primary/25'
+                      : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
+                  }`}
+                >
+                  <Icon size={16} aria-hidden="true" />
+                  <span className="max-w-full truncate">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      </div>
 
       {showDeleteConfirm && (
         <div className="p-6 bg-red-50 border border-red-100 rounded-2xl shadow-sm space-y-3">
