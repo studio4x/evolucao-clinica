@@ -9,6 +9,10 @@ const migrationSource = readFileSync(
   "supabase/migrations/20260806233000_classify_onboarding_notifications.sql",
   "utf8"
 );
+const editableEmailTemplatesMigrationSource = readFileSync(
+  "supabase/migrations/20260807090000_create_editable_email_templates.sql",
+  "utf8"
+);
 
 assert.match(adminSource, /Central de Notificações/);
 assert.match(adminSource, /\/admin\/notifications\/email/);
@@ -27,8 +31,14 @@ assert.match(emailHistorySource, /Página anterior/);
 assert.match(emailHistorySource, /Próxima página/);
 assert.match(adminSource, /<EmailTransactionalTemplates\s*\/>/);
 assert.match(emailTemplatesSource, /Modelos de E-mails Transacionais/);
-assert.match(emailTemplatesSource, /\/api\/admin\/lifecycle\/campaigns/);
-assert.match(emailTemplatesSource, /\/api\/admin\/lifecycle\/rules/);
+assert.match(emailTemplatesSource, /from\('email_templates'\)/);
+assert.match(emailTemplatesSource, /Editar conteúdo/);
+assert.doesNotMatch(emailTemplatesSource, /\/api\/admin\/lifecycle/);
+assert.match(serverSource, /getEditableEmailTemplate/);
+assert.match(serverSource, /platform-notification/);
+assert.match(serverSource, /report-delivery/);
+assert.match(editableEmailTemplatesMigrationSource, /CREATE TABLE IF NOT EXISTS public\.email_templates/);
+assert.match(editableEmailTemplatesMigrationSource, /email_templates_admin_manage/);
 
 const deliveriesStart = serverSource.indexOf('app.get("/api/admin/whatsapp/deliveries"');
 const deliveriesEnd = serverSource.indexOf('app.get("/api/admin/whatsapp/templates"', deliveriesStart);
