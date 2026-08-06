@@ -1983,7 +1983,8 @@ export default function PatientDetail() {
 
   return (
     <div className="space-y-6">
-      <div className="sticky top-0 z-30 -mx-1 space-y-3 bg-brand-bg/95 px-1 pb-3 pt-1 backdrop-blur-xl xl:static xl:mx-0 xl:space-y-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:backdrop-blur-none">
+      <div className="xl:hidden h-36" aria-hidden="true" />
+      <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(0.25rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <PanelPageHeader
           icon={User}
           title={patient.full_name}
