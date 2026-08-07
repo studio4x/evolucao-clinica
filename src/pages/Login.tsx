@@ -9,6 +9,8 @@ import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboard
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { requestGoogleOAuth } from '../services/googleAuth';
 
+import { SplashScreen } from '../components/layout/SplashScreen';
+
 export default function Login() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -120,6 +122,14 @@ export default function Login() {
       alert(`Erro de autenticação: ${error.message}`);
     }
   };
+
+  if (!isAuthReady) {
+    return <SplashScreen message="Iniciando Evolução Clínica..." />;
+  }
+
+  if (user) {
+    return <SplashScreen message="Acessando o painel..." />;
+  }
 
   return (
     <div className="w-full min-h-screen bg-[#edf4fa] flex flex-col justify-between relative overflow-hidden font-sans select-none">
