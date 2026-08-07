@@ -2701,22 +2701,18 @@ export default function PatientDetail() {
                     <>
                         {evo.transcription_text && (
                           <div className="mt-4 text-sm text-brand-text-muted bg-brand-bg p-4 rounded-xl border border-brand-border space-y-3">
-                            {evo.status === 'signed' ? (
-                              <RichTextPreview value={evo.transcription_text} />
-                            ) : (
-                              <div className="space-y-2">
-                                <RichTextPreview value={evo.transcription_text} className={expandedEvoIds[evo.id] ? '' : 'line-clamp-4'} />
-                                {evo.transcription_text && evo.transcription_text.length > 200 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => toggleEvoExpansion(evo.id)}
-                                    className="text-xs text-brand-primary hover:underline font-semibold focus:outline-none cursor-pointer"
-                                  >
-                                    {expandedEvoIds[evo.id] ? 'Ler menos' : 'Ler mais...'}
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                            <div className="space-y-2">
+                              <RichTextPreview value={evo.transcription_text} className={expandedEvoIds[evo.id] ? '' : 'line-clamp-4'} />
+                              {evo.transcription_text.length > 200 && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleEvoExpansion(evo.id)}
+                                  className="text-xs text-brand-primary hover:underline font-semibold focus:outline-none cursor-pointer"
+                                >
+                                  {expandedEvoIds[evo.id] ? 'Ler menos' : 'Ler mais...'}
+                                </button>
+                              )}
+                            </div>
 
                             {evo.status === 'signed' ? (
                               <div className="mt-3 pt-3 border-t border-brand-border flex flex-col md:flex-row justify-between items-start md:items-center text-[11px] text-emerald-700 gap-2 bg-emerald-50/50 p-2.5 rounded-lg border border-emerald-100/50">
