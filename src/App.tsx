@@ -283,6 +283,14 @@ export default function App() {
     updateMeta("meta[name='theme-color']", 'name', 'theme-color', siteConfig.pwa_theme_color);
     updateMeta("meta[property='og:image']", 'property', 'og:image', socialImageUrl);
     updateMeta("meta[name='twitter:image']", 'name', 'twitter:image', socialImageUrl);
+    const seoTitle = siteConfig.seo_title || siteConfig.pwa_app_name;
+    const seoDescription = siteConfig.seo_description || siteConfig.pwa_description;
+    document.title = seoTitle;
+    updateMeta("meta[name='description']", 'name', 'description', seoDescription);
+    updateMeta("meta[property='og:title']", 'property', 'og:title', seoTitle);
+    updateMeta("meta[property='og:description']", 'property', 'og:description', seoDescription);
+    updateMeta("meta[name='twitter:title']", 'name', 'twitter:title', seoTitle);
+    updateMeta("meta[name='twitter:description']", 'name', 'twitter:description', seoDescription);
   }, [siteConfig, assetSignature]);
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);

@@ -933,6 +933,26 @@ function isValidVapidPrivateKey(value: unknown) {
   }
 }
 
+function renderPublicSeoHtml(html: string, config: ReturnType<typeof normalizeSiteConfig>) {
+  const title = config.seo_title?.trim() || config.pwa_app_name || defaultSiteConfig.seo_title;
+  const description = config.seo_description?.trim() || config.pwa_description || defaultSiteConfig.seo_description;
+  const canonicalUrl = `${PRODUCTION_ORIGIN.replace(/\/$/, "")}/`;
+  const imageUrl = config.social_share_url?.startsWith("https://")
+    ? appendBrandVersion(config.social_share_url, config.version)
+    : `${canonicalUrl}og-image-social.png`;
+
+  let rendered = html.replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(title)}</title>`);
+  rendered = rendered.replace(/(<meta[^>]+name=["']description["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(description)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+property=["']og:url["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(canonicalUrl)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+property=["']og:title["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(title)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+property=["']og:description["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(description)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+property=["']og:image["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(imageUrl)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+property=["']og:image:alt["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(title)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+name=["']twitter:title["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(title)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+name=["']twitter:description["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(description)}$2`);
+  return rendered.replace(/(<meta[^>]+name=["']twitter:image["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(imageUrl)}$2`);
+}
+
 const PUSH_NOTIFICATION_CASE_KEYS = ["general", "onboarding", "support", "migration", "session_reminder", "lifecycle"] as const;
 type PushNotificationCase = typeof PUSH_NOTIFICATION_CASE_KEYS[number];
 type PushNotificationCases = Record<PushNotificationCase, boolean>;
@@ -2161,6 +2181,27 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
         console.error(`[AI-Backend] Erro inesperado ao limpar áudio temporário (${audioPathToCleanup}):`, cleanupErr);
       }
     }
+  }
+});
+
+// O WhatsApp e outros crawlers não executam o JavaScript do SPA. A raiz pública
+// recebe as tags já renderizadas para que o preview reflita o painel administrativo.
+app.get("/", async (_req, res) => {
+  try {
+    const htmlPath = path.join(process.cwd(), "dist", "index.html");
+    const fallbackPath = path.join(process.cwd(), "index.html");
+    let html: string;
+    try {
+      html = await readFile(htmlPath, "utf8");
+    } catch {
+      html = await readFile(fallbackPath, "utf8");
+    }
+    const config = await getBrandConfigSnapshot();
+    res.setHeader("Cache-Control", "no-store, max-age=0");
+    res.type("html").send(renderPublicSeoHtml(html, config));
+  } catch (err) {
+    console.error("[SEO] Falha ao renderizar as metatags públicas:", err);
+    res.status(500).send("Não foi possível carregar a página pública.");
   }
 });
 

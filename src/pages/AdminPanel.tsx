@@ -59,7 +59,7 @@ interface Professional {
   };
 }
 
-type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
+type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'seo' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
 type AdminNavItem = { key: AdminTab; label: string; icon: typeof Users };
 type AdminNavGroup = { title: string; items: AdminNavItem[] };
 type NotificationCenterChannel = 'email' | 'whatsapp' | 'push';
@@ -297,6 +297,7 @@ export default function AdminPanel() {
     if (normalizedPath.endsWith('/support')) return 'support';
     if (normalizedPath.endsWith('/profile')) return 'profile';
     if (normalizedPath.endsWith('/brand')) return 'brand';
+    if (normalizedPath.endsWith('/seo')) return 'seo';
     if (normalizedPath.endsWith('/tracking')) return 'tracking';
     if (normalizedPath.endsWith('/faq')) return 'faq';
     if (normalizedPath.endsWith('/feedback')) return 'feedback';
@@ -342,6 +343,7 @@ export default function AdminPanel() {
         { key: 'vapid_keys', label: 'Chaves Web Push', icon: Key },
         { key: 'whatsapp_widget', label: 'Widget do WhatsApp', icon: MessageSquare },
         { key: 'brand', label: 'Identidade Visual', icon: Globe },
+        { key: 'seo', label: 'SEO e compartilhamento', icon: Compass },
         { key: 'tracking', label: 'Rastreamento', icon: Code },
         { key: 'profile', label: 'Meu Perfil', icon: User }
       ]
@@ -362,6 +364,7 @@ export default function AdminPanel() {
     else if (tab === 'vapid_keys') navigate('/admin/vapid-keys');
     else if (tab === 'support') navigate('/admin/support');
     else if (tab === 'brand') navigate('/admin/brand');
+    else if (tab === 'seo') navigate('/admin/seo');
     else if (tab === 'tracking') navigate('/admin/tracking');
     else if (tab === 'faq') navigate('/admin/faq');
     else if (tab === 'feedback') navigate('/admin/feedback');
@@ -416,6 +419,8 @@ export default function AdminPanel() {
   const [brandInstallLogo, setBrandInstallLogo] = useState('');
   const [brandLoadingLogo, setBrandLoadingLogo] = useState('');
   const [brandSocialShare, setBrandSocialShare] = useState('');
+  const [seoTitle, setSeoTitle] = useState('');
+  const [seoDescription, setSeoDescription] = useState('');
   const [brandVersion, setBrandVersion] = useState('1.0');
   const [brandColors, setBrandColors] = useState<BrandColors>(defaultColors);
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
@@ -756,7 +761,7 @@ export default function AdminPanel() {
 
   // Efeito para carregar as configurações da marca
   useEffect(() => {
-    if (user && profileRole === 'admin' && activeTab === 'brand') {
+    if (user && profileRole === 'admin' && (activeTab === 'brand' || activeTab === 'seo')) {
       const fetchBrandSettings = async () => {
         setBrandSettingsLoading(true);
         try {
@@ -778,6 +783,8 @@ export default function AdminPanel() {
             setBrandInstallLogo(parsed.pwa_install_logo_url || '');
             setBrandLoadingLogo(parsed.pwa_loading_logo_url || '');
             setBrandSocialShare(parsed.social_share_url || '');
+            setSeoTitle(parsed.seo_title || parsed.pwa_app_name || 'Evolução Clínica - Prontuários e Evoluções com IA');
+            setSeoDescription(parsed.seo_description || parsed.pwa_description || 'Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive.');
             setBrandVersion(parsed.version || '1.0');
             if (parsed.colors) {
               setBrandColors({
@@ -888,6 +895,8 @@ export default function AdminPanel() {
         pwa_install_logo_url: brandInstallLogo,
         pwa_loading_logo_url: brandLoadingLogo,
         social_share_url: brandSocialShare,
+        seo_title: seoTitle.trim(),
+        seo_description: seoDescription.trim(),
         version: newVersion,
         colors: brandColors
       };
@@ -6698,6 +6707,97 @@ export default function AdminPanel() {
                               <span>Salvar Configurações</span>
                             </>
                           )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </div>
+            ) : activeTab === 'seo' ? (
+              <div className="space-y-6 max-w-4xl">
+                <div className="card bg-white p-6 md:p-8 border-brand-border animate-fadeIn">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <div className="p-3 bg-brand-primary/10 rounded-xl text-brand-primary">
+                      <Compass className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-display font-bold text-brand-primary border-none p-0 pb-0">SEO e compartilhamento</h2>
+                      <p className="text-xs text-brand-text-muted mt-0.5">
+                        Defina a imagem, o título e a descrição mostrados ao compartilhar o link público da plataforma no WhatsApp e em outras redes sociais.
+                      </p>
+                    </div>
+                  </div>
+
+                  {brandSettingsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+                      <p className="text-sm text-brand-text-muted">Carregando configurações...</p>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleSaveBrandSettings} className="space-y-6">
+                      {brandSaveSuccess && (
+                        <div className="flex items-center gap-2 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                          <CheckCircle2 className="h-4 w-4" />
+                          Configurações de SEO salvas. O novo preview pode levar alguns minutos para ser atualizado pelos aplicativos.
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-brand-text">Título do compartilhamento</label>
+                          <input
+                            type="text"
+                            maxLength={120}
+                            value={seoTitle}
+                            onChange={(event) => setSeoTitle(event.target.value)}
+                            placeholder="Ex.: Evolução Clínica - Prontuários e Evoluções com IA"
+                            className="w-full rounded-lg border border-brand-border bg-transparent px-3 py-2 text-sm text-brand-text outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                          />
+                          <p className="text-[11px] text-brand-text-muted">{seoTitle.length}/120 caracteres</p>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-brand-text">Descrição do compartilhamento</label>
+                          <textarea
+                            rows={4}
+                            maxLength={300}
+                            value={seoDescription}
+                            onChange={(event) => setSeoDescription(event.target.value)}
+                            placeholder="Explique brevemente o que a plataforma oferece."
+                            className="w-full rounded-lg border border-brand-border bg-transparent px-3 py-2 text-sm leading-relaxed text-brand-text outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20"
+                          />
+                          <p className="text-[11px] text-brand-text-muted">{seoDescription.length}/300 caracteres</p>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-brand-border/60 bg-brand-bg/10 p-5 space-y-4">
+                        <div>
+                          <h3 className="text-sm font-semibold text-brand-primary">Imagem de compartilhamento</h3>
+                          <p className="mt-1 text-xs text-brand-text-muted">Use PNG, JPG ou WebP em 1200×630 px (proporção 1,91:1) para o melhor resultado no WhatsApp.</p>
+                        </div>
+                        <div className="flex flex-col items-center gap-5 sm:flex-row">
+                          <div className="flex h-36 w-full items-center justify-center overflow-hidden rounded-xl border border-dashed border-brand-border bg-white p-2 sm:w-60">
+                            {brandSocialShare ? <img src={brandSocialShare} alt="Preview da imagem de compartilhamento" className="h-full w-full object-contain" /> : <span className="text-center text-[11px] text-brand-text-muted">Nenhuma imagem personalizada enviada</span>}
+                          </div>
+                          <label className="btn-outline inline-flex w-full cursor-pointer items-center justify-center px-4 py-2.5 text-xs font-semibold sm:w-auto">
+                            {uploadingSocialShare ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />Enviando...</> : <><Upload className="mr-2 h-3.5 w-3.5" />Enviar imagem</>}
+                            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={uploadingSocialShare} onChange={(event) => handleBrandUpload(event, 'socialshare')} />
+                          </label>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-sm">
+                        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-brand-text-muted">Prévia do link</p>
+                        <div className="overflow-hidden rounded-xl border border-brand-border bg-white">
+                          <div className="h-32 bg-brand-bg/50">
+                            {brandSocialShare ? <img src={brandSocialShare} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-brand-text-muted">Imagem de compartilhamento</div>}
+                          </div>
+                          <div className="p-3"><p className="text-[11px] uppercase text-brand-text-muted">www.evolucaoclinica.app.br</p><p className="mt-1 text-sm font-semibold text-brand-text">{seoTitle || 'Título do compartilhamento'}</p><p className="mt-1 text-xs text-brand-text-muted">{seoDescription || 'Descrição do compartilhamento'}</p></div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end border-t border-brand-border pt-4">
+                        <button type="submit" disabled={savingBrand || uploadingSocialShare} className="btn-primary flex items-center gap-2 px-5 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+                          {savingBrand ? <><Loader2 className="h-4 w-4 animate-spin" />Salvando...</> : <><Save className="h-4 w-4" />Salvar SEO e compartilhamento</>}
                         </button>
                       </div>
                     </form>

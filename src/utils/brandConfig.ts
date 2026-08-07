@@ -30,6 +30,8 @@ export interface SiteConfig {
   logo_dark_url: string;
   favicon_url: string;
   social_share_url: string;
+  seo_title: string;
+  seo_description: string;
   version: string;
   colors: BrandColors;
   whatsapp_number?: string;
@@ -79,6 +81,8 @@ export const defaultSiteConfig: SiteConfig = {
   logo_dark_url: "",
   favicon_url: "/favicon.png",
   social_share_url: "",
+  seo_title: "Evolução Clínica - Prontuários e Evoluções com IA",
+  seo_description: "Grave consultas por áudio, transcreva com inteligência artificial e salve tudo de forma organizada e segura em seu próprio Google Drive.",
   version: "1.0",
   colors: defaultColors,
   whatsapp_number: "",

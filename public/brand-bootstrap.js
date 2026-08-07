@@ -101,8 +101,8 @@
     const faviconUrl = appendVersion('/api/favicon', assetSignature);
     const appleTouchIconUrl = appendVersion('/api/apple-touch-icon', assetSignature);
     const socialImageUrl = appendVersion(config.social_share_url || 'https://www.evolucaoclinica.app.br/og-image-social.png', assetSignature);
-    const title = config.pwa_app_name || defaultTitle;
-    const description = config.pwa_description || defaultDescription;
+    const title = config.seo_title || config.pwa_app_name || defaultTitle;
+    const description = config.seo_description || config.pwa_description || defaultDescription;
 
     setLink("link[rel='icon']", 'icon', faviconUrl, undefined, '32x32');
     setLink("link[rel='shortcut icon']", 'shortcut icon', faviconUrl);
