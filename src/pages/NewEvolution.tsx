@@ -31,6 +31,8 @@ type AudioEvolutionItem = {
   mimeType: string;
 };
 
+type EvolutionInputMode = 'text' | 'audio' | 'hybrid';
+
 let activeAudioStopper: (() => void) | null = null;
 
 const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
@@ -252,6 +254,7 @@ export default function NewEvolution() {
   const [isPaused, setIsPaused] = useState(false);
   const [audioItems, setAudioItems] = useState<AudioEvolutionItem[]>([]);
   const [writtenEvolutionText, setWrittenEvolutionText] = useState('');
+  const [inputMode, setInputMode] = useState<EvolutionInputMode>('audio');
   const [recordingTime, setRecordingTime] = useState(0);
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
@@ -1141,8 +1144,8 @@ export default function NewEvolution() {
   };
 
   const handleSubmit = async () => {
-    const items = audioItemsRef.current;
-    const typedText = writtenEvolutionText.trim();
+    const items = inputMode === 'text' ? [] : audioItemsRef.current;
+    const typedText = inputMode === 'audio' ? '' : writtenEvolutionText.trim();
     if ((items.length === 0 && !typedText) || !patient || !user) return;
 
     if (isRecording) {
@@ -1508,11 +1511,52 @@ export default function NewEvolution() {
 
         <div className="border-t border-brand-border pt-6 space-y-6">
           <div>
+            <label className="block text-sm font-medium text-brand-text mb-3">Como deseja registrar a evolução?</label>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Tipo de evolução">
+              {([
+                { id: 'audio', label: 'Áudio', description: 'Grave ou envie arquivos de áudio.', icon: Mic },
+                { id: 'text', label: 'Texto', description: 'Digite a evolução diretamente.', icon: FileText },
+                { id: 'hybrid', label: 'Híbrido', description: 'Combine texto e áudio.', icon: FileText }
+              ] as const).map(({ id: mode, label, description, icon: Icon }) => {
+                const isSelected = inputMode === mode;
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    disabled={isRecording || status === 'processing'}
+                    onClick={() => {
+                      setInputMode(mode);
+                      if (status !== 'processing') {
+                        setStatus('idle');
+                        setErrorMessage('');
+                      }
+                    }}
+                    className={`flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isSelected
+                        ? 'border-brand-primary bg-brand-primary/10 text-brand-primary ring-1 ring-brand-primary/20'
+                        : 'border-brand-border bg-brand-bg/50 text-brand-text-muted hover:border-brand-primary/40 hover:bg-brand-primary/5'
+                    }`}
+                  >
+                    <Icon className="mt-0.5 shrink-0" size={19} />
+                    <span>
+                      <span className="block text-sm font-semibold">{label}</span>
+                      <span className="mt-1 block text-xs leading-5 text-brand-text-muted">{description}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {inputMode !== 'audio' && (
+          <div>
             <label htmlFor="written-evolution" className="block text-sm font-medium text-brand-text mb-2">Evolução por texto</label>
             <div className="rounded-xl border border-brand-border bg-brand-bg/50 p-4">
               <div className="mb-3 flex items-start gap-3 text-brand-text-muted">
                 <div className="rounded-lg bg-brand-primary/10 p-2 text-brand-primary"><FileText size={18} /></div>
-                <p className="pt-1 text-sm">Descreva a evolução da sessão. Você pode enviar somente este texto ou complementá-lo com áudios.</p>
+                <p className="pt-1 text-sm">{inputMode === 'hybrid' ? 'Registre informações adicionais que serão combinadas ao conteúdo dos áudios.' : 'Descreva a evolução da sessão para inseri-la diretamente no prontuário.'}</p>
               </div>
               <textarea
                 id="written-evolution"
@@ -1528,7 +1572,9 @@ export default function NewEvolution() {
               />
             </div>
           </div>
+          )}
 
+          {inputMode !== 'text' && (
           <div>
           <label className="block text-sm font-medium text-brand-text mb-4">Áudio da Evolução</label>
           
@@ -1711,6 +1757,7 @@ export default function NewEvolution() {
             </div>
           )}
           </div>
+          )}
         </div>
 
         {/* Status and Submit */}
@@ -1745,7 +1792,11 @@ export default function NewEvolution() {
           ) : status === 'idle' && (
             <button
               onClick={handleSubmit}
-              disabled={audioItems.length === 0 && !writtenEvolutionText.trim()}
+              disabled={inputMode === 'audio'
+                ? audioItems.length === 0
+                : inputMode === 'text'
+                  ? !writtenEvolutionText.trim()
+                  : audioItems.length === 0 || !writtenEvolutionText.trim()}
               className="w-full btn-primary py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Enviar para Processamento
