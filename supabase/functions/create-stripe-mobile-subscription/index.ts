@@ -18,6 +18,28 @@ async function tokenFingerprint(value: string) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+async function resolveCoupon(admin: any, stripe: any, planId: string, couponCode: unknown, isProduction: boolean) {
+  const code = String(couponCode || "").trim().toUpperCase();
+  if (!code) return null;
+  const now = new Date().toISOString();
+  const { data: coupon, error } = await admin.from("subscription_coupons").select("*").eq("code", code).eq("active", true).maybeSingle();
+  if (error || !coupon || (coupon.starts_at && coupon.starts_at > now) || (coupon.expires_at && coupon.expires_at <= now) || !coupon.applicable_plans?.includes(planId)) {
+    throw new BillingHttpError(400, "Cupom inválido, inativo, expirado ou indisponível para este plano.");
+  }
+  const idField = isProduction ? "stripe_prod_coupon_id" : "stripe_sandbox_coupon_id";
+  let stripeCouponId = coupon[idField];
+  if (!stripeCouponId) {
+    const params: any = { id: `ec_${isProduction ? "p" : "t"}_${coupon.id.replace(/-/g, "")}`, name: coupon.code, duration: coupon.duration, metadata: { subscriptionCouponId: coupon.id, couponCode: coupon.code } };
+    if (coupon.discount_type === "percentage") params.percent_off = Number(coupon.discount_value);
+    else { params.amount_off = Math.round(Number(coupon.discount_value) * 100); params.currency = "brl"; }
+    if (coupon.duration === "repeating") params.duration_in_months = coupon.duration_in_months;
+    try { stripeCouponId = (await stripe.coupons.create(params)).id; } catch (stripeError: any) { if (stripeError?.code !== "resource_already_exists") throw stripeError; stripeCouponId = params.id; }
+    const { error: updateError } = await admin.from("subscription_coupons").update({ [idField]: stripeCouponId, updated_at: now }).eq("id", coupon.id);
+    if (updateError) throw updateError;
+  }
+  return { id: stripeCouponId, code: coupon.code };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Método não permitido." }, 405);
@@ -25,7 +47,7 @@ serve(async (req) => {
   try {
     const admin = createAdminClient();
     const user = await requireAuthenticatedUser(req, admin);
-    const { planId, externalTransactionToken } = await req.json();
+    const { planId, externalTransactionToken, couponCode } = await req.json();
     const choiceToken = String(externalTransactionToken || "").trim();
     if (!choiceToken) throw new BillingHttpError(400, "Token da escolha de faturamento ausente.");
 
@@ -48,6 +70,7 @@ serve(async (req) => {
     const professional = await getProfessional(admin, user.id);
     const stripe = createStripe(config.stripeSecretKey);
     const customer = await getOrCreateStripeCustomer(admin, stripe, professional);
+    const coupon = await resolveCoupon(admin, stripe, plan.id, couponCode, config.isProduction);
     const fingerprint = await tokenFingerprint(choiceToken);
 
     const { data: pending } = await admin
@@ -96,6 +119,10 @@ serve(async (req) => {
         initialExternalTransactionId: externalTransactionId,
       },
     };
+    if (coupon) {
+      subscriptionParams.discounts = [{ coupon: coupon.id }];
+      subscriptionParams.metadata.couponCode = coupon.code;
+    }
     const subscription = await stripe.subscriptions.create(
       subscriptionParams,
       { idempotencyKey: `android-choice-${fingerprint}` },

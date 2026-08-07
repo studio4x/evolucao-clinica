@@ -59,8 +59,8 @@ async function invokeBillingFunction<T>(name: string, body: Record<string, unkno
   return data as T;
 }
 
-export async function createStripeCheckoutSession(planId: BillingPlanId) {
-  return invokeBillingFunction<{ checkoutUrl: string }>('create-stripe-checkout-session', { planId });
+export async function createStripeCheckoutSession(planId: BillingPlanId, couponCode?: string) {
+  return invokeBillingFunction<{ checkoutUrl: string }>('create-stripe-checkout-session', { planId, couponCode });
 }
 
 export async function createStripeCustomerPortalSession() {
@@ -69,14 +69,15 @@ export async function createStripeCustomerPortalSession() {
 
 export async function createStripeMobileSubscription(
   planId: BillingPlanId,
-  externalTransactionToken: string
+  externalTransactionToken: string,
+  couponCode?: string
 ) {
   return invokeBillingFunction<{
     clientSecret: string;
     publishableKey: string;
     subscriptionId: string;
     isProduction: boolean;
-  }>('create-stripe-mobile-subscription', { planId, externalTransactionToken });
+  }>('create-stripe-mobile-subscription', { planId, externalTransactionToken, couponCode });
 }
 
 export async function verifyGooglePlaySubscription(input: {

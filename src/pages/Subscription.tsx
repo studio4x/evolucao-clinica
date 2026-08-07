@@ -148,6 +148,7 @@ export default function Subscription() {
   const [plans, setPlans] = useState<any[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [paymentErrorByPlan, setPaymentErrorByPlan] = useState<Record<string, string>>({});
+  const [couponCode, setCouponCode] = useState('');
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
@@ -704,6 +705,11 @@ export default function Subscription() {
       </div>
 
       {/* Cartões dos Planos de Assinatura */}
+      <div className="mx-auto mb-6 max-w-md rounded-2xl border border-brand-border bg-white p-4 shadow-sm">
+        <label htmlFor="subscription-coupon" className="block text-sm font-bold text-brand-text">Cupom de desconto</label>
+        <p className="mt-1 text-xs text-brand-text-muted">Informe seu código antes de escolher o plano. A validação e o desconto são aplicados no pagamento seguro. No Android, selecione Stripe na escolha de faturamento para usar o cupom.</p>
+        <input id="subscription-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))} placeholder="EX: BEMVINDO20" className="mt-3 w-full rounded-xl border border-brand-border px-3 py-2.5 font-mono uppercase outline-none focus:border-brand-primary" />
+      </div>
       <div className="hidden md:flex xl:hidden items-center justify-between gap-4 mt-4 rounded-2xl border border-brand-primary/15 bg-brand-primary/5 px-4 py-3 text-sm text-brand-primary">
         <div className="flex items-center gap-2 font-semibold">
           <ArrowRight className="h-4 w-4 shrink-0" />
@@ -831,6 +837,7 @@ export default function Subscription() {
                       )}
                       <StripeSubscriptionButton
                         planId={plan.id}
+                        couponCode={couponCode.trim() || undefined}
                         disabled={loadingPlan !== null}
                         onLoadingChange={(loading) => {
                           setPaymentErrorByPlan((current) => ({ ...current, [plan.id]: '' }));

@@ -22,6 +22,7 @@ export type ConfirmedBillingResult = {
 
 type Props = {
   planId: BillingPlanId;
+  couponCode?: string;
   disabled?: boolean;
   onLoadingChange?: (loading: boolean) => void;
   onSuccess?: (result: ConfirmedBillingResult) => void;
@@ -30,6 +31,7 @@ type Props = {
 
 export function StripeSubscriptionButton({
   planId,
+  couponCode,
   disabled,
   onLoadingChange,
   onSuccess,
@@ -63,7 +65,7 @@ export function StripeSubscriptionButton({
       try {
         if (event.type === 'alternative_selected') {
           if (!event.externalTransactionToken) throw new Error('A Play Store não retornou o token da escolha.');
-          const mobile = await createStripeMobileSubscription(activePlan, event.externalTransactionToken);
+          const mobile = await createStripeMobileSubscription(activePlan, event.externalTransactionToken, couponCode);
           window.NativeBillingBridge?.presentStripePaymentSheet(
             mobile.clientSecret,
             mobile.publishableKey,
@@ -138,7 +140,7 @@ export function StripeSubscriptionButton({
         return;
       }
 
-      const { checkoutUrl } = await createStripeCheckoutSession(planId);
+      const { checkoutUrl } = await createStripeCheckoutSession(planId, couponCode);
       window.location.assign(checkoutUrl);
     } catch (error) {
       fail(error);
