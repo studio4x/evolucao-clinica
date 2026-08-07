@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, Play, Pause, BookOpen, ChevronRight } from 'lucide-react';
+import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Trash2, ExternalLink, Eye, X, Save, ArrowLeft, ChevronUp, ChevronDown, GripVertical, Play, Pause, BookOpen, ChevronRight, FileText } from 'lucide-react';
 import { appendToGoogleDoc, replaceEvolutionInGoogleDoc } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
@@ -251,6 +251,7 @@ export default function NewEvolution() {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [audioItems, setAudioItems] = useState<AudioEvolutionItem[]>([]);
+  const [writtenEvolutionText, setWrittenEvolutionText] = useState('');
   const [recordingTime, setRecordingTime] = useState(0);
   const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
@@ -1141,7 +1142,8 @@ export default function NewEvolution() {
 
   const handleSubmit = async () => {
     const items = audioItemsRef.current;
-    if (items.length === 0 || !patient || !user) return;
+    const typedText = writtenEvolutionText.trim();
+    if ((items.length === 0 && !typedText) || !patient || !user) return;
 
     if (isRecording) {
       await showAlert('Finalize a gravação atual antes de enviar a evolução.', {
@@ -1195,7 +1197,11 @@ export default function NewEvolution() {
     };
 
     const transcribeAllAudios = async () => {
-      const transcriptionParts: string[] = [];
+      const transcriptionParts: string[] = typedText ? [typedText] : [];
+
+      if (typedText) {
+        setProcessingMessage(items.length > 0 ? 'Preparando o texto e transcrevendo os áudios...' : 'Preparando a evolução escrita...');
+      }
 
       for (let index = 0; index < items.length; index += 1) {
         const item = items[index];
@@ -1252,7 +1258,7 @@ export default function NewEvolution() {
         evolutionText = await convertEvolutionToTemplate(originalTranscription, selectedTemplateId);
       }
 
-      console.log("Transcrição concluída. Inserindo no Google Docs...");
+      console.log("Evolução concluída. Inserindo no Google Docs...");
 
       await appendToGoogleDoc(
         googleAccessToken,
@@ -1291,6 +1297,7 @@ export default function NewEvolution() {
       }
 
       await clearAllAudioItems();
+      setWrittenEvolutionText('');
 
       if (isOnboardingMode && user?.id && patient?.id) {
         setOnboardingState(user.id, {
@@ -1311,7 +1318,7 @@ export default function NewEvolution() {
       
       let msg = error.message || "Erro desconhecido";
       
-      if (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) {
+      if ((msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) && audioBlobs.length > 0) {
         try {
           await addPendingEvolution({
             id: evolutionId,
@@ -1344,6 +1351,8 @@ export default function NewEvolution() {
           console.error("Erro ao salvar na fila offline:", queueErr);
           msg = "Você está sem internet e houve uma falha ao salvar no armazenamento local do navegador. Não feche o aplicativo e espere a conexão voltar.";
         }
+      } else if (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) {
+        msg = 'Você está sem internet. Conecte-se novamente para salvar a evolução escrita no prontuário.';
       } else if (msg.includes('Muitas solicitações de transcrição')) {
         msg = "Você atingiu o limite de 5 transcrições por minuto. Aguarde alguns segundos e tente novamente.";
       } else if (msg.includes('Limite mensal de transcrição de áudio atingido')) {
@@ -1497,7 +1506,30 @@ export default function NewEvolution() {
           </div>
         </div>
 
-        <div className="border-t border-brand-border pt-6">
+        <div className="border-t border-brand-border pt-6 space-y-6">
+          <div>
+            <label htmlFor="written-evolution" className="block text-sm font-medium text-brand-text mb-2">Evolução por texto</label>
+            <div className="rounded-xl border border-brand-border bg-brand-bg/50 p-4">
+              <div className="mb-3 flex items-start gap-3 text-brand-text-muted">
+                <div className="rounded-lg bg-brand-primary/10 p-2 text-brand-primary"><FileText size={18} /></div>
+                <p className="pt-1 text-sm">Descreva a evolução da sessão. Você pode enviar somente este texto ou complementá-lo com áudios.</p>
+              </div>
+              <textarea
+                id="written-evolution"
+                value={writtenEvolutionText}
+                onChange={(event) => {
+                  setWrittenEvolutionText(event.target.value);
+                  if (status !== 'processing') setStatus('idle');
+                }}
+                disabled={status === 'processing'}
+                rows={7}
+                placeholder="Digite aqui as observações, condutas e demais informações da evolução..."
+                className="input-field min-h-40 w-full resize-y p-3"
+              />
+            </div>
+          </div>
+
+          <div>
           <label className="block text-sm font-medium text-brand-text mb-4">Áudio da Evolução</label>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1678,6 +1710,7 @@ export default function NewEvolution() {
               </div>
             </div>
           )}
+          </div>
         </div>
 
         {/* Status and Submit */}
@@ -1712,7 +1745,7 @@ export default function NewEvolution() {
           ) : status === 'idle' && (
             <button
               onClick={handleSubmit}
-              disabled={audioItems.length === 0}
+              disabled={audioItems.length === 0 && !writtenEvolutionText.trim()}
               className="w-full btn-primary py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Enviar para Processamento
@@ -1724,7 +1757,7 @@ export default function NewEvolution() {
               <Loader2 className="w-8 h-8 text-brand-primary animate-spin" />
               <p className="text-brand-primary font-medium">Processando evolução...</p>
               <p className="text-sm text-brand-text-muted text-center">
-                {processingMessage || 'A IA está transcrevendo os áudios e inserindo no prontuário do paciente. Isso pode levar alguns segundos.'}
+                {processingMessage || 'A evolução está sendo preparada e inserida no prontuário do paciente. Isso pode levar alguns segundos.'}
               </p>
             </div>
           )}
@@ -1747,7 +1780,7 @@ export default function NewEvolution() {
               <p className="text-sm text-brand-text-muted text-center">
                 {isOnboardingMode
                   ? 'O próximo passo do onboarding é sincronizar os atendimentos da agenda.'
-                  : 'A transcrição foi adicionada ao final do documento Google Docs do paciente.'}
+                  : 'A evolução foi adicionada ao final do documento Google Docs do paciente.'}
               </p>
 
               {isOnboardingMode && (
@@ -1772,7 +1805,7 @@ export default function NewEvolution() {
                   className="flex items-center justify-center space-x-2 px-4 py-2.5 bg-brand-primary/10 text-brand-primary rounded-xl hover:bg-brand-primary/20 font-medium transition-colors text-sm"
                 >
                   <Eye className="w-4 h-4" />
-                  <span>Ver/Editar Transcrição</span>
+                  <span>Ver/Editar Evolução</span>
                 </button>
               </div>
 
@@ -1789,6 +1822,7 @@ export default function NewEvolution() {
                       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
                       audioItemsRef.current = [];
                       setAudioItems([]);
+                      setWrittenEvolutionText('');
                       draftIdRef.current = null;
                       recordingTimeRef.current = 0;
                       setRecordingTime(0);
