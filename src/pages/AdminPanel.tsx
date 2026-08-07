@@ -6785,13 +6785,26 @@ export default function AdminPanel() {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-brand-border bg-white p-4 shadow-sm">
-                        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-brand-text-muted">Prévia do link</p>
-                        <div className="overflow-hidden rounded-xl border border-brand-border bg-white">
-                          <div className="h-32 bg-brand-bg/50">
-                            {brandSocialShare ? <img src={brandSocialShare} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-brand-text-muted">Imagem de compartilhamento</div>}
+                      <div className="overflow-hidden rounded-2xl border border-[#d9d3c8] bg-[#efeae2] shadow-sm">
+                        <div className="flex h-11 items-center gap-3 bg-[#075e54] px-4 text-white">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20 text-xs font-bold">W</div>
+                          <div><p className="text-xs font-semibold">WhatsApp</p><p className="text-[10px] text-white/75">Prévia em uma conversa</p></div>
+                        </div>
+                        <div className="min-h-80 bg-[radial-gradient(circle_at_1px_1px,rgba(110,90,65,0.12)_1px,transparent_0)] bg-[length:18px_18px] p-4 sm:p-6">
+                          <div className="mx-auto w-full max-w-[360px] rounded-lg rounded-tr-none bg-[#d9fdd3] p-2 shadow-sm">
+                            <p className="mb-2 break-all px-1 text-xs text-[#007a5a]">https://www.evolucaoclinica.app.br/</p>
+                            <div className="overflow-hidden rounded-md border border-black/10 bg-white">
+                              <div className="aspect-[1.91/1] w-full bg-[#f0f2f5]">
+                                {brandSocialShare ? <img src={brandSocialShare} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-xs text-brand-text-muted">Imagem de compartilhamento</div>}
+                              </div>
+                              <div className="border-l-4 border-[#25d366] px-3 py-2.5">
+                                <p className="text-[10px] uppercase tracking-wide text-[#667781]">www.evolucaoclinica.app.br</p>
+                                <p className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-[#111b21]">{seoTitle || 'Título do compartilhamento'}</p>
+                                <p className="mt-1 line-clamp-2 text-xs leading-snug text-[#667781]">{seoDescription || 'Descrição do compartilhamento'}</p>
+                              </div>
+                            </div>
+                            <p className="mt-1 text-right text-[10px] text-[#667781]">14:57 <span className="font-bold text-[#53bdeb]">✓✓</span></p>
                           </div>
-                          <div className="p-3"><p className="text-[11px] uppercase text-brand-text-muted">www.evolucaoclinica.app.br</p><p className="mt-1 text-sm font-semibold text-brand-text">{seoTitle || 'Título do compartilhamento'}</p><p className="mt-1 text-xs text-brand-text-muted">{seoDescription || 'Descrição do compartilhamento'}</p></div>
                         </div>
                       </div>
 
