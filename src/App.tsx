@@ -61,7 +61,6 @@ import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acq
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
-const AUTH_SESSION_TIMEOUT_MS = 15000;
 
 function NativeBillingRestore() {
   const user = useAuthStore((state) => state.user);
@@ -611,28 +610,17 @@ export default function App() {
       }
     };
 
-    // Pega a sessão inicial. O limite evita que uma falha de rede, armazenamento
-    // ou redirecionamento OAuth deixe o app preso indefinidamente no splash.
+    // Aguarda a restauração real da sessão antes de permitir que as rotas decidam
+    // se devem mostrar o login. Em alguns WebViews a leitura do armazenamento
+    // persistido demora mais do que uma abertura comum; tratar essa espera como
+    // sessão nula fazia o app piscar a tela de login e entrar logo em seguida.
     const loadInitialSession = async () => {
-      let sessionTimeoutId: number | undefined;
-
       try {
-        const result = await Promise.race([
-          supabase.auth.getSession(),
-          new Promise<{ data: { session: null } }>((resolve) => {
-            sessionTimeoutId = window.setTimeout(() => {
-              console.warn('[Auth] Tempo limite ao recuperar a sessão inicial.');
-              resolve({ data: { session: null } });
-            }, AUTH_SESSION_TIMEOUT_MS);
-          })
-        ]);
-
+        const result = await supabase.auth.getSession();
         await handleAuthSession(result.data.session);
       } catch (error) {
         console.error('[Auth] Falha ao recuperar a sessão inicial:', error);
         await handleAuthSession(null);
-      } finally {
-        if (sessionTimeoutId !== undefined) window.clearTimeout(sessionTimeoutId);
       }
     };
 
