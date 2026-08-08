@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
@@ -1978,11 +1978,69 @@ export default function PatientDetail() {
   const isLastReportSigned = lastReportObj?.status === 'signed';
   const mobileTabVisibility = (tab: PatientMobileTab) => activeMobileTab === tab ? 'block xl:block' : 'hidden xl:block';
 
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1) return;
+
+    const target = e.target as HTMLElement | null;
+    if (target) {
+      const tagName = target.tagName.toLowerCase();
+      if (
+        tagName === 'input' ||
+        tagName === 'textarea' ||
+        tagName === 'select' ||
+        target.isContentEditable ||
+        target.closest('input, textarea, select, [data-no-swipe="true"], .no-swipe, [role="dialog"]')
+      ) {
+        touchStartRef.current = null;
+        return;
+      }
+    }
+
+    touchStartRef.current = {
+      x: e.touches[0].clientX,
+      y: e.touches[0].clientY,
+      time: Date.now()
+    };
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartRef.current || e.changedTouches.length !== 1) return;
+
+    const startX = touchStartRef.current.x;
+    const startY = touchStartRef.current.y;
+    const startTime = touchStartRef.current.time;
+    touchStartRef.current = null;
+
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const duration = Date.now() - startTime;
+
+    const deltaX = endX - startX;
+    const deltaY = endY - startY;
+
+    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4 && duration < 600) {
+      const tabOrder: PatientMobileTab[] = ['overview', 'history', 'reminders', 'reports'];
+      const currentIndex = tabOrder.indexOf(activeMobileTab);
+
+      if (deltaX < 0) {
+        if (currentIndex < tabOrder.length - 1) {
+          setActiveMobileTab(tabOrder[currentIndex + 1]);
+        }
+      } else {
+        if (currentIndex > 0) {
+          setActiveMobileTab(tabOrder[currentIndex - 1]);
+        }
+      }
+    }
+  };
+
   if (loading) return <div>Carregando...</div>;
   if (!patient) return <div>Paciente não encontrado.</div>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
       <div className="xl:hidden h-40" aria-hidden="true" />
       <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <PanelPageHeader
