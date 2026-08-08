@@ -1978,7 +1978,7 @@ export default function PatientDetail() {
   const isLastReportSigned = lastReportObj?.status === 'signed';
   const mobileTabVisibility = (tab: PatientMobileTab) => activeMobileTab === tab ? 'block xl:block' : 'hidden xl:block';
 
-  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const touchStateRef = useRef<{ startX: number; startY: number; currentX: number; currentY: number; time: number } | null>(null);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
@@ -1993,34 +1993,41 @@ export default function PatientDetail() {
         target.isContentEditable ||
         target.closest('input, textarea, select, [data-no-swipe="true"], .no-swipe, [role="dialog"]')
       ) {
-        touchStartRef.current = null;
+        touchStateRef.current = null;
         return;
       }
     }
 
-    touchStartRef.current = {
-      x: e.touches[0].clientX,
-      y: e.touches[0].clientY,
+    const touch = e.touches[0];
+    touchStateRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      currentX: touch.clientX,
+      currentY: touch.clientY,
       time: Date.now()
     };
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartRef.current || e.changedTouches.length !== 1) return;
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStateRef.current || e.touches.length !== 1) return;
+    touchStateRef.current.currentX = e.touches[0].clientX;
+    touchStateRef.current.currentY = e.touches[0].clientY;
+  };
 
-    const startX = touchStartRef.current.x;
-    const startY = touchStartRef.current.y;
-    const startTime = touchStartRef.current.time;
-    touchStartRef.current = null;
+  const processSwipe = () => {
+    if (!touchStateRef.current) return;
 
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
-    const duration = Date.now() - startTime;
+    const { startX, startY, currentX, currentY, time } = touchStateRef.current;
+    touchStateRef.current = null;
 
-    const deltaX = endX - startX;
-    const deltaY = endY - startY;
+    const duration = Date.now() - time;
+    const deltaX = currentX - startX;
+    const deltaY = currentY - startY;
 
-    if (Math.abs(deltaX) > 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.4 && duration < 600) {
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    if (absX >= 30 && absX > absY * 0.75 && duration < 700) {
       const tabOrder: PatientMobileTab[] = ['overview', 'history', 'reminders', 'reports'];
       const currentIndex = tabOrder.indexOf(activeMobileTab);
 
@@ -2028,7 +2035,7 @@ export default function PatientDetail() {
         if (currentIndex < tabOrder.length - 1) {
           setActiveMobileTab(tabOrder[currentIndex + 1]);
         }
-      } else {
+      } else if (deltaX > 0) {
         if (currentIndex > 0) {
           setActiveMobileTab(tabOrder[currentIndex - 1]);
         }
@@ -2036,11 +2043,19 @@ export default function PatientDetail() {
     }
   };
 
+  const handleTouchEnd = () => {
+    processSwipe();
+  };
+
+  const handleTouchCancel = () => {
+    processSwipe();
+  };
+
   if (loading) return <div>Carregando...</div>;
   if (!patient) return <div>Paciente não encontrado.</div>;
 
   return (
-    <div className="space-y-6" onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
+    <div className="space-y-6" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
       <div className="xl:hidden h-40" aria-hidden="true" />
       <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <PanelPageHeader
