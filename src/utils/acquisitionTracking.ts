@@ -1,162 +1,239 @@
 import { supabase } from '../supabaseClient';
+import {
+  type AcquisitionData,
+  calculateAcquisitionChannel,
+  hasAttributableSignal,
+  isLikelyOAuthReturn,
+  isValidAcquisitionData,
+  resolveAcquisitionTouches,
+  sanitizeTrackingUrl,
+} from './acquisitionAttribution';
 
-export interface AcquisitionData {
-  utm_source?: string;
-  utm_medium?: string;
-  utm_campaign?: string;
-  utm_term?: string;
-  utm_content?: string;
-  gclid?: string;
-  fbclid?: string;
-  referrer?: string;
-  landing_page?: string;
-  first_seen_at?: string;
-  channel?: string;
-}
+export type { AcquisitionData } from './acquisitionAttribution';
+export { calculateAcquisitionChannel } from './acquisitionAttribution';
 
-const STORAGE_KEY = 'evolucao-clinica:acquisition';
+const LEGACY_STORAGE_KEY = 'evolucao-clinica:acquisition';
+const FIRST_TOUCH_STORAGE_KEY = 'evolucao-clinica:acquisition:first-touch';
+const CURRENT_TOUCH_STORAGE_KEY = 'evolucao-clinica:acquisition:current-touch';
+const SIGNUP_PENDING_PREFIX = 'evolucao-clinica:acquisition:signup-pending';
+const NEW_ACCOUNT_WINDOW_MS = 2 * 60 * 60 * 1000;
 
-/**
- * Calcula o nome legível do canal de aquisição com base em UTMs e Referrer
- */
-export function calculateAcquisitionChannel(data: AcquisitionData): string {
-  const source = (data.utm_source || '').toLowerCase();
-  const medium = (data.utm_medium || '').toLowerCase();
-  const referrer = (data.referrer || '').toLowerCase();
-
-  if (data.gclid || source === 'google_ads' || (source === 'google' && medium === 'cpc')) {
-    return 'Google Ads (Tráfego Pago)';
-  }
-  if (data.fbclid || source === 'facebook_ads' || source === 'meta' || (source === 'facebook' && medium === 'cpc')) {
-    return 'Meta / Facebook Ads';
-  }
-  if (source === 'instagram' || referrer.includes('instagram.com')) {
-    return medium === 'bio' || medium === 'profile' ? 'Instagram (Link na Bio)' : 'Instagram (Social)';
-  }
-  if (source === 'facebook' || referrer.includes('facebook.com')) {
-    return 'Facebook (Social)';
-  }
-  if (source === 'youtube' || referrer.includes('youtube.com')) {
-    return 'YouTube';
-  }
-  if (source === 'pwa' || medium === 'pwa') {
-    return 'Aplicativo PWA / Android';
-  }
-  if (source === 'google' || referrer.includes('google.com')) {
-    return 'Google (Busca Orgânica)';
-  }
-  if (source) {
-    return `${source.toUpperCase()}${medium ? ` (${medium})` : ''}`;
-  }
-  if (referrer && !referrer.includes(window.location.hostname)) {
-    try {
-      const url = new URL(referrer);
-      return `Referral (${url.hostname})`;
-    } catch {
-      return 'Site Referenciador';
-    }
-  }
-  return 'Tráfego Direto';
-}
-
-/**
- * Captura e armazena os dados de origem/UTM do visitante no primeiro acesso
- */
-export function captureAcquisitionData(): AcquisitionData {
+const safeRead = (key: string): AcquisitionData | null => {
+  if (typeof window === 'undefined') return null;
   try {
-    const existing = localStorage.getItem(STORAGE_KEY);
-    if (existing) {
-      const parsed = JSON.parse(existing);
-      if (parsed && typeof parsed === 'object' && (parsed.utm_source || parsed.referrer || parsed.landing_page)) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.warn('Erro ao ler dados de aquisição existentes:', err);
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return isValidAcquisitionData(parsed) ? parsed : null;
+  } catch (error) {
+    console.warn('[AcquisitionTracking] Não foi possível ler dados locais de aquisição.', error);
+    return null;
+  }
+};
+
+const safeWrite = (key: string, data: AcquisitionData): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(data));
+  } catch (error) {
+    console.warn('[AcquisitionTracking] Não foi possível persistir dados locais de aquisição.', error);
+  }
+};
+
+const safeRemove = (key: string): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Falha de limpeza não pode afetar autenticação ou navegação.
+  }
+};
+
+const getSignupPendingKey = (userId: string) => `${SIGNUP_PENDING_PREFIX}:${userId}`;
+
+const readFirstTouch = (): AcquisitionData | null => {
+  const current = safeRead(FIRST_TOUCH_STORAGE_KEY);
+  if (current) return current;
+
+  const legacy = safeRead(LEGACY_STORAGE_KEY);
+  if (legacy) {
+    safeWrite(FIRST_TOUCH_STORAGE_KEY, legacy);
+    return legacy;
   }
 
+  return null;
+};
+
+const buildCurrentTouch = (): AcquisitionData => {
   const urlParams = new URLSearchParams(window.location.search);
-  const utm_source = urlParams.get('utm_source') || undefined;
-  const utm_medium = urlParams.get('utm_medium') || undefined;
-  const utm_campaign = urlParams.get('utm_campaign') || undefined;
-  const utm_term = urlParams.get('utm_term') || undefined;
-  const utm_content = urlParams.get('utm_content') || undefined;
-  const gclid = urlParams.get('gclid') || undefined;
-  const fbclid = urlParams.get('fbclid') || undefined;
-
-  let referrer: string | undefined = undefined;
-  if (document.referrer && !document.referrer.includes(window.location.hostname)) {
-    referrer = document.referrer;
-  }
-
-  const landing_page = window.location.href;
-  const first_seen_at = new Date().toISOString();
+  const externalReferrer = document.referrer && !document.referrer.includes(window.location.hostname)
+    ? sanitizeTrackingUrl(document.referrer)
+    : undefined;
 
   const data: AcquisitionData = {
-    utm_source,
-    utm_medium,
-    utm_campaign,
-    utm_term,
-    utm_content,
-    gclid,
-    fbclid,
-    referrer,
-    landing_page,
-    first_seen_at
+    utm_source: urlParams.get('utm_source') || undefined,
+    utm_medium: urlParams.get('utm_medium') || undefined,
+    utm_campaign: urlParams.get('utm_campaign') || undefined,
+    utm_term: urlParams.get('utm_term') || undefined,
+    utm_content: urlParams.get('utm_content') || undefined,
+    gclid: urlParams.get('gclid') || undefined,
+    fbclid: urlParams.get('fbclid') || undefined,
+    referrer: externalReferrer,
+    landing_page: sanitizeTrackingUrl(window.location.href, window.location.origin),
+    first_seen_at: new Date().toISOString(),
   };
 
   data.channel = calculateAcquisitionChannel(data);
+  return data;
+};
 
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch (err) {
-    console.warn('Erro ao salvar dados de aquisição:', err);
+/**
+ * Captura first touch e o touch da sessão atual.
+ * O first touch é imutável; o current touch é atualizado a cada nova sessão,
+ * exceto no retorno de OAuth, quando preservamos a origem anterior.
+ */
+export function captureAcquisitionData(): AcquisitionData {
+  if (typeof window === 'undefined') return {};
+
+  const existingFirstTouch = readFirstTouch();
+  const existingCurrentTouch = safeRead(CURRENT_TOUCH_STORAGE_KEY);
+  const candidate = buildCurrentTouch();
+
+  const pendingOAuth = Boolean(
+    window.localStorage.getItem('oauth_redirect_path') ||
+    window.localStorage.getItem('evolucao-clinica:google-oauth-scopes')
+  );
+  const returningFromOAuth = isLikelyOAuthReturn(window.location.href, document.referrer) || pendingOAuth;
+  const { firstTouch, currentTouch } = resolveAcquisitionTouches({
+    existingFirstTouch,
+    existingCurrentTouch,
+    candidate,
+    returningFromOAuth,
+  });
+
+  if (!existingFirstTouch) {
+    safeWrite(FIRST_TOUCH_STORAGE_KEY, firstTouch);
+    // Mantém compatibilidade com visitantes que já utilizam a chave antiga.
+    safeWrite(LEGACY_STORAGE_KEY, firstTouch);
   }
 
-  return data;
+  // A sessão atual também pode ser tráfego direto; isso é relevante para signup touch.
+  safeWrite(CURRENT_TOUCH_STORAGE_KEY, currentTouch);
+
+  return firstTouch;
 }
 
 /**
- * Obtém os dados de aquisição locais (ou força a captura se necessário)
+ * Compatibilidade: retorna o first touch.
  */
 export function getLocalAcquisitionData(): AcquisitionData {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch (err) {
-    console.warn('Erro ao carregar aquisição local:', err);
-  }
-  return captureAcquisitionData();
+  return readFirstTouch() || captureAcquisitionData();
 }
+
+export function getCurrentAcquisitionData(): AcquisitionData {
+  if (typeof window === 'undefined') return {};
+  const stored = safeRead(CURRENT_TOUCH_STORAGE_KEY);
+  if (stored) return stored;
+  captureAcquisitionData();
+  return safeRead(CURRENT_TOUCH_STORAGE_KEY) || getLocalAcquisitionData();
+}
+
+const isRecentlyCreatedAccount = (createdAt?: string | null): boolean => {
+  if (!createdAt) return false;
+  const createdAtMs = new Date(createdAt).getTime();
+  if (!Number.isFinite(createdAtMs)) return false;
+  return Date.now() - createdAtMs >= 0 && Date.now() - createdAtMs <= NEW_ACCOUNT_WINDOW_MS;
+};
+
+const isMissingColumnError = (message?: string | null, columnName?: string): boolean => {
+  const normalized = String(message || '').toLowerCase();
+  if (!columnName) return false;
+  return normalized.includes(columnName.toLowerCase()) && (
+    normalized.includes('column') ||
+    normalized.includes('schema cache') ||
+    normalized.includes('does not exist')
+  );
+};
 
 /**
- * Sincroniza os dados de aquisição locais com o perfil do profissional no Supabase
+ * Sincroniza first touch e signup touch com o perfil no Supabase.
+ * Tracking é best-effort: falhas nunca bloqueiam login/onboarding.
  */
-export async function syncAcquisitionWithDatabase(userId: string, currentInfo?: AcquisitionData | null): Promise<void> {
+export async function syncAcquisitionWithDatabase(
+  userId: string,
+  currentInfo?: AcquisitionData | null
+): Promise<void> {
   if (!userId) return;
 
-  // Se o perfil no banco já tiver dados gravados e válidos, não sobrescreve a primeira origem
-  if (currentInfo && typeof currentInfo === 'object' && (currentInfo.utm_source || currentInfo.channel || currentInfo.referrer)) {
-    return;
-  }
-
-  const localData = getLocalAcquisitionData();
-  if (!localData || Object.keys(localData).length === 0) return;
+  const firstTouch = getLocalAcquisitionData();
+  const currentTouch = getCurrentAcquisitionData();
 
   try {
-    const { error } = await supabase
+    if (!isValidAcquisitionData(currentInfo) && isValidAcquisitionData(firstTouch)) {
+      const { error } = await supabase
+        .from('professionals')
+        .update({ acquisition_info: firstTouch })
+        .eq('id', userId);
+
+      if (error) {
+        console.warn('[AcquisitionTracking] Falha ao registrar first touch:', error.message);
+      }
+    }
+
+    const pendingKey = getSignupPendingKey(userId);
+    let pendingSignupTouch = safeRead(pendingKey);
+
+    if (!pendingSignupTouch) {
+      const { data: authData } = await supabase.auth.getUser();
+      const authUser = authData?.user;
+      if (authUser?.id === userId && isRecentlyCreatedAccount(authUser.created_at) && isValidAcquisitionData(currentTouch)) {
+        pendingSignupTouch = currentTouch;
+        safeWrite(pendingKey, currentTouch);
+      }
+    }
+
+    if (!pendingSignupTouch) return;
+
+    const { data: profile, error: profileError } = await supabase
       .from('professionals')
-      .update({ acquisition_info: localData })
+      .select('signup_acquisition_info')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (profileError) {
+      if (!isMissingColumnError(profileError.message, 'signup_acquisition_info')) {
+        console.warn('[AcquisitionTracking] Falha ao consultar signup touch:', profileError.message);
+      }
+      return;
+    }
+
+    if (isValidAcquisitionData(profile?.signup_acquisition_info)) {
+      safeRemove(pendingKey);
+      return;
+    }
+
+    const { error: signupError } = await supabase
+      .from('professionals')
+      .update({ signup_acquisition_info: pendingSignupTouch })
       .eq('id', userId);
 
-    if (error) {
-      console.warn('Falha ao sincronizar dados de aquisição com o perfil:', error.message);
-    } else {
-      console.log('[AcquisitionTracking] Dados de origem registrados no perfil com sucesso:', localData.channel);
+    if (signupError) {
+      if (!isMissingColumnError(signupError.message, 'signup_acquisition_info')) {
+        console.warn('[AcquisitionTracking] Falha ao registrar signup touch:', signupError.message);
+      }
+      return;
     }
-  } catch (err) {
-    console.error('Erro na sincronização de aquisição:', err);
+
+    safeRemove(pendingKey);
+  } catch (error) {
+    console.warn('[AcquisitionTracking] Sincronização de aquisição indisponível; acesso preservado.', error);
   }
 }
+
+export const __acquisitionTrackingInternals = {
+  LEGACY_STORAGE_KEY,
+  FIRST_TOUCH_STORAGE_KEY,
+  CURRENT_TOUCH_STORAGE_KEY,
+  SIGNUP_PENDING_PREFIX,
+  hasAttributableSignal,
+};

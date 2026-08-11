@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { APP_VERSION } from './components/layout/AppVersion';
+import { GrowthProfileGate } from './components/onboarding/GrowthProfileGate';
 import { initAnalytics } from './services/analytics';
 import { installWebViewAudioCompatibility } from './utils/audioWebViewCompatibility';
 import { installGlobalChunkRecovery } from './utils/lazyWithRetry';
@@ -49,6 +50,8 @@ if ("serviceWorker" in navigator) {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <GrowthProfileGate>
+      <App />
+    </GrowthProfileGate>
   </StrictMode>,
 );
