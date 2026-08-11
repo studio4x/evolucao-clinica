@@ -1989,7 +1989,6 @@ export default function PatientDetail() {
     startY: number;
     currentX: number;
     currentY: number;
-    intent: 'horizontal' | 'vertical' | null;
   } | null>(null);
 
   const changeMobileTab = (nextTab: PatientMobileTab, direction: SwipeDirection) => {
@@ -2024,7 +2023,6 @@ export default function PatientDetail() {
       startY: touch.clientY,
       currentX: touch.clientX,
       currentY: touch.clientY,
-      intent: null,
     };
   };
 
@@ -2040,11 +2038,10 @@ export default function PatientDetail() {
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
 
-    if (!gesture.intent && Math.max(absX, absY) >= 8) {
-      gesture.intent = absX > absY * 1.15 ? 'horizontal' : 'vertical';
+    if (absX < 10 || absX <= absY) {
+      clearSwipePreview();
+      return;
     }
-
-    if (gesture.intent !== 'horizontal') return;
 
     const currentIndex = patientMobileTabOrder.indexOf(activeMobileTab);
     const direction: SwipeDirection = deltaX < 0 ? 'next' : 'previous';
@@ -2054,7 +2051,7 @@ export default function PatientDetail() {
 
     setSwipePreview({
       direction: canChange ? direction : null,
-      progress: canChange ? Math.min(absX / 84, 1) : 0,
+      progress: canChange ? Math.min(absX / 52, 1) : 0,
     });
   };
 
@@ -2072,7 +2069,7 @@ export default function PatientDetail() {
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
 
-    if (gesture.intent === 'horizontal' && absX >= 48 && absX > absY * 1.15) {
+    if (absX >= 28 && absX > absY) {
       const currentIndex = patientMobileTabOrder.indexOf(activeMobileTab);
 
       if (deltaX < 0) {
