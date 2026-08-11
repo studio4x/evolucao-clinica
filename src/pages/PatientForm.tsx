@@ -78,6 +78,38 @@ type PatientFormDraft = {
 };
 
 const PATIENT_FORM_DRAFT_PREFIX = 'evolucao-clinica:patient-form-draft';
+const GOOGLE_FOLDER_PREFERENCE_PREFIX = 'evolucao-clinica:last-google-folder';
+
+const getGoogleFolderPreferenceKeys = (userId: string) => ({
+  id: `${GOOGLE_FOLDER_PREFERENCE_PREFIX}:${userId}:id`,
+  name: `${GOOGLE_FOLDER_PREFERENCE_PREFIX}:${userId}:name`,
+});
+
+const readGoogleFolderPreference = (userId: string) => {
+  const keys = getGoogleFolderPreferenceKeys(userId);
+  const id = localStorage.getItem(keys.id) || '';
+  return id
+    ? { id, name: localStorage.getItem(keys.name) || 'Pasta selecionada' }
+    : null;
+};
+
+const saveGoogleFolderPreference = (userId: string | undefined, folderId: string, folderName: string) => {
+  if (!userId) return;
+  const keys = getGoogleFolderPreferenceKeys(userId);
+  localStorage.setItem(keys.id, folderId);
+  localStorage.setItem(keys.name, folderName);
+};
+
+const clearGoogleFolderPreference = (userId: string | undefined) => {
+  if (userId) {
+    const keys = getGoogleFolderPreferenceKeys(userId);
+    localStorage.removeItem(keys.id);
+    localStorage.removeItem(keys.name);
+  }
+  // Remove a preferência antiga, que não era associada à conta Google.
+  localStorage.removeItem('last_google_folder_id');
+  localStorage.removeItem('last_google_folder_name');
+};
 
 const emptyPatientFormValues = (): PatientFormValues => ({
   full_name: '',
@@ -88,8 +120,8 @@ const emptyPatientFormValues = (): PatientFormValues => ({
   google_doc_id: '',
   google_doc_name: '',
   google_doc_url: '',
-  target_folder_id: localStorage.getItem('last_google_folder_id') || '',
-  target_folder_name: localStorage.getItem('last_google_folder_name') || '',
+  target_folder_id: '',
+  target_folder_name: '',
   evolution_reminder_active: false,
   session_days: [],
   session_time: '',
@@ -189,19 +221,20 @@ export default function PatientForm() {
     const draft = readPatientFormDraft(getPatientFormDraftKey(user.id));
     restoredDraftUserRef.current = user.id;
 
-    if (!draft) return;
+    if (draft) {
+      pendingPatientIdRef.current = draft.patientId || null;
+      setFormData((prev) => ({ ...prev, ...draft.formData }));
+      setDdi(draft.ddi || '+55');
+      return;
+    }
 
-    pendingPatientIdRef.current = draft.patientId || null;
-
-    setFormData((prev) => ({
-      ...prev,
-      ...draft.formData,
-    }));
-    setDdi(draft.ddi || '+55');
-
-    if (draft.formData.target_folder_id) {
-      localStorage.setItem('last_google_folder_id', draft.formData.target_folder_id);
-      localStorage.setItem('last_google_folder_name', draft.formData.target_folder_name || '');
+    const savedFolder = readGoogleFolderPreference(user.id);
+    if (savedFolder) {
+      setFormData((prev) => ({
+        ...prev,
+        target_folder_id: savedFolder.id,
+        target_folder_name: savedFolder.name,
+      }));
     }
   }, [id, user?.id]);
 
@@ -219,16 +252,6 @@ export default function PatientForm() {
 
     return () => window.clearTimeout(timer);
   }, [ddi, formData, id, user?.id]);
-
-  useEffect(() => {
-    if (formData.target_folder_id) {
-      localStorage.setItem('last_google_folder_id', formData.target_folder_id);
-      localStorage.setItem('last_google_folder_name', formData.target_folder_name || '');
-    } else {
-      localStorage.removeItem('last_google_folder_id');
-      localStorage.removeItem('last_google_folder_name');
-    }
-  }, [formData.target_folder_id, formData.target_folder_name]);
 
   useEffect(() => {
     if (id) {
@@ -358,21 +381,29 @@ export default function PatientForm() {
     } catch (error: any) {
       console.error("Erro ao criar documento:", error);
       const msg = error.message || "";
-      if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
+      if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials') || msg.includes('INSUFFICIENT_SCOPES')) {
         await showAlert("Sua sessão do Google expirou. Por favor, clique em 'Renovar Autenticação' abaixo para continuar.", {
           title: "Sessão Expirada",
           variant: "warning",
           icon: "warning"
         });
         setGoogleAccessToken(null);
-      } else if (msg.includes('userRateLimitExceeded') || msg.includes('rateLimitExceeded') || msg.includes('quotaExceeded') || msg.includes('403')) {
+      } else if (msg.includes('userRateLimitExceeded') || msg.includes('rateLimitExceeded') || msg.includes('quotaExceeded')) {
         await showAlert("O Google está limitando temporariamente a criação do documento. Tente novamente em alguns segundos.", {
           title: "Limite do Google",
           variant: "warning",
           icon: "warning"
         });
+      } else if (formData.target_folder_id && (msg.includes('404') || msg.includes('File not found') || msg.includes('403'))) {
+        setFormData((prev) => ({ ...prev, target_folder_id: '', target_folder_name: '' }));
+        clearGoogleFolderPreference(user?.id);
+        await showAlert('Não foi possível acessar a pasta de destino. Ela foi removida desta tela; escolha outra pasta ou crie o prontuário no Meu Drive.', {
+          title: 'Pasta do Google Drive indisponível',
+          variant: 'warning',
+          icon: 'warning'
+        });
       } else {
-        await showAlert("Erro ao criar prontuário no Google Docs. Verifique sua conexão.", {
+        await showAlert("Não foi possível criar o prontuário no Google Docs. Renove a autenticação do Google e tente novamente.", {
           title: "Erro ao Criar Documento",
           variant: "danger",
           icon: "warning"
@@ -545,8 +576,7 @@ export default function PatientForm() {
       // Se a pasta excluída era a selecionada, limpa
       if (formData.target_folder_id === folderId) {
         setFormData(prev => ({ ...prev, target_folder_id: '', target_folder_name: '' }));
-        localStorage.removeItem('last_google_folder_id');
-        localStorage.removeItem('last_google_folder_name');
+        clearGoogleFolderPreference(user?.id);
       }
 
       // Refresh list
@@ -580,12 +610,10 @@ export default function PatientForm() {
     const current = explorerPath[explorerPath.length - 1];
     if (current.id === 'root') {
       setFormData(prev => ({ ...prev, target_folder_id: '', target_folder_name: 'Meu Drive (Principal)' }));
-      localStorage.removeItem('last_google_folder_id');
-      localStorage.removeItem('last_google_folder_name');
+      clearGoogleFolderPreference(user?.id);
     } else {
       setFormData(prev => ({ ...prev, target_folder_id: current.id, target_folder_name: current.name }));
-      localStorage.setItem('last_google_folder_id', current.id);
-      localStorage.setItem('last_google_folder_name', current.name);
+      saveGoogleFolderPreference(user?.id, current.id, current.name);
     }
     setShowExplorer(false);
   };
@@ -638,8 +666,7 @@ export default function PatientForm() {
     }
     const name = linkFolderName.trim() || 'Pasta vinculada';
     setFormData(prev => ({ ...prev, target_folder_id: folderId, target_folder_name: name }));
-    localStorage.setItem('last_google_folder_id', folderId);
-    localStorage.setItem('last_google_folder_name', name);
+    saveGoogleFolderPreference(user?.id, folderId, name);
     setShowLinkFolder(false);
     setLinkFolderUrl('');
     setLinkFolderName('');
@@ -1035,8 +1062,7 @@ export default function PatientForm() {
                           type="button"
                           onClick={() => {
                             setFormData(prev => ({ ...prev, target_folder_id: '', target_folder_name: '' }));
-                            localStorage.removeItem('last_google_folder_id');
-                            localStorage.removeItem('last_google_folder_name');
+                            clearGoogleFolderPreference(user?.id);
                           }}
                           className="text-brand-text-muted hover:text-red-500 transition-colors"
                         >
