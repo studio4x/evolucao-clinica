@@ -92,6 +92,7 @@ type ConfirmationDialogState = {
 };
 
 type PatientMobileTab = 'overview' | 'history' | 'reminders' | 'reports';
+type SwipeDirection = 'next' | 'previous';
 
 const patientMobileTabs: { id: PatientMobileTab; label: string; icon: typeof FileText }[] = [
   { id: 'overview', label: 'Resumo', icon: LayoutDashboard },
@@ -99,6 +100,7 @@ const patientMobileTabs: { id: PatientMobileTab; label: string; icon: typeof Fil
   { id: 'reminders', label: 'Lembretes', icon: Bell },
   { id: 'reports', label: 'Relatórios', icon: FileText },
 ];
+const patientMobileTabOrder: PatientMobileTab[] = ['overview', 'history', 'reminders', 'reports'];
 
 
 
@@ -108,6 +110,8 @@ export default function PatientDetail() {
   const navigate = useNavigate();
   const [patient, setPatient] = useState<any>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<PatientMobileTab>('overview');
+  const [mobileTabMotion, setMobileTabMotion] = useState<SwipeDirection>('next');
+  const [swipePreview, setSwipePreview] = useState<{ direction: SwipeDirection | null; progress: number }>({ direction: null, progress: 0 });
   const [evolutions, setEvolutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -1976,9 +1980,25 @@ export default function PatientDetail() {
 
   const lastReportObj = reports.find(r => r.id === lastGeneratedReportId);
   const isLastReportSigned = lastReportObj?.status === 'signed';
-  const mobileTabVisibility = (tab: PatientMobileTab) => activeMobileTab === tab ? 'block xl:block' : 'hidden xl:block';
+  const mobileTabVisibility = (tab: PatientMobileTab) => activeMobileTab === tab
+    ? `block xl:block patient-mobile-tab-enter-${mobileTabMotion}`
+    : 'hidden xl:block';
 
-  const touchStateRef = useRef<{ startX: number; startY: number; currentX: number; currentY: number; time: number } | null>(null);
+  const touchStateRef = useRef<{
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    intent: 'horizontal' | 'vertical' | null;
+  } | null>(null);
+
+  const changeMobileTab = (nextTab: PatientMobileTab, direction: SwipeDirection) => {
+    if (nextTab === activeMobileTab) return;
+    setMobileTabMotion(direction);
+    setActiveMobileTab(nextTab);
+  };
+
+  const clearSwipePreview = () => setSwipePreview({ direction: null, progress: 0 });
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length !== 1) return;
@@ -1991,7 +2011,7 @@ export default function PatientDetail() {
         tagName === 'textarea' ||
         tagName === 'select' ||
         target.isContentEditable ||
-        target.closest('input, textarea, select, [data-no-swipe="true"], .no-swipe, [role="dialog"]')
+        target.closest('input, textarea, select, button, a, [role="button"], [data-no-swipe="true"], .no-swipe, [role="dialog"]')
       ) {
         touchStateRef.current = null;
         return;
@@ -2004,51 +2024,76 @@ export default function PatientDetail() {
       startY: touch.clientY,
       currentX: touch.clientX,
       currentY: touch.clientY,
-      time: Date.now()
+      intent: null,
     };
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (!touchStateRef.current || e.touches.length !== 1) return;
-    touchStateRef.current.currentX = e.touches[0].clientX;
-    touchStateRef.current.currentY = e.touches[0].clientY;
-  };
+    const touch = e.touches[0];
+    const gesture = touchStateRef.current;
+    gesture.currentX = touch.clientX;
+    gesture.currentY = touch.clientY;
 
-  const processSwipe = () => {
-    if (!touchStateRef.current) return;
-
-    const { startX, startY, currentX, currentY, time } = touchStateRef.current;
-    touchStateRef.current = null;
-
-    const duration = Date.now() - time;
-    const deltaX = currentX - startX;
-    const deltaY = currentY - startY;
-
+    const deltaX = gesture.currentX - gesture.startX;
+    const deltaY = gesture.currentY - gesture.startY;
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
 
-    if (absX >= 30 && absX > absY * 0.75 && duration < 700) {
-      const tabOrder: PatientMobileTab[] = ['overview', 'history', 'reminders', 'reports'];
-      const currentIndex = tabOrder.indexOf(activeMobileTab);
+    if (!gesture.intent && Math.max(absX, absY) >= 8) {
+      gesture.intent = absX > absY * 1.15 ? 'horizontal' : 'vertical';
+    }
+
+    if (gesture.intent !== 'horizontal') return;
+
+    const currentIndex = patientMobileTabOrder.indexOf(activeMobileTab);
+    const direction: SwipeDirection = deltaX < 0 ? 'next' : 'previous';
+    const canChange = direction === 'next'
+      ? currentIndex < patientMobileTabOrder.length - 1
+      : currentIndex > 0;
+
+    setSwipePreview({
+      direction: canChange ? direction : null,
+      progress: canChange ? Math.min(absX / 84, 1) : 0,
+    });
+  };
+
+  const processSwipe = (finalTouch?: React.Touch) => {
+    if (!touchStateRef.current) return;
+
+    const gesture = touchStateRef.current;
+    touchStateRef.current = null;
+    clearSwipePreview();
+
+    const currentX = finalTouch?.clientX ?? gesture.currentX;
+    const currentY = finalTouch?.clientY ?? gesture.currentY;
+    const deltaX = currentX - gesture.startX;
+    const deltaY = currentY - gesture.startY;
+    const absX = Math.abs(deltaX);
+    const absY = Math.abs(deltaY);
+
+    if (gesture.intent === 'horizontal' && absX >= 48 && absX > absY * 1.15) {
+      const currentIndex = patientMobileTabOrder.indexOf(activeMobileTab);
 
       if (deltaX < 0) {
-        if (currentIndex < tabOrder.length - 1) {
-          setActiveMobileTab(tabOrder[currentIndex + 1]);
+        if (currentIndex < patientMobileTabOrder.length - 1) {
+          changeMobileTab(patientMobileTabOrder[currentIndex + 1], 'next');
         }
       } else if (deltaX > 0) {
         if (currentIndex > 0) {
-          setActiveMobileTab(tabOrder[currentIndex - 1]);
+          changeMobileTab(patientMobileTabOrder[currentIndex - 1], 'previous');
         }
       }
     }
   };
 
-  const handleTouchEnd = () => {
-    processSwipe();
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    processSwipe(e.changedTouches[0]);
   };
 
   const handleTouchCancel = () => {
-    processSwipe();
+    touchStateRef.current = null;
+    clearSwipePreview();
   };
 
   if (loading) return <div>Carregando...</div>;
@@ -2056,6 +2101,23 @@ export default function PatientDetail() {
 
   return (
     <div className="space-y-6" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
+      <style>{`
+        @media (max-width: 1279px) {
+          @keyframes patient-tab-enter-next {
+            from { opacity: 0; transform: translateX(18px) scale(0.99); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+          }
+          @keyframes patient-tab-enter-previous {
+            from { opacity: 0; transform: translateX(-18px) scale(0.99); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+          }
+          .patient-mobile-tab-enter-next { animation: patient-tab-enter-next 260ms cubic-bezier(.22, 1, .36, 1) both; }
+          .patient-mobile-tab-enter-previous { animation: patient-tab-enter-previous 260ms cubic-bezier(.22, 1, .36, 1) both; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .patient-mobile-tab-enter-next, .patient-mobile-tab-enter-previous { animation: none; }
+        }
+      `}</style>
       <div className="xl:hidden h-40" aria-hidden="true" />
       <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <PanelPageHeader
@@ -2103,7 +2165,7 @@ export default function PatientDetail() {
                 <button
                   key={tabId}
                   type="button"
-                  onClick={() => setActiveMobileTab(tabId)}
+                  onClick={() => changeMobileTab(tabId, patientMobileTabOrder.indexOf(tabId) > patientMobileTabOrder.indexOf(activeMobileTab) ? 'next' : 'previous')}
                   aria-current={isActive ? 'page' : undefined}
                   className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold leading-none transition-all ${
                     isActive
@@ -2116,6 +2178,12 @@ export default function PatientDetail() {
                 </button>
               );
             })}
+          </div>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-brand-border/50" aria-hidden="true">
+            <div
+              className={`h-full rounded-full bg-brand-primary transition-all duration-100 ${swipePreview.direction === 'previous' ? 'ml-auto' : ''}`}
+              style={{ width: `${swipePreview.progress * 100}%` }}
+            />
           </div>
         </nav>
       </div>
