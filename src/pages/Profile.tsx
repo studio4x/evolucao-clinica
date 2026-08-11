@@ -8,6 +8,7 @@ import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding'
 import { clearPendingGoogleScopes } from '../services/googleAuth';
 import { showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { WORK_CONTEXT_OPTIONS, isValidWorkContext, type WorkContext } from '../constants/professionalProfile';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ export default function Profile() {
   const [email, setEmail] = useState('');
   const [professionalTitle, setProfessionalTitle] = useState('');
   const [professionalRegister, setProfessionalRegister] = useState('');
+  const [workContext, setWorkContext] = useState<WorkContext | ''>('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappOptIn, setWhatsappOptIn] = useState(false);
 
@@ -150,7 +152,7 @@ export default function Profile() {
         // Busca os dados da tabela professionals
         const { data, error } = await supabase
           .from('professionals')
-          .select('full_name, professional_title, professional_register, onboarding_completed')
+          .select('full_name, professional_title, professional_register, work_context, onboarding_completed')
           .eq('id', user.id)
           .single();
 
@@ -176,6 +178,7 @@ export default function Profile() {
 
           const initialPrefix = prefixMap[initialSelect] || '';
           setProfessionalRegister(parseRegister(data.professional_register || '', initialPrefix));
+          setWorkContext(isValidWorkContext(data.work_context) ? data.work_context : '');
           
           setOnboardingCompleted(data.onboarding_completed === true);
           // Carregar whatsapp_number de communication_preferences
@@ -217,6 +220,7 @@ export default function Profile() {
 
           const initialPrefix = prefixMap[initialSelect] || '';
           setProfessionalRegister(parseRegister(user.user_metadata?.professional_register || '', initialPrefix));
+          setWorkContext('');
         }
       } catch (err: any) {
         console.error("Erro ao carregar perfil:", err);
@@ -240,6 +244,7 @@ export default function Profile() {
 
         const initialPrefix = prefixMap[initialSelect] || '';
         setProfessionalRegister(parseRegister(user.user_metadata?.professional_register || '', initialPrefix));
+        setWorkContext('');
         setOnboardingCompleted(isOnboardingComplete(user.id));
       } finally {
         setLoading(false);
@@ -270,6 +275,7 @@ export default function Profile() {
           full_name: fullName,
           professional_title: professionalTitle.trim(),
           professional_register: finalRegister || null,
+          work_context: workContext || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -590,6 +596,34 @@ export default function Profile() {
               )}
               <p className="text-[10px] text-brand-text-muted">
                 Este rótulo será exibido no seu perfil, nos relatórios e define a especialidade usada pela IA.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
+                Como você atua profissionalmente hoje?
+              </label>
+              <div className="relative">
+                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted z-10" />
+                <select
+                  value={workContext}
+                  onChange={(e) => setWorkContext(isValidWorkContext(e.target.value) ? e.target.value : '')}
+                  className="input-field pl-10 pr-10 py-3 appearance-none bg-white cursor-pointer"
+                  disabled={saving}
+                >
+                  <option value="">Selecione uma opção...</option>
+                  {WORK_CONTEXT_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-brand-text-muted">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                  </svg>
+                </div>
+              </div>
+              <p className="text-[10px] text-brand-text-muted">
+                Essa informação ajuda a entender seu perfil de uso e pode ser alterada a qualquer momento.
               </p>
             </div>
 
