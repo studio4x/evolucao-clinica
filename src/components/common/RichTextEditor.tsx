@@ -3,11 +3,18 @@ import DOMPurify from 'dompurify';
 import { Bold, Italic, Underline, List, ListOrdered, Heading2 } from 'lucide-react';
 import { markdownToRichHtml, richHtmlToMarkdown } from '../../utils/richText';
 
-type Props = { value: string; onChange: (value: string) => void; disabled?: boolean; label?: string };
+type Props = {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  label?: string;
+  minHeight?: string;
+  resizable?: boolean;
+};
 
 const allowedTags = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'div', 'ul', 'ol', 'li'];
 
-export const RichTextEditor = ({ value, onChange, disabled, label }: Props) => {
+export const RichTextEditor = ({ value, onChange, disabled, label, minHeight, resizable }: Props) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastValueRef = useRef(value);
 
@@ -44,7 +51,8 @@ export const RichTextEditor = ({ value, onChange, disabled, label }: Props) => {
     </div>
     <div ref={editorRef} contentEditable={!disabled} suppressContentEditableWarning onInput={emitChange} onBlur={emitChange}
       dangerouslySetInnerHTML={{ __html: markdownToRichHtml(value) }}
-      className="min-h-[38vh] w-full overflow-y-auto p-4 text-sm leading-relaxed text-brand-text outline-none [&_h1]:my-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-3 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6" />
+      style={minHeight ? { minHeight } : undefined}
+      className={`min-h-[38vh] w-full overflow-y-auto p-4 text-sm leading-relaxed text-brand-text outline-none [&_h1]:my-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-3 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 ${resizable ? 'resize-y' : ''}`} />
   </div>;
 };
 

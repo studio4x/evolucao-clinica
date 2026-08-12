@@ -1565,6 +1565,8 @@ export default function NewEvolution() {
                   if (status !== 'processing') setStatus('idle');
                 }}
                 disabled={status === 'processing'}
+                minHeight="10rem"
+                resizable
               />
             </div>
           </div>
