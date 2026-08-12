@@ -1552,23 +1552,19 @@ export default function NewEvolution() {
 
           {inputMode !== 'audio' && (
           <div>
-            <label htmlFor="written-evolution" className="block text-sm font-medium text-brand-text mb-2">Evolução por texto</label>
+            <p className="mb-2 text-sm font-medium text-brand-text">Evolução por texto</p>
             <div className="rounded-xl border border-brand-border bg-brand-bg/50 p-4">
               <div className="mb-3 flex items-start gap-3 text-brand-text-muted">
                 <div className="rounded-lg bg-brand-primary/10 p-2 text-brand-primary"><FileText size={18} /></div>
                 <p className="pt-1 text-sm">{inputMode === 'hybrid' ? 'Registre informações adicionais que serão combinadas ao conteúdo dos áudios.' : 'Descreva a evolução da sessão para inseri-la diretamente no prontuário.'}</p>
               </div>
-              <textarea
-                id="written-evolution"
+              <RichTextEditor
                 value={writtenEvolutionText}
-                onChange={(event) => {
-                  setWrittenEvolutionText(event.target.value);
+                onChange={(value) => {
+                  setWrittenEvolutionText(value);
                   if (status !== 'processing') setStatus('idle');
                 }}
                 disabled={status === 'processing'}
-                rows={7}
-                placeholder="Digite aqui as observações, condutas e demais informações da evolução..."
-                className="input-field min-h-40 w-full resize-y p-3"
               />
             </div>
           </div>
