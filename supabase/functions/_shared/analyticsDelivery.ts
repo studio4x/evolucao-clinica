@@ -12,6 +12,17 @@ export function nextAttempt(attemptCount: number) {
   return new Date(Date.now() + Math.min(6 * 60 * 60 * 1000, 60_000 * 2 ** Math.max(0, attemptCount - 1))).toISOString();
 }
 
+export function deliveryFailureUpdate(attemptCount: number, lastError: string) {
+  const retryable = Number(attemptCount) < MAX_ATTEMPTS;
+  return {
+    status: retryable ? "pending" : "failed",
+    next_attempt_at: retryable ? nextAttempt(attemptCount) : null,
+    locked_at: null,
+    last_error: lastError.slice(0, 240),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 export function buildMeasurementPayload(input: { eventName: AnalyticsEventName; userId: string; params: Record<string, string | number>; attribution: Attribution; occurredAt: string }) {
   if (!EVENT_NAMES.has(input.eventName) || !UUID.test(input.userId) || !input.attribution.clientId || !CLIENT_ID.test(input.attribution.clientId)) return null;
   const occurredAt = new Date(input.occurredAt).getTime();
@@ -51,8 +62,9 @@ export async function deliverAnalyticsRow(admin: any, row: any) {
   const measurementId = Deno.env.get("GA4_MEASUREMENT_ID");
   const apiSecret = Deno.env.get("GA4_API_SECRET");
   if (!measurementId || !apiSecret) {
-    await admin.from("analytics_event_deliveries").update({ status: "pending", next_attempt_at: nextAttempt(row.attempt_count), locked_at: null, last_error: "GA4 secrets unavailable", updated_at: new Date().toISOString() }).eq("id", row.id);
-    return "secrets_missing";
+    const update = deliveryFailureUpdate(row.attempt_count, "measurement_protocol_configuration_unavailable");
+    await admin.from("analytics_event_deliveries").update(update).eq("id", row.id);
+    return update.status === "pending" ? "secrets_missing_retry_scheduled" : "secrets_missing_failed";
   }
   const shouldValidate = ["development", "test", "staging"].includes(String(Deno.env.get("ANALYTICS_MEASUREMENT_ENV") || "").toLowerCase());
   try {
@@ -71,8 +83,8 @@ export async function deliverAnalyticsRow(admin: any, row: any) {
     await admin.from("analytics_event_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), locked_at: null, last_error: null, updated_at: new Date().toISOString() }).eq("id", row.id);
     return "sent";
   } catch (error) {
-    const retryable = Number(row.attempt_count) < MAX_ATTEMPTS;
-    await admin.from("analytics_event_deliveries").update({ status: retryable ? "pending" : "failed", next_attempt_at: retryable ? nextAttempt(row.attempt_count) : null, locked_at: null, last_error: error instanceof Error ? error.message.slice(0, 240) : "measurement_protocol_network_error", updated_at: new Date().toISOString() }).eq("id", row.id);
-    return retryable ? "retry_scheduled" : "failed";
+    const update = deliveryFailureUpdate(row.attempt_count, "measurement_protocol_network_error");
+    await admin.from("analytics_event_deliveries").update(update).eq("id", row.id);
+    return update.status === "pending" ? "retry_scheduled" : "failed";
   }
 }

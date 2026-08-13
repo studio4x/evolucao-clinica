@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildMeasurementPayload, nextAttempt, validateMeasurementPayload } from "../supabase/functions/_shared/analyticsDelivery.ts";
+import { buildMeasurementPayload, deliverAnalyticsRow, deliveryFailureUpdate, nextAttempt, validateMeasurementPayload } from "../supabase/functions/_shared/analyticsDelivery.ts";
 
 const base = {
   userId: "550e8400-e29b-41d4-a716-446655440000",
@@ -28,4 +28,32 @@ assert.equal(validateMeasurementPayload(sensitive), "invalid_parameter", "dados 
 const retry1 = new Date(nextAttempt(1)).getTime() - Date.now();
 const retry2 = new Date(nextAttempt(2)).getTime() - Date.now();
 assert.ok(retry1 >= 55_000 && retry2 >= 110_000, "backoff deve aumentar entre tentativas");
+
+const penultimate = deliveryFailureUpdate(5, "measurement_protocol_configuration_unavailable");
+assert.equal(penultimate.status, "pending", "a penúltima tentativa deve agendar retry");
+assert.ok(penultimate.next_attempt_at, "retry precisa de next_attempt_at");
+const last = deliveryFailureUpdate(6, "measurement_protocol_configuration_unavailable");
+assert.equal(last.status, "failed", "a última tentativa deve encerrar como failed");
+assert.equal(last.next_attempt_at, null, "falha terminal não pode permanecer reivindicável");
+assert.equal(last.locked_at, null, "falha terminal deve liberar o lock");
+
+const updates: Array<Record<string, unknown>> = [];
+const fakeAdmin = {
+  from() {
+    return {
+      update(value: Record<string, unknown>) {
+        return { eq: async () => { updates.push(value); return { error: null }; } };
+      }
+    };
+  }
+};
+(globalThis as unknown as { Deno: { env: { get(name: string): string | undefined } } }).Deno = { env: { get: () => undefined } };
+const storedPayload = { params, attribution: base.attribution, occurredAt: base.occurredAt };
+assert.equal(await deliverAnalyticsRow(fakeAdmin, { id: 1, event_name: "purchase", user_id: base.userId, payload: storedPayload, attempt_count: 5 }), "secrets_missing_retry_scheduled");
+assert.equal(updates.at(-1)?.status, "pending");
+assert.ok(updates.at(-1)?.next_attempt_at);
+assert.equal(await deliverAnalyticsRow(fakeAdmin, { id: 2, event_name: "purchase", user_id: base.userId, payload: storedPayload, attempt_count: 6 }), "secrets_missing_failed");
+assert.equal(updates.at(-1)?.status, "failed");
+assert.equal(updates.at(-1)?.next_attempt_at, null);
+assert.equal(updates.at(-1)?.last_error, "measurement_protocol_configuration_unavailable", "erro armazenado deve ser técnico e não conter segredo");
 console.log("measurement-protocol.test.ts: OK");

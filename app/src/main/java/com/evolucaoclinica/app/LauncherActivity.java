@@ -7,6 +7,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.ContentValues;
+import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
@@ -38,6 +39,7 @@ import android.widget.Toast;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 import androidx.webkit.ServiceWorkerControllerCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -170,6 +172,19 @@ public class LauncherActivity extends ComponentActivity {
 
         swipeRefreshLayout.addView(webView);
         setContentView(swipeRefreshLayout);
+
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (webView != null && webView.canGoBack()) {
+                    webView.goBack();
+                    return;
+                }
+                setEnabled(false);
+                getOnBackPressedDispatcher().onBackPressed();
+                setEnabled(true);
+            }
+        });
 
         webView.loadUrl(resolveLaunchUrl(getIntent()));
     }
@@ -1011,6 +1026,43 @@ public class LauncherActivity extends ComponentActivity {
         }
 
         @android.webkit.JavascriptInterface
+        @android.annotation.SuppressLint("InvalidAnalyticsName")
+        public boolean logStripeInAppPurchase(String transactionId, double value, String currency, String itemName) {
+            if (!analyticsConsentGranted
+                    || transactionId == null
+                    || !transactionId.matches("^[A-Za-z0-9_-]{1,100}$")
+                    || Double.isNaN(value)
+                    || Double.isInfinite(value)
+                    || value <= 0
+                    || !"BRL".equals(currency)
+                    || !isSafeAnalyticsValue(itemName)) {
+                return false;
+            }
+            synchronized (LauncherActivity.this) {
+                try {
+                    if (firebaseAnalytics == null) initializeFirebaseAnalytics();
+                    if (firebaseAnalytics == null) return false;
+                    SharedPreferences dedupe = getSharedPreferences("analytics_purchase_dedupe", MODE_PRIVATE);
+                    String dedupeKey = "stripe_" + sha256(transactionId);
+                    if (dedupe.getBoolean(dedupeKey, false)) return false;
+
+                    Bundle params = new Bundle();
+                    params.putString(FirebaseAnalytics.Param.TRANSACTION_ID, transactionId);
+                    params.putDouble(FirebaseAnalytics.Param.VALUE, value);
+                    params.putString(FirebaseAnalytics.Param.CURRENCY, currency);
+                    params.putString(FirebaseAnalytics.Param.ITEM_NAME, itemName.trim());
+                    params.putString("payment_provider", "stripe");
+                    firebaseAnalytics.logEvent(FirebaseAnalytics.Event.IN_APP_PURCHASE, params);
+                    dedupe.edit().putBoolean(dedupeKey, true).apply();
+                    return true;
+                } catch (Exception exception) {
+                    Log.w(LOG_TAG, "Compra Stripe confirmada não registrada no Firebase Analytics.");
+                    return false;
+                }
+            }
+        }
+
+        @android.webkit.JavascriptInterface
         public void setUserId(String userId) {
             if (firebaseAnalytics == null) initializeFirebaseAnalytics();
             if (firebaseAnalytics == null) return;
@@ -1409,12 +1461,6 @@ public class LauncherActivity extends ComponentActivity {
         String host = uri.getHost();
         return "accounts.google.com".equalsIgnoreCase(host)
                 || (SUPABASE_HOST.equalsIgnoreCase(host) && uri.getPath() != null && uri.getPath().startsWith("/auth/v1/authorize"));
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack();
-        else super.onBackPressed();
     }
 
     @Override

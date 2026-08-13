@@ -30,7 +30,7 @@ export default function PrivacyPolicy() {
         </div>
 
         <p className="text-sm text-brand-text-muted mb-8">
-          Última atualização: 13 de julho de 2026
+          Última atualização: 13 de agosto de 2026
         </p>
 
         <div className="prose prose-slate max-w-none text-brand-text space-y-6 leading-relaxed">
@@ -122,10 +122,12 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Cookies, sessão, retenção e exclusão</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">6. Tecnologias essenciais, retenção e exclusão</h2>
             <p>
-              Usamos cookies e armazenamento local estritamente necessários para manter a sessão, lembrar preferências, registrar o estado de
-              autenticação e melhorar a experiência do app. Não utilizamos cookies para publicidade comportamental.
+              Usamos cookies, tokens de sessão e armazenamento local essenciais para autenticação, segurança, prevenção de fraude, manutenção da
+              sessão e registro das preferências de privacidade. Esses recursos podem tratar o UUID interno da conta, identificadores de sessão e
+              identificadores de transação da Stripe ou Google Play. Conforme a finalidade, o tratamento se apoia na execução do serviço contratado,
+              no cumprimento de obrigações legais ou regulatórias e na proteção legítima da plataforma e de seus usuários.
             </p>
             <p>
               Os dados são mantidos enquanto a conta estiver ativa e pelo período necessário para cumprir obrigações legais, resolver disputas,
@@ -154,7 +156,30 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">7. Direitos do titular</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">7. Analytics, publicidade e preferências</h2>
+            <p>
+              Com seu consentimento separado para <strong>Analytics</strong>, podemos usar Google Tag Manager, Google Analytics 4 e Firebase Analytics
+              para medir uso, estabilidade, jornadas e conversões confirmadas. Esses serviços podem receber identificadores pseudônimos, como UUID
+              interno, <code>client_id</code>, <code>session_id</code>, número de sessão, identificador da instalação do aplicativo e ID de transação,
+              além de plano, valor, moeda e provedor de pagamento. Identificadores pseudônimos continuam sendo dados relacionados a uma pessoa ou
+              dispositivo; por isso não os descrevemos como dados anônimos.
+            </p>
+            <p>
+              Com seu consentimento independente para <strong>Marketing</strong>, o Google Ads e recursos de remarketing podem ser ativados pelo GTM e,
+              quando houver Pixel configurado, a Meta pode receber eventos de publicidade permitidos, como início de checkout. A personalização de
+              anúncios somente poderá ocorrer se estiver habilitada nas contas dos provedores e for compatível com suas escolhas. Não enviamos a esses
+              destinos conteúdo de prontuários, pacientes, áudios, transcrições, evoluções, documentos clínicos ou dados obtidos das APIs do Google Workspace.
+            </p>
+            <p>
+              Analytics e Marketing permanecem desativados até uma escolha afirmativa. Você pode aceitar uma categoria e negar a outra, ou revogar
+              qualquer uma a qualquer momento pelo botão <strong>Privacidade</strong> exibido no aplicativo. A revogação interrompe novos envios opcionais;
+              ela não desfaz tratamentos anteriores realizados legitimamente. Os provedores aplicáveis incluem Google/Firebase e, condicionalmente,
+              Meta, além de Supabase, Stripe e Google Play nas operações essenciais do serviço.
+            </p>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-xl font-display font-semibold text-brand-primary">8. Direitos do titular</h2>
             <p>
               Você pode solicitar acesso, correção, portabilidade, anonimização, eliminação ou revogação de consentimento, quando aplicável.
             </p>
@@ -165,7 +190,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">8. Dados do Google Workspace e uso limitado</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">9. Dados do Google Workspace e uso limitado</h2>
             <p>
               O uso de dados brutos ou derivados recebidos das APIs do Google Workspace estará em conformidade com a Política de Dados do Usuário dos
               Serviços de API do Google, incluindo os requisitos de Uso Limitado (Limited Use).
@@ -187,7 +212,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xl font-display font-semibold text-brand-primary">9. Contato</h2>
+            <h2 className="text-xl font-display font-semibold text-brand-primary">10. Contato</h2>
             <p>
               Para dúvidas sobre esta política, solicitações relacionadas à privacidade ou exercício de direitos, entre em contato com
               a equipe do <strong>{LEGAL_APP_NAME}</strong> pelo e-mail{' '}

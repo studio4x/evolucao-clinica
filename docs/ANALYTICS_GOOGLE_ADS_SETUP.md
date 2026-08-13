@@ -12,7 +12,9 @@ Antes de qualquer script Google, o app executa sincronicamente `gtag('consent', 
 
 Ao salvar ou revogar, é enviado um único `gtag('consent', 'update', ...)` por mudança efetiva. GTM é carregado se Analytics **ou** Marketing tiver sido aceito; GA4 direto exige Analytics e Meta exige Marketing. O Meta Pixel recebe `consent grant` antes de `init/PageView` e `consent revoke` imediatamente na revogação. Revogar Analytics também desativa Firebase e remove `userId` e propriedades nativas.
 
-`VITE_GTM_ID` é canônico e tem precedência. Sem ele, o ID dinâmico `tracking_settings.gtm_id` pode ser usado pelo serviço central. GA4 direto só é usado se `VITE_ANALYTICS_DIRECT_GA4=true` e nenhum GTM estiver configurado. Nunca configure uma tag GA4 direta dentro de um container GTM além da configuração acima.
+`VITE_GTM_ID` é canônico e tem precedência. Sem ele, o ID dinâmico `tracking_settings.gtm_id` pode ser usado pelo serviço central. `VITE_GA_MEASUREMENT_ID` identifica o destino GA4 usado por `gtag('get', ...)` para obter `client_id`, `session_id` e `session_number`, inclusive quando o carregamento ocorre pelo GTM. Essa leitura não habilita GA4 direto: esse caminho só existe se `VITE_ANALYTICS_DIRECT_GA4=true` e nenhum GTM estiver configurado.
+
+O valor de `VITE_GA_MEASUREMENT_ID` deve ser exatamente o Measurement ID do mesmo stream web usado pela Google Tag dentro do GTM e pelo secret `GA4_MEASUREMENT_ID` das Edge Functions. O checkout limita cada leitura de atribuição a 2 segundos; timeout, ausência do GTM ou configuração incompleta nunca bloqueiam a cobrança nem criam `client_id` artificial.
 
 Os campos legados `head_scripts`, `body_scripts` e `footer_scripts` não são executados. A configuração dinâmica aceita apenas IDs, e `fb_pixel_id` exige Marketing.
 
@@ -27,15 +29,20 @@ O `LauncherActivity` inicia Firebase Analytics com coleta desativada. A ponte `N
 | `sign_up`, `login` | mudança confirmada do Supabase Auth | cliente | analytics | usuário/sessão |
 | `onboarding_begin`, `onboarding_complete`, `professional_profile_complete` | gravação concluída | cliente | analytics | operação/usuário |
 | `patient_created`, `evolution_*`, `audio_evolution_completed` | persistência concluída | cliente | analytics | operação |
-| `begin_checkout` | clique real que abre Stripe Checkout | cliente | analytics; Meta também marketing | `checkout_attempt_id` por tentativa |
+| `begin_checkout` | clique real que abre Stripe Checkout | cliente | Analytics e/ou Marketing, conforme cada escolha | `checkout_attempt_id` por tentativa |
 | `page_view` | mudança de rota | cliente | analytics | rota renderizada; sem query/fragment |
 | `purchase`, `subscription_started`, `subscription_renewed`, `subscription_cancelled` | webhook Stripe confirmado | GA4 Measurement Protocol | analytics persistido | chave estável de invoice/evento no banco |
+| `in_app_purchase` | invoice Stripe Android confirmada pelo webhook e consultada pelo cliente | Firebase Android nativo | analytics | invoice Stripe no armazenamento nativo e web |
 
-Eventos descartados sem consentimento não são enfileirados para envio posterior. No checkout web, após consentimento Analytics, o cliente lê `client_id`, `session_id` e `session_number` reais do Google tag e a sessão Stripe preserva esses metadados. O webhook só envia Measurement Protocol se houver esse identificador real e o consentimento persistido ainda for válido — nunca cria identificadores aleatórios. `purchase` personalizado não é emitido para Google Play; `in_app_purchase`, `first_open` e `session_start` continuam automáticos do Firebase. Não há `app_instance_id`/RTDN disponível para atribuir conversões Android no servidor, portanto elas não são inventadas nem misturadas ao stream web.
+Eventos descartados sem consentimento não são enfileirados para envio posterior. No checkout web, após consentimento Analytics, o cliente lê `client_id`, `session_id` e `session_number` reais do Google tag e a sessão Stripe preserva esses metadados. O webhook só envia Measurement Protocol se houver esse identificador real e o consentimento persistido ainda for válido — nunca cria identificadores aleatórios.
+
+No Android, compras da Google Play continuam automáticas no Firebase e nunca recebem um evento manual, pois o SDK não deduplica os dois caminhos. Para faturamento alternativo Stripe, o cliente aguarda a confirmação do webhook, consulta a invoice `paid` protegida por RLS e só então solicita à ponte nativa um `in_app_purchase` com `transaction_id`, valor, BRL, plano e `payment_provider=stripe`. A deduplicação persistente usa a invoice Stripe; retorno do Payment Sheet, pagamento pendente, falha e restauração não registram compra. Esse caminho usa o SDK Firebase no dispositivo e não exige expor `app_instance_id` nem API secret.
+
+O `dataLayer` contém uma única emissão por evento com os booleanos `analytics_destination` e `marketing_destination`. No GTM, configure tags de GA4/Firebase web apenas quando `analytics_destination=true` e tags de Google Ads apenas quando `marketing_destination=true`. A tag Meta é tratada separadamente pelo Pixel. Não use a mera existência do evento/dataLayer como autorização e não crie dois gatilhos sobrepostos para `begin_checkout`.
 
 ## Entrega server-side e recuperação
 
-O webhook Stripe usa `analytics_event_deliveries` e `claim_analytics_event_delivery` para registrar/retomar eventos com chave idempotente. O lock expira após 15 minutos; falhas transitórias têm até seis tentativas com backoff exponencial de 1 minuto a 6 horas. Eventos enviados ficam imutáveis. Falta de atribuição real ou falha de validação é permanente e não vira uma conversão atribuída.
+O webhook Stripe usa `analytics_event_deliveries` e `claim_analytics_event_delivery` para registrar/retomar eventos com chave idempotente. O lock expira após 15 minutos; falhas transitórias têm até seis tentativas com backoff exponencial de 1 minuto a 6 horas. Na ausência temporária de configuração GA4, a fila tenta novamente antes do limite e muda atomicamente para `failed`, sem `next_attempt_at` e sem lock, na sexta tentativa. Eventos enviados ficam imutáveis. Falta de atribuição real ou falha de validação é permanente e não vira uma conversão atribuída.
 
 O worker `process-analytics-deliveries` é chamado a cada cinco minutos somente quando os dois segredos Vault abaixo existem. Configure também o mesmo token como segredo da Edge Function, sem registrá-lo em arquivos, terminal compartilhado ou frontend:
 
@@ -55,7 +62,7 @@ Sem esses valores o cron fica intencionalmente desativado, em vez de expor uma r
 
 ```env
 VITE_GTM_ID=GTM-XXXXXXXX          # opcional; preferencial quando houver GTM
-VITE_GA_MEASUREMENT_ID=G-XXXXXXXX # somente para GA4 direto
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXX # destino GA4 para atribuição; mesmo stream da Google Tag/GTM e da Edge Function
 VITE_ANALYTICS_DIRECT_GA4=false   # true somente sem GTM
 GA4_MEASUREMENT_ID=G-XXXXXXXX     # Supabase Edge Function secret
 GA4_API_SECRET=...                # Supabase Edge Function secret, nunca VITE_
@@ -63,6 +70,8 @@ ANALYTICS_MEASUREMENT_ENV=production # development/test/staging habilita somente
 ```
 
 Defina os segredos server-side em Supabase Secrets para `stripe-webhook` e `process-analytics-deliveries`. Em `development`, `test` ou `staging`, o worker envia primeiro ao endpoint debug do Measurement Protocol com validação estrita e registra somente códigos de erro, sem payload/PII. Em produção usa o endpoint normal. Não publique `google-services.json`, secrets, tokens, IDs de pacientes, evoluções, conteúdo clínico, documentos, URLs Drive, e-mail ou telefone.
+
+Meta `Purchase` não é disparado pelo retorno do cliente. Só habilite Conversions API no webhook quando houver Pixel/dataset confirmado, token server-side e regra persistida de consentimento de Marketing; use um `event_id` derivado da invoice para deduplicar e não configure simultaneamente outro Purchase cliente para a mesma cobrança.
 
 ## Validação operacional
 

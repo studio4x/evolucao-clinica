@@ -1,76 +1,199 @@
 import assert from 'node:assert/strict';
 
-class MemoryStorage { private values = new Map<string, string>(); getItem(key: string) { return this.values.get(key) ?? null; } setItem(key: string, value: string) { this.values.set(key, value); } removeItem(key: string) { this.values.delete(key); } clear() { this.values.clear(); } }
+class MemoryStorage {
+  private values = new Map<string, string>();
+  getItem(key: string) { return this.values.get(key) ?? null; }
+  setItem(key: string, value: string) { this.values.set(key, value); }
+  removeItem(key: string) { this.values.delete(key); }
+  clear() { this.values.clear(); }
+}
+
+type NativeBridgeMock = {
+  logEvent(eventName: string, parametersJson: string): void;
+  logStripeInAppPurchase(transactionId: string, value: number, currency: string, itemName: string): boolean;
+  setUserId(userId: string | null): void;
+  setUserProperty(name: string, value: string | null): void;
+  setAnalyticsCollectionEnabled(enabled: boolean): void;
+};
+
 const scripts = new Map<string, { id: string; src: string; async: boolean }>();
 const listeners = new Map<string, Set<() => void>>();
 const storage = new MemoryStorage();
 const fbqCalls: unknown[][] = [];
 const windowMock = {
-  localStorage: storage, dataLayer: [] as unknown[], gtag: undefined as ((...args: unknown[]) => void) | undefined, fbq: undefined as ((...args: unknown[]) => void) | undefined,
-  NativeAnalyticsBridge: undefined as { logEvent(eventName: string, parametersJson: string): void; setUserId(userId: string | null): void; setUserProperty(name: string, value: string | null): void; setAnalyticsCollectionEnabled(enabled: boolean): void } | undefined,
-  addEventListener(name: string, listener: () => void) { const set = listeners.get(name) ?? new Set<() => void>(); set.add(listener); listeners.set(name, set); }, removeEventListener() {}, dispatchEvent(event: { type: string }) { listeners.get(event.type)?.forEach((listener) => listener()); return true; }
+  localStorage: storage,
+  dataLayer: [] as unknown[],
+  gtag: undefined as ((...args: unknown[]) => void) | undefined,
+  fbq: undefined as ((...args: unknown[]) => void) | undefined,
+  NativeAnalyticsBridge: undefined as NativeBridgeMock | undefined,
+  addEventListener(name: string, listener: () => void) { const set = listeners.get(name) ?? new Set<() => void>(); set.add(listener); listeners.set(name, set); },
+  removeEventListener() {},
+  dispatchEvent(event: { type: string }) { listeners.get(event.type)?.forEach((listener) => listener()); return true; }
 };
 const documentMock = {
-  title: 'Teste', head: { appendChild(node: { id: string; src: string; async: boolean }) { scripts.set(node.id, node); } },
-  getElementById(id: string) { return scripts.get(id) ?? null; }, createElement() { return { id: '', src: '', async: false }; }
+  title: 'Teste',
+  head: { appendChild(node: { id: string; src: string; async: boolean }) { scripts.set(node.id, node); } },
+  getElementById(id: string) { return scripts.get(id) ?? null; },
+  createElement() { return { id: '', src: '', async: false }; }
 };
 (globalThis as unknown as { window: typeof windowMock }).window = windowMock;
 (globalThis as unknown as { document: typeof documentMock }).document = documentMock;
 (globalThis as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent = class { type: string; constructor(type: string) { this.type = type; } } as typeof CustomEvent;
-windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
 
 const analytics = await import('../src/services/analytics');
-analytics.configureAnalyticsForTests({ gtmId: 'GTM-TEST', gaMeasurementId: 'G-TEST', directGa4: true, metaPixelId: 'PIXEL-TEST' });
+const defaultConfig = { gtmId: 'GTM-TEST', gaMeasurementId: 'G-TEST', directGa4: false, metaPixelId: 'PIXEL-TEST', attributionTimeoutMs: 25 };
+
+function resetRuntime(config: typeof defaultConfig | Partial<typeof defaultConfig> = defaultConfig) {
+  storage.clear();
+  scripts.clear();
+  fbqCalls.length = 0;
+  windowMock.dataLayer.length = 0;
+  windowMock.gtag = undefined;
+  windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
+  delete windowMock.NativeAnalyticsBridge;
+  analytics.resetAnalyticsForTests();
+  analytics.configureAnalyticsForTests(config);
+}
+
+function trackedDataLayerEvents() {
+  return windowMock.dataLayer.filter((entry): entry is Record<string, unknown> => Boolean(entry && !Array.isArray(entry) && typeof entry === 'object' && 'event' in entry));
+}
+
+resetRuntime();
 analytics.initAnalytics();
 assert.equal(scripts.size, 0, 'GTM/GA4/Meta não podem carregar antes do consentimento');
-assert.deepEqual(windowMock.dataLayer.at(-1), ['consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }], 'Consent Mode default deve ser o primeiro comando Google');
+assert.deepEqual(windowMock.dataLayer.at(-1), ['consent', 'default', { analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }]);
 assert.equal(analytics.trackEvent('login', { method: 'google' }), false, 'sem consentimento nada deve ser enviado');
+assert.deepEqual(
+  analytics.sanitizeAnalyticsParameters({ plan_id: 'monthly', plan_name: 'Plano Mensal', value: 39, currency: 'BRL', patient_id: 'segredo', clinical_text: 'não enviar' }),
+  { plan_id: 'monthly', plan_name: 'Plano Mensal', value: 39, currency: 'BRL' },
+  'dados clínicos devem ser removidos'
+);
 
-assert.deepEqual(analytics.sanitizeAnalyticsParameters({ plan_id: 'monthly', plan_name: 'Plano Mensal', value: 39, currency: 'BRL', patient_id: 'segredo', clinical_text: 'não enviar' }), { plan_id: 'monthly', plan_name: 'Plano Mensal', value: 39, currency: 'BRL' }, 'plan_name permitido deve sobreviver e dados clínicos devem ser removidos');
+const consentMatrix = [
+  { analytics: false, marketing: false, emitted: false, dataLayer: 0, analyticsDestination: undefined, marketingDestination: undefined, meta: 0 },
+  { analytics: true, marketing: false, emitted: true, dataLayer: 1, analyticsDestination: true, marketingDestination: false, meta: 0 },
+  { analytics: false, marketing: true, emitted: true, dataLayer: 1, analyticsDestination: false, marketingDestination: true, meta: 1 },
+  { analytics: true, marketing: true, emitted: true, dataLayer: 1, analyticsDestination: true, marketingDestination: true, meta: 1 }
+];
 
+for (const [index, expectation] of consentMatrix.entries()) {
+  resetRuntime();
+  analytics.initAnalytics();
+  analytics.setConsentPreferences({ analytics: expectation.analytics, marketing: expectation.marketing });
+  const result = analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', `matrix-${index}`);
+  const events = trackedDataLayerEvents().filter((entry) => entry.event === 'begin_checkout');
+  const metaCalls = fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'InitiateCheckout');
+  assert.equal(result, expectation.emitted, `resultado incorreto na matriz ${index}`);
+  assert.equal(events.length, expectation.dataLayer, `dataLayer incorreto na matriz ${index}`);
+  assert.equal(metaCalls.length, expectation.meta, `Meta incorreto na matriz ${index}`);
+  if (events[0]) {
+    assert.equal(events[0].analytics_destination, expectation.analyticsDestination);
+    assert.equal(events[0].marketing_destination, expectation.marketingDestination);
+  }
+}
+
+resetRuntime();
+const nativeEvents: string[] = [];
+const nativePurchases: unknown[][] = [];
 const bridgeCalls: string[] = [];
-windowMock.NativeAnalyticsBridge = { logEvent: () => bridgeCalls.push('event'), setUserId: (id) => bridgeCalls.push(`user:${id}`), setUserProperty: (name, value) => bridgeCalls.push(`property:${name}:${value}`), setAnalyticsCollectionEnabled: (enabled) => bridgeCalls.push(`collection:${enabled}`) };
+windowMock.NativeAnalyticsBridge = {
+  logEvent: (name) => nativeEvents.push(name),
+  logStripeInAppPurchase: (...args) => { nativePurchases.push(args); return true; },
+  setUserId: (id) => bridgeCalls.push(`user:${id}`),
+  setUserProperty: (name, value) => bridgeCalls.push(`property:${name}:${value}`),
+  setAnalyticsCollectionEnabled: (enabled) => bridgeCalls.push(`collection:${enabled}`)
+};
+analytics.initAnalytics();
 analytics.setAnalyticsUser('550e8400-e29b-41d4-a716-446655440000', { work_context: 'independent' });
-assert.equal(bridgeCalls.some((call) => call.startsWith('user:550e')), false, 'userId não pode ser definido antes do consentimento');
-
+assert.equal(bridgeCalls.some((call) => call.startsWith('user:550e')), false, 'identidade nativa exige consentimento');
 analytics.setConsentPreferences({ analytics: true, marketing: false });
-assert.equal(analytics.getAnalyticsConsent(), 'granted');
-assert.ok(scripts.has('analytics-gtm'), 'GTM deve carregar após analytics consent');
-assert.equal(scripts.has('analytics-ga4'), false, 'GA4 direto e GTM nunca podem carregar simultaneamente');
-assert.equal(scripts.has('analytics-meta-pixel'), false, 'Meta Pixel exige consentimento de marketing');
-assert.ok(bridgeCalls.includes('user:550e8400-e29b-41d4-a716-446655440000'), 'userId deve ser reaplicado após consentimento');
-const gtmCount = [...scripts.values()].filter((script) => script.src.includes('gtm.js')).length;
-analytics.setConsentPreferences({ analytics: true, marketing: false });
-assert.equal([...scripts.values()].filter((script) => script.src.includes('gtm.js')).length, gtmCount, 'GTM só pode ser carregado uma vez');
+assert.ok(bridgeCalls.includes('user:550e8400-e29b-41d4-a716-446655440000'));
+assert.equal(analytics.trackEvent('login', { method: 'google' }), true);
+assert.deepEqual(nativeEvents, ['login'], 'Firebase recebe Analytics consentido');
+assert.equal(trackedDataLayerEvents().filter((entry) => entry.event === 'login').length, 0, 'Firebase nativo não deve duplicar Analytics no stream web');
 analytics.setConsentPreferences({ analytics: true, marketing: true });
-assert.ok(scripts.has('analytics-meta-pixel'), 'Meta Pixel deve carregar somente após marketing consent');
-assert.ok(fbqCalls.some((call) => call[0] === 'consent' && call[1] === 'grant'), 'Meta recebe grant antes de inicializar');
+assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'native-marketing'), true);
+const nativeMarketingEvent = trackedDataLayerEvents().find((entry) => entry.event === 'begin_checkout');
+assert.equal(nativeMarketingEvent?.analytics_destination, false, 'ponte nativa permanece o único destino de Analytics');
+assert.equal(nativeMarketingEvent?.marketing_destination, true, 'GTM recebe somente a rota de Marketing no app nativo');
+assert.equal(nativeEvents.filter((name) => name === 'begin_checkout').length, 1);
 
-assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'attempt-1'), true);
-assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'attempt-1'), false, 'repetição da mesma tentativa deve ser deduplicada');
-assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'attempt-2'), true, 'nova tentativa legítima do mesmo plano deve ser registrada');
-assert.equal(analytics.trackPurchaseOnce({ transactionId: 'stripe-invoice-1', planId: 'monthly', planName: 'Plano Mensal', amount: 39 }), true);
-assert.equal(analytics.trackPurchaseOnce({ transactionId: 'stripe-invoice-1', planId: 'monthly', planName: 'Plano Mensal', amount: 39 }), false, 'purchase permanece idempotente por transaction_id');
+assert.equal(analytics.trackStripeAndroidPurchaseOnce({ transactionId: 'in_confirmed_1', planName: 'Plano Mensal', amount: 39, currency: 'brl', paymentProvider: 'stripe', status: 'paid' }), true, 'Stripe Android confirmado deve registrar in_app_purchase');
+assert.equal(analytics.trackStripeAndroidPurchaseOnce({ transactionId: 'in_confirmed_1', planName: 'Plano Mensal', amount: 39, currency: 'BRL', paymentProvider: 'stripe', status: 'paid' }), false, 'a mesma transação deve ser deduplicada');
+assert.equal(analytics.trackStripeAndroidPurchaseOnce({ transactionId: 'play_order_1', planName: 'Plano Mensal', amount: 39, currency: 'BRL', paymentProvider: 'google_play', status: 'paid' }), false, 'Google Play nunca recebe evento manual');
+assert.equal(analytics.trackStripeAndroidPurchaseOnce({ transactionId: 'in_pending', planName: 'Plano Mensal', amount: 39, currency: 'BRL', paymentProvider: 'stripe', status: 'pending' }), false, 'pagamento pendente não é compra');
+assert.equal(analytics.trackStripeAndroidPurchaseOnce({ transactionId: 'in_failed', planName: 'Plano Mensal', amount: 39, currency: 'BRL', paymentProvider: 'stripe', status: 'failed' }), false, 'pagamento falho não é compra');
+assert.equal(analytics.trackStripeAndroidPurchaseOnce({ transactionId: 'in_restored', planName: 'Plano Mensal', amount: 39, currency: 'BRL', paymentProvider: 'stripe', status: 'paid', restored: true }), false, 'restauração não gera compra manual');
+assert.equal(nativePurchases.length, 1, 'somente a compra Stripe confirmada e inédita chega ao Firebase');
+
+const metaBeforePurchase = fbqCalls.length;
+assert.equal(analytics.trackEvent('purchase', { transaction_id: 'in_server_only', value: 39, currency: 'BRL' }), true, 'purchase pode continuar no destino Analytics');
+assert.equal(fbqCalls.slice(metaBeforePurchase).some((call) => call[0] === 'track' && call[1] === 'Purchase'), false, 'Meta Purchase não pode nascer no retorno cliente');
+
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+const nativeCountAfterAnalyticsRevoke = nativeEvents.length;
+assert.equal(analytics.trackEvent('patient_created'), false, 'evento de produto não pode ser roteado para Marketing');
+assert.equal(analytics.trackEvent('evolution_completed'), false, 'evento clínico não pode ser roteado para Marketing');
+assert.equal(nativeEvents.length, nativeCountAfterAnalyticsRevoke);
+assert.equal(analytics.trackStripeAndroidPurchaseOnce({ transactionId: 'in_denied', planName: 'Plano Mensal', amount: 39, currency: 'BRL', paymentProvider: 'stripe', status: 'paid' }), false, 'consentimento negado bloqueia compra Firebase');
 
 analytics.setConsentPreferences({ analytics: false, marketing: false });
-assert.ok(fbqCalls.some((call) => call[0] === 'consent' && call[1] === 'revoke'), 'Meta recebe revoke imediatamente');
-const metaCallsAfterRevoke = fbqCalls.length;
-assert.equal(analytics.trackEvent('begin_checkout', { plan_id: 'monthly' }), false, 'Meta não recebe eventos depois da revogação');
-assert.equal(fbqCalls.length, metaCallsAfterRevoke, 'nenhum evento Meta após revoke');
-assert.ok(bridgeCalls.includes('user:null'), 'revogação deve limpar userId');
-assert.ok(bridgeCalls.includes('property:work_context:null'), 'revogação deve limpar propriedades nativas');
-assert.equal(analytics.trackEvent('purchase', { transaction_id: 'blocked' }), false, 'revogação deve interromper coleta');
-assert.deepEqual(windowMock.dataLayer.at(-1), ['consent', 'update', { analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }], 'revogação deve enviar Consent Mode update');
-const consentCommands = windowMock.dataLayer.filter((entry: any) => Array.isArray(entry) && entry[0] === 'consent');
-assert.equal(consentCommands.filter((entry: any) => entry[1] === 'default').length, 1, 'existe um único Consent Mode default');
-assert.equal(consentCommands.filter((entry: any) => entry[1] === 'update').length, 3, 'cada alteração efetiva gera exatamente um update');
-storage.clear(); scripts.clear(); fbqCalls.length = 0; windowMock.dataLayer.length = 0;
-analytics.resetAnalyticsForTests();
+const dataLayerAfterRevoke = trackedDataLayerEvents().length;
+const metaAfterRevoke = fbqCalls.length;
+const nativeAfterRevoke = nativeEvents.length;
+assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'after-revoke'), false);
+assert.equal(trackedDataLayerEvents().length, dataLayerAfterRevoke, 'nenhum dataLayer após revogação total');
+assert.equal(fbqCalls.length, metaAfterRevoke, 'nenhum Meta após revogação total');
+assert.equal(nativeEvents.length, nativeAfterRevoke, 'nenhum Firebase após revogação total');
+assert.ok(fbqCalls.some((call) => call[0] === 'consent' && call[1] === 'revoke'));
+assert.ok(bridgeCalls.includes('user:null'));
+
+resetRuntime({ gaMeasurementId: 'G-DIRECT', directGa4: true, attributionTimeoutMs: 25 });
+const directGaCalls: unknown[][] = [];
+windowMock.gtag = (...args: unknown[]) => directGaCalls.push(args);
 analytics.initAnalytics();
-analytics.setConsentPreferences({ analytics: false, marketing: true });
-assert.ok(scripts.has('analytics-gtm'), 'GTM também deve carregar quando apenas marketing foi aceito');
-assert.equal(scripts.has('analytics-ga4'), false, 'marketing isolado não habilita GA4 direto');
-assert.ok(scripts.has('analytics-meta-pixel'), 'marketing isolado habilita Meta');
-delete windowMock.NativeAnalyticsBridge;
-assert.doesNotThrow(() => analytics.trackEvent('login', { method: 'password' }), 'ausência da ponte Android não pode interromper o navegador');
+analytics.setConsentPreferences({ analytics: true, marketing: false });
+assert.ok(scripts.has('analytics-ga4'), 'GA4 direto só carrega quando explicitamente habilitado e sem GTM');
+assert.equal(analytics.trackEvent('login', { method: 'password' }), true);
+assert.equal(directGaCalls.filter((call) => call[0] === 'event' && call[1] === 'login').length, 1);
+
+resetRuntime();
+windowMock.gtag = (...args: unknown[]) => {
+  if (args[0] !== 'get') return;
+  const field = args[2];
+  const callback = args[3] as (value: unknown) => void;
+  if (field === 'client_id') callback('123456789.987654321');
+  if (field === 'session_id') callback('123');
+  if (field === 'session_number') callback(4);
+};
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: true, marketing: false });
+assert.equal(scripts.has('analytics-ga4'), false, 'GTM com VITE_ANALYTICS_DIRECT_GA4=false não ativa GA4 direto');
+assert.deepEqual(await analytics.getCheckoutAttribution(), { clientId: '123456789.987654321', sessionId: 123, sessionNumber: 4 }, 'GTM usa o Measurement ID apenas para ler atribuição');
+
+const warnings: string[] = [];
+const originalWarn = console.warn;
+console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+windowMock.gtag = (...args: unknown[]) => {
+  if (args[0] !== 'get') return;
+  const field = args[2];
+  const callback = args[3] as (value: unknown) => void;
+  if (field === 'client_id') callback('222222222.333333333');
+  if (field === 'session_id') callback(999);
+};
+assert.deepEqual(await analytics.getCheckoutAttribution(), { clientId: '222222222.333333333', sessionId: 999 }, 'timeout preserva atribuição parcial');
+windowMock.gtag = () => undefined;
+const timeoutStartedAt = Date.now();
+assert.equal(await analytics.getCheckoutAttribution(), undefined, 'callback ausente deve terminar sem inventar client_id');
+assert.ok(Date.now() - timeoutStartedAt < 250, 'checkout não pode ficar bloqueado pelo Google tag');
+assert.ok(warnings.every((warning) => !warning.includes('222222222') && !warning.includes('333333333')), 'diagnóstico de timeout não contém identificadores');
+console.warn = originalWarn;
+
+windowMock.gtag = undefined;
+assert.equal(await analytics.getCheckoutAttribution(), undefined, 'gtag ausente retorna imediatamente');
+analytics.configureAnalyticsForTests({ gtmId: 'GTM-TEST', directGa4: false, attributionTimeoutMs: 25 });
+windowMock.gtag = () => undefined;
+assert.equal(await analytics.getCheckoutAttribution(), undefined, 'ID GA4 ausente retorna imediatamente');
+
 console.log('analytics.test.ts: OK');

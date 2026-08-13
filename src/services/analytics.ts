@@ -7,6 +7,7 @@ declare global {
     fbq?: (...args: unknown[]) => void;
     NativeAnalyticsBridge?: {
       logEvent(eventName: string, parametersJson: string): void;
+      logStripeInAppPurchase(transactionId: string, value: number, currency: string, itemName: string): boolean;
       setUserId(userId: string | null): void;
       setUserProperty(name: string, value: string | null): void;
       setAnalyticsCollectionEnabled(enabled: boolean): void;
@@ -35,6 +36,8 @@ const SENSITIVE_VALUE_PATTERN = /(patient|evolution|clinical|diagnos|transcri|do
 const EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_STRING_LENGTH = 100;
+const DEFAULT_ATTRIBUTION_TIMEOUT_MS = 2_000;
+const MARKETING_EVENT_NAMES = new Set(['begin_checkout']);
 const sentDedupeKeys = new Set<string>();
 let initialized = false;
 let gtmLoaded = false;
@@ -42,7 +45,7 @@ let ga4Loaded = false;
 let metaLoaded = false;
 let dynamicConfigLoaded = false;
 let dynamicConfig: { gtmId?: string; metaPixelId?: string } = {};
-let testConfig: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string } | null = null;
+let testConfig: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number } | null = null;
 let pendingUser: { id: string | null; properties: Record<string, string | null> } = { id: null, properties: {} };
 
 const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
@@ -179,7 +182,6 @@ export const syncAnalyticsConsentForCurrentUser = async () => {
     }, { onConflict: 'user_id' });
   } catch { /* consent storage remains local if the backend is unavailable */ }
 };
-export const setAnalyticsConsent = (consent: Exclude<AnalyticsConsent, 'unknown'>) => setConsentPreferences({ analytics: consent === 'granted', marketing: false });
 export const initAnalytics = () => {
   if (!isBrowser()) return;
   if (!initialized) {
@@ -191,7 +193,7 @@ export const initAnalytics = () => {
   if (preferences) applyConsent(preferences, 'update');
   else { try { nativeBridge()?.setAnalyticsCollectionEnabled(false); clearNativeIdentity(); } catch { /* optional bridge */ } }
 };
-export const configureAnalyticsForTests = (config: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string } | null) => { testConfig = config; };
+export const configureAnalyticsForTests = (config: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number } | null) => { testConfig = config; };
 export const resetAnalyticsForTests = () => {
   initialized = false;
   gtmLoaded = false;
@@ -200,13 +202,31 @@ export const resetAnalyticsForTests = () => {
   dynamicConfigLoaded = false;
   dynamicConfig = {};
   pendingUser = { id: null, properties: {} };
+  sentDedupeKeys.clear();
 };
 export const getCheckoutAttribution = async (): Promise<CheckoutAttribution | undefined> => {
   if (!isBrowser() || getAnalyticsConsent() !== 'granted' || typeof window.gtag !== 'function') return undefined;
+  // This is the GA4 destination configured by the Google Tag in GTM. Reading
+  // attribution never enables direct GA4; VITE_ANALYTICS_DIRECT_GA4 remains the
+  // only switch for that independent loading path.
   const measurementId = cleanId(testConfig?.gaMeasurementId) || cleanId(env.VITE_GA_MEASUREMENT_ID);
   if (!measurementId) return undefined;
+  const timeoutMs = Number.isFinite(testConfig?.attributionTimeoutMs) && Number(testConfig?.attributionTimeoutMs) > 0
+    ? Number(testConfig?.attributionTimeoutMs)
+    : DEFAULT_ATTRIBUTION_TIMEOUT_MS;
   const read = <T,>(field: 'client_id' | 'session_id' | 'session_number') => new Promise<T | undefined>((resolve) => {
-    try { window.gtag?.('get', measurementId, field, (value: T) => resolve(value)); } catch { resolve(undefined); }
+    let settled = false;
+    const finish = (value: T | undefined) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = globalThis.setTimeout(() => {
+      console.warn(`[analytics] Google tag attribution field timed out: ${field}`);
+      finish(undefined);
+    }, timeoutMs);
+    try { window.gtag?.('get', measurementId, field, (value: T) => finish(value)); } catch { finish(undefined); }
   });
   const [clientId, sessionId, sessionNumber] = await Promise.all([read<string>('client_id'), read<number | string>('session_id'), read<number | string>('session_number')]);
   const normalizedClientId = typeof clientId === 'string' && /^\d+\.\d+$/.test(clientId) ? clientId : undefined;
@@ -234,24 +254,49 @@ export const sanitizeAnalyticsParameters = (parameters: AnalyticsParameters = {}
 const normalizeEventName = (eventName: string) => { const normalized = eventName.trim().toLowerCase(); return EVENT_NAME_PATTERN.test(normalized) ? normalized : null; };
 export const hasNativeAnalyticsBridge = () => Boolean(nativeBridge());
 export const trackEvent = (eventName: AnalyticsEventName | string, parameters: AnalyticsParameters = {}, options: { dedupeKey?: string; persistDedupe?: boolean } = {}) => {
-  if (!isBrowser() || getAnalyticsConsent() !== 'granted') return false;
+  if (!isBrowser()) return false;
+  const preferences = getConsentPreferences();
   const normalized = normalizeEventName(eventName);
-  if (!normalized || (options.dedupeKey && sentDedupeKeys.has(options.dedupeKey))) return false;
+  const analyticsAllowed = preferences?.analytics === true;
+  const marketingAllowed = preferences?.marketing === true && MARKETING_EVENT_NAMES.has(normalized || '');
+  if (!normalized || (!analyticsAllowed && !marketingAllowed) || (options.dedupeKey && sentDedupeKeys.has(options.dedupeKey))) return false;
   if (options.dedupeKey && options.persistDedupe) { try { if (window.localStorage.getItem(`analytics:dedupe:${options.dedupeKey}`) === '1') return false; } catch { /* memory dedupe */ } }
   const sanitized = sanitizeAnalyticsParameters(parameters);
-  try {
-    const bridge = nativeBridge();
-    if (bridge) bridge.logEvent(normalized, JSON.stringify(sanitized));
-    else {
+  const bridge = nativeBridge();
+  let emitted = false;
+
+  if (analyticsAllowed && bridge) {
+    try { bridge.logEvent(normalized, JSON.stringify(sanitized)); emitted = true; } catch { /* native analytics never affects the app */ }
+  }
+
+  const analyticsThroughGtm = analyticsAllowed && !bridge && Boolean(activeGtmId());
+  const marketingThroughGtm = marketingAllowed && Boolean(activeGtmId());
+  if (analyticsThroughGtm || marketingThroughGtm) {
+    try {
       window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push({ event: normalized, ...sanitized });
-      if (directGa4Enabled() && typeof window.gtag === 'function') window.gtag('event', normalized, sanitized);
-      if (getConsentPreferences()?.marketing && normalized === 'begin_checkout') window.fbq?.('track', 'InitiateCheckout', sanitized);
-      if (getConsentPreferences()?.marketing && normalized === 'purchase') window.fbq?.('track', 'Purchase', sanitized);
-    }
-    if (options.dedupeKey) { sentDedupeKeys.add(options.dedupeKey); if (options.persistDedupe) try { window.localStorage.setItem(`analytics:dedupe:${options.dedupeKey}`, '1'); } catch { /* optional */ } }
-    return true;
-  } catch { return false; }
+      window.dataLayer.push({
+        event: normalized,
+        ...sanitized,
+        analytics_destination: analyticsThroughGtm,
+        marketing_destination: marketingThroughGtm
+      });
+      emitted = true;
+    } catch { /* a container failure must not affect billing or navigation */ }
+  }
+
+  if (analyticsAllowed && !bridge && directGa4Enabled() && typeof window.gtag === 'function') {
+    try { window.gtag('event', normalized, sanitized); emitted = true; } catch { /* direct GA4 is optional */ }
+  }
+
+  if (marketingAllowed && metaLoaded) {
+    try { window.fbq?.('track', 'InitiateCheckout', sanitized); emitted = true; } catch { /* Meta is optional */ }
+  }
+
+  if (emitted && options.dedupeKey) {
+    sentDedupeKeys.add(options.dedupeKey);
+    if (options.persistDedupe) try { window.localStorage.setItem(`analytics:dedupe:${options.dedupeKey}`, '1'); } catch { /* optional */ }
+  }
+  return emitted;
 };
 export const trackPageView = (pathname: string, title = typeof document !== 'undefined' ? document.title : '') => trackEvent('page_view', { page_location: pathname.split('?')[0].split('#')[0].slice(0, 200) || '/', page_title: title.slice(0, MAX_STRING_LENGTH) });
 export const setAnalyticsUser = (userId: string | null, properties: Partial<Record<'professional_segment' | 'work_context' | 'subscription_plan' | 'app_environment', string | null>> = {}) => {
@@ -261,5 +306,22 @@ export const setAnalyticsUser = (userId: string | null, properties: Partial<Reco
   applyPendingUser();
 };
 export const trackBeginCheckout = (planId: string, planName: string, price: number, paymentProvider?: string, attemptId = `${Date.now()}-${Math.random().toString(36).slice(2)}`) => trackEvent('begin_checkout', { plan_id: planId, plan_name: planName, value: price, currency: 'BRL', payment_provider: paymentProvider }, { dedupeKey: `begin_checkout:${attemptId}` });
-export const trackPurchaseOnce = (input: { transactionId: string; planId: string; planName: string; amount: number; paymentProvider?: string }) => trackEvent('purchase', { transaction_id: input.transactionId, plan_id: input.planId, plan_name: input.planName, value: input.amount, currency: 'BRL', payment_provider: input.paymentProvider }, { dedupeKey: `purchase:${input.transactionId}`, persistDedupe: true });
+export const trackStripeAndroidPurchaseOnce = (input: { transactionId: string; planName: string; amount: number; currency: string; paymentProvider: string; status: string; restored?: boolean }) => {
+  if (!isBrowser() || getAnalyticsConsent() !== 'granted' || input.paymentProvider !== 'stripe' || input.status !== 'paid' || input.restored === true) return false;
+  const transactionId = input.transactionId.trim();
+  const planName = input.planName.trim().slice(0, MAX_STRING_LENGTH);
+  const currency = input.currency.trim().toUpperCase();
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId) || !planName || SENSITIVE_VALUE_PATTERN.test(planName) || !Number.isFinite(input.amount) || input.amount <= 0 || currency !== 'BRL') return false;
+  const dedupeKey = `firebase-in-app-purchase:${transactionId}`;
+  if (sentDedupeKeys.has(dedupeKey)) return false;
+  try { if (window.localStorage.getItem(`analytics:dedupe:${dedupeKey}`) === '1') return false; } catch { /* native dedupe remains authoritative */ }
+  const bridge = nativeBridge();
+  if (!bridge?.logStripeInAppPurchase) return false;
+  try {
+    if (bridge.logStripeInAppPurchase(transactionId, input.amount, currency, planName) !== true) return false;
+    sentDedupeKeys.add(dedupeKey);
+    try { window.localStorage.setItem(`analytics:dedupe:${dedupeKey}`, '1'); } catch { /* native persistent dedupe is sufficient */ }
+    return true;
+  } catch { return false; }
+};
 export const trackJourneyEvent = (eventName: string, params?: AnalyticsParameters) => trackEvent(eventName, params);

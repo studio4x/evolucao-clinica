@@ -5,13 +5,14 @@ import {
   addNativeBillingListener,
   createStripeCheckoutSession,
   createStripeMobileSubscription,
+  getConfirmedStripeTransaction,
   hasNativeBillingBridge,
   type BillingPlanId,
   type NativeBillingEvent,
   verifyGooglePlaySubscription,
   waitForConfirmedSubscription
 } from '../../services/billing';
-import { getCheckoutAttribution, trackBeginCheckout } from '../../services/analytics';
+import { getCheckoutAttribution, trackBeginCheckout, trackStripeAndroidPurchaseOnce } from '../../services/analytics';
 
 export type ConfirmedBillingResult = {
   provider: 'stripe' | 'google_play';
@@ -103,6 +104,23 @@ export function StripeSubscriptionButton({
         if (event.type === 'stripe_payment_completed') {
           if (!user) throw new Error('Sessão expirada. Entre novamente para confirmar o pagamento.');
           const confirmed = await waitForConfirmedSubscription(user.id, activePlan);
+          try {
+            const transaction = confirmed.provider_subscription_id
+              ? await getConfirmedStripeTransaction(confirmed.provider_subscription_id, activePlan)
+              : null;
+            if (transaction) {
+              trackStripeAndroidPurchaseOnce({
+                transactionId: transaction.transactionId,
+                planName: planName || activePlan,
+                amount: transaction.amount,
+                currency: transaction.currency,
+                paymentProvider: 'stripe',
+                status: 'paid'
+              });
+            }
+          } catch {
+            console.warn('[billing] Confirmed Stripe purchase could not be recorded in Firebase Analytics.');
+          }
           setBusy(false);
           onSuccess?.({
             provider: 'stripe',
@@ -132,7 +150,7 @@ export function StripeSubscriptionButton({
     };
 
     return addNativeBillingListener((event) => void handleEvent(event));
-  }, [onError, onSuccess, user]);
+  }, [onError, onSuccess, planName, user]);
 
   const start = async () => {
     if (!user || loading || disabled) return;
@@ -140,12 +158,13 @@ export function StripeSubscriptionButton({
     setBusy(true);
 
     try {
+      const checkoutAttemptId = crypto.randomUUID();
       if (hasNativeBillingBridge()) {
+        trackBeginCheckout(planId, planName || planId, price || 0, 'android_billing', checkoutAttemptId);
         window.NativeBillingBridge?.startSubscription(planId, user.id);
         return;
       }
 
-      const checkoutAttemptId = crypto.randomUUID();
       const attribution = await getCheckoutAttribution();
       trackBeginCheckout(planId, planName || planId, price || 0, 'stripe', checkoutAttemptId);
       const { checkoutUrl } = await createStripeCheckoutSession(planId, couponCode, attribution, checkoutAttemptId);

@@ -131,6 +131,28 @@ export async function waitForConfirmedSubscription(
   );
 }
 
+export async function getConfirmedStripeTransaction(subscriptionId: string, planId: BillingPlanId) {
+  const normalizedSubscriptionId = subscriptionId.trim();
+  if (!/^sub_[A-Za-z0-9]+$/.test(normalizedSubscriptionId)) return null;
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('provider_transaction_id, amount, currency, plan_id, status, payment_provider')
+    .eq('stripe_subscription_id', normalizedSubscriptionId)
+    .eq('plan_id', planId)
+    .eq('payment_provider', 'stripe')
+    .eq('status', 'paid')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  const amount = Number(data?.amount);
+  const transactionId = typeof data?.provider_transaction_id === 'string' ? data.provider_transaction_id.trim() : '';
+  const currency = typeof data?.currency === 'string' ? data.currency.trim().toUpperCase() : '';
+  if (!transactionId || !Number.isFinite(amount) || amount <= 0 || currency !== 'BRL') return null;
+  return { transactionId, amount, currency, planId };
+}
+
 export function addNativeBillingListener(listener: (event: NativeBillingEvent) => void) {
   const handler = (rawEvent: Event) => {
     const detail = (rawEvent as CustomEvent<NativeBillingEvent>).detail;
