@@ -1,8 +1,16 @@
 import { supabase } from '../supabaseClient';
 import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
 import type { CheckoutAttribution } from './analytics';
+import { classifyPaymentConfirmation } from '../utils/paymentConfirmation';
 
 export type BillingPlanId = 'monthly' | 'yearly';
+
+export class BillingConfirmationError extends Error {
+  constructor(public readonly code: 'terminal' | 'timeout', message: string) {
+    super(message);
+    this.name = 'BillingConfirmationError';
+  }
+}
 
 export type NativeBillingEvent = {
   type:
@@ -93,11 +101,18 @@ export async function verifyGooglePlaySubscription(input: {
   planId: BillingPlanId;
   productId: string;
   purchaseToken: string;
+  attribution?: CheckoutAttribution;
+  checkoutAttemptId?: string;
 }) {
   return invokeBillingFunction<{
     status: string;
     currentPeriodEnd: string | null;
     entitled: boolean;
+    transactionId: string | null;
+    amount: number;
+    currency: string;
+    planName: string;
+    provider: 'google_play';
   }>('verify-google-play-subscription', input);
 }
 
@@ -106,7 +121,8 @@ export async function waitForConfirmedSubscription(
   planId: BillingPlanId,
   attempts = 20,
   checkoutSessionId?: string,
-  expectedSubscriptionId?: string
+  expectedSubscriptionId?: string,
+  expectedProvider?: 'stripe' | 'google_play'
 ) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const { data, error } = await supabase
@@ -117,6 +133,10 @@ export async function waitForConfirmedSubscription(
       .maybeSingle();
 
     if (!error && data) {
+      if (expectedProvider && data.provider !== expectedProvider) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        continue;
+      }
       if (expectedSubscriptionId && data.provider_subscription_id !== expectedSubscriptionId) {
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
         continue;
@@ -125,21 +145,18 @@ export async function waitForConfirmedSubscription(
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
         continue;
       }
-      const entitled = data.provider === 'stripe'
-        ? (data.status === 'active' || data.status === 'trialing') &&
-          ['not_required', 'reported'].includes(data.external_reporting_status)
-        : ['active', 'in_grace_period', 'canceled'].includes(data.status) &&
-          Boolean(data.current_period_end && new Date(data.current_period_end).getTime() > Date.now());
-      if (entitled) return data;
-      if (['canceled', 'unpaid', 'refunded', 'expired'].includes(data.status)) {
-        throw new Error('O pagamento não foi confirmado pelo provedor.');
+      const state = classifyPaymentConfirmation(data);
+      if (state === 'active') return data;
+      if (state === 'cancelled') {
+        throw new BillingConfirmationError('terminal', 'O pagamento foi cancelado, expirou ou não foi confirmado pelo provedor.');
       }
     }
 
     await new Promise((resolve) => window.setTimeout(resolve, 1500));
   }
 
-  throw new Error(
+  throw new BillingConfirmationError(
+    'timeout',
     'O pagamento foi recebido e ainda está sendo confirmado. Aguarde alguns instantes e consulte sua assinatura novamente.'
   );
 }
@@ -153,6 +170,28 @@ export async function getConfirmedStripeTransaction(subscriptionId: string, plan
     .eq('stripe_subscription_id', normalizedSubscriptionId)
     .eq('plan_id', planId)
     .eq('payment_provider', 'stripe')
+    .eq('status', 'paid')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  const amount = Number(data?.amount);
+  const transactionId = typeof data?.provider_transaction_id === 'string' ? data.provider_transaction_id.trim() : '';
+  const currency = typeof data?.currency === 'string' ? data.currency.trim().toUpperCase() : '';
+  if (!transactionId || !Number.isFinite(amount) || amount <= 0 || currency !== 'BRL') return null;
+  return { transactionId, amount, currency, planId };
+}
+
+export async function getConfirmedGooglePlayTransaction(purchaseToken: string, planId: BillingPlanId) {
+  const normalizedToken = purchaseToken.trim();
+  if (!normalizedToken) return null;
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('provider_transaction_id, amount, currency, plan_id, status, payment_provider')
+    .eq('play_purchase_token', normalizedToken)
+    .eq('plan_id', planId)
+    .eq('payment_provider', 'google_play')
     .eq('status', 'paid')
     .order('created_at', { ascending: false })
     .limit(1)

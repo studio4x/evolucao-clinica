@@ -1,4 +1,5 @@
 export type AnalyticsEventName = "purchase" | "subscription_started" | "subscription_renewed" | "subscription_cancelled";
+export type AnalyticsPaymentProvider = "stripe" | "google_play";
 declare const Deno: { env: { get(name: string): string | undefined } };
 type Attribution = { clientId?: string; sessionId?: number; sessionNumber?: number };
 const EVENT_NAMES = new Set<AnalyticsEventName>(["purchase", "subscription_started", "subscription_renewed", "subscription_cancelled"]);
@@ -37,16 +38,16 @@ export function validateMeasurementPayload(payload: any): string | null {
   if (!payload || !CLIENT_ID.test(payload.client_id || "") || !UUID.test(payload.user_id || "") || !Number.isSafeInteger(payload.timestamp_micros) || !Array.isArray(payload.events) || payload.events.length !== 1) return "invalid_envelope";
   const event = payload.events[0];
   if (!EVENT_NAMES.has(event?.name) || !event?.params || Object.keys(event.params).length > 25) return "invalid_event";
-  if (event.name === "purchase" && (!event.params.transaction_id || typeof event.params.value !== "number" || event.params.currency !== "BRL" || !event.params.plan_id || !event.params.plan_name || event.params.payment_provider !== "stripe")) return "invalid_purchase";
+  if (event.name === "purchase" && (!event.params.transaction_id || typeof event.params.value !== "number" || event.params.currency !== "BRL" || !event.params.plan_id || !event.params.plan_name || !["stripe", "google_play"].includes(event.params.payment_provider))) return "invalid_purchase";
   for (const [key, value] of Object.entries(event.params)) if (!ALLOWED_PARAMS.has(key) || !PARAMETER_NAME.test(key) || (typeof value !== "string" && typeof value !== "number") || (typeof value === "string" && value.length > 100) || (typeof value === "number" && !Number.isFinite(value))) return "invalid_parameter";
   return null;
 }
 
-export async function enqueueAndDeliverAnalyticsEvent(admin: any, input: { eventKey: string; userId: string; eventName: AnalyticsEventName; params: Record<string, string | number>; attribution: Attribution; occurredAt: string }) {
+export async function enqueueAndDeliverAnalyticsEvent(admin: any, input: { eventKey: string; userId: string; eventName: AnalyticsEventName; provider?: AnalyticsPaymentProvider; params: Record<string, string | number>; attribution: Attribution; occurredAt: string }) {
   const { data: consent } = await admin.from("analytics_consents").select("analytics_granted").eq("user_id", input.userId).maybeSingle();
   if (!consent?.analytics_granted) return "consent_denied";
   const payload = { params: input.params, attribution: input.attribution, occurredAt: input.occurredAt };
-  const { data: claimed } = await admin.rpc("claim_analytics_event_delivery", { p_event_key: input.eventKey, p_user_id: input.userId, p_event_name: input.eventName, p_provider: "stripe", p_payload: payload, p_max_attempts: MAX_ATTEMPTS });
+  const { data: claimed } = await admin.rpc("claim_analytics_event_delivery", { p_event_key: input.eventKey, p_user_id: input.userId, p_event_name: input.eventName, p_provider: input.provider || "stripe", p_payload: payload, p_max_attempts: MAX_ATTEMPTS });
   const row = Array.isArray(claimed) ? claimed[0] : null;
   if (!row) return "already_claimed";
   return await deliverAnalyticsRow(admin, row);

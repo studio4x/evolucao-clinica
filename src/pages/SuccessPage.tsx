@@ -2,11 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { CheckCircle2, ArrowRight, ShieldCheck, Check, Mail, Loader2, Clock3 } from 'lucide-react';
+import { CheckCircle2, ArrowRight, ShieldCheck, Check, Mail, Loader2, Clock3, XCircle, AlertTriangle } from 'lucide-react';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination } from '../utils/onboarding';
 import { supabase } from '../supabaseClient';
-import { addNativeBillingListener, getConfirmedStripeTransaction, waitForConfirmedSubscription } from '../services/billing';
+import { BillingConfirmationError, addNativeBillingListener, getConfirmedGooglePlayTransaction, getConfirmedStripeTransaction, hasNativeBillingBridge, waitForConfirmedSubscription } from '../services/billing';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
 import { trackConfirmedMarketingPurchaseOnce } from '../services/analytics';
 
@@ -63,6 +63,7 @@ export default function SuccessPage() {
   const query = new URLSearchParams(location.search);
   const checkoutSessionId = query.get('session_id');
   const queryPlanId = query.get('plan') === 'yearly' ? 'yearly' : 'monthly';
+  const queryProvider = query.get('provider') === 'google_play' ? 'google_play' : checkoutSessionId ? 'stripe' : null;
 
   useEffect(() => {
     if (initialState && !initialState.pendingConfirmation) {
@@ -70,7 +71,8 @@ export default function SuccessPage() {
       return;
     }
     const expectedSubscriptionId = initialState?.pendingConfirmation ? initialState.subscriptionId : undefined;
-    if ((!checkoutSessionId && !expectedSubscriptionId) || !user) {
+    const expectedProvider = initialState?.provider === 'google_play' || queryProvider === 'google_play' ? 'google_play' : 'stripe';
+    if ((!checkoutSessionId && !expectedSubscriptionId && !queryProvider) || !user) {
       setConfirmationStatus('delayed');
       setConfirmationMessage('Não foi possível identificar este retorno de pagamento.');
       return;
@@ -80,14 +82,16 @@ export default function SuccessPage() {
     const confirmFromWebhook = async () => {
       try {
         const planId = initialState?.planId === 'yearly' || queryPlanId === 'yearly' ? 'yearly' : 'monthly';
-        const confirmed = await waitForConfirmedSubscription(user.id, planId, 120, checkoutSessionId || undefined, expectedSubscriptionId);
+        const confirmed = await waitForConfirmedSubscription(user.id, planId, 40, checkoutSessionId || undefined, expectedSubscriptionId, expectedProvider);
         const { data: plan } = await supabase
           .from('plans')
           .select('name, price')
           .eq('id', planId)
           .maybeSingle();
-        const transaction = confirmed.provider === 'stripe' && confirmed.provider_subscription_id
-          ? await getConfirmedStripeTransaction(confirmed.provider_subscription_id, planId)
+        const transaction = confirmed.provider_subscription_id
+          ? confirmed.provider === 'stripe'
+            ? await getConfirmedStripeTransaction(confirmed.provider_subscription_id, planId)
+            : await getConfirmedGooglePlayTransaction(confirmed.provider_subscription_id, planId)
           : null;
         if (cancelled || paymentAbortedRef.current) return;
         const nextState = {
@@ -97,8 +101,8 @@ export default function SuccessPage() {
           planId,
           planName: plan?.name || initialState?.planName || (planId === 'yearly' ? 'Plano Anual' : 'Plano Mensal'),
           amount: transaction?.amount || Number(initialState?.amount || plan?.price || (planId === 'yearly' ? 199 : 39)),
-          paymentMethod: initialState?.paymentMethod || 'Stripe (Pix, cartão ou carteira digital)',
-          provider: confirmed.provider as 'stripe'
+          paymentMethod: initialState?.paymentMethod || (confirmed.provider === 'google_play' ? 'Google Play (Pix)' : 'Stripe (Pix, cartão ou carteira digital)'),
+          provider: confirmed.provider as 'stripe' | 'google_play'
         };
         setWebCheckoutState(nextState);
         setProfileInfo(
@@ -113,21 +117,57 @@ export default function SuccessPage() {
       } catch (error) {
         if (cancelled || paymentAbortedRef.current) return;
         setConfirmationMessage(error instanceof Error ? error.message : 'A confirmação ainda está pendente.');
-        setConfirmationStatus('delayed');
+        setConfirmationStatus(error instanceof BillingConfirmationError && error.code === 'terminal' ? 'cancelled' : 'delayed');
       }
     };
     void confirmFromWebhook();
     return () => { cancelled = true; };
-  }, [checkoutSessionId, confirmationAttempt, initialState, profileRole, queryPlanId, setProfileInfo, trialEndsAt, user]);
+  }, [checkoutSessionId, confirmationAttempt, initialState, profileRole, queryPlanId, queryProvider, setProfileInfo, trialEndsAt, user]);
 
   useEffect(() => {
-    if (confirmationStatus !== 'delayed') return;
+    if (confirmationStatus !== 'delayed' || confirmationAttempt >= 9) return;
     const retryTimer = window.setTimeout(() => {
       setConfirmationStatus('checking');
       setConfirmationAttempt((current) => current + 1);
     }, 10_000);
     return () => window.clearTimeout(retryTimer);
-  }, [confirmationStatus]);
+  }, [confirmationAttempt, confirmationStatus]);
+
+  useEffect(() => {
+    if (!user || confirmationStatus === 'confirmed' || confirmationStatus === 'cancelled') return;
+    const reconcile = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (hasNativeBillingBridge()) {
+        try { window.NativeBillingBridge?.restorePurchases(user.id); } catch { /* polling remains available */ }
+      }
+      setConfirmationStatus('checking');
+      setConfirmationAttempt((current) => current + 1);
+    };
+    document.addEventListener('visibilitychange', reconcile);
+    window.addEventListener('pageshow', reconcile);
+    window.addEventListener('focus', reconcile);
+    return () => {
+      document.removeEventListener('visibilitychange', reconcile);
+      window.removeEventListener('pageshow', reconcile);
+      window.removeEventListener('focus', reconcile);
+    };
+  }, [confirmationStatus, user]);
+
+  useEffect(() => {
+    if (!user || confirmationStatus === 'confirmed') return;
+    const channel = supabase.channel(`billing-confirmation:${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'billing_subscriptions',
+        filter: `professional_id=eq.${user.id}`
+      }, () => {
+        setConfirmationStatus('checking');
+        setConfirmationAttempt((current) => current + 1);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [confirmationStatus, user]);
 
   useEffect(() => {
     if (!initialState?.pendingConfirmation) return;
@@ -146,13 +186,13 @@ export default function SuccessPage() {
   }, [initialState]);
 
   useEffect(() => {
-    if (confirmationStatus !== 'confirmed' || effectiveState?.provider !== 'stripe' || !effectiveState.transactionId) return;
+    if (confirmationStatus !== 'confirmed' || !['stripe', 'google_play'].includes(effectiveState?.provider || '') || !effectiveState?.transactionId) return;
     void trackConfirmedMarketingPurchaseOnce({
       transactionId: effectiveState.transactionId,
       planId: effectiveState.planId,
       planName: effectiveState.planName,
       amount: effectiveState.amount,
-      paymentProvider: 'stripe'
+      paymentProvider: effectiveState.provider as 'stripe' | 'google_play'
     });
   }, [confirmationStatus, effectiveState]);
 
@@ -183,19 +223,27 @@ export default function SuccessPage() {
   if (confirmationStatus !== 'confirmed') {
     const isChecking = confirmationStatus === 'checking';
     const canRetryConfirmation = confirmationStatus === 'delayed';
+    const isCancelled = confirmationStatus === 'cancelled';
+    const title = isChecking
+      ? 'Confirmando pagamento…'
+      : canRetryConfirmation
+        ? 'Pagamento em processamento'
+        : isCancelled
+          ? 'Pagamento cancelado'
+          : 'Erro na confirmação';
     return (
       <div className="min-h-screen bg-brand-bg flex items-center justify-center p-6">
         <div className="card bg-white border border-brand-border shadow-xl rounded-3xl p-8 max-w-lg w-full text-center space-y-5">
-          <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center ${isChecking ? 'bg-brand-primary/10 text-brand-primary' : 'bg-amber-100 text-amber-700'}`}>
-            {isChecking ? <Loader2 className="w-7 h-7 animate-spin" /> : <Clock3 className="w-7 h-7" />}
+          <div className={`w-14 h-14 mx-auto rounded-2xl flex items-center justify-center ${isChecking ? 'bg-brand-primary/10 text-brand-primary' : canRetryConfirmation ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+            {isChecking ? <Loader2 className="w-7 h-7 animate-spin" /> : canRetryConfirmation ? <Clock3 className="w-7 h-7" /> : isCancelled ? <XCircle className="w-7 h-7" /> : <AlertTriangle className="w-7 h-7" />}
           </div>
-          <h1 className="text-2xl font-bold text-brand-text">
-            {isChecking ? 'Confirmando sua assinatura' : 'Pagamento em processamento'}
-          </h1>
+          <h1 className="text-2xl font-bold text-brand-text">{title}</h1>
           <p className="text-sm leading-relaxed text-brand-text-muted">
             {isChecking
               ? 'Seu pagamento foi enviado. Estamos aguardando a confirmação segura do provedor para ativar o plano automaticamente. Não é necessário atualizar a página.'
-              : confirmationMessage}
+              : confirmationMessage || (isCancelled
+                ? 'Nenhuma assinatura foi ativada e nenhuma conversão foi registrada.'
+                : 'Não foi possível confirmar o pagamento. Tente novamente mais tarde.')}
           </p>
           {canRetryConfirmation && (
             <div className="space-y-3">
@@ -234,9 +282,7 @@ export default function SuccessPage() {
     ? effectiveState.planName
     : (subscriptionPlan === 'yearly' ? 'Plano Anual' : 'Plano Mensal');
 
-  const displayTransactionId = effectiveState?.transactionId
-    ? effectiveState.transactionId
-    : `TX-${Date.now().toString().slice(-8)}`;
+  const displayTransactionId = effectiveState?.transactionId || 'Confirmada pelo provedor';
 
   const displayPaymentMethod = effectiveState?.paymentMethod
     ? effectiveState.paymentMethod
@@ -283,7 +329,7 @@ export default function SuccessPage() {
                   <Mail className="w-3.5 h-3.5" />
                   <span>Assinatura confirmada</span>
                 </div>
-                <h3 className="text-2xl font-display font-bold text-brand-text">Bem-vindo ao {displayPlanName}</h3>
+                <h3 className="text-2xl font-display font-bold text-brand-text">Assinatura ativada</h3>
                 <p className="text-sm leading-relaxed text-brand-text-muted">
                   Seu pedido foi processado com sucesso usando {displayPaymentMethod}. Um e-mail foi enviado com os dados da sua assinatura.
                 </p>
@@ -298,6 +344,10 @@ export default function SuccessPage() {
                   <p className="flex items-start gap-2">
                     <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
                     <span>Plano: {displayPlanName}</span>
+                  </p>
+                  <p className="flex items-start gap-2">
+                    <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
+                    <span>Situação: Ativa</span>
                   </p>
                   <p className="flex items-start gap-2">
                     <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />

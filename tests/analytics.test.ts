@@ -138,6 +138,10 @@ assert.equal((confirmedMarketingPurchase?.ecommerce as { transaction_id?: string
 const metaPurchase = fbqCalls.find((call) => call[0] === 'track' && call[1] === 'Purchase');
 assert.deepEqual(metaPurchase?.[3], { eventID: 'purchase-in_paid_1' }, 'Meta usa eventID estável derivado da invoice');
 assert.equal(await analytics.trackConfirmedMarketingPurchaseOnce({ transactionId: 'in_paid_1', planId: 'monthly', planName: 'Plano Mensal', amount: 39, paymentProvider: 'stripe' }), false, 'a mesma invoice não pode duplicar conversão de mídia');
+assert.equal(await analytics.trackConfirmedMarketingPurchaseOnce({ transactionId: 'GPA.1234-5678', planId: 'monthly', planName: 'Plano Mensal', amount: 39, paymentProvider: 'google_play' }), true, 'orderId confirmado da Google Play deve alimentar Google Ads e Meta');
+const playMarketingPurchase = trackedDataLayerEvents().find((entry) => entry.event === 'purchase' && entry.transaction_id === 'GPA.1234-5678');
+assert.equal(playMarketingPurchase?.payment_provider, 'google_play');
+assert.equal(await analytics.trackConfirmedMarketingPurchaseOnce({ transactionId: 'GPA.1234-5678', planId: 'monthly', planName: 'Plano Mensal', amount: 39, paymentProvider: 'google_play' }), false, 'reload não pode duplicar conversão Google Play');
 
 analytics.setConsentPreferences({ analytics: false, marketing: true });
 const nativeCountAfterAnalyticsRevoke = nativeEvents.length;

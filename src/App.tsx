@@ -66,12 +66,13 @@ const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 function NativeBillingRestore() {
   const user = useAuthStore((state) => state.user);
   const restoredUserRef = useRef<string | null>(null);
+  const lastRestoreAtRef = useRef(0);
 
   useEffect(() => {
     if (!user || !hasNativeBillingBridge()) return;
     const removeListener = addNativeBillingListener((event) => {
       if (
-        event.type !== 'play_purchase' ||
+          !['play_purchase', 'play_purchase_pending'].includes(event.type) ||
         event.restored !== true ||
         !event.productId ||
         !event.purchaseToken
@@ -86,15 +87,28 @@ function NativeBillingRestore() {
       });
     });
 
-    if (restoredUserRef.current !== user.id) {
+      if (restoredUserRef.current !== user.id) {
       restoredUserRef.current = user.id;
       try {
         window.NativeBillingBridge?.restorePurchases(user.id);
       } catch (error) {
         console.error('[BillingRestore] Não foi possível consultar compras:', error);
       }
-    }
-    return removeListener;
+      }
+      const reconcileOnForeground = () => {
+        if (document.visibilityState !== 'visible' || Date.now() - lastRestoreAtRef.current < 2_000) return;
+        lastRestoreAtRef.current = Date.now();
+        try { window.NativeBillingBridge?.restorePurchases(user.id); } catch { /* next foreground retries */ }
+      };
+      document.addEventListener('visibilitychange', reconcileOnForeground);
+      window.addEventListener('pageshow', reconcileOnForeground);
+      window.addEventListener('focus', reconcileOnForeground);
+      return () => {
+        removeListener();
+        document.removeEventListener('visibilitychange', reconcileOnForeground);
+        window.removeEventListener('pageshow', reconcileOnForeground);
+        window.removeEventListener('focus', reconcileOnForeground);
+      };
   }, [user]);
 
   return null;

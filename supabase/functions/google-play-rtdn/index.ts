@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   BillingHttpError,
+  acknowledgePlayPurchase,
   createAdminClient,
   getBillingConfig,
   jsonResponse,
@@ -8,6 +9,7 @@ import {
   projectSubscription,
   verifyPlayPurchase,
 } from "../_shared/billing.ts";
+import { enqueueAndDeliverAnalyticsEvent } from "../_shared/analyticsDelivery.ts";
 
 async function validatePubSubIdentity(req: Request) {
   const expectedAudience = Deno.env.get("GOOGLE_PLAY_RTDN_AUDIENCE") || "";
@@ -46,7 +48,7 @@ serve(async (req) => {
     const admin = createAdminClient();
     const { data: stored } = await admin
       .from("billing_subscriptions")
-      .select("professional_id, plan_id, play_product_id")
+      .select("professional_id, plan_id, play_product_id, metadata")
       .eq("play_purchase_token", purchaseToken)
       .maybeSingle();
     if (!stored) return jsonResponse({ received: true, ignored: true });
@@ -55,7 +57,10 @@ serve(async (req) => {
       await admin.from("billing_subscriptions").update({
         status: "refunded",
         updated_at: new Date().toISOString(),
-        metadata: { voidedNotification },
+        metadata: {
+          ...(stored.metadata && typeof stored.metadata === "object" ? stored.metadata : {}),
+          voidedNotification,
+        },
       }).eq("professional_id", stored.professional_id);
       await admin.from("transactions").update({ status: "refunded" })
         .eq("play_purchase_token", purchaseToken);
@@ -71,14 +76,24 @@ serve(async (req) => {
     const config = await getBillingConfig(admin);
     const purchase = await verifyPlayPurchase(config.googlePackageName, purchaseToken);
     const parsed = parsePlaySubscription(purchase);
+    if (parsed.entitled && parsed.acknowledgementState !== "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED") {
+      await acknowledgePlayPurchase(config.googlePackageName, stored.play_product_id, purchaseToken);
+    }
+    const previousMetadata = stored.metadata && typeof stored.metadata === "object" ? stored.metadata : {};
+    const initialOrderId = previousMetadata.initialOrderId || (parsed.entitled ? parsed.latestOrderId : null);
+    const subscriptionMetadata = {
+      ...previousMetadata,
+      latestOrderId: parsed.latestOrderId,
+      initialOrderId,
+      acknowledgementState: parsed.entitled
+        ? "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED"
+        : parsed.acknowledgementState,
+      notificationType: subscriptionNotification?.notificationType,
+    };
     await admin.from("billing_subscriptions").update({
       status: parsed.status,
       current_period_end: parsed.currentPeriodEnd,
-      metadata: {
-        latestOrderId: parsed.latestOrderId,
-        acknowledgementState: parsed.acknowledgementState,
-        notificationType: subscriptionNotification?.notificationType,
-      },
+      metadata: subscriptionMetadata,
       updated_at: new Date().toISOString(),
     }).eq("professional_id", stored.professional_id);
     await projectSubscription(admin, {
@@ -93,7 +108,7 @@ serve(async (req) => {
     // recebe um orderId próprio. Assim o histórico financeiro não é sobrescrito.
     if (parsed.latestOrderId && parsed.entitled) {
       const { data: plan } = await admin.from("plans")
-        .select("price")
+        .select("name, price")
         .eq("id", stored.plan_id)
         .single();
       const { error: transactionError } = await admin.from("transactions").upsert({
@@ -109,6 +124,42 @@ serve(async (req) => {
         play_purchase_token: purchaseToken,
       }, { onConflict: "payment_provider,provider_transaction_id" });
       if (transactionError) throw transactionError;
+
+      const analyticsPayload = {
+        plan_id: String(stored.plan_id).slice(0, 100),
+        plan_name: String(plan?.name || stored.plan_id).slice(0, 100),
+        value: Number(plan?.price || 0),
+        currency: "BRL",
+        payment_provider: "google_play",
+      };
+      const attribution = {
+        clientId: typeof subscriptionMetadata.ga4ClientId === "string" ? subscriptionMetadata.ga4ClientId : undefined,
+        sessionId: Number(subscriptionMetadata.ga4SessionId) || undefined,
+        sessionNumber: Number(subscriptionMetadata.ga4SessionNumber) || undefined,
+      };
+      const eventTimestamp = purchase?.startTime || (notification?.eventTimeMillis
+        ? Number(notification.eventTimeMillis)
+        : null);
+      const occurredAt = eventTimestamp ? new Date(eventTimestamp).toISOString() : new Date().toISOString();
+      const isInitialOrder = parsed.latestOrderId === initialOrderId;
+      await enqueueAndDeliverAnalyticsEvent(admin, {
+        eventKey: `purchase:google_play:${parsed.latestOrderId}`,
+        userId: stored.professional_id,
+        eventName: "purchase",
+        provider: "google_play",
+        params: { transaction_id: String(parsed.latestOrderId).slice(0, 100), ...analyticsPayload },
+        attribution,
+        occurredAt,
+      });
+      await enqueueAndDeliverAnalyticsEvent(admin, {
+        eventKey: `${isInitialOrder ? "subscription_started" : "subscription_renewed"}:google_play:${parsed.latestOrderId}`,
+        userId: stored.professional_id,
+        eventName: isInitialOrder ? "subscription_started" : "subscription_renewed",
+        provider: "google_play",
+        params: analyticsPayload,
+        attribution,
+        occurredAt,
+      });
     }
 
     return jsonResponse({ received: true });

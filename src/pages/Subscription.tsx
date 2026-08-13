@@ -437,7 +437,7 @@ export default function Subscription() {
       result.currentPeriodEnd || null,
       trialEndsAt
     );
-    navigate('/checkout/success', {
+    navigate(`/checkout/success?provider=${result.provider}&plan=${plan}`, {
       state: {
         transactionId: result.transactionId || result.subscriptionId || `${result.provider}-${Date.now()}`,
         subscriptionId: result.subscriptionId,
@@ -454,14 +454,14 @@ export default function Subscription() {
 
   const handlePendingBillingConfirmation = (result: PendingBillingConfirmation) => {
     const planDetails = getPlanDetails(result.planId);
-    navigate('/checkout/success', {
+    navigate(`/checkout/success?provider=${result.provider}&plan=${result.planId}`, {
       state: {
         pendingConfirmation: true,
         subscriptionId: result.subscriptionId,
         planId: result.planId,
         planName: getPlanDisplayName(planDetails, result.planId),
         amount: Number(planDetails.price || 0),
-        paymentMethod: 'Stripe (Pix, cartão ou Google Pay)',
+        paymentMethod: result.provider === 'google_play' ? 'Google Play (Pix)' : 'Stripe (Pix, cartão ou Google Pay)',
         provider: result.provider,
         returnTo: '/painel/subscription'
       },

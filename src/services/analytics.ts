@@ -307,11 +307,11 @@ export const setAnalyticsUser = (userId: string | null, properties: Partial<Reco
 };
 export const trackBeginCheckout = (planId: string, planName: string, price: number, paymentProvider?: string, attemptId = `${Date.now()}-${Math.random().toString(36).slice(2)}`) => trackEvent('begin_checkout', { plan_id: planId, plan_name: planName, value: price, currency: 'BRL', payment_provider: paymentProvider }, { dedupeKey: `begin_checkout:${attemptId}` });
 export const trackConfirmedMarketingPurchaseOnce = async (input: { transactionId: string; planId: string; planName: string; amount: number; paymentProvider: string }) => {
-  if (!isBrowser() || getConsentPreferences()?.marketing !== true || input.paymentProvider !== 'stripe') return false;
+  if (!isBrowser() || getConsentPreferences()?.marketing !== true || !['stripe', 'google_play'].includes(input.paymentProvider)) return false;
   const transactionId = input.transactionId.trim();
   const planId = input.planId.trim().slice(0, MAX_STRING_LENGTH);
   const planName = input.planName.trim().slice(0, MAX_STRING_LENGTH);
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId) || !planId || !planName || !Number.isFinite(input.amount) || input.amount <= 0) return false;
+  if (!/^[A-Za-z0-9._-]{1,100}$/.test(transactionId) || !planId || !planName || !Number.isFinite(input.amount) || input.amount <= 0) return false;
   const dedupeKey = `marketing-purchase:${transactionId}`;
   if (sentDedupeKeys.has(dedupeKey)) return false;
   try { if (window.localStorage.getItem(`analytics:dedupe:${dedupeKey}`) === '1') return false; } catch { /* memory dedupe */ }
@@ -330,7 +330,7 @@ export const trackConfirmedMarketingPurchaseOnce = async (input: { transactionId
         currency: 'BRL',
         plan_id: planId,
         plan_name: planName,
-        payment_provider: 'stripe',
+        payment_provider: input.paymentProvider,
         analytics_destination: false,
         marketing_destination: true,
         ecommerce: {

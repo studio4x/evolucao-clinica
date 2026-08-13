@@ -14,6 +14,9 @@ assert.equal(purchase.client_id, base.attribution.clientId, "client_id deve ser 
 assert.equal(purchase.events[0].params.session_id, 123);
 assert.equal(purchase.events[0].params.session_number, 4);
 assert.equal(validateMeasurementPayload(purchase), null);
+const playPurchase = buildMeasurementPayload({ ...base, eventName: "purchase", params: { ...params, payment_provider: "google_play", transaction_id: "GPA.0000-0000-0000-00000" } });
+assert.ok(playPurchase, "compra Google Play confirmada deve formar payload");
+assert.equal(validateMeasurementPayload(playPurchase), null);
 
 assert.equal(buildMeasurementPayload({ ...base, attribution: {}, eventName: "purchase", params }), null, "sem client_id real não pode existir fallback aleatório");
 for (const eventName of ["subscription_started", "subscription_renewed", "subscription_cancelled"] as const) {

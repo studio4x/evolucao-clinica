@@ -95,7 +95,7 @@ export default function CheckoutPage() {
     );
     sessionStorage.removeItem('pending_checkout_flow');
     sessionStorage.removeItem('selected_checkout_plan');
-    navigate('/checkout/success', {
+    navigate(`/checkout/success?provider=${result.provider}&plan=${plan}`, {
       state: {
         transactionId: result.transactionId || result.subscriptionId || `${result.provider}-${Date.now()}`,
         subscriptionId: result.subscriptionId,
@@ -112,14 +112,14 @@ export default function CheckoutPage() {
 
   const handlePendingBillingConfirmation = (result: PendingBillingConfirmation) => {
     const details = getPlanDetails(result.planId);
-    navigate('/checkout/success', {
+    navigate(`/checkout/success?provider=${result.provider}&plan=${result.planId}`, {
       state: {
         pendingConfirmation: true,
         subscriptionId: result.subscriptionId,
         planId: result.planId,
         planName: details.name,
         amount: Number(details.price || 0),
-        paymentMethod: 'Stripe (Pix, cartão ou Google Pay)',
+        paymentMethod: result.provider === 'google_play' ? 'Google Play (Pix)' : 'Stripe (Pix, cartão ou Google Pay)',
         provider: result.provider,
         returnTo: '/checkout'
       },

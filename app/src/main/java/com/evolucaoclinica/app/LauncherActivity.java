@@ -199,6 +199,16 @@ public class LauncherActivity extends ComponentActivity {
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // O estado de uma compra pendente pode mudar enquanto o Pix é pago fora
+        // do aplicativo. Reconsultamos o Play Billing a cada retorno ao primeiro plano.
+        if (pendingBillingAccountId != null && !pendingBillingAccountId.trim().isEmpty()) {
+            mainHandler.postDelayed(() -> restoreNativePurchases(pendingBillingAccountId), 350);
+        }
+    }
+
     private String resolveLaunchUrl(Intent intent) {
         Uri uri = intent == null ? null : intent.getData();
         // O callback OAuth precisa ser consumido antes de reabrir o áudio. Caso
@@ -852,11 +862,7 @@ public class LauncherActivity extends ComponentActivity {
                     Log.w(LOG_TAG, billingMessage("Falha ao restaurar compras.", billingResult));
                     return;
                 }
-                for (Purchase purchase : purchases) {
-                    if (purchase.getPurchaseState() == Purchase.PurchaseState.PURCHASED) {
-                        dispatchPlayPurchase(purchase, true);
-                    }
-                }
+                for (Purchase purchase : purchases) dispatchPlayPurchase(purchase, true);
             });
         });
     }

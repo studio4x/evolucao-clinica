@@ -26,9 +26,11 @@ export type ConfirmedBillingResult = {
 };
 
 export type PendingBillingConfirmation = {
-  provider: 'stripe';
+  provider: 'stripe' | 'google_play';
   planId: BillingPlanId;
   subscriptionId: string;
+  productId?: string;
+  purchaseToken?: string;
 };
 
 type Props = {
@@ -108,23 +110,40 @@ export function StripeSubscriptionButton({
           return;
         }
 
-        if (event.type === 'play_purchase') {
+        if (event.type === 'play_purchase' || event.type === 'play_purchase_pending') {
           if (!event.productId || !event.purchaseToken) {
             throw new Error('Dados da compra Google Play incompletos.');
           }
+          const checkoutContext = checkoutContextRef.current;
+          const attribution = checkoutContext ? await checkoutContext.attribution : await getCheckoutAttribution();
           const verified = await verifyGooglePlaySubscription({
             planId: activePlan,
             productId: event.productId,
-            purchaseToken: event.purchaseToken
+            purchaseToken: event.purchaseToken,
+            attribution,
+            checkoutAttemptId: checkoutContext?.attemptId
           });
-          if (!verified.entitled) throw new Error('A compra ainda não foi concluída pela Google Play.');
+          if (!verified.entitled) {
+            setBusy(false);
+            onPendingConfirmation?.({
+              provider: 'google_play',
+              planId: activePlan,
+              subscriptionId: event.purchaseToken,
+              productId: event.productId,
+              purchaseToken: event.purchaseToken
+            });
+            return;
+          }
           setBusy(false);
           onSuccess?.({
             provider: 'google_play',
             planId: activePlan,
             status: verified.status,
             currentPeriodEnd: verified.currentPeriodEnd,
-            subscriptionId: event.orderId || event.purchaseToken
+            subscriptionId: event.purchaseToken,
+            transactionId: verified.transactionId,
+            amount: verified.amount,
+            currency: verified.currency
           });
           return;
         }
@@ -167,10 +186,6 @@ export function StripeSubscriptionButton({
         if (event.type === 'billing_cancelled' || event.type === 'stripe_payment_cancelled') {
           setBusy(false);
           return;
-        }
-
-        if (event.type === 'play_purchase_pending') {
-          throw new Error('A compra está pendente na Google Play. O acesso será liberado após a confirmação.');
         }
 
         if (event.type === 'billing_error' || event.type === 'stripe_payment_failed') {
