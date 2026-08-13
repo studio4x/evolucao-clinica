@@ -317,32 +317,8 @@ export const trackConfirmedMarketingPurchaseOnce = async (input: { transactionId
   try { if (window.localStorage.getItem(`analytics:dedupe:${dedupeKey}`) === '1') return false; } catch { /* memory dedupe */ }
 
   await loadDynamicIds();
-  initializeGtm();
   initializeMeta();
   let emitted = false;
-  if (activeGtmId()) {
-    try {
-      window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push({
-        event: 'purchase',
-        transaction_id: transactionId,
-        value: input.amount,
-        currency: 'BRL',
-        plan_id: planId,
-        plan_name: planName,
-        payment_provider: input.paymentProvider,
-        analytics_destination: false,
-        marketing_destination: true,
-        ecommerce: {
-          transaction_id: transactionId,
-          value: input.amount,
-          currency: 'BRL',
-          items: [{ item_id: planId, item_name: planName, price: input.amount, quantity: 1 }]
-        }
-      });
-      emitted = true;
-    } catch { /* GTM never affects the confirmation page */ }
-  }
   if (metaLoaded) {
     try {
       window.fbq?.('track', 'Purchase', {

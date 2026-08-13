@@ -8,6 +8,7 @@ import {
   stripeSubscriptionStatus,
 } from "../_shared/billing.ts";
 import { enqueueAndDeliverAnalyticsEvent } from "../_shared/analyticsDelivery.ts";
+import { buildFirstStripePurchaseEvent } from "../_shared/stripeAnalytics.ts";
 
 function asId(value: any) {
   return typeof value === "string" ? value : value?.id || null;
@@ -201,6 +202,17 @@ serve(async (req) => {
           .select("external_transaction_id, initial_external_transaction_id")
           .eq("stripe_invoice_id", invoice.id)
           .maybeSingle();
+        const { data: previousPaidTransaction, error: previousPaidTransactionError } = await admin
+          .from("transactions")
+          .select("stripe_invoice_id")
+          .eq("stripe_subscription_id", subscriptionId)
+          .eq("payment_provider", "stripe")
+          .eq("status", "paid")
+          .gt("amount", 0)
+          .neq("stripe_invoice_id", invoice.id)
+          .limit(1)
+          .maybeSingle();
+        if (previousPaidTransactionError) throw previousPaidTransactionError;
 
         const requiresPlayReporting = Boolean(
           billing?.external_transaction_token || billing?.initial_external_transaction_id,
@@ -294,8 +306,46 @@ serve(async (req) => {
           currency: String(transaction.currency || "BRL").toUpperCase().slice(0, 3),
           payment_provider: "stripe",
         };
-        await enqueueAndDeliverAnalyticsEvent(admin, { eventKey: `purchase:${invoice.id}`, userId: synced.userId, eventName: "purchase", params: { transaction_id: String(invoice.id).slice(0, 100), ...gaPayload }, attribution, occurredAt });
-        await enqueueAndDeliverAnalyticsEvent(admin, { eventKey: `${isInitialInvoice ? "subscription_started" : "subscription_renewed"}:${invoice.id}`, userId: synced.userId, eventName: isInitialInvoice ? "subscription_started" : "subscription_renewed", params: gaPayload, attribution, occurredAt });
+        if (gaPayload.value > 0 && /^[A-Z]{3}$/.test(gaPayload.currency)) {
+          await enqueueAndDeliverAnalyticsEvent(admin, {
+            eventKey: `purchase:${invoice.id}`,
+            userId: synced.userId,
+            eventName: "purchase",
+            provider: "stripe",
+            params: { transaction_id: String(invoice.id).slice(0, 100), ...gaPayload },
+            attribution,
+            occurredAt,
+          });
+        }
+        const firstStripePurchase = buildFirstStripePurchaseEvent({
+          provider: transaction.payment_provider,
+          paymentStatus: transaction.status,
+          subscriptionId,
+          transactionId: invoice.id,
+          value: transaction.amount,
+          currency: transaction.currency,
+          planId: synced.planId,
+          planName: plan?.name || synced.planId,
+          hasPreviousPaidTransaction: Boolean(previousPaidTransaction),
+        });
+        if (firstStripePurchase) {
+          await enqueueAndDeliverAnalyticsEvent(admin, {
+            ...firstStripePurchase,
+            userId: synced.userId,
+            provider: "stripe",
+            attribution,
+            occurredAt,
+          });
+        }
+        await enqueueAndDeliverAnalyticsEvent(admin, {
+          eventKey: `${isInitialInvoice ? "subscription_started" : "subscription_renewed"}:${invoice.id}`,
+          userId: synced.userId,
+          eventName: isInitialInvoice ? "subscription_started" : "subscription_renewed",
+          provider: "stripe",
+          params: gaPayload,
+          attribution,
+          occurredAt,
+        });
         break;
       }
 

@@ -17,6 +17,11 @@ assert.equal(validateMeasurementPayload(purchase), null);
 const playPurchase = buildMeasurementPayload({ ...base, eventName: "purchase", params: { ...params, payment_provider: "google_play", transaction_id: "GPA.0000-0000-0000-00000" } });
 assert.ok(playPurchase, "compra Google Play confirmada deve formar payload");
 assert.equal(validateMeasurementPayload(playPurchase), null);
+const stripeAcquisition = buildMeasurementPayload({ ...base, eventName: "purchase_stripe", params: { ...params, transaction_id: "in_first_paid", is_first_activation: true } });
+assert.ok(stripeAcquisition, "primeira ativação Stripe deve formar payload exclusivo");
+assert.equal(validateMeasurementPayload(stripeAcquisition), null);
+assert.equal(validateMeasurementPayload(buildMeasurementPayload({ ...base, eventName: "purchase_stripe", params: { ...params, payment_provider: "google_play", transaction_id: "GPA.invalid", is_first_activation: true } })), "invalid_purchase_stripe");
+assert.equal(validateMeasurementPayload(buildMeasurementPayload({ ...base, eventName: "purchase_stripe", params: { ...params, value: 0, transaction_id: "in_zero", is_first_activation: true } })), "invalid_purchase_stripe");
 
 assert.equal(buildMeasurementPayload({ ...base, attribution: {}, eventName: "purchase", params }), null, "sem client_id real não pode existir fallback aleatório");
 for (const eventName of ["subscription_started", "subscription_renewed", "subscription_cancelled"] as const) {

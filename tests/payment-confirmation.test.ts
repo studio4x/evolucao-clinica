@@ -40,10 +40,12 @@ assert.match(launcher, /for \(Purchase purchase : purchases\) dispatchPlayPurcha
 assert.match(verifier, /if \(parsed\.entitled && parsed\.acknowledgementState/, 'uma compra pendente não pode ser reconhecida nem liberar benefício');
 assert.match(verifier, /purchase:google_play:\$\{parsed\.latestOrderId\}/, 'a conversão deve usar o orderId confirmado');
 assert.match(rtdn, /purchase:google_play:\$\{parsed\.latestOrderId\}/, 'RTDN deve reutilizar a mesma chave idempotente');
+assert.doesNotMatch(verifier, /purchase_stripe/, 'verificação Google Play nunca pode produzir purchase_stripe');
+assert.doesNotMatch(rtdn, /purchase_stripe/, 'RTDN Google Play nunca pode produzir purchase_stripe');
 assert.match(mobileFunction, /ga4ClientId[\s\S]*checkoutAttemptId/, 'o checkout móvel deve preservar atribuição para o webhook');
-assert.match(analytics, /marketing-purchase:\$\{transactionId\}/, 'Google Ads e Meta devem deduplicar pelo mesmo identificador confirmado');
+assert.match(analytics, /marketing-purchase:\$\{transactionId\}/, 'Meta deve deduplicar pelo identificador confirmado');
 assert.match(analytics, /\^\[A-Za-z0-9\._-\]/, 'orderIds GPA com pontos devem ser aceitos na conversão');
 assert.match(analytics, /getConsentPreferences\(\)\?\.marketing !== true/, 'mídia deve respeitar consentimento de marketing');
-assert.match(analytics, /analytics_destination: false,[\s\S]*marketing_destination: true/, 'a compra cliente não pode duplicar o GA4 server-side');
+assert.doesNotMatch(analytics, /event: 'purchase',[\s\S]*marketing_destination: true/, 'a compra cliente não pode duplicar GA4 ou Google Ads');
 
 console.log('payment-confirmation.test.ts: OK');
