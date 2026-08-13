@@ -128,6 +128,9 @@ const NOTIFICATION_IMAGE_BUCKET = "notifications";
 const NOTIFICATION_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 const NOTIFICATION_IMAGE_MAX_WIDTH = 1200;
 const NOTIFICATION_IMAGE_MAX_HEIGHT = 675;
+const SOCIAL_SHARE_IMAGE_WIDTH = 1200;
+const SOCIAL_SHARE_IMAGE_HEIGHT = 630;
+const SOCIAL_SHARE_IMAGE_MAX_SOURCE_BYTES = 8 * 1024 * 1024;
 const transcriptionRateLimitStore = new Map<string, number[]>();
 let hasWarnedAboutMissingUsageTrackingTable = false;
 
@@ -906,6 +909,28 @@ async function buildBrandedIconPng(
     .toBuffer();
 }
 
+async function buildSocialShareImage(config: ReturnType<typeof normalizeSiteConfig>) {
+  const asset = await resolveBrandAssetPayload([
+    config.social_share_url
+  ], "/og-image-social.png");
+
+  if (!asset?.buffer.length || asset.buffer.length > SOCIAL_SHARE_IMAGE_MAX_SOURCE_BYTES) {
+    throw new Error("A imagem social está vazia ou excede o limite permitido.");
+  }
+
+  return sharp(asset.buffer, { limitInputPixels: 40_000_000 })
+    .rotate()
+    .resize({
+      width: SOCIAL_SHARE_IMAGE_WIDTH,
+      height: SOCIAL_SHARE_IMAGE_HEIGHT,
+      fit: "contain",
+      background: "#ffffff"
+    })
+    .flatten({ background: "#ffffff" })
+    .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+    .toBuffer();
+}
+
 function decodeBase64UrlToBuffer(value: string) {
   const normalized = String(value || "").trim().replace(/\s+/g, "");
   const padded = normalized.replace(/-/g, "+").replace(/_/g, "/");
@@ -937,9 +962,10 @@ function renderPublicSeoHtml(html: string, config: ReturnType<typeof normalizeSi
   const title = config.seo_title?.trim() || config.pwa_app_name || defaultSiteConfig.seo_title;
   const description = config.seo_description?.trim() || config.pwa_description || defaultSiteConfig.seo_description;
   const canonicalUrl = `${PRODUCTION_ORIGIN.replace(/\/$/, "")}/`;
-  const imageUrl = config.social_share_url?.startsWith("https://")
-    ? appendBrandVersion(config.social_share_url, config.version)
-    : `${canonicalUrl}og-image-social.png`;
+  const imageUrl = appendBrandVersion(
+    `${canonicalUrl}api/social-share-image.jpg`,
+    getBrandAssetSignature(config)
+  );
 
   let rendered = html.replace(/<title>[^<]*<\/title>/i, `<title>${escapeHtml(title)}</title>`);
   rendered = rendered.replace(/(<meta[^>]+name=["']description["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(description)}$2`);
@@ -947,6 +973,7 @@ function renderPublicSeoHtml(html: string, config: ReturnType<typeof normalizeSi
   rendered = rendered.replace(/(<meta[^>]+property=["']og:title["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(title)}$2`);
   rendered = rendered.replace(/(<meta[^>]+property=["']og:description["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(description)}$2`);
   rendered = rendered.replace(/(<meta[^>]+property=["']og:image["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(imageUrl)}$2`);
+  rendered = rendered.replace(/(<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(imageUrl)}$2`);
   rendered = rendered.replace(/(<meta[^>]+property=["']og:image:alt["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(title)}$2`);
   rendered = rendered.replace(/(<meta[^>]+name=["']twitter:title["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(title)}$2`);
   rendered = rendered.replace(/(<meta[^>]+name=["']twitter:description["'][^>]+content=["'])[^"']*(["'][^>]*>)/i, `$1${escapeHtml(description)}$2`);
@@ -2203,6 +2230,28 @@ app.get(["/", /^\/painel(?:\/.*)?$/], async (_req, res) => {
   } catch (err) {
     console.error("[SEO] Falha ao renderizar as metatags públicas:", err);
     res.status(500).send("Não foi possível carregar a página pública.");
+  }
+});
+
+app.get("/api/social-share-image.jpg", async (req, res) => {
+  try {
+    const config = await getBrandConfigSnapshot();
+    const image = await buildSocialShareImage(config);
+    const etag = `"${createHash("sha256").update(image).digest("hex")}"`;
+
+    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Content-Length", String(image.length));
+    res.setHeader("Cache-Control", "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800");
+    res.setHeader("ETag", etag);
+
+    if (req.headers["if-none-match"] === etag) {
+      return res.status(304).end();
+    }
+
+    return res.send(image);
+  } catch (err: any) {
+    console.error("[SEO] Falha ao gerar a imagem social otimizada:", err?.message || err);
+    return res.status(500).end();
   }
 });
 
