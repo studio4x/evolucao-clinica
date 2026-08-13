@@ -7,6 +7,7 @@ const vercelConfig = JSON.parse(
   routes?: Array<{ src?: string; dest?: string }>;
 };
 const serverSource = readFileSync(new URL("../server.ts", import.meta.url), "utf8");
+const robotsSource = readFileSync(new URL("../public/robots.txt", import.meta.url), "utf8");
 
 const dynamicSeoRoutes = vercelConfig.routes || [];
 
@@ -32,5 +33,7 @@ assert.match(serverSource, /colours: 256/);
 assert.match(serverSource, /property=\["'\]og:image:secure_url/);
 assert.match(serverSource, /SOCIAL_SHARE_IMAGE_WIDTH = 1200/);
 assert.match(serverSource, /SOCIAL_SHARE_IMAGE_HEIGHT = 630/);
+assert.match(robotsSource, /^Allow: \/api\/social-share-image\.png$/m);
+assert.match(robotsSource, /^Disallow: \/api\/$/m);
 
 console.log("SEO social sharing tests passed");
