@@ -44,20 +44,36 @@ npm run build
 ```
 *(Certifique-se de que a build completou com sucesso e os arquivos no diretório `dist/` foram atualizados).*
 
-### Passo 3: Assinar e gerar os artefatos
+### Passo 3: Configurar a assinatura nesta máquina (uma única vez)
 
 O build normal **não executa Bubblewrap**. Isso protege as personalizações nativas versionadas, incluindo WebView, FCM, Billing, seletor de arquivos e retorno OAuth do Google.
 
-Configure as credenciais somente no ambiente da sessão de build. Nunca as coloque em `.env`, documentação, código ou Git:
+O keystore e suas senhas não devem ficar no repositório, em `.env`, na documentação ou em scripts versionados. Nesta máquina Windows, execute uma única vez:
 
 ```powershell
-$env:JAVA_HOME = 'C:\Users\medei\.bubblewrap\jdk\jdk-17.0.11+9'
-$env:ANDROID_KEYSTORE_PASSWORD = '<senha segura da chave>'
-$env:ANDROID_KEY_PASSWORD = '<senha segura da chave>'
-node .agents/build_bubblewrap.js
+.\.agents\setup_android_signing.ps1
 ```
 
-`ANDROID_KEY_ALIAS` é opcional (o padrão é `android`) e `ANDROID_KEYSTORE_PATH` pode apontar para uma chave fora do repositório. O script verifica a sincronização das versões, gera AAB e APK assinados, valida ambos com `jarsigner` e somente então atualiza os artefatos oficiais na raiz.
+O configurador:
+
+1. valida a senha e o alias com `keytool`;
+2. copia a chave para `%LOCALAPPDATA%\EvolucaoClinica\android-signing\upload.keystore`;
+3. salva as senhas em `credentials.clixml`, criptografadas pelo DPAPI do Windows;
+4. restringe a pasta ao usuário atual e ao `SYSTEM`.
+
+O arquivo `credentials.clixml` só pode ser descriptografado pelo mesmo usuário na mesma instalação do Windows. Ele não substitui um backup externo e seguro do keystore e da senha.
+
+### Passo 4: Assinar e gerar os artefatos
+
+Depois da configuração inicial, cada nova release é gerada com:
+
+```powershell
+.\.agents\build_android_release.ps1
+```
+
+O comando recupera as credenciais protegidas somente durante o processo, executa `.agents/build_bubblewrap.js` e remove as senhas do ambiente ao terminar. O script verifica a sincronização das versões, gera AAB e APK assinados, valida ambos com `jarsigner` e somente então atualiza os artefatos oficiais na raiz.
+
+Para um ambiente temporário ou CI, ainda é possível definir manualmente `ANDROID_KEYSTORE_PATH`, `ANDROID_KEY_ALIAS`, `ANDROID_KEYSTORE_PASSWORD` e `ANDROID_KEY_PASSWORD` e executar `node .agents/build_bubblewrap.js`.
 
 > Não execute `npx @bubblewrap/cli update` como parte de uma release rotineira. Quando houver necessidade real de atualizar ícones ou metadados gerados pelo Bubblewrap, faça isso em uma branch limpa, revise o diff completo do Android e confirme que as personalizações nativas foram preservadas antes de gerar a release.
 
@@ -101,10 +117,12 @@ Insira ou cole aqui as notas da versão no idioma pt-BR
 
 ## 🔑 Proteção da chave de assinatura
 
-* A chave e suas senhas são segredos operacionais: mantenha-as em cofre de segredos ou no ambiente protegido de build.
+* A cópia operacional desta máquina fica em `%LOCALAPPDATA%\EvolucaoClinica\android-signing`, nunca dentro do repositório.
+* A chave e suas senhas são segredos operacionais: mantenha também um backup criptografado em um cofre de segredos.
 * Não versione a chave, senhas, aliases privados ou arquivos de configuração local.
 * Faça backup criptografado da chave e teste periodicamente a recuperação em ambiente controlado.
 * A perda da chave de upload pode impedir futuras atualizações; siga o processo de recuperação de chave de upload do Google Play se isso ocorrer.
+* Nunca recupere ou reutilize credenciais que tenham sido expostas em histórico Git. Faça a rotação da chave de upload no Google Play quando houver uma janela segura para isso.
 
 ---
 
