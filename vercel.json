@@ -6,7 +6,8 @@
     }
   },
   "routes": [
-    { "src": "^/$", "dest": "/api/index.ts" }
+    { "src": "^/$", "dest": "/api/index.ts" },
+    { "src": "^/painel(?:/.*)?$", "dest": "/api/index.ts" }
   ],
   "rewrites": [
     { "source": "/sw.js", "destination": "/sw.js" },

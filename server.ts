@@ -2184,9 +2184,10 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
   }
 });
 
-// O WhatsApp e outros crawlers não executam o JavaScript do SPA. A raiz pública
-// recebe as tags já renderizadas para que o preview reflita o painel administrativo.
-app.get("/", async (_req, res) => {
+// O WhatsApp e outros crawlers não executam o JavaScript do SPA. A raiz pública e
+// as rotas autenticadas compartilháveis recebem as tags já renderizadas para que
+// o preview reflita o painel administrativo antes de qualquer JavaScript rodar.
+app.get(["/", /^\/painel(?:\/.*)?$/], async (_req, res) => {
   try {
     const htmlPath = path.join(process.cwd(), "dist", "index.html");
     const fallbackPath = path.join(process.cwd(), "index.html");
