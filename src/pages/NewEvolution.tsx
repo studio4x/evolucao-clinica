@@ -20,6 +20,7 @@ import { showAlert, showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
+import { trackEvent } from '../services/analytics';
 
 type AudioEvolutionItem = {
   id: string;
@@ -1184,6 +1185,8 @@ export default function NewEvolution() {
     const evolutionId = draftIdRef.current || uuidv4();
     const totalAudioDuration = getTotalAudioDuration(items);
     const audioBlobs = items.map(item => item.blob);
+    const firstEvolutionStorageKey = `analytics:first-evolution:${user.id}`;
+    const isFirstActivation = typeof window !== 'undefined' && !window.localStorage.getItem(firstEvolutionStorageKey);
 
     const evolutionData = {
       id: evolutionId,
@@ -1243,6 +1246,10 @@ export default function NewEvolution() {
         .from('evolutions')
         .upsert(evolutionData);
       if (insertError) throw insertError;
+      trackEvent('evolution_started', {
+        input_mode: inputMode,
+        is_first_activation: isFirstActivation
+      }, { dedupeKey: `evolution_started:${user.id}:${evolutionId}`, persistDedupe: true });
 
       const originalTranscription = await transcribeAllAudios();
 
@@ -1286,6 +1293,20 @@ export default function NewEvolution() {
         })
         .eq('id', evolutionId);
       if (updateError) throw updateError;
+
+      trackEvent('evolution_completed', {
+        input_mode: inputMode,
+        is_first_activation: isFirstActivation
+      }, { dedupeKey: `evolution_completed:${user.id}:${evolutionId}`, persistDedupe: true });
+      if (items.length > 0) {
+        trackEvent('audio_evolution_completed', {
+          input_mode: inputMode,
+          is_first_activation: isFirstActivation
+        }, { dedupeKey: `audio_evolution_completed:${user.id}:${evolutionId}`, persistDedupe: true });
+      }
+      if (isFirstActivation && typeof window !== 'undefined') {
+        window.localStorage.setItem(firstEvolutionStorageKey, '1');
+      }
 
       setModalEvolutionId(evolutionId);
       setModalText(evolutionText);

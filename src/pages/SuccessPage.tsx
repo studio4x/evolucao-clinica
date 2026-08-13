@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -8,6 +8,7 @@ import { getOnboardingDestination } from '../utils/onboarding';
 import { supabase } from '../supabaseClient';
 import { waitForConfirmedSubscription } from '../services/billing';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
+import { trackEvent, trackPurchaseOnce } from '../services/analytics';
 
 const formatRenewalDate = (dateStr: string) => {
   try {
@@ -53,6 +54,7 @@ export default function SuccessPage() {
   } | null;
 
   const [webCheckoutState, setWebCheckoutState] = useState<typeof state>(null);
+  const generatedTransactionIdRef = useRef(`pending-${Date.now()}`);
   const effectiveState = state || webCheckoutState;
   const query = new URLSearchParams(location.search);
   const checkoutSessionId = query.get('session_id');
@@ -110,43 +112,21 @@ export default function SuccessPage() {
 
   useEffect(() => {
     if (confirmationStatus === 'confirmed' && effectiveState) {
-      const transactionId = effectiveState.transactionId || `sim-${Date.now().toString().slice(-6)}`;
+      const transactionId = effectiveState.transactionId || checkoutSessionId || generatedTransactionIdRef.current;
       const amount = effectiveState.amount;
       const planName = effectiveState.planName;
       const planId = effectiveState.planId;
-
-      // 1. Push to Google Tag Manager dataLayer
-      if (typeof window !== 'undefined') {
-        const dl = ((window as any).dataLayer = (window as any).dataLayer || []);
-        dl.push({
-          event: 'purchase',
-          ecommerce: {
-            transaction_id: transactionId,
-            value: amount,
-            currency: 'BRL',
-            items: [{
-              item_id: planId,
-              item_name: planName,
-              price: amount,
-              quantity: 1
-            }]
-          }
-        });
-
-        // 2. Fire Facebook Pixel Purchase Event
-        if (typeof (window as any).fbq === 'function') {
-          (window as any).fbq('track', 'Purchase', {
-            value: amount,
-            currency: 'BRL',
-            content_name: planName,
-            content_category: 'Subscription',
-            content_ids: [planId],
-            content_type: 'product'
-          });
-        }
+      const paymentProvider = effectiveState.paymentMethod.toLowerCase().includes('google play') ? 'google_play' : 'stripe';
+      if (paymentProvider !== 'google_play') {
+        trackPurchaseOnce({ transactionId, planId, planName, amount, paymentProvider });
       }
+      trackEvent('subscription_started', {
+        plan_id: planId,
+        plan_name: planName,
+        payment_provider: paymentProvider
+      }, { dedupeKey: `subscription_started:${user?.id || 'anonymous'}:${effectiveState.subscriptionId || transactionId}`, persistDedupe: true });
     }
-  }, [confirmationStatus, effectiveState]);
+  }, [checkoutSessionId, confirmationStatus, effectiveState, user?.id]);
 
   const handleProceed = async () => {
     if (!user || isProceeding) return;

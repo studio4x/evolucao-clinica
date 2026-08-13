@@ -51,6 +51,11 @@
             android:name="com.google.android.gms.wallet.api.enabled"
             android:value="true" />
 
+        <!-- Consent is granted by the web app through NativeAnalyticsBridge. -->
+        <meta-data
+            android:name="firebase_analytics_collection_enabled"
+            android:value="false" />
+
         <meta-data
             android:name="asset_statements"
             android:resource="@string/assetStatements" />

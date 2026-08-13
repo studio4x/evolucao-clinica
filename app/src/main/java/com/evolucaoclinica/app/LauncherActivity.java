@@ -42,6 +42,7 @@ import androidx.webkit.ServiceWorkerControllerCompat;
 import androidx.webkit.WebViewFeature;
 
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.messaging.FirebaseMessaging;
 
 import com.android.billingclient.api.BillingClient;
@@ -110,6 +111,7 @@ public class LauncherActivity extends ComponentActivity {
         }
     };
     private BillingClient billingClient;
+    private FirebaseAnalytics firebaseAnalytics;
     private PaymentSheet paymentSheet;
     private final Map<String, ProductDetails> subscriptionProducts = new HashMap<>();
     private String pendingBillingPlanId;
@@ -134,6 +136,7 @@ public class LauncherActivity extends ComponentActivity {
         captureShareIntent(getIntent());
         createDownloadNotificationChannel();
         requestRequiredPermissions();
+        initializeFirebaseAnalytics();
         paymentSheet = new PaymentSheet(this, this::onPaymentSheetResult);
         initializeBillingClient();
 
@@ -159,6 +162,7 @@ public class LauncherActivity extends ComponentActivity {
         webView.addJavascriptInterface(new NativeBillingBridge(), "NativeBillingBridge");
         webView.addJavascriptInterface(new NativeAppInfoBridge(), "NativeAppInfoBridge");
         webView.addJavascriptInterface(new NativePushBridge(), "NativePushBridge");
+        webView.addJavascriptInterface(new NativeAnalyticsBridge(), "NativeAnalyticsBridge");
         configureWebView(webView);
         webView.clearCache(true);
 
@@ -920,6 +924,118 @@ public class LauncherActivity extends ComponentActivity {
             return result.toString();
         } catch (Exception exception) {
             return String.valueOf(value).replaceAll("[^a-zA-Z0-9]", "");
+        }
+    }
+
+    private void initializeFirebaseAnalytics() {
+        try {
+            if (FirebaseApp.getApps(this).isEmpty()) {
+                FirebaseApp.initializeApp(this);
+            }
+            if (!FirebaseApp.getApps(this).isEmpty()) {
+                firebaseAnalytics = FirebaseAnalytics.getInstance(this);
+            }
+        } catch (Exception exception) {
+            Log.w(LOG_TAG, "Firebase Analytics indisponível", exception);
+        }
+    }
+
+    private boolean isValidAnalyticsEventName(String eventName) {
+        if (eventName == null || !eventName.matches("^[a-z][a-z0-9_]{0,39}$")) return false;
+        return !"first_open".equals(eventName)
+                && !"session_start".equals(eventName)
+                && !"in_app_purchase".equals(eventName);
+    }
+
+    private boolean isAllowedAnalyticsParameter(String name) {
+        if (name == null || name.length() > 40) return false;
+        return "method".equals(name)
+                || "plan_id".equals(name)
+                || "plan_name".equals(name)
+                || "value".equals(name)
+                || "currency".equals(name)
+                || "payment_provider".equals(name)
+                || "input_mode".equals(name)
+                || "is_first_activation".equals(name)
+                || "professional_segment".equals(name)
+                || "work_context".equals(name)
+                || "transaction_id".equals(name)
+                || "page_location".equals(name)
+                || "page_title".equals(name)
+                || "day".equals(name);
+    }
+
+    private boolean isSafeAnalyticsValue(String value) {
+        if (value == null || value.trim().isEmpty() || value.length() > 100) return false;
+        String normalized = value.toLowerCase(java.util.Locale.ROOT);
+        return !normalized.matches(".*(patient|evolution|clinical|diagnos|transcri|document|drive|url|email|phone|name|text|content|token|secret|access|record|cid).*" );
+    }
+
+    private final class NativeAnalyticsBridge {
+        @android.webkit.JavascriptInterface
+        public void logEvent(String eventName, String parametersJson) {
+            if (!isValidAnalyticsEventName(eventName)) return;
+            try {
+                if (firebaseAnalytics == null) initializeFirebaseAnalytics();
+                if (firebaseAnalytics == null) return;
+
+                JSONObject json = new JSONObject(parametersJson == null ? "{}" : parametersJson);
+                Bundle bundle = new Bundle();
+                java.util.Iterator<String> keys = json.keys();
+                int accepted = 0;
+                while (keys.hasNext() && accepted < 25) {
+                    String key = keys.next();
+                    if (!isAllowedAnalyticsParameter(key)) continue;
+                    Object value = json.opt(key);
+                    if (value instanceof String && isSafeAnalyticsValue((String) value)) {
+                        bundle.putString(key, ((String) value).trim());
+                        accepted++;
+                    } else if (value instanceof Boolean) {
+                        bundle.putBoolean(key, (Boolean) value);
+                        accepted++;
+                    } else if (value instanceof Number) {
+                        double number = ((Number) value).doubleValue();
+                        if (!Double.isNaN(number) && !Double.isInfinite(number)) {
+                            bundle.putDouble(key, number);
+                            accepted++;
+                        }
+                    }
+                }
+                firebaseAnalytics.logEvent(eventName, bundle);
+            } catch (Exception exception) {
+                Log.w(LOG_TAG, "Evento de Analytics rejeitado", exception);
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setUserId(String userId) {
+            if (firebaseAnalytics == null) initializeFirebaseAnalytics();
+            if (firebaseAnalytics == null) return;
+            if (userId == null || userId.trim().isEmpty()) {
+                firebaseAnalytics.setUserId(null);
+                return;
+            }
+            if (userId.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")) {
+                firebaseAnalytics.setUserId(userId);
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setUserProperty(String name, String value) {
+            if (firebaseAnalytics == null) initializeFirebaseAnalytics();
+            if (firebaseAnalytics == null || value == null || value.length() > 36 || !isSafeAnalyticsValue(value)) return;
+            if ("professional_segment".equals(name)
+                    || "work_context".equals(name)
+                    || "subscription_plan".equals(name)
+                    || "app_environment".equals(name)) {
+                firebaseAnalytics.setUserProperty(name, value.trim());
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public void setAnalyticsCollectionEnabled(boolean enabled) {
+            if (firebaseAnalytics == null) initializeFirebaseAnalytics();
+            if (firebaseAnalytics != null) firebaseAnalytics.setAnalyticsCollectionEnabled(enabled);
         }
     }
 

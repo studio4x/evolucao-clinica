@@ -59,6 +59,7 @@ import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBounda
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
+import { getAnalyticsConsent, setAnalyticsUser, trackEvent, trackPageView } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
@@ -95,6 +96,30 @@ function NativeBillingRestore() {
     }
     return removeListener;
   }, [user]);
+
+  return null;
+}
+
+function AnalyticsRouteObserver() {
+  const location = useLocation();
+  const lastPageRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const sendPageView = () => {
+      if (getAnalyticsConsent() !== 'granted') {
+        lastPageRef.current = null;
+        return;
+      }
+      const pageKey = `${location.pathname}`;
+      if (lastPageRef.current === pageKey) return;
+      lastPageRef.current = pageKey;
+      trackPageView(location.pathname);
+    };
+
+    sendPageView();
+    window.addEventListener('analytics-consent-changed', sendPageView);
+    return () => window.removeEventListener('analytics-consent-changed', sendPageView);
+  }, [location.pathname]);
 
   return null;
 }
@@ -238,8 +263,31 @@ export default function App() {
     setGoogleGrantedScopes
   } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
+  const subscriptionSnapshotRef = useRef<{ userId: string; status: string | null; endsAt: string | null; plan: string | null } | null>(null);
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
+
+  const observeSubscriptionTransition = (next: { userId: string; status: string | null; endsAt: string | null; plan: string | null }) => {
+    const previous = subscriptionSnapshotRef.current;
+    const activeStatuses = new Set(['active', 'trialing']);
+    if (previous?.userId === next.userId) {
+      if (activeStatuses.has(previous.status || '') && next.status === 'canceled') {
+        trackEvent('subscription_cancelled', {
+          plan_id: next.plan || undefined
+        }, { dedupeKey: `subscription_cancelled:${next.userId}:${next.endsAt || next.status}`, persistDedupe: true });
+      } else if (
+        activeStatuses.has(previous.status || '') &&
+        activeStatuses.has(next.status || '') &&
+        previous.endsAt && next.endsAt &&
+        new Date(next.endsAt).getTime() > new Date(previous.endsAt).getTime()
+      ) {
+        trackEvent('subscription_renewed', {
+          plan_id: next.plan || undefined
+        }, { dedupeKey: `subscription_renewed:${next.userId}:${next.endsAt}`, persistDedupe: true });
+      }
+    }
+    subscriptionSnapshotRef.current = next;
+  };
 
   useEffect(() => {
     clearLazyRetryQueryParam();
@@ -494,6 +542,19 @@ export default function App() {
               profileData.subscription_ends_at,
               profileData.trial_ends_at
             );
+            observeSubscriptionTransition({
+              userId: session.user.id,
+              status: profileData.subscription_status,
+              endsAt: profileData.subscription_ends_at,
+              plan: profileData.subscription_plan
+            });
+
+            setAnalyticsUser(session.user.id, {
+              professional_segment: typeof profileData.professional_title === 'string' ? profileData.professional_title : null,
+              work_context: typeof profileData.work_context === 'string' ? profileData.work_context : null,
+              subscription_plan: typeof profileData.subscription_plan === 'string' ? profileData.subscription_plan : null,
+              app_environment: typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent) ? 'android' : 'web'
+            });
 
             void syncAcquisitionWithDatabase(session.user.id, profileData.acquisition_info);
 
@@ -563,6 +624,12 @@ export default function App() {
                         updatedProf.subscription_ends_at,
                         updatedProf.trial_ends_at
                       );
+                      observeSubscriptionTransition({
+                        userId: session.user.id,
+                        status: updatedProf.subscription_status,
+                        endsAt: updatedProf.subscription_ends_at,
+                        plan: updatedProf.subscription_plan
+                      });
 
                       if (updatedProf.status !== 'pending') {
                         pendingOnboardingNoticeRef.current = null;
@@ -597,6 +664,7 @@ export default function App() {
           }
         } else {
           await clearProfessionalChannel();
+          subscriptionSnapshotRef.current = null;
           pendingOnboardingNoticeRef.current = null;
           clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
           if (currentState.user !== null || currentState.profileStatus !== null) {
@@ -628,6 +696,18 @@ export default function App() {
 
     // Escuta mudanças no Auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session && _event === 'SIGNED_IN') {
+        const method = typeof session.user.app_metadata?.provider === 'string'
+          ? session.user.app_metadata.provider
+          : 'google';
+        trackEvent('login', { method }, { dedupeKey: `login:${session.user.id}:${session.user.last_sign_in_at || 'session'}` });
+
+        const createdAt = new Date(session.user.created_at).getTime();
+        const signedInAt = new Date(session.user.last_sign_in_at || '').getTime();
+        if (Number.isFinite(createdAt) && Number.isFinite(signedInAt) && Math.abs(signedInAt - createdAt) < 5 * 60 * 1000) {
+          trackEvent('sign_up', { method }, { dedupeKey: `sign_up:${session.user.id}` });
+        }
+      }
       handleAuthSession(session);
     });
 
@@ -639,6 +719,7 @@ export default function App() {
 
   return (
     <Router>
+      <AnalyticsRouteObserver />
       <CookieConsent />
       <InstallPrompt />
       <PermissionNotice />

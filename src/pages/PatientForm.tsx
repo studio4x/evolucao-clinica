@@ -12,6 +12,7 @@ import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogl
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { trackEvent } from '../services/analytics';
 
 declare global {
   interface Window {
@@ -721,6 +722,7 @@ export default function PatientForm() {
           .from('patients')
           .insert(patientData);
         if (error) throw error;
+        trackEvent('patient_created', {}, { dedupeKey: `patient_created:${user.id}:${patientId}`, persistDedupe: true });
         void sendNotification({
           title: '✅ Paciente Cadastrado com Sucesso',
           content: `O paciente ${formData.full_name} foi registrado na plataforma e já está disponível no seu prontuário.`,

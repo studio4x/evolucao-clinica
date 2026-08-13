@@ -10,6 +10,7 @@ import {
   isDeclaredProfessionalTitle,
   isValidWorkContext,
 } from '../../constants/professionalProfile';
+import { trackEvent } from '../../services/analytics';
 
 type GrowthProfileGateProps = {
   children: ReactNode;
@@ -174,6 +175,10 @@ export function GrowthProfileGate({ children }: GrowthProfileGateProps) {
         console.warn('[GrowthProfileGate] Perfil salvo, mas metadata do Auth não foi sincronizada:', authError.message);
       }
 
+      trackEvent('professional_profile_complete', {
+        professional_segment: finalProfessional,
+        work_context: workContext
+      }, { dedupeKey: `professional_profile_complete:${user.id}`, persistDedupe: true });
       setShowGate(false);
     } catch (error: any) {
       console.error('[GrowthProfileGate] Erro ao salvar perfil de Growth:', error);

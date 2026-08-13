@@ -9,6 +9,7 @@ import { completeOnboarding, ensureOnboardingState, getOnboardingDestination, ge
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
+import { trackEvent } from '../services/analytics';
 
 const normalizeText = (text: string): string => {
   if (!text) return '';
@@ -131,6 +132,7 @@ export default function Onboarding() {
   const handleStartOnboarding = () => {
     if (!user?.id) return;
     setOnboardingState(user.id, { step: 'patient' });
+    trackEvent('onboarding_begin', {}, { dedupeKey: `onboarding_begin:${user.id}`, persistDedupe: true });
     navigate('/painel/patients/new?onboarding=1', { replace: true });
   };
 
@@ -242,9 +244,18 @@ export default function Onboarding() {
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     if (!user?.id) return;
+    const { error } = await supabase
+      .from('professionals')
+      .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+      .eq('id', user.id);
+    if (error) {
+      console.error('[Onboarding] Não foi possível confirmar a conclusão no banco:', error);
+      return;
+    }
     completeOnboarding(user.id);
+    trackEvent('onboarding_complete', {}, { dedupeKey: `onboarding_complete:${user.id}`, persistDedupe: true });
     navigate('/painel/dashboard', { replace: true });
   };
 

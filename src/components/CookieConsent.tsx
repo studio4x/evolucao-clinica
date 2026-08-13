@@ -1,42 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Check } from 'lucide-react';
+import { getAnalyticsConsent, setAnalyticsConsent } from '../services/analytics';
 
 export const CookieConsent = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
-  const [analyticsConsent, setAnalyticsConsent] = useState(true);
+  const [analyticsConsent, setAnalyticsConsentState] = useState(false);
 
   useEffect(() => {
-    const consent = localStorage.getItem('cookie-consent');
-    if (!consent) {
+    const consent = getAnalyticsConsent();
+    setAnalyticsConsentState(consent === 'granted');
+    setIsVisible(consent === 'unknown');
+
+    const openPreferences = () => {
+      setAnalyticsConsentState(getAnalyticsConsent() === 'granted');
+      setShowPreferences(true);
       setIsVisible(true);
-    } else {
-      try {
-        const parsed = JSON.parse(consent);
-        if (parsed && typeof parsed === 'object') {
-          setAnalyticsConsent(!!parsed.analytics);
-        }
-      } catch (e) {
-        // Se for string antiga 'true', significa consentimento total
-        setAnalyticsConsent(consent === 'true');
-      }
-    }
+    };
+    window.addEventListener('cookie-consent-open', openPreferences);
+    return () => window.removeEventListener('cookie-consent-open', openPreferences);
   }, []);
 
   const handleAcceptAll = () => {
-    localStorage.setItem('cookie-consent', JSON.stringify({ necessary: true, analytics: true }));
+    setAnalyticsConsent('granted');
     setIsVisible(false);
     window.dispatchEvent(new Event("cookie-consent-accepted"));
   };
 
   const handleSavePreferences = () => {
-    localStorage.setItem('cookie-consent', JSON.stringify({ necessary: true, analytics: analyticsConsent }));
+    setAnalyticsConsent(analyticsConsent ? 'granted' : 'denied');
     setIsVisible(false);
     setShowPreferences(false);
     window.dispatchEvent(new Event("cookie-consent-accepted"));
   };
 
-  if (!isVisible) return null;
+  if (!isVisible) {
+    return (
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event('cookie-consent-open'))}
+        className="fixed bottom-2 left-2 z-[60] rounded-full border border-brand-border bg-white px-3 py-1.5 text-[10px] font-semibold text-brand-text-muted shadow-sm hover:text-brand-primary"
+        aria-label="Abrir preferências de privacidade"
+      >
+        Privacidade
+      </button>
+    );
+  }
 
   return (
     <>
@@ -106,7 +115,7 @@ export const CookieConsent = () => {
                   <input 
                     type="checkbox"
                     checked={analyticsConsent}
-                    onChange={(e) => setAnalyticsConsent(e.target.checked)}
+                    onChange={(e) => setAnalyticsConsentState(e.target.checked)}
                     className="w-4.5 h-4.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary cursor-pointer accent-brand-primary"
                   />
                 </div>
