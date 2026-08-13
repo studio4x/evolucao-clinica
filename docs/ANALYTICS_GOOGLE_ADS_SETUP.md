@@ -1,99 +1,50 @@
-# Analytics, GA4, Google Ads e GTM
+# Analytics, GTM, GA4, Firebase e Google Ads
 
-## Arquitetura
+## Privacidade e carregamento
 
-`src/services/analytics.ts` é a única interface de rastreamento do front-end.
+`src/services/analytics.ts` é a única interface de tracking do cliente. `public/brand-bootstrap.js` aplica exclusivamente marca e tema: ele não busca nem executa GTM, Meta Pixel ou scripts arbitrários.
 
-- Web: envia eventos ao `dataLayer` do GTM. O envio direto ao GA4 só é usado quando `VITE_ANALYTICS_DIRECT_GA4=true` e não existe `VITE_GTM_ID`.
-- Android/WebView: encaminha eventos ao `NativeAnalyticsBridge`, que valida novamente os dados antes de chamar Firebase Analytics.
-- Sem consentimento, os scripts de Analytics/GTM não são carregados e os eventos são descartados.
-- Firebase Analytics começa com coleta desativada no Android e só é habilitado após o consentimento web.
-- Page views usam somente o caminho da rota, sem query string ou fragmento.
+Antes de qualquer script Google, o app executa sincronicamente `gtag('consent', 'default', ...)` com os quatro armazenamentos negados. O banner mantém escolhas independentes:
 
-Configuração web:
+- `necessary`: sempre ativo;
+- `analytics`: GA4, GTM de analytics e Firebase Analytics;
+- `marketing`: Google Ads/remarketing e Meta Pixel.
+
+Ao salvar ou revogar, é enviado `gtag('consent', 'update', ...)`. GTM/GA4/Meta não carregam sem a respectiva permissão. Revogar Analytics também desativa Firebase e remove `userId` e propriedades nativas.
+
+`VITE_GTM_ID` é canônico e tem precedência. Sem ele, o ID dinâmico `tracking_settings.gtm_id` pode ser usado pelo serviço central. GA4 direto só é usado se `VITE_ANALYTICS_DIRECT_GA4=true` e nenhum GTM estiver configurado. Nunca configure uma tag GA4 direta dentro de um container GTM além da configuração acima.
+
+Os campos legados `head_scripts`, `body_scripts` e `footer_scripts` não são executados. A configuração dinâmica aceita apenas IDs, e `fb_pixel_id` exige Marketing.
+
+## Firebase Android
+
+O `LauncherActivity` inicia Firebase Analytics com coleta desativada. A ponte `NativeAnalyticsBridge` rejeita eventos, `userId` e propriedades antes de Analytics consent. Apenas o UUID interno Supabase é aceito como `userId`; logout ou revogação o remove junto das propriedades permitidas.
+
+## Eventos
+
+| Evento | Fonte confirmada | Destino | Consentimento | Deduplicação |
+| --- | --- | --- | --- | --- |
+| `sign_up`, `login` | mudança confirmada do Supabase Auth | cliente | analytics | usuário/sessão |
+| `onboarding_begin`, `onboarding_complete`, `professional_profile_complete` | gravação concluída | cliente | analytics | operação/usuário |
+| `patient_created`, `evolution_*`, `audio_evolution_completed` | persistência concluída | cliente | analytics | operação |
+| `begin_checkout` | nova tentativa de checkout | cliente | analytics; Meta também marketing | `checkout_attempt_id` em memória, não enviado |
+| `page_view` | mudança de rota | cliente | analytics | rota renderizada; sem query/fragment |
+| `purchase`, `subscription_started`, `subscription_renewed`, `subscription_cancelled` | webhook Stripe confirmado | GA4 Measurement Protocol | analytics persistido | chave estável de invoice/evento no banco |
+
+Eventos descartados sem consentimento não são enfileirados para envio posterior. `purchase` personalizado não é emitido para Google Play; `in_app_purchase`, `first_open` e `session_start` continuam automáticos do Firebase. Não há confirmação RTDN/Google Play suficiente neste repositório para emitir renovação/cancelamento Play: esses eventos não são simulados no cliente.
+
+## Variáveis
 
 ```env
-VITE_GTM_ID=GTM-XXXXXXXX
-# Alternativa sem GTM; não habilitar junto com GTM.
-VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
-VITE_ANALYTICS_DIRECT_GA4=false
+VITE_GTM_ID=GTM-XXXXXXXX          # opcional; preferencial quando houver GTM
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXX # somente para GA4 direto
+VITE_ANALYTICS_DIRECT_GA4=false   # true somente sem GTM
+GA4_MEASUREMENT_ID=G-XXXXXXXX     # Supabase Edge Function secret
+GA4_API_SECRET=...                # Supabase Edge Function secret, nunca VITE_
 ```
 
-Não coloque credenciais, `google-services.json`, chaves privadas ou tokens neste repositório.
+Defina as duas últimas apenas em Supabase Secrets para `stripe-webhook`. Não publique `google-services.json`, secrets, tokens, IDs de pacientes, evoluções, conteúdo clínico, documentos, URLs Drive, e-mail ou telefone.
 
-## Eventos do funil
+## Validação operacional
 
-| Evento | Origem | Parâmetros permitidos |
-| --- | --- | --- |
-| `sign_up` | autenticação Supabase concluída para conta recém-criada | `method` |
-| `login` | autenticação Supabase concluída | `method` |
-| `onboarding_begin` | início confirmado do assistente | nenhum |
-| `onboarding_complete` | `professionals.onboarding_completed` salvo | nenhum |
-| `professional_profile_complete` | profissão/contexto salvos | `professional_segment`, `work_context` |
-| `patient_created` | insert de paciente concluído | nenhum |
-| `evolution_started` | evolução criada e processamento iniciado | `input_mode`, `is_first_activation` |
-| `evolution_completed` | evolução e Google Docs finalizados | `input_mode`, `is_first_activation` |
-| `audio_evolution_completed` | evolução concluída com áudio | `input_mode`, `is_first_activation` |
-| `begin_checkout` | checkout aberto com plano selecionado | `plan_id`, `plan_name`, `value`, `currency` |
-| `purchase` | pagamento Stripe confirmado pelo webhook | `transaction_id`, `plan_id`, `plan_name`, `value`, `currency`, `payment_provider` |
-| `subscription_started` | assinatura confirmada no banco | `plan_id`, `plan_name`, `payment_provider` |
-| `subscription_renewed` | lifecycle/backend confirmado | `plan_id`, `payment_provider` |
-| `subscription_cancelled` | lifecycle/backend confirmado | `plan_id`, `payment_provider` |
-
-`first_open`, `session_start` e `in_app_purchase` permanecem sob a coleta automática do Firebase. Não os replique no front-end. Para Google Play, o evento customizado `purchase` não é emitido; use `in_app_purchase` e `subscription_started`.
-
-Os eventos não recebem `patient_id`, `evolution_id`, nomes, textos, transcrições, diagnósticos, documentos, URLs/IDs de Drive, tokens, e-mail ou telefone. A allow-list é aplicada no TypeScript e novamente na ponte Java.
-
-## Lifecycle e idempotência
-
-As triggers de `lifecycle_events` continuam sendo a fonte de verdade operacional para eventos confirmados pelo backend. O front-end emite apenas a confirmação necessária para mensuração, sem copiar payload clínico.
-
-`purchase`, `subscription_started`, onboarding, paciente e evolução usam chaves de deduplicação. Compras usam `transaction_id` estável e marca persistida no `localStorage`; a página de sucesso pode ser reaberta sem gerar uma nova compra.
-
-Renovações e cancelamentos devem ser conectados ao fluxo de backend/webhook que já confirma o estado da assinatura. Quando esse estado for disponibilizado ao front-end, use `trackEvent` com uma chave persistente baseada no evento confirmado e no período da assinatura.
-
-## Firebase, GA4, Google Play e Google Ads
-
-1. No Firebase Console, confirme o app Android do projeto associado ao `google-services.json` e habilite Google Analytics para o projeto.
-2. Em Firebase > Project settings > Integrations, vincule a propriedade GA4 correta.
-3. Em GA4, confirme a coleta de `page_view`, os eventos do funil e marque como conversões pelo menos `sign_up`, `purchase`, `subscription_started` e `evolution_completed` conforme o objetivo da campanha.
-4. Vincule GA4 ao Google Ads e importe somente as conversões aprovadas para publicidade.
-5. No Google Play Console, mantenha o mesmo app/projeto Firebase. O Firebase coleta automaticamente `in_app_purchase` para compras Play Billing; não crie um segundo evento nativo.
-6. Teste primeiro em uma propriedade de homologação ou público interno antes de ativar campanhas.
-
-## GTM web
-
-Crie uma tag GA4 Configuration ou Google tag com o Measurement ID, acionada pelo consentimento de Analytics. Crie uma tag GA4 Event para cada evento necessário usando o nome do evento no campo `event` do dataLayer e mapeie somente os parâmetros da tabela.
-
-Ative Consent Initialization/Consent Mode com estado padrão negado. O código atual envia `consent_default` negado e `consent_update` após a escolha. Não instale uma segunda tag GA4 diretamente no HTML.
-
-Para Google Ads, use as conversões importadas do GA4 ou tags específicas no GTM, nunca as duas para o mesmo evento sem uma regra explícita de deduplicação.
-
-## Consentimento
-
-O estado é persistido em `cookie-consent`. A escolha pode ser revogada pelo botão **Privacidade** exibido no site/app. A autenticação, o Supabase, o billing e os recursos essenciais não dependem da coleta.
-
-A configuração final de consentimento, retenção, anúncios e compartilhamento deve ser validada pelo responsável pela privacidade quanto à LGPD. Este documento não é uma afirmação jurídica.
-
-## Testes e debug
-
-- `npm run test`: testes unitários do projeto, incluindo consentimento, sanitização, deduplicação, ponte Android simulada e ausência da ponte no navegador.
-- `npm run build`: valida o bundle web.
-- Firebase DebugView: use um build/devices de teste e valide a mudança de coleta após conceder consentimento.
-- GA4 Realtime: valide `page_view`, `begin_checkout` e `purchase` com uma transação de teste.
-- GTM Preview: confirme que o evento chega uma única vez e que nenhum campo clínico aparece no preview.
-- Android: inspecione o Logcat por `FirebaseAnalytics` e teste concessão, recusa e revogação em instalações limpas.
-
-O modo de debug do serviço usa apenas `console.debug` em desenvolvimento e registra somente o nome do evento e os parâmetros já sanitizados.
-
-## Checklist de publicação
-
-- [ ] IDs de GTM/GA4 configurados no ambiente correto.
-- [ ] Firebase vinculado ao app Android correto.
-- [ ] `google-services.json` fornecido apenas no ambiente de build e fora do Git.
-- [ ] Consent Mode e tags testados no GTM Preview.
-- [ ] Eventos e conversões validados no GA4 Realtime/Firebase DebugView.
-- [ ] Compra Stripe testada com webhook e `transaction_id` estável.
-- [ ] Compra Google Play validada pela coleta automática `in_app_purchase`.
-- [ ] Nenhum dado clínico aparece no dataLayer, Firebase ou GA4.
-- [ ] Configuração final revisada para LGPD, retenção e políticas de anúncios.
+Use GTM Preview para confirmar um único `gtm.js`, Firebase DebugView para o Android, GA4 Realtime/DebugView para eventos e o Google Play Console para RTDN quando essa infraestrutura for adicionada. A compilação não substitui essas verificações com contas reais.

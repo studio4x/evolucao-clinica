@@ -112,6 +112,8 @@ public class LauncherActivity extends ComponentActivity {
     };
     private BillingClient billingClient;
     private FirebaseAnalytics firebaseAnalytics;
+    // The Web consent UI is the source of truth. Collection starts denied.
+    private boolean analyticsConsentGranted = false;
     private PaymentSheet paymentSheet;
     private final Map<String, ProductDetails> subscriptionProducts = new HashMap<>();
     private String pendingBillingPlanId;
@@ -934,6 +936,7 @@ public class LauncherActivity extends ComponentActivity {
             }
             if (!FirebaseApp.getApps(this).isEmpty()) {
                 firebaseAnalytics = FirebaseAnalytics.getInstance(this);
+                firebaseAnalytics.setAnalyticsCollectionEnabled(analyticsConsentGranted);
             }
         } catch (Exception exception) {
             Log.w(LOG_TAG, "Firebase Analytics indisponível", exception);
@@ -968,13 +971,13 @@ public class LauncherActivity extends ComponentActivity {
     private boolean isSafeAnalyticsValue(String value) {
         if (value == null || value.trim().isEmpty() || value.length() > 100) return false;
         String normalized = value.toLowerCase(java.util.Locale.ROOT);
-        return !normalized.matches(".*(patient|evolution|clinical|diagnos|transcri|document|drive|url|email|phone|name|text|content|token|secret|access|record|cid).*" );
+        return !normalized.matches(".*(patient|evolution|clinical|diagnos|transcri|document|drive|https?://|email|phone|token|secret|access[_-]?token|record|cid).*" );
     }
 
     private final class NativeAnalyticsBridge {
         @android.webkit.JavascriptInterface
         public void logEvent(String eventName, String parametersJson) {
-            if (!isValidAnalyticsEventName(eventName)) return;
+            if (!analyticsConsentGranted || !isValidAnalyticsEventName(eventName)) return;
             try {
                 if (firebaseAnalytics == null) initializeFirebaseAnalytics();
                 if (firebaseAnalytics == null) return;
@@ -1015,6 +1018,7 @@ public class LauncherActivity extends ComponentActivity {
                 firebaseAnalytics.setUserId(null);
                 return;
             }
+            if (!analyticsConsentGranted) return;
             if (userId.matches("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$")) {
                 firebaseAnalytics.setUserId(userId);
             }
@@ -1023,19 +1027,34 @@ public class LauncherActivity extends ComponentActivity {
         @android.webkit.JavascriptInterface
         public void setUserProperty(String name, String value) {
             if (firebaseAnalytics == null) initializeFirebaseAnalytics();
-            if (firebaseAnalytics == null || value == null || value.length() > 36 || !isSafeAnalyticsValue(value)) return;
+            if (firebaseAnalytics == null) return;
             if ("professional_segment".equals(name)
                     || "work_context".equals(name)
                     || "subscription_plan".equals(name)
                     || "app_environment".equals(name)) {
+                if (value == null) {
+                    firebaseAnalytics.setUserProperty(name, null);
+                    return;
+                }
+                if (!analyticsConsentGranted || value.length() > 36 || !isSafeAnalyticsValue(value)) return;
                 firebaseAnalytics.setUserProperty(name, value.trim());
             }
         }
 
         @android.webkit.JavascriptInterface
         public void setAnalyticsCollectionEnabled(boolean enabled) {
+            analyticsConsentGranted = enabled;
             if (firebaseAnalytics == null) initializeFirebaseAnalytics();
-            if (firebaseAnalytics != null) firebaseAnalytics.setAnalyticsCollectionEnabled(enabled);
+            if (firebaseAnalytics != null) {
+                firebaseAnalytics.setAnalyticsCollectionEnabled(enabled);
+                if (!enabled) {
+                    firebaseAnalytics.setUserId(null);
+                    firebaseAnalytics.setUserProperty("professional_segment", null);
+                    firebaseAnalytics.setUserProperty("work_context", null);
+                    firebaseAnalytics.setUserProperty("subscription_plan", null);
+                    firebaseAnalytics.setUserProperty("app_environment", null);
+                }
+            }
         }
     }
 

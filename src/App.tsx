@@ -59,7 +59,7 @@ import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBounda
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
-import { getAnalyticsConsent, setAnalyticsUser, trackEvent, trackPageView } from './services/analytics';
+import { getAnalyticsConsent, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackEvent, trackPageView } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
@@ -263,31 +263,8 @@ export default function App() {
     setGoogleGrantedScopes
   } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
-  const subscriptionSnapshotRef = useRef<{ userId: string; status: string | null; endsAt: string | null; plan: string | null } | null>(null);
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
-
-  const observeSubscriptionTransition = (next: { userId: string; status: string | null; endsAt: string | null; plan: string | null }) => {
-    const previous = subscriptionSnapshotRef.current;
-    const activeStatuses = new Set(['active', 'trialing']);
-    if (previous?.userId === next.userId) {
-      if (activeStatuses.has(previous.status || '') && next.status === 'canceled') {
-        trackEvent('subscription_cancelled', {
-          plan_id: next.plan || undefined
-        }, { dedupeKey: `subscription_cancelled:${next.userId}:${next.endsAt || next.status}`, persistDedupe: true });
-      } else if (
-        activeStatuses.has(previous.status || '') &&
-        activeStatuses.has(next.status || '') &&
-        previous.endsAt && next.endsAt &&
-        new Date(next.endsAt).getTime() > new Date(previous.endsAt).getTime()
-      ) {
-        trackEvent('subscription_renewed', {
-          plan_id: next.plan || undefined
-        }, { dedupeKey: `subscription_renewed:${next.userId}:${next.endsAt}`, persistDedupe: true });
-      }
-    }
-    subscriptionSnapshotRef.current = next;
-  };
 
   useEffect(() => {
     clearLazyRetryQueryParam();
@@ -370,6 +347,7 @@ export default function App() {
     clearSilentGoogleRefreshFlag(useAuthStore.getState().googleAccessUserId);
     setUser(null);
     setProfileInfo(null, null, null, null, null, null);
+    setAnalyticsUser(null);
     clearPendingGoogleScopes();
     await supabase.auth.signOut();
   };
@@ -542,19 +520,13 @@ export default function App() {
               profileData.subscription_ends_at,
               profileData.trial_ends_at
             );
-            observeSubscriptionTransition({
-              userId: session.user.id,
-              status: profileData.subscription_status,
-              endsAt: profileData.subscription_ends_at,
-              plan: profileData.subscription_plan
-            });
-
             setAnalyticsUser(session.user.id, {
               professional_segment: typeof profileData.professional_title === 'string' ? profileData.professional_title : null,
               work_context: typeof profileData.work_context === 'string' ? profileData.work_context : null,
               subscription_plan: typeof profileData.subscription_plan === 'string' ? profileData.subscription_plan : null,
               app_environment: typeof navigator !== 'undefined' && /EvolucaoClinicaApp/i.test(navigator.userAgent) ? 'android' : 'web'
             });
+            void syncAnalyticsConsentForCurrentUser();
 
             void syncAcquisitionWithDatabase(session.user.id, profileData.acquisition_info);
 
@@ -624,13 +596,6 @@ export default function App() {
                         updatedProf.subscription_ends_at,
                         updatedProf.trial_ends_at
                       );
-                      observeSubscriptionTransition({
-                        userId: session.user.id,
-                        status: updatedProf.subscription_status,
-                        endsAt: updatedProf.subscription_ends_at,
-                        plan: updatedProf.subscription_plan
-                      });
-
                       if (updatedProf.status !== 'pending') {
                         pendingOnboardingNoticeRef.current = null;
                       }
@@ -664,7 +629,7 @@ export default function App() {
           }
         } else {
           await clearProfessionalChannel();
-          subscriptionSnapshotRef.current = null;
+          setAnalyticsUser(null);
           pendingOnboardingNoticeRef.current = null;
           clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
           if (currentState.user !== null || currentState.profileStatus !== null) {

@@ -8,7 +8,6 @@ import { getOnboardingDestination } from '../utils/onboarding';
 import { supabase } from '../supabaseClient';
 import { waitForConfirmedSubscription } from '../services/billing';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
-import { trackEvent, trackPurchaseOnce } from '../services/analytics';
 
 const formatRenewalDate = (dateStr: string) => {
   try {
@@ -109,24 +108,6 @@ export default function SuccessPage() {
     void confirmFromWebhook();
     return () => { cancelled = true; };
   }, [checkoutSessionId, profileRole, queryPlanId, setProfileInfo, state, trialEndsAt, user]);
-
-  useEffect(() => {
-    if (confirmationStatus === 'confirmed' && effectiveState) {
-      const transactionId = effectiveState.transactionId || checkoutSessionId || generatedTransactionIdRef.current;
-      const amount = effectiveState.amount;
-      const planName = effectiveState.planName;
-      const planId = effectiveState.planId;
-      const paymentProvider = effectiveState.paymentMethod.toLowerCase().includes('google play') ? 'google_play' : 'stripe';
-      if (paymentProvider !== 'google_play') {
-        trackPurchaseOnce({ transactionId, planId, planName, amount, paymentProvider });
-      }
-      trackEvent('subscription_started', {
-        plan_id: planId,
-        plan_name: planName,
-        payment_provider: paymentProvider
-      }, { dedupeKey: `subscription_started:${user?.id || 'anonymous'}:${effectiveState.subscriptionId || transactionId}`, persistDedupe: true });
-    }
-  }, [checkoutSessionId, confirmationStatus, effectiveState, user?.id]);
 
   const handleProceed = async () => {
     if (!user || isProceeding) return;

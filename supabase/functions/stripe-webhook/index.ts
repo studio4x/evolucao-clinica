@@ -58,6 +58,53 @@ async function resolveOwner(admin: any, subscription: any) {
   return { userId, planId };
 }
 
+async function dispatchConfirmedGa4Event(
+  admin: any,
+  input: { eventKey: string; userId: string; eventName: "purchase" | "subscription_started" | "subscription_renewed" | "subscription_cancelled"; payload: Record<string, string | number> },
+) {
+  // Measurement Protocol is opt-in: a server-confirmed payment must not bypass
+  // the account's Analytics consent captured by the client.
+  const { data: consent } = await admin.from("analytics_consents")
+    .select("analytics_granted")
+    .eq("user_id", input.userId)
+    .maybeSingle();
+  if (!consent?.analytics_granted) return;
+
+  const { data: claimed, error: claimError } = await admin.from("analytics_event_deliveries")
+    .insert({
+      event_key: input.eventKey,
+      user_id: input.userId,
+      event_name: input.eventName,
+      provider: "stripe",
+      payload: input.payload,
+    })
+    .select("id")
+    .maybeSingle();
+  if (claimError || !claimed) return; // already delivered/claimed by another webhook retry
+
+  const measurementId = Deno.env.get("GA4_MEASUREMENT_ID");
+  const apiSecret = Deno.env.get("GA4_API_SECRET");
+  if (!measurementId || !apiSecret) {
+    await admin.from("analytics_event_deliveries").update({ status: "failed", last_error: "GA4_MEASUREMENT_ID or GA4_API_SECRET missing", updated_at: new Date().toISOString() }).eq("id", claimed.id);
+    return;
+  }
+  // A random non-identifying client_id is sufficient for server-confirmed
+  // conversion delivery; no clinical record or account PII leaves Supabase.
+  const clientId = `${Math.floor(Math.random() * 9_000_000_000) + 1_000_000_000}.${Date.now()}`;
+  try {
+    const response = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${encodeURIComponent(measurementId)}&api_secret=${encodeURIComponent(apiSecret)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, events: [{ name: input.eventName, params: input.payload }] }),
+    });
+    if (!response.ok) throw new Error(`GA4 Measurement Protocol HTTP ${response.status}`);
+    await admin.from("analytics_event_deliveries").update({ status: "sent", sent_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() }).eq("id", claimed.id);
+  } catch (error) {
+    await admin.from("analytics_event_deliveries").update({ status: "failed", last_error: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500), updated_at: new Date().toISOString() }).eq("id", claimed.id);
+    console.error("[stripe-webhook] Falha no Measurement Protocol", error);
+  }
+}
+
 async function syncStripeSubscription(admin: any, subscription: any) {
   const { userId, planId } = await resolveOwner(admin, subscription);
   if (!userId || !planId) {
@@ -279,6 +326,14 @@ serve(async (req) => {
           status: synced.status,
           currentPeriodEnd: synced.currentPeriodEnd,
         });
+        const gaPayload = {
+          plan_id: String(synced.planId).slice(0, 100),
+          value: Number(transaction.amount),
+          currency: String(transaction.currency || "BRL").toUpperCase().slice(0, 3),
+          payment_provider: "stripe",
+        };
+        await dispatchConfirmedGa4Event(admin, { eventKey: `purchase:${invoice.id}`, userId: synced.userId, eventName: "purchase", payload: { transaction_id: String(invoice.id).slice(0, 100), ...gaPayload } });
+        await dispatchConfirmedGa4Event(admin, { eventKey: `${isInitialInvoice ? "subscription_started" : "subscription_renewed"}:${invoice.id}`, userId: synced.userId, eventName: isInitialInvoice ? "subscription_started" : "subscription_renewed", payload: gaPayload });
         break;
       }
 
@@ -328,6 +383,14 @@ serve(async (req) => {
             planId: synced.planId,
             status: synced.status,
             currentPeriodEnd: synced.currentPeriodEnd,
+          });
+        }
+        if (synced && !synced.duplicate && (event.type === "customer.subscription.deleted" || synced.status === "canceled")) {
+          await dispatchConfirmedGa4Event(admin, {
+            eventKey: `subscription_cancelled:${event.id}`,
+            userId: synced.userId,
+            eventName: "subscription_cancelled",
+            payload: { plan_id: String(synced.planId).slice(0, 100), payment_provider: "stripe" },
           });
         }
         break;

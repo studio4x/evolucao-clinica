@@ -430,12 +430,9 @@ export default function AdminPanel() {
   const [brandSettingsLoading, setBrandSettingsLoading] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
   const [brandSaveSuccess, setBrandSaveSuccess] = useState(false);
-  // Estados de Rastreamento (Google Tag Manager, Facebook Pixel, Head, Body, Footer)
+  // IDs aceitos pelo serviço central consent-aware.
   const [gtmId, setGtmId] = useState('');
   const [fbPixelId, setFbPixelId] = useState('');
-  const [headScripts, setHeadScripts] = useState('');
-  const [bodyScripts, setBodyScripts] = useState('');
-  const [footerScripts, setFooterScripts] = useState('');
   const [trackingSettingsLoading, setTrackingSettingsLoading] = useState(false);
   const [savingTracking, setSavingTracking] = useState(false);
   const [trackingSaveSuccess, setTrackingSaveSuccess] = useState(false);
@@ -458,9 +455,6 @@ export default function AdminPanel() {
             const parsed = JSON.parse(data.api_key);
             setGtmId(parsed.gtm_id || '');
             setFbPixelId(parsed.fb_pixel_id || '');
-            setHeadScripts(parsed.head_scripts || '');
-            setBodyScripts(parsed.body_scripts || '');
-            setFooterScripts(parsed.footer_scripts || '');
           }
         } catch (err: any) {
           console.error('Error fetching tracking settings:', err);
@@ -719,10 +713,7 @@ export default function AdminPanel() {
     try {
       const payload = {
         gtm_id: gtmId,
-        fb_pixel_id: fbPixelId,
-        head_scripts: headScripts,
-        body_scripts: bodyScripts,
-        footer_scripts: footerScripts
+        fb_pixel_id: fbPixelId
       };
 
       const { error } = await supabase
@@ -6591,7 +6582,7 @@ export default function AdminPanel() {
                         Códigos de Rastreamento & Scripts
                       </h2>
                       <p className="text-xs text-brand-text-muted mt-0.5">
-                        Configure o Google Tag Manager, Facebook Pixel e injete códigos customizados no cabeçalho, corpo e rodapé.
+                        Configure somente IDs de GTM e Meta Pixel. O carregamento ocorre após o consentimento correspondente.
                       </p>
                     </div>
                   </div>
@@ -6644,55 +6635,6 @@ export default function AdminPanel() {
                             className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono"
                           />
                           <p className="text-[11px] text-brand-text-muted">Apenas o ID numérico do seu Pixel do Facebook.</p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-5 pt-5 border-t border-brand-border">
-                        <div>
-                          <h3 className="text-sm font-semibold text-brand-primary flex items-center gap-2">
-                            <Sparkles className="w-4 h-4" />
-                            Scripts Customizados Avançados
-                          </h3>
-                          <p className="text-xs text-brand-text-muted mt-1">Use estes campos para injetar scripts gerais, tags de verificação ou qualquer outro script necessário.</p>
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
-                            Código no Head (fim do &lt;head&gt;)
-                          </label>
-                          <textarea
-                            rows={4}
-                            placeholder="<!-- Ex: Meta tags de verificação, scripts de terceiros, CSS customizado -->"
-                            value={headScripts}
-                            onChange={(e) => setHeadScripts(e.target.value)}
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono leading-relaxed"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
-                            Código no Body (início do &lt;body&gt;)
-                          </label>
-                          <textarea
-                            rows={4}
-                            placeholder="<!-- Ex: Scripts noscript, contêineres de rastreamento alternativos -->"
-                            value={bodyScripts}
-                            onChange={(e) => setBodyScripts(e.target.value)}
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono leading-relaxed"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <label className="block text-xs font-semibold text-brand-text uppercase tracking-wider">
-                            Código no Footer (fim do &lt;body&gt;)
-                          </label>
-                          <textarea
-                            rows={4}
-                            placeholder="<!-- Ex: Widgets de chat, botões de contato, scripts de fechamento -->"
-                            value={footerScripts}
-                            onChange={(e) => setFooterScripts(e.target.value)}
-                            className="w-full px-3 py-2 border border-brand-border rounded-lg bg-transparent text-brand-text focus:outline-none focus:ring-2 focus:ring-brand-primary/20 focus:border-brand-primary text-sm font-mono leading-relaxed"
-                          />
                         </div>
                       </div>
 
