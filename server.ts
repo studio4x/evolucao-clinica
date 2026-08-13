@@ -927,7 +927,13 @@ async function buildSocialShareImage(config: ReturnType<typeof normalizeSiteConf
       background: "#ffffff"
     })
     .flatten({ background: "#ffffff" })
-    .jpeg({ quality: 82, progressive: true, mozjpeg: true })
+    .png({
+      compressionLevel: 9,
+      palette: true,
+      colours: 256,
+      quality: 90,
+      effort: 10
+    })
     .toBuffer();
 }
 
@@ -963,7 +969,7 @@ function renderPublicSeoHtml(html: string, config: ReturnType<typeof normalizeSi
   const description = config.seo_description?.trim() || config.pwa_description || defaultSiteConfig.seo_description;
   const canonicalUrl = `${PRODUCTION_ORIGIN.replace(/\/$/, "")}/`;
   const imageUrl = appendBrandVersion(
-    `${canonicalUrl}api/social-share-image.jpg`,
+    `${canonicalUrl}api/social-share-image.png`,
     getBrandAssetSignature(config)
   );
 
@@ -2233,13 +2239,13 @@ app.get(["/", /^\/painel(?:\/.*)?$/], async (_req, res) => {
   }
 });
 
-app.get("/api/social-share-image.jpg", async (req, res) => {
+app.get("/api/social-share-image.png", async (req, res) => {
   try {
     const config = await getBrandConfigSnapshot();
     const image = await buildSocialShareImage(config);
     const etag = `"${createHash("sha256").update(image).digest("hex")}"`;
 
-    res.setHeader("Content-Type", "image/jpeg");
+    res.setHeader("Content-Type", "image/png");
     res.setHeader("Content-Length", String(image.length));
     res.setHeader("Cache-Control", "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800");
     res.setHeader("ETag", etag);

@@ -26,8 +26,9 @@ assert.match(
   "o servidor deve renderizar as metatags também nas rotas do painel"
 );
 assert.match(serverSource, /renderPublicSeoHtml\(html, config\)/);
-assert.match(serverSource, /app\.get\("\/api\/social-share-image\.jpg"/);
-assert.match(serverSource, /\.jpeg\(\{ quality: 82, progressive: true, mozjpeg: true \}\)/);
+assert.match(serverSource, /app\.get\("\/api\/social-share-image\.png"/);
+assert.match(serverSource, /palette: true/);
+assert.match(serverSource, /colours: 256/);
 assert.match(serverSource, /property=\["'\]og:image:secure_url/);
 assert.match(serverSource, /SOCIAL_SHARE_IMAGE_WIDTH = 1200/);
 assert.match(serverSource, /SOCIAL_SHARE_IMAGE_HEIGHT = 630/);
