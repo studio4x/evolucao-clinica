@@ -21,13 +21,19 @@ assert.ok(
   ),
   "as rotas do painel devem passar pelo renderizador dinâmico de SEO"
 );
+assert.ok(
+  dynamicSeoRoutes.some(
+    (route) => route.src === "^/social-share-image\\.png$" && route.dest === "/api/index.ts"
+  ),
+  "a imagem social pública deve passar pelo gerador dinâmico"
+);
 assert.match(
   serverSource,
   /app\.get\(\["\/", \/\^\\\/painel\(\?:\\\/\.\*\)\?\$\/\]/,
   "o servidor deve renderizar as metatags também nas rotas do painel"
 );
 assert.match(serverSource, /renderPublicSeoHtml\(html, config\)/);
-assert.match(serverSource, /app\.get\("\/api\/social-share-image\.png"/);
+assert.match(serverSource, /app\.get\(\["\/social-share-image\.png", "\/api\/social-share-image\.png"\]/);
 assert.match(serverSource, /palette: true/);
 assert.match(serverSource, /colours: 256/);
 assert.match(serverSource, /property=\["'\]og:image:secure_url/);

@@ -969,7 +969,7 @@ function renderPublicSeoHtml(html: string, config: ReturnType<typeof normalizeSi
   const description = config.seo_description?.trim() || config.pwa_description || defaultSiteConfig.seo_description;
   const canonicalUrl = `${PRODUCTION_ORIGIN.replace(/\/$/, "")}/`;
   const imageUrl = appendBrandVersion(
-    `${canonicalUrl}api/social-share-image.png`,
+    `${canonicalUrl}social-share-image.png`,
     getBrandAssetSignature(config)
   );
 
@@ -2239,7 +2239,7 @@ app.get(["/", /^\/painel(?:\/.*)?$/], async (_req, res) => {
   }
 });
 
-app.get("/api/social-share-image.png", async (req, res) => {
+app.get(["/social-share-image.png", "/api/social-share-image.png"], async (req, res) => {
   try {
     const config = await getBrandConfigSnapshot();
     const image = await buildSocialShareImage(config);
