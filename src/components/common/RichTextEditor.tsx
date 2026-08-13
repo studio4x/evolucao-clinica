@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import DOMPurify from 'dompurify';
 import { Bold, Italic, Underline, List, ListOrdered, Heading2 } from 'lucide-react';
 import { markdownToRichHtml, richHtmlToMarkdown } from '../../utils/richText';
@@ -17,11 +17,18 @@ const allowedTags = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3',
 export const RichTextEditor = ({ value, onChange, disabled, label, minHeight, resizable }: Props) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const lastValueRef = useRef(value);
+  const hasInitializedRef = useRef(false);
 
-  useEffect(() => {
-    if (!editorRef.current || lastValueRef.current === value) return;
-    editorRef.current.innerHTML = markdownToRichHtml(value);
+  // O conteúdo não pode ser passado por dangerouslySetInnerHTML em cada render.
+  // No Safari/iOS isso recria o contentEditable após cada tecla e reposiciona o
+  // cursor no início, fazendo o texto ser inserido de trás para frente.
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || (hasInitializedRef.current && lastValueRef.current === value)) return;
+
+    editor.innerHTML = markdownToRichHtml(value);
     lastValueRef.current = value;
+    hasInitializedRef.current = true;
   }, [value]);
 
   const emitChange = () => {
@@ -50,7 +57,6 @@ export const RichTextEditor = ({ value, onChange, disabled, label, minHeight, re
       <button type="button" onClick={() => format('insertOrderedList')} disabled={disabled} className="rounded-lg p-2 hover:bg-white disabled:opacity-50" title="Lista numerada"><ListOrdered size={16} /></button>
     </div>
     <div ref={editorRef} contentEditable={!disabled} suppressContentEditableWarning onInput={emitChange} onBlur={emitChange}
-      dangerouslySetInnerHTML={{ __html: markdownToRichHtml(value) }}
       style={minHeight ? { minHeight } : undefined}
       className={`min-h-[38vh] w-full overflow-y-auto p-4 text-sm leading-relaxed text-brand-text outline-none [&_h1]:my-3 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:my-3 [&_h2]:text-lg [&_h2]:font-bold [&_h3]:my-2 [&_h3]:font-semibold [&_p]:my-0 [&_p+_p]:mt-3 [&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-6 ${resizable ? 'resize-y' : ''}`} />
   </div>;
