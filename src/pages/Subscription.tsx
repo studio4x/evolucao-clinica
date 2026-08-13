@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import { StripeSubscriptionButton, type ConfirmedBillingResult } from '../components/payments/StripeSubscriptionButton';
+import { StripeSubscriptionButton, type ConfirmedBillingResult, type PendingBillingConfirmation } from '../components/payments/StripeSubscriptionButton';
 import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
@@ -439,13 +439,31 @@ export default function Subscription() {
     );
     navigate('/checkout/success', {
       state: {
-        transactionId: result.subscriptionId || `${result.provider}-${Date.now()}`,
+        transactionId: result.transactionId || result.subscriptionId || `${result.provider}-${Date.now()}`,
         subscriptionId: result.subscriptionId,
         endsAt: result.currentPeriodEnd,
         planId: plan,
         planName: getPlanDisplayName(planDetails, plan),
+        amount: result.amount || Number(planDetails.price || 0),
+        paymentMethod: paymentLabel,
+        provider: result.provider
+      },
+      replace: true
+    });
+  };
+
+  const handlePendingBillingConfirmation = (result: PendingBillingConfirmation) => {
+    const planDetails = getPlanDetails(result.planId);
+    navigate('/checkout/success', {
+      state: {
+        pendingConfirmation: true,
+        subscriptionId: result.subscriptionId,
+        planId: result.planId,
+        planName: getPlanDisplayName(planDetails, result.planId),
         amount: Number(planDetails.price || 0),
-        paymentMethod: paymentLabel
+        paymentMethod: 'Stripe (Pix, cartão ou Google Pay)',
+        provider: result.provider,
+        returnTo: '/painel/subscription'
       },
       replace: true
     });
@@ -843,6 +861,7 @@ export default function Subscription() {
                           setPaymentErrorByPlan((current) => ({ ...current, [plan.id]: '' }));
                           setLoadingPlan(loading ? plan.id : null);
                         }}
+                        onPendingConfirmation={handlePendingBillingConfirmation}
                         onSuccess={handleBillingSuccess}
                         onError={(error) => void handleBillingError(plan.id, error)}
                       />

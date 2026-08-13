@@ -18,6 +18,18 @@ async function tokenFingerprint(value: string) {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function analyticsAttribution(input: unknown) {
+  const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const clientId = typeof value.clientId === "string" && /^\d+\.\d+$/.test(value.clientId) ? value.clientId : undefined;
+  const sessionId = Number(value.sessionId);
+  const sessionNumber = Number(value.sessionNumber);
+  const result: Record<string, string | number> = {};
+  if (clientId) result.ga4ClientId = clientId;
+  if (Number.isSafeInteger(sessionId) && sessionId > 0) result.ga4SessionId = sessionId;
+  if (Number.isSafeInteger(sessionNumber) && sessionNumber > 0) result.ga4SessionNumber = sessionNumber;
+  return result;
+}
+
 async function resolveCoupon(admin: any, stripe: any, planId: string, couponCode: unknown, isProduction: boolean) {
   const code = String(couponCode || "").trim().toUpperCase();
   if (!code) return null;
@@ -47,7 +59,7 @@ serve(async (req) => {
   try {
     const admin = createAdminClient();
     const user = await requireAuthenticatedUser(req, admin);
-    const { planId, externalTransactionToken, couponCode } = await req.json();
+    const { planId, externalTransactionToken, couponCode, attribution, checkoutAttemptId } = await req.json();
     const choiceToken = String(externalTransactionToken || "").trim();
     if (!choiceToken) throw new BillingHttpError(400, "Token da escolha de faturamento ausente.");
 
@@ -72,6 +84,15 @@ serve(async (req) => {
     const customer = await getOrCreateStripeCustomer(admin, stripe, professional);
     const coupon = await resolveCoupon(admin, stripe, plan.id, couponCode, config.isProduction);
     const fingerprint = await tokenFingerprint(choiceToken);
+    const { data: analyticsConsent } = await admin
+      .from("analytics_consents")
+      .select("analytics_granted")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const attributionMetadata = analyticsConsent?.analytics_granted ? analyticsAttribution(attribution) : {};
+    const attemptId = typeof checkoutAttemptId === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(checkoutAttemptId)
+      ? checkoutAttemptId
+      : undefined;
 
     const { data: pending } = await admin
       .from("billing_subscriptions")
@@ -117,6 +138,8 @@ serve(async (req) => {
         planId: plan.id,
         checkoutChannel: "android_user_choice",
         initialExternalTransactionId: externalTransactionId,
+        ...attributionMetadata,
+        ...(attemptId ? { checkoutAttemptId: attemptId } : {}),
       },
     };
     if (coupon) {
@@ -151,6 +174,8 @@ serve(async (req) => {
         checkoutChannel: "android_user_choice",
         choiceTokenFingerprint: fingerprint,
         environment: config.environment,
+        ...attributionMetadata,
+        ...(attemptId ? { checkoutAttemptId: attemptId } : {}),
       },
       updated_at: new Date().toISOString(),
     }, { onConflict: "professional_id" });

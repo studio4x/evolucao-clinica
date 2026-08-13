@@ -127,7 +127,7 @@ function AnalyticsRouteObserver() {
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const location = useLocation();
-  const isOnboardingRoute = location.pathname.startsWith('/onboarding') || location.pathname === '/checkout';
+  const isOnboardingRoute = location.pathname.startsWith('/onboarding') || location.pathname.startsWith('/checkout');
   
   if (!isAuthReady) {
     return <SplashScreen message="Preparando seu ambiente clínico..." />;

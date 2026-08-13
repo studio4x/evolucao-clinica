@@ -20,6 +20,15 @@ export type ConfirmedBillingResult = {
   status: string;
   currentPeriodEnd?: string | null;
   subscriptionId?: string | null;
+  transactionId?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+};
+
+export type PendingBillingConfirmation = {
+  provider: 'stripe';
+  planId: BillingPlanId;
+  subscriptionId: string;
 };
 
 type Props = {
@@ -29,6 +38,7 @@ type Props = {
   price?: number;
   disabled?: boolean;
   onLoadingChange?: (loading: boolean) => void;
+  onPendingConfirmation?: (result: PendingBillingConfirmation) => void;
   onSuccess?: (result: ConfirmedBillingResult) => void;
   onError?: (error: Error) => void;
 };
@@ -40,12 +50,17 @@ export function StripeSubscriptionButton({
   price,
   disabled,
   onLoadingChange,
+  onPendingConfirmation,
   onSuccess,
   onError
 }: Props) {
   const user = useAuthStore((state) => state.user);
   const [loading, setLoading] = useState(false);
   const activePlanRef = useRef<BillingPlanId | null>(null);
+  const checkoutContextRef = useRef<{
+    attemptId: string;
+    attribution: ReturnType<typeof getCheckoutAttribution>;
+  } | null>(null);
 
   const setBusy = (value: boolean) => {
     setLoading(value);
@@ -71,12 +86,25 @@ export function StripeSubscriptionButton({
       try {
         if (event.type === 'alternative_selected') {
           if (!event.externalTransactionToken) throw new Error('A Play Store não retornou o token da escolha.');
-          const mobile = await createStripeMobileSubscription(activePlan, event.externalTransactionToken, couponCode);
+          const checkoutContext = checkoutContextRef.current;
+          const attribution = checkoutContext ? await checkoutContext.attribution : await getCheckoutAttribution();
+          const mobile = await createStripeMobileSubscription(
+            activePlan,
+            event.externalTransactionToken,
+            couponCode,
+            attribution,
+            checkoutContext?.attemptId
+          );
           window.NativeBillingBridge?.presentStripePaymentSheet(
             mobile.clientSecret,
             mobile.publishableKey,
             mobile.isProduction
           );
+          onPendingConfirmation?.({
+            provider: 'stripe',
+            planId: activePlan,
+            subscriptionId: mobile.subscriptionId
+          });
           return;
         }
 
@@ -104,8 +132,9 @@ export function StripeSubscriptionButton({
         if (event.type === 'stripe_payment_completed') {
           if (!user) throw new Error('Sessão expirada. Entre novamente para confirmar o pagamento.');
           const confirmed = await waitForConfirmedSubscription(user.id, activePlan);
+          let transaction: Awaited<ReturnType<typeof getConfirmedStripeTransaction>> = null;
           try {
-            const transaction = confirmed.provider_subscription_id
+            transaction = confirmed.provider_subscription_id
               ? await getConfirmedStripeTransaction(confirmed.provider_subscription_id, activePlan)
               : null;
             if (transaction) {
@@ -127,7 +156,10 @@ export function StripeSubscriptionButton({
             planId: activePlan,
             status: confirmed.status,
             currentPeriodEnd: confirmed.current_period_end,
-            subscriptionId: confirmed.provider_subscription_id
+            subscriptionId: confirmed.provider_subscription_id,
+            transactionId: transaction?.transactionId,
+            amount: transaction?.amount,
+            currency: transaction?.currency
           });
           return;
         }
@@ -150,7 +182,7 @@ export function StripeSubscriptionButton({
     };
 
     return addNativeBillingListener((event) => void handleEvent(event));
-  }, [onError, onSuccess, planName, user]);
+  }, [couponCode, onError, onPendingConfirmation, onSuccess, planName, user]);
 
   const start = async () => {
     if (!user || loading || disabled) return;
@@ -161,6 +193,10 @@ export function StripeSubscriptionButton({
       const checkoutAttemptId = crypto.randomUUID();
       if (hasNativeBillingBridge()) {
         trackBeginCheckout(planId, planName || planId, price || 0, 'android_billing', checkoutAttemptId);
+        checkoutContextRef.current = {
+          attemptId: checkoutAttemptId,
+          attribution: getCheckoutAttribution()
+        };
         window.NativeBillingBridge?.startSubscription(planId, user.id);
         return;
       }

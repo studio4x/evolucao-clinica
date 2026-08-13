@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { supabase } from '../supabaseClient';
-import { StripeSubscriptionButton, type ConfirmedBillingResult } from '../components/payments/StripeSubscriptionButton';
+import { StripeSubscriptionButton, type ConfirmedBillingResult, type PendingBillingConfirmation } from '../components/payments/StripeSubscriptionButton';
 import { Check, ShieldCheck, Sparkles, LogOut, ArrowRight, Clock, HelpCircle, AlertTriangle, CreditCard } from 'lucide-react';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -97,13 +97,31 @@ export default function CheckoutPage() {
     sessionStorage.removeItem('selected_checkout_plan');
     navigate('/checkout/success', {
       state: {
-        transactionId: result.subscriptionId || `${result.provider}-${Date.now()}`,
+        transactionId: result.transactionId || result.subscriptionId || `${result.provider}-${Date.now()}`,
         subscriptionId: result.subscriptionId,
         endsAt: result.currentPeriodEnd,
         planId: plan,
         planName: details.name,
+        amount: result.amount || Number(details.price || 0),
+        paymentMethod,
+        provider: result.provider
+      },
+      replace: true
+    });
+  };
+
+  const handlePendingBillingConfirmation = (result: PendingBillingConfirmation) => {
+    const details = getPlanDetails(result.planId);
+    navigate('/checkout/success', {
+      state: {
+        pendingConfirmation: true,
+        subscriptionId: result.subscriptionId,
+        planId: result.planId,
+        planName: details.name,
         amount: Number(details.price || 0),
-        paymentMethod
+        paymentMethod: 'Stripe (Pix, cartão ou Google Pay)',
+        provider: result.provider,
+        returnTo: '/checkout'
       },
       replace: true
     });
@@ -321,6 +339,7 @@ export default function CheckoutPage() {
                     setPaymentError(null);
                     setLoadingPlan(loading ? selectedCheckoutPlan : null);
                   }}
+                  onPendingConfirmation={handlePendingBillingConfirmation}
                   onSuccess={handleBillingSuccess}
                   onError={(error) => setPaymentError(error.message)}
                 />

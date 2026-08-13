@@ -306,6 +306,62 @@ export const setAnalyticsUser = (userId: string | null, properties: Partial<Reco
   applyPendingUser();
 };
 export const trackBeginCheckout = (planId: string, planName: string, price: number, paymentProvider?: string, attemptId = `${Date.now()}-${Math.random().toString(36).slice(2)}`) => trackEvent('begin_checkout', { plan_id: planId, plan_name: planName, value: price, currency: 'BRL', payment_provider: paymentProvider }, { dedupeKey: `begin_checkout:${attemptId}` });
+export const trackConfirmedMarketingPurchaseOnce = async (input: { transactionId: string; planId: string; planName: string; amount: number; paymentProvider: string }) => {
+  if (!isBrowser() || getConsentPreferences()?.marketing !== true || input.paymentProvider !== 'stripe') return false;
+  const transactionId = input.transactionId.trim();
+  const planId = input.planId.trim().slice(0, MAX_STRING_LENGTH);
+  const planName = input.planName.trim().slice(0, MAX_STRING_LENGTH);
+  if (!/^[A-Za-z0-9_-]{1,100}$/.test(transactionId) || !planId || !planName || !Number.isFinite(input.amount) || input.amount <= 0) return false;
+  const dedupeKey = `marketing-purchase:${transactionId}`;
+  if (sentDedupeKeys.has(dedupeKey)) return false;
+  try { if (window.localStorage.getItem(`analytics:dedupe:${dedupeKey}`) === '1') return false; } catch { /* memory dedupe */ }
+
+  await loadDynamicIds();
+  initializeGtm();
+  initializeMeta();
+  let emitted = false;
+  if (activeGtmId()) {
+    try {
+      window.dataLayer = window.dataLayer || [];
+      window.dataLayer.push({
+        event: 'purchase',
+        transaction_id: transactionId,
+        value: input.amount,
+        currency: 'BRL',
+        plan_id: planId,
+        plan_name: planName,
+        payment_provider: 'stripe',
+        analytics_destination: false,
+        marketing_destination: true,
+        ecommerce: {
+          transaction_id: transactionId,
+          value: input.amount,
+          currency: 'BRL',
+          items: [{ item_id: planId, item_name: planName, price: input.amount, quantity: 1 }]
+        }
+      });
+      emitted = true;
+    } catch { /* GTM never affects the confirmation page */ }
+  }
+  if (metaLoaded) {
+    try {
+      window.fbq?.('track', 'Purchase', {
+        value: input.amount,
+        currency: 'BRL',
+        content_name: planName,
+        content_category: 'Subscription',
+        content_ids: [planId],
+        content_type: 'product'
+      }, { eventID: `purchase-${transactionId}` });
+      emitted = true;
+    } catch { /* Meta Pixel is optional */ }
+  }
+  if (emitted) {
+    sentDedupeKeys.add(dedupeKey);
+    try { window.localStorage.setItem(`analytics:dedupe:${dedupeKey}`, '1'); } catch { /* optional */ }
+  }
+  return emitted;
+};
 export const trackStripeAndroidPurchaseOnce = (input: { transactionId: string; planName: string; amount: number; currency: string; paymentProvider: string; status: string; restored?: boolean }) => {
   if (!isBrowser() || getAnalyticsConsent() !== 'granted' || input.paymentProvider !== 'stripe' || input.status !== 'paid' || input.restored === true) return false;
   const transactionId = input.transactionId.trim();

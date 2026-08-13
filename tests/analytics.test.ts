@@ -130,6 +130,14 @@ assert.equal(nativePurchases.length, 1, 'somente a compra Stripe confirmada e in
 const metaBeforePurchase = fbqCalls.length;
 assert.equal(analytics.trackEvent('purchase', { transaction_id: 'in_server_only', value: 39, currency: 'BRL' }), true, 'purchase pode continuar no destino Analytics');
 assert.equal(fbqCalls.slice(metaBeforePurchase).some((call) => call[0] === 'track' && call[1] === 'Purchase'), false, 'Meta Purchase não pode nascer no retorno cliente');
+assert.equal(await analytics.trackConfirmedMarketingPurchaseOnce({ transactionId: 'in_paid_1', planId: 'monthly', planName: 'Plano Mensal', amount: 39, paymentProvider: 'stripe' }), true, 'invoice paga confirmada deve emitir conversão de mídia');
+const confirmedMarketingPurchase = trackedDataLayerEvents().find((entry) => entry.event === 'purchase' && entry.transaction_id === 'in_paid_1');
+assert.equal(confirmedMarketingPurchase?.analytics_destination, false, 'Measurement Protocol continua sendo o único destino GA4 da compra');
+assert.equal(confirmedMarketingPurchase?.marketing_destination, true, 'GTM recebe a compra confirmada para Google Ads');
+assert.equal((confirmedMarketingPurchase?.ecommerce as { transaction_id?: string })?.transaction_id, 'in_paid_1');
+const metaPurchase = fbqCalls.find((call) => call[0] === 'track' && call[1] === 'Purchase');
+assert.deepEqual(metaPurchase?.[3], { eventID: 'purchase-in_paid_1' }, 'Meta usa eventID estável derivado da invoice');
+assert.equal(await analytics.trackConfirmedMarketingPurchaseOnce({ transactionId: 'in_paid_1', planId: 'monthly', planName: 'Plano Mensal', amount: 39, paymentProvider: 'stripe' }), false, 'a mesma invoice não pode duplicar conversão de mídia');
 
 analytics.setConsentPreferences({ analytics: false, marketing: true });
 const nativeCountAfterAnalyticsRevoke = nativeEvents.length;
@@ -143,6 +151,7 @@ const dataLayerAfterRevoke = trackedDataLayerEvents().length;
 const metaAfterRevoke = fbqCalls.length;
 const nativeAfterRevoke = nativeEvents.length;
 assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'after-revoke'), false);
+assert.equal(await analytics.trackConfirmedMarketingPurchaseOnce({ transactionId: 'in_paid_denied', planId: 'monthly', planName: 'Plano Mensal', amount: 39, paymentProvider: 'stripe' }), false, 'sem consentimento de Marketing a compra não chega a GTM/Meta');
 assert.equal(trackedDataLayerEvents().length, dataLayerAfterRevoke, 'nenhum dataLayer após revogação total');
 assert.equal(fbqCalls.length, metaAfterRevoke, 'nenhum Meta após revogação total');
 assert.equal(nativeEvents.length, nativeAfterRevoke, 'nenhum Firebase após revogação total');

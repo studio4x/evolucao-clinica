@@ -32,13 +32,14 @@ O `LauncherActivity` inicia Firebase Analytics com coleta desativada. A ponte `N
 | `begin_checkout` | clique real que abre Stripe Checkout | cliente | Analytics e/ou Marketing, conforme cada escolha | `checkout_attempt_id` por tentativa |
 | `page_view` | mudança de rota | cliente | analytics | rota renderizada; sem query/fragment |
 | `purchase`, `subscription_started`, `subscription_renewed`, `subscription_cancelled` | webhook Stripe confirmado | GA4 Measurement Protocol | analytics persistido | chave estável de invoice/evento no banco |
+| `purchase` de mídia paga | página de confirmação após localizar a invoice Stripe `paid` | GTM/Google Ads e Meta Pixel | marketing | invoice Stripe persistida no navegador |
 | `in_app_purchase` | invoice Stripe Android confirmada pelo webhook e consultada pelo cliente | Firebase Android nativo | analytics | invoice Stripe no armazenamento nativo e web |
 
 Eventos descartados sem consentimento não são enfileirados para envio posterior. No checkout web, após consentimento Analytics, o cliente lê `client_id`, `session_id` e `session_number` reais do Google tag e a sessão Stripe preserva esses metadados. O webhook só envia Measurement Protocol se houver esse identificador real e o consentimento persistido ainda for válido — nunca cria identificadores aleatórios.
 
 No Android, compras da Google Play continuam automáticas no Firebase e nunca recebem um evento manual, pois o SDK não deduplica os dois caminhos. Para faturamento alternativo Stripe, o cliente aguarda a confirmação do webhook, consulta a invoice `paid` protegida por RLS e só então solicita à ponte nativa um `in_app_purchase` com `transaction_id`, valor, BRL, plano e `payment_provider=stripe`. A deduplicação persistente usa a invoice Stripe; retorno do Payment Sheet, pagamento pendente, falha e restauração não registram compra. Esse caminho usa o SDK Firebase no dispositivo e não exige expor `app_instance_id` nem API secret.
 
-O `dataLayer` contém uma única emissão por evento com os booleanos `analytics_destination` e `marketing_destination`. No GTM, configure tags de GA4/Firebase web apenas quando `analytics_destination=true` e tags de Google Ads apenas quando `marketing_destination=true`. A tag Meta é tratada separadamente pelo Pixel. Não use a mera existência do evento/dataLayer como autorização e não crie dois gatilhos sobrepostos para `begin_checkout`.
+O `dataLayer` contém uma única emissão por evento com os booleanos `analytics_destination` e `marketing_destination`. No GTM, configure tags de GA4/Firebase web apenas quando `analytics_destination=true` e tags de Google Ads apenas quando `marketing_destination=true`. Na confirmação de cobrança Stripe, o `purchase` do cliente nasce somente depois de localizar a invoice `paid`, usa `analytics_destination=false` para não duplicar o Measurement Protocol e fornece o objeto `ecommerce` para Google Ads. O Meta Pixel recebe o `Purchase` padrão com `eventID` derivado da mesma invoice. Não use a mera existência do evento/dataLayer como autorização e não crie dois gatilhos sobrepostos para `begin_checkout`.
 
 ## Entrega server-side e recuperação
 
@@ -71,7 +72,7 @@ ANALYTICS_MEASUREMENT_ENV=production # development/test/staging habilita somente
 
 Defina os segredos server-side em Supabase Secrets para `stripe-webhook` e `process-analytics-deliveries`. Em `development`, `test` ou `staging`, o worker envia primeiro ao endpoint debug do Measurement Protocol com validação estrita e registra somente códigos de erro, sem payload/PII. Em produção usa o endpoint normal. Não publique `google-services.json`, secrets, tokens, IDs de pacientes, evoluções, conteúdo clínico, documentos, URLs Drive, e-mail ou telefone.
 
-Meta `Purchase` não é disparado pelo retorno do cliente. Só habilite Conversions API no webhook quando houver Pixel/dataset confirmado, token server-side e regra persistida de consentimento de Marketing; use um `event_id` derivado da invoice para deduplicar e não configure simultaneamente outro Purchase cliente para a mesma cobrança.
+Meta `Purchase` é disparado no cliente somente após a página confirmar no banco uma invoice Stripe `paid`, nunca pelo simples fecho/retorno do PaymentSheet. Só habilite Conversions API no webhook quando houver Pixel/dataset confirmado, token server-side e regra persistida de consentimento de Marketing; reutilize o `event_id` `purchase-<invoice_id>` para deduplicar navegador e servidor.
 
 ## Validação operacional
 

@@ -71,14 +71,22 @@ export async function createStripeCustomerPortalSession() {
 export async function createStripeMobileSubscription(
   planId: BillingPlanId,
   externalTransactionToken: string,
-  couponCode?: string
+  couponCode?: string,
+  attribution?: CheckoutAttribution,
+  checkoutAttemptId?: string
 ) {
   return invokeBillingFunction<{
     clientSecret: string;
     publishableKey: string;
     subscriptionId: string;
     isProduction: boolean;
-  }>('create-stripe-mobile-subscription', { planId, externalTransactionToken, couponCode });
+  }>('create-stripe-mobile-subscription', {
+    planId,
+    externalTransactionToken,
+    couponCode,
+    attribution,
+    checkoutAttemptId
+  });
 }
 
 export async function verifyGooglePlaySubscription(input: {
@@ -97,7 +105,8 @@ export async function waitForConfirmedSubscription(
   userId: string,
   planId: BillingPlanId,
   attempts = 20,
-  checkoutSessionId?: string
+  checkoutSessionId?: string,
+  expectedSubscriptionId?: string
 ) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const { data, error } = await supabase
@@ -108,6 +117,10 @@ export async function waitForConfirmedSubscription(
       .maybeSingle();
 
     if (!error && data) {
+      if (expectedSubscriptionId && data.provider_subscription_id !== expectedSubscriptionId) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        continue;
+      }
       if (checkoutSessionId && data.metadata?.checkoutSessionId !== checkoutSessionId) {
         await new Promise((resolve) => window.setTimeout(resolve, 1500));
         continue;
