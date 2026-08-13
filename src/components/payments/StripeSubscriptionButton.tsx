@@ -11,6 +11,7 @@ import {
   verifyGooglePlaySubscription,
   waitForConfirmedSubscription
 } from '../../services/billing';
+import { getCheckoutAttribution, trackBeginCheckout } from '../../services/analytics';
 
 export type ConfirmedBillingResult = {
   provider: 'stripe' | 'google_play';
@@ -23,6 +24,8 @@ export type ConfirmedBillingResult = {
 type Props = {
   planId: BillingPlanId;
   couponCode?: string;
+  planName?: string;
+  price?: number;
   disabled?: boolean;
   onLoadingChange?: (loading: boolean) => void;
   onSuccess?: (result: ConfirmedBillingResult) => void;
@@ -32,6 +35,8 @@ type Props = {
 export function StripeSubscriptionButton({
   planId,
   couponCode,
+  planName,
+  price,
   disabled,
   onLoadingChange,
   onSuccess,
@@ -140,7 +145,10 @@ export function StripeSubscriptionButton({
         return;
       }
 
-      const { checkoutUrl } = await createStripeCheckoutSession(planId, couponCode);
+      const checkoutAttemptId = crypto.randomUUID();
+      const attribution = await getCheckoutAttribution();
+      trackBeginCheckout(planId, planName || planId, price || 0, 'stripe', checkoutAttemptId);
+      const { checkoutUrl } = await createStripeCheckoutSession(planId, couponCode, attribution, checkoutAttemptId);
       window.location.assign(checkoutUrl);
     } catch (error) {
       fail(error);

@@ -26,6 +26,7 @@ export type AnalyticsEventName =
   | 'journey_start_click' | 'journey_hero_trial_click' | 'journey_start_box_click'
   | 'journey_day_trial_click' | 'journey_day_support_click' | 'journey_footer_support_click';
 export type AnalyticsParameters = Record<string, string | number | boolean | undefined | null>;
+export type CheckoutAttribution = { clientId?: string; sessionId?: number; sessionNumber?: number };
 
 const env: Record<string, string | undefined> = (import.meta as ImportMeta & { env?: Record<string, string | undefined> }).env ?? {};
 const ALLOWED_PARAMETERS = new Set(['method', 'plan_id', 'plan_name', 'value', 'currency', 'payment_provider', 'input_mode', 'is_first_activation', 'professional_segment', 'work_context', 'transaction_id', 'page_location', 'page_title', 'day']);
@@ -104,9 +105,14 @@ const initializeMeta = () => {
   if (!pixelId || metaLoaded || !isBrowser()) return;
   const fbq = window.fbq || ((...args: unknown[]) => { const fn = window.fbq as typeof window.fbq & { queue?: unknown[][] }; if (fn) (fn.queue = fn.queue || []).push(args); });
   window.fbq = fbq;
+  window.fbq('consent', 'grant');
   window.fbq('init', pixelId);
   window.fbq('track', 'PageView');
   metaLoaded = loadScriptOnce('https://connect.facebook.net/en_US/fbevents.js', 'analytics-meta-pixel') || Boolean(document.getElementById('analytics-meta-pixel'));
+};
+const grantMeta = () => { try { window.fbq?.('consent', 'grant'); } catch { /* the Pixel may not be loaded */ } };
+const revokeMeta = () => {
+  try { window.fbq?.('consent', 'revoke'); } catch { /* the Pixel may not be loaded */ }
 };
 const nativeBridge = () => isBrowser() ? window.NativeAnalyticsBridge ?? null : null;
 const clearNativeIdentity = () => {
@@ -134,7 +140,8 @@ const loadDynamicIds = async () => {
     const parsed = JSON.parse(data.api_key) as { gtm_id?: unknown; fb_pixel_id?: unknown };
     dynamicConfig = { gtmId: cleanId(parsed.gtm_id), metaPixelId: cleanId(parsed.fb_pixel_id) };
     const preferences = preferencesFromStorage();
-    if (preferences?.analytics) { initializeGtm(); initializeDirectGa4(); }
+    if (preferences?.analytics || preferences?.marketing) initializeGtm();
+    if (preferences?.analytics) initializeDirectGa4();
     if (preferences?.marketing) initializeMeta();
   } catch { /* dynamic IDs are optional */ }
 };
@@ -142,12 +149,16 @@ const applyConsent = (preferences: ConsentPreferences, command: 'default' | 'upd
   googleConsent(preferences, command);
   try { nativeBridge()?.setAnalyticsCollectionEnabled(preferences.analytics); } catch { /* optional bridge */ }
   if (!preferences.analytics) clearNativeIdentity();
-  if (preferences.analytics) { applyPendingUser(); initializeGtm(); initializeDirectGa4(); void loadDynamicIds(); }
-  if (preferences.marketing) { initializeMeta(); void loadDynamicIds(); }
+  if (preferences.analytics || preferences.marketing) { initializeGtm(); void loadDynamicIds(); }
+  if (preferences.analytics) { applyPendingUser(); initializeDirectGa4(); }
+  if (preferences.marketing) { grantMeta(); initializeMeta(); void loadDynamicIds(); }
+  else revokeMeta();
 };
 export const setConsentPreferences = (preferences: Omit<ConsentPreferences, 'necessary'>) => {
   if (!isBrowser()) return;
   const next: ConsentPreferences = { necessary: true, analytics: preferences.analytics === true, marketing: preferences.marketing === true };
+  const current = preferencesFromStorage();
+  if (current && current.analytics === next.analytics && current.marketing === next.marketing) return;
   try { window.localStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, JSON.stringify(next)); } catch { /* runtime consent still applies */ }
   applyConsent(next, 'update');
   void syncAnalyticsConsentForCurrentUser();
@@ -175,13 +186,38 @@ export const initAnalytics = () => {
     initialized = true;
     // This is synchronous and always precedes any Google script/config/event.
     googleConsent({ necessary: true, analytics: false, marketing: false }, 'default');
-    window.addEventListener(ANALYTICS_CONSENT_EVENT, () => { const preferences = preferencesFromStorage(); if (preferences) applyConsent(preferences, 'update'); });
   }
   const preferences = preferencesFromStorage();
   if (preferences) applyConsent(preferences, 'update');
   else { try { nativeBridge()?.setAnalyticsCollectionEnabled(false); clearNativeIdentity(); } catch { /* optional bridge */ } }
 };
 export const configureAnalyticsForTests = (config: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string } | null) => { testConfig = config; };
+export const resetAnalyticsForTests = () => {
+  initialized = false;
+  gtmLoaded = false;
+  ga4Loaded = false;
+  metaLoaded = false;
+  dynamicConfigLoaded = false;
+  dynamicConfig = {};
+  pendingUser = { id: null, properties: {} };
+};
+export const getCheckoutAttribution = async (): Promise<CheckoutAttribution | undefined> => {
+  if (!isBrowser() || getAnalyticsConsent() !== 'granted' || typeof window.gtag !== 'function') return undefined;
+  const measurementId = cleanId(testConfig?.gaMeasurementId) || cleanId(env.VITE_GA_MEASUREMENT_ID);
+  if (!measurementId) return undefined;
+  const read = <T,>(field: 'client_id' | 'session_id' | 'session_number') => new Promise<T | undefined>((resolve) => {
+    try { window.gtag?.('get', measurementId, field, (value: T) => resolve(value)); } catch { resolve(undefined); }
+  });
+  const [clientId, sessionId, sessionNumber] = await Promise.all([read<string>('client_id'), read<number | string>('session_id'), read<number | string>('session_number')]);
+  const normalizedClientId = typeof clientId === 'string' && /^\d+\.\d+$/.test(clientId) ? clientId : undefined;
+  const normalizedSessionId = Number(sessionId);
+  const normalizedSessionNumber = Number(sessionNumber);
+  const result: CheckoutAttribution = {};
+  if (normalizedClientId) result.clientId = normalizedClientId;
+  if (Number.isSafeInteger(normalizedSessionId) && normalizedSessionId > 0) result.sessionId = normalizedSessionId;
+  if (Number.isSafeInteger(normalizedSessionNumber) && normalizedSessionNumber > 0) result.sessionNumber = normalizedSessionNumber;
+  return Object.keys(result).length ? result : undefined;
+};
 
 export const sanitizeAnalyticsParameters = (parameters: AnalyticsParameters = {}): Record<string, string | number | boolean> => {
   const sanitized: Record<string, string | number | boolean> = {};

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 
-class MemoryStorage { private values = new Map<string, string>(); getItem(key: string) { return this.values.get(key) ?? null; } setItem(key: string, value: string) { this.values.set(key, value); } removeItem(key: string) { this.values.delete(key); } }
+class MemoryStorage { private values = new Map<string, string>(); getItem(key: string) { return this.values.get(key) ?? null; } setItem(key: string, value: string) { this.values.set(key, value); } removeItem(key: string) { this.values.delete(key); } clear() { this.values.clear(); } }
 const scripts = new Map<string, { id: string; src: string; async: boolean }>();
 const listeners = new Map<string, Set<() => void>>();
 const storage = new MemoryStorage();
+const fbqCalls: unknown[][] = [];
 const windowMock = {
   localStorage: storage, dataLayer: [] as unknown[], gtag: undefined as ((...args: unknown[]) => void) | undefined, fbq: undefined as ((...args: unknown[]) => void) | undefined,
   NativeAnalyticsBridge: undefined as { logEvent(eventName: string, parametersJson: string): void; setUserId(userId: string | null): void; setUserProperty(name: string, value: string | null): void; setAnalyticsCollectionEnabled(enabled: boolean): void } | undefined,
@@ -16,6 +17,7 @@ const documentMock = {
 (globalThis as unknown as { window: typeof windowMock }).window = windowMock;
 (globalThis as unknown as { document: typeof documentMock }).document = documentMock;
 (globalThis as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent = class { type: string; constructor(type: string) { this.type = type; } } as typeof CustomEvent;
+windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
 
 const analytics = await import('../src/services/analytics');
 analytics.configureAnalyticsForTests({ gtmId: 'GTM-TEST', gaMeasurementId: 'G-TEST', directGa4: true, metaPixelId: 'PIXEL-TEST' });
@@ -42,6 +44,7 @@ analytics.setConsentPreferences({ analytics: true, marketing: false });
 assert.equal([...scripts.values()].filter((script) => script.src.includes('gtm.js')).length, gtmCount, 'GTM só pode ser carregado uma vez');
 analytics.setConsentPreferences({ analytics: true, marketing: true });
 assert.ok(scripts.has('analytics-meta-pixel'), 'Meta Pixel deve carregar somente após marketing consent');
+assert.ok(fbqCalls.some((call) => call[0] === 'consent' && call[1] === 'grant'), 'Meta recebe grant antes de inicializar');
 
 assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'attempt-1'), true);
 assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'attempt-1'), false, 'repetição da mesma tentativa deve ser deduplicada');
@@ -50,10 +53,24 @@ assert.equal(analytics.trackPurchaseOnce({ transactionId: 'stripe-invoice-1', pl
 assert.equal(analytics.trackPurchaseOnce({ transactionId: 'stripe-invoice-1', planId: 'monthly', planName: 'Plano Mensal', amount: 39 }), false, 'purchase permanece idempotente por transaction_id');
 
 analytics.setConsentPreferences({ analytics: false, marketing: false });
+assert.ok(fbqCalls.some((call) => call[0] === 'consent' && call[1] === 'revoke'), 'Meta recebe revoke imediatamente');
+const metaCallsAfterRevoke = fbqCalls.length;
+assert.equal(analytics.trackEvent('begin_checkout', { plan_id: 'monthly' }), false, 'Meta não recebe eventos depois da revogação');
+assert.equal(fbqCalls.length, metaCallsAfterRevoke, 'nenhum evento Meta após revoke');
 assert.ok(bridgeCalls.includes('user:null'), 'revogação deve limpar userId');
 assert.ok(bridgeCalls.includes('property:work_context:null'), 'revogação deve limpar propriedades nativas');
 assert.equal(analytics.trackEvent('purchase', { transaction_id: 'blocked' }), false, 'revogação deve interromper coleta');
 assert.deepEqual(windowMock.dataLayer.at(-1), ['consent', 'update', { analytics_storage: 'denied', ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }], 'revogação deve enviar Consent Mode update');
+const consentCommands = windowMock.dataLayer.filter((entry: any) => Array.isArray(entry) && entry[0] === 'consent');
+assert.equal(consentCommands.filter((entry: any) => entry[1] === 'default').length, 1, 'existe um único Consent Mode default');
+assert.equal(consentCommands.filter((entry: any) => entry[1] === 'update').length, 3, 'cada alteração efetiva gera exatamente um update');
+storage.clear(); scripts.clear(); fbqCalls.length = 0; windowMock.dataLayer.length = 0;
+analytics.resetAnalyticsForTests();
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+assert.ok(scripts.has('analytics-gtm'), 'GTM também deve carregar quando apenas marketing foi aceito');
+assert.equal(scripts.has('analytics-ga4'), false, 'marketing isolado não habilita GA4 direto');
+assert.ok(scripts.has('analytics-meta-pixel'), 'marketing isolado habilita Meta');
 delete windowMock.NativeAnalyticsBridge;
 assert.doesNotThrow(() => analytics.trackEvent('login', { method: 'password' }), 'ausência da ponte Android não pode interromper o navegador');
 console.log('analytics.test.ts: OK');

@@ -45,6 +45,18 @@ async function resolveCoupon(admin: any, stripe: any, planId: string, couponCode
   return { id: stripeCouponId, code: coupon.code };
 }
 
+function analyticsAttribution(input: unknown) {
+  const value = input && typeof input === "object" ? input as Record<string, unknown> : {};
+  const clientId = typeof value.clientId === "string" && /^\d+\.\d+$/.test(value.clientId) ? value.clientId : undefined;
+  const sessionId = Number(value.sessionId);
+  const sessionNumber = Number(value.sessionNumber);
+  const result: Record<string, string | number> = {};
+  if (clientId) result.ga4ClientId = clientId;
+  if (Number.isSafeInteger(sessionId) && sessionId > 0) result.ga4SessionId = sessionId;
+  if (Number.isSafeInteger(sessionNumber) && sessionNumber > 0) result.ga4SessionNumber = sessionNumber;
+  return result;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Método não permitido." }, 405);
@@ -52,7 +64,7 @@ serve(async (req) => {
   try {
     const admin = createAdminClient();
     const user = await requireAuthenticatedUser(req, admin);
-    const { planId, couponCode } = await req.json();
+    const { planId, couponCode, attribution, checkoutAttemptId } = await req.json();
     const config = await getBillingConfig(admin);
     const plan = await getPlan(admin, planId, config.isProduction);
     if (!plan.stripePriceId) {
@@ -65,6 +77,13 @@ serve(async (req) => {
     const customer = await getOrCreateStripeCustomer(admin, stripe, professional);
     const coupon = await resolveCoupon(admin, stripe, plan.id, couponCode, config.isProduction);
 
+    const { data: analyticsConsent } = await admin
+      .from("analytics_consents")
+      .select("analytics_granted")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const attributionMetadata = analyticsConsent?.analytics_granted ? analyticsAttribution(attribution) : {};
+    const attemptId = typeof checkoutAttemptId === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(checkoutAttemptId) ? checkoutAttemptId : undefined;
     const params: any = {
       mode: "subscription",
       customer: customer.id,
@@ -80,12 +99,16 @@ serve(async (req) => {
         supabaseUserId: user.id,
         planId: plan.id,
         checkoutChannel: "web",
+        ...attributionMetadata,
+        ...(attemptId ? { checkoutAttemptId: attemptId } : {}),
       },
       subscription_data: {
         metadata: {
           supabaseUserId: user.id,
           planId: plan.id,
           checkoutChannel: "web",
+          ...attributionMetadata,
+          ...(attemptId ? { checkoutAttemptId: attemptId } : {}),
         },
       },
     };

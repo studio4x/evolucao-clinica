@@ -20,8 +20,8 @@
     "path": "c:\\PLATAFORMAS VS CODE\\EVOLUÇÃO CLINICA\\evolucao-clinica\\android.keystore",
     "alias": "android"
   },
-  "appVersionName": "79",
-  "appVersionCode": 79,
+  "appVersionName": "80",
+  "appVersionCode": 80,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://www.evolucaoclinica.app.br/manifest.webmanifest",
@@ -64,5 +64,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "79"
+  "appVersion": "80"
 }

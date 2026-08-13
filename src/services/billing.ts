@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
+import type { CheckoutAttribution } from './analytics';
 
 export type BillingPlanId = 'monthly' | 'yearly';
 
@@ -59,8 +60,8 @@ async function invokeBillingFunction<T>(name: string, body: Record<string, unkno
   return data as T;
 }
 
-export async function createStripeCheckoutSession(planId: BillingPlanId, couponCode?: string) {
-  return invokeBillingFunction<{ checkoutUrl: string }>('create-stripe-checkout-session', { planId, couponCode });
+export async function createStripeCheckoutSession(planId: BillingPlanId, couponCode?: string, attribution?: CheckoutAttribution, checkoutAttemptId?: string) {
+  return invokeBillingFunction<{ checkoutUrl: string }>('create-stripe-checkout-session', { planId, couponCode, attribution, checkoutAttemptId });
 }
 
 export async function createStripeCustomerPortalSession() {
