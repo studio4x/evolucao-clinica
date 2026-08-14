@@ -1,10 +1,7 @@
 package com.evolucaoclinica.app;
 
 import android.Manifest;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.ContentValues;
 import android.content.SharedPreferences;
@@ -40,6 +37,7 @@ import android.widget.Toast;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.content.FileProvider;
 import androidx.webkit.ServiceWorkerControllerCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -86,7 +84,6 @@ public class LauncherActivity extends ComponentActivity {
             "application/ogg",
             "application/octet-stream"
     };
-    private static final String DOWNLOAD_NOTIFICATION_CHANNEL_ID = "file_downloads";
     private static final String APP_URL = "https://www.evolucaoclinica.app.br/login?utm_source=pwa";
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
     private static final String SUPABASE_HOST = "kvxboovgrrhhttaqinld.supabase.co";
@@ -138,7 +135,6 @@ public class LauncherActivity extends ComponentActivity {
         }
 
         captureShareIntent(getIntent());
-        createDownloadNotificationChannel();
         requestRequiredPermissions();
         initializeFirebaseAnalytics();
         paymentSheet = new PaymentSheet(this, this::onPaymentSheetResult);
@@ -634,6 +630,7 @@ public class LauncherActivity extends ComponentActivity {
                     ? "application/octet-stream"
                     : mimeType;
             Uri pendingUri = null;
+            Uri savedUri;
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -654,6 +651,7 @@ public class LauncherActivity extends ComponentActivity {
                     values.clear();
                     values.put(MediaStore.Downloads.IS_PENDING, 0);
                     getContentResolver().update(pendingUri, values, null, null);
+                    savedUri = pendingUri;
                 } else {
                     File downloadsDirectory = getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS);
                     if (downloadsDirectory == null) return false;
@@ -662,12 +660,15 @@ public class LauncherActivity extends ComponentActivity {
                     try (FileOutputStream output = new FileOutputStream(target)) {
                         output.write(bytes);
                     }
+                    savedUri = FileProvider.getUriForFile(
+                            LauncherActivity.this,
+                            getPackageName() + ".fileprovider",
+                            target
+                    );
                 }
 
-                runOnUiThread(() -> {
-                    Toast.makeText(LauncherActivity.this, "PDF salvo na pasta Downloads", Toast.LENGTH_SHORT).show();
-                    showDownloadNotification(safeName);
-                });
+                Uri finalSavedUri = savedUri;
+                runOnUiThread(() -> openDownloadedFile(finalSavedUri, safeMimeType, safeName));
                 return true;
             } catch (Exception exception) {
                 if (pendingUri != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -961,6 +962,23 @@ public class LauncherActivity extends ComponentActivity {
             }
         } catch (Exception exception) {
             Log.w(LOG_TAG, "Firebase Analytics indisponível", exception);
+        }
+    }
+
+    private void openDownloadedFile(Uri fileUri, String mimeType, String fileName) {
+        Intent viewIntent = new Intent(Intent.ACTION_VIEW);
+        viewIntent.setDataAndType(fileUri, mimeType);
+        viewIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NO_HISTORY);
+
+        try {
+            startActivity(viewIntent);
+        } catch (ActivityNotFoundException exception) {
+            Log.w(LOG_TAG, "Nenhum aplicativo disponível para abrir o arquivo " + fileName, exception);
+            Toast.makeText(
+                    this,
+                    "PDF salvo em Downloads. Instale um leitor de PDF para abri-lo.",
+                    Toast.LENGTH_LONG
+            ).show();
         }
     }
 
@@ -1401,53 +1419,6 @@ public class LauncherActivity extends ComponentActivity {
     private boolean hasNotificationPermission() {
         return Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
                 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED;
-    }
-
-    private void createDownloadNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
-
-        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (notificationManager == null) return;
-
-        NotificationChannel channel = new NotificationChannel(
-                DOWNLOAD_NOTIFICATION_CHANNEL_ID,
-                "Downloads de arquivos",
-                NotificationManager.IMPORTANCE_DEFAULT
-        );
-        channel.setDescription("Avisos sobre arquivos salvos na pasta Downloads");
-        notificationManager.createNotificationChannel(channel);
-    }
-
-    private void showDownloadNotification(String fileName) {
-        if (!hasNotificationPermission()) return;
-
-        NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (notificationManager == null) return;
-
-        Intent openAppIntent = new Intent(this, LauncherActivity.class);
-        openAppIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        int pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) pendingIntentFlags |= PendingIntent.FLAG_IMMUTABLE;
-        PendingIntent openAppPendingIntent = PendingIntent.getActivity(this, 2001, openAppIntent, pendingIntentFlags);
-
-        String message = fileName + " foi salvo na pasta Downloads.";
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? new Notification.Builder(this, DOWNLOAD_NOTIFICATION_CHANNEL_ID)
-                : new Notification.Builder(this);
-
-        Notification notification = builder
-                .setSmallIcon(R.drawable.ic_notification_icon)
-                .setContentTitle("Download concluído")
-                .setContentText(message)
-                .setStyle(new Notification.BigTextStyle().bigText(message))
-                .setContentIntent(openAppPendingIntent)
-                .setAutoCancel(true)
-                .setOnlyAlertOnce(true)
-                .setCategory(Notification.CATEGORY_STATUS)
-                .setPriority(Notification.PRIORITY_DEFAULT)
-                .build();
-
-        notificationManager.notify((int) (System.currentTimeMillis() & 0x7FFFFFFF), notification);
     }
 
     private boolean isTrustedUrl(Uri uri) {

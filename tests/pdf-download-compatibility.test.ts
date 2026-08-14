@@ -85,6 +85,19 @@ try {
     assert.equal(source.includes('doc.save('), false, `${file} não pode contornar o download compatível.`);
     assert.equal(source.includes('downloadPdfFile'), true, `${file} deve usar o download compatível.`);
   }
+
+  const launcherSource = readFileSync(
+    resolve('app/src/main/java/com/evolucaoclinica/app/LauncherActivity.java'),
+    'utf8'
+  );
+  assert.equal(launcherSource.includes('openDownloadedFile(finalSavedUri'), true);
+  assert.equal(launcherSource.includes('new Intent(Intent.ACTION_VIEW)'), true);
+  assert.equal(launcherSource.includes('Intent.FLAG_GRANT_READ_URI_PERMISSION'), true);
+  assert.equal(launcherSource.includes('showDownloadNotification(safeName)'), false);
+  assert.equal(launcherSource.includes('PDF salvo na pasta Downloads'), false);
+
+  const fileProviderPaths = readFileSync(resolve('app/src/main/res/xml/filepaths.xml'), 'utf8');
+  assert.equal(fileProviderPaths.includes('<external-files-path path="Download/"'), true);
 } finally {
   Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: originalNavigator });
