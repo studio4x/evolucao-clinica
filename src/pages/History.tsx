@@ -13,6 +13,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
+import { downloadPdfFile } from '../utils/prontuarioPdf';
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -722,7 +723,10 @@ export default function History() {
                               const cleanDate = evo.session_date
                                 ? evo.session_date.split('-').reverse().join('-')
                                 : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
-                              doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
+                              const saved = await downloadPdfFile(doc, `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
+                              if (!saved) {
+                                alert('Não foi possível baixar o PDF. Verifique o armazenamento do dispositivo e tente novamente.');
+                              }
                             }}
                             className="btn-outline py-1.5 px-3 text-xs flex items-center space-x-1.5 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer font-semibold rounded-xl"
                             title="Baixar PDF do Prontuário Assinado"

@@ -203,61 +203,60 @@ const blobToBase64 = (blob: Blob): Promise<string> => {
 };
 
 export const downloadPdfFile = async (doc: jsPDF, fileName: string): Promise<boolean> => {
-  const blob = doc.output('blob');
-  const isAndroidWebView = /Android/i.test(navigator.userAgent) && (/\bwv\b/i.test(navigator.userAgent) || !('chrome' in window));
-  const nativeDownload = (window as Window & {
-    NativeFileDownload?: {
-      saveFile?: (name: string, mimeType: string, base64Data: string) => boolean;
-      beginFile?: (name: string, mimeType: string) => boolean;
-      appendFileChunk?: (base64Chunk: string) => boolean;
-      finishFile?: () => boolean;
-    };
-  }).NativeFileDownload;
+  try {
+    const blob = doc.output('blob');
+    const isAndroidWebView = /Android/i.test(navigator.userAgent) && (/\bwv\b/i.test(navigator.userAgent) || !('chrome' in window));
+    const nativeDownload = (window as Window & {
+      NativeFileDownload?: {
+        saveFile?: (name: string, mimeType: string, base64Data: string) => boolean;
+        beginFile?: (name: string, mimeType: string) => boolean;
+        appendFileChunk?: (base64Chunk: string) => boolean;
+        finishFile?: () => boolean;
+      };
+    }).NativeFileDownload;
+    const canWriteInChunks = typeof nativeDownload?.beginFile === 'function'
+      && typeof nativeDownload.appendFileChunk === 'function'
+      && typeof nativeDownload.finishFile === 'function';
 
-  const nativeBase64 = await blobToBase64(blob);
-  const canWriteInChunks = typeof nativeDownload?.beginFile === 'function'
-    && typeof nativeDownload.appendFileChunk === 'function'
-    && typeof nativeDownload.finishFile === 'function';
+    if (canWriteInChunks || typeof nativeDownload?.saveFile === 'function') {
+      const nativeBase64 = await blobToBase64(blob);
 
-  if (canWriteInChunks) {
-    try {
-      if (!nativeDownload.beginFile!(fileName, 'application/pdf')) return false;
-      const chunkSize = 48 * 1024;
-      for (let offset = 0; offset < nativeBase64.length; offset += chunkSize) {
-        const chunk = nativeBase64.slice(offset, offset + chunkSize);
-        if (!nativeDownload.appendFileChunk!(chunk)) return false;
+      if (canWriteInChunks) {
+        if (!nativeDownload.beginFile!(fileName, 'application/pdf')) return false;
+        const chunkSize = 48 * 1024;
+        for (let offset = 0; offset < nativeBase64.length; offset += chunkSize) {
+          const chunk = nativeBase64.slice(offset, offset + chunkSize);
+          if (!nativeDownload.appendFileChunk!(chunk)) return false;
+        }
+        const saved = nativeDownload.finishFile!();
+        if (saved) return true;
+      } else {
+        const saved = nativeDownload!.saveFile!(fileName, 'application/pdf', nativeBase64);
+        if (saved) return true;
       }
-      const saved = nativeDownload.finishFile!();
-      if (saved) return true;
-    } catch (error) {
-      console.error('[PDF] Falha no salvamento nativo:', error);
     }
-  } else if (typeof nativeDownload?.saveFile === 'function') {
-    try {
-      const saved = nativeDownload.saveFile(fileName, 'application/pdf', nativeBase64);
-      if (saved) return true;
-    } catch (error) {
-      console.error('[PDF] Falha no salvamento nativo:', error);
-    }
-  }
 
-  // A WebView Android não garante o download de URLs blob pelo clique em um <a>.
-  // Retornar falha aqui evita mostrar sucesso quando o arquivo não foi salvo.
-  if (isAndroidWebView) {
+    // A WebView Android não garante o download de URLs blob pelo clique em um <a>.
+    // Retornar falha aqui evita mostrar sucesso quando o arquivo não foi salvo.
+    if (isAndroidWebView) {
+      return false;
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+    anchor.rel = 'noopener';
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+    return true;
+  } catch (error) {
+    console.error('[PDF] Falha ao salvar arquivo:', error);
     return false;
   }
-
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = objectUrl;
-  anchor.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
-  anchor.rel = 'noopener';
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
-  return true;
 };
 
 export const getProntuarioPdfFileName = (patientName?: string) => {

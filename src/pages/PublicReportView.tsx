@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader2, ShieldCheck, ShieldAlert, Download, FileText, Check, Copy } from 'lucide-react';
 import { generateReportPDF } from '../utils/reportPdf';
+import { downloadPdfFile } from '../utils/prontuarioPdf';
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -80,7 +81,10 @@ export default function PublicReportView() {
       const doc = generateReportPDF(report, patient, professional, siteConfig, logoBase64);
       const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
       const docLabel = report.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
-      doc.save(`${docLabel}_${cleanPatientName}.pdf`);
+      const saved = await downloadPdfFile(doc, `${docLabel}_${cleanPatientName}.pdf`);
+      if (!saved) {
+        throw new Error('O dispositivo não confirmou o salvamento do arquivo.');
+      }
     } catch (err) {
       console.error("Erro ao gerar PDF:", err);
       alert("Não foi possível gerar o PDF. Tente novamente.");

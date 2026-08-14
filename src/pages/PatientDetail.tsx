@@ -909,6 +909,18 @@ export default function PatientDetail() {
     setShowPrintFilterModal(true);
   };
 
+  const downloadGeneratedPdf = async (doc: jsPDF, fileName: string) => {
+    try {
+      const saved = await downloadPdfFile(doc, fileName);
+      if (!saved) {
+        throw new Error('O dispositivo não confirmou o salvamento do arquivo.');
+      }
+    } catch (error) {
+      console.error('[PDF] Não foi possível baixar o arquivo:', error);
+      alert('Não foi possível baixar o PDF. Verifique o armazenamento do dispositivo e tente novamente.');
+    }
+  };
+
   const downloadProntuarioPdf = async (content: string, documentType: string, periodLabel = '') => {
     let logoBase64: string | null = null;
     const logoUrl = getLogoUrl();
@@ -3016,7 +3028,7 @@ export default function PatientDetail() {
                               const cleanDate = evo.session_date
                                 ? evo.session_date.split('-').reverse().join('-')
                                 : new Date(evo.created_at).toLocaleDateString('pt-BR').replace(/\//g, '-');
-                              doc.save(`Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
+                              await downloadGeneratedPdf(doc, `Evolucao_Clinica_${cleanPatientName}_${cleanDate}.pdf`);
                             }}
                             className="btn-outline h-8 px-2 flex items-center gap-1 border-emerald-200 text-emerald-600 hover:bg-emerald-50 cursor-pointer text-xs font-semibold rounded-xl"
                             title="Baixar PDF do Prontuário Assinado"
@@ -3915,7 +3927,7 @@ export default function PatientDetail() {
                               const doc = generateReportPDF(lastReportObj, patient, professional, siteConfig, logoBase64);
                               const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
                               const docLabel = lastReportObj.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
-                              doc.save(`${docLabel}_${cleanPatientName}.pdf`);
+                              await downloadGeneratedPdf(doc, `${docLabel}_${cleanPatientName}.pdf`);
                             }
                           }}
                           className="btn-outline py-2 px-3 text-xs flex items-center space-x-1.5 cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -4289,7 +4301,7 @@ export default function PatientDetail() {
                         const doc = generateReportPDF(viewingReport, patient, professional, siteConfig, logoBase64);
                         const cleanPatientName = (patient?.full_name || 'Paciente').replace(/\s+/g, '_');
                         const docLabel = viewingReport.type === 'evolution_report' ? 'Relatorio_Evolucao' : 'PDI';
-                        doc.save(`${docLabel}_${cleanPatientName}.pdf`);
+                        await downloadGeneratedPdf(doc, `${docLabel}_${cleanPatientName}.pdf`);
                       }}
                       className="btn-outline py-2 px-3 text-xs flex items-center space-x-1.5 cursor-pointer border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
                     >
