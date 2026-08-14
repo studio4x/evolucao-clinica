@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ExternalLink, Globe2, Info, ShieldCheck, Smartphone, Sparkles } from 'lucide-react';
+import { ExternalLink, Globe2, Info, Settings2, ShieldCheck, Smartphone, Sparkles } from 'lucide-react';
 import { APP_VERSION } from '../layout/AppVersion';
 import { getInstalledAppInfo } from '../../utils/installedAppInfo';
 
@@ -13,6 +13,7 @@ const platformLabels = {
 export function AboutAppCard() {
   const [appInfo] = useState(getInstalledAppInfo);
   const isAndroid = appInfo.platform === 'android';
+  const openPrivacyPreferences = () => window.dispatchEvent(new Event('cookie-consent-open'));
 
   return (
     <section className="card overflow-hidden bg-white shadow-sm border border-brand-border/60" aria-labelledby="about-app-card-title">
@@ -87,6 +88,14 @@ export function AboutAppCard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-brand-border/50 pt-4 text-xs font-medium">
+          <button
+            type="button"
+            onClick={openPrivacyPreferences}
+            className="inline-flex items-center gap-1.5 text-brand-primary hover:underline"
+          >
+            Preferências de privacidade
+            <Settings2 className="h-3 w-3" aria-hidden="true" />
+          </button>
           <Link to="/privacy" className="inline-flex items-center gap-1.5 text-brand-primary hover:underline">
             Política de Privacidade
             <ExternalLink className="h-3 w-3" aria-hidden="true" />
