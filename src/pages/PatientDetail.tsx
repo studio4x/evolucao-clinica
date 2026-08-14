@@ -7,7 +7,7 @@ import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, 
 import { transcribeAudio } from '../services/aiTranscription';
 import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
-import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent, replaceEvolutionInGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDocs';
+import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent, getGoogleDocEvolutionEntries, replaceEvolutionInGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
@@ -167,6 +167,8 @@ export default function PatientDetail() {
   const evolutionEditAuthRecoveryRef = useRef<EvolutionEditAuthRecovery | null>(readEvolutionEditAuthRecovery());
   const evolutionEditRecoveryRestoredRef = useRef(false);
   const evolutionEditAutoResumeStartedRef = useRef(false);
+  const googleDocSyncInFlightRef = useRef(false);
+  const lastGoogleDocSyncAtRef = useRef(0);
   const [patient, setPatient] = useState<any>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<PatientMobileTab>('overview');
   const [mobileTabMotion, setMobileTabMotion] = useState<SwipeDirection>('next');
@@ -175,6 +177,8 @@ export default function PatientDetail() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [syncingEvolutionId, setSyncingEvolutionId] = useState<string | null>(null);
+  const [syncingFromGoogleDocs, setSyncingFromGoogleDocs] = useState(false);
+  const [googleDocSyncMessage, setGoogleDocSyncMessage] = useState('');
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -2165,6 +2169,124 @@ export default function PatientDetail() {
     setActiveMobileTab(nextTab);
   };
 
+  const syncEvolutionsFromGoogleDocs = async (options: { manual?: boolean } = {}) => {
+    if (googleDocSyncInFlightRef.current || !patient?.google_doc_id || !user?.id) return;
+    if (!hasFreshClinicalAccess || !googleAccessToken) {
+      if (options.manual) {
+        setGoogleDocSyncMessage('Renove a conexão com o Google para sincronizar o prontuário.');
+        await requestGoogleOAuth({
+          requiredScopes: 'clinicalDocs',
+          currentGrantedScopes: googleGrantedScopes,
+          redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+          loginHint: user.email || undefined,
+        });
+      }
+      return;
+    }
+    if (!options.manual && editingEvolutionId) return;
+
+    googleDocSyncInFlightRef.current = true;
+    lastGoogleDocSyncAtRef.current = Date.now();
+    setSyncingFromGoogleDocs(true);
+    if (options.manual) setGoogleDocSyncMessage('Lendo alterações do Google Docs...');
+
+    try {
+      const docEntries = await getGoogleDocEvolutionEntries(googleAccessToken, patient.google_doc_id);
+      const docEntriesById = new Map(docEntries.map((entry) => [entry.evolutionId, entry.text]));
+      const normalizeText = (value: unknown) => String(value || '').replace(/\r\n/g, '\n').trim();
+      const updatedTexts = new Map<string, string>();
+      let signedChanges = 0;
+      let emptyChanges = 0;
+
+      for (const evolution of evolutions) {
+        if (evolution.google_doc_append_status !== 'completed') continue;
+        const googleText = docEntriesById.get(String(evolution.id).toLowerCase());
+        if (googleText === undefined || normalizeText(googleText) === normalizeText(evolution.transcription_text)) continue;
+        if (!normalizeText(googleText)) {
+          emptyChanges++;
+          continue;
+        }
+        if (evolution.status === 'signed') {
+          signedChanges++;
+          continue;
+        }
+
+        const syncedAt = new Date().toISOString();
+        const { data, error } = await supabase
+          .from('evolutions')
+          .update({
+            transcription_text: googleText,
+            updated_at: syncedAt,
+          })
+          .eq('id', evolution.id)
+          .eq('professional_id', user.id)
+          .neq('status', 'signed')
+          .select('id');
+
+        if (error) throw error;
+        if (!data?.length) {
+          throw new Error('A evolução não pôde ser confirmada após a sincronização.');
+        }
+        updatedTexts.set(evolution.id, googleText);
+      }
+
+      if (updatedTexts.size > 0) {
+        setEvolutions((current) => current.map((evolution) => (
+          updatedTexts.has(evolution.id)
+            ? { ...evolution, transcription_text: updatedTexts.get(evolution.id), updated_at: new Date().toISOString() }
+            : evolution
+        )));
+      }
+
+      const messages: string[] = [];
+      if (updatedTexts.size > 0) {
+        messages.push(`${updatedTexts.size} ${updatedTexts.size === 1 ? 'evolução atualizada' : 'evoluções atualizadas'} pelo Google Docs.`);
+      } else if (options.manual) {
+        messages.push('O aplicativo já está atualizado com o Google Docs.');
+      }
+      if (signedChanges > 0) {
+        messages.push(`${signedChanges} ${signedChanges === 1 ? 'alteração em evolução assinada foi ignorada' : 'alterações em evoluções assinadas foram ignoradas'} para preservar a assinatura.`);
+      }
+      if (emptyChanges > 0) {
+        messages.push(`${emptyChanges} ${emptyChanges === 1 ? 'texto vazio não foi importado' : 'textos vazios não foram importados'} por segurança.`);
+      }
+      if (messages.length > 0) setGoogleDocSyncMessage(messages.join(' '));
+    } catch (error: any) {
+      console.error('Erro ao sincronizar alterações do Google Docs:', error);
+      if (isGoogleAuthenticationError(error)) {
+        setGoogleAccessToken(null);
+        setGoogleDocSyncMessage('A conexão com o Google expirou. Reconecte para sincronizar as alterações.');
+      } else {
+        setGoogleDocSyncMessage(`Não foi possível sincronizar o Google Docs: ${error.message || error}`);
+      }
+    } finally {
+      googleDocSyncInFlightRef.current = false;
+      setSyncingFromGoogleDocs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (loading || !patient?.google_doc_id || !hasFreshClinicalAccess || evolutions.length === 0) return;
+    void syncEvolutionsFromGoogleDocs();
+  }, [loading, patient?.google_doc_id, hasFreshClinicalAccess, id]);
+
+  useEffect(() => {
+    if (!patient?.google_doc_id || !hasFreshClinicalAccess) return;
+
+    const syncAfterReturningToApp = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastGoogleDocSyncAtRef.current < 1500) return;
+      void syncEvolutionsFromGoogleDocs();
+    };
+
+    window.addEventListener('focus', syncAfterReturningToApp);
+    document.addEventListener('visibilitychange', syncAfterReturningToApp);
+    return () => {
+      window.removeEventListener('focus', syncAfterReturningToApp);
+      document.removeEventListener('visibilitychange', syncAfterReturningToApp);
+    };
+  }, [patient?.google_doc_id, hasFreshClinicalAccess, evolutions, editingEvolutionId]);
+
   const clearSwipePreview = () => setSwipePreview({ direction: null, progress: 0 });
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -2759,17 +2881,37 @@ export default function PatientDetail() {
           </div>
 
           <div className={`card order-5 xl:order-none ${mobileTabVisibility('history')}`}>
-            <div className="px-6 py-4 border-b border-brand-border flex justify-between items-center bg-brand-bg/50">
-              <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
-              {evolutions.length > 0 && (
-                <button 
-                  onClick={() => setShowClearConfirm(true)}
-                  className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
-                >
-                  <Trash2 size={16} />
-                  <span>Limpar Tudo</span>
-                </button>
-              )}
+            <div className="px-6 py-4 border-b border-brand-border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-brand-bg/50">
+              <div>
+                <h2 className="text-lg font-display font-semibold text-brand-primary">Histórico de Evoluções</h2>
+                {googleDocSyncMessage && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-brand-text-muted" role="status">
+                    {googleDocSyncMessage}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                {patient?.google_doc_id && (
+                  <button
+                    type="button"
+                    onClick={() => void syncEvolutionsFromGoogleDocs({ manual: true })}
+                    disabled={syncingFromGoogleDocs}
+                    className="text-brand-primary hover:text-brand-primary/80 flex items-center space-x-1 text-sm font-medium transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw size={16} className={syncingFromGoogleDocs ? 'animate-spin' : ''} />
+                    <span>{syncingFromGoogleDocs ? 'Sincronizando...' : 'Sincronizar Google Docs'}</span>
+                  </button>
+                )}
+                {evolutions.length > 0 && (
+                  <button
+                    onClick={() => setShowClearConfirm(true)}
+                    className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
+                  >
+                    <Trash2 size={16} />
+                    <span>Limpar Tudo</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {!patient?.google_doc_id && (

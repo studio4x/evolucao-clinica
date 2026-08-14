@@ -2,6 +2,19 @@ import { markdownToGoogleDocsText, textRunToMarkdown, type RichTextStyleRange } 
 
 const GOOGLE_API_MAX_ATTEMPTS = 3;
 const EVOLUTION_DIVIDER = "────────────────────────────────────────────────────────";
+const EVOLUTION_HEADER_LABEL = '📅 DATA DA SESSÃO:';
+const EVOLUTION_LABEL = 'Evolução:';
+const EVOLUTION_FOOTER_LABEL = '🔒 REGISTRO DE INSERÇÃO SISTÊMICA';
+
+type GoogleDocTextRun = {
+  content: string;
+  textStyle: Record<string, unknown>;
+};
+
+export type GoogleDocEvolutionEntry = {
+  evolutionId: string;
+  text: string;
+};
 
 const buildTextStyleRequests = (styles: RichTextStyleRange[], baseIndex: number) => styles.map((style) => {
   const textStyle: Record<string, boolean> = {};
@@ -57,6 +70,123 @@ async function googleApiFetch(url: string, options: RequestInit, context: string
   }
 
   throw new Error(`Google Drive API error (${context}): retry limit exceeded.`);
+}
+
+const collectGoogleDocTextRuns = (elements: any[] = []): GoogleDocTextRun[] => {
+  const runs: GoogleDocTextRun[] = [];
+
+  for (const element of elements) {
+    for (const part of element.paragraph?.elements || []) {
+      if (typeof part.textRun?.content === 'string') {
+        runs.push({
+          content: part.textRun.content,
+          textStyle: part.textRun.textStyle || {},
+        });
+      }
+    }
+
+    for (const row of element.table?.tableRows || []) {
+      for (const cell of row.tableCells || []) {
+        runs.push(...collectGoogleDocTextRuns(cell.content || []));
+      }
+    }
+
+    if (element.tableOfContents?.content) {
+      runs.push(...collectGoogleDocTextRuns(element.tableOfContents.content));
+    }
+  }
+
+  return runs;
+};
+
+const textStyleKey = (style: Record<string, unknown>) => [
+  Boolean(style.bold),
+  Boolean(style.italic),
+  Boolean(style.underline),
+].join(':');
+
+const textRangeToMarkdown = (
+  runs: GoogleDocTextRun[],
+  startOffset: number,
+  endOffset: number
+) => {
+  const chunks: GoogleDocTextRun[] = [];
+  let cursor = 0;
+
+  for (const run of runs) {
+    const runStart = cursor;
+    const runEnd = cursor + run.content.length;
+    cursor = runEnd;
+
+    const overlapStart = Math.max(startOffset, runStart);
+    const overlapEnd = Math.min(endOffset, runEnd);
+    if (overlapStart >= overlapEnd) continue;
+
+    const content = run.content.slice(overlapStart - runStart, overlapEnd - runStart);
+    const previous = chunks[chunks.length - 1];
+    if (previous && textStyleKey(previous.textStyle) === textStyleKey(run.textStyle)) {
+      previous.content += content;
+    } else {
+      chunks.push({ content, textStyle: run.textStyle });
+    }
+  }
+
+  return chunks
+    .map((chunk) => textRunToMarkdown(chunk.content, chunk.textStyle))
+    .join('')
+    .replace(/\r\n/g, '\n')
+    .trim();
+};
+
+export function parseGoogleDocEvolutionEntries(doc: any): GoogleDocEvolutionEntry[] {
+  const runs = collectGoogleDocTextRuns(doc?.body?.content || []);
+  const documentText = runs.map((run) => run.content).join('');
+  const markerPattern = /Chave de autenticidade:\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+  const entries: GoogleDocEvolutionEntry[] = [];
+  const seenIds = new Set<string>();
+
+  for (const match of documentText.matchAll(markerPattern)) {
+    const markerOffset = match.index;
+    const evolutionId = match[1].toLowerCase();
+    if (typeof markerOffset !== 'number' || seenIds.has(evolutionId)) continue;
+
+    const textBeforeMarker = documentText.slice(0, markerOffset);
+    const headerOffset = textBeforeMarker.lastIndexOf(EVOLUTION_HEADER_LABEL);
+    const labelOffset = headerOffset >= 0
+      ? documentText.indexOf(EVOLUTION_LABEL, headerOffset)
+      : -1;
+    const footerLabelOffset = textBeforeMarker.lastIndexOf(EVOLUTION_FOOTER_LABEL);
+    const dividerOffset = textBeforeMarker.lastIndexOf(EVOLUTION_DIVIDER);
+    const footerOffset = dividerOffset >= 0 && dividerOffset < footerLabelOffset
+      ? dividerOffset
+      : footerLabelOffset;
+
+    if (labelOffset < 0 || footerOffset < 0 || labelOffset >= footerOffset) continue;
+
+    let textStart = labelOffset + EVOLUTION_LABEL.length;
+    while (textStart < footerOffset && /[\r\n]/.test(documentText[textStart])) textStart++;
+
+    const text = textRangeToMarkdown(runs, textStart, footerOffset);
+    entries.push({ evolutionId, text });
+    seenIds.add(evolutionId);
+  }
+
+  return entries;
+}
+
+export async function getGoogleDocEvolutionEntries(
+  googleAccessToken: string,
+  googleDocId: string
+): Promise<GoogleDocEvolutionEntry[]> {
+  const url = `https://docs.googleapis.com/v1/documents/${encodeURIComponent(googleDocId)}?suggestionsViewMode=PREVIEW_WITHOUT_SUGGESTIONS`;
+  const response = await googleApiFetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${googleAccessToken}`,
+    },
+  }, 'Doc evolution sync');
+
+  return parseGoogleDocEvolutionEntries(await response.json());
 }
 
 export async function validateGoogleDocAccess(
