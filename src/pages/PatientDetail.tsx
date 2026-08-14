@@ -10,6 +10,7 @@ import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent, replaceEvolutionInGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
 import DOMPurify from 'dompurify';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { generateReportPDF } from '../utils/reportPdf';
@@ -77,7 +78,62 @@ const stripMarkdown = (md: string): string => {
 
 const isGoogleAuthenticationError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error || '');
-  return /UNAUTHENTICATED|invalid authentication credentials|401/i.test(message);
+  return /UNAUTHENTICATED|invalid authentication credentials|INSUFFICIENT_SCOPES|insufficient permissions|401/i.test(message);
+};
+
+const EVOLUTION_EDIT_AUTH_RECOVERY_KEY = 'patient-detail:resume-evolution-edit-after-google-auth';
+const EVOLUTION_EDIT_AUTH_RECOVERY_MAX_AGE_MS = 15 * 60 * 1000;
+
+type EvolutionEditAuthRecovery = {
+  userId: string;
+  patientId: string;
+  evolutionId: string;
+  text: string;
+  originalText: string;
+  templateId: string;
+  activeMobileTab: PatientMobileTab;
+  savedAt: number;
+};
+
+const readEvolutionEditAuthRecovery = (): EvolutionEditAuthRecovery | null => {
+  try {
+    const raw = sessionStorage.getItem(EVOLUTION_EDIT_AUTH_RECOVERY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<EvolutionEditAuthRecovery>;
+    const isExpired = typeof parsed.savedAt !== 'number'
+      || Date.now() - parsed.savedAt > EVOLUTION_EDIT_AUTH_RECOVERY_MAX_AGE_MS;
+    if (
+      isExpired
+      || !parsed.userId
+      || !parsed.patientId
+      || !parsed.evolutionId
+      || typeof parsed.text !== 'string'
+    ) {
+      sessionStorage.removeItem(EVOLUTION_EDIT_AUTH_RECOVERY_KEY);
+      return null;
+    }
+    return {
+      userId: parsed.userId,
+      patientId: parsed.patientId,
+      evolutionId: parsed.evolutionId,
+      text: parsed.text,
+      originalText: parsed.originalText || '',
+      templateId: parsed.templateId || '',
+      activeMobileTab: parsed.activeMobileTab || 'history',
+      savedAt: parsed.savedAt,
+    };
+  } catch {
+    sessionStorage.removeItem(EVOLUTION_EDIT_AUTH_RECOVERY_KEY);
+    return null;
+  }
+};
+
+const storeEvolutionEditAuthRecovery = (recovery: EvolutionEditAuthRecovery) => {
+  sessionStorage.setItem(EVOLUTION_EDIT_AUTH_RECOVERY_KEY, JSON.stringify(recovery));
+};
+
+const clearEvolutionEditAuthRecovery = () => {
+  sessionStorage.removeItem(EVOLUTION_EDIT_AUTH_RECOVERY_KEY);
 };
 
 type ConfirmationDialogState = {
@@ -108,6 +164,9 @@ export default function PatientDetail() {
   const siteConfig = useSiteConfig();
   const { id } = useParams();
   const navigate = useNavigate();
+  const evolutionEditAuthRecoveryRef = useRef<EvolutionEditAuthRecovery | null>(readEvolutionEditAuthRecovery());
+  const evolutionEditRecoveryRestoredRef = useRef(false);
+  const evolutionEditAutoResumeStartedRef = useRef(false);
   const [patient, setPatient] = useState<any>(null);
   const [activeMobileTab, setActiveMobileTab] = useState<PatientMobileTab>('overview');
   const [mobileTabMotion, setMobileTabMotion] = useState<SwipeDirection>('next');
@@ -124,6 +183,7 @@ export default function PatientDetail() {
   const { 
     user, 
     googleAccessToken, 
+    googleAccessTokenIssuedAt,
     googleGrantedScopes, 
     setGoogleAccessToken,
     subscriptionStatus,
@@ -132,6 +192,7 @@ export default function PatientDetail() {
     subscriptionPlan
   } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const hasFreshClinicalAccess = hasClinicalAccess && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
 
   useEffect(() => {
     if (!patient?.id || !user?.id) return;
@@ -431,8 +492,32 @@ export default function PatientDetail() {
     }));
   };
 
-  const handleSaveEditedEvolution = async (evoId: string) => {
-    if (!editingEvolutionText.trim()) {
+  const reconnectGoogleAndResumeEvolutionEdit = async (recovery: EvolutionEditAuthRecovery) => {
+    storeEvolutionEditAuthRecovery(recovery);
+    evolutionEditAuthRecoveryRef.current = recovery;
+    setGoogleAccessToken(null);
+
+    const { error } = await requestGoogleOAuth({
+      requiredScopes: 'clinicalDocs',
+      currentGrantedScopes: googleGrantedScopes,
+      redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+      loginHint: user?.email || undefined,
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Não foi possível renovar automaticamente a conexão com o Google.');
+    }
+  };
+
+  const handleSaveEditedEvolution = async (
+    evoId: string,
+    recoveryDraft?: EvolutionEditAuthRecovery
+  ) => {
+    const evolutionText = recoveryDraft?.text ?? editingEvolutionText;
+    const evolutionOriginalText = recoveryDraft?.originalText ?? editingEvolutionOriginalText;
+    const evolutionTemplateId = recoveryDraft?.templateId ?? editingEvolutionTemplateId;
+
+    if (!evolutionText.trim()) {
       alert("O texto da evolução não pode ser vazio.");
       return;
     }
@@ -442,41 +527,124 @@ export default function PatientDetail() {
       if (!currentEvolution) throw new Error('Evolução não encontrada.');
       const previousText = currentEvolution.transcription_text || '';
       const previousTemplateId = currentEvolution.template_id || null;
+      const previousUpdatedAt = currentEvolution.updated_at || null;
+      const requiresGoogleSync = currentEvolution.google_doc_append_status === 'completed' && Boolean(patient?.google_doc_id);
+      const authRecovery: EvolutionEditAuthRecovery = recoveryDraft || {
+        userId: user?.id || '',
+        patientId: patient?.id || id || '',
+        evolutionId: evoId,
+        text: evolutionText,
+        originalText: evolutionOriginalText,
+        templateId: evolutionTemplateId,
+        activeMobileTab,
+        savedAt: Date.now(),
+      };
+
+      if (requiresGoogleSync && (!hasFreshClinicalAccess || !googleAccessToken)) {
+        await reconnectGoogleAndResumeEvolutionEdit({ ...authRecovery, savedAt: Date.now() });
+        return;
+      }
+
       const { error } = await supabase
         .from('evolutions')
         .update({
-          transcription_text: editingEvolutionText,
-          template_id: editingEvolutionTemplateId || null,
+          transcription_text: evolutionText,
+          template_id: evolutionTemplateId || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', evoId);
       if (error) throw error;
 
-      if (currentEvolution.google_doc_append_status === 'completed' && patient?.google_doc_id) {
-        if (!hasClinicalAccess || !googleAccessToken) {
-          await supabase.from('evolutions').update({ transcription_text: previousText, template_id: previousTemplateId }).eq('id', evoId);
-          throw new Error('Renove a conexão com o Google para manter a evolução idêntica no prontuário.');
-        }
+      if (requiresGoogleSync && patient?.google_doc_id && googleAccessToken) {
         try {
-          await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, evoId, editingEvolutionText);
+          await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, evoId, evolutionText);
         } catch (syncError) {
-          await supabase.from('evolutions').update({ transcription_text: previousText, template_id: previousTemplateId }).eq('id', evoId);
+          const rollbackPayload: Record<string, string | null> = {
+            transcription_text: previousText,
+            template_id: previousTemplateId,
+          };
+          if (previousUpdatedAt) rollbackPayload.updated_at = previousUpdatedAt;
+          const { error: rollbackError } = await supabase
+            .from('evolutions')
+            .update(rollbackPayload)
+            .eq('id', evoId);
+
+          if (rollbackError) {
+            console.error('Erro ao restaurar a evolução após falha no Google Docs:', rollbackError);
+          }
+
+          if (isGoogleAuthenticationError(syncError)) {
+            await reconnectGoogleAndResumeEvolutionEdit({ ...authRecovery, savedAt: Date.now() });
+            return;
+          }
+
+          if (rollbackError) {
+            throw new Error('A sincronização com o Google Docs falhou e a restauração automática na plataforma também não foi confirmada. Reabra a evolução antes de tentar novamente.');
+          }
           throw syncError;
         }
       }
 
+      clearEvolutionEditAuthRecovery();
+      evolutionEditAuthRecoveryRef.current = null;
       setEditingEvolutionId(null);
       setEditingEvolutionText('');
       setEditingEvolutionOriginalText('');
       setEditingEvolutionTemplateId('');
       await fetchData();
-      alert("Evolução atualizada com sucesso!");
+      if (recoveryDraft) {
+        setActiveMobileTab(recoveryDraft.activeMobileTab);
+        scrollToAndExpandEvolution(evoId);
+        alert("Conexão com o Google renovada e evolução atualizada com sucesso!");
+      } else {
+        alert("Evolução atualizada com sucesso!");
+      }
     } catch (error: any) {
       console.error("Erro ao atualizar evolução:", error);
-      alert("Erro ao salvar alterações: " + (error.message || error));
+      if (isGoogleAuthenticationError(error)) {
+        alert("Não foi possível renovar a conexão com o Google automaticamente. Sua edição foi preservada; toque novamente em Salvar alterações para tentar a reconexão.");
+      } else {
+        alert("Erro ao salvar alterações: " + (error.message || error));
+      }
     } finally {
       setSavingEvolutionId(null);
     }
+  };
+
+  useEffect(() => {
+    const recovery = evolutionEditAuthRecoveryRef.current;
+    if (!recovery || !user?.id || loading) return;
+
+    if (recovery.userId !== user.id || recovery.patientId !== id) {
+      clearEvolutionEditAuthRecovery();
+      evolutionEditAuthRecoveryRef.current = null;
+      return;
+    }
+
+    if (!evolutionEditRecoveryRestoredRef.current) {
+      evolutionEditRecoveryRestoredRef.current = true;
+      setActiveMobileTab(recovery.activeMobileTab);
+      setEditingEvolutionId(recovery.evolutionId);
+      setEditingEvolutionText(recovery.text);
+      setEditingEvolutionOriginalText(recovery.originalText);
+      setEditingEvolutionTemplateId(recovery.templateId);
+    }
+
+    const evolutionStillExists = evolutions.some((evolution) => evolution.id === recovery.evolutionId);
+    if (!evolutionStillExists || !patient?.google_doc_id || !hasFreshClinicalAccess) return;
+    if (evolutionEditAutoResumeStartedRef.current) return;
+
+    evolutionEditAutoResumeStartedRef.current = true;
+    void handleSaveEditedEvolution(recovery.evolutionId, recovery);
+  }, [evolutions, hasFreshClinicalAccess, id, loading, patient?.google_doc_id, user?.id]);
+
+  const closeEvolutionEditor = () => {
+    clearEvolutionEditAuthRecovery();
+    evolutionEditAuthRecoveryRef.current = null;
+    setEditingEvolutionId(null);
+    setEditingEvolutionText('');
+    setEditingEvolutionOriginalText('');
+    setEditingEvolutionTemplateId('');
   };
 
   const handleConvertEditedEvolution = async (templateId: string) => {
@@ -2871,6 +3039,8 @@ export default function PatientDetail() {
                                 <button
                                   type="button"
                                   onClick={() => {
+                                    clearEvolutionEditAuthRecovery();
+                                    evolutionEditAuthRecoveryRef.current = null;
                                     setEditingEvolutionId(evo.id);
                                     setEditingEvolutionText(evo.transcription_text || '');
                                     setEditingEvolutionOriginalText(
@@ -4272,7 +4442,7 @@ export default function PatientDetail() {
           <div className="flex max-h-[100dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[90vh] sm:rounded-2xl">
             <div className="flex items-center justify-between border-b border-brand-border px-5 py-4">
               <div className="min-w-0"><h3 className="text-lg font-bold text-brand-primary">Editar Evolução</h3><p className="truncate text-xs text-brand-text-muted">{patient?.full_name}</p></div>
-              <button type="button" onClick={() => { setEditingEvolutionId(null); setEditingEvolutionText(''); setEditingEvolutionOriginalText(''); setEditingEvolutionTemplateId(''); }} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg"><X size={20} /></button>
+              <button type="button" onClick={closeEvolutionEditor} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg"><X size={20} /></button>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
               <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
@@ -4292,7 +4462,7 @@ export default function PatientDetail() {
               <p className="text-[11px] text-brand-text-muted">Negrito, itálico, sublinhado, títulos e listas são mantidos ao salvar no Google Docs.</p>
             </div>
             <div className="flex flex-col-reverse gap-2 border-t border-brand-border bg-stone-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end">
-              <button type="button" onClick={() => { setEditingEvolutionId(null); setEditingEvolutionText(''); setEditingEvolutionOriginalText(''); setEditingEvolutionTemplateId(''); }} disabled={savingEvolutionId === editingEvolutionId} className="btn-outline">Cancelar</button>
+              <button type="button" onClick={closeEvolutionEditor} disabled={savingEvolutionId === editingEvolutionId} className="btn-outline">Cancelar</button>
               <button type="button" onClick={() => void handleSaveEditedEvolution(editingEvolutionId)} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="btn-primary disabled:opacity-50">
                 {savingEvolutionId === editingEvolutionId ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}<span>{savingEvolutionId === editingEvolutionId ? 'Salvando...' : 'Salvar alterações'}</span>
               </button>

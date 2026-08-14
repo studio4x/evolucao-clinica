@@ -56,4 +56,36 @@ assert.match(
   'A presença de um provider_token antigo não pode impedir a renovação silenciosa.'
 );
 
+const patientDetailSource = fs.readFileSync('src/pages/PatientDetail.tsx', 'utf8');
+assert.match(
+  patientDetailSource,
+  /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*setGoogleAccessToken\(null\)[\s\S]*requestGoogleOAuth\(/,
+  'A edição deve ser preservada antes de renovar o token Google expirado.'
+);
+assert.match(
+  patientDetailSource,
+  /hasFreshClinicalAccess[\s\S]*reconnectGoogleAndResumeEvolutionEdit/,
+  'O salvamento deve renovar preventivamente um token Google antigo.'
+);
+assert.match(
+  patientDetailSource,
+  /isGoogleAuthenticationError\(syncError\)[\s\S]*reconnectGoogleAndResumeEvolutionEdit/,
+  'Um 401 do Google Docs deve iniciar a reconexão automática.'
+);
+assert.match(
+  patientDetailSource,
+  /handleSaveEditedEvolution\(recovery\.evolutionId, recovery\)/,
+  'O retorno do OAuth deve retomar automaticamente o salvamento preservado.'
+);
+assert.match(
+  patientDetailSource,
+  /setActiveMobileTab\(recovery\.activeMobileTab\)/,
+  'A reconexão deve restaurar a aba móvel em que o usuário estava.'
+);
+assert.doesNotMatch(
+  patientDetailSource,
+  /alert\("Erro ao salvar alterações: " \+ \(error\.message \|\| error\)\);\s*}\s*finally/,
+  'O erro de autenticação do Google não deve cair diretamente no alerta técnico bruto.'
+);
+
 console.log('Google authentication recovery tests passed.');
