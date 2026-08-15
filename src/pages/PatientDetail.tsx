@@ -2172,6 +2172,7 @@ export default function PatientDetail() {
     pointerId: number;
     startX: number;
     startY: number;
+    triggered: boolean;
   } | null>(null);
   const suppressSwipeClickRef = useRef(false);
 
@@ -2324,13 +2325,13 @@ export default function PatientDetail() {
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
+      triggered: false,
     };
   };
 
-  const finishPointerSwipe = (e: React.PointerEvent<HTMLDivElement>) => {
+  const tryPointerSwipe = (e: React.PointerEvent<HTMLDivElement>) => {
     const gesture = swipePointerRef.current;
-    if (!gesture || gesture.pointerId !== e.pointerId) return;
-    swipePointerRef.current = null;
+    if (!gesture || gesture.pointerId !== e.pointerId || gesture.triggered) return;
 
     const direction = resolveHorizontalSwipe({
       deltaX: e.clientX - gesture.startX,
@@ -2338,18 +2339,34 @@ export default function PatientDetail() {
     });
 
     if (direction) {
+      gesture.triggered = true;
       const currentIndex = patientMobileTabOrder.indexOf(activeMobileTab);
       const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
       const nextTab = patientMobileTabOrder[nextIndex];
 
       suppressSwipeClickRef.current = true;
-      window.setTimeout(() => {
-        suppressSwipeClickRef.current = false;
-      }, 0);
 
       if (nextTab) {
         changeMobileTab(nextTab, direction);
       }
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    tryPointerSwipe(e);
+  };
+
+  const finishPointerSwipe = (e: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = swipePointerRef.current;
+    if (!gesture || gesture.pointerId !== e.pointerId) return;
+
+    tryPointerSwipe(e);
+    swipePointerRef.current = null;
+
+    if (gesture.triggered) {
+      window.setTimeout(() => {
+        suppressSwipeClickRef.current = false;
+      }, 0);
     }
 
   };
@@ -2357,6 +2374,7 @@ export default function PatientDetail() {
   const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
     if (swipePointerRef.current?.pointerId !== e.pointerId) return;
     swipePointerRef.current = null;
+    suppressSwipeClickRef.current = false;
   };
 
   const handleSwipeClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -2373,6 +2391,7 @@ export default function PatientDetail() {
     <div
       className="patient-mobile-swipe-surface space-y-6"
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={finishPointerSwipe}
       onPointerCancel={handlePointerCancel}
       onClickCapture={handleSwipeClickCapture}

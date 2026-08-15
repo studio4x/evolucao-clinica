@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { resolveHorizontalSwipe } from '../src/utils/horizontalSwipe';
 
 assert.equal(resolveHorizontalSwipe({
@@ -25,5 +27,22 @@ assert.equal(resolveHorizontalSwipe({
   deltaX: 7,
   deltaY: 2,
 }), null, 'ignores tiny touch jitter');
+
+const patientDetailSource = readFileSync(resolve('src/pages/PatientDetail.tsx'), 'utf8');
+assert.match(
+  patientDetailSource,
+  /onPointerMove=\{handlePointerMove\}/,
+  'tracks the gesture while the finger is still moving',
+);
+assert.match(
+  patientDetailSource,
+  /const handlePointerMove[\s\S]*?tryPointerSwipe\(e\)/,
+  'changes tabs as soon as the short threshold is crossed',
+);
+assert.doesNotMatch(
+  patientDetailSource,
+  /swipePreview/,
+  'does not restore the removed gesture progress bar',
+);
 
 console.log('Horizontal swipe tests passed.');
