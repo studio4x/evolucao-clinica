@@ -23,6 +23,7 @@ import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
+import { hasHorizontalSwipeIntent, resolveHorizontalSwipe } from '../utils/horizontalSwipe';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -149,6 +150,7 @@ type ConfirmationDialogState = {
 
 type PatientMobileTab = 'overview' | 'history' | 'reminders' | 'reports';
 type SwipeDirection = 'next' | 'previous';
+type SwipePointerSample = { x: number; time: number };
 
 const patientMobileTabs: { id: PatientMobileTab; label: string; icon: typeof FileText }[] = [
   { id: 'overview', label: 'Resumo', icon: LayoutDashboard },
@@ -2168,12 +2170,15 @@ export default function PatientDetail() {
     ? `block xl:block patient-mobile-tab-enter-${mobileTabMotion}`
     : 'hidden xl:block';
 
-  const touchStateRef = useRef<{
+  const swipePointerRef = useRef<{
+    pointerId: number;
     startX: number;
     startY: number;
     currentX: number;
     currentY: number;
+    samples: SwipePointerSample[];
   } | null>(null);
+  const suppressSwipeClickRef = useRef(false);
 
   const changeMobileTab = (nextTab: PatientMobileTab, direction: SwipeDirection) => {
     if (nextTab === activeMobileTab) return;
@@ -2301,9 +2306,13 @@ export default function PatientDetail() {
 
   const clearSwipePreview = () => setSwipePreview({ direction: null, progress: 0 });
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.touches.length !== 1) return;
-
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (
+      window.matchMedia('(min-width: 1280px)').matches
+      || !e.isPrimary
+      || e.pointerType === 'mouse'
+      || swipePointerRef.current
+    ) return;
     const target = e.target as HTMLElement | null;
     if (target) {
       const tagName = target.tagName.toLowerCase();
@@ -2312,35 +2321,35 @@ export default function PatientDetail() {
         tagName === 'textarea' ||
         tagName === 'select' ||
         target.isContentEditable ||
-        target.closest('input, textarea, select, button, a, [role="button"], [data-no-swipe="true"], .no-swipe, [role="dialog"]')
+        target.closest('input, textarea, select, [contenteditable="true"], [data-no-swipe="true"], .no-swipe, [role="dialog"]')
       ) {
-        touchStateRef.current = null;
         return;
       }
     }
 
-    const touch = e.touches[0];
-    touchStateRef.current = {
-      startX: touch.clientX,
-      startY: touch.clientY,
-      currentX: touch.clientX,
-      currentY: touch.clientY,
+    swipePointerRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      currentX: e.clientX,
+      currentY: e.clientY,
+      samples: [{ x: e.clientX, time: e.timeStamp }],
     };
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStateRef.current || e.touches.length !== 1) return;
-    const touch = e.touches[0];
-    const gesture = touchStateRef.current;
-    gesture.currentX = touch.clientX;
-    gesture.currentY = touch.clientY;
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = swipePointerRef.current;
+    if (!gesture || gesture.pointerId !== e.pointerId) return;
+    gesture.currentX = e.clientX;
+    gesture.currentY = e.clientY;
+    gesture.samples.push({ x: e.clientX, time: e.timeStamp });
+    gesture.samples = gesture.samples.filter(sample => e.timeStamp - sample.time <= 120);
 
     const deltaX = gesture.currentX - gesture.startX;
     const deltaY = gesture.currentY - gesture.startY;
     const absX = Math.abs(deltaX);
-    const absY = Math.abs(deltaY);
 
-    if (absX < 10 || absX <= absY) {
+    if (!hasHorizontalSwipeIntent(deltaX, deltaY)) {
       clearSwipePreview();
       return;
     }
@@ -2353,55 +2362,71 @@ export default function PatientDetail() {
 
     setSwipePreview({
       direction: canChange ? direction : null,
-      progress: canChange ? Math.min(absX / 52, 1) : 0,
+      progress: canChange ? Math.min(absX / 44, 1) : 0,
     });
   };
 
-  const processSwipe = (finalTouch?: React.Touch) => {
-    if (!touchStateRef.current) return;
-
-    const gesture = touchStateRef.current;
-    touchStateRef.current = null;
+  const finishPointerSwipe = (e: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = swipePointerRef.current;
+    if (!gesture || gesture.pointerId !== e.pointerId) return;
+    swipePointerRef.current = null;
     clearSwipePreview();
 
-    const currentX = finalTouch?.clientX ?? gesture.currentX;
-    const currentY = finalTouch?.clientY ?? gesture.currentY;
-    const deltaX = currentX - gesture.startX;
-    const deltaY = currentY - gesture.startY;
-    const absX = Math.abs(deltaX);
-    const absY = Math.abs(deltaY);
+    gesture.samples.push({ x: e.clientX, time: e.timeStamp });
+    const recentSamples = gesture.samples.filter(sample => e.timeStamp - sample.time <= 120);
+    const velocityAnchor = recentSamples[0] ?? gesture.samples[0];
+    const velocityDuration = Math.max(e.timeStamp - velocityAnchor.time, 1);
+    const direction = resolveHorizontalSwipe({
+      deltaX: e.clientX - gesture.startX,
+      deltaY: e.clientY - gesture.startY,
+      velocityX: (e.clientX - velocityAnchor.x) / velocityDuration,
+    });
 
-    if (absX >= 28 && absX > absY) {
+    if (direction) {
       const currentIndex = patientMobileTabOrder.indexOf(activeMobileTab);
+      const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+      const nextTab = patientMobileTabOrder[nextIndex];
 
-      if (deltaX < 0) {
-        if (currentIndex < patientMobileTabOrder.length - 1) {
-          changeMobileTab(patientMobileTabOrder[currentIndex + 1], 'next');
-        }
-      } else if (deltaX > 0) {
-        if (currentIndex > 0) {
-          changeMobileTab(patientMobileTabOrder[currentIndex - 1], 'previous');
-        }
+      suppressSwipeClickRef.current = true;
+      window.setTimeout(() => {
+        suppressSwipeClickRef.current = false;
+      }, 0);
+
+      if (nextTab) {
+        changeMobileTab(nextTab, direction);
       }
     }
+
   };
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    processSwipe(e.changedTouches[0]);
-  };
-
-  const handleTouchCancel = () => {
-    touchStateRef.current = null;
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (swipePointerRef.current?.pointerId !== e.pointerId) return;
+    swipePointerRef.current = null;
     clearSwipePreview();
+  };
+
+  const handleSwipeClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!suppressSwipeClickRef.current) return;
+    suppressSwipeClickRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   if (loading) return <div>Carregando...</div>;
   if (!patient) return <div>Paciente não encontrado.</div>;
 
   return (
-    <div className="space-y-6" onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} onTouchCancel={handleTouchCancel}>
+    <div
+      className="patient-mobile-swipe-surface space-y-6"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={finishPointerSwipe}
+      onPointerCancel={handlePointerCancel}
+      onClickCapture={handleSwipeClickCapture}
+    >
       <style>{`
         @media (max-width: 1279px) {
+          .patient-mobile-swipe-surface { touch-action: pan-y pinch-zoom; }
           @keyframes patient-tab-enter-next {
             from { opacity: 0; transform: translateX(18px) scale(0.99); }
             to { opacity: 1; transform: translateX(0) scale(1); }
