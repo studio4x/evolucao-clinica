@@ -1477,30 +1477,30 @@ export default function NewEvolution() {
       )}
 
       <div className="card p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-brand-text mb-1">Data da Sessão</label>
             <input
               type="date"
               required
               value={sessionDate}
               onChange={e => setSessionDate(e.target.value)}
-              className="input-field p-2"
+              className="input-field min-w-0 p-2"
             />
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="block text-sm font-medium text-brand-text mb-1">Horário da Sessão</label>
             <input
               type="time"
               required
               value={sessionTime}
               onChange={e => handleSessionTimeChange(e.target.value)}
-              className="input-field p-2"
+              className="input-field min-w-0 p-2"
             />
           </div>
 
-          <div>
+          <div className="col-span-2 md:col-span-1">
             <label className="block text-sm font-medium text-brand-text mb-1">Template de Evolução</label>
             <select
               value={selectedTemplateId}
@@ -1532,43 +1532,26 @@ export default function NewEvolution() {
 
         <div className="border-t border-brand-border pt-6 space-y-6">
           <div>
-            <label className="block text-sm font-medium text-brand-text mb-3">Como deseja registrar a evolução?</label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Tipo de evolução">
-              {([
-                { id: 'audio', label: 'Áudio', description: 'Grave ou envie arquivos de áudio.', icon: Mic },
-                { id: 'text', label: 'Texto', description: 'Digite a evolução diretamente.', icon: FileText },
-                { id: 'hybrid', label: 'Híbrido', description: 'Combine texto e áudio.', icon: FileText }
-              ] as const).map(({ id: mode, label, description, icon: Icon }) => {
-                const isSelected = inputMode === mode;
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    role="radio"
-                    aria-checked={isSelected}
-                    disabled={isRecording || status === 'processing'}
-                    onClick={() => {
-                      setInputMode(mode);
-                      if (status !== 'processing') {
-                        setStatus('idle');
-                        setErrorMessage('');
-                      }
-                    }}
-                    className={`flex min-h-24 items-start gap-3 rounded-xl border p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                      isSelected
-                        ? 'border-brand-primary bg-brand-primary/10 text-brand-primary ring-1 ring-brand-primary/20'
-                        : 'border-brand-border bg-brand-bg/50 text-brand-text-muted hover:border-brand-primary/40 hover:bg-brand-primary/5'
-                    }`}
-                  >
-                    <Icon className="mt-0.5 shrink-0" size={19} />
-                    <span>
-                      <span className="block text-sm font-semibold">{label}</span>
-                      <span className="mt-1 block text-xs leading-5 text-brand-text-muted">{description}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <label htmlFor="evolution-input-mode" className="block text-sm font-medium text-brand-text mb-1">
+              Como deseja registrar a evolução?
+            </label>
+            <select
+              id="evolution-input-mode"
+              value={inputMode}
+              disabled={isRecording || status === 'processing'}
+              onChange={(event) => {
+                setInputMode(event.target.value as EvolutionInputMode);
+                if (status !== 'processing') {
+                  setStatus('idle');
+                  setErrorMessage('');
+                }
+              }}
+              className="input-field p-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="audio">Áudio</option>
+              <option value="text">Texto</option>
+              <option value="hybrid">Híbrido</option>
+            </select>
           </div>
 
           {inputMode !== 'audio' && (
