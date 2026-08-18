@@ -78,7 +78,7 @@ function NativeBillingRestore() {
         !event.purchaseToken
       ) return;
       const planId = event.productId === 'evolucao_yearly' ? 'yearly' : 'monthly';
-      void getCheckoutAttributionWithRetry()
+      void getCheckoutAttributionWithRetry(undefined, 5)
         .then((attribution) => verifyGooglePlaySubscription({
           planId,
           productId: event.productId,

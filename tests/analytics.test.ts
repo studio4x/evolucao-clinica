@@ -32,6 +32,7 @@ const windowMock = {
 };
 const documentMock = {
   title: 'Teste',
+  cookie: '',
   head: { appendChild(node: { id: string; src: string; async: boolean }) { scripts.set(node.id, node); } },
   getElementById(id: string) { return scripts.get(id) ?? null; },
   createElement() { return { id: '', src: '', async: false }; }
@@ -50,6 +51,7 @@ function resetRuntime(config: typeof defaultConfig | Partial<typeof defaultConfi
   windowMock.dataLayer.length = 0;
   windowMock.gtag = undefined;
   windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
+  documentMock.cookie = '';
   delete windowMock.NativeAnalyticsBridge;
   analytics.resetAnalyticsForTests();
   analytics.configureAnalyticsForTests(config);
@@ -193,6 +195,15 @@ windowMock.gtag = (...args: unknown[]) => {
   if (field === 'session_id') callback(999);
 };
 assert.deepEqual(await analytics.getCheckoutAttribution(), { clientId: '222222222.333333333', sessionId: 999 }, 'timeout preserva atribuição parcial');
+
+documentMock.cookie = '_ga=GA1.1.888888888.999999999; _ga_TEST=GS2.1.s1700000000$o5$g1$t1700000123';
+windowMock.gtag = undefined;
+assert.deepEqual(
+  await analytics.getCheckoutAttribution(),
+  { clientId: '888888888.999999999', sessionId: 1700000000, sessionNumber: 5 },
+  'o WebView deve reutilizar somente a atribuição real gravada pela tag do Google'
+);
+documentMock.cookie = '';
 
 let attributionRead = 0;
 windowMock.gtag = (...args: unknown[]) => {

@@ -88,6 +88,27 @@ const loadScriptOnce = (src: string, id: string) => {
   return true;
 };
 const activeGtmId = () => cleanId(testConfig?.gtmId) || cleanId(env.VITE_GTM_ID) || cleanId(dynamicConfig.gtmId);
+const getGoogleCookieAttribution = (measurementId: string): CheckoutAttribution | undefined => {
+  if (!isBrowser()) return undefined;
+  const cookies = new Map(document.cookie.split(';').map((part) => {
+    const separator = part.indexOf('=');
+    if (separator < 0) return [part.trim(), ''];
+    return [part.slice(0, separator).trim(), decodeURIComponent(part.slice(separator + 1))];
+  }));
+  const clientMatch = cookies.get('_ga')?.match(/^GA\d+\.\d+\.(\d+)\.(\d+)$/);
+  const result: CheckoutAttribution = {};
+  if (clientMatch) result.clientId = `${clientMatch[1]}.${clientMatch[2]}`;
+
+  const sessionCookie = cookies.get(`_ga_${measurementId.replace(/^G-/, '')}`);
+  const taggedSessionId = sessionCookie?.match(/(?:^|[.$])s(\d+)(?:\$|$)/)?.[1];
+  const taggedSessionNumber = sessionCookie?.match(/(?:^|[.$])o(\d+)(?:\$|$)/)?.[1];
+  const legacyParts = sessionCookie?.match(/^GS\d+\.\d+\.(.+)$/)?.[1].split('.');
+  const sessionId = Number(taggedSessionId || legacyParts?.[0]);
+  const sessionNumber = Number(taggedSessionNumber || legacyParts?.[1]);
+  if (Number.isSafeInteger(sessionId) && sessionId > 0) result.sessionId = sessionId;
+  if (Number.isSafeInteger(sessionNumber) && sessionNumber > 0) result.sessionNumber = sessionNumber;
+  return Object.keys(result).length ? result : undefined;
+};
 const directGa4Enabled = () => (testConfig?.directGa4 ?? env.VITE_ANALYTICS_DIRECT_GA4 === 'true') && !activeGtmId();
 const initializeGtm = () => {
   const id = activeGtmId();
@@ -206,12 +227,15 @@ export const resetAnalyticsForTests = () => {
   sentDedupeKeys.clear();
 };
 export const getCheckoutAttribution = async (): Promise<CheckoutAttribution | undefined> => {
-  if (!isBrowser() || getAnalyticsConsent() !== 'granted' || typeof window.gtag !== 'function') return undefined;
+  if (!isBrowser() || getAnalyticsConsent() !== 'granted') return undefined;
   // This is the GA4 destination configured by the Google Tag in GTM. Reading
   // attribution never enables direct GA4; VITE_ANALYTICS_DIRECT_GA4 remains the
   // only switch for that independent loading path.
   const measurementId = cleanId(testConfig?.gaMeasurementId) || cleanId(env.VITE_GA_MEASUREMENT_ID);
   if (!measurementId) return undefined;
+  const cookieAttribution = getGoogleCookieAttribution(measurementId);
+  if (cookieAttribution?.clientId && cookieAttribution.sessionId) return cookieAttribution;
+  if (typeof window.gtag !== 'function') return cookieAttribution;
   const timeoutMs = Number.isFinite(testConfig?.attributionTimeoutMs) && Number(testConfig?.attributionTimeoutMs) > 0
     ? Number(testConfig?.attributionTimeoutMs)
     : DEFAULT_ATTRIBUTION_TIMEOUT_MS;
@@ -233,7 +257,7 @@ export const getCheckoutAttribution = async (): Promise<CheckoutAttribution | un
   const normalizedClientId = typeof clientId === 'string' && /^\d+\.\d+$/.test(clientId) ? clientId : undefined;
   const normalizedSessionId = Number(sessionId);
   const normalizedSessionNumber = Number(sessionNumber);
-  const result: CheckoutAttribution = {};
+  const result: CheckoutAttribution = { ...cookieAttribution };
   if (normalizedClientId) result.clientId = normalizedClientId;
   if (Number.isSafeInteger(normalizedSessionId) && normalizedSessionId > 0) result.sessionId = normalizedSessionId;
   if (Number.isSafeInteger(normalizedSessionNumber) && normalizedSessionNumber > 0) result.sessionNumber = normalizedSessionNumber;

@@ -30,7 +30,7 @@ assert.equal(
 );
 
 assert.match(app, /\['play_purchase', 'play_purchase_pending'\]\.includes\(event\.type\)/, 'restauração global deve reconciliar compras pendentes e aprovadas');
-assert.match(app, /getCheckoutAttributionWithRetry\(\)[\s\S]*verifyGooglePlaySubscription\([\s\S]*attribution/, 'a restauração deve recapturar atribuição antes de reconciliar a compra');
+assert.match(app, /getCheckoutAttributionWithRetry\(undefined, 5\)[\s\S]*verifyGooglePlaySubscription\([\s\S]*attribution/, 'a restauração deve aguardar a atribuição antes de reconciliar a compra');
 assert.match(button, /event\.type === 'play_purchase' \|\| event\.type === 'play_purchase_pending'/, 'o retorno pendente deve abrir a confirmação, não um erro');
 assert.match(button, /getCheckoutAttributionWithRetry\(checkoutContext\?\.attribution\)/, 'o retorno da Google Play deve tentar novamente se a atribuição inicial expirou');
 assert.match(success, /waitForConfirmedSubscription\(user\.id, planId, 40,[\s\S]*expectedProvider\)/, 'a consulta automática deve ter intervalo e limite');
@@ -49,6 +49,7 @@ assert.match(mobileFunction, /ga4ClientId[\s\S]*checkoutAttemptId/, 'o checkout 
 assert.match(analytics, /marketing-purchase:\$\{transactionId\}/, 'Meta deve deduplicar pelo identificador confirmado');
 assert.match(analytics, /\^\[A-Za-z0-9\._-\]/, 'orderIds GPA com pontos devem ser aceitos na conversão');
 assert.match(analytics, /getConsentPreferences\(\)\?\.marketing !== true/, 'mídia deve respeitar consentimento de marketing');
+assert.match(analytics, /cookies\.get\('_ga'\)/, 'o WebView deve poder recuperar o client_id real gravado pela tag do Google');
 assert.doesNotMatch(analytics, /event: 'purchase',[\s\S]*marketing_destination: true/, 'a compra cliente não pode duplicar GA4 ou Google Ads');
 
 console.log('payment-confirmation.test.ts: OK');
