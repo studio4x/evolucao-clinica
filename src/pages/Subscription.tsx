@@ -725,7 +725,7 @@ export default function Subscription() {
       {/* Cartões dos Planos de Assinatura */}
       <div className="mx-auto mb-6 max-w-md rounded-2xl border border-brand-border bg-white p-4 shadow-sm">
         <label htmlFor="subscription-coupon" className="block text-sm font-bold text-brand-text">Cupom de desconto</label>
-        <p className="mt-1 text-xs text-brand-text-muted">Informe seu código antes de escolher o plano. A validação é feita no servidor. No Stripe, o desconto é aplicado diretamente no checkout; no Google Play, o código precisa estar vinculado a uma oferta publicada no Play Console.</p>
+        <p className="mt-1 text-xs text-brand-text-muted">Tem um cupom? Informe o código para conferir seu desconto antes de escolher o plano.</p>
         <input id="subscription-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))} placeholder="EX: BEMVINDO20" className="mt-3 w-full rounded-xl border border-brand-border px-3 py-2.5 font-mono uppercase outline-none focus:border-brand-primary" />
       </div>
       <div className="hidden md:flex xl:hidden items-center justify-between gap-4 mt-4 rounded-2xl border border-brand-primary/15 bg-brand-primary/5 px-4 py-3 text-sm text-brand-primary">
