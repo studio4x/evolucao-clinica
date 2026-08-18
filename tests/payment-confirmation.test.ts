@@ -35,6 +35,7 @@ assert.match(success, /waitForConfirmedSubscription\(user\.id, planId, 40,[\s\S]
 assert.match(success, /restorePurchases[\s\S]*visibilitychange/, 'o retorno ao aplicativo deve reconciliar a compra');
 assert.match(success, /getConfirmedGooglePlayTransaction/, 'o sucesso Google Play deve usar uma transação paga real');
 assert.match(success, /Não é necessário atualizar a página\./, 'a interface deve orientar que não é preciso recarregar');
+assert.match(success, /className="min-w-0 break-all">Assinatura:/, 'o identificador longo da assinatura deve quebrar dentro do resumo');
 assert.match(launcher, /protected void onResume\(\)[\s\S]*restoreNativePurchases/, 'o Android deve consultar compras novamente no onResume');
 assert.match(launcher, /for \(Purchase purchase : purchases\) dispatchPlayPurchase\(purchase, true\)/, 'a reconciliação nativa deve incluir PURCHASED e PENDING');
 assert.match(verifier, /if \(parsed\.entitled && parsed\.acknowledgementState/, 'uma compra pendente não pode ser reconhecida nem liberar benefício');

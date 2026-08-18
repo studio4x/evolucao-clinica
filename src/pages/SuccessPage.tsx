@@ -362,9 +362,9 @@ export default function SuccessPage() {
                     <span>Referência: {displayTransactionId}</span>
                   </p>
                   {effectiveState?.subscriptionId && (
-                    <p className="flex items-start gap-2">
+                    <p className="flex min-w-0 items-start gap-2">
                       <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
-                      <span>Assinatura: {effectiveState.subscriptionId}</span>
+                      <span className="min-w-0 break-all">Assinatura: {effectiveState.subscriptionId}</span>
                     </p>
                   )}
                   {effectiveState?.invoiceId && (

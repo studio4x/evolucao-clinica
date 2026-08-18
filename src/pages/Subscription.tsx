@@ -1136,9 +1136,9 @@ export default function Subscription() {
                 <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted mb-2">Resumo da transação</p>
                 <div className="space-y-2 text-sm text-brand-text">
                   {paymentModal.summaryLines.map((line) => (
-                    <p key={line} className="flex items-start gap-2">
+                    <p key={line} className="flex min-w-0 items-start gap-2">
                       <ArrowRight className="w-4 h-4 text-brand-primary mt-0.5 shrink-0" />
-                      <span>{line}</span>
+                      <span className="min-w-0 break-all">{line}</span>
                     </p>
                   ))}
                 </div>
