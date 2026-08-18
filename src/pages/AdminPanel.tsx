@@ -60,6 +60,14 @@ interface Professional {
   };
 }
 
+type JourneyGroupCheckStatus = 'unknown' | 'checking' | 'member' | 'not_member' | 'missing_phone' | 'indeterminate';
+
+interface JourneyGroupCheckState {
+  status: JourneyGroupCheckStatus;
+  checkedAt?: string;
+  message?: string;
+}
+
 type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'coupons' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'seo' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
 type AdminNavItem = { key: AdminTab; label: string; icon: typeof Users };
 type AdminNavGroup = { title: string; items: AdminNavItem[] };
@@ -1061,6 +1069,7 @@ export default function AdminPanel() {
   const [accessControlSaving, setAccessControlSaving] = useState(false);
   const [accessControlSuccess, setAccessControlSuccess] = useState('');
   const [accessControlError, setAccessControlError] = useState('');
+  const [journeyGroupChecks, setJourneyGroupChecks] = useState<Record<string, JourneyGroupCheckState>>({});
 
   // Estados da Chave Gemini
   const [currentGeminiKey, setCurrentGeminiKey] = useState('');
@@ -2723,6 +2732,58 @@ export default function AdminPanel() {
     }
   };
 
+  const handleCheckJourneyGroupMembership = async (prof: Professional) => {
+    setJourneyGroupChecks(prev => ({
+      ...prev,
+      [prof.id]: { status: 'checking' }
+    }));
+
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+
+      const response = await fetch(`/api/admin/professionals/${prof.id}/journey-group-membership`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.ok && (payload.status === 'member' || payload.status === 'not_member')) {
+        setJourneyGroupChecks(prev => ({
+          ...prev,
+          [prof.id]: {
+            status: payload.status,
+            checkedAt: payload.checkedAt
+          }
+        }));
+        return;
+      }
+
+      const status: JourneyGroupCheckStatus = payload.status === 'missing_phone'
+        ? 'missing_phone'
+        : 'indeterminate';
+      setJourneyGroupChecks(prev => ({
+        ...prev,
+        [prof.id]: {
+          status,
+          message: payload.error || 'Não foi possível concluir a verificação.'
+        }
+      }));
+    } catch (error: any) {
+      setJourneyGroupChecks(prev => ({
+        ...prev,
+        [prof.id]: {
+          status: 'indeterminate',
+          message: error.message || 'Não foi possível concluir a verificação.'
+        }
+      }));
+    }
+  };
+
   const handleUpdateStatus = async (prof: Professional, newStatus: 'active' | 'inactive') => {
     if (updatingId) return;
     setUpdatingId(prof.id);
@@ -3905,6 +3966,7 @@ export default function AdminPanel() {
                           <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
                             <th className="p-4 pl-6">Profissional</th>
                             <th className="p-4">Contato</th>
+                            <th className="p-4">Grupo Jornada</th>
                             <th className="p-4">Data do cadastro</th>
                             <th className="p-4">Assinatura / Plano</th>
                             <th className="p-4">Vencimento</th>
@@ -3915,6 +3977,16 @@ export default function AdminPanel() {
                         <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
                           {filteredProfessionals.map((prof) => {
                             const isAdminSelf = prof.id === user?.id;
+                            const journeyGroupCheck: JourneyGroupCheckState = journeyGroupChecks[prof.id] || { status: 'unknown' };
+                            const journeyGroupTitle = journeyGroupCheck.status === 'member'
+                              ? `Está no grupo da Jornada. Verificado em ${journeyGroupCheck.checkedAt ? new Date(journeyGroupCheck.checkedAt).toLocaleString('pt-BR') : 'agora'}. Clique para verificar novamente.`
+                              : journeyGroupCheck.status === 'not_member'
+                                ? `Não está no grupo da Jornada. Verificado em ${journeyGroupCheck.checkedAt ? new Date(journeyGroupCheck.checkedAt).toLocaleString('pt-BR') : 'agora'}. Clique para verificar novamente.`
+                                : journeyGroupCheck.status === 'missing_phone'
+                                  ? journeyGroupCheck.message || 'O profissional não possui WhatsApp cadastrado.'
+                                  : journeyGroupCheck.status === 'indeterminate'
+                                    ? journeyGroupCheck.message || 'Não foi possível concluir a verificação. Clique para tentar novamente.'
+                                    : 'Verificar se o profissional está no grupo da Jornada.';
                             return (
                               <tr key={prof.id} className="hover:bg-brand-bg/30 transition-colors">
                                 <td className="p-4 pl-6">
@@ -3938,6 +4010,41 @@ export default function AdminPanel() {
 
                                 <td className="p-4 text-brand-text-muted font-medium break-all">
                                   {prof.google_email}
+                                </td>
+
+                                <td className="p-4 whitespace-nowrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCheckJourneyGroupMembership(prof)}
+                                    disabled={journeyGroupCheck.status === 'checking'}
+                                    title={journeyGroupTitle}
+                                    aria-label={journeyGroupTitle}
+                                    className={`inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-70 ${
+                                      journeyGroupCheck.status === 'member'
+                                        ? 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                        : journeyGroupCheck.status === 'not_member'
+                                          ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                                          : journeyGroupCheck.status === 'missing_phone'
+                                            ? 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                            : journeyGroupCheck.status === 'indeterminate'
+                                              ? 'border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100'
+                                              : 'border-brand-border bg-brand-bg/50 text-brand-primary hover:bg-brand-bg'
+                                    }`}
+                                  >
+                                    {journeyGroupCheck.status === 'checking' ? (
+                                      <><Loader2 className="h-3.5 w-3.5 animate-spin" /><span>Verificando</span></>
+                                    ) : journeyGroupCheck.status === 'member' ? (
+                                      <><CheckCircle2 className="h-3.5 w-3.5" /><span>No grupo</span></>
+                                    ) : journeyGroupCheck.status === 'not_member' ? (
+                                      <><XCircle className="h-3.5 w-3.5" /><span>Fora</span></>
+                                    ) : journeyGroupCheck.status === 'missing_phone' ? (
+                                      <><AlertTriangle className="h-3.5 w-3.5" /><span>Sem WhatsApp</span></>
+                                    ) : journeyGroupCheck.status === 'indeterminate' ? (
+                                      <><AlertTriangle className="h-3.5 w-3.5" /><span>Tentar novamente</span></>
+                                    ) : (
+                                      <><MessageCircle className="h-3.5 w-3.5" /><span>Verificar</span></>
+                                    )}
+                                  </button>
                                 </td>
 
                                 <td className="p-4 text-brand-text-muted whitespace-nowrap text-xs">

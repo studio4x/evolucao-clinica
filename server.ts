@@ -48,6 +48,10 @@ import {
   WhatsAppUserLookupValidationError
 } from "./server/whatsapp/whatsappUserLookup.js";
 import {
+  checkJourneyGroupMembership,
+  JourneyGroupMembershipError
+} from "./server/whatsapp/journeyGroupMembership.js";
+import {
   createWhatsAppN8nEventsService,
   validateNormalizedWhatsAppN8nEvent,
   verifyWhatsAppN8nEventsAuthorization,
@@ -3533,6 +3537,78 @@ app.get("/api/admin/daily-push-history", requireAuth, requireAdmin, async (req, 
   }
 });
 
+
+app.post("/api/admin/professionals/:professionalId/journey-group-membership", requireAuth, requireAdmin, async (req: any, res) => {
+  const professionalId = String(req.params.professionalId || "").trim();
+  if (!professionalId) {
+    return res.status(400).json({ error: "ID do profissional ausente.", code: "professional_id_missing" });
+  }
+
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    const { data: preferences, error: preferencesError } = await supabaseAdmin
+      .from("communication_preferences")
+      .select("whatsapp_number")
+      .eq("user_id", professionalId)
+      .maybeSingle();
+
+    if (preferencesError) throw preferencesError;
+    if (!preferences?.whatsapp_number) {
+      return res.status(422).json({
+        ok: false,
+        status: "missing_phone",
+        member: null,
+        professionalId,
+        code: "whatsapp_number_not_configured",
+        error: "O profissional não possui número de WhatsApp cadastrado."
+      });
+    }
+
+    const { phoneNumber } = validateWhatsAppUserLookupPayload({
+      phoneNumber: preferences.whatsapp_number
+    });
+    const result = await checkJourneyGroupMembership({
+      webhookUrl: process.env.N8N_JOURNEY_GROUP_CHECK_WEBHOOK_URL,
+      webhookToken: process.env.N8N_JOURNEY_GROUP_CHECK_TOKEN,
+      professionalId,
+      phoneNumber,
+      requestId: `admin-${req.user.id}-${Date.now()}`
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    if (error instanceof WhatsAppUserLookupValidationError) {
+      return res.status(422).json({
+        ok: false,
+        status: "missing_phone",
+        member: null,
+        professionalId,
+        code: "whatsapp_number_invalid",
+        error: "O número de WhatsApp cadastrado para o profissional é inválido."
+      });
+    }
+    if (error instanceof JourneyGroupMembershipError) {
+      console.error(`[Journey group membership] status=indeterminate code=${error.code}`);
+      return res.status(error.statusCode).json({
+        ok: false,
+        status: "indeterminate",
+        member: null,
+        professionalId,
+        code: error.code,
+        error: error.message
+      });
+    }
+    console.error("[Journey group membership] Falha interna ao verificar profissional.");
+    return res.status(500).json({
+      ok: false,
+      status: "indeterminate",
+      member: null,
+      professionalId,
+      code: "internal_error",
+      error: "Não foi possível verificar o profissional no grupo da Jornada."
+    });
+  }
+});
 
 app.delete("/api/admin/professionals/:userId", requireAuth, requireAdmin, async (req: any, res) => {
   const targetUserId = req.params.userId;
