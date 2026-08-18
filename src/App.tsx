@@ -59,7 +59,7 @@ import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBounda
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
-import { getAnalyticsConsent, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackEvent, trackPageView } from './services/analytics';
+import { getAnalyticsConsent, getCheckoutAttributionWithRetry, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackEvent, trackPageView } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
@@ -78,13 +78,16 @@ function NativeBillingRestore() {
         !event.purchaseToken
       ) return;
       const planId = event.productId === 'evolucao_yearly' ? 'yearly' : 'monthly';
-      void verifyGooglePlaySubscription({
-        planId,
-        productId: event.productId,
-        purchaseToken: event.purchaseToken
-      }).catch((error) => {
-        console.error('[BillingRestore] Falha ao restaurar compra Google Play:', error);
-      });
+      void getCheckoutAttributionWithRetry()
+        .then((attribution) => verifyGooglePlaySubscription({
+          planId,
+          productId: event.productId,
+          purchaseToken: event.purchaseToken,
+          attribution
+        }))
+        .catch((error) => {
+          console.error('[BillingRestore] Falha ao restaurar compra Google Play:', error);
+        });
     });
 
       if (restoredUserRef.current !== user.id) {

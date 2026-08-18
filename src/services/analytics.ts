@@ -37,6 +37,7 @@ const EVENT_NAME_PATTERN = /^[a-z][a-z0-9_]{0,39}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MAX_STRING_LENGTH = 100;
 const DEFAULT_ATTRIBUTION_TIMEOUT_MS = 2_000;
+const DEFAULT_ATTRIBUTION_RETRY_DELAY_MS = 250;
 const MARKETING_EVENT_NAMES = new Set(['begin_checkout']);
 const sentDedupeKeys = new Set<string>();
 let initialized = false;
@@ -237,6 +238,25 @@ export const getCheckoutAttribution = async (): Promise<CheckoutAttribution | un
   if (Number.isSafeInteger(normalizedSessionId) && normalizedSessionId > 0) result.sessionId = normalizedSessionId;
   if (Number.isSafeInteger(normalizedSessionNumber) && normalizedSessionNumber > 0) result.sessionNumber = normalizedSessionNumber;
   return Object.keys(result).length ? result : undefined;
+};
+
+export const getCheckoutAttributionWithRetry = async (
+  initial?: Promise<CheckoutAttribution | undefined> | CheckoutAttribution,
+  freshAttempts = 2
+): Promise<CheckoutAttribution | undefined> => {
+  let result = await initial;
+  if (result?.clientId) return result;
+
+  for (let attempt = 0; attempt < freshAttempts; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, DEFAULT_ATTRIBUTION_RETRY_DELAY_MS));
+    }
+    const refreshed = await getCheckoutAttribution();
+    result = refreshed ? { ...result, ...refreshed } : result;
+    if (result?.clientId) return result;
+  }
+
+  return result;
 };
 
 export const sanitizeAnalyticsParameters = (parameters: AnalyticsParameters = {}): Record<string, string | number | boolean> => {

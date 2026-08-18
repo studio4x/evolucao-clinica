@@ -30,7 +30,9 @@ assert.equal(
 );
 
 assert.match(app, /\['play_purchase', 'play_purchase_pending'\]\.includes\(event\.type\)/, 'restauração global deve reconciliar compras pendentes e aprovadas');
+assert.match(app, /getCheckoutAttributionWithRetry\(\)[\s\S]*verifyGooglePlaySubscription\([\s\S]*attribution/, 'a restauração deve recapturar atribuição antes de reconciliar a compra');
 assert.match(button, /event\.type === 'play_purchase' \|\| event\.type === 'play_purchase_pending'/, 'o retorno pendente deve abrir a confirmação, não um erro');
+assert.match(button, /getCheckoutAttributionWithRetry\(checkoutContext\?\.attribution\)/, 'o retorno da Google Play deve tentar novamente se a atribuição inicial expirou');
 assert.match(success, /waitForConfirmedSubscription\(user\.id, planId, 40,[\s\S]*expectedProvider\)/, 'a consulta automática deve ter intervalo e limite');
 assert.match(success, /restorePurchases[\s\S]*visibilitychange/, 'o retorno ao aplicativo deve reconciliar a compra');
 assert.match(success, /getConfirmedGooglePlayTransaction/, 'o sucesso Google Play deve usar uma transação paga real');

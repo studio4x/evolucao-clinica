@@ -13,7 +13,7 @@ import {
   verifyGooglePlaySubscription,
   waitForConfirmedSubscription
 } from '../../services/billing';
-import { getCheckoutAttribution, trackBeginCheckout, trackStripeAndroidPurchaseOnce } from '../../services/analytics';
+import { getCheckoutAttribution, getCheckoutAttributionWithRetry, trackBeginCheckout, trackStripeAndroidPurchaseOnce } from '../../services/analytics';
 
 export type ConfirmedBillingResult = {
   provider: 'stripe' | 'google_play';
@@ -93,7 +93,7 @@ export function StripeSubscriptionButton({
         if (event.type === 'alternative_selected') {
           if (!event.externalTransactionToken) throw new Error('A Play Store não retornou o token da escolha.');
           const checkoutContext = checkoutContextRef.current;
-          const attribution = checkoutContext ? await checkoutContext.attribution : await getCheckoutAttribution();
+          const attribution = await getCheckoutAttributionWithRetry(checkoutContext?.attribution);
           const mobile = await createStripeMobileSubscription(
             activePlan,
             event.externalTransactionToken,
@@ -119,7 +119,7 @@ export function StripeSubscriptionButton({
             throw new Error('Dados da compra Google Play incompletos.');
           }
           const checkoutContext = checkoutContextRef.current;
-          const attribution = checkoutContext ? await checkoutContext.attribution : await getCheckoutAttribution();
+          const attribution = await getCheckoutAttributionWithRetry(checkoutContext?.attribution);
           const verified = await verifyGooglePlaySubscription({
             planId: activePlan,
             productId: event.productId,

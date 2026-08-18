@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildMeasurementPayload, deliverAnalyticsRow, deliveryFailureUpdate, nextAttempt, validateMeasurementPayload } from "../supabase/functions/_shared/analyticsDelivery.ts";
+import { buildMeasurementPayload, deliverAnalyticsRow, deliveryFailureUpdate, enqueueAndDeliverAnalyticsEvent, nextAttempt, validateMeasurementPayload } from "../supabase/functions/_shared/analyticsDelivery.ts";
 
 const base = {
   userId: "550e8400-e29b-41d4-a716-446655440000",
@@ -64,4 +64,54 @@ assert.equal(await deliverAnalyticsRow(fakeAdmin, { id: 2, event_name: "purchase
 assert.equal(updates.at(-1)?.status, "failed");
 assert.equal(updates.at(-1)?.next_attempt_at, null);
 assert.equal(updates.at(-1)?.last_error, "measurement_protocol_configuration_unavailable", "erro armazenado deve ser técnico e não conter segredo");
+
+const recoveryUpdates: Array<{ value: Record<string, unknown>; filters: Array<[string, unknown]> }> = [];
+const claimArgs: Array<Record<string, unknown>> = [];
+const recoveryAdmin = {
+  from(table: string) {
+    if (table === "analytics_consents") {
+      return { select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { analytics_granted: true } }) }) }) };
+    }
+    return {
+      update(value: Record<string, unknown>) {
+        const record = { value, filters: [] as Array<[string, unknown]> };
+        recoveryUpdates.push(record);
+        const chain = { eq(name: string, value: unknown) { record.filters.push([name, value]); return chain; } };
+        return chain;
+      }
+    };
+  },
+  async rpc(_name: string, args: Record<string, unknown>) {
+    claimArgs.push(args);
+    if (claimArgs.length === 1) return { data: [] };
+    return {
+      data: [{
+        id: 3,
+        event_name: "purchase",
+        user_id: base.userId,
+        payload: args.p_payload,
+        attempt_count: 2
+      }]
+    };
+  }
+};
+assert.equal(
+  await enqueueAndDeliverAnalyticsEvent(recoveryAdmin, {
+    eventKey: "purchase:google_play:GPA.0000-0000-0000-00000",
+    userId: base.userId,
+    eventName: "purchase",
+    provider: "google_play",
+    params: { ...params, payment_provider: "google_play", transaction_id: "GPA.0000-0000-0000-00000" },
+    attribution: base.attribution,
+    occurredAt: base.occurredAt
+  }),
+  "secrets_missing_retry_scheduled",
+  "falha antiga sem atribuição deve voltar à fila usando a mesma chave"
+);
+assert.equal(claimArgs.length, 2, "a mesma chave deve ser reivindicada novamente após a recuperação");
+const recovery = recoveryUpdates[0];
+assert.ok(recovery.filters.some(([name, value]) => name === "status" && value === "failed"));
+assert.ok(recovery.filters.some(([name, value]) => name === "last_error" && value === "missing_real_web_attribution"));
+assert.ok(recovery.filters.some(([name, value]) => name === "event_key" && value === "purchase:google_play:GPA.0000-0000-0000-00000"));
+assert.equal((recovery.value.payload as { attribution: typeof base.attribution }).attribution.clientId, base.attribution.clientId);
 console.log("measurement-protocol.test.ts: OK");

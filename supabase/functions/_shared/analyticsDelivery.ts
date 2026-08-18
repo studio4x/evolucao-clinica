@@ -49,8 +49,24 @@ export async function enqueueAndDeliverAnalyticsEvent(admin: any, input: { event
   const { data: consent } = await admin.from("analytics_consents").select("analytics_granted").eq("user_id", input.userId).maybeSingle();
   if (!consent?.analytics_granted) return "consent_denied";
   const payload = { params: input.params, attribution: input.attribution, occurredAt: input.occurredAt };
-  const { data: claimed } = await admin.rpc("claim_analytics_event_delivery", { p_event_key: input.eventKey, p_user_id: input.userId, p_event_name: input.eventName, p_provider: input.provider || "stripe", p_payload: payload, p_max_attempts: MAX_ATTEMPTS });
-  const row = Array.isArray(claimed) ? claimed[0] : null;
+  const provider = input.provider || "stripe";
+  const claim = () => admin.rpc("claim_analytics_event_delivery", { p_event_key: input.eventKey, p_user_id: input.userId, p_event_name: input.eventName, p_provider: provider, p_payload: payload, p_max_attempts: MAX_ATTEMPTS });
+  let { data: claimed } = await claim();
+  let row = Array.isArray(claimed) ? claimed[0] : null;
+  if (!row && input.attribution.clientId && CLIENT_ID.test(input.attribution.clientId)) {
+    // A later app restore may finally provide the real Google tag attribution.
+    // Reopen only this exact terminal cause; sent rows and other failures remain immutable.
+    await admin.from("analytics_event_deliveries")
+      .update({ payload, status: "pending", next_attempt_at: new Date().toISOString(), locked_at: null, last_error: null, updated_at: new Date().toISOString() })
+      .eq("event_key", input.eventKey)
+      .eq("user_id", input.userId)
+      .eq("event_name", input.eventName)
+      .eq("provider", provider)
+      .eq("status", "failed")
+      .eq("last_error", "missing_real_web_attribution");
+    ({ data: claimed } = await claim());
+    row = Array.isArray(claimed) ? claimed[0] : null;
+  }
   if (!row) return "already_claimed";
   return await deliverAnalyticsRow(admin, row);
 }

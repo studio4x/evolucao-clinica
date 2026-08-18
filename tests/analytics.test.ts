@@ -193,10 +193,29 @@ windowMock.gtag = (...args: unknown[]) => {
   if (field === 'session_id') callback(999);
 };
 assert.deepEqual(await analytics.getCheckoutAttribution(), { clientId: '222222222.333333333', sessionId: 999 }, 'timeout preserva atribuição parcial');
+
+let attributionRead = 0;
+windowMock.gtag = (...args: unknown[]) => {
+  if (args[0] !== 'get') return;
+  const field = args[2];
+  const callback = args[3] as (value: unknown) => void;
+  if (field === 'client_id') {
+    attributionRead += 1;
+    if (attributionRead === 2) callback('444444444.555555555');
+  }
+  if (field === 'session_id') callback(attributionRead === 2 ? 777 : 666);
+};
+assert.deepEqual(
+  await analytics.getCheckoutAttributionWithRetry(Promise.resolve(undefined)),
+  { clientId: '444444444.555555555', sessionId: 777 },
+  'o retorno do provedor deve recapturar atribuição quando a leitura inicial expirou'
+);
+
 windowMock.gtag = () => undefined;
 const timeoutStartedAt = Date.now();
 assert.equal(await analytics.getCheckoutAttribution(), undefined, 'callback ausente deve terminar sem inventar client_id');
 assert.ok(Date.now() - timeoutStartedAt < 250, 'checkout não pode ficar bloqueado pelo Google tag');
+assert.equal(await analytics.getCheckoutAttributionWithRetry(undefined, 1), undefined, 'retry também não pode inventar client_id');
 assert.ok(warnings.every((warning) => !warning.includes('222222222') && !warning.includes('333333333')), 'diagnóstico de timeout não contém identificadores');
 console.warn = originalWarn;
 
