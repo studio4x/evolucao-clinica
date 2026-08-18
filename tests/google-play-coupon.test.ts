@@ -14,6 +14,9 @@ const [migration, admin, button, billing, launcher, verifier, rtdn] = await Prom
 assert.match(migration, /ADD COLUMN IF NOT EXISTS google_play_offer_id text/);
 assert.match(admin, /googlePlayOfferId/);
 assert.match(admin, /google_play_offer_id: form\.googlePlayOfferId\.trim\(\) \|\| null/);
+assert.match(admin, /editingCouponId/);
+assert.match(admin, /update\(\{ \.\.\.validated\.payload, updated_at:/);
+assert.match(admin, />Editar<\/button>/);
 assert.match(button, /resolveGooglePlayOffer\(planId, normalizedCouponCode\)/);
 assert.match(button, /startSubscription\(planId, user\.id, googlePlayOfferId\)/);
 assert.match(button, /couponCode: checkoutContext\?\.couponCode/);
