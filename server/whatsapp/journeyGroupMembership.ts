@@ -95,15 +95,16 @@ export async function checkJourneyGroupMembership(input: CheckJourneyGroupMember
   }
 
   const status = payload?.status;
-  const member = payload?.member;
+  const rawMember = payload?.member;
   if (
     (status !== "member" && status !== "not_member") ||
-    (status === "member" && member !== true) ||
-    (status === "not_member" && member !== false)
+    (status === "member" && rawMember !== true) ||
+    (status === "not_member" && rawMember !== false)
   ) {
     throw new JourneyGroupMembershipError(502, "webhook_invalid_response", "O n8n retornou uma resposta inválida.");
   }
 
+  const member = rawMember === true;
   const participantCount = Number(payload?.participantCount);
   return {
     ok: true,
