@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, Volume2, Award } from 'lucide-react';
+import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, Volume2, Award, MessageCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -10,6 +10,7 @@ import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 import { trackEvent } from '../services/analytics';
+import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
 
 const normalizeText = (text: string): string => {
   if (!text) return '';
@@ -76,6 +77,9 @@ export default function Onboarding() {
   const [syncError, setSyncError] = useState('');
   const [syncSummary, setSyncSummary] = useState<AgendaSyncSummary | null>(null);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [whatsappError, setWhatsappError] = useState('');
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
 
   // Controle local do Slider de Apresentação (passo 'intro')
   const [activeSlide, setActiveSlide] = useState(0);
@@ -121,6 +125,31 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (!user?.id) return;
+    let active = true;
+    const loadWhatsApp = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (!token) return;
+        const response = await fetch('/api/communication/preferences', {
+          cache: 'no-store',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (active && payload.preferences?.whatsapp_number) {
+          setWhatsappNumber(payload.preferences.whatsapp_number);
+        }
+      } catch (error) {
+        console.warn('[Onboarding] Não foi possível carregar o WhatsApp cadastrado.', error);
+      }
+    };
+    void loadWhatsApp();
+    return () => { active = false; };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
 
     if (activeStep === 'agenda') {
       setOnboardingState(user.id, { step: 'agenda' });
@@ -129,11 +158,35 @@ export default function Onboarding() {
     }
   }, [activeStep, onboardingState?.step, user?.id]);
 
-  const handleStartOnboarding = () => {
+  const handleStartOnboarding = async () => {
     if (!user?.id) return;
-    setOnboardingState(user.id, { step: 'patient' });
-    trackEvent('onboarding_begin', {}, { dedupeKey: `onboarding_begin:${user.id}`, persistDedupe: true });
-    navigate('/painel/patients/new?onboarding=1', { replace: true });
+    setWhatsappError('');
+
+    try {
+      const normalizedWhatsApp = normalizeRequiredWhatsAppNumber(whatsappNumber);
+      setSavingWhatsapp(true);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sua sessão não está disponível. Faça login novamente.');
+
+      const response = await fetch('/api/communication/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ whatsapp_number: normalizedWhatsApp })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o WhatsApp.');
+
+      setWhatsappNumber(normalizedWhatsApp);
+      setOnboardingState(user.id, { step: 'patient' });
+      trackEvent('onboarding_begin', {}, { dedupeKey: `onboarding_begin:${user.id}`, persistDedupe: true });
+      navigate('/painel/patients/new?onboarding=1', { replace: true });
+    } catch (error: any) {
+      setActiveSlide(3);
+      setWhatsappError(error.message || 'Informe um WhatsApp válido para continuar.');
+    } finally {
+      setSavingWhatsapp(false);
+    }
   };
 
   const handleConnectGoogleCalendar = async () => {
@@ -498,10 +551,11 @@ export default function Onboarding() {
             {/* Botão de Pular a Intro (apenas na apresentação) */}
             {activeStep === 'intro' && (
               <button
-                onClick={handleStartOnboarding}
+                onClick={() => void handleStartOnboarding()}
+                disabled={savingWhatsapp}
                 className="text-xs font-semibold text-brand-text-muted hover:text-brand-primary px-3 py-1.5 rounded-xl hover:bg-brand-bg transition-colors"
               >
-                Pular
+                {savingWhatsapp ? 'Salvando...' : 'Pular'}
               </button>
             )}
           </div>
@@ -625,6 +679,39 @@ export default function Onboarding() {
                       <p className="text-sm sm:text-base text-brand-text-muted leading-relaxed">
                         Para começar a usar a plataforma, vamos criar seu primeiro paciente e registrar a primeira evolução de teste. Faremos tudo em um fluxo interativo.
                       </p>
+                      <div className="w-full max-w-sm space-y-2 pt-1 text-left">
+                        <label htmlFor="onboarding-whatsapp" className="block text-[11px] font-bold uppercase tracking-wider text-brand-text">
+                          WhatsApp obrigatório
+                        </label>
+                        <div className="relative">
+                          <MessageCircle className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-primary" />
+                          <input
+                            id="onboarding-whatsapp"
+                            type="tel"
+                            required
+                            inputMode="tel"
+                            autoComplete="tel"
+                            value={whatsappNumber}
+                            onChange={(event) => {
+                              setWhatsappNumber(event.target.value);
+                              if (whatsappError) setWhatsappError('');
+                            }}
+                            placeholder="Ex: 5511999887766"
+                            disabled={savingWhatsapp}
+                            className={`input-field w-full py-3 pl-10 pr-4 text-sm ${whatsappError ? 'border-red-400 focus:border-red-500' : ''}`}
+                            aria-invalid={Boolean(whatsappError)}
+                            aria-describedby={whatsappError ? 'onboarding-whatsapp-error' : 'onboarding-whatsapp-help'}
+                          />
+                        </div>
+                        <p id="onboarding-whatsapp-help" className="text-[10px] leading-relaxed text-brand-text-muted">
+                          Informe DDI + DDD + número. Esse dado poderá ser alterado depois no seu perfil.
+                        </p>
+                        {whatsappError && (
+                          <p id="onboarding-whatsapp-error" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-700">
+                            {whatsappError}
+                          </p>
+                        )}
+                      </div>
                     </>
                   )}
 
@@ -863,11 +950,12 @@ export default function Onboarding() {
                 ) : (
                   <button
                     type="button"
-                    onClick={handleStartOnboarding}
+                    onClick={() => void handleStartOnboarding()}
+                    disabled={savingWhatsapp}
                     className="btn-primary px-6 py-2.5 text-xs font-bold inline-flex items-center gap-1.5 shadow-md shadow-brand-primary/15"
                   >
-                    Iniciar Configuração
-                    <ArrowRight size={14} />
+                    {savingWhatsapp ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
+                    {savingWhatsapp ? 'Salvando WhatsApp...' : 'Iniciar Configuração'}
                   </button>
                 )}
               </>

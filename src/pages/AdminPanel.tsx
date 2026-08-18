@@ -22,6 +22,7 @@ import DailyPushNotificationManager from '../components/admin/DailyPushNotificat
 import PushNotificationCasesManager from '../components/admin/PushNotificationCasesManager';
 import LifecycleAdmin from '../components/admin/LifecycleAdmin';
 import SubscriptionCouponsAdmin from '../components/admin/SubscriptionCouponsAdmin';
+import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsModal';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 
@@ -1070,6 +1071,7 @@ export default function AdminPanel() {
   const [accessControlSuccess, setAccessControlSuccess] = useState('');
   const [accessControlError, setAccessControlError] = useState('');
   const [journeyGroupChecks, setJourneyGroupChecks] = useState<Record<string, JourneyGroupCheckState>>({});
+  const [selectedProfessionalDetails, setSelectedProfessionalDetails] = useState<Professional | null>(null);
 
   // Estados da Chave Gemini
   const [currentGeminiKey, setCurrentGeminiKey] = useState('');
@@ -4110,6 +4112,14 @@ export default function AdminPanel() {
                                     <div className="inline-flex gap-1.5 items-center">
                                       <span className="text-xs text-brand-text-muted italic mr-2">Administrador Geral</span>
                                       <button
+                                        onClick={() => setSelectedProfessionalDetails(prof)}
+                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 transition-colors cursor-pointer"
+                                        title="Visualizar todos os dados do profissional"
+                                        aria-label={`Visualizar dados de ${prof.full_name}`}
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button
                                         onClick={() => setSelectedAcquisitionProf(prof)}
                                         className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
                                           prof.acquisition_info && (prof.acquisition_info.utm_source || prof.acquisition_info.referrer || prof.acquisition_info.channel)
@@ -4131,6 +4141,14 @@ export default function AdminPanel() {
                                     </div>
                                   ) : (
                                     <div className="inline-flex gap-1.5">
+                                      <button
+                                        onClick={() => setSelectedProfessionalDetails(prof)}
+                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 transition-colors cursor-pointer"
+                                        title="Visualizar todos os dados do profissional"
+                                        aria-label={`Visualizar dados de ${prof.full_name}`}
+                                      >
+                                        <Eye className="w-3.5 h-3.5" />
+                                      </button>
                                       <button
                                         onClick={() => setSelectedAcquisitionProf(prof)}
                                         className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
@@ -8425,6 +8443,11 @@ export default function AdminPanel() {
             </div>
           </div>
         )}
+
+        <ProfessionalDetailsModal
+          professional={selectedProfessionalDetails}
+          onClose={() => setSelectedProfessionalDetails(null)}
+        />
 
         {/* Modal de Origem e Rastreamento de Aquisição (UTMs) */}
         {selectedAcquisitionProf && (

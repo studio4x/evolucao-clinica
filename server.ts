@@ -3538,6 +3538,50 @@ app.get("/api/admin/daily-push-history", requireAuth, requireAdmin, async (req, 
 });
 
 
+app.get("/api/admin/professionals/:professionalId/details", requireAuth, requireAdmin, async (req: any, res) => {
+  const professionalId = String(req.params.professionalId || "").trim();
+  if (!professionalId) {
+    return res.status(400).json({ error: "ID do profissional ausente." });
+  }
+
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    const [professionalResult, preferencesResult, authResult] = await Promise.all([
+      supabaseAdmin
+        .from("professionals")
+        .select("id, google_email, full_name, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at, updated_at, professional_title, professional_register, force_google_disconnect, trial_expiration_email_sent_at, onboarding_completed, custom_logo_url, auto_backup_enabled, last_backup_at, backup_frequency, billing_provider, stripe_customer_id, acquisition_info, signup_acquisition_info, work_context")
+        .eq("id", professionalId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("communication_preferences")
+        .select("whatsapp_number, whatsapp_enabled, whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_source, whatsapp_opt_in_text_version, whatsapp_opt_out_at, whatsapp_opt_out_source, whatsapp_opt_out_reason, email_enabled, push_enabled, lifecycle_enabled, product_education_enabled, commercial_enabled, created_at, updated_at")
+        .eq("user_id", professionalId)
+        .maybeSingle(),
+      supabaseAdmin.auth.admin.getUserById(professionalId)
+    ]);
+
+    if (professionalResult.error) throw professionalResult.error;
+    if (preferencesResult.error) throw preferencesResult.error;
+    if (!professionalResult.data) {
+      return res.status(404).json({ error: "Profissional não encontrado." });
+    }
+
+    const authUser = authResult.data?.user;
+    return res.json({
+      professional: professionalResult.data,
+      communicationPreferences: preferencesResult.data || null,
+      auth: authUser ? {
+        created_at: authUser.created_at || null,
+        last_sign_in_at: authUser.last_sign_in_at || null,
+        email_confirmed_at: authUser.email_confirmed_at || null
+      } : null
+    });
+  } catch (error) {
+    console.error("[Admin professional details] Falha ao consultar dados do profissional.");
+    return res.status(500).json({ error: "Não foi possível carregar os dados do profissional." });
+  }
+});
+
 app.post("/api/admin/professionals/:professionalId/journey-group-membership", requireAuth, requireAdmin, async (req: any, res) => {
   const professionalId = String(req.params.professionalId || "").trim();
   if (!professionalId) {

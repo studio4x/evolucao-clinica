@@ -9,6 +9,7 @@ import { clearPendingGoogleScopes } from '../services/googleAuth';
 import { showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { WORK_CONTEXT_OPTIONS, isValidWorkContext, type WorkContext } from '../constants/professionalProfile';
+import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -268,6 +269,8 @@ export default function Profile() {
       : professionalRegister.trim();
 
     try {
+      const normalizedWhatsApp = normalizeRequiredWhatsAppNumber(whatsappNumber);
+
       // 1. Atualiza a tabela public.professionals
       const { error: dbError } = await supabase
         .from('professionals')
@@ -300,34 +303,32 @@ export default function Profile() {
         setUser(authData.user);
       }
 
-      // 4. Atualiza whatsapp_number em communication_preferences e sincroniza com Brevo
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const syncToken = sessionData.session?.access_token;
-        if (syncToken) {
-          const preferencesResponse = await fetch('/api/communication/preferences', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
-            body: JSON.stringify({
-              whatsapp_number: whatsappNumber.trim() || null,
-              whatsapp_opt_in: whatsappOptIn,
-              whatsapp_opt_in_source: 'configurações',
-              whatsapp_opt_in_text_version: WHATSAPP_OPT_IN_TEXT_VERSION
-            })
-          });
-          if (!preferencesResponse.ok) {
-            const preferencesError = await preferencesResponse.json().catch(() => ({}));
-            throw new Error(preferencesError.error || 'Não foi possível salvar a autorização do WhatsApp.');
-          }
-          fetch('/api/profile/sync-brevo', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
-            body: JSON.stringify({ fullName, whatsappNumber: whatsappNumber.trim() || null })
-          }).catch((err) => console.warn('[Profile] Erro ao sincronizar perfil com Brevo:', err));
-        }
-      } catch (syncErr) {
-        console.warn('[Profile] Erro ao salvar preferências WhatsApp:', syncErr);
+      // 4. Atualiza o WhatsApp obrigatório em communication_preferences e sincroniza com Brevo
+      const { data: sessionData } = await supabase.auth.getSession();
+      const syncToken = sessionData.session?.access_token;
+      if (!syncToken) throw new Error('Sua sessão não está disponível. Faça login novamente.');
+
+      const preferencesResponse = await fetch('/api/communication/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
+        body: JSON.stringify({
+          whatsapp_number: normalizedWhatsApp,
+          whatsapp_opt_in: whatsappOptIn,
+          whatsapp_opt_in_source: 'configurações',
+          whatsapp_opt_in_text_version: WHATSAPP_OPT_IN_TEXT_VERSION
+        })
+      });
+      if (!preferencesResponse.ok) {
+        const preferencesError = await preferencesResponse.json().catch(() => ({}));
+        throw new Error(preferencesError.error || 'Não foi possível salvar o WhatsApp.');
       }
+      setWhatsappNumber(normalizedWhatsApp);
+
+      fetch('/api/profile/sync-brevo', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${syncToken}` },
+        body: JSON.stringify({ fullName, whatsappNumber: normalizedWhatsApp })
+      }).catch((err) => console.warn('[Profile] Erro ao sincronizar perfil com Brevo:', err));
 
       setSuccessMessage('Perfil atualizado com sucesso!');
       setTimeout(() => setSuccessMessage(''), 4000);
@@ -683,7 +684,7 @@ export default function Profile() {
 
             <div className="space-y-2">
               <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
-                Número do WhatsApp (DDI + DDD + Número)
+                Número do WhatsApp (DDI + DDD + Número) *
               </label>
               <div className="relative">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" viewBox="0 0 24 24" fill="currentColor">
@@ -691,6 +692,9 @@ export default function Profile() {
                 </svg>
                 <input
                   type="tel"
+                  required
+                  inputMode="tel"
+                  autoComplete="tel"
                   value={whatsappNumber}
                   onChange={(e) => setWhatsappNumber(e.target.value)}
                   className="input-field pl-10 pr-4 py-3"
