@@ -15,6 +15,7 @@ import {
   verifyPlayPurchase,
 } from "../_shared/billing.ts";
 import { enqueueAndDeliverAnalyticsEvent } from "../_shared/analyticsDelivery.ts";
+import { enqueueAndDeliverMetaPurchase } from "../_shared/metaDelivery.ts";
 
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -194,6 +195,17 @@ serve(async (req) => {
         attribution: playAttribution,
         occurredAt,
       });
+      if (isInitialOrder) {
+        await enqueueAndDeliverMetaPurchase(admin, {
+          eventKey: `purchase:google_play:${parsed.latestOrderId}`,
+          userId: user.id,
+          provider: "google_play",
+          transactionId: String(parsed.latestOrderId).slice(0, 100),
+          value: amount,
+          currency: "BRL",
+          occurredAt,
+        });
+      }
       await enqueueAndDeliverAnalyticsEvent(admin, {
         eventKey: `${isInitialOrder ? "subscription_started" : "subscription_renewed"}:google_play:${parsed.latestOrderId}`,
         userId: user.id,

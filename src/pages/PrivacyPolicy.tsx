@@ -166,7 +166,8 @@ export default function PrivacyPolicy() {
             </p>
             <p>
               Com seu consentimento independente para <strong>Marketing</strong>, o Google Ads e recursos de remarketing podem ser ativados pelo GTM e,
-              quando houver Pixel configurado, a Meta pode receber eventos de publicidade permitidos, como início de checkout. A personalização de
+              quando houver Pixel ou API de Conversões configurados, a Meta pode receber eventos de publicidade permitidos, como início de checkout e
+              compra confirmada, com valor, moeda, horário, identificador idempotente da transação e identificador pseudônimo da conta profissional com hash. A personalização de
               anúncios somente poderá ocorrer se estiver habilitada nas contas dos provedores e for compatível com suas escolhas. Não enviamos a esses
               destinos conteúdo de prontuários, pacientes, áudios, transcrições, evoluções, documentos clínicos ou dados obtidos das APIs do Google Workspace.
             </p>

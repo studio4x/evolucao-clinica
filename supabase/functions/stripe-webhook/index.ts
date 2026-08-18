@@ -8,6 +8,7 @@ import {
   stripeSubscriptionStatus,
 } from "../_shared/billing.ts";
 import { enqueueAndDeliverAnalyticsEvent } from "../_shared/analyticsDelivery.ts";
+import { enqueueAndDeliverMetaPurchase } from "../_shared/metaDelivery.ts";
 import { buildFirstStripePurchaseEvent } from "../_shared/stripeAnalytics.ts";
 
 function asId(value: any) {
@@ -316,6 +317,17 @@ serve(async (req) => {
             attribution,
             occurredAt,
           });
+          if (isInitialInvoice) {
+            await enqueueAndDeliverMetaPurchase(admin, {
+              eventKey: `purchase:${invoice.id}`,
+              userId: synced.userId,
+              provider: "stripe",
+              transactionId: String(invoice.id).slice(0, 100),
+              value: gaPayload.value,
+              currency: gaPayload.currency,
+              occurredAt,
+            });
+          }
         }
         const firstStripePurchase = buildFirstStripePurchaseEvent({
           provider: transaction.payment_provider,

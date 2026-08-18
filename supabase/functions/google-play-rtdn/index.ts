@@ -10,6 +10,7 @@ import {
   verifyPlayPurchase,
 } from "../_shared/billing.ts";
 import { enqueueAndDeliverAnalyticsEvent } from "../_shared/analyticsDelivery.ts";
+import { enqueueAndDeliverMetaPurchase } from "../_shared/metaDelivery.ts";
 
 async function validatePubSubIdentity(req: Request) {
   const expectedAudience = Deno.env.get("GOOGLE_PLAY_RTDN_AUDIENCE") || "";
@@ -157,6 +158,17 @@ serve(async (req) => {
         attribution,
         occurredAt,
       });
+      if (isInitialOrder) {
+        await enqueueAndDeliverMetaPurchase(admin, {
+          eventKey: `purchase:google_play:${parsed.latestOrderId}`,
+          userId: stored.professional_id,
+          provider: "google_play",
+          transactionId: String(parsed.latestOrderId).slice(0, 100),
+          value: amount,
+          currency: "BRL",
+          occurredAt,
+        });
+      }
       await enqueueAndDeliverAnalyticsEvent(admin, {
         eventKey: `${isInitialOrder ? "subscription_started" : "subscription_renewed"}:google_play:${parsed.latestOrderId}`,
         userId: stored.professional_id,
