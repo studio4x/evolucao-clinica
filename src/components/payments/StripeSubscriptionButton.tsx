@@ -7,6 +7,7 @@ import {
   createStripeMobileSubscription,
   getConfirmedStripeTransaction,
   hasNativeBillingBridge,
+  resolveGooglePlayOffer,
   type BillingPlanId,
   type NativeBillingEvent,
   verifyGooglePlaySubscription,
@@ -62,6 +63,8 @@ export function StripeSubscriptionButton({
   const checkoutContextRef = useRef<{
     attemptId: string;
     attribution: ReturnType<typeof getCheckoutAttribution>;
+    couponCode?: string;
+    googlePlayOfferId?: string;
   } | null>(null);
 
   const setBusy = (value: boolean) => {
@@ -93,7 +96,7 @@ export function StripeSubscriptionButton({
           const mobile = await createStripeMobileSubscription(
             activePlan,
             event.externalTransactionToken,
-            couponCode,
+            checkoutContext?.couponCode || couponCode,
             attribution,
             checkoutContext?.attemptId
           );
@@ -120,6 +123,7 @@ export function StripeSubscriptionButton({
             planId: activePlan,
             productId: event.productId,
             purchaseToken: event.purchaseToken,
+            couponCode: checkoutContext?.couponCode,
             attribution,
             checkoutAttemptId: checkoutContext?.attemptId
           });
@@ -206,19 +210,25 @@ export function StripeSubscriptionButton({
 
     try {
       const checkoutAttemptId = crypto.randomUUID();
+      const normalizedCouponCode = couponCode?.trim() || undefined;
       if (hasNativeBillingBridge()) {
+        const googlePlayOfferId = normalizedCouponCode
+          ? (await resolveGooglePlayOffer(planId, normalizedCouponCode)).offerId
+          : undefined;
         trackBeginCheckout(planId, planName || planId, price || 0, 'android_billing', checkoutAttemptId);
         checkoutContextRef.current = {
           attemptId: checkoutAttemptId,
-          attribution: getCheckoutAttribution()
+          attribution: getCheckoutAttribution(),
+          couponCode: normalizedCouponCode,
+          googlePlayOfferId
         };
-        window.NativeBillingBridge?.startSubscription(planId, user.id);
+        window.NativeBillingBridge?.startSubscription(planId, user.id, googlePlayOfferId);
         return;
       }
 
       const attribution = await getCheckoutAttribution();
       trackBeginCheckout(planId, planName || planId, price || 0, 'stripe', checkoutAttemptId);
-      const { checkoutUrl } = await createStripeCheckoutSession(planId, couponCode, attribution, checkoutAttemptId);
+      const { checkoutUrl } = await createStripeCheckoutSession(planId, normalizedCouponCode, attribution, checkoutAttemptId);
       window.location.assign(checkoutUrl);
     } catch (error) {
       fail(error);

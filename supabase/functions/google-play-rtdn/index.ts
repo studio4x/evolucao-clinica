@@ -111,9 +111,16 @@ serve(async (req) => {
         .select("name, price")
         .eq("id", stored.plan_id)
         .single();
+      const isInitialOrder = parsed.latestOrderId === initialOrderId;
+      const configuredCouponAmount = Number(subscriptionMetadata.googlePlayCouponAmount);
+      const couponDuration = String(subscriptionMetadata.googlePlayCouponDuration || "");
+      const amount = Number.isFinite(configuredCouponAmount) && configuredCouponAmount > 0 &&
+        (isInitialOrder || couponDuration === "forever")
+        ? configuredCouponAmount
+        : Number(plan?.price || 0);
       const { error: transactionError } = await admin.from("transactions").upsert({
         professional_id: stored.professional_id,
-        amount: Number(plan?.price || 0),
+        amount,
         currency: "brl",
         plan_id: stored.plan_id,
         status: "paid",
@@ -128,7 +135,7 @@ serve(async (req) => {
       const analyticsPayload = {
         plan_id: String(stored.plan_id).slice(0, 100),
         plan_name: String(plan?.name || stored.plan_id).slice(0, 100),
-        value: Number(plan?.price || 0),
+        value: amount,
         currency: "BRL",
         payment_provider: "google_play",
       };
@@ -141,7 +148,6 @@ serve(async (req) => {
         ? Number(notification.eventTimeMillis)
         : null);
       const occurredAt = eventTimestamp ? new Date(eventTimestamp).toISOString() : new Date().toISOString();
-      const isInitialOrder = parsed.latestOrderId === initialOrderId;
       await enqueueAndDeliverAnalyticsEvent(admin, {
         eventKey: `purchase:google_play:${parsed.latestOrderId}`,
         userId: stored.professional_id,

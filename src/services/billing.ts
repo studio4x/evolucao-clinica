@@ -35,7 +35,7 @@ declare global {
   interface Window {
     NativeBillingBridge?: {
       isAvailable(): boolean;
-      startSubscription(planId: string, accountId: string): void;
+      startSubscription(planId: string, accountId: string, offerId?: string): void;
       restorePurchases(accountId: string): void;
       presentStripePaymentSheet(
         clientSecret: string,
@@ -97,10 +97,18 @@ export async function createStripeMobileSubscription(
   });
 }
 
+export async function resolveGooglePlayOffer(planId: BillingPlanId, couponCode: string) {
+  return invokeBillingFunction<{ offerId: string; couponCode: string }>('resolve-google-play-offer', {
+    planId,
+    couponCode
+  });
+}
+
 export async function verifyGooglePlaySubscription(input: {
   planId: BillingPlanId;
   productId: string;
   purchaseToken: string;
+  couponCode?: string;
   attribution?: CheckoutAttribution;
   checkoutAttemptId?: string;
 }) {

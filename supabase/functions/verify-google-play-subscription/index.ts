@@ -4,6 +4,8 @@ import {
   acknowledgePlayPurchase,
   corsHeaders,
   createAdminClient,
+  calculateCouponAmount,
+  getActiveSubscriptionCoupon,
   getBillingConfig,
   getPlan,
   jsonResponse,
@@ -38,7 +40,7 @@ serve(async (req) => {
   try {
     const admin = createAdminClient();
     const user = await requireAuthenticatedUser(req, admin);
-    const { planId, productId, purchaseToken, attribution, checkoutAttemptId } = await req.json();
+    const { planId, productId, purchaseToken, couponCode, attribution, checkoutAttemptId } = await req.json();
     const normalizedToken = String(purchaseToken || "").trim();
     const normalizedProductId = String(productId || "").trim();
     if (!normalizedToken || !normalizedProductId) {
@@ -55,6 +57,22 @@ serve(async (req) => {
     const parsed = parsePlaySubscription(purchase);
     if (!parsed.productIds.includes(normalizedProductId)) {
       throw new BillingHttpError(400, "A compra verificada não contém o produto informado.");
+    }
+
+    const normalizedCouponCode = String(couponCode || "").trim().toUpperCase();
+    const coupon = normalizedCouponCode
+      ? await getActiveSubscriptionCoupon(admin, plan.id, normalizedCouponCode)
+      : null;
+    const googlePlayOfferId = String(coupon?.google_play_offer_id || "").trim();
+    if (coupon && !googlePlayOfferId) {
+      throw new BillingHttpError(400, "Este cupom não está configurado para uma oferta do Google Play.");
+    }
+    if (googlePlayOfferId && !parsed.offerIds.includes(googlePlayOfferId)) {
+      throw new BillingHttpError(400, "A compra Google Play não contém a oferta correspondente ao cupom.");
+    }
+    const amount = coupon ? calculateCouponAmount(plan.price, coupon) : Number(plan.price || 0);
+    if (coupon && amount <= 0) {
+      throw new BillingHttpError(400, "O desconto do cupom precisa deixar um valor positivo no Google Play.");
     }
 
     const expectedAccountId = await sha256(user.id);
@@ -98,6 +116,12 @@ serve(async (req) => {
         ? "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED"
         : parsed.acknowledgementState,
       testPurchase: Boolean(purchase?.testPurchase),
+      ...(coupon ? {
+        googlePlayCouponCode: coupon.code,
+        googlePlayOfferId,
+        googlePlayCouponDuration: coupon.duration,
+        googlePlayCouponAmount: amount,
+      } : {}),
     };
 
     const { error: subscriptionError } = await admin.from("billing_subscriptions").upsert({
@@ -134,7 +158,7 @@ serve(async (req) => {
     }
     const { error: transactionError } = await admin.from("transactions").upsert({
       professional_id: user.id,
-      amount: Number(plan.price || 0),
+      amount,
       currency: "brl",
       plan_id: plan.id,
       status: parsed.entitled ? "paid" : parsed.status === "pending" ? "processing" : "failed",
@@ -151,7 +175,7 @@ serve(async (req) => {
       const analyticsPayload = {
         plan_id: String(plan.id).slice(0, 100),
         plan_name: String(plan.name || plan.id).slice(0, 100),
-        value: Number(plan.price || 0),
+        value: amount,
         currency: "BRL",
         payment_provider: "google_play",
       };
@@ -186,7 +210,7 @@ serve(async (req) => {
       currentPeriodEnd: parsed.currentPeriodEnd,
       entitled: parsed.entitled,
       transactionId: parsed.entitled ? parsed.latestOrderId : null,
-      amount: Number(plan.price || 0),
+      amount,
       currency: "BRL",
       planName: plan.name,
       provider: "google_play",

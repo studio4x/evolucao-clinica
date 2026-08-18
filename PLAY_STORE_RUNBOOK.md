@@ -115,6 +115,31 @@ Insira ou cole aqui as notas da versão no idioma pt-BR
 
 ---
 
+## 🏷️ Cupons no Stripe e no Google Play
+
+O código de cupom é comum aos dois provedores, mas o desconto é aplicado de
+forma diferente:
+
+* No Stripe, o backend cria/aplica o cupom Stripe a partir do registro em
+  `subscription_coupons`.
+* No Google Play, crie primeiro uma oferta promocional no produto e no
+  `base plan` correspondente. O campo **ID da oferta Google Play** no painel
+  `/admin/coupons` deve receber exatamente o `offerId` publicado no Play
+  Console, e não o código digitado pelo cliente.
+* O app consulta a oferta elegível, abre o Billing com o `offerToken` retornado
+  pelo Google Play e o backend confirma novamente o `offerId` antes de ativar o
+  acesso. Um cupom sem oferta Google Play configurada continua válido apenas
+  no Stripe.
+* O valor financeiro e os eventos de conversão do Google Play só são gravados
+  depois da confirmação autoritativa. Nunca substitua o preço do Play por um
+  valor informado pelo cliente.
+
+Ao testar, valide separadamente Stripe e Google Play. No modal do Play deve
+aparecer o produto/oferta esperados e, para contas de teste, um instrumento de
+teste; Pix ou cartão real devem ser cancelados imediatamente.
+
+---
+
 ## 🔑 Proteção da chave de assinatura
 
 * A cópia operacional desta máquina fica em `%LOCALAPPDATA%\EvolucaoClinica\android-signing`, nunca dentro do repositório.

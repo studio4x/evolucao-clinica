@@ -117,6 +117,7 @@ public class LauncherActivity extends ComponentActivity {
     private final Map<String, ProductDetails> subscriptionProducts = new HashMap<>();
     private String pendingBillingPlanId;
     private String pendingBillingAccountId;
+    private String pendingGooglePlayOfferId;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -687,8 +688,8 @@ public class LauncherActivity extends ComponentActivity {
         }
 
         @android.webkit.JavascriptInterface
-        public void startSubscription(String planId, String accountId) {
-            runOnUiThread(() -> startNativeSubscription(planId, accountId));
+        public void startSubscription(String planId, String accountId, String offerId) {
+            runOnUiThread(() -> startNativeSubscription(planId, accountId, offerId));
         }
 
         @android.webkit.JavascriptInterface
@@ -748,7 +749,7 @@ public class LauncherActivity extends ComponentActivity {
         });
     }
 
-    private void startNativeSubscription(String planId, String accountId) {
+    private void startNativeSubscription(String planId, String accountId, String offerId) {
         if (!"monthly".equals(planId) && !"yearly".equals(planId)) {
             dispatchBillingError("Plano de assinatura inválido.");
             return;
@@ -759,6 +760,7 @@ public class LauncherActivity extends ComponentActivity {
         }
         pendingBillingPlanId = planId;
         pendingBillingAccountId = accountId;
+        pendingGooglePlayOfferId = offerId == null ? "" : offerId.trim();
         connectBillingClient(() -> queryProductAndLaunch(planId));
     }
 
@@ -792,12 +794,22 @@ public class LauncherActivity extends ComponentActivity {
             }
 
             String expectedBasePlan = "yearly".equals(planId) ? "yearly-auto" : "monthly-auto";
-            ProductDetails.SubscriptionOfferDetails selectedOffer = offers.get(0);
+            ProductDetails.SubscriptionOfferDetails selectedOffer = null;
             for (ProductDetails.SubscriptionOfferDetails offer : offers) {
-                if (expectedBasePlan.equals(offer.getBasePlanId())) {
+                if (expectedBasePlan.equals(offer.getBasePlanId()) &&
+                        (pendingGooglePlayOfferId == null || pendingGooglePlayOfferId.isEmpty() ||
+                                pendingGooglePlayOfferId.equals(offer.getOfferId()))) {
                     selectedOffer = offer;
                     break;
                 }
+            }
+            if (selectedOffer == null) {
+                if (pendingGooglePlayOfferId != null && !pendingGooglePlayOfferId.isEmpty()) {
+                    dispatchBillingError("A oferta do cupom não está disponível para este plano na Google Play.");
+                } else {
+                    dispatchBillingError("O plano base da assinatura não foi encontrado na Google Play.");
+                }
+                return;
             }
 
             BillingFlowParams.ProductDetailsParams productParams =

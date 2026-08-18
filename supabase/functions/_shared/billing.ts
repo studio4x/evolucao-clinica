@@ -131,6 +131,43 @@ export async function getPlan(admin: any, planId: unknown, isProduction: boolean
   return { ...data, stripePriceId };
 }
 
+export async function getActiveSubscriptionCoupon(admin: any, planId: unknown, couponCode: unknown) {
+  const code = String(couponCode || "").trim().toUpperCase();
+  if (!code) return null;
+
+  const normalizedPlanId = String(planId || "").trim();
+  const now = new Date();
+  const { data: coupon, error } = await admin
+    .from("subscription_coupons")
+    .select("*")
+    .eq("code", code)
+    .eq("active", true)
+    .maybeSingle();
+
+  if (
+    error ||
+    !coupon ||
+    !Array.isArray(coupon.applicable_plans) ||
+    !coupon.applicable_plans.includes(normalizedPlanId) ||
+    (coupon.starts_at && new Date(coupon.starts_at) > now) ||
+    (coupon.expires_at && new Date(coupon.expires_at) <= now)
+  ) {
+    throw new BillingHttpError(400, "Cupom inválido, inativo, expirado ou indisponível para este plano.");
+  }
+
+  return coupon;
+}
+
+export function calculateCouponAmount(basePrice: unknown, coupon: any) {
+  const price = Number(basePrice || 0);
+  const discount = Number(coupon?.discount_value || 0);
+  if (!Number.isFinite(price) || price < 0 || !Number.isFinite(discount) || discount <= 0) return price;
+  const amount = coupon?.discount_type === "percentage"
+    ? price * (1 - discount / 100)
+    : price - discount;
+  return Math.max(0, Math.round(amount * 100) / 100);
+}
+
 export async function getProfessional(admin: any, userId: string) {
   const { data, error } = await admin
     .from("professionals")
@@ -363,6 +400,7 @@ export function parsePlaySubscription(subscription: any) {
     entitled: entitledStates.has(normalized) && hasFutureExpiry,
     currentPeriodEnd: latestExpiry,
     productIds: lineItems.map((item: any) => item?.productId).filter(Boolean),
+    offerIds: lineItems.map((item: any) => item?.offerDetails?.offerId).filter(Boolean),
     latestOrderId: lineItems
       .map((item: any) => item?.latestSuccessfulOrderId)
       .filter(Boolean)

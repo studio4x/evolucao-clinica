@@ -5,7 +5,8 @@ import { supabase } from '../../supabaseClient';
 type Coupon = {
   id: string; code: string; discount_type: 'percentage' | 'fixed_amount'; discount_value: number;
   duration: 'once' | 'forever' | 'repeating'; duration_in_months: number | null;
-  applicable_plans: string[]; active: boolean; starts_at: string | null; expires_at: string | null; created_at: string;
+  applicable_plans: string[]; active: boolean; starts_at: string | null; expires_at: string | null;
+  google_play_offer_id: string | null; created_at: string;
 };
 
 const normalizeCode = (value: string) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
@@ -16,7 +17,7 @@ export default function SubscriptionCouponsAdmin() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [form, setForm] = useState({ code: '', discountType: 'percentage' as Coupon['discount_type'], value: '', duration: 'once' as Coupon['duration'], months: '1', monthly: true, yearly: true, startsAt: '', expiresAt: '' });
+  const [form, setForm] = useState({ code: '', discountType: 'percentage' as Coupon['discount_type'], value: '', duration: 'once' as Coupon['duration'], months: '1', monthly: true, yearly: true, startsAt: '', expiresAt: '', googlePlayOfferId: '' });
 
   const load = async () => {
     setLoading(true);
@@ -38,11 +39,12 @@ export default function SubscriptionCouponsAdmin() {
       code, discount_type: form.discountType, discount_value: value, duration: form.duration,
       duration_in_months: form.duration === 'repeating' ? Number(form.months) : null,
       applicable_plans: plans, starts_at: form.startsAt ? new Date(form.startsAt).toISOString() : null,
-      expires_at: form.expiresAt ? new Date(form.expiresAt).toISOString() : null
+      expires_at: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
+      google_play_offer_id: form.googlePlayOfferId.trim() || null
     });
     setSaving(false);
     if (error) return setError(error.code === '23505' ? 'Este código já existe.' : error.message);
-    setForm({ code: '', discountType: 'percentage', value: '', duration: 'once', months: '1', monthly: true, yearly: true, startsAt: '', expiresAt: '' });
+    setForm({ code: '', discountType: 'percentage', value: '', duration: 'once', months: '1', monthly: true, yearly: true, startsAt: '', expiresAt: '', googlePlayOfferId: '' });
     setMessage(`Cupom ${code} criado com sucesso.`); void load();
   };
 
@@ -56,7 +58,7 @@ export default function SubscriptionCouponsAdmin() {
 
   return <div className="space-y-6">
     <div className="card border border-brand-border/60 bg-white p-6 shadow-sm">
-      <div className="mb-6 flex items-center gap-3"><div className="rounded-xl bg-brand-primary/10 p-3 text-brand-primary"><Tag size={24} /></div><div><h2 className="text-xl font-display font-bold text-brand-primary">Cupons de desconto</h2><p className="mt-0.5 text-xs text-brand-text-muted">Crie códigos aplicados de forma segura no checkout da Stripe.</p></div></div>
+      <div className="mb-6 flex items-center gap-3"><div className="rounded-xl bg-brand-primary/10 p-3 text-brand-primary"><Tag size={24} /></div><div><h2 className="text-xl font-display font-bold text-brand-primary">Cupons de desconto</h2><p className="mt-0.5 text-xs text-brand-text-muted">Crie códigos aplicados com validação no Stripe e, quando configurados, em uma oferta do Google Play.</p></div></div>
       {message && <div className="mb-4 flex gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"><Check size={18} />{message}</div>}
       {error && <div className="mb-4 flex gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><XCircle size={18} />{error}</div>}
       <form onSubmit={create} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -66,11 +68,12 @@ export default function SubscriptionCouponsAdmin() {
         <label className="text-xs font-semibold text-brand-text">Aplicação<select value={form.duration} onChange={e => setForm({ ...form, duration: e.target.value as Coupon['duration'] })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2.5"><option value="once">Apenas primeira cobrança</option><option value="forever">Todas as cobranças</option><option value="repeating">Número de meses</option></select></label>
         {form.duration === 'repeating' && <label className="text-xs font-semibold text-brand-text">Quantidade de meses<input type="number" min="1" max="36" value={form.months} onChange={e => setForm({ ...form, months: e.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2.5" /></label>}
         <div className="text-xs font-semibold text-brand-text">Planos válidos<div className="mt-1.5 flex gap-4 rounded-xl border border-brand-border px-3 py-2.5"><label><input type="checkbox" checked={form.monthly} onChange={e => setForm({ ...form, monthly: e.target.checked })} /> Mensal</label><label><input type="checkbox" checked={form.yearly} onChange={e => setForm({ ...form, yearly: e.target.checked })} /> Anual</label></div></div>
+        <label className="text-xs font-semibold text-brand-text">ID da oferta Google Play (opcional)<input value={form.googlePlayOfferId} onChange={e => setForm({ ...form, googlePlayOfferId: e.target.value.trim() })} placeholder="ex.: cupom20-mensal" className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2.5 font-mono outline-none focus:border-brand-primary" /><span className="mt-1 block text-[11px] font-normal leading-relaxed text-brand-text-muted">É o offer ID criado no Play Console, não o código digitado pelo cliente. Sem ele, o cupom continua disponível apenas no Stripe.</span></label>
         <label className="text-xs font-semibold text-brand-text">Início (opcional)<input type="datetime-local" value={form.startsAt} onChange={e => setForm({ ...form, startsAt: e.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2.5" /></label>
         <label className="text-xs font-semibold text-brand-text">Expiração (opcional)<input type="datetime-local" value={form.expiresAt} onChange={e => setForm({ ...form, expiresAt: e.target.value })} className="mt-1.5 w-full rounded-xl border border-brand-border bg-white px-3 py-2.5" /></label>
         <div className="flex items-end"><button disabled={saving} className="btn-primary flex w-full items-center justify-center gap-2 px-4 py-3 text-sm disabled:opacity-60">{saving ? <Loader2 className="animate-spin" size={17} /> : <Plus size={17} />}Criar cupom</button></div>
       </form>
     </div>
-    <div className="card overflow-hidden border border-brand-border/60 bg-white shadow-sm"><div className="flex items-center gap-2 border-b border-brand-border/60 p-5"><Percent size={18} className="text-brand-primary" /><h3 className="font-bold text-brand-text">Cupons criados</h3></div>{loading ? <div className="p-10 text-center"><Loader2 className="mx-auto animate-spin text-brand-primary" /></div> : coupons.length === 0 ? <p className="p-8 text-center text-sm text-brand-text-muted">Nenhum cupom criado.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-brand-bg/50 text-brand-text-muted"><tr><th className="p-4">Código</th><th className="p-4">Desconto</th><th className="p-4">Aplicação</th><th className="p-4">Planos</th><th className="p-4">Validade</th><th className="p-4 text-right">Status</th></tr></thead><tbody>{coupons.map(coupon => <tr key={coupon.id} className="border-t border-brand-border/40"><td className="p-4 font-mono font-bold text-brand-primary">{coupon.code}</td><td className="p-4">{formatDiscount(coupon)}</td><td className="p-4">{durationText(coupon)}</td><td className="p-4">{coupon.applicable_plans.map(p => p === 'monthly' ? 'Mensal' : 'Anual').join(', ')}</td><td className="p-4">{coupon.expires_at ? new Date(coupon.expires_at).toLocaleString('pt-BR') : 'Sem expiração'}</td><td className="p-4 text-right"><button type="button" onClick={() => void setActive(coupon)} className={`rounded-full px-3 py-1 font-semibold ${coupon.active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{coupon.active ? 'Ativo' : 'Inativo'}</button></td></tr>)}</tbody></table></div>}</div>
+    <div className="card overflow-hidden border border-brand-border/60 bg-white shadow-sm"><div className="flex items-center gap-2 border-b border-brand-border/60 p-5"><Percent size={18} className="text-brand-primary" /><h3 className="font-bold text-brand-text">Cupons criados</h3></div>{loading ? <div className="p-10 text-center"><Loader2 className="mx-auto animate-spin text-brand-primary" /></div> : coupons.length === 0 ? <p className="p-8 text-center text-sm text-brand-text-muted">Nenhum cupom criado.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-xs"><thead className="bg-brand-bg/50 text-brand-text-muted"><tr><th className="p-4">Código</th><th className="p-4">Desconto</th><th className="p-4">Aplicação</th><th className="p-4">Planos</th><th className="p-4">Google Play</th><th className="p-4">Validade</th><th className="p-4 text-right">Status</th></tr></thead><tbody>{coupons.map(coupon => <tr key={coupon.id} className="border-t border-brand-border/40"><td className="p-4 font-mono font-bold text-brand-primary">{coupon.code}</td><td className="p-4">{formatDiscount(coupon)}</td><td className="p-4">{durationText(coupon)}</td><td className="p-4">{coupon.applicable_plans.map(p => p === 'monthly' ? 'Mensal' : 'Anual').join(', ')}</td><td className="p-4 font-mono text-[11px]">{coupon.google_play_offer_id || 'Stripe apenas'}</td><td className="p-4">{coupon.expires_at ? new Date(coupon.expires_at).toLocaleString('pt-BR') : 'Sem expiração'}</td><td className="p-4 text-right"><button type="button" onClick={() => void setActive(coupon)} className={`rounded-full px-3 py-1 font-semibold ${coupon.active ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>{coupon.active ? 'Ativo' : 'Inativo'}</button></td></tr>)}</tbody></table></div>}</div>
   </div>;
 }
