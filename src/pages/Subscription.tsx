@@ -39,6 +39,8 @@ const DEFAULT_PLANS = [
   }
 ];
 
+const normalizeCouponCode = (value: string) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+
 type SubscriptionPlanLike = {
   id: string;
   name?: string;
@@ -149,6 +151,8 @@ export default function Subscription() {
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [paymentErrorByPlan, setPaymentErrorByPlan] = useState<Record<string, string>>({});
   const [couponCode, setCouponCode] = useState('');
+  const [couponDraft, setCouponDraft] = useState('');
+  const [couponMessage, setCouponMessage] = useState('');
 
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loadingTransactions, setLoadingTransactions] = useState(true);
@@ -246,6 +250,14 @@ export default function Subscription() {
     const diffTime = Math.abs(endsAtDate.getTime() - now.getTime());
     daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
+
+  const handleSaveCoupon = () => {
+    const normalized = normalizeCouponCode(couponDraft.trim());
+    setCouponCode(normalized);
+    setCouponDraft(normalized);
+    setPaymentErrorByPlan({});
+    setCouponMessage(normalized ? `Cupom ${normalized} salvo para o checkout.` : 'Cupom removido do checkout.');
+  };
 
   const handleSimulatePayment = async (plan: 'monthly' | 'yearly') => {
     if (!user) return;
@@ -726,7 +738,14 @@ export default function Subscription() {
       <div className="mx-auto mb-6 max-w-md rounded-2xl border border-brand-border bg-white p-4 shadow-sm">
         <label htmlFor="subscription-coupon" className="block text-sm font-bold text-brand-text">Cupom de desconto</label>
         <p className="mt-1 text-xs text-brand-text-muted">Tem um cupom? Informe o código para conferir seu desconto antes de escolher o plano.</p>
-        <input id="subscription-coupon" value={couponCode} onChange={(event) => setCouponCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))} placeholder="EX: BEMVINDO20" className="mt-3 w-full rounded-xl border border-brand-border px-3 py-2.5 font-mono uppercase outline-none focus:border-brand-primary" />
+        <div className="mt-3 flex gap-2">
+          <input id="subscription-coupon" value={couponDraft} onChange={(event) => { setCouponDraft(normalizeCouponCode(event.target.value)); setCouponMessage(''); }} placeholder="EX: BEMVINDO20" className="min-w-0 flex-1 rounded-xl border border-brand-border px-3 py-2.5 font-mono uppercase outline-none focus:border-brand-primary" />
+          <button type="button" onClick={handleSaveCoupon} className="shrink-0 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-primary/90">Salvar cupom</button>
+        </div>
+        <p className="mt-2 text-[11px] text-brand-text-muted" aria-live="polite">
+          {couponCode ? <>Cupom aplicado ao checkout: <span className="font-mono font-semibold text-brand-primary">{couponCode}</span></> : 'Nenhum cupom aplicado ao checkout.'}
+        </p>
+        {couponMessage && <p className="mt-1 text-xs font-semibold text-brand-primary" role="status">{couponMessage}</p>}
       </div>
       <div className="hidden md:flex xl:hidden items-center justify-between gap-4 mt-4 rounded-2xl border border-brand-primary/15 bg-brand-primary/5 px-4 py-3 text-sm text-brand-primary">
         <div className="flex items-center gap-2 font-semibold">

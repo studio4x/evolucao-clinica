@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [migration, admin, button, billing, launcher, verifier, rtdn] = await Promise.all([
+const [migration, admin, subscription, button, billing, launcher, verifier, rtdn] = await Promise.all([
   readFile(new URL('../supabase/migrations/20260818130000_add_google_play_offer_to_subscription_coupons.sql', import.meta.url), 'utf8'),
   readFile(new URL('../src/components/admin/SubscriptionCouponsAdmin.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../src/pages/Subscription.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/components/payments/StripeSubscriptionButton.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/services/billing.ts', import.meta.url), 'utf8'),
   readFile(new URL('../app/src/main/java/com/evolucaoclinica/app/LauncherActivity.java', import.meta.url), 'utf8'),
@@ -17,6 +18,10 @@ assert.match(admin, /google_play_offer_id: form\.googlePlayOfferId\.trim\(\) \|\
 assert.match(admin, /editingCouponId/);
 assert.match(admin, /update\(\{ \.\.\.validated\.payload, updated_at:/);
 assert.match(admin, />Editar<\/button>/);
+assert.match(subscription, /handleSaveCoupon/);
+assert.match(subscription, /setCouponCode\(normalized\)/);
+assert.match(subscription, /Cupom removido do checkout/);
+assert.match(subscription, />Salvar cupom<\/button>/);
 assert.match(button, /resolveGooglePlayOffer\(planId, normalizedCouponCode\)/);
 assert.match(button, /startSubscription\(planId, user\.id, googlePlayOfferId\)/);
 assert.match(button, /couponCode: checkoutContext\?\.couponCode/);
