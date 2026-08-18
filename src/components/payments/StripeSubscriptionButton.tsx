@@ -75,6 +75,7 @@ export function StripeSubscriptionButton({
 
   const fail = (error: unknown) => {
     const normalized = error instanceof Error ? error : new Error(String(error));
+    checkoutContextRef.current = null;
     setBusy(false);
     onError?.(normalized);
   };
@@ -149,6 +150,7 @@ export function StripeSubscriptionButton({
             amount: verified.amount,
             currency: verified.currency
           });
+          checkoutContextRef.current = null;
           return;
         }
 
@@ -184,10 +186,12 @@ export function StripeSubscriptionButton({
             amount: transaction?.amount,
             currency: transaction?.currency
           });
+          checkoutContextRef.current = null;
           return;
         }
 
         if (event.type === 'billing_cancelled' || event.type === 'stripe_payment_cancelled') {
+          checkoutContextRef.current = null;
           setBusy(false);
           return;
         }
@@ -222,7 +226,7 @@ export function StripeSubscriptionButton({
           couponCode: normalizedCouponCode,
           googlePlayOfferId
         };
-        window.NativeBillingBridge?.startSubscription(planId, user.id, googlePlayOfferId);
+        window.NativeBillingBridge?.startSubscription(planId, user.id, googlePlayOfferId || '');
         return;
       }
 

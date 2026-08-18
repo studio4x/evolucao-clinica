@@ -915,7 +915,15 @@ public class LauncherActivity extends ComponentActivity {
     }
 
     private void dispatchBillingError(String message) {
-        dispatchSimpleBillingEvent("billing_error", pendingBillingPlanId, message);
+        String planId = pendingBillingPlanId;
+        dispatchSimpleBillingEvent("billing_error", planId, message);
+        clearPendingBillingState();
+    }
+
+    private void clearPendingBillingState() {
+        pendingBillingPlanId = null;
+        pendingBillingAccountId = null;
+        pendingGooglePlayOfferId = "";
     }
 
     private void dispatchSimpleBillingEvent(String type, String planId, String message) {
