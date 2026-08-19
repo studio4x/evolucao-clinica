@@ -3942,6 +3942,7 @@ export default function AdminPanel() {
                             value={newProfessionalPassword}
                             onChange={(e) => setNewProfessionalPassword(e.target.value)}
                             placeholder="Mínimo 6 caracteres"
+                            autoComplete="new-password"
                             required
                             className="w-full px-3.5 pr-10 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
                           />

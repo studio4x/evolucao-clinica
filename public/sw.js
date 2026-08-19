@@ -138,6 +138,15 @@ self.addEventListener("fetch", (event) => {
   // Se nao for GET, e nao for share_target, apenas passa direto
   if (event.request.method !== "GET") return;
 
+  // Recursos externos devem seguir diretamente para a rede. Interceptá-los aqui
+  // fazia o fallback offline devolver HTML para imagens, fontes e coletores de
+  // analytics, além de manter respostas externas inválidas no ciclo do PWA.
+  const isBrandStorageAsset = url.hostname.endsWith("supabase.co") &&
+                              url.pathname.includes("/storage/v1/object/public/brand");
+  if (url.origin !== self.location.origin && !isBrandStorageAsset) {
+    return;
+  }
+
   // Skip external APIs e Auth flows (Firebase/Google/Supabase)
   if (
     url.hostname.includes("supabase.co") ||
@@ -151,7 +160,7 @@ self.addEventListener("fetch", (event) => {
     url.hostname.includes("firebaseinstallations.googleapis.com")
   ) {
     // Exceção: permitir cache para os assets da marca (bucket brand)
-    if (url.pathname.includes("/storage/v1/object/public/brand")) {
+    if (isBrandStorageAsset) {
       // Deixa prosseguir para a estratégia de cache
     } else {
       return;
