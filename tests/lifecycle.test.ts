@@ -53,6 +53,10 @@ assert.equal(evaluateKnownRule(trialRule, { ...baseState, subscriptionStatus: 'a
 const contextualRule: any = { id: 'rule-context', rule_key: 'inactive_3d', name: 'Próxima ação', rule_type: 'inactivity', priority: 80, cooldown_hours: 96, delay_minutes: 0, condition_config: { days: 3, pending_hours: 72 }, enabled: true, message_config: {} };
 assert.equal(evaluateKnownRule(contextualRule, { ...baseState, lastActivityAt: '2026-07-13T12:00:00.000Z', firstLoginAt: '2026-07-12T12:00:00.000Z' }, now)?.messageKey, 'conditional:inactive_3d');
 assert.equal(evaluateKnownRule(contextualRule, { ...baseState, lastActivityAt: '2026-07-14T12:00:00.000Z', firstLoginAt: '2026-07-15T12:00:00.000Z' }, now), null);
+const canceledTrialRule: any = { id: 'rule-canceled-trial', rule_key: 'trial_canceled_reengagement_3d', name: 'Trial cancelado', rule_type: 'state', priority: 88, cooldown_hours: 168, delay_minutes: 0, condition_config: { minimum_hours: 72, bonus_days: 7, email_only: true }, enabled: true, message_config: {} };
+assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-13T11:00:00.000Z' }, now)?.messageKey, 'conditional:trial_canceled_reengagement_3d');
+assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-13T13:00:00.000Z' }, now), null);
+assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionPlan: 'monthly', subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-10T12:00:00.000Z' }, now), null);
 
 const operationalContext: any = {
   failedEvolution: { id: 'evolution-1', updatedAt: '2026-07-16T11:00:00.000Z' },
@@ -144,9 +148,20 @@ assert.doesNotMatch(lifecycleSchedulerSource, /from\("transactions"\)\.select\("
 assert.doesNotMatch(lifecycleSchedulerSource, /current_position:\s*chosen\.dispatchType/);
 assert.match(lifecycleSchedulerSource, /chosen\.dispatchType === "sequence"\s*\?\s*scheduledFor\.toISOString\(\)/);
 assert.match(lifecycleSchedulerSource, /calculateNextSequenceStepAt\(now, currentStep!\.wait_minutes, nextStep\.wait_minutes\)/);
+assert.match(lifecycleSchedulerSource, /templateStep \? applyConditionalStepTemplate\(candidate, templateStep\) : null/);
+assert.match(lifecycleSchedulerSource, /condition_config\?\.email_only === true \? \{ force_email_only: true \}/);
 
 const lifecycleQueueSource = readFileSync('server/lifecycle/lifecycleQueue.ts', 'utf8');
 assert.match(lifecycleQueueSource, /calculateNextSequenceStepAt\(sentAt, step\.wait_minutes, nextStep\.wait_minutes\)/);
+assert.match(lifecycleQueueSource, /grant_lifecycle_trial_reengagement_bonus/);
+assert.match(lifecycleQueueSource, /conditional_step_not_active/);
+
+const canceledTrialMigration = readFileSync('supabase/migrations/20260819120000_add_canceled_trial_reengagement_step.sql', 'utf8');
+assert.match(canceledTrialMigration, /'conditional_trial_canceled_reengagement_3d'/);
+assert.match(canceledTrialMigration, /\n\s*15,\n\s*4320,/);
+assert.match(canceledTrialMigration, /\n\s*'draft',/);
+assert.match(canceledTrialMigration, /UNIQUE \(user_id, cancellation_event_at\)/);
+assert.match(canceledTrialMigration, /grant_lifecycle_trial_reengagement_bonus/);
 
 const lifecycleRepositorySource = readFileSync('server/lifecycle/lifecycleRepository.ts', 'utf8');
 const existingEnrollmentLookup = lifecycleRepositorySource.indexOf('const { data: existingEnrollment');

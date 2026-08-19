@@ -55,6 +55,7 @@ const FALLBACK_RULE_MESSAGES: Record<string, Record<string, unknown>> = {
   trial_expired: { subject: "Seu período de teste terminou", preheader: "Escolha uma opção de continuidade.", body: "Seu período de teste terminou. Para continuar utilizando os recursos disponíveis, escolha um plano.", cta_label: "Escolher um plano", cta_route: "/painel/subscription", category: "commercial", commercial: true },
   trial_recovery_2d: { subject: "Continue de onde você parou", preheader: "Retome sua organização quando estiver pronto.", body: "Você já começou a organizar sua rotina. Escolha um plano e retome sua conta quando desejar.", cta_label: "Retomar minha conta", cta_route: "/painel/subscription", category: "commercial", commercial: true },
   trial_recovery_7d: { subject: "O que impediu você de continuar?", preheader: "Conte o que dificultou sua continuidade.", body: "Gostaríamos de entender se algo dificultou sua continuidade. Sua resposta pode ajudar a melhorar a plataforma.", cta_label: "Contar o que aconteceu", cta_route: "/painel/support", category: "commercial", commercial: true },
+  trial_canceled_reengagement_3d: { subject: "Liberamos mais 7 dias para você conhecer o Evolução Clínica", preheader: "Seu acesso gratuito foi reativado por mais 7 dias.", body: "Percebemos que seu período de teste foi interrompido antes de você conhecer tudo o que o Evolução Clínica pode fazer pela sua rotina.\n\nPor isso, reativamos seu acesso gratuitamente por mais 7 dias. É uma nova oportunidade para conhecer a plataforma com mais calma.", cta_label: "Aproveitar meus 7 dias", cta_route: "/painel/dashboard", category: "commercial", commercial: true },
   inactive_3d: { subject: "Seu próximo passo no Evolução Clínica", preheader: "Uma ação concreta para continuar sua organização.", body: "Você já iniciou sua organização no Evolução Clínica. Continue pela próxima ação disponível: {{titulo_proxima_acao}}.\n\n{{descricao_proxima_acao}}", cta_label: "{{texto_cta_proxima_acao}}", cta_route: "{{url_proxima_acao}}", category: "reactivation" },
   inactive_7d: { subject: "A semana ficou corrida?", preheader: "Comece por apenas uma ação.", body: "Se os registros ficaram para depois, abra a plataforma e retome um atendimento de cada vez.", cta_label: "Retomar meus registros", cta_route: "/painel/patients", category: "reactivation" },
   inactive_14d: { subject: "Algo dificultou o uso da plataforma?", preheader: "Estamos disponíveis para ajudar.", body: "Gostaríamos de saber se você encontrou alguma dificuldade durante o uso.", cta_label: "Preciso de ajuda", cta_route: "/painel/support", category: "reactivation" },
@@ -132,6 +133,15 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
     case "trial_recovery_7d":
       return !isSubscriber(state) && state.subscriptionStatus !== "active" && trialDays !== null && trialDays <= -7 && trialDays > -14
         ? createCandidate(rule, state, now, `trial-recovery-7d:${state.trialEndsAt}`, "recuperação sete dias após o teste") : null;
+    case "trial_canceled_reengagement_3d": {
+      const minimumHours = Number(rule.condition_config?.minimum_hours || 72);
+      return state.subscriptionPlan === "trial"
+        && state.subscriptionStatus === "canceled"
+        && Boolean(state.subscriptionCancelledAt)
+        && hoursSince(state.subscriptionCancelledAt, now) >= minimumHours
+        ? createCandidate(rule, state, now, `trial-canceled:${state.subscriptionCancelledAt}`, "trial cancelado há pelo menos três dias")
+        : null;
+    }
     case "inactive_3d": {
       const trialEndedWithoutSubscription = Boolean(state.trialEndsAt && new Date(state.trialEndsAt).getTime() <= now.getTime() && state.subscriptionStatus !== "active");
       const actionPendingAt = getContextualActionPendingAt(state);

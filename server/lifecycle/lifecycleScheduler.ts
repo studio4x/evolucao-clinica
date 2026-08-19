@@ -1,4 +1,4 @@
-import { LIFECYCLE_COOLDOWN_HOURS, LIFECYCLE_PRIORITY, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
+import { LIFECYCLE_CONDITIONAL_CAMPAIGN_KEY, LIFECYCLE_COOLDOWN_HOURS, LIFECYCLE_PRIORITY, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { chooseHighestPriority, evaluateKnownRule, getNextBestAction, shouldSkipSequenceStep } from "./lifecycleRules.js";
 import { ensureLifecycleEnrollment, getLifecyclePreferences, getLifecycleRuntimeConfig, findCampaign, recordLifecycleEvent } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
@@ -140,6 +140,46 @@ function applyConditionalStepTemplate(candidate: LifecycleCandidate, step: Lifec
   };
 }
 
+async function ensureConditionalRecoveryEnrollment(deps: LifecycleDependencies, userId: string, campaign: any, now: Date) {
+  const { data: existing, error: lookupError } = await deps.supabaseAdmin
+    .from("lifecycle_enrollments")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("campaign_id", campaign.id)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message || "Falha ao consultar matrícula condicional.");
+  if (existing?.status === "active") return existing;
+
+  const enrollment = {
+    status: "active",
+    enrolled_at: now.toISOString(),
+    started_at: now.toISOString(),
+    current_position: 0,
+    next_step_at: now.toISOString(),
+    completion_deadline_at: new Date(now.getTime() + Number(campaign.completion_window_days || 25) * 86400000).toISOString(),
+    completed_at: null,
+    paused_at: null,
+    cancelled_at: null,
+    pause_reason: null,
+    cancellation_reason: null,
+    updated_at: now.toISOString()
+  };
+
+  if (existing) {
+    const { data, error } = await deps.supabaseAdmin.from("lifecycle_enrollments").update(enrollment).eq("id", existing.id).select("*").single();
+    if (error) throw new Error(error.message || "Falha ao reativar matrícula condicional.");
+    return data;
+  }
+
+  const { data, error } = await deps.supabaseAdmin.from("lifecycle_enrollments").insert({
+    ...enrollment,
+    user_id: userId,
+    campaign_id: campaign.id
+  }).select("*").single();
+  if (error) throw new Error(error.message || "Falha ao criar matrícula condicional.");
+  return data;
+}
+
 function isRelationshipCooldownBlocked(state: LifecycleState, now: Date, candidate: LifecycleCandidate): boolean {
   if (candidate.dispatchType === "transactional_bridge") return false;
   if (candidate.dispatchType === "sequence") return false;
@@ -273,9 +313,9 @@ async function scheduleForEnrollment(
   const currentStep = steps.find((step) => step.position === enrollment.current_position + 1);
   const candidates = rules.map((rule) => {
     const candidate = evaluateKnownRule(rule, state, now, operational);
-    if (!candidate || conditionalCampaign?.status !== "active") return candidate;
+    if (!candidate || conditionalCampaign?.status !== "active") return null;
     const templateStep = conditionalSteps.find((step) => step.eligibility_rule_key === rule.rule_key && step.status === "active" && step.enabled);
-    return templateStep ? applyConditionalStepTemplate(candidate, templateStep) : candidate;
+    return templateStep ? applyConditionalStepTemplate(candidate, templateStep) : null;
   }).filter(Boolean) as LifecycleCandidate[];
   let sequence = sequenceDue(currentStep, enrollment, now) && currentStep ? sequenceCandidate(currentStep, campaign.key, now.toISOString().slice(0, 10)) : null;
   if (sequence && shouldSkipSequenceStep(currentStep!, state)) {
@@ -370,7 +410,7 @@ async function scheduleForEnrollment(
     status: "queued",
     scheduled_for: scheduledFor.toISOString(),
     dedupe_key: `${chosen.dispatchType}:${state.userId}:${chosen.messageKey}:${processingDedupeKey}`,
-    metadata: { ...context, ...(processingEvolutionId ? { processing_evolution_id: processingEvolutionId } : {}), ...(chosen.resourceId ? { resource_id: chosen.resourceId } : {}), ...(chosen.occurrenceId ? { occurrence_id: chosen.occurrenceId } : {}), cta_label_template: chosen.ctaLabelTemplate, cta_route_template: chosen.ctaRouteTemplate, category: chosen.category, commercial: chosen.commercial }
+    metadata: { ...context, ...(processingEvolutionId ? { processing_evolution_id: processingEvolutionId } : {}), ...(chosen.resourceId ? { resource_id: chosen.resourceId } : {}), ...(chosen.occurrenceId ? { occurrence_id: chosen.occurrenceId } : {}), ...(chosen.rule?.condition_config?.email_only === true ? { force_email_only: true } : {}), cta_label_template: chosen.ctaLabelTemplate, cta_route_template: chosen.ctaRouteTemplate, category: chosen.category, commercial: chosen.commercial }
   });
   if (dispatchError && dispatchError.code !== "23505") throw new Error(dispatchError.message || "Falha ao criar dispatch lifecycle.");
 
@@ -388,7 +428,7 @@ async function scheduleForEnrollment(
 export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now = new Date()) {
   const runtime = await getLifecycleRuntimeConfig(deps);
   const activationCampaign = await findCampaign(deps, "new_user_activation_15d");
-  const conditionalCampaign = await findCampaign(deps, "conditional_lifecycle_messages");
+  const conditionalCampaign = await findCampaign(deps, LIFECYCLE_CONDITIONAL_CAMPAIGN_KEY);
   const campaign = activationCampaign?.status === "active" ? activationCampaign : null;
   if (!campaign) return { scheduled: 0, dryRun: runtime.dry_run || !runtime.send_enabled, reason: "campaign_not_active" };
   const [{ data: steps, error: stepsError }, { data: rules, error: rulesError }, { data: professionals, error: professionalsError }, { data: conditionalSteps, error: conditionalStepsError }] = await Promise.all([
@@ -404,11 +444,23 @@ export async function scheduleLifecycleMessages(deps: LifecycleDependencies, now
   if (stepsError || rulesError || professionalsError || conditionalStepsError) throw new Error(stepsError?.message || rulesError?.message || professionalsError?.message || conditionalStepsError?.message || "Falha ao buscar dados do scheduler lifecycle.");
   const users = professionals || [];
   const batchResult = await processLifecycleSchedulerUsers(users, async (professional) => {
-    const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
-    if (!enrollment) return "not_enrolled";
     const state = await getOrRecalculateLifecycleState(deps, professional.id);
     const operational = await loadOperationalContext(deps, professional.id);
-    const result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], conditionalCampaign, conditionalSteps || [], rules || [], state, operational, runtime, now);
+    const enrollment = await ensureLifecycleEnrollment(deps, professional.id, { campaignKey: campaign.key });
+    let result: unknown;
+
+    if (enrollment?.status === "active") {
+      result = await scheduleForEnrollment(deps, campaign, enrollment, steps || [], conditionalCampaign, conditionalSteps || [], rules || [], state, operational, runtime, now);
+    } else {
+      const recoveryRule = (rules || []).find((rule) => rule.rule_key === "trial_canceled_reengagement_3d");
+      const recoveryStep = (conditionalSteps || []).find((step) => step.eligibility_rule_key === recoveryRule?.rule_key && step.status === "active" && step.enabled);
+      const recoveryCandidate = recoveryRule ? evaluateKnownRule(recoveryRule, state, now, operational) : null;
+      if (!conditionalCampaign || conditionalCampaign.status !== "active" || !recoveryStep || !recoveryCandidate) {
+        return enrollment ? "inactive" : "not_enrolled";
+      }
+      const conditionalEnrollment = await ensureConditionalRecoveryEnrollment(deps, professional.id, conditionalCampaign, now);
+      result = await scheduleForEnrollment(deps, conditionalCampaign, conditionalEnrollment, [], conditionalCampaign, conditionalSteps || [], rules || [], state, operational, runtime, now);
+    }
     if (state.subscriptionStatus === "trialing" && state.trialEndsAt) {
       const trialDays = Math.ceil((new Date(state.trialEndsAt).getTime() - now.getTime()) / 86400000);
       if (trialDays > 0 && trialDays <= 3) await recordLifecycleEvent(deps, { userId: professional.id, eventName: "trial_expiring", source: "backend", metadata: { days: trialDays }, idempotencyKey: `trial_expiring:${professional.id}:${state.trialEndsAt}:${trialDays}` });

@@ -649,7 +649,7 @@ export default function LifecycleAdmin() {
     ['instances', 'Usuários no Fluxo', Users],
     ['logs', 'Registros de Envio', ScrollText]
   ];
-  const isVisibleStep = (campaign: any, step: any) => campaign.key !== 'conditional_lifecycle_messages' || (step.status === 'active' && step.enabled !== false);
+  const isVisibleStep = (campaign: any, step: any) => campaign.key !== 'conditional_lifecycle_messages' || step.status !== 'archived';
   const templateRows = campaigns.flatMap((campaign) => (steps[campaign.id] || []).filter((step) => isVisibleStep(campaign, step)).map((step) => ({ ...step, campaign })));
   const activationCampaign = campaigns.find((campaign) => campaign.key === 'new_user_activation_15d');
   const activationSteps = activationCampaign ? steps[activationCampaign.id] || [] : [];

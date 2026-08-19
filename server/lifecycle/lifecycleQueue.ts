@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { WhatsAppSendResult } from "../whatsapp/whatsappTypes.js";
-import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
+import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_CONDITIONAL_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { getContextualActionPendingAt, getNextActionCopy, getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
 import { ensureCommunicationToken, getLifecycleFailureAlertState, getLifecyclePreferences, getLifecycleRuntimeConfig, getUserProfile, saveLifecycleFailureAlertState, type LifecycleFailureAlertState } from "./lifecycleRepository.js";
 import { getOrRecalculateLifecycleState } from "./lifecycleStateService.js";
@@ -397,6 +397,39 @@ async function validateTrialRecovery(deps: LifecycleDependencies, userId: string
   return null;
 }
 
+async function validateTrialCanceledReengagement(deps: LifecycleDependencies, userId: string, dispatchId: string, rule: any) {
+  const [{ data: existingGrant, error: grantError }, { data: professional, error: professionalError }, { data: cancellationEvent, error: eventError }] = await Promise.all([
+    deps.supabaseAdmin.from("lifecycle_trial_extensions").select("id").eq("dispatch_id", dispatchId).maybeSingle(),
+    deps.supabaseAdmin.from("professionals").select("status, subscription_plan, subscription_status, updated_at").eq("id", userId).maybeSingle(),
+    deps.supabaseAdmin.from("lifecycle_events").select("occurred_at").eq("user_id", userId).eq("event_name", "subscription_cancelled").order("occurred_at", { ascending: false }).limit(1).maybeSingle()
+  ]);
+  if (grantError) throw new Error(grantError.message || "Falha ao verificar a concessão anterior do trial.");
+  if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar o trial cancelado.");
+  if (eventError) throw new Error(eventError.message || "Falha ao consultar a data do cancelamento.");
+  if (existingGrant?.id) return null;
+  if (professional?.status !== "active") return "account_not_recoverable";
+  if (professional?.subscription_plan !== "trial" || professional?.subscription_status !== "canceled") return "trial_no_longer_canceled";
+
+  const cancellationAt = cancellationEvent?.occurred_at || professional?.updated_at;
+  const minimumHours = Number(rule?.condition_config?.minimum_hours || 72);
+  const elapsedHours = cancellationAt ? (Date.now() - new Date(cancellationAt).getTime()) / 3600000 : 0;
+  if (!cancellationAt || !Number.isFinite(elapsedHours) || elapsedHours < minimumHours) return "cancellation_interval_not_elapsed";
+  return null;
+}
+
+async function grantTrialCanceledReengagementBonus(deps: LifecycleDependencies, userId: string, dispatchId: string, rule: any) {
+  const bonusDays = Number(rule?.condition_config?.bonus_days || 7);
+  const { data, error } = await deps.supabaseAdmin.rpc("grant_lifecycle_trial_reengagement_bonus", {
+    p_user_id: userId,
+    p_dispatch_id: dispatchId,
+    p_bonus_days: bonusDays
+  });
+  if (error) throw new Error(error.message || "Falha ao conceder os dias adicionais do trial.");
+  const code = String(data?.code || "unknown");
+  if (code !== "granted" && code !== "already_granted") return code;
+  return null;
+}
+
 async function validateInactiveFourteenDays(deps: LifecycleDependencies, userId: string, rule: any) {
   const [{ data: professional, error: professionalError }, { data: state, error: stateError }, { data: subscriptionEvents, error: eventsError }, { data: technicalDispatch, error: technicalDispatchError }] = await Promise.all([
     deps.supabaseAdmin.from("professionals").select("status, subscription_status, trial_ends_at").eq("id", userId).maybeSingle(),
@@ -577,7 +610,9 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     .eq("id", enrollment.campaign_id)
     .maybeSingle();
   if (enrollmentCampaignError) throw new Error(enrollmentCampaignError.message || "Falha ao consultar campanha lifecycle.");
-  if (enrollmentCampaign?.key !== LIFECYCLE_ACTIVATION_CAMPAIGN_KEY) {
+  const validEnrollmentCampaign = enrollmentCampaign?.key === LIFECYCLE_ACTIVATION_CAMPAIGN_KEY
+    || (dispatch.dispatch_type === "conditional" && enrollmentCampaign?.key === LIFECYCLE_CONDITIONAL_CAMPAIGN_KEY);
+  if (!validEnrollmentCampaign) {
     await markSuppressed(deps, dispatch, "activation_enrollment_inactive");
     return { status: "suppressed" };
   }
@@ -589,6 +624,10 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     dispatch.step_id ? deps.supabaseAdmin.from("lifecycle_steps").select("*").eq("id", dispatch.step_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
     dispatch.rule_id ? deps.supabaseAdmin.from("lifecycle_rules").select("*").eq("id", dispatch.rule_id).maybeSingle() : Promise.resolve({ data: null, error: null })
   ]);
+  if (dispatch.dispatch_type === "conditional" && (!stepResult.data || stepResult.data.status !== "active" || stepResult.data.enabled !== true)) {
+    await markSuppressed(deps, dispatch, "conditional_step_not_active");
+    return { status: "suppressed" };
+  }
   const processingValidationReason = await validateProcessingAlert(deps, dispatch, ruleResult.data, runtime);
   if (processingValidationReason) {
     await markSuppressed(deps, dispatch, processingValidationReason);
@@ -615,6 +654,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "trial_recovery_2d" || ruleResult.data?.rule_key === "trial_recovery_7d") {
     const skipReason = await validateTrialRecovery(deps, dispatch.user_id, ruleResult.data);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "trial_canceled_reengagement_3d") {
+    const skipReason = await validateTrialCanceledReengagement(deps, dispatch.user_id, dispatch.id, ruleResult.data);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };
@@ -668,6 +714,18 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   if (stateResult.subscriptionStatus === "active" && dispatch.metadata?.commercial) {
     await markSuppressed(deps, dispatch, "subscriber_commercial_message_cancelled");
     return { status: "suppressed" };
+  }
+
+  if (ruleResult.data?.rule_key === "trial_canceled_reengagement_3d") {
+    if (preferences.email_enabled === false) {
+      await markSuppressed(deps, dispatch, "email_disabled");
+      return { status: "suppressed" };
+    }
+    const grantSkipReason = await grantTrialCanceledReengagementBonus(deps, dispatch.user_id, dispatch.id, ruleResult.data);
+    if (grantSkipReason) {
+      await markSkipped(deps, dispatch, grantSkipReason);
+      return { status: "skipped" };
+    }
   }
 
   const now = new Date();

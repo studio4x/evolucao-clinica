@@ -1,5 +1,6 @@
 export const LIFECYCLE_TIMEZONE = "America/Sao_Paulo";
 export const LIFECYCLE_ACTIVATION_CAMPAIGN_KEY = "new_user_activation_15d";
+export const LIFECYCLE_CONDITIONAL_CAMPAIGN_KEY = "conditional_lifecycle_messages";
 export const LIFECYCLE_COOLDOWN_HOURS = 24;
 export const LIFECYCLE_COMPLETION_WINDOW_DAYS = 25;
 export const LIFECYCLE_DEFAULT_BATCH_SIZE = 25;
