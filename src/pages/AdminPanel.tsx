@@ -25,6 +25,12 @@ import SubscriptionCouponsAdmin from '../components/admin/SubscriptionCouponsAdm
 import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsModal';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
+import {
+  addAvatarCacheBuster,
+  getProfessionalInitials,
+  JOURNEY_GROUP_BATCH_CONCURRENCY,
+  runWithConcurrency
+} from '../utils/adminProfessionals';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -67,6 +73,58 @@ interface JourneyGroupCheckState {
   status: JourneyGroupCheckStatus;
   checkedAt?: string;
   message?: string;
+}
+
+interface JourneyGroupBatchProgress {
+  completed: number;
+  total: number;
+}
+
+function ProfessionalAvatar({ professional }: { professional: Professional }) {
+  const photoUrl = String(professional.photo_url || '').trim();
+  const [source, setSource] = useState(photoUrl);
+  const [retryAttempted, setRetryAttempted] = useState(false);
+  const [imageFailed, setImageFailed] = useState(!photoUrl);
+
+  useEffect(() => {
+    setSource(photoUrl);
+    setRetryAttempted(false);
+    setImageFailed(!photoUrl);
+  }, [photoUrl]);
+
+  const handleImageError = () => {
+    if (photoUrl && !retryAttempted) {
+      setRetryAttempted(true);
+      setSource(addAvatarCacheBuster(photoUrl, Date.now()));
+      return;
+    }
+
+    setImageFailed(true);
+  };
+
+  if (imageFailed) {
+    return (
+      <div
+        role="img"
+        aria-label={`Avatar de ${professional.full_name}`}
+        title={professional.full_name}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-brand-primary/20 bg-brand-primary/10 text-xs font-bold text-brand-primary"
+      >
+        {getProfessionalInitials(professional.full_name)}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={source}
+      alt={professional.full_name}
+      className="h-10 w-10 shrink-0 rounded-full border border-brand-border object-cover"
+      referrerPolicy="no-referrer"
+      decoding="async"
+      onError={handleImageError}
+    />
+  );
 }
 
 type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'coupons' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'seo' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
@@ -1071,6 +1129,9 @@ export default function AdminPanel() {
   const [accessControlSuccess, setAccessControlSuccess] = useState('');
   const [accessControlError, setAccessControlError] = useState('');
   const [journeyGroupChecks, setJourneyGroupChecks] = useState<Record<string, JourneyGroupCheckState>>({});
+  const [checkingAllJourneyGroup, setCheckingAllJourneyGroup] = useState(false);
+  const [journeyGroupBatchProgress, setJourneyGroupBatchProgress] = useState<JourneyGroupBatchProgress | null>(null);
+  const [journeyGroupBatchError, setJourneyGroupBatchError] = useState('');
   const [selectedProfessionalDetails, setSelectedProfessionalDetails] = useState<Professional | null>(null);
 
   // Estados da Chave Gemini
@@ -2734,18 +2795,9 @@ export default function AdminPanel() {
     }
   };
 
-  const handleCheckJourneyGroupMembership = async (prof: Professional) => {
-    setJourneyGroupChecks(prev => ({
-      ...prev,
-      [prof.id]: { status: 'checking' }
-    }));
-
+  const requestJourneyGroupMembership = async (professionalId: string, token: string): Promise<JourneyGroupCheckState> => {
     try {
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token;
-      if (!token) throw new Error('Não autenticado.');
-
-      const response = await fetch(`/api/admin/professionals/${prof.id}/journey-group-membership`, {
+      const response = await fetch(`/api/admin/professionals/${professionalId}/journey-group-membership`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -2755,34 +2807,83 @@ export default function AdminPanel() {
       const payload = await response.json().catch(() => ({}));
 
       if (response.ok && (payload.status === 'member' || payload.status === 'not_member')) {
-        setJourneyGroupChecks(prev => ({
-          ...prev,
-          [prof.id]: {
-            status: payload.status,
-            checkedAt: payload.checkedAt
-          }
-        }));
-        return;
+        return {
+          status: payload.status,
+          checkedAt: payload.checkedAt
+        };
       }
 
-      const status: JourneyGroupCheckStatus = payload.status === 'missing_phone'
-        ? 'missing_phone'
-        : 'indeterminate';
-      setJourneyGroupChecks(prev => ({
-        ...prev,
-        [prof.id]: {
-          status,
-          message: payload.error || 'Não foi possível concluir a verificação.'
-        }
-      }));
+      return {
+        status: payload.status === 'missing_phone' ? 'missing_phone' : 'indeterminate',
+        message: payload.error || 'Não foi possível concluir a verificação.'
+      };
     } catch (error: any) {
-      setJourneyGroupChecks(prev => ({
-        ...prev,
-        [prof.id]: {
-          status: 'indeterminate',
-          message: error.message || 'Não foi possível concluir a verificação.'
+      return {
+        status: 'indeterminate',
+        message: error.message || 'Não foi possível concluir a verificação.'
+      };
+    }
+  };
+
+  const handleCheckJourneyGroupMembership = async (prof: Professional) => {
+    if (checkingAllJourneyGroup) return;
+
+    setJourneyGroupChecks(prev => ({
+      ...prev,
+      [prof.id]: { status: 'checking' }
+    }));
+
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    const result = token
+      ? await requestJourneyGroupMembership(prof.id, token)
+      : { status: 'indeterminate', message: 'Não autenticado.' } as JourneyGroupCheckState;
+
+    setJourneyGroupChecks(prev => ({
+      ...prev,
+      [prof.id]: result
+    }));
+  };
+
+  const handleCheckAllJourneyGroupMembership = async () => {
+    if (checkingAllJourneyGroup || professionals.length === 0) return;
+
+    setJourneyGroupBatchError('');
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    if (!token) {
+      setJourneyGroupBatchError('Sua sessão expirou. Entre novamente para verificar os profissionais.');
+      return;
+    }
+
+    const professionalsToCheck = [...professionals];
+    setCheckingAllJourneyGroup(true);
+    setJourneyGroupBatchProgress({ completed: 0, total: professionalsToCheck.length });
+    setJourneyGroupChecks(prev => {
+      const next = { ...prev };
+      professionalsToCheck.forEach((professional) => {
+        next[professional.id] = { status: 'checking' };
+      });
+      return next;
+    });
+
+    let completed = 0;
+    try {
+      await runWithConcurrency(
+        professionalsToCheck,
+        JOURNEY_GROUP_BATCH_CONCURRENCY,
+        async (professional) => {
+          const result = await requestJourneyGroupMembership(professional.id, token);
+          setJourneyGroupChecks(prev => ({
+            ...prev,
+            [professional.id]: result
+          }));
+          completed += 1;
+          setJourneyGroupBatchProgress({ completed, total: professionalsToCheck.length });
         }
-      }));
+      );
+    } finally {
+      setCheckingAllJourneyGroup(false);
     }
   };
 
@@ -3370,6 +3471,18 @@ export default function AdminPanel() {
 
   // Contadores de Profissionais
   const totalCount = professionals.length;
+  const journeyGroupSummary = professionals.reduce(
+    (summary, professional) => {
+      const status = journeyGroupChecks[professional.id]?.status;
+      if (status === 'member') summary.members += 1;
+      if (status === 'not_member') summary.notMembers += 1;
+      if (status === 'missing_phone') summary.missingPhone += 1;
+      if (status === 'indeterminate') summary.indeterminate += 1;
+      if (status && status !== 'unknown' && status !== 'checking') summary.checked += 1;
+      return summary;
+    },
+    { checked: 0, members: 0, notMembers: 0, missingPhone: 0, indeterminate: 0 }
+  );
   const activeCount = professionals.filter(p => p.status === 'active').length;
   const pendingCount = professionals.filter(p => p.status === 'pending').length;
   const inactiveCount = professionals.filter(p => p.status === 'inactive').length;
@@ -3912,19 +4025,36 @@ export default function AdminPanel() {
                 </div>
 
                 {/* Controles de Filtro e Busca */}
-                <div className="card p-6 bg-white space-y-4 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-                  <div className="relative flex-1 max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
-                    <input
-                      type="text"
-                      placeholder="Buscar por nome ou e-mail..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
-                    />
-                  </div>
+                <div className="card bg-white p-6">
+                  <div className="space-y-4 md:flex md:items-center md:justify-between md:gap-4 md:space-y-0">
+                    <div className="relative flex-1 max-w-md">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nome ou e-mail..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-brand-border focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none text-sm transition-colors"
+                      />
+                    </div>
 
-                  <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCheckAllJourneyGroupMembership}
+                        disabled={checkingAllJourneyGroup || professionals.length === 0}
+                        className="inline-flex items-center gap-2 rounded-xl border border-brand-primary bg-brand-primary px-4 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-primary-hover disabled:cursor-wait disabled:opacity-60"
+                        title="Verificar todos os profissionais no grupo da Jornada"
+                      >
+                        {checkingAllJourneyGroup
+                          ? <Loader2 className="h-4 w-4 animate-spin" />
+                          : <RefreshCw className="h-4 w-4" />}
+                        <span>
+                          {checkingAllJourneyGroup && journeyGroupBatchProgress
+                            ? `Verificando ${journeyGroupBatchProgress.completed}/${journeyGroupBatchProgress.total}`
+                            : 'Verificar todos'}
+                        </span>
+                      </button>
                     {[
                       { id: 'all', label: 'Todos' },
                       { id: 'pending', label: 'Pendentes' },
@@ -3943,7 +4073,21 @@ export default function AdminPanel() {
                         {tab.label}
                       </button>
                     ))}
+                    </div>
                   </div>
+
+                  {journeyGroupBatchError && (
+                    <p className="mt-3 text-xs font-medium text-red-600">{journeyGroupBatchError}</p>
+                  )}
+
+                  {!checkingAllJourneyGroup && journeyGroupSummary.checked > 0 && (
+                    <p className="mt-3 text-xs text-brand-text-muted" aria-live="polite">
+                      Verificação da Jornada: <strong className="text-emerald-700">{journeyGroupSummary.members} no grupo</strong>
+                      {' · '}<strong className="text-red-700">{journeyGroupSummary.notMembers} fora</strong>
+                      {' · '}{journeyGroupSummary.missingPhone} sem WhatsApp
+                      {journeyGroupSummary.indeterminate > 0 && ` · ${journeyGroupSummary.indeterminate} não concluída(s)`}
+                    </p>
+                  )}
                 </div>
 
                 {/* Tabela de Profissionais */}
@@ -3993,12 +4137,7 @@ export default function AdminPanel() {
                               <tr key={prof.id} className="hover:bg-brand-bg/30 transition-colors">
                                 <td className="p-4 pl-6">
                                   <div className="flex items-center space-x-3">
-                                    <img
-                                      src={prof.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(prof.full_name)}&background=005C13&color=fff`}
-                                      alt={prof.full_name}
-                                      className="w-10 h-10 rounded-full object-cover border border-brand-border"
-                                      referrerPolicy="no-referrer"
-                                    />
+                                    <ProfessionalAvatar professional={prof} />
                                     <div>
                                       <p className="font-semibold text-brand-text">{prof.full_name}</p>
                                       {isAdminSelf && (
@@ -4018,7 +4157,7 @@ export default function AdminPanel() {
                                   <button
                                     type="button"
                                     onClick={() => handleCheckJourneyGroupMembership(prof)}
-                                    disabled={journeyGroupCheck.status === 'checking'}
+                                    disabled={checkingAllJourneyGroup || journeyGroupCheck.status === 'checking'}
                                     title={journeyGroupTitle}
                                     aria-label={journeyGroupTitle}
                                     className={`inline-flex min-w-[92px] items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-wait disabled:opacity-70 ${
