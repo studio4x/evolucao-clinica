@@ -40,7 +40,6 @@ if ("serviceWorker" in navigator) {
       scope: '/',
       updateViaCache: 'none'
     }).then(reg => {
-      console.log("[PWA] Service Worker registrado com escopo:", reg.scope);
       void reg.update();
     }).catch((error) => {
       console.warn("[PWA] Falha ao registrar service worker:", error);

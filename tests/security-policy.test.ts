@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 const indexHtml = readFileSync(resolve('index.html'), 'utf8');
 const serviceWorker = readFileSync(resolve('public/sw.js'), 'utf8');
 const adminSource = readFileSync(resolve('src/pages/AdminPanel.tsx'), 'utf8');
+const mainSource = readFileSync(resolve('src/main.tsx'), 'utf8');
 const vercelConfig = JSON.parse(readFileSync(resolve('vercel.json'), 'utf8')) as {
   headers: Array<{ headers: Array<{ key: string; value: string }> }>;
 };
@@ -33,10 +34,18 @@ for (const destination of [
   assert.ok(contentSecurityPolicy.includes(destination), `CSP deve permitir ${destination}`);
 }
 
+assert.ok(contentSecurityPolicy.includes("worker-src 'self' blob:"), 'CSP deve declarar workers locais e blob explicitamente');
+assert.doesNotMatch(mainSource, /Service Worker registrado com escopo/, 'registro bem-sucedido do PWA não deve poluir o console');
+
 assert.match(
   adminSource,
   /placeholder="Mínimo 6 caracteres"\s+autoComplete="new-password"/,
   'senha de novo profissional deve declarar autocomplete apropriado'
+);
+assert.match(
+  adminSource,
+  /placeholder="profissional@exemplo\.com"\s+autoComplete="username"/,
+  'e-mail de novo profissional deve ser identificado como username'
 );
 
 console.log('Security policy and external resource tests passed.');

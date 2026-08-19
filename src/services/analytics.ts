@@ -1,10 +1,19 @@
 /** Privacy boundary for every client-side analytics integration. */
 
+type MetaPixelFunction = ((...args: unknown[]) => void) & {
+  callMethod?: (...args: unknown[]) => void;
+  loaded?: boolean;
+  push?: MetaPixelFunction;
+  queue?: unknown[][];
+  version?: string;
+};
+
 declare global {
   interface Window {
     dataLayer?: unknown[];
     gtag?: (...args: unknown[]) => void;
-    fbq?: (...args: unknown[]) => void;
+    fbq?: MetaPixelFunction;
+    _fbq?: MetaPixelFunction;
     NativeAnalyticsBridge?: {
       logEvent(eventName: string, parametersJson: string): void;
       logStripeInAppPurchase(transactionId: string, value: number, currency: string, itemName: string): boolean;
@@ -128,8 +137,21 @@ const initializeDirectGa4 = () => {
 const initializeMeta = () => {
   const pixelId = cleanId(testConfig?.metaPixelId) || cleanId(dynamicConfig.metaPixelId);
   if (!pixelId || metaLoaded || !isBrowser()) return;
-  const fbq = window.fbq || ((...args: unknown[]) => { const fn = window.fbq as typeof window.fbq & { queue?: unknown[][] }; if (fn) (fn.queue = fn.queue || []).push(args); });
+  const fbq = window.fbq || (() => {
+    const queuedFbq = ((...args: unknown[]) => {
+      if (queuedFbq.callMethod) queuedFbq.callMethod(...args);
+      else (queuedFbq.queue = queuedFbq.queue || []).push(args);
+    }) as MetaPixelFunction;
+    queuedFbq.push = queuedFbq;
+    queuedFbq.loaded = true;
+    queuedFbq.version = '2.0';
+    queuedFbq.queue = [];
+    return queuedFbq;
+  })();
   window.fbq = fbq;
+  // O bootstrap oficial mantém os dois aliases idênticos. Sem `_fbq`, o
+  // próprio fbevents.js interpreta a página como duas versões conflitantes.
+  window._fbq = fbq;
   window.fbq('consent', 'grant');
   window.fbq('init', pixelId);
   window.fbq('track', 'PageView');

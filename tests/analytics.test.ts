@@ -25,6 +25,7 @@ const windowMock = {
   dataLayer: [] as unknown[],
   gtag: undefined as ((...args: unknown[]) => void) | undefined,
   fbq: undefined as ((...args: unknown[]) => void) | undefined,
+  _fbq: undefined as ((...args: unknown[]) => void) | undefined,
   NativeAnalyticsBridge: undefined as NativeBridgeMock | undefined,
   addEventListener(name: string, listener: () => void) { const set = listeners.get(name) ?? new Set<() => void>(); set.add(listener); listeners.set(name, set); },
   removeEventListener() {},
@@ -51,6 +52,7 @@ function resetRuntime(config: typeof defaultConfig | Partial<typeof defaultConfi
   windowMock.dataLayer.length = 0;
   windowMock.gtag = undefined;
   windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
+  windowMock._fbq = undefined;
   documentMock.cookie = '';
   delete windowMock.NativeAnalyticsBridge;
   analytics.resetAnalyticsForTests();
@@ -78,6 +80,11 @@ const consentMatrix = [
   { analytics: false, marketing: true, emitted: true, dataLayer: 1, analyticsDestination: false, marketingDestination: true, meta: 1 },
   { analytics: true, marketing: true, emitted: true, dataLayer: 1, analyticsDestination: true, marketingDestination: true, meta: 1 }
 ];
+
+resetRuntime();
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+assert.equal(windowMock._fbq, windowMock.fbq, 'bootstrap do Meta deve manter fbq e _fbq na mesma versão');
 
 for (const [index, expectation] of consentMatrix.entries()) {
   resetRuntime();

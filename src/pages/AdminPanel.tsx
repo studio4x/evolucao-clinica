@@ -3929,6 +3929,7 @@ export default function AdminPanel() {
                           value={newProfessionalEmail}
                           onChange={(e) => setNewProfessionalEmail(e.target.value)}
                           placeholder="profissional@exemplo.com"
+                          autoComplete="username"
                           required
                           className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
                         />
