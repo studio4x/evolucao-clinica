@@ -162,6 +162,8 @@ assert.match(canceledTrialMigration, /\n\s*15,\n\s*4320,/);
 assert.match(canceledTrialMigration, /\n\s*'draft',/);
 assert.match(canceledTrialMigration, /UNIQUE \(user_id, cancellation_event_at\)/);
 assert.match(canceledTrialMigration, /grant_lifecycle_trial_reengagement_bonus/);
+const canceledTrialCopyFixMigration = readFileSync('supabase/migrations/20260819130000_fix_canceled_trial_reengagement_copy.sql', 'utf8');
+assert.match(canceledTrialCopyFixMigration, /body_markdown = E'Olá, \{\{primeiro_nome\}\}!\\n\\nPercebemos/);
 
 const lifecycleRepositorySource = readFileSync('server/lifecycle/lifecycleRepository.ts', 'utf8');
 const existingEnrollmentLookup = lifecycleRepositorySource.indexOf('const { data: existingEnrollment');
