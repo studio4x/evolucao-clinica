@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil, Tag } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil, Tag, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -29,7 +29,10 @@ import {
   addAvatarCacheBuster,
   getProfessionalInitials,
   JOURNEY_GROUP_BATCH_CONCURRENCY,
-  runWithConcurrency
+  runWithConcurrency,
+  sortProfessionals,
+  type ProfessionalSortKey,
+  type SortDirection
 } from '../utils/adminProfessionals';
 
 const alert = (msg: string) => {
@@ -1113,6 +1116,10 @@ export default function AdminPanel() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'pending' | 'inactive'>('all');
+  const [professionalSort, setProfessionalSort] = useState<{ key: ProfessionalSortKey; direction: SortDirection }>({
+    key: 'created_at',
+    direction: 'desc'
+  });
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [creatingProfessional, setCreatingProfessional] = useState(false);
@@ -3497,6 +3504,34 @@ export default function AdminPanel() {
 
     return matchesSearch && matchesStatus;
   });
+  const sortedProfessionals = sortProfessionals(
+    filteredProfessionals,
+    professionalSort.key,
+    professionalSort.direction
+  );
+
+  const handleProfessionalSort = (key: ProfessionalSortKey) => {
+    setProfessionalSort(current => ({
+      key,
+      direction: current.key === key
+        ? (current.direction === 'asc' ? 'desc' : 'asc')
+        : (key === 'name' ? 'asc' : 'desc')
+    }));
+  };
+
+  const renderProfessionalSortIcon = (key: ProfessionalSortKey) => {
+    if (professionalSort.key !== key) return <ArrowUpDown className="h-3.5 w-3.5 opacity-50" aria-hidden="true" />;
+    return professionalSort.direction === 'asc'
+      ? <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+      : <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />;
+  };
+
+  const getProfessionalSortAriaLabel = (key: ProfessionalSortKey, label: string) => {
+    const nextDirection = professionalSort.key === key
+      ? (professionalSort.direction === 'asc' ? 'decrescente' : 'crescente')
+      : (key === 'name' ? 'crescente' : 'decrescente');
+    return `Ordenar ${label} em ordem ${nextDirection}`;
+  };
 
   // Métricas de Consumo
   const totalUsageCostUsd = usageLogs.reduce((acc, log) => acc + (log.cost_usd || 0), 0);
@@ -4099,7 +4134,7 @@ export default function AdminPanel() {
                       <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
                       <span className="text-sm">Carregando profissionais...</span>
                     </div>
-                  ) : filteredProfessionals.length === 0 ? (
+                  ) : sortedProfessionals.length === 0 ? (
                     <div className="p-12 text-center text-brand-text-muted">
                       <Users className="w-12 h-12 mx-auto text-brand-border mb-3" />
                       <p className="font-medium text-brand-text">Nenhum profissional encontrado</p>
@@ -4112,18 +4147,57 @@ export default function AdminPanel() {
                       <table className="w-full text-left border-collapse">
                         <thead>
                           <tr className="bg-brand-bg border-b border-brand-border/60 text-xs font-semibold text-brand-text uppercase tracking-wider">
-                            <th className="p-4 pl-6">Profissional</th>
+                            <th
+                              className="p-4 pl-6"
+                              aria-sort={professionalSort.key === 'name' ? (professionalSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleProfessionalSort('name')}
+                                aria-label={getProfessionalSortAriaLabel('name', 'por profissional')}
+                                className="inline-flex items-center gap-1.5 rounded-md text-left transition-colors hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                              >
+                                <span>Profissional</span>
+                                {renderProfessionalSortIcon('name')}
+                              </button>
+                            </th>
                             <th className="p-4">Contato</th>
                             <th className="p-4">Grupo Jornada</th>
-                            <th className="p-4">Data do cadastro</th>
+                            <th
+                              className="p-4"
+                              aria-sort={professionalSort.key === 'created_at' ? (professionalSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleProfessionalSort('created_at')}
+                                aria-label={getProfessionalSortAriaLabel('created_at', 'por data do cadastro')}
+                                className="inline-flex items-center gap-1.5 rounded-md text-left transition-colors hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                              >
+                                <span>Data do cadastro</span>
+                                {renderProfessionalSortIcon('created_at')}
+                              </button>
+                            </th>
                             <th className="p-4">Assinatura / Plano</th>
-                            <th className="p-4">Vencimento</th>
+                            <th
+                              className="p-4"
+                              aria-sort={professionalSort.key === 'expiration' ? (professionalSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handleProfessionalSort('expiration')}
+                                aria-label={getProfessionalSortAriaLabel('expiration', 'por vencimento')}
+                                className="inline-flex items-center gap-1.5 rounded-md text-left transition-colors hover:text-brand-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                              >
+                                <span>Vencimento</span>
+                                {renderProfessionalSortIcon('expiration')}
+                              </button>
+                            </th>
                             <th className="p-4">Status</th>
                             <th className="p-4 pr-6 text-right">Acoes</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-brand-border/40 text-sm text-brand-text">
-                          {filteredProfessionals.map((prof) => {
+                          {sortedProfessionals.map((prof) => {
                             const isAdminSelf = prof.id === user?.id;
                             const journeyGroupCheck: JourneyGroupCheckState = journeyGroupChecks[prof.id] || { status: 'unknown' };
                             const journeyGroupTitle = journeyGroupCheck.status === 'member'
