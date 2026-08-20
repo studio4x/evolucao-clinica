@@ -74,6 +74,10 @@ import {
   getNextJourneyPublicationCronRun,
   JOURNEY_PUBLICATION_CRON_JOB
 } from "./server/journeys/journeyPublicationCron.js";
+import {
+  getProfessionalCommunicationHistory,
+  parseProfessionalCommunicationHistoryQuery
+} from "./server/admin/professionalCommunicationHistory.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -3579,6 +3583,36 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
   } catch (error) {
     console.error("[Admin professional details] Falha ao consultar dados do profissional.");
     return res.status(500).json({ error: "Não foi possível carregar os dados do profissional." });
+  }
+});
+
+app.get("/api/admin/professionals/:professionalId/communications", requireAuth, requireAdmin, async (req: any, res) => {
+  const professionalId = String(req.params.professionalId || "").trim();
+  if (!professionalId) {
+    return res.status(400).json({ error: "ID do profissional ausente." });
+  }
+
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    const { data: professional, error: professionalError } = await supabaseAdmin
+      .from("professionals")
+      .select("id")
+      .eq("id", professionalId)
+      .maybeSingle();
+    if (professionalError) throw professionalError;
+    if (!professional) {
+      return res.status(404).json({ error: "Profissional não encontrado." });
+    }
+
+    const history = await getProfessionalCommunicationHistory(
+      { supabaseAdmin },
+      professionalId,
+      parseProfessionalCommunicationHistoryQuery(req.query || {})
+    );
+    return res.json(history);
+  } catch (error) {
+    console.error("[Admin professional communications] Falha ao consultar histórico do profissional.");
+    return res.status(500).json({ error: "Não foi possível carregar o histórico de comunicação." });
   }
 });
 
