@@ -59,6 +59,8 @@ assert.match(adminSource, /handleProfessionalSort\('created_at'\)/);
 assert.match(adminSource, /handleProfessionalSort\('expiration'\)/);
 assert.match(adminSource, /aria-sort=/);
 assert.match(adminSource, /onError=\{handleImageError\}/);
+assert.match(adminSource, /data-testid="professional-actions-grid"/);
+assert.match(adminSource, /inline-grid grid-cols-3 gap-1\.5/);
 assert.doesNotMatch(adminSource, /ui-avatars\.com/);
 
 console.log('Admin professionals batch and avatar tests passed.');

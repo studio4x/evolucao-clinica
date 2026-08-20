@@ -4324,38 +4324,40 @@ export default function AdminPanel() {
 
                                 <td className="p-4 pr-6 text-right whitespace-nowrap">
                                   {isAdminSelf ? (
-                                    <div className="inline-flex gap-1.5 items-center">
-                                      <span className="text-xs text-brand-text-muted italic mr-2">Administrador Geral</span>
-                                      <button
-                                        onClick={() => setSelectedProfessionalDetails(prof)}
-                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 transition-colors cursor-pointer"
-                                        title="Visualizar todos os dados do profissional"
-                                        aria-label={`Visualizar dados de ${prof.full_name}`}
-                                      >
-                                        <Eye className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => setSelectedAcquisitionProf(prof)}
-                                        className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
-                                          prof.acquisition_info && (prof.acquisition_info.utm_source || prof.acquisition_info.referrer || prof.acquisition_info.channel)
-                                            ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100'
-                                            : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border-gray-200'
-                                        }`}
-                                        title="Origem do Cadastro / UTMs de Aquisição"
-                                      >
-                                        <Compass className="w-3.5 h-3.5" />
-                                      </button>
-                                      <button
-                                        onClick={() => handleForceGoogleDisconnect(prof)}
-                                        disabled={updatingId !== null}
-                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100 transition-colors disabled:opacity-50 cursor-pointer"
-                                        title="Forçar Desconexão do Google (Testes)"
-                                      >
-                                        <Link2Off className="w-3.5 h-3.5" />
-                                      </button>
+                                    <div className="inline-flex flex-col items-end gap-1.5">
+                                      <span className="text-xs text-brand-text-muted italic">Administrador Geral</span>
+                                      <div className="grid grid-cols-3 gap-1.5">
+                                        <button
+                                          onClick={() => setSelectedProfessionalDetails(prof)}
+                                          className="inline-flex items-center justify-center p-2 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 transition-colors cursor-pointer"
+                                          title="Visualizar todos os dados do profissional"
+                                          aria-label={`Visualizar dados de ${prof.full_name}`}
+                                        >
+                                          <Eye className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => setSelectedAcquisitionProf(prof)}
+                                          className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
+                                            prof.acquisition_info && (prof.acquisition_info.utm_source || prof.acquisition_info.referrer || prof.acquisition_info.channel)
+                                              ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100'
+                                              : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border-gray-200'
+                                          }`}
+                                          title="Origem do Cadastro / UTMs de Aquisição"
+                                        >
+                                          <Compass className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleForceGoogleDisconnect(prof)}
+                                          disabled={updatingId !== null}
+                                          className="inline-flex items-center justify-center p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-100 transition-colors disabled:opacity-50 cursor-pointer"
+                                          title="Forçar Desconexão do Google (Testes)"
+                                        >
+                                          <Link2Off className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                     </div>
                                   ) : (
-                                    <div className="inline-flex gap-1.5">
+                                    <div className="inline-grid grid-cols-3 gap-1.5" data-testid="professional-actions-grid">
                                       <button
                                         onClick={() => setSelectedProfessionalDetails(prof)}
                                         className="inline-flex items-center justify-center p-2 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 transition-colors cursor-pointer"
