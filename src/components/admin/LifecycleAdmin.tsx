@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Bold, Check, CirclePause, CirclePlay, Eraser, FileText, Heading2, Italic, List, ListChecks, Loader2, Mail, MessageCircle, Pencil, RefreshCw, RotateCcw, Save, ScrollText, Send, Settings, Users, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { showAlert, showConfirm } from '../../store/modalStore';
+import { groupLifecycleDeliveries, paginateLifecycleDeliveryGroups, type LifecycleDeliveryGroup } from '../../utils/lifecycleDeliveries';
 
 type Tab = 'overview' | 'campaigns' | 'preferences' | 'settings';
 type CampaignTab = 'flows' | 'instances' | 'logs';
@@ -328,6 +329,120 @@ function EmptyState({ icon: Icon, title, description }: { icon: typeof FileText;
     <strong className="block text-sm text-brand-text">{title}</strong>
     <span className="mt-1 block text-xs text-brand-text-muted">{description}</span>
   </div>;
+}
+
+const PROFESSIONALS_PER_DELIVERY_PAGE = 10;
+
+function LifecycleDeliveryLogs({
+  deliveries,
+  resendingDispatchId,
+  onResend
+}: {
+  deliveries: any[];
+  resendingDispatchId: string | null;
+  onResend: (delivery: any) => void;
+}) {
+  const [page, setPage] = useState(1);
+  const groupedDeliveries = useMemo(() => groupLifecycleDeliveries(deliveries), [deliveries]);
+  const pagination = useMemo(
+    () => paginateLifecycleDeliveryGroups(groupedDeliveries, page, PROFESSIONALS_PER_DELIVERY_PAGE),
+    [groupedDeliveries, page]
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [deliveries]);
+
+  useEffect(() => {
+    if (page !== pagination.page) setPage(pagination.page);
+  }, [page, pagination.page]);
+
+  if (deliveries.length === 0) {
+    return <EmptyState icon={ScrollText} title="Nenhum registro de envio" description="Os disparos processados pela fila aparecerão aqui." />;
+  }
+
+  return (
+    <div className="space-y-4" data-testid="lifecycle-delivery-groups">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-brand-border bg-white px-4 py-3">
+        <div>
+          <strong className="block text-sm text-brand-text">Envios agrupados por profissional</strong>
+          <span className="text-xs text-brand-text-muted">Até {PROFESSIONALS_PER_DELIVERY_PAGE} profissionais por página · {pagination.total} profissionais com registros</span>
+        </div>
+        <span className="rounded-full bg-brand-bg px-3 py-1 text-xs font-semibold text-brand-primary">Página {pagination.page} de {pagination.totalPages}</span>
+      </div>
+
+      {pagination.groups.map((group: LifecycleDeliveryGroup, index) => (
+        <details key={group.professionalId} open={index === 0} className="overflow-hidden rounded-xl border border-brand-border bg-white shadow-sm">
+          <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-brand-bg/40">
+            <div className="min-w-0">
+              <strong className="block truncate text-sm text-brand-text">{group.recipientName}</strong>
+              <span className="block truncate text-xs text-brand-text-muted">{group.recipientEmail}</span>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-brand-text-muted">
+              <span>{group.deliveries.length} {group.deliveries.length === 1 ? 'envio' : 'envios'}</span>
+              <span>Último: {group.latestAt ? new Date(group.latestAt).toLocaleString('pt-BR') : '—'}</span>
+            </div>
+          </summary>
+
+          <div className="overflow-x-auto border-t border-brand-border">
+            <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
+              <thead className="bg-brand-bg text-xs uppercase text-brand-text-muted">
+                <tr>
+                  <th className="w-[19%] p-3">Modelo enviado</th>
+                  <th className="w-[9%] p-3">Status</th>
+                  <th className="w-[15%] p-3">Canais</th>
+                  <th className="w-[17%] p-3">Enviada/agendada</th>
+                  <th className="w-[9%] p-3">Tentativas</th>
+                  <th className="w-[24%] p-3">Motivo</th>
+                  <th className="w-[7%] p-3 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-brand-border">
+                {group.deliveries.map((item) => (
+                  <tr key={item.id} className="hover:bg-brand-bg/40">
+                    <td className="p-3">
+                      <strong className="block max-w-full truncate" title={item.template_name}>{item.template_name}</strong>
+                      <span className="block max-w-full truncate text-xs text-brand-text-muted" title={item.template_key}>{item.template_reference}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (item.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')}>
+                        {deliveryStatusLabel(item.status)}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1.5">
+                        <ChannelDeliveryIcon channel="email" status={channelDeliveryStatus(item, 'email')} />
+                        <ChannelDeliveryIcon channel="push" status={channelDeliveryStatus(item, 'push')} />
+                        <ChannelDeliveryIcon channel="whatsapp" status={channelDeliveryStatus(item, 'whatsapp')} />
+                      </div>
+                    </td>
+                    <td className="p-3 whitespace-nowrap">{(item.sent_at || item.scheduled_for) ? new Date(item.sent_at || item.scheduled_for).toLocaleString('pt-BR') : '—'}</td>
+                    <td className="p-3">{item.attempt_count}/{item.max_attempts}</td>
+                    <td className="max-w-full truncate p-3" title={item.skip_reason || item.failure_reason || ''}>{item.skip_reason || item.failure_reason || '—'}</td>
+                    <td className="p-3 text-right">
+                      <button onClick={() => onResend(item)} disabled={resendingDispatchId === item.id} title="Reenviar mensagem pelos canais habilitados" className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">
+                        {resendingDispatchId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                        <span className="sr-only">Reenviar</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ))}
+
+      <nav className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-border bg-white px-4 py-3" aria-label="Paginação dos profissionais com envios">
+        <span className="text-xs text-brand-text-muted">Mostrando profissionais {(pagination.page - 1) * pagination.pageSize + 1}–{Math.min(pagination.page * pagination.pageSize, pagination.total)} de {pagination.total}</span>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={pagination.page <= 1} className="btn-outline px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">Anterior</button>
+          <span className="min-w-20 text-center text-xs font-semibold text-brand-text">{pagination.page} / {pagination.totalPages}</span>
+          <button type="button" onClick={() => setPage((current) => Math.min(pagination.totalPages, current + 1))} disabled={pagination.page >= pagination.totalPages} className="btn-outline px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">Próxima</button>
+        </div>
+      </nav>
+    </div>
+  );
 }
 
 export default function LifecycleAdmin() {
@@ -764,7 +879,7 @@ export default function LifecycleAdmin() {
 
       {campaignTab === 'instances' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white">{users.length === 0 ? <EmptyState icon={Users} title="Nenhum usuário no fluxo" description="Os usuários matriculados em campanhas aparecerão aqui." /> : <table className="w-full min-w-[980px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Estágio</th><th className="p-3">Passo atual</th><th className="p-3">Próxima execução</th><th className="p-3">Status da jornada</th><th className="p-3">Ações</th></tr></thead><tbody className="divide-y divide-brand-border">{users.map((user) => { const enrollment = activationCampaign ? user.enrollments?.find((item: any) => item.campaign_id === activationCampaign.id) : null; const currentPosition = Number(enrollment?.current_position || 0); const currentStep = activationSteps.find((step) => step.position === currentPosition + 1); const nextStep = activationSteps.find((step) => step.position === currentPosition + 2); const canForceSend = Boolean(enrollment?.status === 'active' && currentStep); const isSending = sendingUserId === user.id; const isRestarting = restartingUserId === user.id; return <tr key={user.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong>{user.full_name || 'Profissional'}</strong><span className="block text-xs text-brand-text-muted">{user.google_email}</span></td><td className="p-3">{activationStatusLabel(user.state?.activation_status)}<span className="block text-xs text-brand-text-muted">Nível {user.state?.activation_level ?? 0}</span></td><td className="p-3">{enrollment ? <><strong className="block">{currentStep ? `Passo ${currentStep.position}` : 'Jornada concluída'}</strong><span className="block max-w-[260px] truncate text-xs text-brand-text-muted">{currentStep?.subject_template || 'Nenhum passo configurado'}</span></> : <span className="text-brand-text-muted">Não matriculado</span>}</td><td className="p-3 whitespace-nowrap">{enrollment ? <><strong className="block">{formatNextExecution(enrollment.next_step_at)}</strong><span className="block text-xs text-brand-text-muted">{nextStep ? `Próximo: passo ${nextStep.position}` : 'Sem próximo passo'}</span></> : '—'}</td><td className="p-3"><span className={'inline-flex rounded-full px-2.5 py-1 text-xs font-medium ' + enrollmentStatusClass(enrollment?.status)}>{enrollmentStatusLabel(enrollment?.status)}</span></td><td className="p-3"><div className="flex flex-wrap gap-1"><button title="Enviar mensagem do passo atual pelos canais habilitados" aria-label="Enviar mensagem do passo atual pelos canais habilitados" disabled={!canForceSend || isSending || isRestarting} onClick={() => void forceSendCurrentStep(user, currentStep)} className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}<span className="sr-only">Enviar agora</span></button><button title="Recalcular" onClick={() => void userAction(user, 'recalculate')} disabled={isRestarting} className="btn-outline p-1.5 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw size={14} /></button>{enrollment?.status === 'active' ? <button title="Pausar" onClick={() => void userAction(user, 'pause')} disabled={isRestarting} className="btn-outline p-1.5 disabled:cursor-not-allowed disabled:opacity-50"><CirclePause size={14} /></button> : <button title="Matricular/retomar" onClick={() => void userAction(user, enrollment?.status === 'paused' ? 'resume' : 'enroll')} disabled={isRestarting} className="btn-outline p-1.5 disabled:cursor-not-allowed disabled:opacity-50"><CirclePlay size={14} /></button>}<button title="Reiniciar jornada desde o primeiro passo" aria-label="Reiniciar jornada desde o primeiro passo" onClick={() => void restartJourney(user)} disabled={isRestarting} className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{isRestarting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}<span className="sr-only">Reiniciar jornada</span></button></div></td></tr>; })}</tbody></table>}</div>}
 
-      {campaignTab === 'logs' && <div className="overflow-hidden rounded-xl border border-brand-border bg-white">{deliveries.length === 0 ? <EmptyState icon={ScrollText} title="Nenhum registro de envio" description="Os disparos processados pela fila aparecerão aqui." /> : <table className="w-full min-w-[1120px] table-fixed text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="w-[18%] p-3">Destinatário</th><th className="w-[19%] p-3">Modelo enviado</th><th className="w-[8%] p-3">Status</th><th className="w-[14%] p-3">Canais</th><th className="w-[16%] p-3">Enviada/agendada</th><th className="w-[8%] p-3">Tentativas</th><th className="w-[12%] p-3">Motivo</th><th className="w-[5%] p-3 text-right">Ação</th></tr></thead><tbody className="divide-y divide-brand-border">{deliveries.map((item) => <tr key={item.id} className="hover:bg-brand-bg/40"><td className="p-3"><strong className="block max-w-full truncate">{item.recipient_name}</strong><span className="block max-w-full truncate text-xs text-brand-text-muted">{item.recipient_email}</span></td><td className="p-3"><strong className="block max-w-full truncate" title={item.template_name}>{item.template_name}</strong><span className="block max-w-full truncate text-xs text-brand-text-muted" title={item.template_key}>{item.template_reference}</span></td><td className="p-3"><span className={'rounded-full px-2.5 py-1 text-xs font-medium ' + (item.status === 'sent' ? 'bg-emerald-100 text-emerald-700' : item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600')}>{deliveryStatusLabel(item.status)}</span></td><td className="p-3"><div className="flex items-center gap-1.5"><ChannelDeliveryIcon channel="email" status={channelDeliveryStatus(item, 'email')} /><ChannelDeliveryIcon channel="push" status={channelDeliveryStatus(item, 'push')} /><ChannelDeliveryIcon channel="whatsapp" status={channelDeliveryStatus(item, 'whatsapp')} /></div></td><td className="p-3 whitespace-nowrap">{(item.sent_at || item.scheduled_for) ? new Date(item.sent_at || item.scheduled_for).toLocaleString('pt-BR') : '—'}</td><td className="p-3">{item.attempt_count}/{item.max_attempts}</td><td className="p-3 max-w-full truncate" title={item.skip_reason || item.failure_reason || ''}>{item.skip_reason || item.failure_reason || '—'}</td><td className="p-3 text-right"><button onClick={() => void resendLifecycleDelivery(item)} disabled={resendingDispatchId === item.id} title="Reenviar mensagem pelos canais habilitados" className="btn-outline inline-flex items-center gap-1.5 p-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50">{resendingDispatchId === item.id ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}<span className="sr-only">Reenviar</span></button></td></tr>)}</tbody></table>}</div>}
+      {campaignTab === 'logs' && <LifecycleDeliveryLogs deliveries={deliveries} resendingDispatchId={resendingDispatchId} onResend={(delivery) => void resendLifecycleDelivery(delivery)} />}
     </div>}
 
     {tab === 'preferences' && <div className="overflow-x-auto rounded-xl border border-brand-border bg-white"><table className="w-full min-w-[700px] text-left text-sm"><thead className="bg-brand-bg text-xs uppercase text-brand-text-muted"><tr><th className="p-3">Usuário</th><th className="p-3">Jornada</th><th className="p-3">Educativo</th><th className="p-3">Comercial</th><th className="p-3">Atualizado</th></tr></thead><tbody className="divide-y divide-brand-border">{preferences.map((item) => <tr key={item.user_id}><td className="p-3"><strong className="block">{item.user?.full_name || 'Usuário não identificado'}</strong><span className="block text-xs text-brand-text-muted">{item.user?.google_email || item.user_id}</span></td><td className="p-3">{item.lifecycle_enabled ? 'Ativo' : 'Descadastrado'}</td><td className="p-3">{item.product_education_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.commercial_enabled ? 'Sim' : 'Não'}</td><td className="p-3">{item.updated_at ? new Date(item.updated_at).toLocaleString('pt-BR') : '—'}</td></tr>)}</tbody></table></div>}
