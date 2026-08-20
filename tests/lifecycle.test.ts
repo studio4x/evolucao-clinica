@@ -153,7 +153,9 @@ assert.match(lifecycleSchedulerSource, /condition_config\?\.email_only === true 
 
 const lifecycleQueueSource = readFileSync('server/lifecycle/lifecycleQueue.ts', 'utf8');
 assert.match(lifecycleQueueSource, /calculateNextSequenceStepAt\(sentAt, step\.wait_minutes, nextStep\.wait_minutes\)/);
-assert.match(lifecycleQueueSource, /grant_lifecycle_trial_reengagement_bonus/);
+assert.match(lifecycleQueueSource, /issue_lifecycle_trial_reengagement_offer/);
+assert.doesNotMatch(lifecycleQueueSource, /rpc\("grant_lifecycle_trial_reengagement_bonus"/);
+assert.match(lifecycleQueueSource, /\/reativar-teste\?token=\$\{encodeURIComponent\(offer\.token\)\}/);
 assert.match(lifecycleQueueSource, /conditional_step_not_active/);
 
 const canceledTrialMigration = readFileSync('supabase/migrations/20260819120000_add_canceled_trial_reengagement_step.sql', 'utf8');
@@ -164,6 +166,16 @@ assert.match(canceledTrialMigration, /UNIQUE \(user_id, cancellation_event_at\)/
 assert.match(canceledTrialMigration, /grant_lifecycle_trial_reengagement_bonus/);
 const canceledTrialCopyFixMigration = readFileSync('supabase/migrations/20260819130000_fix_canceled_trial_reengagement_copy.sql', 'utf8');
 assert.match(canceledTrialCopyFixMigration, /body_markdown = E'Olá, \{\{primeiro_nome\}\}!\\n\\nPercebemos/);
+const clickToRedeemMigration = readFileSync('supabase/migrations/20260820100000_make_trial_extension_click_to_redeem.sql', 'utf8');
+assert.match(clickToRedeemMigration, /CREATE TABLE IF NOT EXISTS public\.lifecycle_trial_extension_offers/);
+assert.match(clickToRedeemMigration, /issue_lifecycle_trial_reengagement_offer/);
+assert.match(clickToRedeemMigration, /redeem_lifecycle_trial_reengagement_offer/);
+assert.match(clickToRedeemMigration, /status = 'draft'/);
+
+const lifecycleRoutesSource = readFileSync('server/lifecycle/lifecycleRoutes.ts', 'utf8');
+assert.match(lifecycleRoutesSource, /\/api\/lifecycle\/trial-extension\/redeem/);
+const appSource = readFileSync('src/App.tsx', 'utf8');
+assert.match(appSource, /path="\/reativar-teste"/);
 
 const lifecycleRepositorySource = readFileSync('server/lifecycle/lifecycleRepository.ts', 'utf8');
 const existingEnrollmentLookup = lifecycleRepositorySource.indexOf('const { data: existingEnrollment');

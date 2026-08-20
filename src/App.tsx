@@ -42,6 +42,7 @@ const PublicJourneyIndex = lazyWithRetry(() => import('./pages/PublicJourneyInde
 const CommunicationPreferences = lazyWithRetry(() => import('./pages/CommunicationPreferences'), 'CommunicationPreferences');
 const Unsubscribe = lazyWithRetry(() => import('./pages/Unsubscribe'), 'Unsubscribe');
 const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedback'), 'ContinuityFeedback');
+const TrialExtensionRedeem = lazyWithRetry(() => import('./pages/TrialExtensionRedeem'), 'TrialExtensionRedeem');
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
@@ -725,6 +726,7 @@ export default function App() {
           <Route path="/preferencias-de-comunicacao" element={<Navigate to="/painel/preferencias-de-comunicacao" replace />} />
           <Route path="/descadastro" element={<Unsubscribe />} />
           <Route path="/feedback/continuidade" element={<ContinuityFeedback />} />
+          <Route path="/reativar-teste" element={<TrialExtensionRedeem />} />
           <Route path="/public/reports/:reportId" element={<PublicReportView />} />
           <Route path="/jornada" element={<PublicJourneyIndex />} />
           <Route path="/jornada/:journeySlug" element={<PublicJourneyIndex />} />

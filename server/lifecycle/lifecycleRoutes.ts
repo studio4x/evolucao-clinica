@@ -106,6 +106,33 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ success: true, ticketId: ticket.id });
       }));
 
+      app.post("/api/lifecycle/trial-extension/redeem", asyncRoute(async (req, res) => {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        const token = String(req.body?.token || "").trim().toLowerCase();
+        if (!/^[0-9a-f]{64}$/.test(token)) {
+          return res.status(400).json({ error: "Este link de ativação é inválido ou está incompleto." });
+        }
+
+        const { data, error } = await deps.supabaseAdmin.rpc("redeem_lifecycle_trial_reengagement_offer", {
+          p_token_hash: hashCommunicationToken(token)
+        });
+        if (error) throw new Error(error.message || "Não foi possível ativar a extensão do teste.");
+
+        const code = String(data?.code || "unknown");
+        if (code === "redeemed" || code === "already_redeemed") {
+          return res.json({
+            success: true,
+            alreadyRedeemed: code === "already_redeemed",
+            bonusDays: Number(data?.bonus_days || 7),
+            trialEndsAt: data?.new_trial_ends_at || null
+          });
+        }
+        if (code === "offer_expired") return res.status(410).json({ error: "Este convite expirou. Entre em contato com o suporte se precisar de ajuda." });
+        if (code === "trial_no_longer_canceled") return res.status(409).json({ error: "Sua conta não está mais elegível para esta extensão." });
+        if (code === "account_not_recoverable") return res.status(409).json({ error: "Não foi possível reativar esta conta por este link." });
+        return res.status(404).json({ error: "Este link de ativação é inválido ou já não está disponível." });
+      }));
+
       app.get("/api/lifecycle/me", middleware.requireAuth, asyncRoute(async (req, res) => {
         const state = await recalculateLifecycleUserState(deps, req.user.id);
         const { data: enrollments, error: enrollmentError } = await deps.supabaseAdmin.from("lifecycle_enrollments").select("id, status, current_position, next_step_at, completion_deadline_at, campaign_id, lifecycle_campaigns(key,name,status)").eq("user_id", req.user.id);

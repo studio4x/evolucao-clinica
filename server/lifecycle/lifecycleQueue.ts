@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { WhatsAppSendResult } from "../whatsapp/whatsappTypes.js";
 import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY, LIFECYCLE_CONDITIONAL_CAMPAIGN_KEY, LIFECYCLE_FAILURE_ALERT_COOLDOWN_MINUTES, LIFECYCLE_FAILURE_ALERT_THRESHOLD, LIFECYCLE_RETRY_DELAYS_MINUTES, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { getContextualActionPendingAt, getNextActionCopy, getNextBestAction, getSubscriberNextBestAction } from "./lifecycleRules.js";
@@ -417,17 +417,21 @@ async function validateTrialCanceledReengagement(deps: LifecycleDependencies, us
   return null;
 }
 
-async function grantTrialCanceledReengagementBonus(deps: LifecycleDependencies, userId: string, dispatchId: string, rule: any) {
+async function issueTrialCanceledReengagementOffer(deps: LifecycleDependencies, dispatchId: string, rule: any) {
+  const token = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(token).digest("hex");
   const bonusDays = Number(rule?.condition_config?.bonus_days || 7);
-  const { data, error } = await deps.supabaseAdmin.rpc("grant_lifecycle_trial_reengagement_bonus", {
-    p_user_id: userId,
+  const validDays = Number(rule?.condition_config?.offer_valid_days || 14);
+  const { data, error } = await deps.supabaseAdmin.rpc("issue_lifecycle_trial_reengagement_offer", {
     p_dispatch_id: dispatchId,
-    p_bonus_days: bonusDays
+    p_token_hash: tokenHash,
+    p_bonus_days: bonusDays,
+    p_valid_days: validDays
   });
-  if (error) throw new Error(error.message || "Falha ao conceder os dias adicionais do trial.");
+  if (error) throw new Error(error.message || "Falha ao criar o link individual da extensão do trial.");
   const code = String(data?.code || "unknown");
-  if (code !== "granted" && code !== "already_granted") return code;
-  return null;
+  if (code !== "issued") return { token: null, error: code };
+  return { token, error: null };
 }
 
 async function validateInactiveFourteenDays(deps: LifecycleDependencies, userId: string, rule: any) {
@@ -716,25 +720,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     return { status: "suppressed" };
   }
 
-  if (ruleResult.data?.rule_key === "trial_canceled_reengagement_3d") {
-    if (preferences.email_enabled === false) {
-      await markSuppressed(deps, dispatch, "email_disabled");
-      return { status: "suppressed" };
-    }
-    const grantSkipReason = await grantTrialCanceledReengagementBonus(deps, dispatch.user_id, dispatch.id, ruleResult.data);
-    if (grantSkipReason) {
-      await markSkipped(deps, dispatch, grantSkipReason);
-      return { status: "skipped" };
-    }
-  }
-
   const now = new Date();
   const communicationToken = await ensureCommunicationToken(deps, dispatch.user_id);
   const feedbackUrl = `${deps.productionOrigin}/feedback/continuidade?token=${encodeURIComponent(communicationToken)}`;
   const isTrialRecovery = ruleResult.data?.rule_key === "trial_recovery_2d" || ruleResult.data?.rule_key === "trial_recovery_7d";
   const context = buildContext(stateResult, deps.productionOrigin, now, ruleResult.data?.rule_key === "subscriber_low_usage", isTrialRecovery, feedbackUrl, ruleResult.data?.rule_key === "inactive_3d");
   const config = messageFromConfig(dispatch, stepResult.data, ruleResult.data);
-  const rendered = renderLifecycleMessage({
+  let rendered = renderLifecycleMessage({
     subjectTemplate: config.subject_template,
     preheaderTemplate: config.preheader_template,
     bodyTemplate: config.body_markdown,
@@ -762,6 +754,27 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
     : null;
   if (existingEmailDelivery) {
     console.warn(`[Lifecycle Worker] E-mail já enviado anteriormente para o dispatch ${dispatch.id}; continuando para garantir o push.`);
+  }
+
+  if (ruleResult.data?.rule_key === "trial_canceled_reengagement_3d" && !existingEmailDelivery) {
+    if (preferences.email_enabled === false) {
+      await markSuppressed(deps, dispatch, "email_disabled");
+      return { status: "suppressed" };
+    }
+    const offer = await issueTrialCanceledReengagementOffer(deps, dispatch.id, ruleResult.data);
+    if (offer.error || !offer.token) {
+      await markSkipped(deps, dispatch, offer.error || "trial_extension_offer_not_issued");
+      return { status: "skipped" };
+    }
+    config.cta_route_template = `/reativar-teste?token=${encodeURIComponent(offer.token)}`;
+    rendered = renderLifecycleMessage({
+      subjectTemplate: config.subject_template,
+      preheaderTemplate: config.preheader_template,
+      bodyTemplate: config.body_markdown,
+      ctaLabelTemplate: config.cta_label_template,
+      ctaRouteTemplate: config.cta_route_template,
+      context
+    });
   }
 
   const unsubscribeToken = communicationToken;
