@@ -15,7 +15,7 @@ export function hasActivePaidAccess(input: SubscriptionAccessInput) {
   if (input.profileRole === 'admin' || input.subscriptionPlan === 'none') return true;
 
   return (
-    (input.subscriptionPlan === 'monthly' || input.subscriptionPlan === 'yearly') &&
+    (input.subscriptionPlan === 'monthly' || input.subscriptionPlan === 'yearly' || input.subscriptionPlan === 'courtesy') &&
     (input.subscriptionStatus === 'active' || input.subscriptionStatus === 'trialing') &&
     hasNotExpired(input.subscriptionEndsAt)
   );
@@ -25,7 +25,7 @@ export function hasActiveYearlyAccess(input: SubscriptionAccessInput) {
   if (input.profileRole === 'admin' || input.subscriptionPlan === 'none') return true;
 
   return (
-    input.subscriptionPlan === 'yearly' &&
+    (input.subscriptionPlan === 'yearly' || input.subscriptionPlan === 'courtesy') &&
     (input.subscriptionStatus === 'active' || input.subscriptionStatus === 'trialing') &&
     hasNotExpired(input.subscriptionEndsAt)
   );

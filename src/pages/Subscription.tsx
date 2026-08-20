@@ -243,7 +243,9 @@ export default function Subscription() {
   const now = new Date();
   const endsAtDate = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
   const isExpired = endsAtDate ? endsAtDate < now : false;
-  const isCanceled = subscriptionStatus === 'canceled' || (subscriptionPlan !== 'none' && isExpired && subscriptionStatus !== 'active');
+  const isCanceled = subscriptionStatus === 'canceled' || (
+    subscriptionPlan !== 'none' && subscriptionPlan !== 'courtesy' && isExpired && subscriptionStatus !== 'active'
+  );
   
   let daysRemaining = 0;
   if (endsAtDate && !isExpired) {
@@ -670,6 +672,7 @@ export default function Subscription() {
                 {subscriptionPlan === 'trial' && 'Teste gratuito de 7 dias'}
                 {subscriptionPlan === 'monthly' && 'Plano Mensal'}
                 {subscriptionPlan === 'yearly' && 'Plano Anual'}
+                {subscriptionPlan === 'courtesy' && 'Plano Cortesia'}
                 {subscriptionPlan === 'none' && 'Vitalício / Admin'}
                 {!subscriptionPlan && 'Nenhum'}
               </span>
@@ -687,7 +690,7 @@ export default function Subscription() {
                     : 'bg-amber-100 text-amber-800'
               }`}>
                 {subscriptionStatus === 'trialing' && 'Teste gratuito ativo'}
-                {subscriptionStatus === 'active' && 'Ativo (Pago)'}
+                {subscriptionStatus === 'active' && (subscriptionPlan === 'courtesy' ? 'Regular / Ativo' : 'Ativo (Pago)')}
                 {subscriptionStatus === 'canceled' && 'Cancelado'}
                 {subscriptionStatus === 'past_due' && 'Atrasado'}
                 {subscriptionStatus === 'unpaid' && 'Não Pago'}

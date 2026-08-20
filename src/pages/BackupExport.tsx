@@ -32,7 +32,7 @@ export default function BackupExport() {
   const navigate = useNavigate();
   const { user, googleAccessToken, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const [professionalName, setProfessionalName] = useState('Terapeuta');
-  const [dbSubscriptionPlan, setDbSubscriptionPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none' | null>(null);
+  const [dbSubscriptionPlan, setDbSubscriptionPlan] = useState<'trial' | 'monthly' | 'yearly' | 'courtesy' | 'none' | null>(null);
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(false);
   const [backupFrequency, setBackupFrequency] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);

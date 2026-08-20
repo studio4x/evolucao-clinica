@@ -234,19 +234,19 @@ export default function SupportTicketDetail() {
             {/* Admin visual info for creator's plan */}
             {isAdmin && (
               <span className={`text-xs px-2.5 py-1 rounded-full border font-bold flex items-center ${
-                ticket.userPlan === 'yearly'
+                ticket.userPlan === 'yearly' || ticket.userPlan === 'courtesy'
                   ? 'bg-amber-50 text-amber-800 border-amber-200 shadow-sm'
                   : ticket.userPlan === 'monthly'
                     ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                     : 'bg-gray-50 text-gray-800 border-gray-200'
               }`}>
-                {ticket.userPlan === 'yearly' ? '👑 VIP Anual' : ticket.userPlan === 'monthly' ? '💼 Mensal' : '🌱 Trial'}
+                {ticket.userPlan === 'yearly' ? '👑 VIP Anual' : ticket.userPlan === 'courtesy' ? '🎁 VIP Cortesia' : ticket.userPlan === 'monthly' ? '💼 Mensal' : '🌱 Trial'}
               </span>
             )}
           </div>
           
           <div className="text-xs text-brand-text-muted leading-relaxed">
-            <strong>Cliente:</strong> {ticket.userFullName || 'Profissional'} ({ticket.userPlan === 'yearly' ? 'Anual' : ticket.userPlan === 'monthly' ? 'Mensal' : 'Avaliação'})
+            <strong>Cliente:</strong> {ticket.userFullName || 'Profissional'} ({ticket.userPlan === 'yearly' ? 'Anual' : ticket.userPlan === 'courtesy' ? 'Cortesia' : ticket.userPlan === 'monthly' ? 'Mensal' : 'Avaliação'})
             <span className="mx-2">•</span>
             <strong>Criado em:</strong> {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(ticket.createdAt))}
           </div>

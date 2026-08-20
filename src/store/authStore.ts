@@ -11,7 +11,7 @@ interface AuthState {
   isAuthReady: boolean;
   profileStatus: 'active' | 'pending' | 'inactive' | null;
   profileRole: 'admin' | 'therapist' | null;
-  subscriptionPlan: 'trial' | 'monthly' | 'yearly' | 'none' | null;
+  subscriptionPlan: 'trial' | 'monthly' | 'yearly' | 'courtesy' | 'none' | null;
   subscriptionStatus: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' | null;
   subscriptionEndsAt: string | null;
   trialEndsAt: string | null;
@@ -24,7 +24,7 @@ interface AuthState {
   setProfileInfo: (
     status: 'active' | 'pending' | 'inactive' | null,
     role: 'admin' | 'therapist' | null,
-    subscriptionPlan?: 'trial' | 'monthly' | 'yearly' | 'none' | null,
+    subscriptionPlan?: 'trial' | 'monthly' | 'yearly' | 'courtesy' | 'none' | null,
     subscriptionStatus?: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid' | null,
     subscriptionEndsAt?: string | null,
     trialEndsAt?: string | null

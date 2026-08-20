@@ -25,6 +25,7 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { getSubscriptionPlanLabel } from '../../utils/subscriptionPlans';
 
 type ProfessionalSummary = {
   id: string;
@@ -600,12 +601,15 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
               </Section>
 
               <Section icon={CreditCard} title="Assinatura">
-                <Detail label="Plano" value={p.subscription_plan} />
-                <Detail label="Status da assinatura" value={p.subscription_status} />
+                <Detail label="Plano" value={getSubscriptionPlanLabel(p.subscription_plan)} />
+                <Detail label="Status da assinatura" value={p.subscription_plan === 'courtesy' ? 'Regular / Ativo' : p.subscription_status} />
                 <Detail label="Provedor de cobrança" value={p.billing_provider} />
                 <Detail label="ID do cliente Stripe" value={p.stripe_customer_id} mono />
                 <Detail label="Fim do período de teste" value={dateValue(p.trial_ends_at)} />
-                <Detail label="Vencimento da assinatura" value={dateValue(p.subscription_ends_at)} />
+                <Detail
+                  label="Vencimento da assinatura"
+                  value={p.subscription_plan === 'courtesy' || p.subscription_plan === 'none' ? 'Sem expiração' : dateValue(p.subscription_ends_at)}
+                />
                 <Detail label="Aviso de fim do teste enviado" value={dateValue(p.trial_expiration_email_sent_at)} />
               </Section>
 

@@ -34,6 +34,12 @@ import {
   type ProfessionalSortKey,
   type SortDirection
 } from '../utils/adminProfessionals';
+import {
+  getSubscriptionPlanLabel,
+  isPaidSubscriberForMetrics,
+  normalizeManagedSubscription,
+  type SubscriptionPlan
+} from '../utils/subscriptionPlans';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -51,7 +57,7 @@ interface Professional {
   role: 'admin' | 'therapist';
   status: 'active' | 'pending' | 'inactive';
   created_at?: string;
-  subscription_plan?: 'trial' | 'monthly' | 'yearly' | 'none';
+  subscription_plan?: SubscriptionPlan;
   subscription_status?: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid';
   subscription_ends_at?: string;
   trial_ends_at?: string;
@@ -1254,7 +1260,7 @@ export default function AdminPanel() {
 
   // Estados do modal de edição de assinatura SaaS
   const [editingProf, setEditingProf] = useState<Professional | null>(null);
-  const [editPlan, setEditPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none'>('trial');
+  const [editPlan, setEditPlan] = useState<SubscriptionPlan>('trial');
   const [editStatus, setEditStatus] = useState<'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid'>('trialing');
 
   // Estado do modal de rastreamento de aquisição / UTMs
@@ -3034,11 +3040,23 @@ export default function AdminPanel() {
   };
 
   const handleOpenEditSubscription = (prof: Professional) => {
+    const isCourtesy = prof.subscription_plan === 'courtesy';
     setEditingProf(prof);
     setEditPlan(prof.subscription_plan || 'trial');
-    setEditStatus(prof.subscription_status || 'trialing');
-    setEditEndsAt(prof.subscription_ends_at ? prof.subscription_ends_at.substring(0, 16) : '');
-    setEditUserStatus(prof.status);
+    setEditStatus(isCourtesy ? 'active' : (prof.subscription_status || 'trialing'));
+    setEditEndsAt(isCourtesy ? '' : (prof.subscription_ends_at ? prof.subscription_ends_at.substring(0, 16) : ''));
+    setEditUserStatus(isCourtesy ? 'active' : prof.status);
+  };
+
+  const handleManagedPlanChange = (plan: SubscriptionPlan) => {
+    setEditPlan(plan);
+    if (plan === 'courtesy') {
+      setEditStatus('active');
+      setEditEndsAt('');
+      setEditUserStatus('active');
+    } else if (plan === 'none') {
+      setEditEndsAt('');
+    }
   };
 
   const handleSaveSubscription = async (e: React.FormEvent) => {
@@ -3047,11 +3065,17 @@ export default function AdminPanel() {
     setUpdatingId(editingProf.id);
 
     try {
+      const normalizedSubscription = normalizeManagedSubscription({
+        subscriptionPlan: editPlan,
+        subscriptionStatus: editStatus,
+        subscriptionEndsAt: editEndsAt ? new Date(editEndsAt).toISOString() : null,
+        accountStatus: editUserStatus
+      });
       const updateData: any = {
-        subscription_plan: editPlan,
-        subscription_status: editStatus,
-        subscription_ends_at: editEndsAt ? new Date(editEndsAt).toISOString() : null,
-        status: editUserStatus,
+        subscription_plan: normalizedSubscription.subscriptionPlan,
+        subscription_status: normalizedSubscription.subscriptionStatus,
+        subscription_ends_at: normalizedSubscription.subscriptionEndsAt,
+        status: normalizedSubscription.accountStatus,
         updated_at: new Date().toISOString()
       };
 
@@ -3066,10 +3090,10 @@ export default function AdminPanel() {
           item.id === editingProf.id
             ? {
                 ...item,
-                subscription_plan: editPlan,
-                subscription_status: editStatus,
-                subscription_ends_at: editEndsAt ? new Date(editEndsAt).toISOString() : null,
-                status: editUserStatus
+                subscription_plan: normalizedSubscription.subscriptionPlan,
+                subscription_status: normalizedSubscription.subscriptionStatus,
+                subscription_ends_at: normalizedSubscription.subscriptionEndsAt || undefined,
+                status: normalizedSubscription.accountStatus
               }
             : item
         )
@@ -3077,7 +3101,7 @@ export default function AdminPanel() {
 
       void refreshProfessionals(false);
 
-      if (editingProf.status !== 'active' && editUserStatus === 'active') {
+      if (editingProf.status !== 'active' && normalizedSubscription.accountStatus === 'active') {
         try {
           await notifyProfessionalApproval(editingProf.id);
         } catch (notifyError: any) {
@@ -4025,7 +4049,7 @@ export default function AdminPanel() {
                     <div>
                        <p className="text-xs text-brand-text-muted font-medium uppercase tracking-wider font-semibold">Assinantes Pagos</p>
                       <h3 className="text-2xl font-bold font-display text-brand-primary">
-                        {professionals.filter(p => (p.subscription_plan === 'monthly' || p.subscription_plan === 'yearly') && p.subscription_status === 'active' && p.status === 'active').length}
+                        {professionals.filter(isPaidSubscriberForMetrics).length}
                       </h3>
                     </div>
                   </div>
@@ -4273,27 +4297,27 @@ export default function AdminPanel() {
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold w-max ${
                                       prof.subscription_plan === 'monthly' || prof.subscription_plan === 'yearly'
                                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                        : prof.subscription_plan === 'courtesy'
+                                        ? 'bg-sky-50 text-sky-700 border border-sky-100'
                                         : prof.subscription_plan === 'trial'
                                         ? 'bg-amber-50 text-amber-700 border border-amber-100'
                                         : 'bg-purple-50 text-purple-700 border border-purple-100'
                                     }`}>
-                                      {prof.subscription_plan === 'monthly' && 'Plano Mensal'}
-                                      {prof.subscription_plan === 'yearly' && 'Plano Anual'}
-                                      {prof.subscription_plan === 'trial' && 'Teste (Trial)'}
-                                      {prof.subscription_plan === 'none' && 'Vitalício'}
-                                      {!prof.subscription_plan && 'Sem Plano'}
+                                      {getSubscriptionPlanLabel(prof.subscription_plan)}
                                     </span>
                                     {prof.subscription_status && prof.subscription_plan !== 'none' && (
                                       <span className="text-[10px] text-brand-text-muted capitalize">
-                                        Status: {prof.subscription_status === 'trialing' ? 'Testando' : prof.subscription_status}
+                                        Status: {prof.subscription_plan === 'courtesy'
+                                          ? 'Regular / Ativo'
+                                          : prof.subscription_status === 'trialing' ? 'Testando' : prof.subscription_status}
                                       </span>
                                     )}
                                   </div>
                                 </td>
 
                                 <td className="p-4 text-brand-text-muted whitespace-nowrap text-xs">
-                                  {prof.subscription_plan === 'none' ? (
-                                    <span className="text-purple-600 font-medium">Nunca Expira</span>
+                                  {prof.subscription_plan === 'none' || prof.subscription_plan === 'courtesy' ? (
+                                    <span className={prof.subscription_plan === 'courtesy' ? 'text-sky-700 font-medium' : 'text-purple-600 font-medium'}>Sem Expiração</span>
                                   ) : prof.subscription_ends_at ? (
                                     <span className={new Date(prof.subscription_ends_at) < new Date() ? 'text-red-600 font-bold' : ''}>
                                       {formatDate(prof.subscription_ends_at)}
@@ -6666,6 +6690,7 @@ export default function AdminPanel() {
                       >
                          <option value="all">Todos os Planos</option>
                          <option value="yearly">Anual (VIP)</option>
+                         <option value="courtesy">Cortesia (VIP)</option>
                          <option value="monthly">Mensal</option>
                          <option value="trial">Trial / Gratuito</option>
                       </select>
@@ -6751,7 +6776,7 @@ export default function AdminPanel() {
                           </thead>
                           <tbody className="divide-y divide-brand-border/30 text-xs">
                             {filtered.map((ticket) => {
-                              const isVIP = ticket.userPlan === 'yearly';
+                              const isVIP = ticket.userPlan === 'yearly' || ticket.userPlan === 'courtesy';
                               return (
                                 <tr 
                                   key={ticket.id} 
@@ -6767,7 +6792,7 @@ export default function AdminPanel() {
                                           {ticket.userFullName || 'Profissional'}
                                         </p>
                                         <p className="text-[10px] text-brand-text-muted">
-                                          {ticket.userPlan === 'yearly' ? 'Plano Anual' : ticket.userPlan === 'monthly' ? 'Plano Mensal' : 'Período Trial'}
+                                          {ticket.userPlan === 'yearly' ? 'Plano Anual' : ticket.userPlan === 'courtesy' ? 'Plano Cortesia' : ticket.userPlan === 'monthly' ? 'Plano Mensal' : 'Período Trial'}
                                         </p>
                                       </div>
                                     </div>
@@ -8375,14 +8400,20 @@ export default function AdminPanel() {
                   <label className="text-xs font-semibold text-brand-text uppercase tracking-wider block">Plano SaaS</label>
                   <select
                     value={editPlan}
-                    onChange={(e) => setEditPlan(e.target.value as any)}
+                    onChange={(e) => handleManagedPlanChange(e.target.value as SubscriptionPlan)}
                     className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
                   >
                     <option value="trial">Período de Teste (Trial)</option>
                     <option value="monthly">Plano Mensal (Pago)</option>
                     <option value="yearly">Plano Anual (Pago)</option>
+                    <option value="courtesy">Plano Cortesia (Acesso Anual)</option>
                     <option value="none">Vitalício / Admin (Sem Limite)</option>
                   </select>
+                  {editPlan === 'courtesy' && (
+                    <p className="text-[11px] leading-relaxed text-sky-700">
+                      Acesso completo do plano anual, sem cobrança e sem data de expiração.
+                    </p>
+                  )}
                 </div>
 
                 {/* Status da Assinatura */}
@@ -8391,7 +8422,8 @@ export default function AdminPanel() {
                   <select
                     value={editStatus}
                     onChange={(e) => setEditStatus(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                    disabled={editPlan === 'courtesy'}
+                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="trialing">Em Período de Testes (Trialing)</option>
                     <option value="active">Regular / Ativo (Active)</option>
@@ -8408,7 +8440,7 @@ export default function AdminPanel() {
                     type="datetime-local"
                     value={editEndsAt}
                     onChange={(e) => setEditEndsAt(e.target.value)}
-                    disabled={editPlan === 'none'}
+                    disabled={editPlan === 'none' || editPlan === 'courtesy'}
                     className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 disabled:opacity-50 font-medium"
                   />
                 </div>
@@ -8419,7 +8451,8 @@ export default function AdminPanel() {
                   <select
                     value={editUserStatus}
                     onChange={(e) => setEditUserStatus(e.target.value as any)}
-                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
+                    disabled={editPlan === 'courtesy'}
+                    className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <option value="active">Ativo (Acesso Liberado)</option>
                     <option value="pending">Aguardando Liberação</option>

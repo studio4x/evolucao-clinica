@@ -4973,7 +4973,7 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
       return res.status(403).json({ error: "Nao autorizado a disparar notificacoes para este chamado" });
     }
 
-    const isVip = creator?.subscription_plan === "yearly";
+    const isVip = creator?.subscription_plan === "yearly" || creator?.subscription_plan === "courtesy";
     const vipPrefix = isVip ? "👑 [VIP] " : "";
     const link = `/painel/support/${ticketId}`;
 
@@ -5000,10 +5000,12 @@ app.post("/api/support/notify", requireAuth, async (req: any, res) => {
       // A. Notificar o próprio usuário que criou
       const userPlanLabel = creator?.subscription_plan === "yearly"
         ? "Anual/VIP"
+        : creator?.subscription_plan === "courtesy"
+        ? "Cortesia/VIP"
         : creator?.subscription_plan === "monthly"
         ? "Mensal"
         : "Gratuito/Avaliação";
-      const slaLabel = creator?.subscription_plan === "yearly"
+      const slaLabel = creator?.subscription_plan === "yearly" || creator?.subscription_plan === "courtesy"
         ? "2 horas úteis"
         : creator?.subscription_plan === "monthly"
         ? "24 horas úteis (12h úteis para faturamento)"

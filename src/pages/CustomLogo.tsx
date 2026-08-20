@@ -18,7 +18,7 @@ export default function CustomLogo() {
   const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
   const cropDragStart = useRef<{ x: number; y: number; pointerX: number; pointerY: number } | null>(null);
   const [previewDocument, setPreviewDocument] = useState<'prontuario' | 'report' | 'pdi'>('prontuario');
-  const [dbSubscriptionPlan, setDbSubscriptionPlan] = useState<'trial' | 'monthly' | 'yearly' | 'none' | null>(null);
+  const [dbSubscriptionPlan, setDbSubscriptionPlan] = useState<'trial' | 'monthly' | 'yearly' | 'courtesy' | 'none' | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');

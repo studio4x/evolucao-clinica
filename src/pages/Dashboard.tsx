@@ -117,7 +117,7 @@ export default function Dashboard() {
     today: [],
     thisWeek: []
   });
-  const hasPaidSubscription = subscriptionPlan === 'monthly' || subscriptionPlan === 'yearly';
+  const hasPaidSubscription = subscriptionPlan === 'monthly' || subscriptionPlan === 'yearly' || subscriptionPlan === 'courtesy';
   const hasActiveSubscription = Boolean(
     profileRole === 'admin'
       || (hasPaidSubscription && (subscriptionStatus === 'active' || subscriptionStatus === 'trialing'))
