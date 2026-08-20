@@ -50,4 +50,11 @@ assert.match(migrationSource, /enforce_courtesy_subscription_invariants/);
 assert.match(migrationSource, /subscription_plan IN \('yearly', 'courtesy'\)/);
 assert.match(migrationSource, /user_plan IN \('yearly', 'courtesy', 'none'\)/);
 
+const constraintMigrationSource = readFileSync(
+  resolve('supabase/migrations/20260820180000_allow_courtesy_subscription_plan.sql'),
+  'utf8'
+);
+assert.match(constraintMigrationSource, /DROP CONSTRAINT IF EXISTS professionals_subscription_plan_check/);
+assert.match(constraintMigrationSource, /subscription_plan IN \('trial', 'monthly', 'yearly', 'courtesy', 'none'\)/);
+
 console.log('Courtesy subscription plan tests passed.');
