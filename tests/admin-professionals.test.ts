@@ -60,6 +60,8 @@ assert.match(adminSource, /handleProfessionalSort\('expiration'\)/);
 assert.match(adminSource, /aria-sort=/);
 assert.match(adminSource, /onError=\{handleImageError\}/);
 assert.match(adminSource, /data-testid="professional-actions-grid"/);
+assert.match(adminSource, /data-testid="admin-self-actions-grid"/);
+assert.match(adminSource, /aria-label=\{`Gerenciar assinatura de \$\{prof\.full_name\}`\}/);
 assert.match(adminSource, /inline-grid grid-cols-3 gap-1\.5/);
 assert.doesNotMatch(adminSource, /ui-avatars\.com/);
 

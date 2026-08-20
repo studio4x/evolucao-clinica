@@ -4350,7 +4350,7 @@ export default function AdminPanel() {
                                   {isAdminSelf ? (
                                     <div className="inline-flex flex-col items-end gap-1.5">
                                       <span className="text-xs text-brand-text-muted italic">Administrador Geral</span>
-                                      <div className="grid grid-cols-3 gap-1.5">
+                                      <div className="grid grid-cols-3 gap-1.5" data-testid="admin-self-actions-grid">
                                         <button
                                           onClick={() => setSelectedProfessionalDetails(prof)}
                                           className="inline-flex items-center justify-center p-2 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-100 transition-colors cursor-pointer"
@@ -4369,6 +4369,14 @@ export default function AdminPanel() {
                                           title="Origem do Cadastro / UTMs de Aquisição"
                                         >
                                           <Compass className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleOpenEditSubscription(prof)}
+                                          className="inline-flex items-center justify-center p-2 rounded-lg bg-brand-bg hover:bg-brand-border/40 text-brand-primary border border-brand-border transition-colors cursor-pointer"
+                                          title="Gerenciar Assinatura"
+                                          aria-label={`Gerenciar assinatura de ${prof.full_name}`}
+                                        >
+                                          <Settings className="w-3.5 h-3.5" />
                                         </button>
                                         <button
                                           onClick={() => handleForceGoogleDisconnect(prof)}
