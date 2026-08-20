@@ -4,6 +4,7 @@ import {
   Bell,
   Calendar,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -196,6 +197,7 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [communicationChannel, setCommunicationChannel] = useState<CommunicationChannel>('all');
+  const [communicationExpanded, setCommunicationExpanded] = useState(false);
   const [communicationPage, setCommunicationPage] = useState(1);
   const [communicationHistory, setCommunicationHistory] = useState<CommunicationHistory | null>(null);
   const [communicationLoading, setCommunicationLoading] = useState(false);
@@ -234,6 +236,7 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
   }, [professional]);
 
   useEffect(() => {
+    setCommunicationExpanded(false);
     setCommunicationChannel('all');
     setCommunicationPage(1);
     setCommunicationHistory(null);
@@ -413,15 +416,30 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                 <p className="text-[11px] text-brand-text-muted">O total usa os registros efetivos de transcrição; a distribuição por paciente considera os áudios vinculados às evoluções.</p>
               </section>
 
-              <section className="space-y-3">
-                <div className="flex flex-col gap-3 border-b border-brand-border/40 pb-3 sm:flex-row sm:items-end sm:justify-between">
-                  <div>
+              <section className="space-y-3" data-testid="professional-communication-history">
+                <button
+                  type="button"
+                  onClick={() => setCommunicationExpanded(current => !current)}
+                  aria-expanded={communicationExpanded}
+                  aria-controls="professional-communication-history-content"
+                  className="flex w-full items-center justify-between gap-4 rounded-2xl border border-brand-border/60 bg-brand-bg/20 px-4 py-4 text-left transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/5"
+                >
+                  <div className="min-w-0">
                     <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-primary">
                       <History className="h-4 w-4" />
                       Histórico de comunicação
                     </h4>
                     <p className="mt-1 text-xs text-brand-text-muted">Linha do tempo de todos os contatos registrados pela plataforma.</p>
                   </div>
+                  <span className="flex shrink-0 items-center gap-2 text-xs font-bold text-brand-primary">
+                    {communicationExpanded ? 'Recolher' : 'Expandir'}
+                    <ChevronDown className={`h-4 w-4 transition-transform ${communicationExpanded ? 'rotate-180' : ''}`} />
+                  </span>
+                </button>
+
+                {communicationExpanded && (
+                  <div id="professional-communication-history-content" className="space-y-3">
+                    <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={() => setCommunicationReloadKey(current => current + 1)}
@@ -431,9 +449,9 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                     <RefreshCw className={`h-3.5 w-3.5 ${communicationLoading ? 'animate-spin' : ''}`} />
                     Atualizar
                   </button>
-                </div>
+                    </div>
 
-                <div className="flex flex-wrap gap-2" aria-label="Filtrar histórico por canal">
+                    <div className="flex flex-wrap gap-2" aria-label="Filtrar histórico por canal">
                   {COMMUNICATION_CHANNELS.map(({ key, label, icon: Icon }) => {
                     const count = communicationHistory?.counts?.[key] ?? 0;
                     const active = communicationChannel === key;
@@ -552,6 +570,8 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                 <p className="text-[11px] text-brand-text-muted">
                   O WhatsApp registra template, status e datas de entrega; o conteúdo completo não é armazenado por segurança.
                 </p>
+                  </div>
+                )}
               </section>
 
               <Section icon={MessageCircle} title="WhatsApp e comunicação">

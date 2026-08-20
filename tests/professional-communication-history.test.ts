@@ -75,6 +75,10 @@ const migrationSource = readFileSync(resolve('supabase/migrations/20260820150000
 assert.match(serverSource, /\/api\/admin\/professionals\/:professionalId\/communications", requireAuth, requireAdmin/);
 assert.match(modalSource, /Histórico de comunicação/);
 assert.match(modalSource, /Todos os contatos registrados pela plataforma/i);
+assert.match(modalSource, /useState\(false\).*communicationExpanded|communicationExpanded.*useState\(false\)/s);
+assert.match(modalSource, /aria-expanded=\{communicationExpanded\}/);
+assert.match(modalSource, /setCommunicationExpanded\(false\)/);
+assert.match(modalSource, /\{communicationExpanded && \(/);
 assert.match(modalSource, /channel: communicationChannel/);
 assert.match(modalSource, /Página \{communicationHistory\.pagination\.page\}/);
 assert.doesNotMatch(modalSource, /request_payload|response_payload|wamid/);
