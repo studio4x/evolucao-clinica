@@ -6,15 +6,19 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock3,
   CreditCard,
   Database,
+  FileText,
   Loader2,
   Globe,
   History,
   Mail,
   MessageCircle,
   RefreshCw,
+  Sparkles,
   User,
+  Users,
   X,
   XCircle,
   type LucideIcon
@@ -30,6 +34,32 @@ type ProfessionalSummary = {
 type ProfessionalDetails = {
   professional: Record<string, any>;
   communicationPreferences: Record<string, any> | null;
+  onboardingEligibility: {
+    evaluatedAt: string;
+    blockedReason: string | null;
+    emails: Array<{
+      key: string;
+      subject: string;
+      campaignName: string;
+      stepPosition: number;
+      kind: 'sequence' | 'conditional';
+      status: 'eligible' | 'scheduled' | 'waiting';
+      scheduledFor: string | null;
+      reason: string;
+    }>;
+  };
+  clinicalMetrics: {
+    patientCount: number;
+    evolutionCount: number;
+    transcribedSeconds: number;
+    patients: Array<{
+      id: string;
+      name: string;
+      status: string | null;
+      evolutionCount: number;
+      transcribedSeconds: number;
+    }>;
+  };
   auth: {
     created_at: string | null;
     last_sign_in_at: string | null;
@@ -138,6 +168,27 @@ const statusPresentation = (status: string) => {
       ? 'bg-amber-50 text-amber-700 border-amber-200'
       : 'bg-emerald-50 text-emerald-700 border-emerald-200';
   return { label: labels[normalized] || status, className };
+};
+
+const formatTranscribedMinutes = (secondsValue: unknown) => {
+  const seconds = Number(secondsValue || 0);
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0 min';
+  const minutes = seconds / 60;
+  if (minutes < 1) return '< 1 min';
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(minutes)} min`;
+};
+
+const eligibilityPresentation = (status: 'eligible' | 'scheduled' | 'waiting') => {
+  if (status === 'scheduled') return { label: 'Agendado', className: 'border-sky-200 bg-sky-50 text-sky-700' };
+  if (status === 'waiting') return { label: 'Aguardando', className: 'border-amber-200 bg-amber-50 text-amber-700' };
+  return { label: 'Elegível agora', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' };
+};
+
+const patientStatusLabel = (status: string | null) => {
+  if (status === 'active') return 'Ativo';
+  if (status === 'inactive') return 'Inativo';
+  if (status === 'archived') return 'Arquivado';
+  return status || 'Sem status';
 };
 
 export default function ProfessionalDetailsModal({ professional, onClose }: Props) {
@@ -262,6 +313,105 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                 <Detail label="Status" value={p.status} />
                 <Detail label="Onboarding concluído" value={p.onboarding_completed} />
               </Section>
+
+              <section className="space-y-3" data-testid="professional-onboarding-eligibility">
+                <div className="border-b border-brand-border/40 pb-2">
+                  <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-primary">
+                    <Sparkles className="h-4 w-4" />
+                    Elegível para os e-mails
+                  </h4>
+                  <p className="mt-1 text-xs text-brand-text-muted">Modelos do onboarding que podem ser enviados conforme o estado atual do profissional.</p>
+                </div>
+
+                {details.onboardingEligibility.emails.length ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {details.onboardingEligibility.emails.map(email => {
+                      const presentation = eligibilityPresentation(email.status);
+                      return (
+                        <article key={email.key} className="rounded-2xl border border-brand-border/60 bg-brand-bg/20 p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-brand-primary">
+                              Passo {email.stepPosition} · {email.kind === 'conditional' ? 'Condicional' : 'Jornada'}
+                            </span>
+                            <span className={`rounded-full border px-2 py-1 text-[10px] font-bold ${presentation.className}`}>{presentation.label}</span>
+                          </div>
+                          <h5 className="mt-2 text-sm font-bold text-brand-text">{email.subject}</h5>
+                          <p className="mt-1 text-xs text-brand-text-muted">{email.campaignName} · {email.reason}</p>
+                          {email.scheduledFor && (
+                            <p className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-brand-text-muted">
+                              <Clock3 className="h-3.5 w-3.5" />
+                              {email.status === 'scheduled' ? 'Envio previsto' : 'Disponível a partir de'}: {dateValue(email.scheduledFor)}
+                            </p>
+                          )}
+                        </article>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-brand-border bg-brand-bg/20 p-4 text-sm text-brand-text-muted">
+                    {details.onboardingEligibility.blockedReason || 'Nenhum e-mail elegível neste momento.'}
+                  </div>
+                )}
+              </section>
+
+              <section className="space-y-3" data-testid="professional-clinical-metrics">
+                <div className="border-b border-brand-border/40 pb-2">
+                  <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-primary">
+                    <Users className="h-4 w-4" />
+                    Pacientes e uso clínico
+                  </h4>
+                  <p className="mt-1 text-xs text-brand-text-muted">Resumo dos pacientes, evoluções registradas e tempo efetivamente transcrito.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                    <Users className="h-5 w-5 text-sky-700" />
+                    <strong className="mt-2 block text-2xl text-sky-950">{details.clinicalMetrics.patientCount}</strong>
+                    <span className="text-xs font-semibold text-sky-700">Pacientes</span>
+                  </div>
+                  <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                    <FileText className="h-5 w-5 text-violet-700" />
+                    <strong className="mt-2 block text-2xl text-violet-950">{details.clinicalMetrics.evolutionCount}</strong>
+                    <span className="text-xs font-semibold text-violet-700">Evoluções</span>
+                  </div>
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <Clock3 className="h-5 w-5 text-emerald-700" />
+                    <strong className="mt-2 block text-2xl text-emerald-950">{formatTranscribedMinutes(details.clinicalMetrics.transcribedSeconds)}</strong>
+                    <span className="text-xs font-semibold text-emerald-700">Minutos transcritos</span>
+                  </div>
+                </div>
+
+                {details.clinicalMetrics.patients.length ? (
+                  <div className="max-h-72 overflow-auto rounded-2xl border border-brand-border/60">
+                    <table className="w-full min-w-[560px] text-left text-xs">
+                      <thead className="sticky top-0 bg-brand-bg text-[10px] uppercase tracking-wide text-brand-text-muted">
+                        <tr>
+                          <th className="px-4 py-3">Paciente</th>
+                          <th className="px-4 py-3 text-center">Evoluções</th>
+                          <th className="px-4 py-3 text-right">Áudio transcrito</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-border/50 bg-white">
+                        {details.clinicalMetrics.patients.map(patient => (
+                          <tr key={patient.id}>
+                            <td className="px-4 py-3">
+                              <strong className="block text-brand-text">{patient.name}</strong>
+                              <span className="text-[10px] text-brand-text-muted">{patientStatusLabel(patient.status)}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold text-brand-text">{patient.evolutionCount}</td>
+                            <td className="px-4 py-3 text-right font-semibold text-brand-text">{formatTranscribedMinutes(patient.transcribedSeconds)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-brand-border bg-brand-bg/20 p-4 text-sm text-brand-text-muted">
+                    Este profissional ainda não possui pacientes cadastrados.
+                  </div>
+                )}
+                <p className="text-[11px] text-brand-text-muted">O total usa os registros efetivos de transcrição; a distribuição por paciente considera os áudios vinculados às evoluções.</p>
+              </section>
 
               <section className="space-y-3">
                 <div className="flex flex-col gap-3 border-b border-brand-border/40 pb-3 sm:flex-row sm:items-end sm:justify-between">

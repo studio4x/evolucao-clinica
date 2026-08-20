@@ -78,6 +78,10 @@ import {
   getProfessionalCommunicationHistory,
   parseProfessionalCommunicationHistoryQuery
 } from "./server/admin/professionalCommunicationHistory.js";
+import {
+  getProfessionalClinicalMetrics,
+  getProfessionalOnboardingEligibility
+} from "./server/admin/professionalOverview.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -3570,10 +3574,23 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
       return res.status(404).json({ error: "Profissional não encontrado." });
     }
 
+    const professional = professionalResult.data;
+    const communicationPreferences = preferencesResult.data || null;
+    const [clinicalMetrics, onboardingEligibility] = await Promise.all([
+      getProfessionalClinicalMetrics(supabaseAdmin, professionalId),
+      getProfessionalOnboardingEligibility({
+        supabaseAdmin,
+        professionalId,
+        professionalStatus: String(professional.status || ""),
+        preferences: communicationPreferences
+      })
+    ]);
     const authUser = authResult.data?.user;
     return res.json({
-      professional: professionalResult.data,
-      communicationPreferences: preferencesResult.data || null,
+      professional,
+      communicationPreferences,
+      clinicalMetrics,
+      onboardingEligibility,
       auth: authUser ? {
         created_at: authUser.created_at || null,
         last_sign_in_at: authUser.last_sign_in_at || null,
