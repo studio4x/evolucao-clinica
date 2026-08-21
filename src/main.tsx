@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
+import AdminCampaignDispatch from './pages/AdminCampaignDispatch';
 import './index.css';
 import { APP_VERSION } from './components/layout/AppVersion';
 import { GrowthProfileGate } from './components/onboarding/GrowthProfileGate';
@@ -47,10 +48,17 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+const normalizedEntryPath = window.location.pathname.replace(/\/+$/, '') || '/';
+const isAdminCampaignDispatch = normalizedEntryPath === '/admin/captacao-disparos';
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <GrowthProfileGate>
-      <App />
-    </GrowthProfileGate>
+    {isAdminCampaignDispatch ? (
+      <AdminCampaignDispatch />
+    ) : (
+      <GrowthProfileGate>
+        <App />
+      </GrowthProfileGate>
+    )}
   </StrictMode>,
 );
