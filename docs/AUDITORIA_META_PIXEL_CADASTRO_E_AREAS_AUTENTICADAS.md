@@ -1,10 +1,14 @@
 # Auditoria técnica — Meta Pixel, cadastro e áreas autenticadas
 
-**Projeto:** Evolução Clínica  
-**Domínio:** `evolucaoclinica.app.br`  
-**Data da auditoria:** 21 de agosto de 2026  
-**Baseline do repositório oficial:** `main` — commit `9db4b30a49c3b07e1f264e376b7ca322582ef70a`  
-**Build analisada:** `v1.10.824` / aplicativo móvel `1.0.85`  
+**Projeto:** Evolução Clínica
+
+**Domínio:** `evolucaoclinica.app.br`
+
+**Data da auditoria:** 21 de agosto de 2026
+
+**Baseline do repositório oficial:** `main` — commit `9db4b30a49c3b07e1f264e376b7ca322582ef70a`
+
+**Build analisada:** `v1.10.824` / aplicativo móvel `1.0.85`
 **Natureza da análise:** exclusivamente técnica, sem afirmações jurídicas sobre LGPD ou conformidade.
 
 ## 1. Escopo e metodologia
