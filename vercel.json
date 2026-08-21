@@ -6,28 +6,92 @@
     }
   },
   "routes": [
-    { "src": "^/$", "dest": "/api/index.ts" },
-    { "src": "^/painel(?:/.*)?$", "dest": "/api/index.ts" },
-    { "src": "^/social-share-image\\.png$", "dest": "/api/index.ts" }
+    {
+      "src": "^/$",
+      "dest": "/api/index.ts"
+    },
+    {
+      "src": "^/painel(?:/.*)?$",
+      "dest": "/api/index.ts"
+    },
+    {
+      "src": "^/social-share-image\\.png$",
+      "dest": "/api/index.ts"
+    }
   ],
   "rewrites": [
-    { "source": "/sw.js", "destination": "/sw.js" },
-    { "source": "/.well-known/assetlinks.json", "destination": "/.well-known/assetlinks.json" },
-    { "source": "/manifest.webmanifest", "destination": "/api/manifest" },
-    { "source": "/icon-192x192.png", "destination": "/api/pwa-icon/192" },
-    { "source": "/icon-512x512.png", "destination": "/api/pwa-icon/512" },
-    { "source": "/icon-512x512-maskable.png", "destination": "/api/pwa-icon/maskable" },
-    { "source": "/apple-touch-icon.png", "destination": "/api/apple-touch-icon" },
-    { "source": "/favicon.png", "destination": "/api/favicon" },
-    { "source": "/favicon.ico", "destination": "/api/favicon" },
-    { "source": "/logo.svg", "destination": "/logo.svg" },
-    { "source": "/screenshot-1.png", "destination": "/screenshot-1.png" },
-    { "source": "/screenshot-2.png", "destination": "/screenshot-2.png" },
-    { "source": "/offline.html", "destination": "/offline.html" },
-    { "source": "/api/admin/campaign-dispatch", "destination": "/api/campaign-dispatch" },
-    { "source": "/api/(.*)", "destination": "/api/index.ts" },
-    { "source": "/share-target", "destination": "/api/share-target" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/sw.js",
+      "destination": "/sw.js"
+    },
+    {
+      "source": "/.well-known/assetlinks.json",
+      "destination": "/.well-known/assetlinks.json"
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "destination": "/api/manifest"
+    },
+    {
+      "source": "/icon-192x192.png",
+      "destination": "/api/pwa-icon/192"
+    },
+    {
+      "source": "/icon-512x512.png",
+      "destination": "/api/pwa-icon/512"
+    },
+    {
+      "source": "/icon-512x512-maskable.png",
+      "destination": "/api/pwa-icon/maskable"
+    },
+    {
+      "source": "/apple-touch-icon.png",
+      "destination": "/api/apple-touch-icon"
+    },
+    {
+      "source": "/favicon.png",
+      "destination": "/api/favicon"
+    },
+    {
+      "source": "/favicon.ico",
+      "destination": "/api/favicon"
+    },
+    {
+      "source": "/logo.svg",
+      "destination": "/logo.svg"
+    },
+    {
+      "source": "/screenshot-1.png",
+      "destination": "/screenshot-1.png"
+    },
+    {
+      "source": "/screenshot-2.png",
+      "destination": "/screenshot-2.png"
+    },
+    {
+      "source": "/offline.html",
+      "destination": "/offline.html"
+    },
+    {
+      "source": "/api/admin/campaign-dispatch",
+      "destination": "/api/campaign-dispatch"
+    },
+    {
+      "source": "/api/admin/campaign-dashboard",
+      "destination": "/api/campaign-dashboard"
+    },
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/index.ts"
+    },
+    {
+      "source": "/share-target",
+      "destination": "/api/share-target"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
@@ -58,42 +122,75 @@
     {
       "source": "/.well-known/assetlinks.json",
       "headers": [
-        { "key": "Content-Type", "value": "application/json" },
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
       ]
     },
     {
       "source": "/manifest.webmanifest",
       "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" },
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
       ]
     },
     {
       "source": "/icon-(.*).png",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=2592000, immutable" },
-        { "key": "Content-Type", "value": "image/png" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=2592000, immutable"
+        },
+        {
+          "key": "Content-Type",
+          "value": "image/png"
+        }
       ]
     },
     {
       "source": "/assets/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
       ]
     },
     {
       "source": "/index.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
-        { "key": "Pragma", "value": "no-cache" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        }
       ]
     }
   ]
