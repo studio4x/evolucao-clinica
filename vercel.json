@@ -24,7 +24,6 @@
     { "source": "/screenshot-1.png", "destination": "/screenshot-1.png" },
     { "source": "/screenshot-2.png", "destination": "/screenshot-2.png" },
     { "source": "/offline.html", "destination": "/offline.html" },
-    { "source": "/assets/(.*)", "destination": "/assets/$1" },
     { "source": "/api/admin/campaign-dispatch", "destination": "/api/campaign-dispatch" },
     { "source": "/api/(.*)", "destination": "/api/index.ts" },
     { "source": "/share-target", "destination": "/api/share-target" },
