@@ -47,6 +47,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 const MAX_STRING_LENGTH = 100;
 const DEFAULT_ATTRIBUTION_TIMEOUT_MS = 2_000;
 const DEFAULT_ATTRIBUTION_RETRY_DELAY_MS = 250;
+const DEFAULT_META_READY_TIMEOUT_MS = 5_000;
 const MARKETING_EVENT_NAMES = new Set(['begin_checkout']);
 const META_EXACT_ALLOWED_PATHS = new Set(['/', '/login', '/checkout', '/checkout/success', '/checkout/sucess']);
 const META_CONTROLLED_CHECKOUT_PATH = '/painel/subscription';
@@ -58,7 +59,7 @@ let ga4Loaded = false;
 let metaLoaded = false;
 let dynamicConfigLoaded = false;
 let dynamicConfig: { gtmId?: string; metaPixelId?: string } = {};
-let testConfig: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number } | null = null;
+let testConfig: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number; metaReadyTimeoutMs?: number } | null = null;
 let pendingUser: { id: string | null; properties: Record<string, string | null> } = { id: null, properties: {} };
 let lastMetaPageKey: string | null = null;
 
@@ -174,6 +175,16 @@ const initializeMeta = (allowControlledCheckout = false) => {
   metaLoaded = loadScriptOnce('https://connect.facebook.net/en_US/fbevents.js', 'analytics-meta-pixel') || Boolean(document.getElementById('analytics-meta-pixel'));
   return metaLoaded;
 };
+const waitForMetaPixelReady = async () => {
+  if (!isBrowser()) return false;
+  const timeoutMs = testConfig?.metaReadyTimeoutMs ?? DEFAULT_META_READY_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (typeof window.fbq?.callMethod === 'function') return true;
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
+  }
+  return false;
+};
 const grantMeta = () => { try { window.fbq?.('consent', 'grant'); } catch { /* the Pixel may not be loaded */ } };
 const revokeMeta = () => {
   try { window.fbq?.('consent', 'revoke'); } catch { /* the Pixel may not be loaded */ }
@@ -285,7 +296,7 @@ export const initAnalytics = () => {
   if (preferences) applyConsent(preferences, 'update');
   else { try { nativeBridge()?.setAnalyticsCollectionEnabled(false); clearNativeIdentity(); } catch { /* optional bridge */ } }
 };
-export const configureAnalyticsForTests = (config: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number } | null) => { testConfig = config; };
+export const configureAnalyticsForTests = (config: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number; metaReadyTimeoutMs?: number } | null) => { testConfig = config; };
 export const resetAnalyticsForTests = () => {
   initialized = false;
   gtmLoaded = false;
@@ -460,28 +471,37 @@ export const trackConfirmedMarketingPurchaseOnce = async (input: { transactionId
   }
   return emitted;
 };
-export const trackCompleteRegistrationOnce = async (eventId: string) => {
+const markCompleteRegistrationDelivered = (eventId: string) => {
+  const dedupeKey = `meta-complete-registration:${eventId}`;
+  sentDedupeKeys.add(dedupeKey);
+  try { window.localStorage.setItem(`analytics:dedupe:${dedupeKey}`, '1'); } catch { /* server delivery remains authoritative */ }
+};
+
+const emitCompleteRegistration = async (eventId: string, usePersistentDedupe: boolean) => {
   if (!isBrowser() || getConsentPreferences()?.marketing !== true || !isMetaPageContextAllowed() || !META_REGISTRATION_EVENT_ID_PATTERN.test(eventId)) return false;
   const dedupeKey = `meta-complete-registration:${eventId}`;
   if (sentDedupeKeys.has(dedupeKey)) return false;
-  try { if (window.localStorage.getItem(`analytics:dedupe:${dedupeKey}`) === '1') return false; } catch { /* server claim remains authoritative */ }
+  if (usePersistentDedupe) {
+    try { if (window.localStorage.getItem(`analytics:dedupe:${dedupeKey}`) === '1') return false; } catch { /* server delivery remains authoritative */ }
+  }
 
   await loadDynamicIds();
-  if (!initializeMeta()) return false;
+  if (!initializeMeta() || !await waitForMetaPixelReady() || !isMetaPageContextAllowed()) return false;
   try {
     grantMeta();
     window.fbq?.('track', 'CompleteRegistration', {
       content_name: 'Cadastro Evolução Clínica'
     }, { eventID: eventId });
-    sentDedupeKeys.add(dedupeKey);
-    try { window.localStorage.setItem(`analytics:dedupe:${dedupeKey}`, '1'); } catch { /* server claim remains authoritative */ }
+    if (usePersistentDedupe) markCompleteRegistrationDelivered(eventId);
     return true;
   } catch { return false; }
 };
+
+export const trackCompleteRegistrationOnce = async (eventId: string) => emitCompleteRegistration(eventId, true);
+
 export const trackConfirmedMetaRegistrationOnce = async (knownAccessToken?: string) => {
-  if (!isBrowser() || getConsentPreferences()?.marketing !== true || !isMetaPageContextAllowed()) return false;
-  await loadDynamicIds();
-  if (!initializeMeta()) return false;
+  const preferences = getConsentPreferences();
+  if (!isBrowser() || preferences?.marketing !== true || !isMetaPageContextAllowed()) return false;
   try {
     let accessToken = knownAccessToken;
     if (!accessToken) {
@@ -489,13 +509,42 @@ export const trackConfirmedMetaRegistrationOnce = async (knownAccessToken?: stri
       accessToken = (await supabase.auth.getSession()).data.session?.access_token;
     }
     if (!accessToken) return false;
-    const response = await fetch('/api/analytics/meta-registration/claim', {
+
+    const pendingResponse = await fetch('/api/analytics/meta-registration/pending', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` }
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        analyticsGranted: preferences.analytics,
+        marketingGranted: preferences.marketing
+      })
     });
-    if (!response.ok) return false;
-    const payload = await response.json() as { eventId?: unknown };
-    return typeof payload.eventId === 'string' ? trackCompleteRegistrationOnce(payload.eventId) : false;
+    if (!pendingResponse.ok) return false;
+    const pendingPayload = await pendingResponse.json() as { eventId?: unknown };
+    if (typeof pendingPayload.eventId !== 'string' || !META_REGISTRATION_EVENT_ID_PATTERN.test(pendingPayload.eventId)) return false;
+
+    const eventId = pendingPayload.eventId;
+    // The database is authoritative here. A retry intentionally ignores local
+    // dedupe and reuses the same Meta eventID if the previous acknowledgement
+    // was lost after fbq accepted the event.
+    sentDedupeKeys.delete(`meta-complete-registration:${eventId}`);
+    if (!await emitCompleteRegistration(eventId, false)) return false;
+
+    const completeResponse = await fetch('/api/analytics/meta-registration/complete', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ eventId })
+    });
+    if (!completeResponse.ok) return false;
+    const completePayload = await completeResponse.json() as { eventId?: unknown; status?: unknown };
+    if (completePayload.eventId !== eventId || completePayload.status !== 'delivered') return false;
+    markCompleteRegistrationDelivered(eventId);
+    return true;
   } catch { return false; }
 };
 export const trackStripeAndroidPurchaseOnce = (input: { transactionId: string; planName: string; amount: number; currency: string; paymentProvider: string; status: string; restored?: boolean }) => {

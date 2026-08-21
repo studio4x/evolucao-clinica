@@ -1243,23 +1243,30 @@ O fluxo é:
 ```text
 INSERT real em auth.users
   → trigger cria um marcador único
-  → cliente sincroniza o consentimento
-  → endpoint autenticado verifica Marketing no servidor
-  → RPC reivindica o marcador com UPDATE ... WHERE claimed_at IS NULL
-  → cliente em rota comercial limpa emite CompleteRegistration
+  → retorno OAuth permanece em /login com URL limpa
+  → SIGNED_IN e INITIAL_SESSION aguardam a mesma tentativa em voo
+  → endpoint autenticado persiste o consentimento e lê o marcador sem consumi-lo
+  → cliente aguarda o fbevents.js disponibilizar fbq.callMethod
+  → cliente em /login emite CompleteRegistration
+  → segundo endpoint confirma delivered_at no banco
+  → somente então a aplicação libera o redirecionamento para /onboarding
 ```
 
 A deduplicação possui três camadas:
 
 1. `user_id` é chave primária do marcador: existe apenas um registro por conta;
-2. a RPC atômica preenche `claimed_at` somente quando ainda é nulo: apenas uma aba/requisição vence;
-3. o navegador mantém uma chave persistente por `eventID` no `localStorage`, além da deduplicação em memória.
+2. `eventID` permanece estável em todo retry; se o `fbq` enviar e a confirmação HTTP se perder, a Meta pode deduplicar o reenvio pelo mesmo identificador;
+3. `delivered_at` só é preenchido pela RPC de conclusão depois que o Pixel real está carregado e o evento foi colocado no `fbq`; após a confirmação, memória e `localStorage` evitam novas tentativas no cliente.
+
+A migração complementar `20260821220000_make_meta_registration_delivery_retriable.sql` substitui a reivindicação destrutiva anterior por duas etapas: `get_pending_meta_registration_event` e `complete_meta_registration_event`. Registros já reivindicados pela versão anterior são preservados como entregues; registros ainda pendentes podem ser recuperados.
 
 O `eventID` é estável porque fica armazenado no banco e opaco porque contém 128 bits aleatórios, sem UUID do usuário. O mesmo valor poderá ser reutilizado futuramente em uma CAPI de cadastro. Nenhuma CAPI de `CompleteRegistration` foi adicionada nesta etapa.
 
 O evento envia somente `content_name`. Não envia nome, e-mail, telefone, especialidade, dados de paciente, conteúdo clínico ou onboarding.
 
 O `sign_up` temporal foi preservado exclusivamente para compatibilidade com Analytics legado. Ele não é roteado para Marketing e não decide o `CompleteRegistration`.
+
+O bloqueio de `/onboarding` permanece inalterado. O Pixel não é autorizado nessa página: a autenticação segura temporariamente a exposição da sessão ao roteador até finalizar a tentativa permitida em `/login`.
 
 ### 27.5 Preservações verificadas
 
@@ -1287,6 +1294,8 @@ onboarding_complete
 ### 27.6 Estado do banco remoto
 
 A migração foi aplicada ao projeto Supabase vinculado após `db push --dry-run`. A inspeção remota posterior confirmou `public.meta_registration_events` existente e com contagem estimada de zero linhas, coerente com a ausência intencional de backfill dos 11 profissionais existentes no momento da implantação.
+
+Após a falha observada no primeiro teste real, a migração recuperável `20260821220000_make_meta_registration_delivery_retriable.sql` também foi aplicada ao projeto vinculado. Um novo `db push --linked --dry-run` confirmou o banco remoto atualizado.
 
 ### 27.7 Validação manual no Meta Events Manager
 

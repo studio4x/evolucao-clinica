@@ -343,6 +343,7 @@ export default function App() {
   }, [siteConfig, assetSignature]);
   const pendingOnboardingNoticeRef = useRef<string | null>(null);
   const authSessionHandlingRef = useRef(false);
+  const metaRegistrationTrackingRef = useRef<{ userId: string; promise: Promise<boolean> } | null>(null);
 
   const clearSilentGoogleRefreshFlag = (userId?: string | null) => {
     if (typeof window === 'undefined' || !userId) return;
@@ -386,6 +387,28 @@ export default function App() {
   };
 
   useEffect(() => {
+    const trackMetaRegistrationBeforeAppAccess = (session: any) => {
+      const existing = metaRegistrationTrackingRef.current;
+      if (existing?.userId === session.user.id) return existing.promise;
+
+      const promise = (async () => {
+        if (sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
+        // This sync remains useful for all server-side analytics, but its result
+        // no longer gates registration: the pending endpoint persists the same
+        // preferences atomically before reading the marker.
+        await syncAnalyticsConsentForCurrentUser(session.user.id);
+        return trackConfirmedMetaRegistrationOnce(session.access_token);
+      })();
+
+      metaRegistrationTrackingRef.current = { userId: session.user.id, promise };
+      void promise.finally(() => {
+        if (metaRegistrationTrackingRef.current?.promise === promise) {
+          metaRegistrationTrackingRef.current = null;
+        }
+      });
+      return promise;
+    };
+
     const bootstrapProfessionalAccess = async (session: any) => {
       const response = await fetch('/api/onboarding/bootstrap', {
         method: 'POST',
@@ -676,10 +699,7 @@ export default function App() {
       try {
         const result = await supabase.auth.getSession();
         if (result.data.session) {
-          if (sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
-          if (await syncAnalyticsConsentForCurrentUser(result.data.session.user.id)) {
-            await trackConfirmedMetaRegistrationOnce(result.data.session.access_token);
-          }
+          await trackMetaRegistrationBeforeAppAccess(result.data.session);
         }
         await handleAuthSession(result.data.session);
       } catch (error) {
@@ -697,7 +717,6 @@ export default function App() {
       window.setTimeout(() => {
         void (async () => {
           if (session && _event === 'SIGNED_IN') {
-            if (sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
             const method = typeof session.user.app_metadata?.provider === 'string'
               ? session.user.app_metadata.provider
               : 'google';
@@ -710,9 +729,12 @@ export default function App() {
             if (Number.isFinite(createdAt) && Number.isFinite(signedInAt) && Math.abs(signedInAt - createdAt) < 5 * 60 * 1000) {
               trackEvent('sign_up', { method }, { dedupeKey: `sign_up:${session.user.id}` });
             }
-            if (await syncAnalyticsConsentForCurrentUser(session.user.id)) {
-              await trackConfirmedMetaRegistrationOnce(session.access_token);
-            }
+          }
+          // Supabase emits INITIAL_SESSION independently of getSession(). Both
+          // paths must await the same promise before handleAuthSession can expose
+          // the user and let /login redirect to the blocked /onboarding route.
+          if (session && (_event === 'SIGNED_IN' || _event === 'INITIAL_SESSION')) {
+            await trackMetaRegistrationBeforeAppAccess(session);
           }
           await handleAuthSession(session);
         })();

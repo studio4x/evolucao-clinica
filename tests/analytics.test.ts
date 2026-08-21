@@ -16,6 +16,10 @@ type NativeBridgeMock = {
   setAnalyticsCollectionEnabled(enabled: boolean): void;
 };
 
+type MetaPixelMock = ((...args: unknown[]) => void) & {
+  callMethod?: (...args: unknown[]) => void;
+};
+
 const scripts = new Map<string, { id: string; src: string; async: boolean }>();
 const listeners = new Map<string, Set<() => void>>();
 const storage = new MemoryStorage();
@@ -34,12 +38,13 @@ const windowMock = {
   },
   dataLayer: [] as unknown[],
   gtag: undefined as ((...args: unknown[]) => void) | undefined,
-  fbq: undefined as ((...args: unknown[]) => void) | undefined,
-  _fbq: undefined as ((...args: unknown[]) => void) | undefined,
+  fbq: undefined as MetaPixelMock | undefined,
+  _fbq: undefined as MetaPixelMock | undefined,
   NativeAnalyticsBridge: undefined as NativeBridgeMock | undefined,
   addEventListener(name: string, listener: () => void) { const set = listeners.get(name) ?? new Set<() => void>(); set.add(listener); listeners.set(name, set); },
   removeEventListener() {},
-  dispatchEvent(event: { type: string }) { listeners.get(event.type)?.forEach((listener) => listener()); return true; }
+  dispatchEvent(event: { type: string }) { listeners.get(event.type)?.forEach((listener) => listener()); return true; },
+  setTimeout(callback: () => void, delay: number) { return globalThis.setTimeout(callback, delay); }
 };
 const documentMock = {
   title: 'Teste',
@@ -53,7 +58,13 @@ const documentMock = {
 (globalThis as unknown as { CustomEvent: typeof CustomEvent }).CustomEvent = class { type: string; constructor(type: string) { this.type = type; } } as typeof CustomEvent;
 
 const analytics = await import('../src/services/analytics');
-const defaultConfig = { gtmId: 'GTM-TEST', gaMeasurementId: 'G-TEST', directGa4: false, metaPixelId: 'PIXEL-TEST', attributionTimeoutMs: 25 };
+const defaultConfig = { gtmId: 'GTM-TEST', gaMeasurementId: 'G-TEST', directGa4: false, metaPixelId: 'PIXEL-TEST', attributionTimeoutMs: 25, metaReadyTimeoutMs: 25 };
+
+function createFbqMock() {
+  const fbq = ((...args: unknown[]) => { fbqCalls.push(args); }) as MetaPixelMock;
+  fbq.callMethod = () => undefined;
+  return fbq;
+}
 
 function resetRuntime(config: typeof defaultConfig | Partial<typeof defaultConfig> = defaultConfig) {
   storage.clear();
@@ -61,7 +72,7 @@ function resetRuntime(config: typeof defaultConfig | Partial<typeof defaultConfi
   fbqCalls.length = 0;
   windowMock.dataLayer.length = 0;
   windowMock.gtag = undefined;
-  windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
+  windowMock.fbq = createFbqMock();
   windowMock._fbq = undefined;
   windowMock.location.pathname = '/';
   windowMock.location.search = '';
@@ -162,8 +173,70 @@ assert.deepEqual(registrationCall?.[3], { eventID: registrationEventId });
 assert.equal(await analytics.trackCompleteRegistrationOnce(registrationEventId), false, 'Strict Mode/repetição não pode duplicar cadastro');
 analytics.resetAnalyticsForTests();
 analytics.configureAnalyticsForTests(defaultConfig);
-windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
+windowMock.fbq = createFbqMock();
 assert.equal(await analytics.trackCompleteRegistrationOnce(registrationEventId), false, 'reload/nova inicialização respeita deduplicação persistente');
+
+resetRuntime();
+setRoute('/login');
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: true, marketing: true });
+const originalFetch = globalThis.fetch;
+const registrationRequests: Array<{ url: string; body: Record<string, unknown> | null }> = [];
+let registrationDelivered = false;
+globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+  const url = String(input);
+  const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : null;
+  registrationRequests.push({ url, body });
+  if (url.endsWith('/pending')) {
+    return new Response(JSON.stringify(registrationDelivered ? { eventId: null, status: 'not_pending' } : { eventId: registrationEventId, status: 'pending' }), { status: 200 });
+  }
+  assert.ok(url.endsWith('/complete'));
+  registrationDelivered = true;
+  return new Response(JSON.stringify({ eventId: registrationEventId, status: 'delivered' }), { status: 200 });
+}) as typeof fetch;
+
+const registrationTracksBeforeConfirmedFlow = fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'CompleteRegistration').length;
+assert.equal(await analytics.trackConfirmedMetaRegistrationOnce('access-token-test'), true, 'prepare → fbq pronto → complete confirma a entrega');
+assert.deepEqual(registrationRequests.map((request) => request.url), [
+  '/api/analytics/meta-registration/pending',
+  '/api/analytics/meta-registration/complete'
+]);
+assert.deepEqual(registrationRequests[0]?.body, { analyticsGranted: true, marketingGranted: true });
+assert.deepEqual(registrationRequests[1]?.body, { eventId: registrationEventId });
+assert.equal(
+  fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'CompleteRegistration').length,
+  registrationTracksBeforeConfirmedFlow + 1
+);
+assert.equal(await analytics.trackConfirmedMetaRegistrationOnce('access-token-test'), false, 'servidor entregue não retorna novo marcador');
+assert.equal(
+  fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'CompleteRegistration').length,
+  registrationTracksBeforeConfirmedFlow + 1
+);
+
+resetRuntime();
+setRoute('/login');
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+let completeAttempts = 0;
+globalThis.fetch = (async (input: string | URL | Request) => {
+  const url = String(input);
+  if (url.endsWith('/pending')) {
+    return new Response(JSON.stringify({ eventId: registrationEventId, status: 'pending' }), { status: 200 });
+  }
+  completeAttempts += 1;
+  return completeAttempts === 1
+    ? new Response('{}', { status: 503 })
+    : new Response(JSON.stringify({ eventId: registrationEventId, status: 'delivered' }), { status: 200 });
+}) as typeof fetch;
+assert.equal(await analytics.trackConfirmedMetaRegistrationOnce('access-token-test'), false, 'falha de acknowledgement mantém o marcador recuperável');
+assert.equal(await analytics.trackConfirmedMetaRegistrationOnce('access-token-test'), true, 'retry reutiliza o mesmo eventID e conclui no servidor');
+const retryRegistrationCalls = fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'CompleteRegistration');
+assert.equal(retryRegistrationCalls.length, 2, 'perda de acknowledgement pode reenviar para deduplicação por eventID');
+assert.deepEqual(retryRegistrationCalls.map((call) => call[3]), [
+  { eventID: registrationEventId },
+  { eventID: registrationEventId }
+]);
+globalThis.fetch = originalFetch;
 
 resetRuntime();
 setRoute('/painel/subscription');

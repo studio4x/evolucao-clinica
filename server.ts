@@ -21,7 +21,11 @@ import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js
 import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
-import { claimMetaRegistrationEvent } from "./server/analytics/metaRegistration.js";
+import {
+  completeMetaRegistrationEvent,
+  prepareMetaRegistrationEvent,
+  readPendingMetaRegistrationEvent
+} from "./server/analytics/metaRegistration.js";
 import {
   createWhatsAppClient,
   getWhatsAppConfigFromEnv,
@@ -1162,13 +1166,48 @@ async function requireAuth(req: any, res: any, next: any) {
   }
 }
 
-app.post("/api/analytics/meta-registration/claim", requireAuth, async (req: any, res) => {
+app.post("/api/analytics/meta-registration/pending", requireAuth, async (req: any, res) => {
   try {
-    const result = await claimMetaRegistrationEvent(supabaseAdmin, req.user.id);
+    const analyticsGranted = req.body?.analyticsGranted;
+    const marketingGranted = req.body?.marketingGranted;
+    if (typeof analyticsGranted !== "boolean" || typeof marketingGranted !== "boolean") {
+      return res.status(400).json({ error: "Preferencias de consentimento invalidas." });
+    }
+
+    const result = await prepareMetaRegistrationEvent(supabaseAdmin, req.user.id, {
+      analyticsGranted,
+      marketingGranted
+    });
     return res.json(result);
   } catch (error: any) {
-    console.error("[Analytics] Falha ao reivindicar conversao de cadastro Meta:", error?.message || error);
+    console.error("[Analytics] Falha ao preparar conversao de cadastro Meta:", error?.message || error);
     return res.status(500).json({ error: "Nao foi possivel confirmar a conversao de cadastro." });
+  }
+});
+
+// Compatibility for cached clients. Unlike the former implementation, this
+// route only reads the stable marker and never consumes it before Pixel send.
+app.post("/api/analytics/meta-registration/claim", requireAuth, async (req: any, res) => {
+  try {
+    const result = await readPendingMetaRegistrationEvent(supabaseAdmin, req.user.id);
+    return res.json(result);
+  } catch (error: any) {
+    console.error("[Analytics] Falha ao ler conversao de cadastro Meta:", error?.message || error);
+    return res.status(500).json({ error: "Nao foi possivel confirmar a conversao de cadastro." });
+  }
+});
+
+app.post("/api/analytics/meta-registration/complete", requireAuth, async (req: any, res) => {
+  try {
+    const eventId = typeof req.body?.eventId === "string" ? req.body.eventId : "";
+    const result = await completeMetaRegistrationEvent(supabaseAdmin, req.user.id, eventId);
+    return res.json(result);
+  } catch (error: any) {
+    const invalidEventId = error?.message === "Invalid Meta registration event id";
+    if (!invalidEventId) {
+      console.error("[Analytics] Falha ao concluir conversao de cadastro Meta:", error?.message || error);
+    }
+    return res.status(invalidEventId ? 400 : 500).json({ error: "Nao foi possivel concluir a conversao de cadastro." });
   }
 });
 
