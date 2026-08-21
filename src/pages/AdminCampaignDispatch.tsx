@@ -66,6 +66,9 @@ type DispatchStatusResult = {
   workflow_version?: string;
   selected?: number;
   processed?: number;
+  pending?: number;
+  progress_percent?: number;
+  current_row?: number;
   source_rows?: string;
   group_notice?: 'AGUARDANDO' | 'PENDENTE' | 'OK' | 'ERRO';
   group_http_status?: number;
@@ -201,15 +204,20 @@ export default function AdminCampaignDispatch() {
       }
     };
 
-    const firstPoll = window.setTimeout(() => void pollStatus(), 1200);
-    const timer = window.setInterval(() => void pollStatus(), 5000);
+    const pollIntervalMs = Math.min(
+      60_000,
+      Math.max(10_000, Number(result.poll_after_ms || 15_000))
+    );
+
+    const firstPoll = window.setTimeout(() => void pollStatus(), 1500);
+    const timer = window.setInterval(() => void pollStatus(), pollIntervalMs);
 
     return () => {
       cancelled = true;
       window.clearTimeout(firstPoll);
       window.clearInterval(timer);
     };
-  }, [accessToken, result?.request_id, statusResult?.complete]);
+  }, [accessToken, result?.poll_after_ms, result?.request_id, statusResult?.complete]);
 
   const selectedTemplate = useMemo(
     () => TEMPLATES.find((item) => item.value === template),
@@ -224,6 +232,34 @@ export default function AdminCampaignDispatch() {
   const groupNoticeError = statusResult?.group_notice === 'ERRO';
   const completeSuccess = currentStatus === 'CONCLUIDO';
   const terminalWithIssue = Boolean(statusResult?.complete && !completeSuccess);
+
+  const requestedTotal = Math.max(0, Number(result?.quantity || 0));
+  const selectedTotal = Math.max(0, Number(statusResult?.selected || 0));
+  const progressTotal = selectedTotal > 0 ? selectedTotal : requestedTotal;
+  const progressProcessed = Math.min(
+    progressTotal,
+    Math.max(0, Number(statusResult?.processed || 0))
+  );
+  const progressPending = Math.max(
+    0,
+    Number.isFinite(Number(statusResult?.pending))
+      ? Number(statusResult?.pending || 0)
+      : progressTotal - progressProcessed
+  );
+  const progressPercent = Math.min(
+    100,
+    Math.max(
+      0,
+      selectedTotal > 0 && Number.isFinite(Number(statusResult?.progress_percent))
+        ? Number(statusResult?.progress_percent || 0)
+        : progressTotal > 0
+          ? Math.round((progressProcessed / progressTotal) * 100)
+          : 0
+    )
+  );
+  const pollSeconds = Math.round(
+    Math.min(60_000, Math.max(10_000, Number(result?.poll_after_ms || 15_000))) / 1000
+  );
 
   const resetRun = () => {
     if (runActive) return;
@@ -281,6 +317,10 @@ export default function AdminCampaignDispatch() {
         message: 'Solicitação aceita. Aguardando o n8n registrar o início do processamento.',
         started: false,
         batch_completed: false,
+        selected: body.quantity || 0,
+        processed: 0,
+        pending: body.quantity || 0,
+        progress_percent: 0,
         group_notice: 'AGUARDANDO'
       });
       setDispatchStartedAt(Date.now());
@@ -367,7 +407,7 @@ export default function AdminCampaignDispatch() {
                 Processamento em tempo real
               </div>
               <p className="mt-1 text-xs text-brand-text-muted">
-                O andamento é atualizado automaticamente pelo `request_id` gravado em logs_execucao.
+                O andamento é atualizado automaticamente pelo request_id, logs_execucao e estado das linhas do lote.
               </p>
             </div>
             {result?.accepted ? (
@@ -431,6 +471,31 @@ export default function AdminCampaignDispatch() {
                 ))}
               </div>
 
+              <div className="rounded-2xl border border-brand-border bg-brand-bg/25 px-4 py-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-brand-text-muted">Progresso do lote</p>
+                    <p className="mt-1 text-lg font-bold text-brand-text">
+                      {progressProcessed} de {progressTotal || '-'} envios finalizados
+                    </p>
+                  </div>
+                  <div className="text-sm font-bold text-brand-primary">{progressPercent}%</div>
+                </div>
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${completeSuccess ? 'bg-emerald-500' : 'bg-brand-primary'}`}
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <div className="mt-2 flex flex-col gap-1 text-[11px] text-brand-text-muted sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    {progressPending > 0 ? `${progressPending} envio(s) ainda pendente(s)` : progressTotal > 0 ? 'Todos os contatos do lote foram processados' : 'Aguardando a seleção do lote'}
+                    {statusResult?.current_row && progressPending > 0 ? ` · próxima linha: ${statusResult.current_row}` : ''}
+                  </span>
+                  <span>Atualização aproximada a cada {pollSeconds}s</span>
+                </div>
+              </div>
+
               <div className={`rounded-2xl border px-4 py-4 ${
                 completeSuccess
                   ? 'border-emerald-200 bg-emerald-50'
@@ -453,13 +518,13 @@ export default function AdminCampaignDispatch() {
                     <div className="mt-2 grid gap-x-5 gap-y-1 text-xs text-brand-text-muted sm:grid-cols-2 lg:grid-cols-3">
                       <span><strong>Tempo:</strong> {formatElapsed(elapsedSeconds)}</span>
                       <span><strong>Máximo solicitado:</strong> {result.quantity ?? '-'}</span>
-                      <span><strong>Processados:</strong> {batchCompleted ? statusResult?.processed ?? 0 : 'em andamento'}</span>
+                      <span><strong>Processados:</strong> {progressProcessed} de {progressTotal || '-'}</span>
                       <span><strong>Versão:</strong> {statusResult?.workflow_version || result.workflow || 'aguardando'}</span>
                       <span><strong>Aviso:</strong> {statusResult?.group_notice || 'AGUARDANDO'}</span>
                       {statusResult?.group_http_status ? <span><strong>HTTP aviso:</strong> {statusResult.group_http_status}</span> : null}
                     </div>
                     {statusResult?.source_rows && (
-                      <p className="mt-2 text-xs text-brand-text-muted"><strong>Linhas processadas:</strong> {statusResult.source_rows}</p>
+                      <p className="mt-2 text-xs text-brand-text-muted"><strong>Linhas do lote:</strong> {statusResult.source_rows}</p>
                     )}
                     <p className="mt-2 break-all text-[11px] text-brand-text-muted"><strong>Solicitação:</strong> {result.request_id}</p>
                     {statusResult?.execution_id && (
@@ -472,7 +537,7 @@ export default function AdminCampaignDispatch() {
               {statusError && (
                 <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
                   <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{statusError} O lote não será reiniciado; a página apenas tentará consultar o status novamente.</span>
+                  <span>{statusError} O último progresso confirmado continua exibido e a página tentará consultar novamente sem reiniciar o lote.</span>
                 </div>
               )}
 
