@@ -1166,7 +1166,7 @@ async function requireAuth(req: any, res: any, next: any) {
   }
 }
 
-app.post("/api/analytics/meta-registration/pending", requireAuth, async (req: any, res) => {
+app.post("/api/analytics/meta-registration/pending", requireAuth, express.json({ limit: "1kb" }), async (req: any, res) => {
   try {
     const analyticsGranted = req.body?.analyticsGranted;
     const marketingGranted = req.body?.marketingGranted;
@@ -1197,7 +1197,7 @@ app.post("/api/analytics/meta-registration/claim", requireAuth, async (req: any,
   }
 });
 
-app.post("/api/analytics/meta-registration/complete", requireAuth, async (req: any, res) => {
+app.post("/api/analytics/meta-registration/complete", requireAuth, express.json({ limit: "1kb" }), async (req: any, res) => {
   try {
     const eventId = typeof req.body?.eventId === "string" ? req.body.eventId : "";
     const result = await completeMetaRegistrationEvent(supabaseAdmin, req.user.id, eventId);

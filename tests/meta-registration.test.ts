@@ -119,5 +119,7 @@ assert.match(appSource, /await trackMetaRegistrationBeforeAppAccess\(session\)[\
 assert.match(appSource, /metaRegistrationTrackingRef/, 'getSession e callback Auth compartilham a mesma tentativa em voo');
 assert.match(serverSource, /meta-registration\/pending/);
 assert.match(serverSource, /meta-registration\/complete/);
+assert.match(serverSource, /meta-registration\/pending", requireAuth, express\.json\(\{ limit: "1kb" \}\)/, 'pending interpreta JSON antes de validar as preferências');
+assert.match(serverSource, /meta-registration\/complete", requireAuth, express\.json\(\{ limit: "1kb" \}\)/, 'complete interpreta o eventID antes de concluir a entrega');
 
 console.log('Meta registration tests passed');
