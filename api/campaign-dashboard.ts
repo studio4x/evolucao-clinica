@@ -108,7 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       webhookUrl,
       internalToken,
       { action: 'dashboard_round2' },
-      30_000
+      55_000
     );
 
     if (!n8nResponse.ok) {
