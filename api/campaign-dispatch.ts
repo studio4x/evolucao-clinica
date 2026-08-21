@@ -17,6 +17,8 @@ const ALLOWED_TEMPLATES = new Set([
   'convite_jornada_evolucao_clinica'
 ]);
 
+const REQUEST_ID_PATTERN = /^[A-Za-z0-9-]{8,100}$/;
+
 const readBearerToken = (req: VercelRequest) => {
   const authorization = String(req.headers.authorization || '').trim();
   const match = authorization.match(/^Bearer\s+(.+)$/i);
@@ -42,11 +44,47 @@ const parseBody = (body: unknown): Record<string, unknown> => {
   return {};
 };
 
+const callN8n = async (
+  webhookUrl: string,
+  internalToken: string,
+  payload: Record<string, unknown>,
+  timeoutMs: number
+) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${internalToken}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    const rawResponse = await response.text();
+    let body: Record<string, unknown> = {};
+
+    try {
+      body = rawResponse ? JSON.parse(rawResponse) : {};
+    } catch {
+      body = {};
+    }
+
+    return { response, body };
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
 
-  if (req.method !== 'POST') {
-    res.setHeader('Allow', 'POST');
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    res.setHeader('Allow', 'GET, POST');
     return res.status(405).json({ ok: false, error: 'method_not_allowed' });
   }
 
@@ -89,6 +127,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ ok: false, error: 'admin_only' });
   }
 
+  const webhookUrl = String(process.env.EVOLUCAO_CLINICA_BATCH_DISPATCH_WEBHOOK_URL || '').trim();
+  const internalToken = String(process.env.EVOLUCAO_CLINICA_BATCH_DISPATCH_TOKEN || '').trim();
+
+  if (!webhookUrl || !internalToken) {
+    console.error('[CampaignDispatch] Webhook/token interno do n8n não configurado.');
+    return res.status(503).json({ ok: false, error: 'dispatch_integration_not_configured' });
+  }
+
+  if (req.method === 'GET') {
+    const requestId = String(req.query.request_id || '').trim();
+
+    if (!REQUEST_ID_PATTERN.test(requestId)) {
+      return res.status(400).json({ ok: false, error: 'invalid_request_id' });
+    }
+
+    try {
+      const { response: n8nResponse, body: n8nBody } = await callN8n(
+        webhookUrl,
+        internalToken,
+        {
+          action: 'status',
+          request_id: requestId
+        },
+        12_000
+      );
+
+      if (!n8nResponse.ok) {
+        console.error('[CampaignDispatch] n8n recusou consulta de status.', {
+          status: n8nResponse.status,
+          requestId
+        });
+        return res.status(502).json({
+          ok: false,
+          error: 'n8n_status_rejected',
+          request_id: requestId,
+          upstream_status: n8nResponse.status
+        });
+      }
+
+      return res.status(200).json(n8nBody);
+    } catch (error) {
+      const isAbort = error instanceof Error && error.name === 'AbortError';
+      console.error('[CampaignDispatch] Falha ao consultar status no n8n.', {
+        requestId,
+        error: isAbort ? 'timeout' : error instanceof Error ? error.message : 'unknown_error'
+      });
+      return res.status(502).json({
+        ok: false,
+        error: isAbort ? 'n8n_status_timeout' : 'n8n_status_unavailable',
+        request_id: requestId
+      });
+    }
+  }
+
   const payload = parseBody(req.body);
   const sheet = String(payload.sheet || '').trim();
   const template = String(payload.template || '').trim();
@@ -111,42 +203,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ ok: false, error: 'confirmation_required' });
   }
 
-  const webhookUrl = String(process.env.EVOLUCAO_CLINICA_BATCH_DISPATCH_WEBHOOK_URL || '').trim();
-  const internalToken = String(process.env.EVOLUCAO_CLINICA_BATCH_DISPATCH_TOKEN || '').trim();
-
-  if (!webhookUrl || !internalToken) {
-    console.error('[CampaignDispatch] Webhook/token interno do n8n não configurado.');
-    return res.status(503).json({ ok: false, error: 'dispatch_integration_not_configured' });
-  }
-
   const requestId = randomUUID();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15_000);
 
   try {
-    const n8nResponse = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${internalToken}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
+    const { response: n8nResponse, body: n8nBody } = await callN8n(
+      webhookUrl,
+      internalToken,
+      {
+        action: 'dispatch',
         request_id: requestId,
         aba_origem: sheet,
         max_disparos_lote: quantity,
         template_name: template
-      }),
-      signal: controller.signal
-    });
-
-    const rawResponse = await n8nResponse.text();
-    let n8nBody: Record<string, unknown> = {};
-    try {
-      n8nBody = rawResponse ? JSON.parse(rawResponse) : {};
-    } catch {
-      n8nBody = {};
-    }
+      },
+      15_000
+    );
 
     if (!n8nResponse.ok) {
       console.error('[CampaignDispatch] n8n recusou a solicitação.', {
@@ -168,7 +239,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sheet,
       quantity,
       template,
-      workflow: typeof n8nBody.workflow === 'string' ? n8nBody.workflow : undefined
+      workflow: typeof n8nBody.workflow === 'string' ? n8nBody.workflow : undefined,
+      poll_after_ms: 5000
     });
   } catch (error) {
     const isAbort = error instanceof Error && error.name === 'AbortError';
@@ -181,7 +253,5 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: isAbort ? 'n8n_timeout' : 'n8n_unavailable',
       request_id: requestId
     });
-  } finally {
-    clearTimeout(timeout);
   }
 }
