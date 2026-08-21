@@ -60,7 +60,7 @@ import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBounda
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
-import { getAnalyticsConsent, getCheckoutAttributionWithRetry, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackEvent, trackPageView } from './services/analytics';
+import { getAnalyticsConsent, getCheckoutAttributionWithRetry, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
@@ -124,6 +124,7 @@ function AnalyticsRouteObserver() {
 
   useEffect(() => {
     const sendPageView = () => {
+      refreshMarketingAnalyticsForCurrentRoute();
       if (getAnalyticsConsent() !== 'granted') {
         lastPageRef.current = null;
         return;
@@ -137,7 +138,7 @@ function AnalyticsRouteObserver() {
     sendPageView();
     window.addEventListener('analytics-consent-changed', sendPageView);
     return () => window.removeEventListener('analytics-consent-changed', sendPageView);
-  }, [location.pathname]);
+  }, [location.hash, location.pathname, location.search]);
 
   return null;
 }
@@ -287,6 +288,12 @@ export default function App() {
   useEffect(() => {
     clearLazyRetryQueryParam();
     captureAcquisitionData();
+    const cleanupMarketingUrlTimer = window.setTimeout(() => {
+      const pathname = window.location.pathname;
+      const isAcquisitionPage = pathname === '/' || pathname === '/jornada' || pathname.startsWith('/jornada/');
+      if (isAcquisitionPage && sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
+    }, 0);
+    return () => window.clearTimeout(cleanupMarketingUrlTimer);
   }, []);
 
   useEffect(() => {
@@ -668,6 +675,12 @@ export default function App() {
     const loadInitialSession = async () => {
       try {
         const result = await supabase.auth.getSession();
+        if (result.data.session) {
+          if (sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
+          if (await syncAnalyticsConsentForCurrentUser(result.data.session.user.id)) {
+            await trackConfirmedMetaRegistrationOnce(result.data.session.access_token);
+          }
+        }
         await handleAuthSession(result.data.session);
       } catch (error) {
         console.error('[Auth] Falha ao recuperar a sessão inicial:', error);
@@ -678,20 +691,32 @@ export default function App() {
     void loadInitialSession();
 
     // Escuta mudanças no Auth
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session && _event === 'SIGNED_IN') {
-        const method = typeof session.user.app_metadata?.provider === 'string'
-          ? session.user.app_metadata.provider
-          : 'google';
-        trackEvent('login', { method }, { dedupeKey: `login:${session.user.id}:${session.user.last_sign_in_at || 'session'}` });
-
-        const createdAt = new Date(session.user.created_at).getTime();
-        const signedInAt = new Date(session.user.last_sign_in_at || '').getTime();
-        if (Number.isFinite(createdAt) && Number.isFinite(signedInAt) && Math.abs(signedInAt - createdAt) < 5 * 60 * 1000) {
-          trackEvent('sign_up', { method }, { dedupeKey: `sign_up:${session.user.id}` });
-        }
-      }
-      handleAuthSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      // O callback do Auth retorna imediatamente; consultas adicionais são
+      // executadas fora do lock interno do cliente Supabase.
+      window.setTimeout(() => {
+        void (async () => {
+          if (session && _event === 'SIGNED_IN') {
+            if (sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
+            const method = typeof session.user.app_metadata?.provider === 'string'
+              ? session.user.app_metadata.provider
+              : 'google';
+            trackEvent('login', { method }, { dedupeKey: `login:${session.user.id}:${session.user.last_sign_in_at || 'session'}` });
+            // Compatibilidade exclusiva com o evento legado de Analytics. A Meta
+            // não usa esta heurística: CompleteRegistration depende do marcador
+            // transacional criado pelo trigger de auth.users.
+            const createdAt = new Date(session.user.created_at).getTime();
+            const signedInAt = new Date(session.user.last_sign_in_at || '').getTime();
+            if (Number.isFinite(createdAt) && Number.isFinite(signedInAt) && Math.abs(signedInAt - createdAt) < 5 * 60 * 1000) {
+              trackEvent('sign_up', { method }, { dedupeKey: `sign_up:${session.user.id}` });
+            }
+            if (await syncAnalyticsConsentForCurrentUser(session.user.id)) {
+              await trackConfirmedMetaRegistrationOnce(session.access_token);
+            }
+          }
+          await handleAuthSession(session);
+        })();
+      }, 0);
     });
 
     return () => {

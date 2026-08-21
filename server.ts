@@ -21,6 +21,7 @@ import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js
 import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
+import { claimMetaRegistrationEvent } from "./server/analytics/metaRegistration.js";
 import {
   createWhatsAppClient,
   getWhatsAppConfigFromEnv,
@@ -1160,6 +1161,16 @@ async function requireAuth(req: any, res: any, next: any) {
     return res.status(401).json({ error: err.message || "Erro de autenticacao" });
   }
 }
+
+app.post("/api/analytics/meta-registration/claim", requireAuth, async (req: any, res) => {
+  try {
+    const result = await claimMetaRegistrationEvent(supabaseAdmin, req.user.id);
+    return res.json(result);
+  } catch (error: any) {
+    console.error("[Analytics] Falha ao reivindicar conversao de cadastro Meta:", error?.message || error);
+    return res.status(500).json({ error: "Nao foi possivel confirmar a conversao de cadastro." });
+  }
+});
 
 async function requireAdmin(req: any, res: any, next: any) {
   try {

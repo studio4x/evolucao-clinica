@@ -112,7 +112,7 @@ export default function Login() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'login',
         currentGrantedScopes: [],
-        redirectTo: window.location.origin + '/painel',
+        redirectTo: window.location.origin + '/login',
         prompt: forcePrompt ? 'consent select_account' : undefined,
       });
       if (error) throw error;

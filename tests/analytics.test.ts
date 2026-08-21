@@ -22,6 +22,16 @@ const storage = new MemoryStorage();
 const fbqCalls: unknown[][] = [];
 const windowMock = {
   localStorage: storage,
+  location: { pathname: '/', search: '', hash: '' },
+  history: {
+    state: null,
+    replaceState(_state: unknown, _title: string, url: string) {
+      const parsed = new URL(url, 'https://evolucaoclinica.app.br');
+      windowMock.location.pathname = parsed.pathname;
+      windowMock.location.search = parsed.search;
+      windowMock.location.hash = parsed.hash;
+    }
+  },
   dataLayer: [] as unknown[],
   gtag: undefined as ((...args: unknown[]) => void) | undefined,
   fbq: undefined as ((...args: unknown[]) => void) | undefined,
@@ -53,10 +63,19 @@ function resetRuntime(config: typeof defaultConfig | Partial<typeof defaultConfi
   windowMock.gtag = undefined;
   windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
   windowMock._fbq = undefined;
+  windowMock.location.pathname = '/';
+  windowMock.location.search = '';
+  windowMock.location.hash = '';
   documentMock.cookie = '';
   delete windowMock.NativeAnalyticsBridge;
   analytics.resetAnalyticsForTests();
   analytics.configureAnalyticsForTests(config);
+}
+
+function setRoute(pathname: string, search = '', hash = '') {
+  windowMock.location.pathname = pathname;
+  windowMock.location.search = search;
+  windowMock.location.hash = hash;
 }
 
 function trackedDataLayerEvents() {
@@ -85,6 +104,92 @@ resetRuntime();
 analytics.initAnalytics();
 analytics.setConsentPreferences({ analytics: false, marketing: true });
 assert.equal(windowMock._fbq, windowMock.fbq, 'bootstrap do Meta deve manter fbq e _fbq na mesma versão');
+const autoConfigIndex = fbqCalls.findIndex((call) => call[0] === 'set' && call[1] === 'autoConfig');
+const initIndex = fbqCalls.findIndex((call) => call[0] === 'init');
+const pageViewIndex = fbqCalls.findIndex((call) => call[0] === 'track' && call[1] === 'PageView');
+assert.ok(autoConfigIndex >= 0 && autoConfigIndex < initIndex, 'autoConfig=false deve anteceder o init da Meta');
+assert.ok(initIndex < pageViewIndex, 'PageView dedicado deve ocorrer somente depois do init');
+assert.deepEqual(fbqCalls[autoConfigIndex], ['set', 'autoConfig', false, 'PIXEL-TEST']);
+
+for (const blockedPath of ['/painel/dashboard', '/admin/professionals', '/public/reports/550e8400-e29b-41d4-a716-446655440000']) {
+  resetRuntime();
+  setRoute(blockedPath);
+  analytics.initAnalytics();
+  analytics.setConsentPreferences({ analytics: false, marketing: true });
+  assert.equal(scripts.has('analytics-meta-pixel'), false, `Pixel não pode carregar em ${blockedPath}`);
+  assert.equal(fbqCalls.some((call) => call[0] === 'track' && call[1] === 'PageView'), false, `PageView Meta não pode ocorrer em ${blockedPath}`);
+}
+
+resetRuntime();
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+const pageViewsBeforeClinicalRoute = fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length;
+setRoute('/painel/patients/550e8400-e29b-41d4-a716-446655440000');
+analytics.refreshMarketingAnalyticsForCurrentRoute();
+assert.equal(fbqCalls.at(-1)?.[1], 'revoke', 'navegação SPA clínica deve revogar imediatamente a Meta');
+assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length, pageViewsBeforeClinicalRoute);
+setRoute('/');
+analytics.refreshMarketingAnalyticsForCurrentRoute();
+assert.ok(fbqCalls.some((call) => call[0] === 'consent' && call[1] === 'grant'), 'retorno à landing restaura Meta com consentimento persistido');
+assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length, pageViewsBeforeClinicalRoute + 1);
+
+resetRuntime();
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: false });
+setRoute('/painel/dashboard');
+analytics.refreshMarketingAnalyticsForCurrentRoute();
+setRoute('/');
+analytics.refreshMarketingAnalyticsForCurrentRoute();
+assert.equal(fbqCalls.some((call) => call[0] === 'consent' && call[1] === 'grant'), false, 'retorno à landing não concede Meta sem consentimento persistido');
+
+resetRuntime();
+setRoute('/login', '?code=oauth-secret&token=secret&session_id=cs_test&patient_id=550e8400-e29b-41d4-a716-446655440000', '#access_token=secret');
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+assert.equal(fbqCalls.some((call) => call[0] === 'track' && call[1] === 'PageView'), false, 'URL com query/hash não pode gerar PageView');
+assert.equal(analytics.sanitizeCurrentMarketingUrl(), true);
+analytics.refreshMarketingAnalyticsForCurrentRoute();
+assert.deepEqual(windowMock.location, { pathname: '/login', search: '', hash: '' });
+assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length, 1);
+assert.equal(JSON.stringify(fbqCalls).includes('oauth-secret'), false, 'code/token nunca podem entrar em fbq');
+assert.equal(JSON.stringify(fbqCalls).includes('550e8400-e29b-41d4-a716-446655440000'), false, 'UUID nunca pode entrar em fbq');
+
+const registrationEventId = 'registration-0123456789abcdef0123456789abcdef';
+assert.equal(await analytics.trackCompleteRegistrationOnce(registrationEventId), true, 'cadastro confirmado deve emitir CompleteRegistration');
+const registrationCall = fbqCalls.find((call) => call[0] === 'track' && call[1] === 'CompleteRegistration');
+assert.deepEqual(registrationCall?.[2], { content_name: 'Cadastro Evolução Clínica' });
+assert.deepEqual(registrationCall?.[3], { eventID: registrationEventId });
+assert.equal(await analytics.trackCompleteRegistrationOnce(registrationEventId), false, 'Strict Mode/repetição não pode duplicar cadastro');
+analytics.resetAnalyticsForTests();
+analytics.configureAnalyticsForTests(defaultConfig);
+windowMock.fbq = (...args: unknown[]) => { fbqCalls.push(args); };
+assert.equal(await analytics.trackCompleteRegistrationOnce(registrationEventId), false, 'reload/nova inicialização respeita deduplicação persistente');
+
+resetRuntime();
+setRoute('/painel/subscription');
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'controlled-subscription'), true, 'assinatura pode emitir apenas InitiateCheckout explícito');
+assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length, 0, 'assinatura autenticada nunca emite PageView Meta');
+assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'InitiateCheckout').length, 1);
+assert.equal(fbqCalls.at(-1)?.[1], 'revoke', 'Meta volta ao estado revogado após o checkout explícito autenticado');
+
+resetRuntime();
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+const metaTracksBeforeClinicalEvents = fbqCalls.filter((call) => call[0] === 'track').length;
+for (const clinicalEvent of [
+  'patient_created',
+  'evolution_started',
+  'evolution_completed',
+  'audio_evolution_completed',
+  'professional_profile_complete',
+  'onboarding_begin',
+  'onboarding_complete'
+]) {
+  assert.equal(analytics.trackEvent(clinicalEvent), false, `${clinicalEvent} nunca pode ser Marketing`);
+}
+assert.equal(fbqCalls.filter((call) => call[0] === 'track').length, metaTracksBeforeClinicalEvents, 'nenhum evento clínico chega ao fbq');
 
 for (const [index, expectation] of consentMatrix.entries()) {
   resetRuntime();

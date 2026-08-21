@@ -11,6 +11,8 @@
 **Build analisada:** `v1.10.824` / aplicativo móvel `1.0.85`
 **Natureza da análise:** exclusivamente técnica, sem afirmações jurídicas sobre LGPD ou conformidade.
 
+> **Nota de atualização:** as seções 1 a 26 registram o estado encontrado antes da correção. A implementação aprovada está documentada na seção 27 e passa a ser o estado técnico atual a partir da build `v1.10.825`.
+
 ## 1. Escopo e metodologia
 
 Este documento consolida duas auditorias complementares:
@@ -1149,3 +1151,157 @@ Meta CAPI de cadastro: ❌ inexistente
 Meta CAPI de compra: ✅ implementada no código, operação externa não confirmada
 Recomendação: allowlist comercial + bloqueio de /painel, /admin e relatórios públicos
 ```
+
+## 27. Atualização pós-auditoria — implementação aprovada
+
+**Build:** `v1.10.825` / aplicativo móvel `1.0.85`
+
+**Data:** 21 de agosto de 2026
+
+### 27.1 Estado implementado
+
+A política Meta passou a ser `deny-by-default`. O Pixel direto só pode gerar `PageView` quando as três condições são verdadeiras ao mesmo tempo:
+
+```text
+consentimento persistido de Marketing
++ rota presente na allowlist
++ URL sem query string e sem hash
+```
+
+Allowlist efetiva:
+
+```text
+/
+/login
+/jornada
+/jornada/*
+/checkout
+/checkout/success
+/checkout/sucess
+```
+
+Qualquer outra rota é bloqueada, inclusive:
+
+```text
+/onboarding
+/painel/*
+/admin/*
+/public/reports/*
+/jornada-15-dias
+qualquer rota comercial ainda contendo query string ou hash
+```
+
+`/painel/subscription` não gera `PageView`. Quando o usuário efetivamente inicia o checkout, apenas a chamada explícita `InitiateCheckout` é permitida e o consentimento Meta volta imediatamente ao estado revogado nessa rota.
+
+### 27.2 Inicialização, navegação SPA e GTM
+
+`initializeMeta()` não dispara mais `PageView`. A ordem do bootstrap direto é:
+
+```javascript
+fbq('consent', 'grant')
+fbq('set', 'autoConfig', false, pixelId)
+fbq('init', pixelId)
+```
+
+O `PageView` passou para uma operação dedicada que valida consentimento, rota e URL limpa. O observador do React Router contempla mudanças de `pathname`, `search` e `hash`.
+
+Na transição comercial → clínica:
+
+```javascript
+fbq('consent', 'revoke')
+```
+
+No retorno clínica → comercial, `grant` só ocorre se o consentimento de Marketing continuar persistido. O Google Consent Mode também mantém `ad_storage`, `ad_user_data` e `ad_personalization` como `denied` fora da allowlist. O GTM não recebeu nenhuma tag Meta nova; a fonte de verdade da Meta continua sendo `src/services/analytics.ts`.
+
+### 27.3 Proteção de URL
+
+O Pixel fica bloqueado enquanto houver qualquer query string ou hash. A limpeza usa `history.replaceState` somente depois da leitura necessária:
+
+- Landing e jornada: aquisição (`utm_*`, `gclid`, `fbclid`) é capturada antes da limpeza;
+- OAuth: o retorno passou a ser `/login`; o `code` só é removido depois de o Supabase confirmar `SIGNED_IN`;
+- checkout/sucesso: `session_id`, plano e provedor são lidos antes da limpeza.
+
+Assim, `code`, `session_id`, tokens, UUIDs, query string e hash não são usados em nenhuma chamada `fbq`.
+
+### 27.4 `CompleteRegistration` transacional
+
+O evento implementado é:
+
+```javascript
+fbq(
+  'track',
+  'CompleteRegistration',
+  { content_name: 'Cadastro Evolução Clínica' },
+  { eventID: 'registration-<32 caracteres hexadecimais aleatórios>' }
+)
+```
+
+A confirmação de conta nova não usa a heurística de cinco minutos. A migração `20260821180000_create_meta_registration_events.sql` cria um marcador no mesmo evento transacional `AFTER INSERT` de `auth.users`. Não há backfill de usuários existentes.
+
+O fluxo é:
+
+```text
+INSERT real em auth.users
+  → trigger cria um marcador único
+  → cliente sincroniza o consentimento
+  → endpoint autenticado verifica Marketing no servidor
+  → RPC reivindica o marcador com UPDATE ... WHERE claimed_at IS NULL
+  → cliente em rota comercial limpa emite CompleteRegistration
+```
+
+A deduplicação possui três camadas:
+
+1. `user_id` é chave primária do marcador: existe apenas um registro por conta;
+2. a RPC atômica preenche `claimed_at` somente quando ainda é nulo: apenas uma aba/requisição vence;
+3. o navegador mantém uma chave persistente por `eventID` no `localStorage`, além da deduplicação em memória.
+
+O `eventID` é estável porque fica armazenado no banco e opaco porque contém 128 bits aleatórios, sem UUID do usuário. O mesmo valor poderá ser reutilizado futuramente em uma CAPI de cadastro. Nenhuma CAPI de `CompleteRegistration` foi adicionada nesta etapa.
+
+O evento envia somente `content_name`. Não envia nome, e-mail, telefone, especialidade, dados de paciente, conteúdo clínico ou onboarding.
+
+O `sign_up` temporal foi preservado exclusivamente para compatibilidade com Analytics legado. Ele não é roteado para Marketing e não decide o `CompleteRegistration`.
+
+### 27.5 Preservações verificadas
+
+Permanecem intactos:
+
+- `InitiateCheckout` explícito;
+- `Purchase` direto após confirmação;
+- Meta CAPI de `Purchase` e sua deduplicação;
+- GA4, Google Ads e Firebase;
+- captura e persistência de UTM, `fbclid` e `gclid`;
+- bloqueio de eventos clínicos no destino Marketing.
+
+Os eventos abaixo possuem teste explícito garantindo que não chegam a `fbq`:
+
+```text
+patient_created
+evolution_started
+evolution_completed
+audio_evolution_completed
+professional_profile_complete
+onboarding_begin
+onboarding_complete
+```
+
+### 27.6 Estado do banco remoto
+
+A migração foi aplicada ao projeto Supabase vinculado após `db push --dry-run`. A inspeção remota posterior confirmou `public.meta_registration_events` existente e com contagem estimada de zero linhas, coerente com a ausência intencional de backfill dos 11 profissionais existentes no momento da implantação.
+
+### 27.7 Validação manual no Meta Events Manager
+
+1. Abra **Gerenciador de Eventos → fonte de dados do domínio → Testar eventos**.
+2. Use um navegador/perfil limpo e aceite Marketing na Landing Page.
+3. Informe a URL da Landing no teste e confirme exatamente um `PageView`, sem query/hash nos detalhes.
+4. Navegue para `/login` e confirme o `PageView` permitido.
+5. Crie uma conta Google realmente nova; não reutilize uma conta que já entrou no sistema.
+6. Após o retorno OAuth, confirme um único `CompleteRegistration` com apenas `content_name = Cadastro Evolução Clínica` e um `event_id` no formato `registration-` seguido de 32 caracteres hexadecimais.
+7. Atualize a página, abra outra aba e faça novo login com a mesma conta; confirme que não surge outro `CompleteRegistration`.
+8. Acesse `/painel/dashboard`, pacientes, prontuário/evoluções, gravações, transcrições, documentos, perfil e `/admin`; confirme ausência de `PageView` e de eventos Meta.
+9. Teste diretamente `/public/reports/<id>`; confirme ausência de Pixel/PageView.
+10. Em `/painel/subscription`, confirme ausência de `PageView`; clique para iniciar o checkout e confirme um único `InitiateCheckout`.
+11. Conclua um pagamento de teste e confirme `Purchase` somente após a confirmação do provedor. Confira a deduplicação Pixel/CAPI pelo mesmo `event_id` de compra já existente.
+12. Repita um retorno com `code`, `session_id` ou parâmetros UTM e verifique no Pixel Helper/Network que esses valores não aparecem na requisição Meta.
+13. Em **Configurações** da fonte, revise se a ferramenta de configuração automática de eventos não criou regras externas conflitantes. Não crie tag Meta no GTM.
+
+Esta validação no painel é necessária para comprovar recebimento real; os testes de repositório comprovam as barreiras de código, mas não substituem a observação da fonte de dados da Meta.

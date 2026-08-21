@@ -8,7 +8,7 @@ import { getOnboardingDestination } from '../utils/onboarding';
 import { supabase } from '../supabaseClient';
 import { BillingConfirmationError, addNativeBillingListener, getConfirmedGooglePlayTransaction, getConfirmedStripeTransaction, hasNativeBillingBridge, waitForConfirmedSubscription } from '../services/billing';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
-import { trackConfirmedMarketingPurchaseOnce } from '../services/analytics';
+import { refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, trackConfirmedMarketingPurchaseOnce } from '../services/analytics';
 
 const formatRenewalDate = (dateStr: string) => {
   try {
@@ -64,6 +64,12 @@ export default function SuccessPage() {
   const checkoutSessionId = query.get('session_id');
   const queryPlanId = query.get('plan') === 'yearly' ? 'yearly' : 'monthly';
   const queryProvider = query.get('provider') === 'google_play' ? 'google_play' : checkoutSessionId ? 'stripe' : null;
+
+  useEffect(() => {
+    // Os identificadores do retorno já foram lidos acima. A URL precisa ficar
+    // limpa antes que PageView ou Purchase sejam liberados para a Meta.
+    if (sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
+  }, []);
 
   useEffect(() => {
     if (initialState && !initialState.pendingConfirmation) {
