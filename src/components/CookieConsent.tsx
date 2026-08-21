@@ -1,9 +1,28 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Check, Cookie, ExternalLink, Shield } from 'lucide-react';
 import { getConsentPreferences, setConsentPreferences } from '../services/analytics';
 
+const PUBLIC_PRIVACY_WIDGET_EXACT_PATHS = new Set([
+  '/',
+  '/login',
+  '/privacy',
+  '/terms',
+  '/delete-account',
+  '/descadastro',
+  '/feedback/continuidade',
+  '/reativar-teste',
+  '/jornada-15-dias'
+]);
+
+export const isPublicPrivacyWidgetPath = (pathname: string) => (
+  PUBLIC_PRIVACY_WIDGET_EXACT_PATHS.has(pathname)
+  || pathname === '/jornada'
+  || pathname.startsWith('/jornada/')
+);
+
 export const CookieConsent = () => {
+  const location = useLocation();
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
@@ -73,9 +92,11 @@ export const CookieConsent = () => {
 
   if (!ready) return null;
 
+  const showFloatingPrivacyWidget = isPublicPrivacyWidgetPath(location.pathname);
+
   return (
     <>
-      {!visible && (
+      {!visible && showFloatingPrivacyWidget && (
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event('cookie-consent-open'))}

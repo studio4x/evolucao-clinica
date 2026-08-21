@@ -173,7 +173,7 @@ export default function PrivacyPolicy() {
             </p>
             <p>
               Analytics e Marketing permanecem desativados até uma escolha afirmativa. Você pode aceitar uma categoria e negar a outra, ou revogar
-              qualquer uma a qualquer momento pelo botão flutuante <strong>Privacidade e cookies</strong> ou, na página <strong>Sobre o app</strong>, pela opção <strong>Preferências de privacidade</strong>.
+              qualquer uma a qualquer momento pelo botão flutuante <strong>Privacidade e cookies</strong> nas páginas públicas do site ou, dentro do painel, na página <strong>Sobre o app</strong>, pela opção <strong>Preferências de privacidade</strong>.
               A revogação interrompe novos envios opcionais;
               ela não desfaz tratamentos anteriores realizados legitimamente. Os provedores aplicáveis incluem Google/Firebase e, condicionalmente,
               Meta, além de Supabase, Stripe e Google Play nas operações essenciais do serviço.
