@@ -150,7 +150,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           action: 'status',
           request_id: requestId
         },
-        12_000
+        25_000
       );
 
       if (!n8nResponse.ok) {
@@ -232,6 +232,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    const upstreamPollAfterMs = Number(n8nBody.poll_after_ms);
+    const pollAfterMs = Number.isFinite(upstreamPollAfterMs)
+      ? Math.min(60_000, Math.max(10_000, Math.round(upstreamPollAfterMs)))
+      : 15_000;
+
     return res.status(202).json({
       ok: true,
       accepted: true,
@@ -240,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       quantity,
       template,
       workflow: typeof n8nBody.workflow === 'string' ? n8nBody.workflow : undefined,
-      poll_after_ms: 5000
+      poll_after_ms: pollAfterMs
     });
   } catch (error) {
     const isAbort = error instanceof Error && error.name === 'AbortError';
