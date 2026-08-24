@@ -1,18 +1,18 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
   BarChart3,
   CheckCircle2,
-  Clock3,
+  ExternalLink,
   FileSpreadsheet,
-  Filter,
   Loader2,
   MessageCircleReply,
   RefreshCw,
   Send,
   ShieldCheck,
+  Trophy,
   Users,
   UserRoundCheck
 } from 'lucide-react';
@@ -37,23 +37,50 @@ type VariantMetric = {
   maturity: string;
 };
 
-type DashboardContact = {
-  source_row: number;
-  name: string;
-  phone_masked: string;
-  confidence: string;
-  group_count: number;
-  variant: 'A' | 'B';
+type FollowupVariantMetric = {
   template: string;
-  dispatch_status: string;
-  meta_status: string;
-  response: string;
-  label: string;
-  current_group_status: string;
-  sent_at: string;
-  response_at: string;
-  attempts: number;
-  status_category: string;
+  sent: number;
+  entered_group: number;
+  conversion_rate: number;
+};
+
+type FollowupPayload = {
+  available: boolean;
+  scope: string;
+  queue: {
+    no_response: number;
+    group_reminder: number;
+    no_registration: number;
+    total: number;
+    due_total: number;
+    waiting_deadline: number;
+    due_no_response: number;
+    due_group_reminder: number;
+    due_no_registration: number;
+  };
+  conversion: {
+    entered_after_no_response: number;
+    entered_after_group_reminder: number;
+    entered_after_any: number;
+    received_pre_group: number;
+    conversion_rate: number;
+    current_members: number;
+    direct_entries: number;
+  };
+  ab: {
+    no_response: {
+      A: FollowupVariantMetric;
+      B: FollowupVariantMetric;
+    };
+    group_reminder: {
+      A: FollowupVariantMetric;
+      B: FollowupVariantMetric;
+    };
+    registration: {
+      template: string;
+      sent: number;
+    };
+  };
 };
 
 type DashboardPayload = {
@@ -66,6 +93,7 @@ type DashboardPayload = {
   workflow?: string;
   updated_at?: string;
   sample_size?: number;
+  contacts_sheet_url?: string;
   overall?: {
     planned: number;
     processed: number;
@@ -92,18 +120,14 @@ type DashboardPayload = {
   }>;
   decision?: {
     final: boolean;
-    text: string;
-    sample_status: string;
-    reason: string;
+    status?: string;
+    winner?: string;
+    winner_template?: string;
+    closed_at_label?: string;
+    criterion?: string;
+    reason?: string;
   };
-  maturation?: {
-    window_hours: number;
-    last_send_at: string;
-    closes_at: string;
-    mature: boolean;
-    remaining_minutes: number;
-  };
-  contacts?: DashboardContact[];
+  followups?: FollowupPayload;
 };
 
 const errorLabels: Record<string, string> = {
@@ -122,7 +146,12 @@ const errorLabels: Record<string, string> = {
 
 const templateLabels: Record<string, string> = {
   convite_jornada_ec_15dias_v1: 'A — Jornada 15 dias',
-  convite_jornada_ec_organizacao_v2: 'B — Organização v2'
+  convite_jornada_ec_organizacao_v2: 'B — Organização v2',
+  followup_jornada_sem_resposta_v1: 'Sem resposta v1',
+  followup_jornada_sem_resposta_v2: 'Sem resposta v2',
+  followup_jornada_lembrete_grupo_v1: 'Lembrete de grupo v1',
+  followup_jornada_lembrete_grupo_v2: 'Lembrete de grupo v2',
+  followup_jornada_sem_cadastro_v1: 'Sem cadastro v1'
 };
 
 const formatPercent = (value: number | undefined) =>
@@ -140,48 +169,6 @@ const formatDateTime = (value?: string) => {
     timeStyle: 'short',
     timeZone: 'America/Sao_Paulo'
   }).format(date);
-};
-
-const formatRemaining = (minutes: number) => {
-  if (minutes <= 0) return 'Janela concluída';
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  if (hours >= 24) {
-    const days = Math.floor(hours / 24);
-    const restHours = hours % 24;
-    return `${days}d ${restHours}h`;
-  }
-  return `${hours}h ${mins}min`;
-};
-
-const statusLabel = (status: string) => {
-  const labels: Record<string, string> = {
-    ENTREGUE: 'Entregue',
-    AGUARDANDO_META: 'Aguardando Meta',
-    FALHA: 'Falha',
-    INTERESSADO: 'Interessado',
-    SEM_INTERESSE: 'Sem interesse',
-    MEMBRO: 'No grupo',
-    ENVIADO: 'Enviado',
-    PENDENTE: 'Pendente'
-  };
-  return labels[status] || status || '—';
-};
-
-const statusBadgeClass = (status: string) => {
-  if (status === 'MEMBRO' || status === 'INTERESSADO' || status === 'ENTREGUE') {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-800';
-  }
-  if (status === 'FALHA') {
-    return 'border-red-200 bg-red-50 text-red-800';
-  }
-  if (status === 'AGUARDANDO_META') {
-    return 'border-amber-200 bg-amber-50 text-amber-800';
-  }
-  if (status === 'SEM_INTERESSE') {
-    return 'border-slate-200 bg-slate-100 text-slate-700';
-  }
-  return 'border-brand-border bg-brand-bg text-brand-text-muted';
 };
 
 function MetricCard({
@@ -207,10 +194,18 @@ function MetricCard({
   );
 }
 
-function VariantCard({ metric }: { metric: VariantMetric }) {
+function VariantCard({
+  metric,
+  winner
+}: {
+  metric: VariantMetric;
+  winner?: string;
+}) {
   const isA = metric.variant === 'A';
+  const isWinner = winner === metric.variant;
+
   return (
-    <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
+    <section className={`rounded-3xl border bg-white p-5 shadow-sm ${isWinner ? 'border-emerald-300 ring-1 ring-emerald-100' : 'border-brand-border'}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-center gap-2">
           <span className={`inline-flex h-8 w-8 items-center justify-center rounded-xl text-sm font-black ${isA ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
@@ -221,9 +216,15 @@ function VariantCard({ metric }: { metric: VariantMetric }) {
             <p className="text-xs text-brand-text-muted">{templateLabels[metric.template] || metric.template}</p>
           </div>
         </div>
-        <span className="self-start rounded-full border border-brand-border bg-brand-bg px-3 py-1 text-xs font-bold text-brand-text-muted">
-          {metric.maturity || 'AMOSTRA'}
-        </span>
+        {isWinner ? (
+          <span className="inline-flex items-center gap-1.5 self-start rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">
+            <Trophy className="h-3.5 w-3.5" /> Vencedora
+          </span>
+        ) : (
+          <span className="self-start rounded-full border border-brand-border bg-brand-bg px-3 py-1 text-xs font-bold text-brand-text-muted">
+            {metric.maturity || 'AMOSTRA'}
+          </span>
+        )}
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-5">
@@ -257,6 +258,54 @@ function VariantCard({ metric }: { metric: VariantMetric }) {
   );
 }
 
+function FollowupABCard({
+  title,
+  A,
+  B
+}: {
+  title: string;
+  A: FollowupVariantMetric;
+  B: FollowupVariantMetric;
+}) {
+  const totalSent = Number(A.sent || 0) + Number(B.sent || 0);
+
+  return (
+    <div className="rounded-2xl border border-brand-border bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="font-bold text-brand-text">{title}</h3>
+          <p className="mt-1 text-xs text-brand-text-muted">Comparação por template persistido no workflow.</p>
+        </div>
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold ${totalSent >= 20 ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+          {totalSent >= 20 ? 'Em análise' : 'Amostra inicial'}
+        </span>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {[
+          ['A', A],
+          ['B', B]
+        ].map(([variant, metric]) => {
+          const item = metric as FollowupVariantMetric;
+          return (
+            <div key={String(variant)} className="rounded-xl bg-brand-bg p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-black text-brand-primary">Variante {variant}</span>
+                <span className="text-[11px] text-brand-text-muted">{templateLabels[item.template] || item.template || '—'}</span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div><p className="text-[11px] text-brand-text-muted">Enviados</p><p className="mt-1 text-lg font-bold text-brand-text">{item.sent}</p></div>
+                <div><p className="text-[11px] text-brand-text-muted">Entraram</p><p className="mt-1 text-lg font-bold text-brand-text">{item.entered_group}</p></div>
+                <div><p className="text-[11px] text-brand-text-muted">Conversão</p><p className="mt-1 text-lg font-bold text-brand-primary">{formatPercent(item.conversion_rate)}</p></div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function AdminCampaignDashboard() {
   const [authLoading, setAuthLoading] = useState(true);
   const [accessToken, setAccessToken] = useState('');
@@ -264,9 +313,6 @@ export default function AdminCampaignDashboard() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [variantFilter, setVariantFilter] = useState<'ALL' | 'A' | 'B'>('ALL');
-  const [statusFilter, setStatusFilter] = useState('ALL');
-  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -303,6 +349,7 @@ export default function AdminCampaignDashboard() {
         setErrorMessage(errorLabels[String(body.error || '')] || 'Não foi possível carregar o dashboard agora.');
         return;
       }
+
       setData(body);
       setErrorMessage('');
     } catch (error) {
@@ -321,16 +368,6 @@ export default function AdminCampaignDashboard() {
     return () => window.clearInterval(timer);
   }, [accessToken]);
 
-  const filteredContacts = useMemo(() => {
-    const term = searchTerm.trim().toLocaleLowerCase('pt-BR');
-    return (data?.contacts || []).filter(contact => {
-      if (variantFilter !== 'ALL' && contact.variant !== variantFilter) return false;
-      if (statusFilter !== 'ALL' && contact.status_category !== statusFilter) return false;
-      if (!term) return true;
-      return contact.name.toLocaleLowerCase('pt-BR').includes(term) || String(contact.source_row).includes(term) || contact.phone_masked.toLocaleLowerCase('pt-BR').includes(term);
-    });
-  }, [data?.contacts, searchTerm, statusFilter, variantFilter]);
-
   if (authLoading) {
     return (
       <div className="min-h-screen bg-brand-bg flex items-center justify-center px-4">
@@ -345,6 +382,9 @@ export default function AdminCampaignDashboard() {
   const overall = data?.overall;
   const variants = data?.variants;
   const funnelBase = Math.max(1, Number(overall?.processed || 0));
+  const decision = data?.decision;
+  const followups = data?.followups;
+  const contactsSheetUrl = data?.contacts_sheet_url || 'https://docs.google.com/spreadsheets/d/1PwouSDq1gi0588hlfzo2jCeoCwZ79z4IAxEm3w2thJg/edit#gid=1007370751';
 
   return (
     <main className="min-h-screen bg-brand-bg px-4 py-6 md:px-8 md:py-10">
@@ -355,7 +395,7 @@ export default function AdminCampaignDashboard() {
               <ArrowLeft className="h-4 w-4" /> Voltar para Jornada 15 dias
             </a>
             <h1 className="text-2xl font-display font-bold text-brand-primary md:text-3xl">Dashboard de Captação</h1>
-            <p className="mt-1 max-w-3xl text-sm text-brand-text-muted">Rodada 2 • Fase 1 • Psicologia e Saúde Mental. Esta primeira versão é somente leitura e não mistura dados de outras rodadas.</p>
+            <p className="mt-1 max-w-3xl text-sm text-brand-text-muted">Rodada 2 • Fase 1 • Psicologia e Saúde Mental. Métricas consolidadas da amostra e dos follow-ups, sem misturar outras rodadas.</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -390,7 +430,7 @@ export default function AdminCampaignDashboard() {
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-brand-primary"><BarChart3 className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Rodada 2 — visão geral</h2></div>
-                  <p className="mt-1 text-xs text-brand-text-muted">Fonte: Dashboard + Rodada 2 - Controle + aba de origem, consultadas pelo workflow {data.workflow || 'n8n'}.</p>
+                  <p className="mt-1 text-xs text-brand-text-muted">Fonte: Dashboard + Config Automação + Dados Follow-up, consultados pelo workflow {data.workflow || 'n8n'}.</p>
                 </div>
                 <div className="text-left text-xs text-brand-text-muted md:text-right"><p>Última atualização</p><p className="mt-1 font-bold text-brand-text">{formatDateTime(data.updated_at)}</p><p className="mt-1">Atualização automática a cada 60 s</p></div>
               </div>
@@ -410,23 +450,30 @@ export default function AdminCampaignDashboard() {
               </div>
             </section>
 
-            <section className={`rounded-3xl border p-5 shadow-sm ${data.maturation?.mature ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
-              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <section className={`rounded-3xl border p-5 shadow-sm ${decision?.final ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="flex items-start gap-3">
-                  <Clock3 className={`mt-0.5 h-5 w-5 shrink-0 ${data.maturation?.mature ? 'text-emerald-700' : 'text-amber-700'}`} />
+                  <Trophy className={`mt-0.5 h-6 w-6 shrink-0 ${decision?.final ? 'text-emerald-700' : 'text-amber-700'}`} />
                   <div>
-                    <h2 className={`font-display font-bold ${data.maturation?.mature ? 'text-emerald-900' : 'text-amber-900'}`}>{data.maturation?.mature ? 'Janela de maturação concluída' : 'Análise A/B ainda em maturação'}</h2>
-                    <p className={`mt-1 text-sm ${data.maturation?.mature ? 'text-emerald-800' : 'text-amber-800'}`}>{data.decision?.reason || 'Aguardar 48 horas após o último envio antes da decisão final.'}</p>
-                    {data.decision?.text ? <p className="mt-2 text-xs font-semibold text-brand-text-muted">Dashboard atual: {data.decision.text}</p> : null}
+                    <h2 className={`font-display text-lg font-bold ${decision?.final ? 'text-emerald-900' : 'text-amber-900'}`}>
+                      {decision?.final ? `Fase 1 encerrada — Variante ${decision.winner || '—'} vencedora` : 'Fase 1 ainda em análise'}
+                    </h2>
+                    {decision?.winner_template ? <p className="mt-1 text-sm font-semibold text-emerald-800">{templateLabels[decision.winner_template] || decision.winner_template}</p> : null}
+                    <p className={`mt-2 text-sm ${decision?.final ? 'text-emerald-800' : 'text-amber-800'}`}>{decision?.reason || 'Aguardando encerramento da janela de análise.'}</p>
                   </div>
                 </div>
-                <div className="rounded-2xl bg-white/80 px-4 py-3 text-sm shadow-sm"><p className="text-xs text-brand-text-muted">Fechamento da janela</p><p className="mt-1 font-bold text-brand-text">{formatDateTime(data.maturation?.closes_at)}</p><p className="mt-1 text-xs font-semibold text-brand-primary">{formatRemaining(Number(data.maturation?.remaining_minutes || 0))}</p></div>
+                <div className="min-w-64 rounded-2xl bg-white/80 px-4 py-3 text-xs shadow-sm">
+                  <p className="text-brand-text-muted">Critério de fechamento</p>
+                  <p className="mt-1 font-bold text-brand-text">{decision?.criterion || '—'}</p>
+                  <p className="mt-3 text-brand-text-muted">Encerrada em</p>
+                  <p className="mt-1 font-bold text-brand-text">{decision?.closed_at_label || '—'}</p>
+                </div>
               </div>
             </section>
 
             <section>
               <div className="mb-3 flex items-center gap-2 text-brand-primary"><BarChart3 className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Comparativo A × B</h2></div>
-              <div className="grid gap-4 xl:grid-cols-2"><VariantCard metric={variants.A} /><VariantCard metric={variants.B} /></div>
+              <div className="grid gap-4 xl:grid-cols-2"><VariantCard metric={variants.A} winner={decision?.final ? decision.winner : undefined} /><VariantCard metric={variants.B} winner={decision?.final ? decision.winner : undefined} /></div>
             </section>
 
             <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
@@ -447,44 +494,62 @@ export default function AdminCampaignDashboard() {
             </section>
 
             <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-brand-primary"><FileSpreadsheet className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Contatos da Rodada 2</h2></div>
-                  <p className="mt-1 text-xs text-brand-text-muted">{filteredContacts.length} de {data.sample_size || 0} contatos • telefone mascarado • nenhuma ação de escrita disponível.</p>
+                  <div className="flex items-center gap-2 text-brand-primary"><MessageCircleReply className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Follow-ups — Rodada 2</h2></div>
+                  <p className="mt-1 text-xs text-brand-text-muted">Métricas calculadas apenas sobre os 100 contatos da Fase 1. Conversão para grupo é atribuída quando a confirmação de membro ocorre após o envio do follow-up.</p>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <label><span className="sr-only">Buscar</span><input type="search" value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Nome ou linha" className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm outline-none focus:border-brand-primary sm:w-48" /></label>
-                  <label><span className="sr-only">Filtrar variante</span><select value={variantFilter} onChange={event => setVariantFilter(event.target.value as 'ALL' | 'A' | 'B')} className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm font-semibold text-brand-text outline-none focus:border-brand-primary"><option value="ALL">Todas variantes</option><option value="A">Variante A</option><option value="B">Variante B</option></select></label>
-                  <label><span className="sr-only">Filtrar status</span><select value={statusFilter} onChange={event => setStatusFilter(event.target.value)} className="h-10 w-full rounded-xl border border-brand-border bg-white px-3 text-sm font-semibold text-brand-text outline-none focus:border-brand-primary"><option value="ALL">Todos status</option><option value="ENTREGUE">Entregue</option><option value="AGUARDANDO_META">Aguardando Meta</option><option value="FALHA">Falha</option><option value="INTERESSADO">Interessado</option><option value="SEM_INTERESSE">Sem interesse</option><option value="MEMBRO">No grupo</option></select></label>
-                </div>
+                <span className="rounded-full border border-brand-border bg-brand-bg px-3 py-1 text-xs font-bold text-brand-text-muted">{followups?.scope || 'Rodada 2 • Fase 1'}</span>
               </div>
 
-              <div className="mt-4 overflow-x-auto rounded-2xl border border-brand-border">
-                <table className="min-w-full divide-y divide-brand-border text-left text-sm">
-                  <thead className="bg-brand-bg"><tr className="text-xs uppercase tracking-wide text-brand-text-muted"><th className="px-4 py-3 font-bold">Linha</th><th className="px-4 py-3 font-bold">Contato</th><th className="px-4 py-3 font-bold">Variante</th><th className="px-4 py-3 font-bold">Status</th><th className="px-4 py-3 font-bold">Meta</th><th className="px-4 py-3 font-bold">Resposta</th><th className="px-4 py-3 font-bold">Grupo</th><th className="px-4 py-3 font-bold">Enviado em</th></tr></thead>
-                  <tbody className="divide-y divide-brand-border bg-white">
-                    {filteredContacts.map(contact => (
-                      <tr key={`${contact.variant}-${contact.source_row}`} className="align-top hover:bg-brand-bg/60">
-                        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-brand-text-muted">{contact.source_row}</td>
-                        <td className="min-w-52 px-4 py-3"><p className="font-semibold text-brand-text">{contact.name || 'Sem nome'}</p><p className="mt-0.5 text-xs text-brand-text-muted">{contact.phone_masked || '—'}</p></td>
-                        <td className="whitespace-nowrap px-4 py-3"><span className="inline-flex rounded-lg bg-brand-bg px-2 py-1 text-xs font-bold text-brand-primary">{contact.variant}</span></td>
-                        <td className="whitespace-nowrap px-4 py-3"><span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${statusBadgeClass(contact.status_category)}`}>{statusLabel(contact.status_category)}</span></td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-brand-text-muted">{contact.meta_status || '—'}</td>
-                        <td className="max-w-56 px-4 py-3 text-xs text-brand-text">{contact.response || '—'}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs font-semibold text-brand-text-muted">{contact.current_group_status || '—'}</td>
-                        <td className="whitespace-nowrap px-4 py-3 text-xs text-brand-text-muted">{formatDateTime(contact.sent_at)}</td>
-                      </tr>
-                    ))}
-                    {!filteredContacts.length ? <tr><td colSpan={8} className="px-4 py-10 text-center text-sm text-brand-text-muted"><Filter className="mx-auto mb-2 h-5 w-5" />Nenhum contato corresponde aos filtros atuais.</td></tr> : null}
-                  </tbody>
-                </table>
-              </div>
+              {followups?.available ? (
+                <>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                    <MetricCard label="Fila total" value={followups.queue.total} helper={`${followups.queue.no_response} sem resposta`} icon={<MessageCircleReply className="h-5 w-5" />} />
+                    <MetricCard label="Prazo atingido" value={followups.queue.due_total} helper="Elegíveis pelo prazo" icon={<AlertTriangle className="h-5 w-5" />} />
+                    <MetricCard label="Aguardando prazo" value={followups.queue.waiting_deadline} helper="Ainda não elegíveis" icon={<Activity className="h-5 w-5" />} />
+                    <MetricCard label="Receberam pré-grupo" value={followups.conversion.received_pre_group} helper="Sem resposta ou grupo" icon={<Send className="h-5 w-5" />} />
+                    <MetricCard label="Entraram após follow-up" value={followups.conversion.entered_after_any} helper={`${followups.conversion.current_members} membros atuais`} icon={<Users className="h-5 w-5" />} />
+                    <MetricCard label="Conversão → grupo" value={Number(followups.conversion.conversion_rate || 0)} helper="Percentual" icon={<UserRoundCheck className="h-5 w-5" />} />
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <div className="rounded-2xl border border-brand-border bg-brand-bg p-4"><p className="text-xs font-bold text-brand-text-muted">SEM RESPOSTA</p><p className="mt-2 text-2xl font-bold text-brand-text">{followups.queue.no_response}</p><p className="mt-1 text-xs text-brand-text-muted">{followups.queue.due_no_response} com prazo atingido</p></div>
+                    <div className="rounded-2xl border border-brand-border bg-brand-bg p-4"><p className="text-xs font-bold text-brand-text-muted">LEMBRETE DE GRUPO</p><p className="mt-2 text-2xl font-bold text-brand-text">{followups.queue.group_reminder}</p><p className="mt-1 text-xs text-brand-text-muted">{followups.queue.due_group_reminder} com prazo atingido</p></div>
+                    <div className="rounded-2xl border border-brand-border bg-brand-bg p-4"><p className="text-xs font-bold text-brand-text-muted">SEM CADASTRO</p><p className="mt-2 text-2xl font-bold text-brand-text">{followups.queue.no_registration}</p><p className="mt-1 text-xs text-brand-text-muted">{followups.queue.due_no_registration} com prazo atingido</p></div>
+                  </div>
+
+                  <div className="mt-5">
+                    <h3 className="font-display text-base font-bold text-brand-primary">A/B dos follow-ups</h3>
+                    <p className="mt-1 text-xs text-brand-text-muted">As variantes são analisadas separadamente. Enquanto a amostra for pequena, o dashboard apenas registra os números e não declara vencedor.</p>
+                    <div className="mt-3 grid gap-4 xl:grid-cols-2">
+                      <FollowupABCard title="Sem resposta" A={followups.ab.no_response.A} B={followups.ab.no_response.B} />
+                      <FollowupABCard title="Lembrete de grupo" A={followups.ab.group_reminder.A} B={followups.ab.group_reminder.B} />
+                    </div>
+                    <div className="mt-4 rounded-2xl border border-brand-border bg-brand-bg p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div><p className="text-xs font-bold text-brand-text-muted">FOLLOW-UP SEM CADASTRO</p><p className="mt-1 text-sm font-semibold text-brand-text">{templateLabels[followups.ab.registration.template] || followups.ab.registration.template || '—'}</p></div>
+                        <div className="text-left sm:text-right"><p className="text-xs text-brand-text-muted">Enviados</p><p className="mt-1 text-2xl font-bold text-brand-primary">{followups.ab.registration.sent}</p></div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">As métricas de follow-up ficarão disponíveis assim que o backend V1.22 estiver ativo.</div>
+              )}
             </section>
 
-            <footer className="flex flex-col gap-2 pb-4 text-xs text-brand-text-muted sm:flex-row sm:items-center sm:justify-between">
-              <span>Rodada 2 isolada para validação. Rodadas 1, 3 e futuras ainda não participam destes números.</span>
-              <span className="inline-flex items-center gap-1.5 font-semibold">{refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}Atualização a cada 60 s</span>
-            </footer>
+            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <FileSpreadsheet className="mt-0.5 h-6 w-6 text-brand-primary" />
+                  <div><h2 className="font-display text-lg font-bold text-brand-primary">Contatos da Rodada 2</h2><p className="mt-1 text-sm text-brand-text-muted">A listagem completa permanece no Google Sheets para consulta operacional, sem duplicar centenas de linhas nesta página.</p></div>
+                </div>
+                <a href={contactsSheetUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90">
+                  <ExternalLink className="h-4 w-4" /> Abrir contatos no Google Sheets
+                </a>
+              </div>
+            </section>
           </>
         ) : null}
       </div>
