@@ -107,6 +107,9 @@ type Round1Member = {
   name: string;
   area: string;
   template: string;
+  variant?: string;
+  template_label?: string;
+  badge_letter?: string;
 };
 
 type SourceSheet = {
@@ -679,6 +682,37 @@ export default function AdminCampaignDashboard() {
                 {followups.ab ? <div className="mt-5"><h3 className="font-display text-base font-bold text-brand-primary">A/B dos follow-ups</h3><p className="mt-1 text-xs text-brand-text-muted">As variantes são analisadas separadamente. Enquanto a amostra for pequena, o dashboard apenas registra os números e não declara vencedor.</p><div className="mt-3 grid gap-4 xl:grid-cols-2"><FollowupABCard title="Sem resposta" A={followups.ab.no_response.A} B={followups.ab.no_response.B} /><FollowupABCard title="Lembrete de grupo" A={followups.ab.group_reminder.A} B={followups.ab.group_reminder.B} /></div><div className="mt-4 rounded-2xl border border-brand-border bg-brand-bg p-4"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold text-brand-text-muted">FOLLOW-UP SEM CADASTRO</p><p className="mt-1 text-sm font-semibold text-brand-text">{templateLabels[followups.ab.registration.template] || followups.ab.registration.template || '—'}</p></div><div className="text-left sm:text-right"><p className="text-xs text-brand-text-muted">Enviados</p><p className="mt-1 text-2xl font-bold text-brand-primary">{followups.ab.registration.sent}</p></div></div></div></div> : null}
               </section>
             ) : null}
+
+            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex items-center gap-2 text-brand-primary"><Users className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Leads da Rodada 2 atualmente no grupo</h2></div>
+                  <p className="mt-1 text-xs text-brand-text-muted">{(data.group_members || []).length} leads com status atual MEMBRO. A lista muda automaticamente com a sincronização do grupo.</p>
+                </div>
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">{Number(overall.group_members || 0)} membros</span>
+              </div>
+
+              {(data.group_members || []).length > 0 ? (
+                <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {(data.group_members || []).map((member, index) => (
+                    <div key={`${member.variant || 'R2'}-${member.name}-${index}`} className="rounded-2xl border border-brand-border bg-brand-bg p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-black text-emerald-800">{member.badge_letter || member.name.slice(0, 1).toUpperCase()}</div>
+                        <div className="min-w-0">
+                          <p className="truncate font-bold text-brand-text">{member.name}</p>
+                          <p className="mt-1 text-xs text-brand-text-muted">{member.area || 'Psicologia e Saúde Mental'}</p>
+                          <p className="mt-1 truncate text-[11px] text-brand-primary">{member.variant ? `Variante ${member.variant} • ` : ''}{templateLabels[member.template] || member.template_label || member.template || 'Template não identificado'}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-5 rounded-2xl border border-dashed border-brand-border bg-brand-bg p-5 text-sm text-brand-text-muted">
+                  A contagem consolidada está disponível. A lista nominal aparecerá assim que o workflow V1.24 estiver respondendo o campo <strong>group_members</strong> da Rodada 2.
+                </div>
+              )}
+            </section>
 
             <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><FileSpreadsheet className="mt-0.5 h-6 w-6 text-brand-primary" /><div><h2 className="font-display text-lg font-bold text-brand-primary">Contatos da Rodada 2</h2><p className="mt-1 text-sm text-brand-text-muted">A listagem completa permanece no Google Sheets para consulta operacional, sem duplicar centenas de linhas nesta página.</p></div></div><a href={contactsSheetUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90"><ExternalLink className="h-4 w-4" /> Abrir contatos no Google Sheets</a></div>
