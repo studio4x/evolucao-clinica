@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -26,13 +26,13 @@ const SHEETS = [
 const TEMPLATES = [
   {
     value: 'convite_jornada_ec_15dias_v1',
-    label: 'A — Jornada 15 dias',
-    description: 'Template de controle da Rodada 2.'
+    label: 'Recomendado — Jornada 15 dias',
+    description: 'Vencedor da Rodada 2 e modelo principal recomendado para a Rodada 3.'
   },
   {
     value: 'convite_jornada_ec_organizacao_v2',
-    label: 'B — Organização v2',
-    description: 'Template desafiante da Rodada 2.'
+    label: 'Organização v2 — não recomendado na Rodada 3',
+    description: 'Variante B da Rodada 2. Permanece disponível apenas para uso excepcional.'
   },
   {
     value: 'convite_jornada_evolucao_clinica',
@@ -77,6 +77,19 @@ type DispatchStatusResult = {
   error?: string;
 };
 
+type Round3ReadinessResult = {
+  ok: boolean;
+  status?: string;
+  template?: string;
+  updated_at?: string;
+  overall?: {
+    planned?: number;
+    released?: number;
+    processed?: number;
+  };
+  error?: string;
+};
+
 const errorLabels: Record<string, string> = {
   authentication_required: 'Sua sessão não foi encontrada. Faça login novamente.',
   invalid_session: 'Sua sessão expirou. Faça login novamente.',
@@ -93,6 +106,7 @@ const errorLabels: Record<string, string> = {
   n8n_status_rejected: 'O n8n recusou a consulta de acompanhamento.',
   n8n_status_timeout: 'A consulta de acompanhamento demorou além do esperado.',
   n8n_status_unavailable: 'Não foi possível consultar o andamento no n8n.',
+  round3_data_incomplete: 'Os dados de preparação da Rodada 3 ainda não estão completos na fonte.',
   server_configuration_missing: 'Configuração server-side indisponível.',
   admin_validation_failed: 'Não foi possível validar a permissão administrativa.'
 };
@@ -114,12 +128,22 @@ const formatElapsed = (seconds: number) => {
   return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`;
 };
 
+const formatDateTime = (value?: string) => {
+  if (!value) return 'aguardando atualização';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short'
+  }).format(date);
+};
+
 export default function AdminCampaignDispatch() {
   const [authLoading, setAuthLoading] = useState(true);
   const [accessToken, setAccessToken] = useState('');
   const [sheet, setSheet] = useState<(typeof SHEETS)[number]>('Psicologia e Saúde Mental');
   const [quantity, setQuantity] = useState(1);
-  const [template, setTemplate] = useState<(typeof TEMPLATES)[number]['value']>('convite_jornada_ec_organizacao_v2');
+  const [template, setTemplate] = useState<(typeof TEMPLATES)[number]['value']>('convite_jornada_ec_15dias_v1');
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<DispatchResult | null>(null);
@@ -129,6 +153,9 @@ export default function AdminCampaignDispatch() {
   const [errorMessage, setErrorMessage] = useState('');
   const [dispatchStartedAt, setDispatchStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [round3Readiness, setRound3Readiness] = useState<Round3ReadinessResult | null>(null);
+  const [round3ReadinessLoading, setRound3ReadinessLoading] = useState(false);
+  const [round3ReadinessError, setRound3ReadinessError] = useState('');
 
   useEffect(() => {
     let mounted = true;
@@ -148,6 +175,41 @@ export default function AdminCampaignDispatch() {
       mounted = false;
     };
   }, []);
+
+  const loadRound3Readiness = useCallback(async () => {
+    if (!accessToken) return;
+
+    setRound3ReadinessLoading(true);
+    try {
+      const response = await fetch('/api/admin/campaign-dashboard?round=3', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json'
+        },
+        cache: 'no-store'
+      });
+
+      const body = await response.json().catch(() => ({ ok: false, error: 'invalid_response' })) as Round3ReadinessResult;
+      if (!response.ok || !body.ok) {
+        setRound3ReadinessError(errorLabels[String(body.error || '')] || 'Não foi possível consultar a preparação da Rodada 3 agora.');
+        return;
+      }
+
+      setRound3Readiness(body);
+      setRound3ReadinessError('');
+    } catch (error) {
+      console.error('[AdminCampaignDispatch] Falha ao consultar preparação da Rodada 3:', error);
+      setRound3ReadinessError('Falha de comunicação ao consultar a preparação da Rodada 3.');
+    } finally {
+      setRound3ReadinessLoading(false);
+    }
+  }, [accessToken]);
+
+  useEffect(() => {
+    if (!accessToken) return;
+    void loadRound3Readiness();
+  }, [accessToken, loadRound3Readiness]);
 
   useEffect(() => {
     if (!dispatchStartedAt || statusResult?.complete) return;
@@ -232,6 +294,14 @@ export default function AdminCampaignDispatch() {
   const groupNoticeError = statusResult?.group_notice === 'ERRO';
   const completeSuccess = currentStatus === 'CONCLUIDO';
   const terminalWithIssue = Boolean(statusResult?.complete && !completeSuccess);
+  const round3Configuration = sheet === 'Psicologia e Saúde Mental';
+  const winnerTemplateSelected = template === 'convite_jornada_ec_15dias_v1';
+  const round3Planned = Math.max(0, Number(round3Readiness?.overall?.planned || 0));
+  const round3Released = Math.max(0, Number(round3Readiness?.overall?.released || 0));
+  const round3Processed = Math.max(0, Number(round3Readiness?.overall?.processed || 0));
+  const round3ReadinessAvailable = Boolean(round3Readiness?.ok);
+  const noRound3ContactsReleased = round3Configuration && round3ReadinessAvailable && round3Released === 0;
+  const quantityExceedsReleased = round3Configuration && round3ReadinessAvailable && quantity > round3Released;
 
   const requestedTotal = Math.max(0, Number(result?.quantity || 0));
   const selectedTotal = Math.max(0, Number(statusResult?.selected || 0));
@@ -398,6 +468,70 @@ export default function AdminCampaignDispatch() {
             </p>
           </div>
         </div>
+
+        <section className="rounded-3xl border border-blue-200 bg-blue-50/70 p-5 shadow-sm md:p-6" aria-live="polite">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 text-base font-bold text-brand-primary">
+                <ShieldCheck className="h-5 w-5" />
+                Pré-checagem da Rodada 3
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
+                Leitura do dashboard administrativo. “Liberados” indica apenas <strong>SIM na origem</strong>; a elegibilidade final ainda depende de todas as travas do workflow.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadRound3Readiness()}
+              disabled={round3ReadinessLoading}
+              className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-blue-200 bg-white px-3.5 py-2 text-xs font-bold text-brand-primary transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <RefreshCw className={`h-4 w-4 ${round3ReadinessLoading ? 'animate-spin' : ''}`} />
+              Atualizar dados
+            </button>
+          </div>
+
+          {round3ReadinessLoading && !round3Readiness ? (
+            <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-brand-text-muted">
+              <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+              Consultando a preparação atual...
+            </div>
+          ) : round3Readiness ? (
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Planejados</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round3Planned}</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Liberados na origem</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round3Released}</p>
+                </div>
+                <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Processados</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round3Processed}</p>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 text-[11px] text-brand-text-muted sm:flex-row sm:items-center sm:justify-between">
+                <span><strong>Status:</strong> {round3Readiness.status || 'PREPARADA / AGUARDANDO ENVIOS'}</span>
+                <span><strong>Atualizado:</strong> {formatDateTime(round3Readiness.updated_at)}</span>
+              </div>
+              {round3Released === 0 && (
+                <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  Nenhum contato da Rodada 3 está liberado na origem. A execução permanece bloqueada nesta configuração até uma nova consulta confirmar pelo menos um contato liberado.
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {round3ReadinessError && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{round3ReadinessError} A consulta indisponível não libera contatos nem inicia envios.</span>
+            </div>
+          )}
+        </section>
 
         <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm md:p-7" aria-live="polite">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -617,6 +751,20 @@ export default function AdminCampaignDispatch() {
             </div>
           </div>
 
+          {round3Configuration && !winnerTemplateSelected && (
+            <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              Para a Rodada 3, o modelo recomendado é <strong>convite_jornada_ec_15dias_v1</strong>, vencedor da Rodada 2. O template selecionado agora não é o recomendado.
+            </div>
+          )}
+
+          {quantityExceedsReleased && round3Released > 0 && (
+            <div className="mt-5 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              O teto solicitado ({quantity}) é maior que os {round3Released} contato(s) atualmente liberado(s) na origem. O workflow processará apenas os que também passarem pelas demais travas de elegibilidade.
+            </div>
+          )}
+
           {quantity > 5 && (
             <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -664,7 +812,7 @@ export default function AdminCampaignDispatch() {
             </p>
             <button
               type="submit"
-              disabled={!confirmed || submitting || runActive}
+              disabled={!confirmed || submitting || runActive || noRound3ContactsReleased}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
