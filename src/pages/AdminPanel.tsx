@@ -40,6 +40,13 @@ import {
   normalizeManagedSubscription,
   type SubscriptionPlan
 } from '../utils/subscriptionPlans';
+import {
+  getAcquisitionChannelLabel,
+  getAcquisitionDistribution,
+  getAcquisitionPlatform,
+  isTechnicalPlatformMarker,
+  type AcquisitionData
+} from '../utils/acquisitionAttribution';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -49,22 +56,21 @@ const alert = (msg: string) => {
   });
 };
 
-type AcquisitionInfo = {
-  utm_source?: string;
-  utm_medium?: string;
-  utm_campaign?: string;
-  utm_term?: string;
-  utm_content?: string;
-  gclid?: string;
-  fbclid?: string;
-  referrer?: string;
-  landing_page?: string;
-  first_seen_at?: string;
-  channel?: string;
-  attribution_method?: 'url' | 'google_play_install_referrer';
-  referrer_click_at?: string;
-  install_begin_at?: string;
+type AcquisitionInfo = AcquisitionData;
+
+const acquisitionPlatformLabel = (info?: AcquisitionInfo | null) => {
+  const platform = getAcquisitionPlatform(info);
+  if (platform === 'android') return 'Android';
+  if (platform === 'pwa') return 'PWA';
+  if (platform === 'web') return 'Web';
+  return 'Não informado';
 };
+
+const acquisitionDistributionLabel = (info?: AcquisitionInfo | null) => (
+  getAcquisitionDistribution(info) === 'google_play' ? 'Google Play' : 'Não informada'
+);
+
+const marketingValue = (value?: string) => isTechnicalPlatformMarker(value) ? undefined : value;
 
 const hasAcquisitionInfo = (info?: AcquisitionInfo | null) => Boolean(
   info && (info.channel || info.utm_source || info.referrer || info.landing_page || info.gclid || info.fbclid)
@@ -1281,6 +1287,8 @@ export default function AdminPanel() {
     ? selectedSignupAcquisition
     : selectedFirstAcquisition;
   const selectedAcquisitionIsSignupTouch = hasAcquisitionInfo(selectedSignupAcquisition);
+  const selectedAcquisitionChannel = getAcquisitionChannelLabel(selectedAcquisition);
+  const selectedFirstAcquisitionChannel = getAcquisitionChannelLabel(selectedFirstAcquisition);
 
   // Estados para aba de Notificações & SMTP no Painel Admin
   const [adminSmtpHost, setAdminSmtpHost] = useState('');
@@ -8760,7 +8768,7 @@ export default function AdminPanel() {
                             {selectedAcquisitionIsSignupTouch ? 'Origem no momento do cadastro' : 'Origem disponível (primeiro acesso)'}
                           </span>
                           <span className="text-base font-extrabold text-indigo-950">
-                            {selectedAcquisition?.channel || 'Desconhecido'}
+                            {selectedAcquisitionChannel}
                           </span>
                         </div>
                         <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm">
@@ -8772,7 +8780,7 @@ export default function AdminPanel() {
                           Primeiro acesso
                         </span>
                         <span className="text-sm font-extrabold text-slate-800">
-                          {selectedFirstAcquisition?.channel || 'Não registrado'}
+                          {hasAcquisitionInfo(selectedFirstAcquisition) ? selectedFirstAcquisitionChannel : 'Não registrado'}
                         </span>
                         <p className="mt-1 text-[10px] text-slate-500">
                           O bloco detalhado abaixo prioriza a origem capturada no cadastro.
@@ -8791,14 +8799,14 @@ export default function AdminPanel() {
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
                           <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Source</span>
                           <p className="font-semibold text-gray-800 break-all">
-                            {selectedAcquisition?.utm_source || <span className="text-gray-400 italic">Não informado</span>}
+                            {marketingValue(selectedAcquisition?.utm_source) || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
 
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
                           <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Medium</span>
                           <p className="font-semibold text-gray-800 break-all">
-                            {selectedAcquisition?.utm_medium || <span className="text-gray-400 italic">Não informado</span>}
+                            {marketingValue(selectedAcquisition?.utm_medium) || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
 
@@ -8822,6 +8830,16 @@ export default function AdminPanel() {
                             {selectedAcquisition?.utm_content || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
+
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase block">FBCLID</span>
+                          <p className="font-semibold text-gray-800">{selectedAcquisition?.fbclid ? 'Capturado' : 'Não capturado'}</p>
+                        </div>
+
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
+                          <span className="text-[10px] font-bold text-gray-400 uppercase block">GCLID</span>
+                          <p className="font-semibold text-gray-800">{selectedAcquisition?.gclid ? 'Capturado' : 'Não capturado'}</p>
+                        </div>
                       </div>
                     </div>
 
@@ -8833,6 +8851,16 @@ export default function AdminPanel() {
                       </h4>
 
                       <div className="space-y-2 text-xs">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Plataforma de acesso</span>
+                            <span className="font-semibold text-gray-700">{acquisitionPlatformLabel(selectedAcquisition)}</span>
+                          </div>
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase block">Distribuição</span>
+                            <span className="font-semibold text-gray-700">{acquisitionDistributionLabel(selectedAcquisition)}</span>
+                          </div>
+                        </div>
                         {selectedAcquisition?.referrer && (
                           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase block">Site de Origem (Referrer)</span>

@@ -25,6 +25,13 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import {
+  getAcquisitionChannelLabel,
+  getAcquisitionDistribution,
+  getAcquisitionPlatform,
+  isTechnicalPlatformMarker,
+  type AcquisitionData
+} from '../../utils/acquisitionAttribution';
 import { getSubscriptionPlanLabel } from '../../utils/subscriptionPlans';
 
 type ProfessionalSummary = {
@@ -152,6 +159,21 @@ const channelPresentation = (channel: CommunicationHistoryItem['channel']) => {
   if (channel === 'notification') return { label: 'Notificação', icon: Bell, className: 'bg-violet-50 text-violet-700 border-violet-200' };
   return { label: 'WhatsApp', icon: MessageCircle, className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
 };
+
+const platformLabel = (data: AcquisitionData) => {
+  const platform = getAcquisitionPlatform(data);
+  if (platform === 'android') return 'Android';
+  if (platform === 'pwa') return 'PWA';
+  if (platform === 'web') return 'Web';
+  return null;
+};
+
+const distributionLabel = (data: AcquisitionData) => (
+  getAcquisitionDistribution(data) === 'google_play' ? 'Google Play' : null
+);
+
+const marketingValue = (value?: string) => isTechnicalPlatformMarker(value) ? null : value;
+const clickIdStatus = (value?: string) => value ? 'Capturado' : 'Não capturado';
 
 const statusPresentation = (status: string) => {
   const normalized = status.toLowerCase();
@@ -281,8 +303,8 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
   if (!professional) return null;
   const p = details?.professional || {};
   const preferences = details?.communicationPreferences;
-  const firstAcquisition = p.acquisition_info || {};
-  const signupAcquisition = p.signup_acquisition_info || {};
+  const firstAcquisition = (p.acquisition_info || {}) as AcquisitionData;
+  const signupAcquisition = (p.signup_acquisition_info || {}) as AcquisitionData;
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby="professional-details-title">
@@ -631,10 +653,16 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
               </Section>
 
               <Section icon={Globe} title="Origem no momento do cadastro">
-                <Detail label="Canal" value={signupAcquisition.channel} />
-                <Detail label="UTM Source" value={signupAcquisition.utm_source} />
-                <Detail label="UTM Medium" value={signupAcquisition.utm_medium} />
+                <Detail label="Canal de aquisição" value={getAcquisitionChannelLabel(signupAcquisition)} />
+                <Detail label="Plataforma do cadastro" value={platformLabel(signupAcquisition)} />
+                <Detail label="Distribuição" value={distributionLabel(signupAcquisition)} />
+                <Detail label="UTM Source" value={marketingValue(signupAcquisition.utm_source)} />
+                <Detail label="UTM Medium" value={marketingValue(signupAcquisition.utm_medium)} />
                 <Detail label="UTM Campaign" value={signupAcquisition.utm_campaign} />
+                <Detail label="Termo" value={signupAcquisition.utm_term} />
+                <Detail label="Criativo" value={signupAcquisition.utm_content} />
+                <Detail label="FBCLID" value={clickIdStatus(signupAcquisition.fbclid)} />
+                <Detail label="GCLID" value={clickIdStatus(signupAcquisition.gclid)} />
                 <Detail label="Página de entrada" value={signupAcquisition.landing_page} />
                 <Detail
                   label="Método de atribuição"
@@ -646,10 +674,16 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
               </Section>
 
               <Section icon={Globe} title="Origem do primeiro acesso">
-                <Detail label="Canal" value={firstAcquisition.channel} />
-                <Detail label="UTM Source" value={firstAcquisition.utm_source} />
-                <Detail label="UTM Medium" value={firstAcquisition.utm_medium} />
+                <Detail label="Canal de aquisição" value={getAcquisitionChannelLabel(firstAcquisition)} />
+                <Detail label="Plataforma do primeiro acesso" value={platformLabel(firstAcquisition)} />
+                <Detail label="Distribuição" value={distributionLabel(firstAcquisition)} />
+                <Detail label="UTM Source" value={marketingValue(firstAcquisition.utm_source)} />
+                <Detail label="UTM Medium" value={marketingValue(firstAcquisition.utm_medium)} />
                 <Detail label="UTM Campaign" value={firstAcquisition.utm_campaign} />
+                <Detail label="Termo" value={firstAcquisition.utm_term} />
+                <Detail label="Criativo" value={firstAcquisition.utm_content} />
+                <Detail label="FBCLID" value={clickIdStatus(firstAcquisition.fbclid)} />
+                <Detail label="GCLID" value={clickIdStatus(firstAcquisition.gclid)} />
                 <Detail label="Página de entrada" value={firstAcquisition.landing_page} />
                 <Detail label="Primeiro acesso detectado" value={dateValue(firstAcquisition.first_seen_at)} />
               </Section>

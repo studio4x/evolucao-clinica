@@ -88,7 +88,7 @@ public class LauncherActivity extends ComponentActivity {
             "application/ogg",
             "application/octet-stream"
     };
-    private static final String APP_URL = "https://www.evolucaoclinica.app.br/login?utm_source=pwa";
+    private static final String APP_URL = "https://www.evolucaoclinica.app.br/login";
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
     private static final String SUPABASE_HOST = "kvxboovgrrhhttaqinld.supabase.co";
     private static final String ACQUISITION_PREFS = "evolucao_acquisition";
@@ -253,7 +253,7 @@ public class LauncherActivity extends ComponentActivity {
     }
 
     private String appUrl() {
-        return APP_URL + "&native_version=" + getInstalledVersionCode();
+        return APP_URL + "?native_version=" + getInstalledVersionCode();
     }
 
     private long getInstalledVersionCode() {

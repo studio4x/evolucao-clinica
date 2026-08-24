@@ -2606,7 +2606,7 @@ app.get(["/manifest.webmanifest", "/api/manifest"], async (req, res) => {
       "short_name": config.pwa_short_name || config.pwa_app_name || defaultSiteConfig.pwa_short_name,
       "description": config.pwa_description || defaultSiteConfig.pwa_description,
       "lang": "pt-BR",
-      "start_url": "/?utm_source=pwa",
+      "start_url": "/",
       "scope": "/",
       "display": "standalone",
       "orientation": "portrait",

@@ -4,12 +4,15 @@ import {
   type AcquisitionData,
   calculateAcquisitionChannel,
   hasAttributableSignal,
-  isGenericAppFallback,
   isLikelyOAuthReturn,
   isValidAcquisitionData,
+  normalizeAcquisitionCandidate,
   resolveAcquisitionTouches,
   sanitizeTrackingUrl,
+  shouldPersistFirstTouch,
+  shouldPersistSignupTouch,
 } from './acquisitionAttribution';
+import { getInstalledAppInfo } from './installedAppInfo';
 
 export type { AcquisitionData } from './acquisitionAttribution';
 export { calculateAcquisitionChannel } from './acquisitionAttribution';
@@ -86,6 +89,7 @@ const readFirstTouch = (): AcquisitionData | null => {
 
 const buildCurrentTouch = (): AcquisitionData => {
   const urlParams = new URLSearchParams(window.location.search);
+  const accessPlatform = getInstalledAppInfo().platform;
   const externalReferrer = document.referrer && !document.referrer.includes(window.location.hostname)
     ? sanitizeTrackingUrl(document.referrer)
     : undefined;
@@ -104,8 +108,8 @@ const buildCurrentTouch = (): AcquisitionData => {
     attribution_method: 'url',
   };
 
-  data.channel = calculateAcquisitionChannel(data);
-  return data;
+  data.platform = accessPlatform;
+  return normalizeAcquisitionCandidate(data);
 };
 
 const persistAcquisitionCandidate = (
@@ -172,10 +176,11 @@ const nativePayloadToAcquisition = (payload: NativeInstallAttributionPayload): A
     attribution_method: 'google_play_install_referrer',
     referrer_click_at: timestampSecondsToIso(payload.referrer_click_timestamp_seconds),
     install_begin_at: timestampSecondsToIso(payload.install_begin_timestamp_seconds),
+    platform: 'android',
+    distribution: 'google_play',
   };
 
-  data.channel = calculateAcquisitionChannel(data);
-  return hasAttributableSignal(data) ? data : null;
+  return normalizeAcquisitionCandidate(data);
 };
 
 const wait = (milliseconds: number) => new Promise(resolve => window.setTimeout(resolve, milliseconds));
@@ -266,8 +271,7 @@ export async function syncAcquisitionWithDatabase(
   const currentTouch = getCurrentAcquisitionData();
 
   try {
-    const shouldUpgradeFirstTouch = isGenericAppFallback(currentInfo) && !isGenericAppFallback(firstTouch);
-    if ((!isValidAcquisitionData(currentInfo) || shouldUpgradeFirstTouch) && isValidAcquisitionData(firstTouch)) {
+    if (shouldPersistFirstTouch(currentInfo, firstTouch)) {
       const { error } = await supabase
         .from('professionals')
         .update({ acquisition_info: firstTouch })
@@ -305,9 +309,7 @@ export async function syncAcquisitionWithDatabase(
       return;
     }
 
-    const shouldUpgradeSignupTouch = isGenericAppFallback(profile?.signup_acquisition_info)
-      && !isGenericAppFallback(pendingSignupTouch);
-    if (isValidAcquisitionData(profile?.signup_acquisition_info) && !shouldUpgradeSignupTouch) {
+    if (!shouldPersistSignupTouch(profile?.signup_acquisition_info, pendingSignupTouch)) {
       safeRemove(pendingKey);
       return;
     }

@@ -24,7 +24,7 @@ plugins {
 def twaManifest = [
     applicationId: 'com.evolucaoclinica.app',
     hostName: 'www.evolucaoclinica.app.br', // The domain being opened in the TWA.
-    launchUrl: '/login?utm_source=pwa', // The start path for the TWA. Must be relative to the domain.
+    launchUrl: '/login', // The start path for the TWA. Must be relative to the domain.
     name: 'Evolução Clínica', // The application name.
     launcherName: 'Evolução Clínica', // The name shown on the Android Launcher.
     themeColor: '#005C13', // The color used for the status bar.

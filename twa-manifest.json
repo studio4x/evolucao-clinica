@@ -12,7 +12,7 @@
   "navigationDividerColorDark": "#000000",
   "backgroundColor": "#FFFFFF",
   "enableNotifications": true,
-  "startUrl": "/login?utm_source=pwa",
+  "startUrl": "/login",
   "iconUrl": "https://www.evolucaoclinica.app.br/api/pwa-icon/512?v=rxc1av",
   "maskableIconUrl": "https://www.evolucaoclinica.app.br/api/pwa-icon/maskable?v=rxc1av",
   "splashScreenFadeOutDuration": 300,
