@@ -20,6 +20,20 @@ import { supabase } from '../supabaseClient';
 
 type RoundNumber = 1 | 2 | 3;
 
+const AVAILABLE_ROUNDS: RoundNumber[] = [1, 2, 3];
+const DEFAULT_ROUND: RoundNumber = 3;
+
+const readRoundFromUrl = (): RoundNumber => {
+  const round = Number(new URLSearchParams(window.location.search).get('round'));
+  return AVAILABLE_ROUNDS.includes(round as RoundNumber) ? round as RoundNumber : DEFAULT_ROUND;
+};
+
+const getRoundHref = (round: RoundNumber) => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('round', String(round));
+  return `${url.pathname}${url.search}${url.hash}`;
+};
+
 type VariantMetric = {
   variant: 'A' | 'B';
   template: string;
@@ -407,7 +421,7 @@ function FunnelSection({ title, funnel, base }: { title: string; funnel: Dashboa
 export default function AdminCampaignDashboard() {
   const [authLoading, setAuthLoading] = useState(true);
   const [accessToken, setAccessToken] = useState('');
-  const [selectedRound, setSelectedRound] = useState<RoundNumber>(2);
+  const [selectedRound, setSelectedRound] = useState<RoundNumber>(() => readRoundFromUrl());
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -427,6 +441,38 @@ export default function AdminCampaignDashboard() {
     });
     return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    const syncRoundFromUrl = () => setSelectedRound(readRoundFromUrl());
+    const normalizedRound = readRoundFromUrl();
+    const currentRound = new URLSearchParams(window.location.search).get('round');
+
+    if (currentRound !== String(normalizedRound)) {
+      window.history.replaceState(window.history.state, '', getRoundHref(normalizedRound));
+    }
+
+    window.addEventListener('popstate', syncRoundFromUrl);
+    return () => window.removeEventListener('popstate', syncRoundFromUrl);
+  }, []);
+
+  const handleRoundNavigation = (event: React.MouseEvent<HTMLAnchorElement>, round: RoundNumber) => {
+    if (
+      event.defaultPrevented ||
+      event.button !== 0 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    if (round === selectedRound) return;
+
+    window.history.pushState(window.history.state, '', getRoundHref(round));
+    setSelectedRound(round);
+  };
 
   const loadDashboard = async (round: RoundNumber, silent = false) => {
     if (!accessToken) return;
@@ -503,8 +549,16 @@ export default function AdminCampaignDashboard() {
         </header>
 
         <div className="inline-flex rounded-2xl border border-brand-border bg-white p-1 shadow-sm">
-          {([1, 2, 3] as RoundNumber[]).map(round => (
-            <button key={round} type="button" onClick={() => setSelectedRound(round)} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${selectedRound === round ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted hover:bg-brand-bg'}`}>Rodada {round}</button>
+          {AVAILABLE_ROUNDS.map(round => (
+            <a
+              key={round}
+              href={getRoundHref(round)}
+              onClick={(event) => handleRoundNavigation(event, round)}
+              aria-current={selectedRound === round ? 'page' : undefined}
+              className={`rounded-xl px-4 py-2 text-sm font-bold transition ${selectedRound === round ? 'bg-brand-primary text-white shadow-sm' : 'text-brand-text-muted hover:bg-brand-bg'}`}
+            >
+              Rodada {round}
+            </a>
           ))}
         </div>
 
