@@ -10,6 +10,9 @@ export interface AcquisitionData {
   landing_page?: string;
   first_seen_at?: string;
   channel?: string;
+  attribution_method?: 'url' | 'google_play_install_referrer';
+  referrer_click_at?: string;
+  install_begin_at?: string;
 }
 
 const PAID_MEDIA = new Set(['cpc', 'ppc', 'paid', 'paid_social', 'social_paid']);
@@ -75,11 +78,21 @@ export const hasAttributableSignal = (data: AcquisitionData): boolean => Boolean
     data.referrer
 );
 
+export const isGenericAppFallback = (data?: AcquisitionData | null): boolean => {
+  const source = normalizeAcquisitionSource(data?.utm_source);
+  const medium = normalizeAcquisitionMedium(data?.utm_medium);
+  return (source === 'pwa' || medium === 'pwa') && !data?.gclid && !data?.fbclid && !data?.utm_campaign;
+};
+
 export function calculateAcquisitionChannel(data: AcquisitionData): string {
   const source = normalizeAcquisitionSource(data.utm_source);
   const medium = normalizeAcquisitionMedium(data.utm_medium);
   const referrerHost = safeHostname(data.referrer);
   const isPaid = PAID_MEDIA.has(medium);
+
+  // O gclid é um identificador emitido pelo Google Ads. Ele prevalece sobre
+  // fontes genéricas que o Google Play possa anexar ao install referrer.
+  if (data.gclid) return 'Google Ads (Tráfego Pago)';
 
   if (source === 'google') {
     if (isPaid) return 'Google Ads (Tráfego Pago)';
@@ -111,8 +124,6 @@ export function calculateAcquisitionChannel(data: AcquisitionData): string {
     if (ORGANIC_SOCIAL_MEDIA.has(medium)) return `${source.toUpperCase()} (Orgânico/Social)`;
     return `${source.toUpperCase()}${medium ? ` (${medium})` : ''}`;
   }
-
-  if (data.gclid) return 'Google Ads (Tráfego Pago)';
 
   if (referrerHost.includes('instagram.com')) return 'Instagram (Orgânico/Social)';
   if (referrerHost.includes('facebook.com')) return 'Facebook (Orgânico/Social)';
@@ -156,10 +167,24 @@ export const resolveAcquisitionTouches = ({
   existingCurrentTouch?: AcquisitionData | null;
   candidate: AcquisitionData;
   returningFromOAuth: boolean;
-}): { firstTouch: AcquisitionData; currentTouch: AcquisitionData } => ({
-  firstTouch: existingFirstTouch || candidate,
-  currentTouch: returningFromOAuth && existingCurrentTouch ? existingCurrentTouch : candidate,
-});
+}): { firstTouch: AcquisitionData; currentTouch: AcquisitionData } => {
+  const candidateReplacesAppFallback = hasAttributableSignal(candidate) && !isGenericAppFallback(candidate);
+
+  const firstTouch = existingFirstTouch && !(isGenericAppFallback(existingFirstTouch) && candidateReplacesAppFallback)
+    ? existingFirstTouch
+    : candidate;
+
+  let currentTouch = candidate;
+  if (returningFromOAuth && existingCurrentTouch) {
+    currentTouch = existingCurrentTouch;
+  } else if (isGenericAppFallback(candidate) && existingCurrentTouch && !isGenericAppFallback(existingCurrentTouch)) {
+    // Reabrir o WebView com utm_source=pwa não pode apagar a referência paga
+    // recuperada do Google Play durante a mesma instalação.
+    currentTouch = existingCurrentTouch;
+  }
+
+  return { firstTouch, currentTouch };
+};
 
 export const isLikelyOAuthReturn = (rawUrl?: string | null, referrer?: string | null): boolean => {
   try {

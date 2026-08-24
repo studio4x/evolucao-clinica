@@ -1,8 +1,10 @@
 import { supabase } from '../supabaseClient';
+import { getConsentPreferences } from '../services/analytics';
 import {
   type AcquisitionData,
   calculateAcquisitionChannel,
   hasAttributableSignal,
+  isGenericAppFallback,
   isLikelyOAuthReturn,
   isValidAcquisitionData,
   resolveAcquisitionTouches,
@@ -17,6 +19,24 @@ const FIRST_TOUCH_STORAGE_KEY = 'evolucao-clinica:acquisition:first-touch';
 const CURRENT_TOUCH_STORAGE_KEY = 'evolucao-clinica:acquisition:current-touch';
 const SIGNUP_PENDING_PREFIX = 'evolucao-clinica:acquisition:signup-pending';
 const NEW_ACCOUNT_WINDOW_MS = 2 * 60 * 60 * 1000;
+const NATIVE_REFERRER_ATTEMPTS = 10;
+const NATIVE_REFERRER_RETRY_MS = 300;
+
+type NativeInstallAttributionPayload = {
+  status?: 'pending' | 'ready' | 'unavailable';
+  install_referrer?: string;
+  referrer_click_timestamp_seconds?: number;
+  install_begin_timestamp_seconds?: number;
+};
+
+declare global {
+  interface Window {
+    NativeAcquisitionBridge?: {
+      getInstallAttribution: () => string;
+      requestInstallAttribution: () => void;
+    };
+  }
+}
 
 const safeRead = (key: string): AcquisitionData | null => {
   if (typeof window === 'undefined') return null;
@@ -81,10 +101,33 @@ const buildCurrentTouch = (): AcquisitionData => {
     referrer: externalReferrer,
     landing_page: sanitizeTrackingUrl(window.location.href, window.location.origin),
     first_seen_at: new Date().toISOString(),
+    attribution_method: 'url',
   };
 
   data.channel = calculateAcquisitionChannel(data);
   return data;
+};
+
+const persistAcquisitionCandidate = (
+  candidate: AcquisitionData,
+  returningFromOAuth = false
+): AcquisitionData => {
+  const existingFirstTouch = readFirstTouch();
+  const existingCurrentTouch = safeRead(CURRENT_TOUCH_STORAGE_KEY);
+  const { firstTouch, currentTouch } = resolveAcquisitionTouches({
+    existingFirstTouch,
+    existingCurrentTouch,
+    candidate,
+    returningFromOAuth,
+  });
+
+  if (!existingFirstTouch || firstTouch !== existingFirstTouch) {
+    safeWrite(FIRST_TOUCH_STORAGE_KEY, firstTouch);
+    safeWrite(LEGACY_STORAGE_KEY, firstTouch);
+  }
+
+  safeWrite(CURRENT_TOUCH_STORAGE_KEY, currentTouch);
+  return firstTouch;
 };
 
 /**
@@ -95,8 +138,6 @@ const buildCurrentTouch = (): AcquisitionData => {
 export function captureAcquisitionData(): AcquisitionData {
   if (typeof window === 'undefined') return {};
 
-  const existingFirstTouch = readFirstTouch();
-  const existingCurrentTouch = safeRead(CURRENT_TOUCH_STORAGE_KEY);
   const candidate = buildCurrentTouch();
 
   const pendingOAuth = Boolean(
@@ -104,23 +145,79 @@ export function captureAcquisitionData(): AcquisitionData {
     window.localStorage.getItem('evolucao-clinica:google-oauth-scopes')
   );
   const returningFromOAuth = isLikelyOAuthReturn(window.location.href, document.referrer) || pendingOAuth;
-  const { firstTouch, currentTouch } = resolveAcquisitionTouches({
-    existingFirstTouch,
-    existingCurrentTouch,
-    candidate,
-    returningFromOAuth,
-  });
+  return persistAcquisitionCandidate(candidate, returningFromOAuth);
+}
 
-  if (!existingFirstTouch) {
-    safeWrite(FIRST_TOUCH_STORAGE_KEY, firstTouch);
-    // Mantém compatibilidade com visitantes que já utilizam a chave antiga.
-    safeWrite(LEGACY_STORAGE_KEY, firstTouch);
+const timestampSecondsToIso = (value?: number): string | undefined => {
+  if (!Number.isFinite(value) || Number(value) <= 0) return undefined;
+  return new Date(Number(value) * 1000).toISOString();
+};
+
+const nativePayloadToAcquisition = (payload: NativeInstallAttributionPayload): AcquisitionData | null => {
+  if (payload.status !== 'ready' || !payload.install_referrer) return null;
+
+  const params = new URLSearchParams(payload.install_referrer.replace(/^\?/, ''));
+  const data: AcquisitionData = {
+    utm_source: params.get('utm_source') || undefined,
+    utm_medium: params.get('utm_medium') || undefined,
+    utm_campaign: params.get('utm_campaign') || undefined,
+    utm_term: params.get('utm_term') || undefined,
+    utm_content: params.get('utm_content') || undefined,
+    gclid: params.get('gclid') || undefined,
+    fbclid: params.get('fbclid') || undefined,
+    landing_page: typeof window !== 'undefined'
+      ? sanitizeTrackingUrl(window.location.href, window.location.origin)
+      : undefined,
+    first_seen_at: timestampSecondsToIso(payload.referrer_click_timestamp_seconds) || new Date().toISOString(),
+    attribution_method: 'google_play_install_referrer',
+    referrer_click_at: timestampSecondsToIso(payload.referrer_click_timestamp_seconds),
+    install_begin_at: timestampSecondsToIso(payload.install_begin_timestamp_seconds),
+  };
+
+  data.channel = calculateAcquisitionChannel(data);
+  return hasAttributableSignal(data) ? data : null;
+};
+
+const wait = (milliseconds: number) => new Promise(resolve => window.setTimeout(resolve, milliseconds));
+let nativeAttributionPromise: Promise<AcquisitionData | null> | null = null;
+
+/**
+ * Recupera a referência de instalação do Google Play no aplicativo Android.
+ * O bridge devolve somente o conteúdo oficial do Install Referrer; a aplicação
+ * persiste apenas UTMs e click IDs já aceitos pelo modelo de aquisição.
+ */
+export function captureNativeInstallAttribution(): Promise<AcquisitionData | null> {
+  if (
+    typeof window === 'undefined'
+    || getConsentPreferences()?.marketing !== true
+    || !window.NativeAcquisitionBridge?.getInstallAttribution
+  ) {
+    return Promise.resolve(null);
   }
+  if (nativeAttributionPromise) return nativeAttributionPromise;
 
-  // A sessão atual também pode ser tráfego direto; isso é relevante para signup touch.
-  safeWrite(CURRENT_TOUCH_STORAGE_KEY, currentTouch);
+  nativeAttributionPromise = (async () => {
+    window.NativeAcquisitionBridge?.requestInstallAttribution();
+    for (let attempt = 0; attempt < NATIVE_REFERRER_ATTEMPTS; attempt += 1) {
+      try {
+        const raw = window.NativeAcquisitionBridge?.getInstallAttribution();
+        const payload = raw ? JSON.parse(raw) as NativeInstallAttributionPayload : null;
+        const acquisition = payload ? nativePayloadToAcquisition(payload) : null;
+        if (acquisition) {
+          persistAcquisitionCandidate(acquisition);
+          return acquisition;
+        }
+        if (payload?.status === 'unavailable') return null;
+      } catch (error) {
+        console.warn('[AcquisitionTracking] Referência nativa de instalação inválida.', error);
+        return null;
+      }
+      await wait(NATIVE_REFERRER_RETRY_MS);
+    }
+    return null;
+  })();
 
-  return firstTouch;
+  return nativeAttributionPromise;
 }
 
 /**
@@ -169,7 +266,8 @@ export async function syncAcquisitionWithDatabase(
   const currentTouch = getCurrentAcquisitionData();
 
   try {
-    if (!isValidAcquisitionData(currentInfo) && isValidAcquisitionData(firstTouch)) {
+    const shouldUpgradeFirstTouch = isGenericAppFallback(currentInfo) && !isGenericAppFallback(firstTouch);
+    if ((!isValidAcquisitionData(currentInfo) || shouldUpgradeFirstTouch) && isValidAcquisitionData(firstTouch)) {
       const { error } = await supabase
         .from('professionals')
         .update({ acquisition_info: firstTouch })
@@ -207,7 +305,9 @@ export async function syncAcquisitionWithDatabase(
       return;
     }
 
-    if (isValidAcquisitionData(profile?.signup_acquisition_info)) {
+    const shouldUpgradeSignupTouch = isGenericAppFallback(profile?.signup_acquisition_info)
+      && !isGenericAppFallback(pendingSignupTouch);
+    if (isValidAcquisitionData(profile?.signup_acquisition_info) && !shouldUpgradeSignupTouch) {
       safeRemove(pendingKey);
       return;
     }

@@ -281,7 +281,8 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
   if (!professional) return null;
   const p = details?.professional || {};
   const preferences = details?.communicationPreferences;
-  const acquisition = p.acquisition_info || p.signup_acquisition_info || {};
+  const firstAcquisition = p.acquisition_info || {};
+  const signupAcquisition = p.signup_acquisition_info || {};
 
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby="professional-details-title">
@@ -629,13 +630,28 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                 <Detail label="Consentimento atualizado em" value={dateValue(preferences?.updated_at)} />
               </Section>
 
-              <Section icon={Globe} title="Origem do cadastro">
-                <Detail label="Canal" value={acquisition.channel} />
-                <Detail label="UTM Source" value={acquisition.utm_source} />
-                <Detail label="UTM Medium" value={acquisition.utm_medium} />
-                <Detail label="UTM Campaign" value={acquisition.utm_campaign} />
-                <Detail label="Página de entrada" value={acquisition.landing_page} />
-                <Detail label="Primeiro acesso detectado" value={dateValue(acquisition.first_seen_at)} />
+              <Section icon={Globe} title="Origem no momento do cadastro">
+                <Detail label="Canal" value={signupAcquisition.channel} />
+                <Detail label="UTM Source" value={signupAcquisition.utm_source} />
+                <Detail label="UTM Medium" value={signupAcquisition.utm_medium} />
+                <Detail label="UTM Campaign" value={signupAcquisition.utm_campaign} />
+                <Detail label="Página de entrada" value={signupAcquisition.landing_page} />
+                <Detail
+                  label="Método de atribuição"
+                  value={signupAcquisition.attribution_method === 'google_play_install_referrer'
+                    ? 'Google Play Install Referrer'
+                    : signupAcquisition.attribution_method === 'url' ? 'Parâmetros da URL' : null}
+                />
+                <Detail label="Origem detectada em" value={dateValue(signupAcquisition.first_seen_at)} />
+              </Section>
+
+              <Section icon={Globe} title="Origem do primeiro acesso">
+                <Detail label="Canal" value={firstAcquisition.channel} />
+                <Detail label="UTM Source" value={firstAcquisition.utm_source} />
+                <Detail label="UTM Medium" value={firstAcquisition.utm_medium} />
+                <Detail label="UTM Campaign" value={firstAcquisition.utm_campaign} />
+                <Detail label="Página de entrada" value={firstAcquisition.landing_page} />
+                <Detail label="Primeiro acesso detectado" value={dateValue(firstAcquisition.first_seen_at)} />
               </Section>
 
               <div className="rounded-2xl border border-brand-border/50 bg-brand-bg/30 p-4 text-xs text-brand-text-muted">

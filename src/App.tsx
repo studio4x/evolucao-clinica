@@ -58,9 +58,9 @@ import { isGoogleAccessTokenFresh } from './utils/googleAuthSession';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
-import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
+import { captureAcquisitionData, captureNativeInstallAttribution, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
-import { getAnalyticsConsent, getCheckoutAttributionWithRetry, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
+import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
@@ -288,12 +288,20 @@ export default function App() {
   useEffect(() => {
     clearLazyRetryQueryParam();
     captureAcquisitionData();
+    const captureAllowedNativeAttribution = () => {
+      if (getConsentPreferences()?.marketing === true) void captureNativeInstallAttribution();
+    };
+    captureAllowedNativeAttribution();
+    window.addEventListener('cookie-consent-accepted', captureAllowedNativeAttribution);
     const cleanupMarketingUrlTimer = window.setTimeout(() => {
       const pathname = window.location.pathname;
       const isAcquisitionPage = pathname === '/' || pathname === '/jornada' || pathname.startsWith('/jornada/');
       if (isAcquisitionPage && sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
     }, 0);
-    return () => window.clearTimeout(cleanupMarketingUrlTimer);
+    return () => {
+      window.clearTimeout(cleanupMarketingUrlTimer);
+      window.removeEventListener('cookie-consent-accepted', captureAllowedNativeAttribution);
+    };
   }, []);
 
   useEffect(() => {
@@ -576,7 +584,10 @@ export default function App() {
             });
             void syncAnalyticsConsentForCurrentUser();
 
-            void syncAcquisitionWithDatabase(session.user.id, profileData.acquisition_info);
+            const nativeAttribution = getConsentPreferences()?.marketing === true
+              ? captureNativeInstallAttribution()
+              : Promise.resolve(null);
+            void nativeAttribution.finally(() => syncAcquisitionWithDatabase(session.user.id, profileData.acquisition_info));
 
             pendingOnboardingNoticeRef.current = profileData.status === 'pending' ? session.user.id : null;
 

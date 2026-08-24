@@ -49,6 +49,27 @@ const alert = (msg: string) => {
   });
 };
 
+type AcquisitionInfo = {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_term?: string;
+  utm_content?: string;
+  gclid?: string;
+  fbclid?: string;
+  referrer?: string;
+  landing_page?: string;
+  first_seen_at?: string;
+  channel?: string;
+  attribution_method?: 'url' | 'google_play_install_referrer';
+  referrer_click_at?: string;
+  install_begin_at?: string;
+};
+
+const hasAcquisitionInfo = (info?: AcquisitionInfo | null) => Boolean(
+  info && (info.channel || info.utm_source || info.referrer || info.landing_page || info.gclid || info.fbclid)
+);
+
 interface Professional {
   id: string;
   google_email: string;
@@ -61,19 +82,8 @@ interface Professional {
   subscription_status?: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid';
   subscription_ends_at?: string;
   trial_ends_at?: string;
-  acquisition_info?: {
-    utm_source?: string;
-    utm_medium?: string;
-    utm_campaign?: string;
-    utm_term?: string;
-    utm_content?: string;
-    gclid?: string;
-    fbclid?: string;
-    referrer?: string;
-    landing_page?: string;
-    first_seen_at?: string;
-    channel?: string;
-  };
+  acquisition_info?: AcquisitionInfo;
+  signup_acquisition_info?: AcquisitionInfo;
 }
 
 type JourneyGroupCheckStatus = 'unknown' | 'checking' | 'member' | 'not_member' | 'missing_phone' | 'indeterminate';
@@ -1265,6 +1275,12 @@ export default function AdminPanel() {
 
   // Estado do modal de rastreamento de aquisição / UTMs
   const [selectedAcquisitionProf, setSelectedAcquisitionProf] = useState<Professional | null>(null);
+  const selectedSignupAcquisition = selectedAcquisitionProf?.signup_acquisition_info;
+  const selectedFirstAcquisition = selectedAcquisitionProf?.acquisition_info;
+  const selectedAcquisition = hasAcquisitionInfo(selectedSignupAcquisition)
+    ? selectedSignupAcquisition
+    : selectedFirstAcquisition;
+  const selectedAcquisitionIsSignupTouch = hasAcquisitionInfo(selectedSignupAcquisition);
 
   // Estados para aba de Notificações & SMTP no Painel Admin
   const [adminSmtpHost, setAdminSmtpHost] = useState('');
@@ -4362,7 +4378,7 @@ export default function AdminPanel() {
                                         <button
                                           onClick={() => setSelectedAcquisitionProf(prof)}
                                           className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
-                                            prof.acquisition_info && (prof.acquisition_info.utm_source || prof.acquisition_info.referrer || prof.acquisition_info.channel)
+                                            hasAcquisitionInfo(prof.signup_acquisition_info) || hasAcquisitionInfo(prof.acquisition_info)
                                               ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100'
                                               : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border-gray-200'
                                           }`}
@@ -4401,7 +4417,7 @@ export default function AdminPanel() {
                                       <button
                                         onClick={() => setSelectedAcquisitionProf(prof)}
                                         className={`inline-flex items-center justify-center p-2 rounded-lg transition-colors cursor-pointer border ${
-                                          prof.acquisition_info && (prof.acquisition_info.utm_source || prof.acquisition_info.referrer || prof.acquisition_info.channel)
+                                          hasAcquisitionInfo(prof.signup_acquisition_info) || hasAcquisitionInfo(prof.acquisition_info)
                                             ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-100'
                                             : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border-gray-200'
                                         }`}
@@ -8734,25 +8750,33 @@ export default function AdminPanel() {
               </div>
 
               <div className="p-6 space-y-6 max-h-[80vh] overflow-y-auto">
-                {selectedAcquisitionProf.acquisition_info && (
-                  selectedAcquisitionProf.acquisition_info.channel ||
-                  selectedAcquisitionProf.acquisition_info.utm_source ||
-                  selectedAcquisitionProf.acquisition_info.referrer ||
-                  selectedAcquisitionProf.acquisition_info.landing_page
-                ) ? (
+                {hasAcquisitionInfo(selectedAcquisition) ? (
                   <>
                     {/* Canal em Destaque */}
-                    <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between shadow-sm">
-                      <div>
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">
-                          Canal Principal Detectado
-                        </span>
-                        <span className="text-base font-extrabold text-indigo-950">
-                          {selectedAcquisitionProf.acquisition_info.channel || 'Desconhecido'}
-                        </span>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex items-center justify-between shadow-sm">
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">
+                            {selectedAcquisitionIsSignupTouch ? 'Origem no momento do cadastro' : 'Origem disponível (primeiro acesso)'}
+                          </span>
+                          <span className="text-base font-extrabold text-indigo-950">
+                            {selectedAcquisition?.channel || 'Desconhecido'}
+                          </span>
+                        </div>
+                        <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm">
+                          <Target className="w-5 h-5" />
+                        </div>
                       </div>
-                      <div className="p-2.5 bg-indigo-600 text-white rounded-xl shadow-sm">
-                        <Target className="w-5 h-5" />
+                      <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 block">
+                          Primeiro acesso
+                        </span>
+                        <span className="text-sm font-extrabold text-slate-800">
+                          {selectedFirstAcquisition?.channel || 'Não registrado'}
+                        </span>
+                        <p className="mt-1 text-[10px] text-slate-500">
+                          O bloco detalhado abaixo prioriza a origem capturada no cadastro.
+                        </p>
                       </div>
                     </div>
 
@@ -8767,35 +8791,35 @@ export default function AdminPanel() {
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
                           <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Source</span>
                           <p className="font-semibold text-gray-800 break-all">
-                            {selectedAcquisitionProf.acquisition_info.utm_source || <span className="text-gray-400 italic">Não informado</span>}
+                            {selectedAcquisition?.utm_source || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
 
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
                           <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Medium</span>
                           <p className="font-semibold text-gray-800 break-all">
-                            {selectedAcquisitionProf.acquisition_info.utm_medium || <span className="text-gray-400 italic">Não informado</span>}
+                            {selectedAcquisition?.utm_medium || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
 
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
                           <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Campaign</span>
                           <p className="font-semibold text-gray-800 break-all">
-                            {selectedAcquisitionProf.acquisition_info.utm_campaign || <span className="text-gray-400 italic">Não informado</span>}
+                            {selectedAcquisition?.utm_campaign || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
 
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1">
                           <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Term</span>
                           <p className="font-semibold text-gray-800 break-all">
-                            {selectedAcquisitionProf.acquisition_info.utm_term || <span className="text-gray-400 italic">Não informado</span>}
+                            {selectedAcquisition?.utm_term || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
 
                         <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 space-y-1 sm:col-span-2">
                           <span className="text-[10px] font-bold text-gray-400 uppercase block">UTM Content</span>
                           <p className="font-semibold text-gray-800 break-all">
-                            {selectedAcquisitionProf.acquisition_info.utm_content || <span className="text-gray-400 italic">Não informado</span>}
+                            {selectedAcquisition?.utm_content || <span className="text-gray-400 italic">Não informado</span>}
                           </p>
                         </div>
                       </div>
@@ -8809,35 +8833,46 @@ export default function AdminPanel() {
                       </h4>
 
                       <div className="space-y-2 text-xs">
-                        {selectedAcquisitionProf.acquisition_info.referrer && (
+                        {selectedAcquisition?.referrer && (
                           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase block">Site de Origem (Referrer)</span>
                             <a
-                              href={selectedAcquisitionProf.acquisition_info.referrer}
+                              href={selectedAcquisition.referrer}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="font-medium text-brand-primary hover:underline break-all flex items-center gap-1"
                             >
-                              <span>{selectedAcquisitionProf.acquisition_info.referrer}</span>
+                              <span>{selectedAcquisition.referrer}</span>
                               <ExternalLink className="w-3 h-3 flex-shrink-0" />
                             </a>
                           </div>
                         )}
 
-                        {selectedAcquisitionProf.acquisition_info.landing_page && (
+                        {selectedAcquisition?.landing_page && (
                           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1">
                             <span className="text-[10px] font-bold text-gray-400 uppercase block">Página Inicial de Entrada (Landing Page)</span>
                             <p className="font-mono text-[11px] text-gray-700 break-all">
-                              {selectedAcquisitionProf.acquisition_info.landing_page}
+                              {selectedAcquisition.landing_page}
                             </p>
                           </div>
                         )}
 
-                        {selectedAcquisitionProf.acquisition_info.first_seen_at && (
+                        {selectedAcquisition?.first_seen_at && (
                           <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
                             <span className="text-[10px] font-bold text-gray-400 uppercase">Primeiro Acesso Detectado</span>
                             <span className="font-semibold text-gray-700">
-                              {new Date(selectedAcquisitionProf.acquisition_info.first_seen_at).toLocaleString('pt-BR')}
+                              {new Date(selectedAcquisition.first_seen_at).toLocaleString('pt-BR')}
+                            </span>
+                          </div>
+                        )}
+
+                        {selectedAcquisition?.attribution_method && (
+                          <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between gap-3">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase">Método de atribuição</span>
+                            <span className="font-semibold text-right text-gray-700">
+                              {selectedAcquisition.attribution_method === 'google_play_install_referrer'
+                                ? 'Google Play Install Referrer'
+                                : 'Parâmetros da URL'}
                             </span>
                           </div>
                         )}

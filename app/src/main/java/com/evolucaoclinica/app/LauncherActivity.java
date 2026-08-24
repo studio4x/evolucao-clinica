@@ -45,6 +45,10 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.analytics.FirebaseAnalytics;
 import com.google.firebase.messaging.FirebaseMessaging;
 
+import com.android.installreferrer.api.InstallReferrerClient;
+import com.android.installreferrer.api.InstallReferrerStateListener;
+import com.android.installreferrer.api.ReferrerDetails;
+
 import com.android.billingclient.api.BillingClient;
 import com.android.billingclient.api.BillingClientStateListener;
 import com.android.billingclient.api.BillingFlowParams;
@@ -87,6 +91,8 @@ public class LauncherActivity extends ComponentActivity {
     private static final String APP_URL = "https://www.evolucaoclinica.app.br/login?utm_source=pwa";
     private static final String TRUSTED_HOST = "www.evolucaoclinica.app.br";
     private static final String SUPABASE_HOST = "kvxboovgrrhhttaqinld.supabase.co";
+    private static final String ACQUISITION_PREFS = "evolucao_acquisition";
+    private static final String INSTALL_ATTRIBUTION_KEY = "google_play_install_attribution";
     private WebView webView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ValueCallback<Uri[]> filePathCallback;
@@ -111,6 +117,8 @@ public class LauncherActivity extends ComponentActivity {
     };
     private BillingClient billingClient;
     private FirebaseAnalytics firebaseAnalytics;
+    private InstallReferrerClient installReferrerClient;
+    private volatile String installAttributionJson = "{\"status\":\"pending\"}";
     // The Web consent UI is the source of truth. Collection starts denied.
     private boolean analyticsConsentGranted = false;
     private PaymentSheet paymentSheet;
@@ -164,6 +172,7 @@ public class LauncherActivity extends ComponentActivity {
         webView.addJavascriptInterface(new NativeAppInfoBridge(), "NativeAppInfoBridge");
         webView.addJavascriptInterface(new NativePushBridge(), "NativePushBridge");
         webView.addJavascriptInterface(new NativeAnalyticsBridge(), "NativeAnalyticsBridge");
+        webView.addJavascriptInterface(new NativeAcquisitionBridge(), "NativeAcquisitionBridge");
         configureWebView(webView);
         webView.clearCache(true);
 
@@ -985,6 +994,67 @@ public class LauncherActivity extends ComponentActivity {
         }
     }
 
+    private void initializeInstallReferrer() {
+        SharedPreferences preferences = getSharedPreferences(ACQUISITION_PREFS, MODE_PRIVATE);
+        String cached = preferences.getString(INSTALL_ATTRIBUTION_KEY, "");
+        if (cached != null && !cached.trim().isEmpty()) {
+            installAttributionJson = cached;
+            return;
+        }
+
+        try {
+            installReferrerClient = InstallReferrerClient.newBuilder(this).build();
+            installReferrerClient.startConnection(new InstallReferrerStateListener() {
+                @Override
+                public void onInstallReferrerSetupFinished(int responseCode) {
+                    if (responseCode != InstallReferrerClient.InstallReferrerResponse.OK) {
+                        if (responseCode == InstallReferrerClient.InstallReferrerResponse.FEATURE_NOT_SUPPORTED) {
+                            installAttributionJson = "{\"status\":\"unavailable\"}";
+                        }
+                        endInstallReferrerConnection();
+                        return;
+                    }
+
+                    try {
+                        ReferrerDetails details = installReferrerClient.getInstallReferrer();
+                        JSONObject payload = new JSONObject();
+                        payload.put("status", "ready");
+                        payload.put("install_referrer", details.getInstallReferrer());
+                        payload.put("referrer_click_timestamp_seconds", details.getReferrerClickTimestampSeconds());
+                        payload.put("install_begin_timestamp_seconds", details.getInstallBeginTimestampSeconds());
+                        String serialized = payload.toString();
+                        installAttributionJson = serialized;
+                        preferences.edit().putString(INSTALL_ATTRIBUTION_KEY, serialized).apply();
+                    } catch (Exception exception) {
+                        installAttributionJson = "{\"status\":\"unavailable\"}";
+                        Log.w(LOG_TAG, "Referência de instalação do Google Play indisponível", exception);
+                    } finally {
+                        endInstallReferrerConnection();
+                    }
+                }
+
+                @Override
+                public void onInstallReferrerServiceDisconnected() {
+                    // Sem cache, uma nova tentativa será feita na próxima inicialização.
+                }
+            });
+        } catch (Exception exception) {
+            installAttributionJson = "{\"status\":\"unavailable\"}";
+            Log.w(LOG_TAG, "Não foi possível iniciar o Install Referrer", exception);
+        }
+    }
+
+    private void endInstallReferrerConnection() {
+        if (installReferrerClient == null) return;
+        try {
+            installReferrerClient.endConnection();
+        } catch (Exception exception) {
+            Log.w(LOG_TAG, "Falha ao encerrar Install Referrer", exception);
+        } finally {
+            installReferrerClient = null;
+        }
+    }
+
     private void openDownloadedFile(Uri fileUri, String mimeType, String fileName) {
         Intent viewIntent = new Intent(Intent.ACTION_VIEW);
         viewIntent.setDataAndType(fileUri, mimeType);
@@ -1175,6 +1245,20 @@ public class LauncherActivity extends ComponentActivity {
                 swipeRefreshLayout.setEnabled(enabled);
                 if (!enabled) swipeRefreshLayout.setRefreshing(false);
             });
+        }
+    }
+
+    private final class NativeAcquisitionBridge {
+        @android.webkit.JavascriptInterface
+        public void requestInstallAttribution() {
+            if ("{\"status\":\"pending\"}".equals(installAttributionJson) && installReferrerClient == null) {
+                initializeInstallReferrer();
+            }
+        }
+
+        @android.webkit.JavascriptInterface
+        public String getInstallAttribution() {
+            return installAttributionJson;
         }
     }
 
@@ -1463,6 +1547,7 @@ public class LauncherActivity extends ComponentActivity {
     @Override
     protected void onDestroy() {
         releaseSharedAudioPlayer(true);
+        endInstallReferrerConnection();
         if (billingClient != null) billingClient.endConnection();
         if (webView != null) {
             webView.stopLoading();

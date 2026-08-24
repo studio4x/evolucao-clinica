@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   calculateAcquisitionChannel,
   hasAttributableSignal,
+  isGenericAppFallback,
   isLikelyOAuthReturn,
   normalizeAcquisitionSource,
   resolveAcquisitionTouches,
@@ -38,6 +39,12 @@ assert.equal(
 );
 
 assert.equal(
+  calculateAcquisitionChannel({ utm_source: 'google-play', utm_medium: 'organic', gclid: 'google-click' }),
+  'Google Ads (Tráfego Pago)',
+  'gclid deve prevalecer sobre a fonte genérica devolvida pelo Google Play'
+);
+
+assert.equal(
   calculateAcquisitionChannel({ fbclid: 'abc' }),
   'Meta / Facebook (Origem não determinada)',
   'fbclid isolado não deve ser rotulado como tráfego pago'
@@ -60,6 +67,8 @@ assert.equal(isLikelyOAuthReturn('https://app.test/login?utm_source=instagram', 
 
 assert.equal(hasAttributableSignal({ landing_page: 'https://app.test/' }), false);
 assert.equal(hasAttributableSignal({ utm_source: 'instagram' }), true);
+assert.equal(isGenericAppFallback({ utm_source: 'pwa' }), true);
+assert.equal(isGenericAppFallback({ utm_source: 'pwa', gclid: 'google-click' }), false);
 
 const firstTouch = { utm_source: 'google', channel: 'Google (Busca Orgânica)' };
 const laterTouch = { utm_source: 'meta', utm_medium: 'paid_social', channel: 'Meta Ads (Tráfego Pago)' };
@@ -80,6 +89,34 @@ const resolvedOAuth = resolveAcquisitionTouches({
   returningFromOAuth: true,
 });
 assert.deepEqual(resolvedOAuth.currentTouch, laterTouch, 'retorno OAuth deve preservar a origem pré-login');
+
+const pwaFallback = { utm_source: 'pwa', channel: 'Aplicativo PWA / Android' };
+const installReferrerTouch = {
+  utm_source: 'google',
+  utm_medium: 'cpc',
+  gclid: 'google-click',
+  channel: 'Google Ads (Tráfego Pago)'
+};
+const resolvedInstallReferrer = resolveAcquisitionTouches({
+  existingFirstTouch: pwaFallback,
+  existingCurrentTouch: pwaFallback,
+  candidate: installReferrerTouch,
+  returningFromOAuth: false,
+});
+assert.deepEqual(
+  resolvedInstallReferrer.firstTouch,
+  installReferrerTouch,
+  'Install Referrer deve substituir somente o fallback genérico pwa'
+);
+
+const resolvedPwaReopen = resolveAcquisitionTouches({
+  existingFirstTouch: installReferrerTouch,
+  existingCurrentTouch: installReferrerTouch,
+  candidate: pwaFallback,
+  returningFromOAuth: false,
+});
+assert.deepEqual(resolvedPwaReopen.firstTouch, installReferrerTouch, 'pwa não deve apagar o first touch atribuído');
+assert.deepEqual(resolvedPwaReopen.currentTouch, installReferrerTouch, 'pwa não deve apagar o signup touch atribuído');
 
 assert.equal(isValidWorkContext('independent'), true);
 assert.equal(isValidWorkContext('clinic_professional'), true);
