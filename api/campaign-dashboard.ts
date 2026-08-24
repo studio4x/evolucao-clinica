@@ -57,7 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const round = Number(req.query.round || 2);
-  if (round !== 2) {
+  if (round !== 1 && round !== 2) {
     return res.status(400).json({ ok: false, error: 'unsupported_round' });
   }
 
@@ -103,16 +103,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ ok: false, error: 'dispatch_integration_not_configured' });
   }
 
+  const action = round === 1 ? 'dashboard_round1' : 'dashboard_round2';
+
   try {
     const { response: n8nResponse, body: n8nBody } = await callN8n(
       webhookUrl,
       internalToken,
-      { action: 'dashboard_round2' },
+      { action },
       55_000
     );
 
     if (!n8nResponse.ok) {
       console.error('[CampaignDashboard] n8n recusou consulta do dashboard.', {
+        round,
         status: n8nResponse.status
       });
       return res.status(502).json({
@@ -133,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const isAbort = error instanceof Error && error.name === 'AbortError';
     console.error('[CampaignDashboard] Falha ao consultar dashboard no n8n.', {
+      round,
       error: isAbort ? 'timeout' : error instanceof Error ? error.message : 'unknown_error'
     });
     return res.status(502).json({
