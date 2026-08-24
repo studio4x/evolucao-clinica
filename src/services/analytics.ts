@@ -432,6 +432,14 @@ export const trackEvent = (eventName: AnalyticsEventName | string, parameters: A
   return emitted;
 };
 export const trackPageView = (pathname: string, title = typeof document !== 'undefined' ? document.title : '') => trackEvent('page_view', { page_location: pathname.split('?')[0].split('#')[0].slice(0, 200) || '/', page_title: title.slice(0, MAX_STRING_LENGTH) });
+export const trackSignUpOnce = (userId: string, method: string) => {
+  const normalizedUserId = userId.trim().toLowerCase();
+  if (!UUID_PATTERN.test(normalizedUserId)) return false;
+  return trackEvent('sign_up', { method }, {
+    dedupeKey: `sign_up:${normalizedUserId}`,
+    persistDedupe: true
+  });
+};
 export const setAnalyticsUser = (userId: string | null, properties: Partial<Record<'professional_segment' | 'work_context' | 'subscription_plan' | 'app_environment', string | null>> = {}) => {
   const validId = userId && UUID_PATTERN.test(userId) ? userId : null;
   pendingUser = { id: validId, properties: Object.fromEntries(Object.entries(properties).filter(([name, value]) => ALLOWED_USER_PROPERTIES.has(name) && (value === null || (typeof value === 'string' && !SENSITIVE_VALUE_PATTERN.test(value) && value.length <= 36)))) };

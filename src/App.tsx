@@ -60,7 +60,7 @@ import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBounda
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
 import { captureAcquisitionData, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
-import { getAnalyticsConsent, getCheckoutAttributionWithRetry, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView } from './services/analytics';
+import { getAnalyticsConsent, getCheckoutAttributionWithRetry, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
@@ -727,7 +727,7 @@ export default function App() {
             const createdAt = new Date(session.user.created_at).getTime();
             const signedInAt = new Date(session.user.last_sign_in_at || '').getTime();
             if (Number.isFinite(createdAt) && Number.isFinite(signedInAt) && Math.abs(signedInAt - createdAt) < 5 * 60 * 1000) {
-              trackEvent('sign_up', { method }, { dedupeKey: `sign_up:${session.user.id}` });
+              trackSignUpOnce(session.user.id, method);
             }
           }
           // Supabase emits INITIAL_SESSION independently of getSession(). Both
