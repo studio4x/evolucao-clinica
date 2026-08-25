@@ -90,6 +90,51 @@ type Round3ReadinessResult = {
   error?: string;
 };
 
+type PersistedDispatchRun = {
+  result: DispatchResult;
+  statusResult: DispatchStatusResult | null;
+  dispatchStartedAt: number;
+  savedAt: number;
+};
+
+const DISPATCH_RUN_STORAGE_KEY = 'evolucao-clinica:campaign-dispatch:active-run';
+const DISPATCH_RUN_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+const readPersistedDispatchRun = (): PersistedDispatchRun | null => {
+  try {
+    const raw = window.localStorage.getItem(DISPATCH_RUN_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Partial<PersistedDispatchRun>;
+    const requestId = String(parsed.result?.request_id || '').trim();
+    const startedAt = Number(parsed.dispatchStartedAt || 0);
+    const savedAt = Number(parsed.savedAt || 0);
+    const expired = !savedAt || Date.now() - savedAt > DISPATCH_RUN_MAX_AGE_MS;
+
+    if (
+      expired ||
+      parsed.result?.accepted !== true ||
+      !/^[A-Za-z0-9-]{8,100}$/.test(requestId) ||
+      !Number.isFinite(startedAt) ||
+      startedAt <= 0
+    ) {
+      window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
+      return null;
+    }
+
+    return {
+      result: parsed.result,
+      statusResult: parsed.statusResult || null,
+      dispatchStartedAt: startedAt,
+      savedAt
+    };
+  } catch (error) {
+    console.warn('[AdminCampaignDispatch] Não foi possível restaurar a execução salva:', error);
+    window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
+    return null;
+  }
+};
+
 const errorLabels: Record<string, string> = {
   authentication_required: 'Sua sessão não foi encontrada. Faça login novamente.',
   invalid_session: 'Sua sessão expirou. Faça login novamente.',
@@ -156,6 +201,55 @@ export default function AdminCampaignDispatch() {
   const [round3Readiness, setRound3Readiness] = useState<Round3ReadinessResult | null>(null);
   const [round3ReadinessLoading, setRound3ReadinessLoading] = useState(false);
   const [round3ReadinessError, setRound3ReadinessError] = useState('');
+  const [runStateRestored, setRunStateRestored] = useState(false);
+  const [runRecovered, setRunRecovered] = useState(false);
+
+  useEffect(() => {
+    const persisted = readPersistedDispatchRun();
+
+    if (persisted) {
+      setResult(persisted.result);
+      setStatusResult(persisted.statusResult);
+      setDispatchStartedAt(persisted.dispatchStartedAt);
+      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - persisted.dispatchStartedAt) / 1000)));
+      setRunRecovered(true);
+
+      if (SHEETS.includes(persisted.result.sheet as (typeof SHEETS)[number])) {
+        setSheet(persisted.result.sheet as (typeof SHEETS)[number]);
+      }
+
+      const savedQuantity = Number(persisted.result.quantity || 0);
+      if (Number.isInteger(savedQuantity) && savedQuantity >= 1 && savedQuantity <= 50) {
+        setQuantity(savedQuantity);
+      }
+
+      if (TEMPLATES.some(item => item.value === persisted.result.template)) {
+        setTemplate(persisted.result.template as (typeof TEMPLATES)[number]['value']);
+      }
+    }
+
+    setRunStateRestored(true);
+  }, []);
+
+  useEffect(() => {
+    if (!runStateRestored) return;
+
+    try {
+      if (result?.accepted && result.request_id && dispatchStartedAt) {
+        const persisted: PersistedDispatchRun = {
+          result,
+          statusResult,
+          dispatchStartedAt,
+          savedAt: Date.now()
+        };
+        window.localStorage.setItem(DISPATCH_RUN_STORAGE_KEY, JSON.stringify(persisted));
+      } else {
+        window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
+      }
+    } catch (error) {
+      console.warn('[AdminCampaignDispatch] Não foi possível salvar o acompanhamento da execução:', error);
+    }
+  }, [dispatchStartedAt, result, runStateRestored, statusResult]);
 
   useEffect(() => {
     let mounted = true;
@@ -333,6 +427,7 @@ export default function AdminCampaignDispatch() {
 
   const resetRun = () => {
     if (runActive) return;
+    window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
     setResult(null);
     setStatusResult(null);
     setStatusError('');
@@ -340,6 +435,7 @@ export default function AdminCampaignDispatch() {
     setDispatchStartedAt(null);
     setElapsedSeconds(0);
     setConfirmed(false);
+    setRunRecovered(false);
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -353,6 +449,8 @@ export default function AdminCampaignDispatch() {
     setErrorMessage('');
     setDispatchStartedAt(null);
     setElapsedSeconds(0);
+    setRunRecovered(false);
+    window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
 
     try {
       const response = await fetch('/api/admin/campaign-dispatch', {
@@ -562,6 +660,13 @@ export default function AdminCampaignDispatch() {
               </div>
             )}
           </div>
+
+          {runRecovered && result?.accepted && (
+            <div className="mt-4 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+              <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" />
+              <span><strong>Acompanhamento recuperado.</strong> Esta execução foi restaurada após a atualização ou reabertura da página e continuará sendo consultada pelo mesmo request_id.</span>
+            </div>
+          )}
 
           {!result?.accepted ? (
             <div className="mt-5 rounded-2xl border border-dashed border-brand-border bg-brand-bg/30 px-5 py-6 text-center">
