@@ -32,8 +32,6 @@ jobs:
           text = page.read_text(encoding='utf-8')
           original = text
 
-          # Move the campaign-dispatch precheck from R3 to R4 without changing
-          # the dispatch endpoint or execution tracking logic.
           text = text.replace('Round3', 'Round4')
           text = text.replace('round3', 'round4')
           text = text.replace('Rodada 3', 'Rodada 4')
@@ -51,7 +49,6 @@ jobs:
               raise SystemExit('Safety block target not found in AdminCampaignDispatch.tsx')
           text = text.replace(old_block, new_block, 1)
 
-          # Make the operational decision explicit in the R4 precheck.
           old_precheck = (
               'Leitura do dashboard administrativo. “Liberados” indica apenas '
               '<strong>SIM na origem</strong>; a elegibilidade final ainda depende de todas as travas do workflow.'
@@ -117,3 +114,5 @@ jobs:
           git add src/pages/AdminCampaignDispatch.tsx api/campaign-dashboard.ts .github/workflows/apply-round4-transition.yml
           git commit -m 'feat: prepare campaign dispatch for round 4'
           git push origin HEAD:main
+
+# trigger: 2026-08-26-round4
