@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, Volume2, Award, MessageCircle, Compass, ListChecks } from 'lucide-react';
+import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Volume2, Award, Compass, ListChecks } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -12,7 +12,17 @@ import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 import { trackEvent } from '../services/analytics';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
-import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
+import {
+  DEFAULT_WHATSAPP_COUNTRY,
+  formatWhatsAppNationalNumber,
+  getWhatsAppCountryCallingCode,
+  getWhatsAppCountryOptions,
+  normalizeRequiredWhatsAppNationalNumber,
+  splitStoredWhatsAppNumber,
+} from '../utils/whatsappNumber';
+import type { CountryCode } from 'libphonenumber-js';
+
+const WHATSAPP_COUNTRY_OPTIONS = getWhatsAppCountryOptions();
 
 const normalizeText = (text: string): string => {
   if (!text) return '';
@@ -79,6 +89,7 @@ export default function Onboarding() {
   const [syncError, setSyncError] = useState('');
   const [syncSummary, setSyncSummary] = useState<AgendaSyncSummary | null>(null);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [whatsappCountry, setWhatsappCountry] = useState<CountryCode>(DEFAULT_WHATSAPP_COUNTRY);
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappError, setWhatsappError] = useState('');
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
@@ -145,7 +156,9 @@ export default function Onboarding() {
         if (!response.ok) return;
         const payload = await response.json();
         if (active && payload.preferences?.whatsapp_number) {
-          setWhatsappNumber(payload.preferences.whatsapp_number);
+          const storedWhatsApp = splitStoredWhatsAppNumber(payload.preferences.whatsapp_number);
+          setWhatsappCountry(storedWhatsApp.country);
+          setWhatsappNumber(storedWhatsApp.nationalNumber);
         }
       } catch (error) {
         console.warn('[Onboarding] Não foi possível carregar o WhatsApp cadastrado.', error);
@@ -170,7 +183,7 @@ export default function Onboarding() {
     setWhatsappError('');
 
     try {
-      const normalizedWhatsApp = normalizeRequiredWhatsAppNumber(whatsappNumber);
+      const normalizedWhatsApp = normalizeRequiredWhatsAppNationalNumber(whatsappNumber, whatsappCountry);
       setSavingWhatsapp(true);
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
@@ -184,7 +197,7 @@ export default function Onboarding() {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o WhatsApp.');
 
-      setWhatsappNumber(normalizedWhatsApp);
+      setWhatsappNumber(formatWhatsAppNationalNumber(whatsappNumber, whatsappCountry));
       setOnboardingState(user.id, { step: 'patient' });
       void trackLifecycleEvent('onboarding_step_completed', {
         metadata: { step: 'intro', mode: onboardingState?.mode || 'guided' },
