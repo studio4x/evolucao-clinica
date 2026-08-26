@@ -1,0 +1,119 @@
+name: Apply Round 4 transition
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/apply-round4-transition.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Patch Round 4 dashboard
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path('src/pages/AdminCampaignDispatch.tsx')
+          text = page.read_text(encoding='utf-8')
+          original = text
+
+          # Move the campaign-dispatch precheck from R3 to R4 without changing
+          # the dispatch endpoint or execution tracking logic.
+          text = text.replace('Round3', 'Round4')
+          text = text.replace('round3', 'round4')
+          text = text.replace('Rodada 3', 'Rodada 4')
+          text = text.replace('?round=3&refresh=', '?round=4&refresh=')
+
+          old_block = (
+              'const round4DispatchBlocked = round4Configuration && '
+              'round4ReadinessAvailable && round4Released === 0;'
+          )
+          new_block = (
+              'const round4DispatchBlocked = round4Configuration && '
+              '(!round4ReadinessAvailable || round4Released === 0);'
+          )
+          if old_block not in text:
+              raise SystemExit('Safety block target not found in AdminCampaignDispatch.tsx')
+          text = text.replace(old_block, new_block, 1)
+
+          # Make the operational decision explicit in the R4 precheck.
+          old_precheck = (
+              'Leitura do dashboard administrativo. “Liberados” indica apenas '
+              '<strong>SIM na origem</strong>; a elegibilidade final ainda depende de todas as travas do workflow.'
+          )
+          new_precheck = (
+              'Leitura do dashboard administrativo. “Liberados” indica apenas '
+              '<strong>SIM na origem</strong>; a elegibilidade final ainda depende de todas as travas do workflow. '
+              'Os follow-ups da captação permanecem desativados.'
+          )
+          if old_precheck not in text:
+              raise SystemExit('R4 precheck text target not found')
+          text = text.replace(old_precheck, new_precheck, 1)
+
+          if text == original:
+              raise SystemExit('AdminCampaignDispatch.tsx was not changed')
+          if 'round3' in text or 'Round3' in text or 'Rodada 3' in text:
+              raise SystemExit('Stale Round 3 references remain in AdminCampaignDispatch.tsx')
+          if '/api/admin/campaign-dashboard?round=4&refresh=' not in text:
+              raise SystemExit('Round 4 dashboard endpoint not configured in frontend')
+          if '(!round4ReadinessAvailable || round4Released === 0)' not in text:
+              raise SystemExit('Round 4 safety block is missing')
+          page.write_text(text, encoding='utf-8')
+
+          api = Path('api/campaign-dashboard.ts')
+          api_text = api.read_text(encoding='utf-8')
+          api_original = api_text
+          if 'if (![1, 2, 3].includes(round))' not in api_text:
+              raise SystemExit('Supported-rounds target not found')
+          api_text = api_text.replace(
+              'if (![1, 2, 3].includes(round))',
+              'if (![1, 2, 3, 4].includes(round))',
+              1,
+          )
+          if "    3: 'dashboard_round3'\n" not in api_text:
+              raise SystemExit('Round action map target not found')
+          api_text = api_text.replace(
+              "    3: 'dashboard_round3'\n",
+              "    3: 'dashboard_round3',\n    4: 'dashboard_round4'\n",
+              1,
+          )
+          if api_text == api_original:
+              raise SystemExit('campaign-dashboard.ts was not changed')
+          if "4: 'dashboard_round4'" not in api_text:
+              raise SystemExit('Round 4 action missing from API')
+          api.write_text(api_text, encoding='utf-8')
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate lint
+        run: npm run lint
+
+      - name: Validate build
+        run: npm run build
+
+      - name: Commit validated Round 4 patch
+        shell: bash
+        run: |
+          rm -f .github/workflows/apply-round4-transition.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/pages/AdminCampaignDispatch.tsx api/campaign-dashboard.ts .github/workflows/apply-round4-transition.yml
+          git commit -m 'feat: prepare campaign dispatch for round 4'
+          git push origin HEAD:main
