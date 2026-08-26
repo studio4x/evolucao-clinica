@@ -295,14 +295,20 @@ export default function AdminCampaignDispatch() {
 
     setRound3ReadinessLoading(true);
     try {
-      const response = await fetch('/api/admin/campaign-dashboard?round=3', {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          Accept: 'application/json'
-        },
-        cache: 'no-store'
-      });
+      const refreshNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const response = await fetch(
+        `/api/admin/campaign-dashboard?round=3&refresh=${encodeURIComponent(refreshNonce)}`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            Accept: 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            Pragma: 'no-cache'
+          },
+          cache: 'no-store'
+        }
+      );
 
       const body = await response.json().catch(() => ({ ok: false, error: 'invalid_response' })) as Round3ReadinessResult;
       if (!response.ok || !body.ok) {
@@ -310,7 +316,10 @@ export default function AdminCampaignDispatch() {
         return;
       }
 
-      setRound3Readiness(body);
+      setRound3Readiness({
+        ...body,
+        overall: body.overall ? { ...body.overall } : undefined
+      });
       setRound3ReadinessError('');
     } catch (error) {
       console.error('[AdminCampaignDispatch] Falha ao consultar preparação da Rodada 3:', error);
