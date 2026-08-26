@@ -22,10 +22,13 @@ const callN8n = async (
       headers: {
         Authorization: `Bearer ${internalToken}`,
         Accept: 'application/json',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        Pragma: 'no-cache'
       },
       body: JSON.stringify(payload),
-      signal: controller.signal
+      signal: controller.signal,
+      cache: 'no-store'
     });
 
     const rawResponse = await response.text();
@@ -44,7 +47,12 @@ const callN8n = async (
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('CDN-Cache-Control', 'no-store');
+  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Vary', 'Authorization');
 
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
