@@ -30,7 +30,7 @@
     "test:google-auth": "tsx tests/google-auth-recovery.test.ts",
     "test:google-doc-sync": "tsx tests/google-doc-evolution-sync.test.ts",
     "test:share-target": "tsx tests/share-target-experience.test.ts",
-    "test:acquisition": "tsx tests/acquisition-attribution.test.ts && tsx tests/acquisition-telemetry.test.ts",
+    "test:acquisition": "tsx tests/acquisition-attribution.test.ts && tsx tests/acquisition-telemetry.test.ts && tsx tests/acquisition-telemetry-retention.test.ts",
     "test:analytics": "tsx tests/analytics.test.ts",
     "test:meta-registration": "tsx tests/meta-registration.test.ts",
     "test:cookie-consent": "tsx tests/cookie-consent.test.ts",
