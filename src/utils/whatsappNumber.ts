@@ -4,7 +4,16 @@ import {
   getCountryCallingCode,
   parsePhoneNumberFromString,
   type CountryCode,
-} from 'libphonenumber-js/min';
+  type MetadataJson,
+} from 'libphonenumber-js/core';
+import importedPhoneMetadata from 'libphonenumber-js/min/metadata';
+
+export type { CountryCode } from 'libphonenumber-js/core';
+
+const PHONE_METADATA = (
+  (importedPhoneMetadata as unknown as { default?: MetadataJson }).default
+  || importedPhoneMetadata
+) as MetadataJson;
 
 export const DEFAULT_WHATSAPP_COUNTRY: CountryCode = 'BR';
 
@@ -30,7 +39,7 @@ const countryFlag = (country: CountryCode): string => country
   .join('');
 
 export function getWhatsAppCountryCallingCode(country: CountryCode): string {
-  return getCountryCallingCode(country);
+  return getCountryCallingCode(country, PHONE_METADATA);
 }
 
 export function getWhatsAppCountryOptions(): WhatsAppCountryOption[] {
@@ -38,10 +47,10 @@ export function getWhatsAppCountryOptions(): WhatsAppCountryOption[] {
     ? new Intl.DisplayNames(['pt-BR'], { type: 'region' })
     : null;
 
-  return getCountries()
+  return getCountries(PHONE_METADATA)
     .map((code) => ({
       code,
-      callingCode: getCountryCallingCode(code),
+      callingCode: getCountryCallingCode(code, PHONE_METADATA),
       flag: countryFlag(code),
       name: displayNames?.of(code) || code,
     }))
@@ -49,7 +58,7 @@ export function getWhatsAppCountryOptions(): WhatsAppCountryOption[] {
 }
 
 export function formatWhatsAppNationalNumber(value: string, country: CountryCode): string {
-  return new AsYouType(country).input(digitsOnly(value));
+  return new AsYouType(country, PHONE_METADATA).input(digitsOnly(value));
 }
 
 export function normalizeRequiredWhatsAppNationalNumber(value: string, country: CountryCode): string {
@@ -58,7 +67,7 @@ export function normalizeRequiredWhatsAppNationalNumber(value: string, country: 
     throw new RequiredWhatsAppNumberError('Informe seu número de WhatsApp para continuar.');
   }
 
-  const parsed = parsePhoneNumberFromString(nationalNumber, country);
+  const parsed = parsePhoneNumberFromString(nationalNumber, country, PHONE_METADATA);
   if (!parsed?.isPossible()) {
     throw new RequiredWhatsAppNumberError('Informe um número de WhatsApp válido para o país selecionado.');
   }
@@ -75,7 +84,7 @@ export function splitStoredWhatsAppNumber(
     return { country: fallbackCountry, nationalNumber: '' };
   }
 
-  const parsed = parsePhoneNumberFromString(`+${normalized}`);
+  const parsed = parsePhoneNumberFromString(`+${normalized}`, PHONE_METADATA);
   if (parsed?.country) {
     return {
       country: parsed.country,
@@ -83,7 +92,7 @@ export function splitStoredWhatsAppNumber(
     };
   }
 
-  const fallbackCallingCode = getCountryCallingCode(fallbackCountry);
+  const fallbackCallingCode = getCountryCallingCode(fallbackCountry, PHONE_METADATA);
   const nationalNumber = normalized.startsWith(fallbackCallingCode)
     ? normalized.slice(fallbackCallingCode.length)
     : normalized;

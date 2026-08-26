@@ -19,8 +19,8 @@ import {
   getWhatsAppCountryOptions,
   normalizeRequiredWhatsAppNationalNumber,
   splitStoredWhatsAppNumber,
+  type CountryCode,
 } from '../utils/whatsappNumber';
-import type { CountryCode } from 'libphonenumber-js';
 
 const WHATSAPP_COUNTRY_OPTIONS = getWhatsAppCountryOptions();
 
@@ -813,8 +813,38 @@ export default function Onboarding() {
                         <label htmlFor="onboarding-whatsapp" className="block text-[11px] font-bold uppercase tracking-wider text-brand-text">
                           WhatsApp obrigatório
                         </label>
-                        <div className="relative">
-                          <MessageCircle className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-primary" />
+                        <div
+                          className={`flex w-full overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary ${whatsappError ? 'border-red-400 focus-within:border-red-500 focus-within:ring-red-500' : 'border-brand-border'}`}
+                        >
+                          <div className="relative flex shrink-0 items-center border-r border-brand-border bg-brand-bg/60">
+                            <div className="pointer-events-none flex min-w-[92px] items-center justify-center gap-1.5 px-3 text-sm font-semibold text-brand-text" aria-hidden="true">
+                              <span className="text-lg leading-none">
+                                {WHATSAPP_COUNTRY_OPTIONS.find((country) => country.code === whatsappCountry)?.flag}
+                              </span>
+                              <span>+{getWhatsAppCountryCallingCode(whatsappCountry)}</span>
+                              <ChevronDown className="h-3.5 w-3.5 text-brand-text-muted" />
+                            </div>
+                            <select
+                              id="onboarding-whatsapp-country"
+                              aria-label="País do WhatsApp"
+                              title="Selecionar país e DDI"
+                              value={whatsappCountry}
+                              disabled={savingWhatsapp}
+                              onChange={(event) => {
+                                const nextCountry = event.target.value as CountryCode;
+                                setWhatsappCountry(nextCountry);
+                                setWhatsappNumber((currentNumber) => formatWhatsAppNationalNumber(currentNumber, nextCountry));
+                                if (whatsappError) setWhatsappError('');
+                              }}
+                              className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                            >
+                              {WHATSAPP_COUNTRY_OPTIONS.map((country) => (
+                                <option key={country.code} value={country.code}>
+                                  {country.flag} {country.name} (+{country.callingCode})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                           <input
                             id="onboarding-whatsapp"
                             type="tel"
@@ -823,18 +853,18 @@ export default function Onboarding() {
                             autoComplete="tel"
                             value={whatsappNumber}
                             onChange={(event) => {
-                              setWhatsappNumber(event.target.value);
+                              setWhatsappNumber(formatWhatsAppNationalNumber(event.target.value, whatsappCountry));
                               if (whatsappError) setWhatsappError('');
                             }}
-                            placeholder="Ex: 5511999887766"
+                            placeholder={whatsappCountry === 'BR' ? '(99) 99999-9999' : 'Número do WhatsApp'}
                             disabled={savingWhatsapp}
-                            className={`input-field w-full py-3 pl-10 pr-4 text-sm ${whatsappError ? 'border-red-400 focus:border-red-500' : ''}`}
+                            className="min-w-0 flex-1 border-0 bg-white px-3 py-3 text-sm text-brand-text outline-none ring-0 placeholder:text-brand-text-muted/70 focus:border-0 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                             aria-invalid={Boolean(whatsappError)}
                             aria-describedby={whatsappError ? 'onboarding-whatsapp-error' : 'onboarding-whatsapp-help'}
                           />
                         </div>
                         <p id="onboarding-whatsapp-help" className="text-[10px] leading-relaxed text-brand-text-muted">
-                          Informe DDI + DDD + número. Esse dado poderá ser alterado depois no seu perfil.
+                          Selecione o país e informe o número com DDD. Esse dado poderá ser alterado depois no seu perfil.
                         </p>
                         {whatsappError && (
                           <p id="onboarding-whatsapp-error" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-700">
