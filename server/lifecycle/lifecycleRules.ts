@@ -117,7 +117,7 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
       return !state.lastLoginAt && hoursSince(state.onboardingCompletedAt || state.lastActivityAt, now) >= 24
         ? createCandidate(rule, state, now, `registration:${period}`, "sem novo acesso após 24 horas") : null;
     case "onboarding_incomplete_24h": {
-      const minimumHours = Number(rule.condition_config?.minimum_hours || 24);
+      const minimumHours = Number(rule.condition_config?.minimum_hours || 12);
       const trialEndedWithoutAccess = Boolean(
         state.trialEndsAt
         && new Date(state.trialEndsAt).getTime() <= now.getTime()

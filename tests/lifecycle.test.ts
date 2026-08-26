@@ -58,9 +58,9 @@ const canceledTrialRule: any = { id: 'rule-canceled-trial', rule_key: 'trial_can
 assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-13T11:00:00.000Z' }, now)?.messageKey, 'conditional:trial_canceled_reengagement_3d');
 assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-13T13:00:00.000Z' }, now), null);
 assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionPlan: 'monthly', subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-10T12:00:00.000Z' }, now), null);
-const onboardingIncompleteRule: any = { id: 'rule-onboarding-incomplete', rule_key: 'onboarding_incomplete_24h', name: 'Onboarding pendente', rule_type: 'state', priority: 86, cooldown_hours: 168, delay_minutes: 0, condition_config: { minimum_hours: 24 }, enabled: true, message_config: {} };
+const onboardingIncompleteRule: any = { id: 'rule-onboarding-incomplete', rule_key: 'onboarding_incomplete_24h', name: 'Onboarding pendente', rule_type: 'state', priority: 86, cooldown_hours: 168, delay_minutes: 0, condition_config: { minimum_hours: 12 }, enabled: true, message_config: {} };
 assert.equal(evaluateKnownRule(onboardingIncompleteRule, baseState, now)?.messageKey, 'conditional:onboarding_incomplete_24h');
-assert.equal(evaluateKnownRule(onboardingIncompleteRule, { ...baseState, registeredAt: '2026-07-15T13:00:00.000Z' }, now), null);
+assert.equal(evaluateKnownRule(onboardingIncompleteRule, { ...baseState, registeredAt: '2026-07-16T01:00:00.000Z' }, now), null);
 assert.equal(evaluateKnownRule(onboardingIncompleteRule, { ...baseState, onboardingCompletedAt: '2026-07-15T14:00:00.000Z' }, now), null);
 assert.equal(evaluateKnownRule(onboardingIncompleteRule, { ...baseState, subscriptionStatus: 'canceled' }, now), null);
 
@@ -197,6 +197,11 @@ assert.match(onboardingIncompleteMigration, /'onboarding_incomplete_24h'/);
 assert.match(onboardingIncompleteMigration, /\n\s*16,\n\s*1440,/);
 assert.match(onboardingIncompleteMigration, /\n\s*'draft',/);
 assert.match(onboardingIncompleteMigration, /'\/onboarding'/);
+
+const onboardingTwelveHourMigration = readFileSync('supabase/migrations/20260826200000_adjust_onboarding_incomplete_step_to_12h.sql', 'utf8');
+assert.match(onboardingTwelveHourMigration, /'\{minimum_hours\}', '12'::jsonb/);
+assert.match(onboardingTwelveHourMigration, /wait_minutes = 720/);
+assert.match(onboardingTwelveHourMigration, /status = 'draft'/);
 
 const lifecycleRoutesSource = readFileSync('server/lifecycle/lifecycleRoutes.ts', 'utf8');
 assert.match(lifecycleRoutesSource, /\/api\/lifecycle\/trial-extension\/redeem/);

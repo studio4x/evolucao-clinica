@@ -428,7 +428,7 @@ async function validateOnboardingIncomplete(deps: LifecycleDependencies, userId:
   if (professional.onboarding_completed === true || professional.onboarding_status === "completed") return "onboarding_already_completed";
   if (professional.subscription_status === "canceled") return "account_no_longer_available_for_onboarding";
 
-  const minimumHours = Number(rule?.condition_config?.minimum_hours || 24);
+  const minimumHours = Number(rule?.condition_config?.minimum_hours || 12);
   const registeredAt = professional.created_at ? new Date(professional.created_at).getTime() : 0;
   if (!Number.isFinite(registeredAt) || registeredAt <= 0 || Date.now() - registeredAt < minimumHours * 3600000) {
     return "onboarding_reminder_interval_not_elapsed";
