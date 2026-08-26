@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Clock,
+  ExternalLink,
   FileSpreadsheet,
   Loader2,
   MessageSquareText,
@@ -74,6 +75,9 @@ type DispatchStatusResult = {
   group_http_status?: number;
   last_event?: string;
   updated_at?: string;
+  error_node?: string;
+  error_message?: string;
+  error_execution_url?: string;
   error?: string;
 };
 
@@ -183,6 +187,21 @@ const formatDateTime = (value?: string) => {
   }).format(date);
 };
 
+const isSafeN8nExecutionUrl = (value?: string) => {
+  if (!value) return false;
+
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'n8n.studio4x.com.br' &&
+      url.pathname.includes('/executions/')
+    );
+  } catch {
+    return false;
+  }
+};
+
 export default function AdminCampaignDispatch() {
   const [authLoading, setAuthLoading] = useState(true);
   const [accessToken, setAccessToken] = useState('');
@@ -211,7 +230,8 @@ export default function AdminCampaignDispatch() {
       setResult(persisted.result);
       setStatusResult(persisted.statusResult);
       setDispatchStartedAt(persisted.dispatchStartedAt);
-      setElapsedSeconds(Math.max(0, Math.floor((Date.now() - persisted.dispatchStartedAt) / 1000)));
+      const elapsedReference = persisted.statusResult?.complete ? persisted.savedAt : Date.now();
+      setElapsedSeconds(Math.max(0, Math.floor((elapsedReference - persisted.dispatchStartedAt) / 1000)));
       setRunRecovered(true);
 
       if (SHEETS.includes(persisted.result.sheet as (typeof SHEETS)[number])) {
@@ -388,6 +408,9 @@ export default function AdminCampaignDispatch() {
   const groupNoticeError = statusResult?.group_notice === 'ERRO';
   const completeSuccess = currentStatus === 'CONCLUIDO';
   const terminalWithIssue = Boolean(statusResult?.complete && !completeSuccess);
+  const safeErrorExecutionUrl = isSafeN8nExecutionUrl(statusResult?.error_execution_url)
+    ? statusResult?.error_execution_url
+    : '';
   const round3Configuration = sheet === 'Psicologia e Saúde Mental';
   const winnerTemplateSelected = template === 'convite_jornada_ec_15dias_v1';
   const round3Planned = Math.max(0, Number(round3Readiness?.overall?.planned || 0));
@@ -662,9 +685,25 @@ export default function AdminCampaignDispatch() {
           </div>
 
           {runRecovered && result?.accepted && (
-            <div className="mt-4 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs text-blue-900">
+            <div className={`mt-4 flex items-start gap-2 rounded-xl border px-4 py-3 text-xs ${
+              statusResult?.complete
+                ? terminalWithIssue
+                  ? 'border-amber-200 bg-amber-50 text-amber-900'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                : 'border-blue-200 bg-blue-50 text-blue-900'
+            }`}>
               <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" />
-              <span><strong>Acompanhamento recuperado.</strong> Esta execução foi restaurada após a atualização ou reabertura da página e continuará sendo consultada pelo mesmo request_id.</span>
+              <span>
+                {statusResult?.complete ? (
+                  <>
+                    <strong>Execução finalizada restaurada.</strong> O último estado confirmado foi recuperado do navegador. Não há processamento em andamento para este request_id.
+                  </>
+                ) : (
+                  <>
+                    <strong>Acompanhamento recuperado.</strong> Esta execução foi restaurada após a atualização ou reabertura da página e continuará sendo consultada pelo mesmo request_id.
+                  </>
+                )}
+              </span>
             </div>
           )}
 
@@ -754,6 +793,49 @@ export default function AdminCampaignDispatch() {
                     <p className="text-sm font-bold text-brand-text">
                       {statusResult?.message || 'Acompanhando a execução do lote.'}
                     </p>
+
+                    {currentStatus === 'ERRO' && (
+                      <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-950">
+                        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          Detalhes da falha
+                        </div>
+                        <dl className="mt-2 grid gap-x-5 gap-y-2 text-xs sm:grid-cols-2">
+                          {statusResult?.error_node && (
+                            <div>
+                              <dt className="font-semibold text-red-800">Node</dt>
+                              <dd className="mt-0.5 break-words">{statusResult.error_node}</dd>
+                            </div>
+                          )}
+                          {statusResult?.execution_id && (
+                            <div>
+                              <dt className="font-semibold text-red-800">Execução n8n</dt>
+                              <dd className="mt-0.5 break-all">{statusResult.execution_id}</dd>
+                            </div>
+                          )}
+                          <div className="sm:col-span-2">
+                            <dt className="font-semibold text-red-800">Mensagem</dt>
+                            <dd className="mt-0.5 break-words">{statusResult?.error_message || statusResult?.message || 'Falha sem mensagem detalhada.'}</dd>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <dt className="font-semibold text-red-800">Request ID</dt>
+                            <dd className="mt-0.5 break-all">{result.request_id}</dd>
+                          </div>
+                        </dl>
+                        {safeErrorExecutionUrl && (
+                          <a
+                            href={safeErrorExecutionUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-3 inline-flex items-center gap-2 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-800 transition hover:bg-red-100"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                            Abrir execução no n8n
+                          </a>
+                        )}
+                      </div>
+                    )}
+
                     <div className="mt-2 grid gap-x-5 gap-y-1 text-xs text-brand-text-muted sm:grid-cols-2 lg:grid-cols-3">
                       <span><strong>Tempo:</strong> {formatElapsed(elapsedSeconds)}</span>
                       <span><strong>Máximo solicitado:</strong> {result.quantity ?? '-'}</span>
