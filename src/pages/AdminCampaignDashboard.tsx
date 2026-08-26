@@ -18,10 +18,10 @@ import {
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
-type RoundNumber = 1 | 2 | 3;
+type RoundNumber = 1 | 2 | 3 | 4;
 
-const AVAILABLE_ROUNDS: RoundNumber[] = [1, 2, 3];
-const DEFAULT_ROUND: RoundNumber = 3;
+const AVAILABLE_ROUNDS: RoundNumber[] = [1, 2, 3, 4];
+const DEFAULT_ROUND: RoundNumber = 4;
 
 const readRoundFromUrl = (): RoundNumber => {
   const round = Number(new URLSearchParams(window.location.search).get('round'));
@@ -202,7 +202,8 @@ const errorLabels: Record<string, string> = {
   n8n_dashboard_unavailable: 'Não foi possível consultar os dados do dashboard neste momento.',
   round1_data_incomplete: 'Os dados da Rodada 1 ainda não estão completos na fonte.',
   round2_data_incomplete: 'Os dados da Rodada 2 ainda não estão completos na fonte.',
-  round3_data_incomplete: 'Os dados da Rodada 3 ainda não estão completos na fonte.'
+  round3_data_incomplete: 'Os dados da Rodada 3 ainda não estão completos na fonte.',
+  round4_data_incomplete: 'Os dados da Rodada 4 ainda não estão completos na fonte.'
 };
 
 const templateLabels: Record<string, string> = {
@@ -519,6 +520,7 @@ export default function AdminCampaignDashboard() {
   const isRound1 = selectedRound === 1;
   const isRound2 = selectedRound === 2;
   const isRound3 = selectedRound === 3;
+  const isRound4 = selectedRound === 4;
   const overall = data?.overall;
   const variants = data?.variants;
   const decision = data?.decision;
@@ -530,7 +532,9 @@ export default function AdminCampaignDashboard() {
     ? 'Rodada 1 • Terapia Ocupacional + Enfermagem - Home Care. Histórico de envios, follow-ups e presença atual no grupo.'
     : isRound2
       ? 'Rodada 2 • Fase 1 • Psicologia e Saúde Mental. Teste A/B encerrado, follow-ups e presença atual no grupo.'
-      : 'Rodada 3 • Psicologia e Saúde Mental. Expansão com os leads remanescentes e o template vencedor da Rodada 2.';
+      : isRound3
+        ? 'Rodada 3 • Psicologia e Saúde Mental. Rodada encerrada com 100 contatos processados; follow-up desativado.'
+        : 'Rodada 4 • Psicologia e Saúde Mental. Nova coorte fixa de 100 contatos liberados; follow-up desativado.';
 
   return (
     <main className="min-h-screen bg-brand-bg px-4 py-6 md:px-8 md:py-10">
@@ -613,7 +617,7 @@ export default function AdminCampaignDashboard() {
           <>
             <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div><div className="flex items-center gap-2 text-brand-primary"><BarChart3 className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Rodada 3 — visão geral</h2></div><p className="mt-1 text-xs text-brand-text-muted">Coorte fixa de Psicologia e Saúde Mental. Os contatos foram preparados no Sheets, sem liberação automática.</p></div>
+                <div><div className="flex items-center gap-2 text-brand-primary"><BarChart3 className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Rodada 3 — visão geral</h2></div><p className="mt-1 text-xs text-brand-text-muted">Rodada encerrada. Coorte histórica congelada no Sheets, com 100 contatos processados.</p></div>
                 <div className="text-left text-xs text-brand-text-muted md:text-right"><p>Última atualização</p><p className="mt-1 font-bold text-brand-text">{formatDateTime(data.updated_at)}</p><p className="mt-1">Workflow {data.workflow || 'n8n'}</p></div>
               </div>
 
@@ -631,18 +635,55 @@ export default function AdminCampaignDashboard() {
 
             <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-start gap-3"><Trophy className="mt-0.5 h-6 w-6 shrink-0 text-blue-700" /><div><h2 className="font-display text-lg font-bold text-blue-900">Estratégia da Rodada 3</h2><p className="mt-1 text-sm font-semibold text-blue-800">{templateLabels[data.template || ''] || data.template || 'Template não definido'}</p><p className="mt-2 text-sm text-blue-800">A Rodada 3 utiliza o template vencedor da Rodada 2. Não há novo A/B no convite inicial nesta etapa.</p></div></div>
+                <div className="flex items-start gap-3"><Trophy className="mt-0.5 h-6 w-6 shrink-0 text-blue-700" /><div><h2 className="font-display text-lg font-bold text-blue-900">Estratégia da Rodada 3</h2><p className="mt-1 text-sm font-semibold text-blue-800">{templateLabels[data.template || ''] || data.template || 'Template não definido'}</p><p className="mt-2 text-sm text-blue-800">A Rodada 3 utilizou o template vencedor da Rodada 2. Não houve novo A/B no convite inicial.</p></div></div>
                 <div className="min-w-64 rounded-2xl bg-white/80 px-4 py-3 text-xs shadow-sm"><p className="text-brand-text-muted">Status operacional</p><p className="mt-1 font-bold text-brand-text">{data.status || '—'}</p><p className="mt-3 text-brand-text-muted">Origem da decisão</p><p className="mt-1 font-bold text-brand-text">{data.origin_decision || '—'}</p></div>
               </div>
             </section>
 
             <FunnelSection title="Funil da Rodada 3" funnel={data.funnel} base={Number(overall.planned || 0)} />
 
-            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><MessageCircleReply className="mt-0.5 h-6 w-6 text-brand-primary" /><div><h2 className="font-display text-lg font-bold text-brand-primary">Política de follow-up — Rodada 3</h2><p className="mt-1 text-sm text-brand-text-muted">Os follow-ups pagos de “sem resposta” e “lembrete de grupo” permanecem pausados. Apenas o follow-up de cadastro, para quem já estiver no grupo e ainda não tiver cadastro confirmado, permanece em avaliação.</p></div></div></section>
+            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><MessageCircleReply className="mt-0.5 h-6 w-6 text-brand-primary" /><div><h2 className="font-display text-lg font-bold text-brand-primary">Política de follow-up — Rodada 3</h2><p className="mt-1 text-sm text-brand-text-muted">Os follow-ups da captação estão desativados por decisão operacional e assim permanecem após o encerramento da rodada.</p></div></div></section>
 
             <MembersSection round={3} members={members} total={overall.group_members} />
 
-            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><FileSpreadsheet className="mt-0.5 h-6 w-6 text-brand-primary" /><div><h2 className="font-display text-lg font-bold text-brand-primary">Contatos da Rodada 3</h2><p className="mt-1 text-sm text-brand-text-muted">A coorte completa está congelada na aba Rodada 3 - Controle. Nenhum contato foi liberado automaticamente.</p></div></div><a href={contactsSheetUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90"><ExternalLink className="h-4 w-4" /> Abrir Rodada 3 no Google Sheets</a></div></section>
+            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><FileSpreadsheet className="mt-0.5 h-6 w-6 text-brand-primary" /><div><h2 className="font-display text-lg font-bold text-brand-primary">Contatos da Rodada 3</h2><p className="mt-1 text-sm text-brand-text-muted">A fotografia final da Rodada 3 está congelada na aba de controle e não será alterada pelos disparos seguintes.</p></div></div><a href={contactsSheetUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90"><ExternalLink className="h-4 w-4" /> Abrir Rodada 3 no Google Sheets</a></div></section>
+          </>
+        ) : null}
+
+        {data && isRound4 && overall ? (
+          <>
+            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div><div className="flex items-center gap-2 text-brand-primary"><BarChart3 className="h-5 w-5" /><h2 className="font-display text-lg font-bold">Rodada 4 — visão geral</h2></div><p className="mt-1 text-xs text-brand-text-muted">Coorte fixa de 100 contatos de Psicologia e Saúde Mental, selecionada após o encerramento da Rodada 3.</p></div>
+                <div className="text-left text-xs text-brand-text-muted md:text-right"><p>Última atualização</p><p className="mt-1 font-bold text-brand-text">{formatDateTime(data.updated_at)}</p><p className="mt-1">Workflow {data.workflow || 'n8n'}</p></div>
+              </div>
+
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+                <MetricCard label="Planejados" value={Number(overall.planned || 0)} helper="Coorte fixa" icon={<Users className="h-5 w-5" />} />
+                <MetricCard label="Liberados" value={Number(overall.released || 0)} helper="SIM na origem" icon={<ShieldCheck className="h-5 w-5" />} />
+                <MetricCard label="Processados" value={Number(overall.processed || 0)} helper="Com status de disparo" icon={<Activity className="h-5 w-5" />} />
+                <MetricCard label="Enviados" value={Number(overall.sent || 0)} helper={`${Number(overall.pending_meta || 0)} aguardando callback`} icon={<Send className="h-5 w-5" />} />
+                <MetricCard label="Respostas" value={overall.responses} helper={`${formatPercent(overall.response_rate)} dos enviados`} icon={<MessageCircleReply className="h-5 w-5" />} />
+                <MetricCard label="Interessados" value={overall.interested} helper={`${formatPercent(overall.interest_rate)} dos enviados`} icon={<UserRoundCheck className="h-5 w-5" />} />
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border border-red-200 bg-red-50 p-4"><p className="text-xs font-semibold text-red-800">Erros</p><p className="mt-1 text-2xl font-bold text-red-900">{Number(overall.failures || 0)}</p></div><div className="rounded-2xl border border-slate-200 bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-700">Sem interesse</p><p className="mt-1 text-2xl font-bold text-slate-900">{overall.no_interest}</p></div><div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs font-semibold text-emerald-800">No grupo agora</p><p className="mt-1 text-2xl font-bold text-emerald-900">{overall.group_members}</p></div></div>
+            </section>
+
+            <section className="rounded-3xl border border-blue-200 bg-blue-50 p-5 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="flex items-start gap-3"><Trophy className="mt-0.5 h-6 w-6 shrink-0 text-blue-700" /><div><h2 className="font-display text-lg font-bold text-blue-900">Estratégia da Rodada 4</h2><p className="mt-1 text-sm font-semibold text-blue-800">{templateLabels[data.template || ''] || data.template || 'Template não definido'}</p><p className="mt-2 text-sm text-blue-800">A Rodada 4 mantém o template vencedor da Rodada 2, validado também na Rodada 3. Não há novo A/B no convite inicial.</p></div></div>
+                <div className="min-w-64 rounded-2xl bg-white/80 px-4 py-3 text-xs shadow-sm"><p className="text-brand-text-muted">Status operacional</p><p className="mt-1 font-bold text-brand-text">{data.status || '—'}</p><p className="mt-3 text-brand-text-muted">Origem da decisão</p><p className="mt-1 font-bold text-brand-text">{data.origin_decision || '—'}</p></div>
+              </div>
+            </section>
+
+            <FunnelSection title="Funil da Rodada 4" funnel={data.funnel} base={Number(overall.planned || 0)} />
+
+            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm"><div className="flex items-start gap-3"><MessageCircleReply className="mt-0.5 h-6 w-6 text-brand-primary" /><div><h2 className="font-display text-lg font-bold text-brand-primary">Política de follow-up — Rodada 4</h2><p className="mt-1 text-sm text-brand-text-muted">Os follow-ups da captação permanecem desativados por decisão operacional. Nenhum follow-up será enviado nesta rodada.</p></div></div></section>
+
+            <MembersSection round={4} members={members} total={overall.group_members} />
+
+            <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><FileSpreadsheet className="mt-0.5 h-6 w-6 text-brand-primary" /><div><h2 className="font-display text-lg font-bold text-brand-primary">Contatos da Rodada 4</h2><p className="mt-1 text-sm text-brand-text-muted">A coorte de 100 contatos está fixa na aba Rodada 4 - Controle e a liberação é acompanhada pela origem.</p></div></div><a href={contactsSheetUrl} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:opacity-90"><ExternalLink className="h-4 w-4" /> Abrir Rodada 4 no Google Sheets</a></div></section>
           </>
         ) : null}
       </div>
