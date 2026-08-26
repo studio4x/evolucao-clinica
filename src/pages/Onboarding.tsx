@@ -1,15 +1,17 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, Volume2, Award, MessageCircle } from 'lucide-react';
+import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, Volume2, Award, MessageCircle, Compass, ListChecks } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
-import { completeOnboarding, ensureOnboardingState, getOnboardingDestination, getOnboardingState, setOnboardingState } from '../utils/onboarding';
+import { chooseOnboardingMode, completeOnboarding, ensureOnboardingState, getOnboardingDestination, setOnboardingState } from '../utils/onboarding';
+import { classifyOnboardingError, isOnboardingChoiceRequired } from '../utils/onboardingState';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 import { trackEvent } from '../services/analytics';
+import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
 
 const normalizeText = (text: string): string => {
@@ -80,6 +82,8 @@ export default function Onboarding() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappError, setWhatsappError] = useState('');
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [choosingMode, setChoosingMode] = useState<'guided' | 'explore' | null>(null);
+  const [choiceError, setChoiceError] = useState('');
 
   // Controle local do Slider de Apresentação (passo 'intro')
   const [activeSlide, setActiveSlide] = useState(0);
@@ -88,7 +92,8 @@ export default function Onboarding() {
   const touchStartX = useRef(0);
   const touchEndX = useRef(0);
 
-  const onboardingState = user?.id ? getOnboardingState(user.id) : null;
+  const onboardingState = user?.id ? ensureOnboardingState(user.id) : null;
+  const showStartChoice = isOnboardingChoiceRequired(onboardingState);
   const activeStep = (searchParams.get('step') as 'intro' | 'agenda' | 'complete' | null) || onboardingState?.step || 'intro';
   const isAgendaStep = activeStep === 'agenda';
   const agendaAlreadySynced = Boolean(onboardingState?.agendaSyncedAt);
@@ -103,6 +108,7 @@ export default function Onboarding() {
       navigate('/login', { replace: true });
       return;
     }
+    if (showStartChoice) return;
 
     if (onboardingState?.step === 'complete') {
       navigate('/painel/dashboard', { replace: true });
@@ -115,7 +121,7 @@ export default function Onboarding() {
         navigate(destination, { replace: true });
       }
     }
-  }, [isAuthReady, navigate, onboardingState?.step, user]);
+  }, [isAuthReady, navigate, onboardingState?.step, showStartChoice, user]);
 
   useEffect(() => {
     if (user?.id && !onboardingState) {
@@ -125,6 +131,7 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (!user?.id) return;
+    if (showStartChoice) return;
     let active = true;
     const loadWhatsApp = async () => {
       try {
@@ -156,7 +163,7 @@ export default function Onboarding() {
     } else if (activeStep === 'intro' && onboardingState?.step !== 'intro') {
       setOnboardingState(user.id, { step: 'intro' });
     }
-  }, [activeStep, onboardingState?.step, user?.id]);
+  }, [activeStep, onboardingState?.step, showStartChoice, user?.id]);
 
   const handleStartOnboarding = async () => {
     if (!user?.id) return;
@@ -179,6 +186,10 @@ export default function Onboarding() {
 
       setWhatsappNumber(normalizedWhatsApp);
       setOnboardingState(user.id, { step: 'patient' });
+      void trackLifecycleEvent('onboarding_step_completed', {
+        metadata: { step: 'intro', mode: onboardingState?.mode || 'guided' },
+        dedupeKey: `onboarding_step_completed:${user.id}:intro`,
+      });
       trackEvent('onboarding_begin', {}, { dedupeKey: `onboarding_begin:${user.id}`, persistDedupe: true });
       navigate('/painel/patients/new?onboarding=1', { replace: true });
     } catch (error: any) {
@@ -186,6 +197,25 @@ export default function Onboarding() {
       setWhatsappError(error.message || 'Informe um WhatsApp válido para continuar.');
     } finally {
       setSavingWhatsapp(false);
+    }
+  };
+
+  const handleChooseStartMode = async (mode: 'guided' | 'explore') => {
+    if (!user?.id) return;
+    setChoosingMode(mode);
+    setChoiceError('');
+    try {
+      await chooseOnboardingMode(user.id, mode);
+      if (mode === 'explore') {
+        navigate('/painel/dashboard', { replace: true });
+      } else {
+        setActiveSlide(0);
+      }
+    } catch (error) {
+      console.error('[Onboarding] Não foi possível salvar a escolha inicial:', error);
+      setChoiceError('Não foi possível salvar sua escolha. Verifique a conexão e tente novamente.');
+    } finally {
+      setChoosingMode(null);
     }
   };
 
@@ -280,9 +310,21 @@ export default function Onboarding() {
           step: 'agenda',
           agendaSyncedAt: new Date().toISOString()
         });
+        void trackLifecycleEvent('onboarding_step_completed', {
+          metadata: { step: 'agenda', mode: onboardingState?.mode || 'guided', result: 'calendar_synced' },
+          dedupeKey: `onboarding_step_completed:${user.id}:agenda`,
+        });
       }
     } catch (error: any) {
       console.error('Erro ao sincronizar agenda no onboarding:', error);
+      void trackLifecycleEvent('onboarding_step_error', {
+        metadata: {
+          step: 'agenda',
+          source: 'google_calendar',
+          error_code: classifyOnboardingError(error, 'calendar_sync_failed'),
+        },
+        dedupeKey: `onboarding_step_error:${user.id}:agenda:${classifyOnboardingError(error, 'calendar_sync_failed')}:${new Date().toISOString().slice(0, 10)}`,
+      });
       const message = error?.message || 'Não foi possível sincronizar a agenda.';
       if (message.includes('INSUFFICIENT_SCOPES')) {
         setSyncError('A conta Google foi conectada, mas este token ainda não tem permissão para ler a agenda. Reconecte e aprove o acesso ao Google Agenda.');
@@ -301,13 +343,22 @@ export default function Onboarding() {
     if (!user?.id) return;
     const { error } = await supabase
       .from('professionals')
-      .update({ onboarding_completed: true, updated_at: new Date().toISOString() })
+      .update({
+        onboarding_completed: true,
+        onboarding_status: 'completed',
+        onboarding_current_step: 'complete',
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', user.id);
     if (error) {
       console.error('[Onboarding] Não foi possível confirmar a conclusão no banco:', error);
       return;
     }
     completeOnboarding(user.id);
+    void trackLifecycleEvent('onboarding_step_completed', {
+      metadata: { step: 'complete', mode: onboardingState?.mode || 'guided' },
+      dedupeKey: `onboarding_step_completed:${user.id}:complete`,
+    });
     trackEvent('onboarding_complete', {}, { dedupeKey: `onboarding_complete:${user.id}`, persistDedupe: true });
     navigate('/painel/dashboard', { replace: true });
   };
@@ -368,6 +419,72 @@ export default function Onboarding() {
       return 'pending';
     }
   };
+
+  if (showStartChoice) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-brand-bg via-white to-brand-primary/5 px-4 py-6 sm:flex sm:items-center sm:justify-center">
+        <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-[28px] border border-brand-border/70 bg-white shadow-2xl shadow-brand-primary/10">
+          <div className="border-b border-brand-border/60 bg-gradient-to-r from-brand-primary/10 via-white to-brand-accent/10 px-6 py-7 text-center sm:px-10 sm:py-9">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-primary text-white shadow-lg shadow-brand-primary/20">
+              <Compass size={24} />
+            </div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.2em] text-brand-primary">Bem-vindo ao Evolução Clínica</p>
+            <h1 className="font-display text-2xl font-bold text-brand-text sm:text-3xl">Como você prefere começar?</h1>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-brand-text-muted sm:text-base">
+              Configure seu primeiro atendimento com ajuda ou conheça o aplicativo antes. Você poderá retomar a configuração pelo painel quando quiser.
+            </p>
+          </div>
+
+          <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-8">
+            <section className="relative flex flex-col rounded-3xl border-2 border-brand-primary bg-brand-primary/[0.035] p-6 shadow-sm">
+              <span className="absolute right-5 top-5 rounded-full bg-brand-primary px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">Recomendado</span>
+              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-primary/10 text-brand-primary">
+                <ListChecks size={22} />
+              </div>
+              <h2 className="font-display text-xl font-bold text-brand-text">Configurar com ajuda</h2>
+              <p className="mt-2 flex-1 text-sm leading-6 text-brand-text-muted">
+                Siga o passo a passo para cadastrar seu primeiro paciente, conectar o Google Docs e criar uma evolução.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleChooseStartMode('guided')}
+                disabled={choosingMode !== null}
+                className="btn-primary mt-6 w-full justify-center py-3 disabled:opacity-60"
+              >
+                {choosingMode === 'guided' ? <Loader2 size={16} className="mr-2 animate-spin" /> : <ArrowRight size={16} className="mr-2" />}
+                Iniciar configuração guiada
+              </button>
+            </section>
+
+            <section className="flex flex-col rounded-3xl border border-brand-border bg-white p-6 shadow-sm">
+              <div className="mb-5 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-accent/15 text-brand-primary">
+                <Compass size={22} />
+              </div>
+              <h2 className="font-display text-xl font-bold text-brand-text">Conhecer o aplicativo primeiro</h2>
+              <p className="mt-2 flex-1 text-sm leading-6 text-brand-text-muted">
+                Entre no painel, explore os recursos e conclua a preparação do seu espaço clínico quando estiver pronto.
+              </p>
+              <button
+                type="button"
+                onClick={() => void handleChooseStartMode('explore')}
+                disabled={choosingMode !== null}
+                className="btn-outline mt-6 w-full justify-center py-3 disabled:opacity-60"
+              >
+                {choosingMode === 'explore' ? <Loader2 size={16} className="mr-2 animate-spin" /> : <Compass size={16} className="mr-2" />}
+                Explorar o aplicativo
+              </button>
+            </section>
+          </div>
+
+          {choiceError && (
+            <p className="mx-5 mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-center text-sm text-red-700 sm:mx-8">
+              {choiceError}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen w-full bg-brand-bg flex items-center justify-center overflow-x-hidden p-0 md:p-6 select-none font-sans">

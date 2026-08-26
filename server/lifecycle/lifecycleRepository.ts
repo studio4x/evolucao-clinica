@@ -77,7 +77,10 @@ export function scrubSensitivePatterns(text: string): string {
 
 export function sanitizeLifecycleMetadata(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== "object" || Array.isArray(input)) return {};
-  const allowedKeys = new Set(["status", "source", "feature", "duration_seconds", "count", "result", "route", "days", "has_google_doc"]);
+  const allowedKeys = new Set([
+    "status", "source", "feature", "duration_seconds", "count", "result", "route", "days",
+    "has_google_doc", "step", "mode", "error_code"
+  ]);
   const output: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
     if (!allowedKeys.has(key)) continue;

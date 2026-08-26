@@ -9,6 +9,7 @@ import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { showAlert, showConfirm } from '../store/modalStore';
+import { OnboardingProgressCard } from '../components/onboarding/OnboardingProgressCard';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -454,6 +455,10 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {user?.id && profileRole !== 'admin' && (
+        <OnboardingProgressCard userId={user.id} />
+      )}
 
       {showSubscriptionCta && (
         <div className="relative overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-white to-amber-100/50 p-6 md:p-7 shadow-md shadow-amber-100/40">

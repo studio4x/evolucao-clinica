@@ -2,7 +2,9 @@ import type { WhatsAppSendInput, WhatsAppSendResult } from "../whatsapp/whatsapp
 
 export const LIFECYCLE_EVENT_NAMES = [
   "user_registered", "user_activated", "user_logged_in", "profile_updated", "profession_selected",
-  "onboarding_started", "onboarding_completed", "patient_created", "patient_record_linked",
+  "onboarding_started", "onboarding_completed", "onboarding_choice_guided", "onboarding_choice_explore",
+  "onboarding_resumed", "onboarding_step_viewed", "onboarding_step_completed", "onboarding_step_error",
+  "patient_created", "patient_record_linked",
   "evolution_started", "evolution_completed", "evolution_failed", "audio_evolution_completed",
   "patient_history_viewed", "report_generated", "migration_requested", "migration_completed",
   "backup_configured", "custom_logo_added", "digital_signature_used", "feature_discovered",

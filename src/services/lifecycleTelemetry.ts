@@ -1,6 +1,17 @@
 import { supabase } from '../supabaseClient';
 
-export type LifecycleFrontendEvent = 'patient_history_viewed' | 'feature_discovered' | 'document_area_viewed' | 'subscription_page_viewed' | 'support_opened';
+export type LifecycleFrontendEvent =
+  | 'patient_history_viewed'
+  | 'feature_discovered'
+  | 'document_area_viewed'
+  | 'subscription_page_viewed'
+  | 'support_opened'
+  | 'onboarding_choice_guided'
+  | 'onboarding_choice_explore'
+  | 'onboarding_resumed'
+  | 'onboarding_step_viewed'
+  | 'onboarding_step_completed'
+  | 'onboarding_step_error';
 
 export async function trackLifecycleEvent(
   eventName: LifecycleFrontendEvent,

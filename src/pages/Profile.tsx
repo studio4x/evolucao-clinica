@@ -362,7 +362,14 @@ export default function Profile() {
       
       const { error } = await supabase
         .from('professionals')
-        .update({ onboarding_completed: false })
+        .update({
+          onboarding_completed: false,
+          onboarding_status: 'not_started',
+          onboarding_mode: null,
+          onboarding_current_step: 'intro',
+          onboarding_choice_at: null,
+          onboarding_deferred_at: null,
+        })
         .eq('id', user.id);
 
       if (error) {

@@ -50,7 +50,13 @@ import LandingPage from './pages/LandingPage';
 import { CookieConsent } from './components/CookieConsent';
 import { CustomModalContainer } from './components/common/CustomModalContainer';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl } from './utils/brandAssets';
-import { getOnboardingDestination, isOnboardingComplete, completeOnboarding } from './utils/onboarding';
+import {
+  canAccessApplication,
+  completeOnboarding,
+  getOnboardingDestination,
+  hydrateOnboardingFromProfile,
+  isOnboardingComplete,
+} from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
 import { canUseNativeGoogleOAuthCallback, clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
@@ -207,7 +213,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (profileRole !== 'admin' && user && !isOnboardingComplete(user.id)) {
+  if (
+    profileRole !== 'admin'
+    && user
+    && !isOnboardingComplete(user.id)
+    && !canAccessApplication(user.id)
+  ) {
     const destination = getOnboardingDestination(user.id);
     const cleanDestPath = destination.split('?')[0];
     const isEditingPatientOnboarding = location.pathname.match(/^\/painel\/patients\/[^/]+\/edit$/) && location.search.includes('onboarding=1');
@@ -269,7 +280,11 @@ function RootRoute() {
   }
 
   if (user) {
-    if (profileRole !== 'admin' && !isOnboardingComplete(user.id)) {
+    if (
+      profileRole !== 'admin'
+      && !isOnboardingComplete(user.id)
+      && !canAccessApplication(user.id)
+    ) {
       return <Navigate to={getOnboardingDestination(user.id)} replace />;
     }
 
@@ -606,6 +621,8 @@ export default function App() {
 
             pendingOnboardingNoticeRef.current = profileData.status === 'pending' ? session.user.id : null;
 
+            hydrateOnboardingFromProfile(session.user.id, profileData);
+
             // Sincronização do status do onboarding
             const localComplete = isOnboardingComplete(session.user.id);
             const dbComplete = profileData.onboarding_completed === true;
@@ -673,6 +690,8 @@ export default function App() {
                       if (updatedProf.status !== 'pending') {
                         pendingOnboardingNoticeRef.current = null;
                       }
+
+                      hydrateOnboardingFromProfile(session.user.id, updatedProf);
 
                       // Sincronização do status do onboarding em tempo real
                       const localComplete = isOnboardingComplete(session.user.id);

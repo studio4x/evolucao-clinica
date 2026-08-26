@@ -6,13 +6,15 @@ import { v4 as uuidv4 } from 'uuid';
 import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle, ShieldCheck, Lock } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
-import { setOnboardingState, completeOnboarding, getOnboardingState } from '../utils/onboarding';
+import { deferOnboarding, setOnboardingState, getOnboardingState } from '../utils/onboarding';
+import { classifyOnboardingError } from '../utils/onboardingState';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { trackEvent } from '../services/analytics';
+import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 
 declare global {
   interface Window {
@@ -158,12 +160,11 @@ export default function PatientForm() {
   const [searchParams] = useSearchParams();
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
   const onboardingState = getOnboardingState(user?.id);
-  const isOnboardingMode = !id && (
-    searchParams.get('onboarding') === '1'
-    || onboardingState?.step === 'patient'
+  const isOnboardingMode = searchParams.get('onboarding') === '1' || (!id && (
+    onboardingState?.step === 'patient'
     || onboardingState?.step === 'evolution'
     || onboardingState?.step === 'agenda'
-  );
+  ));
   const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const restoredDraftUserRef = useRef<string | null>(null);
@@ -340,6 +341,13 @@ export default function PatientForm() {
       if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
+      if (isOnboardingMode && user?.id) {
+        const errorCode = classifyOnboardingError(error, 'google_oauth_start_failed');
+        void trackLifecycleEvent('onboarding_step_error', {
+          metadata: { step: 'patient', source: 'google_oauth', error_code: errorCode },
+          dedupeKey: `onboarding_step_error:${user.id}:patient:google_oauth:${errorCode}:${new Date().toISOString().slice(0, 10)}`,
+        });
+      }
       await showAlert("Erro ao renovar autenticação. Tente novamente.", {
         title: "Erro de Autenticação",
         variant: "danger",
@@ -381,6 +389,13 @@ export default function PatientForm() {
       }));
     } catch (error: any) {
       console.error("Erro ao criar documento:", error);
+      if (isOnboardingMode && user?.id) {
+        const errorCode = classifyOnboardingError(error, 'google_doc_create_failed');
+        void trackLifecycleEvent('onboarding_step_error', {
+          metadata: { step: 'patient', source: 'google_docs', error_code: errorCode },
+          dedupeKey: `onboarding_step_error:${user.id}:patient:google_docs:${errorCode}:${new Date().toISOString().slice(0, 10)}`,
+        });
+      }
       const msg = error.message || "";
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials') || msg.includes('INSUFFICIENT_SCOPES')) {
         await showAlert("Sua sessão do Google expirou. Por favor, clique em 'Renovar Autenticação' abaixo para continuar.", {
@@ -779,6 +794,10 @@ export default function PatientForm() {
           patientId,
           patientName: formData.full_name
         });
+        void trackLifecycleEvent('onboarding_step_completed', {
+          metadata: { step: 'patient', mode: onboardingState?.mode || 'guided', has_google_doc: true },
+          dedupeKey: `onboarding_step_completed:${user.id}:patient`,
+        });
         if (!id) {
           clearPatientFormDraft(getPatientFormDraftKey(user.id));
         }
@@ -793,6 +812,13 @@ export default function PatientForm() {
       }
     } catch (error: any) {
       console.error("Error saving patient:", error);
+      if (isOnboardingMode) {
+        const errorCode = classifyOnboardingError(error, 'patient_save_failed');
+        void trackLifecycleEvent('onboarding_step_error', {
+          metadata: { step: 'patient', source: 'patient_save', error_code: errorCode },
+          dedupeKey: `onboarding_step_error:${user.id}:patient:save:${errorCode}:${new Date().toISOString().slice(0, 10)}`,
+        });
+      }
       await showAlert("Erro ao salvar paciente: " + (error?.message || error), {
         title: "Erro ao Salvar",
         variant: "danger",
@@ -1423,7 +1449,7 @@ export default function PatientForm() {
                   icon: "question"
                 });
                 if (confirmed) {
-                  if (user?.id) completeOnboarding(user.id);
+                  if (user?.id) await deferOnboarding(user.id, 'patient');
                   if (user?.id && !id) {
                     clearPatientFormDraft(getPatientFormDraftKey(user.id));
                   }

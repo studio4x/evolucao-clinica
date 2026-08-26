@@ -121,6 +121,18 @@ assert.equal(sanitized.clinical_notes, undefined);
 assert.equal(sanitized.count, 5);
 assert.equal(sanitized.has_google_doc, true);
 
+const onboardingMetadata = sanitizeLifecycleMetadata({
+  step: 'patient',
+  mode: 'explore',
+  error_code: 'google_unauthenticated',
+  patient_name: 'Não deve persistir'
+});
+assert.deepEqual(onboardingMetadata, {
+  step: 'patient',
+  mode: 'explore',
+  error_code: 'google_unauthenticated'
+});
+
 // 3. Padrões sensíveis (CPF, CID, Email) dentro de chaves autorizadas devem ter sido substituídos
 assert.equal(sanitized.status, 'active with CPF [CPF_REDACTED] and ICD [CID_REDACTED]');
 assert.equal(sanitized.result, 'email send to [EMAIL_REDACTED] success');

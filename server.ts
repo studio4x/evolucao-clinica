@@ -3649,7 +3649,7 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
     const [professionalResult, preferencesResult, authResult] = await Promise.all([
       supabaseAdmin
         .from("professionals")
-        .select("id, google_email, full_name, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at, updated_at, professional_title, professional_register, force_google_disconnect, trial_expiration_email_sent_at, onboarding_completed, custom_logo_url, auto_backup_enabled, last_backup_at, backup_frequency, billing_provider, stripe_customer_id, acquisition_info, signup_acquisition_info, work_context")
+        .select("id, google_email, full_name, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at, updated_at, professional_title, professional_register, force_google_disconnect, trial_expiration_email_sent_at, onboarding_completed, onboarding_status, onboarding_mode, onboarding_current_step, onboarding_choice_at, onboarding_deferred_at, custom_logo_url, auto_backup_enabled, last_backup_at, backup_frequency, billing_provider, stripe_customer_id, acquisition_info, signup_acquisition_info, work_context")
         .eq("id", professionalId)
         .maybeSingle(),
       supabaseAdmin

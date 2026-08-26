@@ -14,13 +14,15 @@ import { resolveAudioMimeType, transcribeAudio } from '../services/aiTranscripti
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
-import { setOnboardingState, completeOnboarding } from '../utils/onboarding';
+import { deferOnboarding, setOnboardingState } from '../utils/onboarding';
+import { classifyOnboardingError } from '../utils/onboardingState';
 import { getAudioDurationFromBlob } from '../utils/audioDuration';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { trackEvent } from '../services/analytics';
+import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 
 type AudioEvolutionItem = {
   id: string;
@@ -804,6 +806,13 @@ export default function NewEvolution() {
       if (error) throw error;
     } catch (error) {
       console.error("Reauthentication error:", error);
+      if (isOnboardingMode && user?.id) {
+        const errorCode = classifyOnboardingError(error, 'google_oauth_start_failed');
+        void trackLifecycleEvent('onboarding_step_error', {
+          metadata: { step: 'evolution', source: 'google_oauth', error_code: errorCode },
+          dedupeKey: `onboarding_step_error:${user.id}:evolution:google_oauth:${errorCode}:${new Date().toISOString().slice(0, 10)}`,
+        });
+      }
       clearAuthRecoveryFlag();
       await showAlert("Erro ao renovar autenticação. Tente novamente.", {
         title: "Falha na Autenticação",
@@ -1329,6 +1338,10 @@ export default function NewEvolution() {
           patientId: patient.id,
           patientName: patient.full_name
         });
+        void trackLifecycleEvent('onboarding_step_completed', {
+          metadata: { step: 'evolution', mode: 'guided' },
+          dedupeKey: `onboarding_step_completed:${user.id}:evolution`,
+        });
       }
 
       void sendNotification({
@@ -1339,6 +1352,13 @@ export default function NewEvolution() {
       });
     } catch (error: any) {
       console.error("Processing error:", error);
+      if (isOnboardingMode) {
+        const errorCode = classifyOnboardingError(error, 'evolution_processing_failed');
+        void trackLifecycleEvent('onboarding_step_error', {
+          metadata: { step: 'evolution', source: 'evolution_processing', error_code: errorCode },
+          dedupeKey: `onboarding_step_error:${user.id}:evolution:processing:${errorCode}:${new Date().toISOString().slice(0, 10)}`,
+        });
+      }
       
       let msg = error.message || "Erro desconhecido";
       
@@ -1919,7 +1939,7 @@ export default function NewEvolution() {
                     icon: "question"
                   });
                   if (confirmed) {
-                    completeOnboarding(user.id);
+                    await deferOnboarding(user.id, 'evolution');
                     navigate('/painel/dashboard');
                   }
                 }}

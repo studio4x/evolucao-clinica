@@ -338,7 +338,30 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                 <Detail label="ID do usuário" value={p.id} mono />
                 <Detail label="Perfil de acesso" value={p.role === 'admin' ? 'Administrador' : 'Profissional'} />
                 <Detail label="Status" value={p.status} />
-                <Detail label="Onboarding concluído" value={p.onboarding_completed} />
+              <Detail label="Onboarding concluído" value={p.onboarding_completed} />
+              <Detail
+                label="Status do onboarding"
+                value={{
+                  not_started: 'Não iniciado',
+                  in_progress: 'Em andamento',
+                  deferred: 'Explorando o aplicativo',
+                  completed: 'Concluído',
+                }[String(p.onboarding_status || '')] || 'Não informado'}
+              />
+              <Detail
+                label="Forma escolhida para começar"
+                value={p.onboarding_mode === 'guided' ? 'Configuração guiada' : p.onboarding_mode === 'explore' ? 'Explorar primeiro' : 'Não escolhida'}
+              />
+              <Detail
+                label="Etapa atual"
+                value={{
+                  intro: 'Apresentação',
+                  patient: 'Primeiro paciente e prontuário',
+                  evolution: 'Primeira evolução',
+                  agenda: 'Google Agenda (opcional)',
+                  complete: 'Concluído',
+                }[String(p.onboarding_current_step || '')] || 'Não informada'}
+              />
               </Section>
 
               <section className="space-y-3" data-testid="professional-onboarding-eligibility">
