@@ -28,11 +28,11 @@ const TEMPLATES = [
   {
     value: 'convite_jornada_ec_15dias_v1',
     label: 'Recomendado — Jornada 15 dias',
-    description: 'Vencedor da Rodada 2 e modelo principal recomendado para a Rodada 3.'
+    description: 'Vencedor da Rodada 2 e modelo principal mantido para a Rodada 4.'
   },
   {
     value: 'convite_jornada_ec_organizacao_v2',
-    label: 'Organização v2 — não recomendado na Rodada 3',
+    label: 'Organização v2 — uso excepcional',
     description: 'Variante B da Rodada 2. Permanece disponível apenas para uso excepcional.'
   },
   {
@@ -81,7 +81,7 @@ type DispatchStatusResult = {
   error?: string;
 };
 
-type Round3ReadinessResult = {
+type Round4ReadinessResult = {
   ok: boolean;
   status?: string;
   template?: string;
@@ -155,7 +155,7 @@ const errorLabels: Record<string, string> = {
   n8n_status_rejected: 'O n8n recusou a consulta de acompanhamento.',
   n8n_status_timeout: 'A consulta de acompanhamento demorou além do esperado.',
   n8n_status_unavailable: 'Não foi possível consultar o andamento no n8n.',
-  round3_data_incomplete: 'Os dados de preparação da Rodada 3 ainda não estão completos na fonte.',
+  round4_data_incomplete: 'Os dados de preparação da Rodada 4 ainda não estão completos na fonte.',
   server_configuration_missing: 'Configuração server-side indisponível.',
   admin_validation_failed: 'Não foi possível validar a permissão administrativa.'
 };
@@ -217,9 +217,9 @@ export default function AdminCampaignDispatch() {
   const [errorMessage, setErrorMessage] = useState('');
   const [dispatchStartedAt, setDispatchStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [round3Readiness, setRound3Readiness] = useState<Round3ReadinessResult | null>(null);
-  const [round3ReadinessLoading, setRound3ReadinessLoading] = useState(false);
-  const [round3ReadinessError, setRound3ReadinessError] = useState('');
+  const [round4Readiness, setRound4Readiness] = useState<Round4ReadinessResult | null>(null);
+  const [round4ReadinessLoading, setRound4ReadinessLoading] = useState(false);
+  const [round4ReadinessError, setRound4ReadinessError] = useState('');
   const [runStateRestored, setRunStateRestored] = useState(false);
   const [runRecovered, setRunRecovered] = useState(false);
 
@@ -237,7 +237,6 @@ export default function AdminCampaignDispatch() {
       if (SHEETS.includes(persisted.result.sheet as (typeof SHEETS)[number])) {
         setSheet(persisted.result.sheet as (typeof SHEETS)[number]);
       }
-
       const savedQuantity = Number(persisted.result.quantity || 0);
       if (Number.isInteger(savedQuantity) && savedQuantity >= 1 && savedQuantity <= 50) {
         setQuantity(savedQuantity);
@@ -290,14 +289,14 @@ export default function AdminCampaignDispatch() {
     };
   }, []);
 
-  const loadRound3Readiness = useCallback(async () => {
+  const loadRound4Readiness = useCallback(async () => {
     if (!accessToken) return;
 
-    setRound3ReadinessLoading(true);
+    setRound4ReadinessLoading(true);
     try {
       const refreshNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const response = await fetch(
-        `/api/admin/campaign-dashboard?round=3&refresh=${encodeURIComponent(refreshNonce)}`,
+        `/api/admin/campaign-dashboard?round=4&refresh=${encodeURIComponent(refreshNonce)}`,
         {
           method: 'GET',
           headers: {
@@ -310,29 +309,29 @@ export default function AdminCampaignDispatch() {
         }
       );
 
-      const body = await response.json().catch(() => ({ ok: false, error: 'invalid_response' })) as Round3ReadinessResult;
+      const body = await response.json().catch(() => ({ ok: false, error: 'invalid_response' })) as Round4ReadinessResult;
       if (!response.ok || !body.ok) {
-        setRound3ReadinessError(errorLabels[String(body.error || '')] || 'Não foi possível consultar a preparação da Rodada 3 agora.');
+        setRound4ReadinessError(errorLabels[String(body.error || '')] || 'Não foi possível consultar a preparação da Rodada 4 agora.');
         return;
       }
 
-      setRound3Readiness({
+      setRound4Readiness({
         ...body,
         overall: body.overall ? { ...body.overall } : undefined
       });
-      setRound3ReadinessError('');
+      setRound4ReadinessError('');
     } catch (error) {
-      console.error('[AdminCampaignDispatch] Falha ao consultar preparação da Rodada 3:', error);
-      setRound3ReadinessError('Falha de comunicação ao consultar a preparação da Rodada 3.');
+      console.error('[AdminCampaignDispatch] Falha ao consultar preparação da Rodada 4:', error);
+      setRound4ReadinessError('Falha de comunicação ao consultar a preparação da Rodada 4.');
     } finally {
-      setRound3ReadinessLoading(false);
+      setRound4ReadinessLoading(false);
     }
   }, [accessToken]);
 
   useEffect(() => {
     if (!accessToken) return;
-    void loadRound3Readiness();
-  }, [accessToken, loadRound3Readiness]);
+    void loadRound4Readiness();
+  }, [accessToken, loadRound4Readiness]);
 
   useEffect(() => {
     if (!dispatchStartedAt || statusResult?.complete) return;
@@ -420,14 +419,14 @@ export default function AdminCampaignDispatch() {
   const safeErrorExecutionUrl = isSafeN8nExecutionUrl(statusResult?.error_execution_url)
     ? statusResult?.error_execution_url
     : '';
-  const round3Configuration = sheet === 'Psicologia e Saúde Mental';
+  const round4Configuration = sheet === 'Psicologia e Saúde Mental';
   const winnerTemplateSelected = template === 'convite_jornada_ec_15dias_v1';
-  const round3Planned = Math.max(0, Number(round3Readiness?.overall?.planned || 0));
-  const round3Released = Math.max(0, Number(round3Readiness?.overall?.released || 0));
-  const round3Processed = Math.max(0, Number(round3Readiness?.overall?.processed || 0));
-  const round3ReadinessAvailable = Boolean(round3Readiness?.ok);
-  const noRound3ContactsReleased = round3Configuration && round3ReadinessAvailable && round3Released === 0;
-  const quantityExceedsReleased = round3Configuration && round3ReadinessAvailable && quantity > round3Released;
+  const round4Planned = Math.max(0, Number(round4Readiness?.overall?.planned || 0));
+  const round4Released = Math.max(0, Number(round4Readiness?.overall?.released || 0));
+  const round4Processed = Math.max(0, Number(round4Readiness?.overall?.processed || 0));
+  const round4ReadinessAvailable = Boolean(round4Readiness?.ok);
+  const round4DispatchBlocked = round4Configuration && (!round4ReadinessAvailable || round4Released === 0);
+  const quantityExceedsReleased = round4Configuration && round4ReadinessAvailable && quantity > round4Released;
 
   const requestedTotal = Math.max(0, Number(result?.quantity || 0));
   const selectedTotal = Math.max(0, Number(statusResult?.selected || 0));
@@ -604,61 +603,61 @@ export default function AdminCampaignDispatch() {
             <div>
               <div className="flex items-center gap-2 text-base font-bold text-brand-primary">
                 <ShieldCheck className="h-5 w-5" />
-                Pré-checagem da Rodada 3
+                Pré-checagem da Rodada 4
               </div>
               <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
-                Leitura do dashboard administrativo. “Liberados” indica apenas <strong>SIM na origem</strong>; a elegibilidade final ainda depende de todas as travas do workflow.
+                Leitura do dashboard administrativo. “Liberados” indica apenas <strong>SIM na origem</strong>; a elegibilidade final ainda depende de todas as travas do workflow. Os follow-ups da captação permanecem desativados.
               </p>
             </div>
             <button
               type="button"
-              onClick={() => void loadRound3Readiness()}
-              disabled={round3ReadinessLoading}
+              onClick={() => void loadRound4Readiness()}
+              disabled={round4ReadinessLoading}
               className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-blue-200 bg-white px-3.5 py-2 text-xs font-bold text-brand-primary transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <RefreshCw className={`h-4 w-4 ${round3ReadinessLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${round4ReadinessLoading ? 'animate-spin' : ''}`} />
               Atualizar dados
             </button>
           </div>
 
-          {round3ReadinessLoading && !round3Readiness ? (
+          {round4ReadinessLoading && !round4Readiness ? (
             <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-brand-text-muted">
               <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
               Consultando a preparação atual...
             </div>
-          ) : round3Readiness ? (
+          ) : round4Readiness ? (
             <div className="mt-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Planejados</p>
-                  <p className="mt-1 text-xl font-bold text-brand-text">{round3Planned}</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round4Planned}</p>
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Liberados na origem</p>
-                  <p className="mt-1 text-xl font-bold text-brand-text">{round3Released}</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round4Released}</p>
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Processados</p>
-                  <p className="mt-1 text-xl font-bold text-brand-text">{round3Processed}</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round4Processed}</p>
                 </div>
               </div>
               <div className="flex flex-col gap-1 text-[11px] text-brand-text-muted sm:flex-row sm:items-center sm:justify-between">
-                <span><strong>Status:</strong> {round3Readiness.status || 'PREPARADA / AGUARDANDO ENVIOS'}</span>
-                <span><strong>Atualizado:</strong> {formatDateTime(round3Readiness.updated_at)}</span>
+                <span><strong>Status:</strong> {round4Readiness.status || 'PREPARADA / AGUARDANDO ENVIOS'}</span>
+                <span><strong>Atualizado:</strong> {formatDateTime(round4Readiness.updated_at)}</span>
               </div>
-              {round3Released === 0 && (
+              {round4Released === 0 && (
                 <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  Nenhum contato da Rodada 3 está liberado na origem. A execução permanece bloqueada nesta configuração até uma nova consulta confirmar pelo menos um contato liberado.
+                  Nenhum contato da Rodada 4 está liberado na origem. A execução permanece bloqueada nesta configuração até uma nova consulta confirmar pelo menos um contato liberado.
                 </div>
               )}
             </div>
           ) : null}
 
-          {round3ReadinessError && (
+          {round4ReadinessError && (
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{round3ReadinessError} A consulta indisponível não libera contatos nem inicia envios.</span>
+              <span>{round4ReadinessError} A consulta indisponível não libera contatos nem inicia envios.</span>
             </div>
           )}
         </section>
@@ -947,17 +946,17 @@ export default function AdminCampaignDispatch() {
             </div>
           </div>
 
-          {round3Configuration && !winnerTemplateSelected && (
+          {round4Configuration && !winnerTemplateSelected && (
             <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              Para a Rodada 3, o modelo recomendado é <strong>convite_jornada_ec_15dias_v1</strong>, vencedor da Rodada 2. O template selecionado agora não é o recomendado.
+              Para a Rodada 4, o modelo recomendado é <strong>convite_jornada_ec_15dias_v1</strong>, vencedor da Rodada 2. O template selecionado agora não é o recomendado.
             </div>
           )}
 
-          {quantityExceedsReleased && round3Released > 0 && (
+          {quantityExceedsReleased && round4Released > 0 && (
             <div className="mt-5 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              O teto solicitado ({quantity}) é maior que os {round3Released} contato(s) atualmente liberado(s) na origem. O workflow processará apenas os que também passarem pelas demais travas de elegibilidade.
+              O teto solicitado ({quantity}) é maior que os {round4Released} contato(s) atualmente liberado(s) na origem. O workflow processará apenas os que também passarem pelas demais travas de elegibilidade.
             </div>
           )}
 
@@ -1008,7 +1007,7 @@ export default function AdminCampaignDispatch() {
             </p>
             <button
               type="submit"
-              disabled={!confirmed || submitting || runActive || noRound3ContactsReleased}
+              disabled={!confirmed || submitting || runActive || round4DispatchBlocked}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
