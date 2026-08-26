@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import {
   canAccessApplicationDuringOnboarding,
   classifyOnboardingError,
+  getNextOnboardingTarget,
   getOnboardingDestinationForState,
+  hasCompletedEssentialOnboardingSteps,
   hydrateOnboardingState,
   isOnboardingChoiceRequired,
   normalizeOnboardingState,
@@ -68,6 +70,36 @@ assert.equal(classifyOnboardingError(new Error('Google Drive API error: 401')), 
 assert.equal(classifyOnboardingError(new Error('Failed to fetch')), 'network_unavailable');
 assert.equal(classifyOnboardingError(new Error('unexpected'), 'operation_failed'), 'operation_failed');
 
+const profileOnlyProgress = {
+  profileReady: true,
+  patients: [],
+  evolutionsCount: 0,
+};
+assert.deepEqual(getNextOnboardingTarget(profileOnlyProgress), { step: 'patient' });
+assert.equal(
+  getOnboardingDestinationForState(normalizeOnboardingState({
+    ...getNextOnboardingTarget(profileOnlyProgress),
+    status: 'in_progress',
+    mode: 'guided',
+  })),
+  '/painel/patients/new?onboarding=1',
+);
+assert.deepEqual(getNextOnboardingTarget({
+  profileReady: true,
+  patients: [{ id: 'patient-1', google_doc_id: null }],
+  evolutionsCount: 0,
+}), { step: 'patient', patientId: 'patient-1' });
+assert.deepEqual(getNextOnboardingTarget({
+  profileReady: true,
+  patients: [{ id: 'patient-1', google_doc_id: 'doc-1' }],
+  evolutionsCount: 0,
+}), { step: 'evolution', patientId: 'patient-1' });
+assert.equal(hasCompletedEssentialOnboardingSteps({
+  profileReady: true,
+  patients: [{ id: 'patient-1', google_doc_id: 'doc-1' }],
+  evolutionsCount: 1,
+}), true);
+
 const appSource = readFileSync('src/App.tsx', 'utf8');
 const onboardingSource = readFileSync('src/pages/Onboarding.tsx', 'utf8');
 const progressCardSource = readFileSync('src/components/onboarding/OnboardingProgressCard.tsx', 'utf8');
@@ -82,6 +114,10 @@ assert.match(onboardingSource, /Explorar o aplicativo/);
 assert.match(progressCardSource, /Prepare seu espaço clínico no seu ritmo/);
 assert.match(progressCardSource, /Google Agenda/);
 assert.match(progressCardSource, /\(opcional\)/);
+assert.match(progressCardSource, /Recolher configuração flexível/);
+assert.match(progressCardSource, /Expandir configuração flexível/);
+assert.match(progressCardSource, /hasCompletedEssentialOnboardingSteps\(snapshot\)/);
+assert.doesNotMatch(progressCardSource, /handleDismiss|sessionStorage|Ocultar checklist/);
 assert.match(patientFormSource, /await deferOnboarding\(user\.id, 'patient'\)/);
 assert.match(migrationSource, /'not_started', 'in_progress', 'deferred', 'completed'/);
 assert.match(migrationSource, /enforce_professional_onboarding_state_trigger/);

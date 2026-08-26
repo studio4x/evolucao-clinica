@@ -25,6 +25,12 @@ export type RemoteOnboardingProfile = {
   onboarding_deferred_at?: string | null;
 };
 
+export type OnboardingProgressSnapshot = {
+  profileReady: boolean;
+  patients: Array<{ id: string; google_doc_id: string | null }>;
+  evolutionsCount: number;
+};
+
 const ONBOARDING_STEPS: readonly OnboardingStep[] = ['intro', 'patient', 'evolution', 'agenda', 'complete'];
 const ONBOARDING_STATUSES: readonly OnboardingStatus[] = ['not_started', 'in_progress', 'deferred', 'completed'];
 const ONBOARDING_MODES: readonly OnboardingMode[] = ['guided', 'explore'];
@@ -129,6 +135,38 @@ export const getOnboardingDestinationForState = (state: OnboardingState): string
   }
 
   return '/onboarding';
+};
+
+export const hasCompletedEssentialOnboardingSteps = (progress: OnboardingProgressSnapshot): boolean => (
+  progress.profileReady
+  && progress.patients.length > 0
+  && progress.patients.some(patient => Boolean(patient.google_doc_id))
+  && progress.evolutionsCount > 0
+);
+
+export const getNextOnboardingTarget = (
+  progress: OnboardingProgressSnapshot
+): Pick<OnboardingState, 'step'> & Pick<Partial<OnboardingState>, 'patientId'> => {
+  const firstPatient = progress.patients[0];
+  const linkedPatient = progress.patients.find(patient => Boolean(patient.google_doc_id));
+
+  if (!progress.profileReady && !firstPatient) {
+    return { step: 'intro' };
+  }
+
+  if (!firstPatient) {
+    return { step: 'patient' };
+  }
+
+  if (!linkedPatient) {
+    return { step: 'patient', patientId: firstPatient.id };
+  }
+
+  if (progress.evolutionsCount === 0) {
+    return { step: 'evolution', patientId: linkedPatient.id };
+  }
+
+  return { step: 'complete', patientId: linkedPatient.id };
 };
 
 export const classifyOnboardingError = (error: unknown, fallback = 'unknown'): string => {
