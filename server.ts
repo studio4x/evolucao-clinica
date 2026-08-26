@@ -1796,6 +1796,48 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+const ACQUISITION_TELEMETRY_EVENTS = new Set([
+  "acquisition_arrival",
+  "consent_banner_shown",
+  "marketing_consent_granted",
+  "meta_config_loaded",
+  "meta_config_failed",
+  "meta_script_requested",
+  "meta_pixel_initialized",
+  "meta_pageview_queued"
+]);
+const ACQUISITION_TELEMETRY_CHANNELS = new Set([
+  "google_ads", "google_organic", "meta_ads", "youtube", "whatsapp", "email", "referral", "direct", "other", "unknown"
+]);
+
+app.post("/api/analytics/acquisition-telemetry", express.json({ limit: "2kb" }), async (req, res) => {
+  const body = req.body && typeof req.body === "object" ? req.body as Record<string, unknown> : {};
+  const eventName = typeof body.eventName === "string" ? body.eventName : "";
+  const pathname = typeof body.pathname === "string" ? body.pathname : "/";
+  const channel = typeof body.channel === "string" ? body.channel : "unknown";
+  if (
+    !ACQUISITION_TELEMETRY_EVENTS.has(eventName)
+    || !/^\/[A-Za-z0-9/_-]{0,119}$/.test(pathname)
+    || !ACQUISITION_TELEMETRY_CHANNELS.has(channel)
+  ) {
+    return res.status(400).json({ error: "invalid telemetry payload" });
+  }
+
+  const { error } = await supabaseAdmin.from("acquisition_telemetry_events").insert({
+    event_name: eventName,
+    pathname,
+    channel,
+    campaign_present: body.campaignPresent === true,
+    platform: body.platform === "web" || body.platform === "pwa" || body.platform === "android" ? body.platform : null,
+    distribution: body.distribution === "google_play" ? body.distribution : null
+  });
+  if (error) {
+    console.error("[AcquisitionTelemetry] Falha ao registrar evento operacional:", error.code || "unknown");
+    return res.status(204).end();
+  }
+  return res.status(204).end();
+});
+
 // Webhook público da WhatsApp Cloud API (Meta)
 app.get("/api/webhooks/whatsapp", async (req, res) => {
   try {

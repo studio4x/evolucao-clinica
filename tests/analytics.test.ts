@@ -157,13 +157,53 @@ resetRuntime();
 setRoute('/login', '?code=oauth-secret&token=secret&session_id=cs_test&patient_id=550e8400-e29b-41d4-a716-446655440000', '#access_token=secret');
 analytics.initAnalytics();
 analytics.setConsentPreferences({ analytics: false, marketing: true });
-assert.equal(fbqCalls.some((call) => call[0] === 'track' && call[1] === 'PageView'), false, 'URL com query/hash não pode gerar PageView');
-assert.equal(analytics.sanitizeCurrentMarketingUrl(), true);
+assert.equal(fbqCalls.some((call) => call[0] === 'track' && call[1] === 'PageView'), true, 'URL OAuth deve ser sanitizada antes do PageView');
+assert.equal(analytics.sanitizeCurrentMarketingUrl(), false);
 analytics.refreshMarketingAnalyticsForCurrentRoute();
 assert.deepEqual(windowMock.location, { pathname: '/login', search: '', hash: '' });
 assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length, 1);
 assert.equal(JSON.stringify(fbqCalls).includes('oauth-secret'), false, 'code/token nunca podem entrar em fbq');
 assert.equal(JSON.stringify(fbqCalls).includes('550e8400-e29b-41d4-a716-446655440000'), false, 'UUID nunca pode entrar em fbq');
+
+resetRuntime();
+setRoute('/checkout/success', '?session_id=cs_test_functional');
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+assert.equal(windowMock.location.search, '?session_id=cs_test_functional', 'session_id funcional do checkout deve ser preservado');
+
+for (const [pathname, search] of [
+  ['/', '?utm_source=facebook&utm_medium=paid_social&fbclid=XYZ'],
+  ['/login', '?utm_source=facebook&utm_medium=paid_social'],
+  ['/jornada-15-dias', '?utm_source=facebook&utm_medium=paid_social'],
+  ['/login', '?from_plan=monthly'],
+  ['/login', '?native_version=123']
+] as const) {
+  resetRuntime();
+  setRoute(pathname, search);
+  analytics.initAnalytics();
+  analytics.setConsentPreferences({ analytics: false, marketing: true });
+  assert.equal(
+    fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length,
+    1,
+    `PageView deve cobrir ${pathname}${search}`
+  );
+}
+
+resetRuntime({ gtmId: undefined, gaMeasurementId: undefined, directGa4: false, metaPixelId: undefined, attributionTimeoutMs: 25, metaReadyTimeoutMs: 25 });
+let dynamicAttempts = 0;
+analytics.configureAnalyticsForTests({
+  trackingSettingsLoader: async () => {
+    dynamicAttempts += 1;
+    if (dynamicAttempts < 3) throw new Error('transient');
+    return { metaPixelId: 'PIXEL-RETRY' };
+  }
+});
+setRoute('/login');
+analytics.initAnalytics();
+analytics.setConsentPreferences({ analytics: false, marketing: true });
+await new Promise((resolve) => setTimeout(resolve, 1_350));
+assert.equal(dynamicAttempts, 3, 'configuração dinâmica deve usar retry limitado');
+assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length, 1, 'retry não duplica PageView');
 
 const registrationEventId = 'registration-0123456789abcdef0123456789abcdef';
 assert.equal(await analytics.trackCompleteRegistrationOnce(registrationEventId), true, 'cadastro confirmado deve emitir CompleteRegistration');

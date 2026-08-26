@@ -58,7 +58,9 @@ import { isGoogleAccessTokenFresh } from './utils/googleAuthSession';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
-import { captureAcquisitionData, captureNativeInstallAttribution, syncAcquisitionWithDatabase } from './utils/acquisitionTracking';
+import { captureAcquisitionData, captureNativeInstallAttribution, syncAcquisitionWithDatabase, getCurrentAcquisitionData } from './utils/acquisitionTracking';
+import { calculateAcquisitionChannel, getAcquisitionDistribution, getAcquisitionPlatform } from './utils/acquisitionAttribution';
+import { isPublicAcquisitionPathname, sendAcquisitionTelemetry } from './services/acquisitionTelemetry';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
 import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
@@ -124,6 +126,19 @@ function AnalyticsRouteObserver() {
 
   useEffect(() => {
     const sendPageView = () => {
+      captureAcquisitionData();
+      if (isPublicAcquisitionPathname(location.pathname)) {
+        const acquisition = getCurrentAcquisitionData();
+        sendAcquisitionTelemetry('acquisition_arrival', {
+          pathname: location.pathname,
+          channel: calculateAcquisitionChannel(acquisition),
+          campaignPresent: Boolean(acquisition.utm_campaign),
+          platform: getAcquisitionPlatform(acquisition),
+          distribution: getAcquisitionDistribution(acquisition),
+          dedupeKey: `acquisition_arrival:${location.pathname}`
+        });
+      }
+      sanitizeCurrentMarketingUrl();
       refreshMarketingAnalyticsForCurrentRoute();
       if (getAnalyticsConsent() !== 'granted') {
         lastPageRef.current = null;
@@ -295,7 +310,7 @@ export default function App() {
     window.addEventListener('cookie-consent-accepted', captureAllowedNativeAttribution);
     const cleanupMarketingUrlTimer = window.setTimeout(() => {
       const pathname = window.location.pathname;
-      const isAcquisitionPage = pathname === '/' || pathname === '/jornada' || pathname.startsWith('/jornada/');
+      const isAcquisitionPage = pathname === '/' || pathname === '/jornada' || pathname === '/jornada-15-dias' || pathname.startsWith('/jornada/');
       if (isAcquisitionPage && sanitizeCurrentMarketingUrl()) refreshMarketingAnalyticsForCurrentRoute();
     }, 0);
     return () => {

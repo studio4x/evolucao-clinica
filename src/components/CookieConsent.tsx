@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Check, Cookie, ExternalLink, Shield } from 'lucide-react';
 import { getConsentPreferences, setConsentPreferences } from '../services/analytics';
+import { sendAcquisitionTelemetry } from '../services/acquisitionTelemetry';
 
 const PUBLIC_PRIVACY_WIDGET_EXACT_PATHS = new Set([
   '/',
@@ -34,6 +35,7 @@ export const CookieConsent = () => {
     setAnalytics(current?.analytics ?? false);
     setMarketing(current?.marketing ?? false);
     setVisible(current === null);
+    if (current === null) sendAcquisitionTelemetry('consent_banner_shown', { dedupeKey: 'consent_banner_shown' });
     setReady(true);
     return current;
   };

@@ -43,6 +43,7 @@ import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 import { supabase } from '../supabaseClient';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
+import { getCurrentAcquisitionData } from '../utils/acquisitionTracking';
 
 const DEFAULT_PLANS = [
   {
@@ -108,13 +109,14 @@ export default function LandingPage() {
 
     setSubmittingLead(true);
     try {
-      // 1. Extrair parâmetros UTM da URL
-      const searchParams = new URLSearchParams(window.location.search);
-      const utmSource = searchParams.get('utm_source');
-      const utmMedium = searchParams.get('utm_medium');
-      const utmCampaign = searchParams.get('utm_campaign');
-      const utmTerm = searchParams.get('utm_term');
-      const utmContent = searchParams.get('utm_content');
+      // A aquisição é capturada no primeiro acesso e pode sobreviver à limpeza
+      // da URL, navegação SPA e retorno do OAuth.
+      const acquisition = getCurrentAcquisitionData();
+      const utmSource = acquisition.utm_source || null;
+      const utmMedium = acquisition.utm_medium || null;
+      const utmCampaign = acquisition.utm_campaign || null;
+      const utmTerm = acquisition.utm_term || null;
+      const utmContent = acquisition.utm_content || null;
 
       // 2. Tentar salvar o lead no banco de dados
       const { error } = await supabase
@@ -123,11 +125,11 @@ export default function LandingPage() {
           name: leadName,
           phone: leadPhone.replace(/\D/g, ''),
           message: leadMessage,
-          utm_source: utmSource || null,
-          utm_medium: utmMedium || null,
-          utm_campaign: utmCampaign || null,
-          utm_term: utmTerm || null,
-          utm_content: utmContent || null,
+          utm_source: utmSource,
+          utm_medium: utmMedium,
+          utm_campaign: utmCampaign,
+          utm_term: utmTerm,
+          utm_content: utmContent,
           referrer: document.referrer || null
         });
 

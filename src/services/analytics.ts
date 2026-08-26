@@ -1,5 +1,7 @@
 /** Privacy boundary for every client-side analytics integration. */
 
+import { sendAcquisitionTelemetry } from './acquisitionTelemetry';
+
 type MetaPixelFunction = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
   loaded?: boolean;
@@ -49,17 +51,23 @@ const DEFAULT_ATTRIBUTION_TIMEOUT_MS = 2_000;
 const DEFAULT_ATTRIBUTION_RETRY_DELAY_MS = 250;
 const DEFAULT_META_READY_TIMEOUT_MS = 5_000;
 const MARKETING_EVENT_NAMES = new Set(['begin_checkout']);
-const META_EXACT_ALLOWED_PATHS = new Set(['/', '/login', '/checkout', '/checkout/success', '/checkout/sucess']);
+const META_EXACT_ALLOWED_PATHS = new Set(['/', '/login', '/checkout', '/checkout/success', '/checkout/sucess', '/jornada-15-dias']);
 const META_CONTROLLED_CHECKOUT_PATH = '/painel/subscription';
 const META_REGISTRATION_EVENT_ID_PATTERN = /^registration-[a-f0-9]{32}$/;
+const SENSITIVE_URL_KEY_PATTERN = /(?:token|secret|code|state|session[_-]?id|patient|clinical|evolution|diagnos|record|pront|cpf|email|phone|access[_-]?token|refresh[_-]?token|id_token|error(?:_|$))/i;
 const sentDedupeKeys = new Set<string>();
 let initialized = false;
 let gtmLoaded = false;
 let ga4Loaded = false;
 let metaLoaded = false;
-let dynamicConfigLoaded = false;
+let metaInitialized = false;
+type DynamicConfigState = 'idle' | 'loading' | 'loaded' | 'failed';
+let dynamicConfigState: DynamicConfigState = 'idle';
+let dynamicConfigAttempts = 0;
+let dynamicConfigPromise: Promise<boolean> | null = null;
+let dynamicConfigGeneration = 0;
 let dynamicConfig: { gtmId?: string; metaPixelId?: string } = {};
-let testConfig: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number; metaReadyTimeoutMs?: number } | null = null;
+let testConfig: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number; metaReadyTimeoutMs?: number; trackingSettingsLoader?: () => Promise<{ gtmId?: string; metaPixelId?: string } | null> } | null = null;
 let pendingUser: { id: string | null; properties: Record<string, string | null> } = { id: null, properties: {} };
 let lastMetaPageKey: string | null = null;
 
@@ -84,9 +92,16 @@ export const isMetaAllowedPathname = (pathname: string) => {
   const normalized = pathname.trim() || '/';
   return META_EXACT_ALLOWED_PATHS.has(normalized) || normalized === '/jornada' || normalized.startsWith('/jornada/');
 };
-const hasCleanCurrentMarketingUrl = () => isBrowser() && window.location.search === '' && window.location.hash === '';
-const isMetaPageContextAllowed = () => isBrowser() && isMetaAllowedPathname(window.location.pathname) && hasCleanCurrentMarketingUrl();
-const isControlledMetaCheckoutContext = () => isBrowser() && window.location.pathname === META_CONTROLLED_CHECKOUT_PATH && hasCleanCurrentMarketingUrl();
+const hasSensitiveCurrentMarketingUrl = () => {
+  if (!isBrowser()) return true;
+  const hasSensitive = (raw: string) => {
+    const params = new URLSearchParams(raw.replace(/^#/, ''));
+    return Array.from(params.keys()).some((key) => SENSITIVE_URL_KEY_PATTERN.test(key));
+  };
+  return hasSensitive(window.location.search) || hasSensitive(window.location.hash);
+};
+const isMetaPageContextAllowed = () => isBrowser() && isMetaAllowedPathname(window.location.pathname) && !hasSensitiveCurrentMarketingUrl();
+const isControlledMetaCheckoutContext = () => isBrowser() && window.location.pathname === META_CONTROLLED_CHECKOUT_PATH && !hasSensitiveCurrentMarketingUrl();
 const effectiveMarketingConsent = (preferences: ConsentPreferences) => preferences.marketing && isMetaPageContextAllowed();
 
 const googleConsent = (preferences: ConsentPreferences, command: 'default' | 'update') => {
@@ -172,7 +187,12 @@ const initializeMeta = (allowControlledCheckout = false) => {
   window.fbq('consent', 'grant');
   window.fbq('set', 'autoConfig', false, pixelId);
   window.fbq('init', pixelId);
+  if (!metaInitialized) {
+    metaInitialized = true;
+    sendAcquisitionTelemetry('meta_pixel_initialized', { dedupeKey: 'meta_pixel_initialized' });
+  }
   metaLoaded = loadScriptOnce('https://connect.facebook.net/en_US/fbevents.js', 'analytics-meta-pixel') || Boolean(document.getElementById('analytics-meta-pixel'));
+  if (metaLoaded) sendAcquisitionTelemetry('meta_script_requested', { dedupeKey: 'meta_script_requested' });
   return metaLoaded;
 };
 const waitForMetaPixelReady = async () => {
@@ -190,12 +210,15 @@ const revokeMeta = () => {
   try { window.fbq?.('consent', 'revoke'); } catch { /* the Pixel may not be loaded */ }
 };
 const trackMetaPageView = () => {
-  if (getConsentPreferences()?.marketing !== true || !isMetaPageContextAllowed()) return false;
+  if (getConsentPreferences()?.marketing !== true) return false;
+  sanitizeCurrentMarketingUrl();
+  if (!isMetaPageContextAllowed()) return false;
   const pageKey = window.location.pathname;
   if (lastMetaPageKey === pageKey || !initializeMeta()) return false;
   try {
     grantMeta();
     window.fbq?.('track', 'PageView');
+    sendAcquisitionTelemetry('meta_pageview_queued', { pathname: pageKey, dedupeKey: `meta_pageview_queued:${pageKey}` });
     lastMetaPageKey = pageKey;
     return true;
   } catch { return false; }
@@ -216,22 +239,53 @@ const applyPendingUser = () => {
     for (const [name, value] of Object.entries(pendingUser.properties)) if (ALLOWED_USER_PROPERTIES.has(name)) bridge?.setUserProperty(name, value);
   } catch { /* analytics never affects the app */ }
 };
-const loadDynamicIds = async () => {
-  if (dynamicConfigLoaded || !isBrowser()) return;
-  dynamicConfigLoaded = true;
-  try {
-    const { supabase } = await import('../supabaseClient');
-    const { data, error } = await supabase.from('settings').select('api_key').eq('id', 'tracking_settings').maybeSingle();
-    if (error || !data?.api_key) return;
-    const parsed = JSON.parse(data.api_key) as { gtm_id?: unknown; fb_pixel_id?: unknown };
-    dynamicConfig = { gtmId: cleanId(parsed.gtm_id), metaPixelId: cleanId(parsed.fb_pixel_id) };
-    const preferences = preferencesFromStorage();
-    if (preferences?.analytics || effectiveMarketingConsent(preferences)) initializeGtm();
-    if (preferences?.analytics) initializeDirectGa4();
-    if (effectiveMarketingConsent(preferences)) trackMetaPageView();
-  } catch { /* dynamic IDs are optional */ }
+const loadDynamicIds = async (): Promise<boolean> => {
+  if (!isBrowser()) return false;
+  if (dynamicConfigState === 'loaded') return true;
+  if (dynamicConfigState === 'failed' && dynamicConfigAttempts >= 3) return false;
+  if (dynamicConfigPromise) return dynamicConfigPromise;
+  const generation = dynamicConfigGeneration;
+  const trackingSettingsLoader = testConfig?.trackingSettingsLoader;
+  dynamicConfigState = 'loading';
+  dynamicConfigPromise = (async () => {
+    for (let attempt = dynamicConfigAttempts; attempt < 3; attempt += 1) {
+      dynamicConfigAttempts = attempt + 1;
+      try {
+        let loaded: { gtmId?: string; metaPixelId?: string } | null;
+        if (trackingSettingsLoader) {
+          loaded = await trackingSettingsLoader();
+        } else {
+          const { supabase } = await import('../supabaseClient');
+          const { data, error } = await supabase.from('settings').select('api_key').eq('id', 'tracking_settings').maybeSingle();
+          if (error || !data?.api_key) throw new Error('tracking_settings_unavailable');
+          const parsed = JSON.parse(data.api_key) as { gtm_id?: unknown; fb_pixel_id?: unknown };
+          loaded = { gtmId: cleanId(parsed.gtm_id), metaPixelId: cleanId(parsed.fb_pixel_id) };
+        }
+        if (!loaded || (!loaded.gtmId && !loaded.metaPixelId)) throw new Error('tracking_settings_empty');
+        if (generation !== dynamicConfigGeneration) return false;
+        dynamicConfig = { gtmId: cleanId(loaded.gtmId), metaPixelId: cleanId(loaded.metaPixelId) };
+        dynamicConfigState = 'loaded';
+        sendAcquisitionTelemetry('meta_config_loaded', { dedupeKey: 'meta_config_loaded' });
+        const preferences = preferencesFromStorage();
+        if (preferences?.analytics || effectiveMarketingConsent(preferences)) initializeGtm();
+        if (preferences?.analytics) initializeDirectGa4();
+        if (effectiveMarketingConsent(preferences)) trackMetaPageView();
+        return true;
+      } catch {
+        if (attempt < 2) await new Promise((resolve) => globalThis.setTimeout(resolve, attempt === 0 ? 250 : 1_000));
+      }
+    }
+    if (generation !== dynamicConfigGeneration) return false;
+    dynamicConfigState = 'failed';
+    sendAcquisitionTelemetry('meta_config_failed', { dedupeKey: 'meta_config_failed' });
+    return false;
+  })().finally(() => {
+    if (generation === dynamicConfigGeneration) dynamicConfigPromise = null;
+  });
+  return dynamicConfigPromise;
 };
 const applyConsent = (preferences: ConsentPreferences, command: 'default' | 'update') => {
+  sanitizeCurrentMarketingUrl();
   googleConsent(preferences, command);
   try { nativeBridge()?.setAnalyticsCollectionEnabled(preferences.analytics); } catch { /* optional bridge */ }
   if (!preferences.analytics) clearNativeIdentity();
@@ -255,8 +309,30 @@ export const refreshMarketingAnalyticsForCurrentRoute = () => {
   void loadDynamicIds();
 };
 export const sanitizeCurrentMarketingUrl = () => {
-  if (!isBrowser() || !isMetaAllowedPathname(window.location.pathname) || hasCleanCurrentMarketingUrl()) return false;
-  window.history.replaceState(window.history.state, document.title, window.location.pathname);
+  if (!isBrowser() || !isMetaAllowedPathname(window.location.pathname)) return false;
+  const url = new URL(`${window.location.pathname}${window.location.search}${window.location.hash}`, 'https://evolucaoclinica.app.br');
+  let changed = false;
+  for (const key of Array.from(url.searchParams.keys())) {
+    const checkoutSessionIsFunctional = key.toLowerCase() === 'session_id'
+      && (url.pathname === '/checkout/success' || url.pathname === '/checkout/sucess');
+    if (SENSITIVE_URL_KEY_PATTERN.test(key) && !checkoutSessionIsFunctional) {
+      url.searchParams.delete(key);
+      changed = true;
+    }
+  }
+  if (url.hash.startsWith('#')) {
+    const hashParams = new URLSearchParams(url.hash.slice(1));
+    const kept = new URLSearchParams();
+    for (const [key, value] of hashParams.entries()) {
+      if (SENSITIVE_URL_KEY_PATTERN.test(key)) changed = true;
+      else kept.append(key, value);
+    }
+    const nextHash = kept.toString();
+    if (nextHash !== url.hash.slice(1)) changed = true;
+    url.hash = nextHash ? `#${nextHash}` : '';
+  }
+  if (!changed) return false;
+  window.history.replaceState(window.history.state, document.title, `${url.pathname}${url.search}${url.hash}`);
   return true;
 };
 export const setConsentPreferences = (preferences: Omit<ConsentPreferences, 'necessary'>) => {
@@ -266,6 +342,7 @@ export const setConsentPreferences = (preferences: Omit<ConsentPreferences, 'nec
   if (current && current.analytics === next.analytics && current.marketing === next.marketing) return;
   try { window.localStorage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, JSON.stringify(next)); } catch { /* runtime consent still applies */ }
   applyConsent(next, 'update');
+  if (next.marketing && current?.marketing !== true) sendAcquisitionTelemetry('marketing_consent_granted', { dedupeKey: 'marketing_consent_granted' });
   void syncAnalyticsConsentForCurrentUser();
   window.dispatchEvent(new CustomEvent(ANALYTICS_CONSENT_EVENT, { detail: next }));
 };
@@ -296,13 +373,17 @@ export const initAnalytics = () => {
   if (preferences) applyConsent(preferences, 'update');
   else { try { nativeBridge()?.setAnalyticsCollectionEnabled(false); clearNativeIdentity(); } catch { /* optional bridge */ } }
 };
-export const configureAnalyticsForTests = (config: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number; metaReadyTimeoutMs?: number } | null) => { testConfig = config; };
+export const configureAnalyticsForTests = (config: { gtmId?: string; gaMeasurementId?: string; directGa4?: boolean; metaPixelId?: string; attributionTimeoutMs?: number; metaReadyTimeoutMs?: number; trackingSettingsLoader?: () => Promise<{ gtmId?: string; metaPixelId?: string } | null> } | null) => { testConfig = config; };
 export const resetAnalyticsForTests = () => {
   initialized = false;
   gtmLoaded = false;
   ga4Loaded = false;
   metaLoaded = false;
-  dynamicConfigLoaded = false;
+  metaInitialized = false;
+  dynamicConfigState = 'idle';
+  dynamicConfigAttempts = 0;
+  dynamicConfigPromise = null;
+  dynamicConfigGeneration += 1;
   dynamicConfig = {};
   pendingUser = { id: null, properties: {} };
   lastMetaPageKey = null;
