@@ -25,6 +25,7 @@ export type LifecycleState = {
   professionSegment: string;
   activationLevel: number;
   activationStatus: string;
+  registeredAt: string | null;
   firstLoginAt: string | null;
   lastLoginAt: string | null;
   lastActivityAt: string | null;

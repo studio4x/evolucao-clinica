@@ -47,6 +47,7 @@ const eligibility = deriveProfessionalOnboardingEligibility({
     professionSegment: 'other',
     activationLevel: 0,
     activationStatus: 'registered',
+    registeredAt: '2026-08-16T09:00:00.000Z',
     firstLoginAt: null,
     lastLoginAt: null,
     lastActivityAt: null,

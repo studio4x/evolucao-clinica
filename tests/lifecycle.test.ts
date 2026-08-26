@@ -12,6 +12,7 @@ const now = new Date('2026-07-16T12:00:00.000Z');
 const baseState: any = {
   userId: 'user-1', fullName: 'Maria Teste', email: 'maria@example.com', profession: 'Psicóloga', professionSegment: 'psychology',
   activationLevel: 1, activationStatus: 'profile_started', firstLoginAt: '2026-07-14T12:00:00.000Z', lastLoginAt: '2026-07-14T12:00:00.000Z', lastActivityAt: '2026-07-14T12:00:00.000Z', usageDaysCount: 1,
+  registeredAt: '2026-07-14T12:00:00.000Z',
   patientsCount: 0, linkedRecordsCount: 0, evolutionsCount: 0, processingEvolutionsCount: 0, failedEvolutionsCount: 0, audioEvolutionsCount: 0, reportsCount: 0, migrationsCount: 0, resourcesCount: 0,
   onboardingCompletedAt: null, subscriptionPlan: 'trial', subscriptionStatus: 'trialing', trialEndsAt: '2026-07-20T12:00:00.000Z', subscriptionStartedAt: null, subscriptionCancelledAt: null,
   lastRelationshipEmailAt: null, nextRelationshipEmailEligibleAt: null, firstEvolutionCompletedAt: null, latestEvolutionAt: null, distinctActivityDays: []
@@ -57,6 +58,11 @@ const canceledTrialRule: any = { id: 'rule-canceled-trial', rule_key: 'trial_can
 assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-13T11:00:00.000Z' }, now)?.messageKey, 'conditional:trial_canceled_reengagement_3d');
 assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-13T13:00:00.000Z' }, now), null);
 assert.equal(evaluateKnownRule(canceledTrialRule, { ...baseState, subscriptionPlan: 'monthly', subscriptionStatus: 'canceled', subscriptionCancelledAt: '2026-07-10T12:00:00.000Z' }, now), null);
+const onboardingIncompleteRule: any = { id: 'rule-onboarding-incomplete', rule_key: 'onboarding_incomplete_24h', name: 'Onboarding pendente', rule_type: 'state', priority: 86, cooldown_hours: 168, delay_minutes: 0, condition_config: { minimum_hours: 24 }, enabled: true, message_config: {} };
+assert.equal(evaluateKnownRule(onboardingIncompleteRule, baseState, now)?.messageKey, 'conditional:onboarding_incomplete_24h');
+assert.equal(evaluateKnownRule(onboardingIncompleteRule, { ...baseState, registeredAt: '2026-07-15T13:00:00.000Z' }, now), null);
+assert.equal(evaluateKnownRule(onboardingIncompleteRule, { ...baseState, onboardingCompletedAt: '2026-07-15T14:00:00.000Z' }, now), null);
+assert.equal(evaluateKnownRule(onboardingIncompleteRule, { ...baseState, subscriptionStatus: 'canceled' }, now), null);
 
 const operationalContext: any = {
   failedEvolution: { id: 'evolution-1', updatedAt: '2026-07-16T11:00:00.000Z' },
@@ -169,6 +175,8 @@ assert.match(lifecycleQueueSource, /issue_lifecycle_trial_reengagement_offer/);
 assert.doesNotMatch(lifecycleQueueSource, /rpc\("grant_lifecycle_trial_reengagement_bonus"/);
 assert.match(lifecycleQueueSource, /\/reativar-teste\?token=\$\{encodeURIComponent\(offer\.token\)\}/);
 assert.match(lifecycleQueueSource, /conditional_step_not_active/);
+assert.match(lifecycleQueueSource, /validateOnboardingIncomplete/);
+assert.match(lifecycleQueueSource, /onboarding_already_completed/);
 
 const canceledTrialMigration = readFileSync('supabase/migrations/20260819120000_add_canceled_trial_reengagement_step.sql', 'utf8');
 assert.match(canceledTrialMigration, /'conditional_trial_canceled_reengagement_3d'/);
@@ -183,6 +191,12 @@ assert.match(clickToRedeemMigration, /CREATE TABLE IF NOT EXISTS public\.lifecyc
 assert.match(clickToRedeemMigration, /issue_lifecycle_trial_reengagement_offer/);
 assert.match(clickToRedeemMigration, /redeem_lifecycle_trial_reengagement_offer/);
 assert.match(clickToRedeemMigration, /status = 'draft'/);
+
+const onboardingIncompleteMigration = readFileSync('supabase/migrations/20260826190000_add_onboarding_incomplete_conditional_step.sql', 'utf8');
+assert.match(onboardingIncompleteMigration, /'onboarding_incomplete_24h'/);
+assert.match(onboardingIncompleteMigration, /\n\s*16,\n\s*1440,/);
+assert.match(onboardingIncompleteMigration, /\n\s*'draft',/);
+assert.match(onboardingIncompleteMigration, /'\/onboarding'/);
 
 const lifecycleRoutesSource = readFileSync('server/lifecycle/lifecycleRoutes.ts', 'utf8');
 assert.match(lifecycleRoutesSource, /\/api\/lifecycle\/trial-extension\/redeem/);

@@ -49,6 +49,7 @@ function messageConfig(rule: LifecycleRule, fallback: Record<string, unknown>) {
 
 const FALLBACK_RULE_MESSAGES: Record<string, Record<string, unknown>> = {
   no_return_after_registration: { subject: "Sua conta está pronta para continuar", preheader: "Acesse a plataforma e continue pela primeira etapa.", body: "Sua conta no Evolução Clínica já está disponível. Acesse a plataforma e comece por uma ação simples.", cta_label: "Acessar minha conta", cta_route: "/painel/dashboard", category: "activation" },
+  onboarding_incomplete_24h: { subject: "Falta pouco para concluir sua configuração", preheader: "Retome o onboarding e deixe sua conta pronta para o primeiro atendimento.", body: "Seu cadastro foi concluído, mas a configuração inicial ainda está pendente. Retome o onboarding para preparar sua conta e continuar exatamente de onde parou.", cta_label: "Concluir minha configuração", cta_route: "/onboarding", category: "activation" },
   evolution_processing_too_long: { subject: "Sua evolução ainda está em processamento", preheader: "Acesse a plataforma para verificar o status.", body: "Uma evolução iniciada ainda não foi concluída. Acesse a plataforma para verificar o status.", cta_label: "Verificar evolução", cta_route: "/painel/history", category: "technical" },
   trial_expiring_3d: { subject: "Seu período de teste termina em 3 dias", preheader: "Conheça as opções para continuar.", body: "Seu período de teste termina em {{data_fim_teste}}. Conheça as opções disponíveis para continuar.", cta_label: "Conhecer os planos", cta_route: "/painel/subscription", category: "commercial", commercial: true },
   trial_expiring_1d: { subject: "Seu teste termina amanhã", preheader: "Continue com o Evolução Clínica.", body: "Seu período de teste termina amanhã. Conheça os planos disponíveis para continuar.", cta_label: "Continuar com o Evolução Clínica", cta_route: "/painel/subscription", category: "commercial", commercial: true },
@@ -115,6 +116,21 @@ export function evaluateKnownRule(rule: LifecycleRule, state: LifecycleState, no
     case "no_return_after_registration":
       return !state.lastLoginAt && hoursSince(state.onboardingCompletedAt || state.lastActivityAt, now) >= 24
         ? createCandidate(rule, state, now, `registration:${period}`, "sem novo acesso após 24 horas") : null;
+    case "onboarding_incomplete_24h": {
+      const minimumHours = Number(rule.condition_config?.minimum_hours || 24);
+      const trialEndedWithoutAccess = Boolean(
+        state.trialEndsAt
+        && new Date(state.trialEndsAt).getTime() <= now.getTime()
+        && state.subscriptionStatus !== "active"
+      );
+      return !state.onboardingCompletedAt
+        && Boolean(state.registeredAt)
+        && hoursSince(state.registeredAt, now) >= minimumHours
+        && state.subscriptionStatus !== "canceled"
+        && !trialEndedWithoutAccess
+        ? createCandidate(rule, state, now, `onboarding-incomplete:${state.registeredAt}`, "onboarding não concluído após o cadastro")
+        : null;
+    }
     case "evolution_processing_too_long":
       return state.processingEvolutionsCount > 0
         ? createCandidate(rule, state, now, `processing:${period}`, "evolução em processamento") : null;

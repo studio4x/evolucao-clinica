@@ -10,6 +10,7 @@ export async function recalculateLifecycleUserState(deps: LifecycleDependencies,
 
   return {
     ...mapState(data),
+    registeredAt: profile.created_at || null,
     fullName: profile.full_name || "Profissional",
     email: profile.google_email || "",
     profession: profile.professional_title || ""
@@ -21,5 +22,5 @@ export async function getOrRecalculateLifecycleState(deps: LifecycleDependencies
   if (existing.error) throw new Error(existing.error.message);
   if (!existing.data) return recalculateLifecycleUserState(deps, userId);
   const profile = await getUserProfile(deps, userId);
-  return { ...mapState(existing.data), fullName: profile?.full_name || "Profissional", email: profile?.google_email || "", profession: profile?.professional_title || "" };
+  return { ...mapState(existing.data), registeredAt: profile?.created_at || null, fullName: profile?.full_name || "Profissional", email: profile?.google_email || "", profession: profile?.professional_title || "" };
 }

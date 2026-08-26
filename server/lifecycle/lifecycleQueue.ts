@@ -417,6 +417,30 @@ async function validateTrialCanceledReengagement(deps: LifecycleDependencies, us
   return null;
 }
 
+async function validateOnboardingIncomplete(deps: LifecycleDependencies, userId: string, rule: any) {
+  const { data: professional, error } = await deps.supabaseAdmin
+    .from("professionals")
+    .select("status, subscription_status, trial_ends_at, onboarding_completed, onboarding_status, created_at")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message || "Falha ao confirmar o status do onboarding.");
+  if (!professional || professional.status !== "active") return "account_no_longer_active";
+  if (professional.onboarding_completed === true || professional.onboarding_status === "completed") return "onboarding_already_completed";
+  if (professional.subscription_status === "canceled") return "account_no_longer_available_for_onboarding";
+
+  const minimumHours = Number(rule?.condition_config?.minimum_hours || 24);
+  const registeredAt = professional.created_at ? new Date(professional.created_at).getTime() : 0;
+  if (!Number.isFinite(registeredAt) || registeredAt <= 0 || Date.now() - registeredAt < minimumHours * 3600000) {
+    return "onboarding_reminder_interval_not_elapsed";
+  }
+
+  const trialEndsAt = professional.trial_ends_at ? new Date(professional.trial_ends_at).getTime() : 0;
+  if (trialEndsAt > 0 && trialEndsAt <= Date.now() && professional.subscription_status !== "active") {
+    return "trial_no_longer_available_for_onboarding";
+  }
+  return null;
+}
+
 async function issueTrialCanceledReengagementOffer(deps: LifecycleDependencies, dispatchId: string, rule: any) {
   const token = randomBytes(32).toString("hex");
   const tokenHash = createHash("sha256").update(token).digest("hex");
@@ -665,6 +689,13 @@ async function processOneDispatch(deps: LifecycleDependencies, dispatch: any, ru
   }
   if (ruleResult.data?.rule_key === "trial_canceled_reengagement_3d") {
     const skipReason = await validateTrialCanceledReengagement(deps, dispatch.user_id, dispatch.id, ruleResult.data);
+    if (skipReason) {
+      await markSkipped(deps, dispatch, skipReason);
+      return { status: "skipped" };
+    }
+  }
+  if (ruleResult.data?.rule_key === "onboarding_incomplete_24h") {
+    const skipReason = await validateOnboardingIncomplete(deps, dispatch.user_id, ruleResult.data);
     if (skipReason) {
       await markSkipped(deps, dispatch, skipReason);
       return { status: "skipped" };

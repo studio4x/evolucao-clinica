@@ -225,6 +225,7 @@ export function mapState(row: any): LifecycleState {
     professionSegment: row.profession_segment || "other",
     activationLevel: Number(row.activation_level || 0),
     activationStatus: row.activation_status || "registered",
+    registeredAt: row.registered_at || null,
     firstLoginAt: row.first_login_at || null,
     lastLoginAt: row.last_login_at || null,
     lastActivityAt: row.last_activity_at || null,
@@ -329,7 +330,7 @@ export async function ensureLifecycleEnrollment(deps: LifecycleDependencies, use
 }
 
 export async function getUserProfile(deps: LifecycleDependencies, userId: string) {
-  const { data, error } = await deps.supabaseAdmin.from("professionals").select("id, full_name, google_email, professional_title, status, role, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, onboarding_completed, created_at, updated_at").eq("id", userId).maybeSingle();
+  const { data, error } = await deps.supabaseAdmin.from("professionals").select("id, full_name, google_email, professional_title, status, role, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, onboarding_completed, onboarding_status, onboarding_current_step, created_at, updated_at").eq("id", userId).maybeSingle();
   if (error) throw new Error(error.message || "Falha ao consultar profissional.");
   return data;
 }
