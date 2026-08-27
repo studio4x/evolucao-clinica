@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const round = Number(req.query.round || 2);
-  if (![1, 2, 3, 4].includes(round)) {
+  if (![1, 2, 3, 4, 5].includes(round)) {
     return res.status(400).json({ ok: false, error: 'unsupported_round' });
   }
 
@@ -115,7 +115,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     1: 'dashboard_round1',
     2: 'dashboard_round2',
     3: 'dashboard_round3',
-    4: 'dashboard_round4'
+    4: 'dashboard_round4',
+    5: 'dashboard_round5'
   };
   const action = actionByRound[round];
 
