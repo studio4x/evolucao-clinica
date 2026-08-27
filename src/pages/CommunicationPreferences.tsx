@@ -4,6 +4,8 @@ import { Check, Loader2, Mail, Save, AlertTriangle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { WhatsAppVerificationField } from '../components/common/WhatsAppVerificationField';
+import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
 
 type Preferences = {
   product_education_enabled: boolean;
@@ -15,6 +17,8 @@ type Preferences = {
   push_enabled: boolean;
   whatsapp_enabled: boolean;
   whatsapp_number: string | null;
+  whatsapp_verified_number: string | null;
+  whatsapp_verified_at: string | null;
   unsubscribed_at: string | null;
   unsubscribe_reason: string | null;
 };
@@ -31,6 +35,8 @@ export default function CommunicationPreferences() {
     push_enabled: true, 
     whatsapp_enabled: true, 
     whatsapp_number: '',
+    whatsapp_verified_number: null,
+    whatsapp_verified_at: null,
     unsubscribed_at: null,
     unsubscribe_reason: null
   });
@@ -64,14 +70,25 @@ export default function CommunicationPreferences() {
   const save = async () => {
     setSaving(true); setSaved(false); setError('');
     try {
+      if (preferences.whatsapp_enabled) {
+        const normalizedWhatsApp = normalizeRequiredWhatsAppNumber(preferences.whatsapp_number || '');
+        if (preferences.whatsapp_verified_number !== normalizedWhatsApp) {
+          throw new Error('Verifique seu número de WhatsApp com o código enviado antes de salvar.');
+        }
+      }
       const { data } = await supabase.auth.getSession();
+      const {
+        whatsapp_verified_number: _verifiedNumber,
+        whatsapp_verified_at: _verifiedAt,
+        ...editablePreferences
+      } = preferences;
       const response = await fetch('/api/communication/preferences', { 
         method: 'PUT', 
         headers: { 
           'Content-Type': 'application/json', 
           Authorization: 'Bearer ' + (data.session?.access_token || '') 
         }, 
-        body: JSON.stringify(preferences) 
+        body: JSON.stringify(editablePreferences)
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || 'Falha ao salvar preferências.');
@@ -193,17 +210,28 @@ export default function CommunicationPreferences() {
                       />
                     </label>
                     {key === 'whatsapp_enabled' && preferences.whatsapp_enabled && (
-                      <div className="pl-4 pr-2 pb-2">
-                        <label className="block">
-                          <span className="text-xs font-semibold text-brand-text">Número do WhatsApp (DDI + DDD + Número)</span>
-                          <input 
-                            type="tel"
-                            placeholder="Ex: 5511999999999" 
-                            value={preferences.whatsapp_number || ''} 
-                            onChange={(event) => setPreferences({ ...preferences, whatsapp_number: event.target.value })} 
-                            className="mt-1 w-full rounded-lg border border-brand-border px-3 py-1.5 text-sm" 
-                          />
-                        </label>
+                      <div className="pl-4 pr-2 pb-2 pt-1">
+                        <WhatsAppVerificationField
+                          idPrefix="preferences-whatsapp"
+                          value={preferences.whatsapp_number}
+                          verifiedNumber={preferences.whatsapp_verified_number}
+                          onChange={(phoneNumber) => setPreferences((current) => ({
+                            ...current,
+                            whatsapp_number: phoneNumber,
+                          }))}
+                          onVerified={(phoneNumber) => {
+                            setPreferences((current) => ({
+                              ...current,
+                              whatsapp_number: phoneNumber,
+                              whatsapp_verified_number: phoneNumber,
+                              whatsapp_verified_at: new Date().toISOString(),
+                            }));
+                            setError('');
+                          }}
+                          disabled={saving}
+                          required
+                          label="Número do WhatsApp"
+                        />
                       </div>
                     )}
                   </div>

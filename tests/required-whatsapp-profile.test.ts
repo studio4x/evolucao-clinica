@@ -34,13 +34,24 @@ assert.throws(
 
 const onboardingSource = readFileSync(resolve('src/pages/Onboarding.tsx'), 'utf8');
 const profileSource = readFileSync(resolve('src/pages/Profile.tsx'), 'utf8');
+const preferencesSource = readFileSync(resolve('src/pages/CommunicationPreferences.tsx'), 'utf8');
+const verificationFieldSource = readFileSync(resolve('src/components/common/WhatsAppVerificationField.tsx'), 'utf8');
 const adminSource = readFileSync(resolve('src/pages/AdminPanel.tsx'), 'utf8');
 
 assert.match(onboardingSource, /id="onboarding-whatsapp"[\s\S]*?type="tel"[\s\S]*?required/);
 assert.match(onboardingSource, /id="onboarding-whatsapp-country"[\s\S]*?aria-label="País do WhatsApp"/);
 assert.match(onboardingSource, /normalizeRequiredWhatsAppNationalNumber\(whatsappNumber, whatsappCountry\)/);
 assert.match(onboardingSource, /placeholder=\{whatsappCountry === 'BR' \? '\(99\) 99999-9999'/);
-assert.match(profileSource, /type="tel"[\s\S]*?required[\s\S]*?value=\{whatsappNumber\}/);
+assert.match(profileSource, /<WhatsAppVerificationField[\s\S]*?idPrefix="profile-whatsapp"/);
+assert.match(profileSource, /whatsappVerifiedNumber !== normalizedWhatsApp/);
+assert.match(preferencesSource, /<WhatsAppVerificationField[\s\S]*?idPrefix="preferences-whatsapp"/);
+assert.match(preferencesSource, /preferences\.whatsapp_verified_number !== normalizedWhatsApp/);
+assert.match(verificationFieldSource, /getWhatsAppCountryOptions\(\)/);
+assert.match(verificationFieldSource, /placeholder=\{country === 'BR' \? '\(99\) 99999-9999'/);
+assert.match(verificationFieldSource, /\/api\/onboarding\/whatsapp-verification\/request/);
+assert.match(verificationFieldSource, /\/api\/onboarding\/whatsapp-verification\/verify/);
+assert.match(verificationFieldSource, /autoComplete="one-time-code"/);
+assert.match(verificationFieldSource, /WhatsApp verificado/);
 assert.match(adminSource, /ProfessionalDetailsModal/);
 
 console.log('Required WhatsApp and professional details tests passed.');

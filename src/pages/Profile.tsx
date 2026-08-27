@@ -10,6 +10,7 @@ import { showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { WORK_CONTEXT_OPTIONS, isValidWorkContext, type WorkContext } from '../constants/professionalProfile';
 import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
+import { WhatsAppVerificationField } from '../components/common/WhatsAppVerificationField';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ export default function Profile() {
   const [professionalRegister, setProfessionalRegister] = useState('');
   const [workContext, setWorkContext] = useState<WorkContext | ''>('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
+  const [whatsappVerifiedNumber, setWhatsappVerifiedNumber] = useState<string | null>(null);
   const [whatsappOptIn, setWhatsappOptIn] = useState(false);
 
   const WHATSAPP_OPT_IN_TEXT = 'Quero receber pelo WhatsApp notificações operacionais relacionadas à minha conta e ao uso do Evolução Clínica. Posso cancelar essa autorização a qualquer momento.';
@@ -194,6 +196,7 @@ export default function Profile() {
               if (prefsRes.ok) {
                 const prefsData = await prefsRes.json();
                 setWhatsappNumber(prefsData.preferences?.whatsapp_number || '');
+                setWhatsappVerifiedNumber(prefsData.preferences?.whatsapp_verified_number || null);
                 setWhatsappOptIn(prefsData.preferences?.whatsapp_opt_in === true);
               }
             }
@@ -270,6 +273,9 @@ export default function Profile() {
 
     try {
       const normalizedWhatsApp = normalizeRequiredWhatsAppNumber(whatsappNumber);
+      if (whatsappVerifiedNumber !== normalizedWhatsApp) {
+        throw new Error('Verifique seu número de WhatsApp com o código enviado antes de salvar.');
+      }
 
       // 1. Atualiza a tabela public.professionals
       const { error: dbError } = await supabase
@@ -318,11 +324,12 @@ export default function Profile() {
           whatsapp_opt_in_text_version: WHATSAPP_OPT_IN_TEXT_VERSION
         })
       });
+      const preferencesPayload = await preferencesResponse.json().catch(() => ({}));
       if (!preferencesResponse.ok) {
-        const preferencesError = await preferencesResponse.json().catch(() => ({}));
-        throw new Error(preferencesError.error || 'Não foi possível salvar o WhatsApp.');
+        throw new Error(preferencesPayload.error || 'Não foi possível salvar o WhatsApp.');
       }
       setWhatsappNumber(normalizedWhatsApp);
+      setWhatsappVerifiedNumber(preferencesPayload.preferences?.whatsapp_verified_number || normalizedWhatsApp);
 
       fetch('/api/profile/sync-brevo', {
         method: 'PUT',
@@ -690,28 +697,20 @@ export default function Profile() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">
-                Número do WhatsApp (DDI + DDD + Número) *
-              </label>
-              <div className="relative">
-                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-muted" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
-                </svg>
-                <input
-                  type="tel"
-                  required
-                  inputMode="tel"
-                  autoComplete="tel"
-                  value={whatsappNumber}
-                  onChange={(e) => setWhatsappNumber(e.target.value)}
-                  className="input-field pl-10 pr-4 py-3"
-                  placeholder="Ex: 5511999887766"
-                  disabled={saving}
-                />
-              </div>
-              <p className="text-[10px] text-brand-text-muted">
-                DDI + DDD + Número, sem espaços ou caracteres especiais. Ex: 5511999887766.
-              </p>
+              <WhatsAppVerificationField
+                idPrefix="profile-whatsapp"
+                value={whatsappNumber}
+                verifiedNumber={whatsappVerifiedNumber}
+                onChange={setWhatsappNumber}
+                onVerified={(phoneNumber) => {
+                  setWhatsappNumber(phoneNumber);
+                  setWhatsappVerifiedNumber(phoneNumber);
+                  setErrorMessage('');
+                }}
+                disabled={saving}
+                required
+                label="Número do WhatsApp"
+              />
               <label className="flex items-start gap-3 rounded-xl border border-brand-border bg-brand-bg/40 p-3 cursor-pointer">
                 <input
                   type="checkbox"
