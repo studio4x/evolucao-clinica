@@ -34,6 +34,7 @@ jobs:
                   raise SystemExit(f'missing expected token: {token}')
 
           text = text.replace('Round4ReadinessResult', 'Round5ReadinessResult')
+          text = text.replace('Round4', 'Round5')
           text = text.replace('round4', 'round5')
           text = text.replace('round=4', 'round=5')
           text = text.replace('Rodada 4', 'Rodada 5')
