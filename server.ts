@@ -35,6 +35,11 @@ import {
 import { createWhatsAppRepository } from "./server/whatsapp/whatsappRepository.js";
 import type { WhatsAppSendResult } from "./server/whatsapp/whatsappTypes.js";
 import {
+  createWhatsAppOtpService,
+  getWhatsAppOtpConfigFromEnv,
+  registerWhatsAppOtpRoutes
+} from "./server/whatsapp/whatsappOtp.js";
+import {
   resolveWhatsAppAdministrativeTemplate,
   mapSupportStatus,
   type WhatsAppAdministrativeNotification
@@ -110,6 +115,11 @@ const whatsappRepository = createWhatsAppRepository(supabaseAdmin);
 const whatsappClient = createWhatsAppClient({
   config: whatsappConfig,
   repository: whatsappRepository
+});
+const whatsappOtpService = createWhatsAppOtpService({
+  supabaseAdmin,
+  whatsappClient,
+  config: getWhatsAppOtpConfigFromEnv()
 });
 const whatsappN8nEventsService = createWhatsAppN8nEventsService({ repository: whatsappRepository });
 
@@ -1779,6 +1789,7 @@ async function deleteProfessionalAccount(targetUserId: string) {
 // Content-Length is missing or forged.
 app.use("/api/integrations/whatsapp/opt-out", express.json({ limit: "8kb" }));
 app.use("/api/integrations/whatsapp/user-lookup", express.json({ limit: "2kb" }));
+app.use("/api/onboarding/whatsapp-verification", express.json({ limit: "2kb" }));
 // Middleware
 app.use(express.json({
   limit: '10mb',
@@ -7179,6 +7190,7 @@ app.get("/api/public/reports/:reportId", async (req, res) => {
 });
 
 lifecycleService.registerRoutes(app, { requireAuth, requireAdmin });
+registerWhatsAppOtpRoutes(app, { requireAuth, service: whatsappOtpService });
 
 // API 404 Catch-all
 app.all(/^\/api\/.*$/, (req, res) => {
@@ -7186,6 +7198,7 @@ app.all(/^\/api\/.*$/, (req, res) => {
 });
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   const isWhatsAppUserLookup = req.originalUrl.split("?")[0] === "/api/integrations/whatsapp/user-lookup";
+  const isWhatsAppOtp = req.originalUrl.split("?")[0].startsWith("/api/onboarding/whatsapp-verification/");
   if (err?.type === "entity.too.large" && req.originalUrl.split("?")[0] === "/api/integrations/whatsapp/opt-out") {
     return res.status(413).json({ error: "Payload excede o limite de 8 KB para o webhook de descadastramento." });
   }
@@ -7196,6 +7209,14 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   if (isWhatsAppUserLookup && err?.type === "entity.parse.failed") {
     res.set("Cache-Control", "no-store");
     return res.status(400).json({ error: "Payload JSON inválido." });
+  }
+  if (isWhatsAppOtp && err?.type === "entity.too.large") {
+    res.set("Cache-Control", "no-store");
+    return res.status(413).json({ success: false, error: "Payload excede o limite permitido.", code: "otp_payload_too_large" });
+  }
+  if (isWhatsAppOtp && err?.type === "entity.parse.failed") {
+    res.set("Cache-Control", "no-store");
+    return res.status(400).json({ success: false, error: "Payload JSON inválido.", code: "otp_invalid_json" });
   }
   console.error("Express error:", err);
   if (req.path && req.path.startsWith('/api/')) {

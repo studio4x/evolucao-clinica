@@ -98,13 +98,22 @@ export type WhatsAppTextSendInput = {
   previewUrl?: boolean;
 };
 
-export type WhatsAppTemplateComponent = {
-  type: "body";
-  parameters: Array<{
-    type: "text";
-    text: string;
-  }>;
+export type WhatsAppTemplateParameter = {
+  type: "text";
+  text: string;
 };
+
+export type WhatsAppTemplateComponent =
+  | {
+      type: "body";
+      parameters: WhatsAppTemplateParameter[];
+    }
+  | {
+      type: "button";
+      sub_type: "url";
+      index: string;
+      parameters: WhatsAppTemplateParameter[];
+    };
 
 export type WhatsAppTemplateSendInput = {
   userId?: string | null;

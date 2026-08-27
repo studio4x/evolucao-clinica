@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Volume2, Award, Compass, ListChecks } from 'lucide-react';
+import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Volume2, Award, Compass, ListChecks, MessageCircle, RotateCcw } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -79,6 +79,12 @@ type AgendaSyncSummary = {
   syncedAt: string;
 };
 
+type WhatsAppOtpRequest = {
+  requestId: string;
+  maskedPhone: string;
+  resendAvailableAt: number;
+};
+
 export default function Onboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -93,6 +99,10 @@ export default function Onboarding() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappError, setWhatsappError] = useState('');
   const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [verifyingWhatsapp, setVerifyingWhatsapp] = useState(false);
+  const [whatsappOtpRequest, setWhatsappOtpRequest] = useState<WhatsAppOtpRequest | null>(null);
+  const [whatsappOtpCode, setWhatsappOtpCode] = useState('');
+  const [whatsappResendSeconds, setWhatsappResendSeconds] = useState(0);
   const [choosingMode, setChoosingMode] = useState<'guided' | 'explore' | null>(null);
   const [choiceError, setChoiceError] = useState('');
 
@@ -169,6 +179,20 @@ export default function Onboarding() {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!whatsappOtpRequest) {
+      setWhatsappResendSeconds(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      setWhatsappResendSeconds(Math.max(0, Math.ceil((whatsappOtpRequest.resendAvailableAt - Date.now()) / 1000)));
+    };
+    updateCountdown();
+    const interval = window.setInterval(updateCountdown, 1000);
+    return () => window.clearInterval(interval);
+  }, [whatsappOtpRequest]);
+
+  useEffect(() => {
     if (!user?.id) return;
 
     if (activeStep === 'agenda') {
@@ -178,7 +202,21 @@ export default function Onboarding() {
     }
   }, [activeStep, onboardingState?.step, showStartChoice, user?.id]);
 
-  const handleStartOnboarding = async () => {
+  const finishWhatsAppStep = (normalizedWhatsApp: string) => {
+    if (!user?.id) return;
+    const storedWhatsApp = splitStoredWhatsAppNumber(normalizedWhatsApp);
+    setWhatsappCountry(storedWhatsApp.country);
+    setWhatsappNumber(storedWhatsApp.nationalNumber);
+    setOnboardingState(user.id, { step: 'patient' });
+    void trackLifecycleEvent('onboarding_step_completed', {
+      metadata: { step: 'intro', mode: onboardingState?.mode || 'guided' },
+      dedupeKey: `onboarding_step_completed:${user.id}:intro`,
+    });
+    trackEvent('onboarding_begin', {}, { dedupeKey: `onboarding_begin:${user.id}`, persistDedupe: true });
+    navigate('/painel/patients/new?onboarding=1', { replace: true });
+  };
+
+  const requestWhatsAppOtp = async () => {
     if (!user?.id) return;
     setWhatsappError('');
 
@@ -189,28 +227,66 @@ export default function Onboarding() {
       const token = sessionData.session?.access_token;
       if (!token) throw new Error('Sua sessão não está disponível. Faça login novamente.');
 
-      const response = await fetch('/api/communication/preferences', {
-        method: 'PUT',
+      const response = await fetch('/api/onboarding/whatsapp-verification/request', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ whatsapp_number: normalizedWhatsApp })
+        body: JSON.stringify({ phoneNumber: normalizedWhatsApp })
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar o WhatsApp.');
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o código pelo WhatsApp.');
 
-      setWhatsappNumber(formatWhatsAppNationalNumber(whatsappNumber, whatsappCountry));
-      setOnboardingState(user.id, { step: 'patient' });
-      void trackLifecycleEvent('onboarding_step_completed', {
-        metadata: { step: 'intro', mode: onboardingState?.mode || 'guided' },
-        dedupeKey: `onboarding_step_completed:${user.id}:intro`,
+      if (payload.alreadyVerified === true) {
+        finishWhatsAppStep(normalizedWhatsApp);
+        return;
+      }
+      if (!payload.requestId) throw new Error('A solicitação do código não foi identificada. Tente novamente.');
+      setWhatsappOtpCode('');
+      setWhatsappOtpRequest({
+        requestId: String(payload.requestId),
+        maskedPhone: String(payload.maskedPhone || normalizedWhatsApp),
+        resendAvailableAt: Date.now() + (Number(payload.resendAfterSeconds) || 60) * 1000,
       });
-      trackEvent('onboarding_begin', {}, { dedupeKey: `onboarding_begin:${user.id}`, persistDedupe: true });
-      navigate('/painel/patients/new?onboarding=1', { replace: true });
     } catch (error: any) {
       setActiveSlide(3);
-      setWhatsappError(error.message || 'Informe um WhatsApp válido para continuar.');
+      setWhatsappError(error.message || 'Não foi possível enviar o código pelo WhatsApp.');
     } finally {
       setSavingWhatsapp(false);
     }
+  };
+
+  const handleVerifyWhatsAppOtp = async () => {
+    if (!user?.id || !whatsappOtpRequest) return;
+    setWhatsappError('');
+    const code = whatsappOtpCode.replace(/\D/g, '').slice(0, 6);
+    if (code.length !== 6) {
+      setWhatsappError('Informe o código de 6 dígitos enviado pelo WhatsApp.');
+      return;
+    }
+
+    try {
+      setVerifyingWhatsapp(true);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sua sessão não está disponível. Faça login novamente.');
+      const response = await fetch('/api/onboarding/whatsapp-verification/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ requestId: whatsappOtpRequest.requestId, code }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível confirmar o código.');
+      finishWhatsAppStep(String(payload.phoneNumber || normalizeRequiredWhatsAppNationalNumber(whatsappNumber, whatsappCountry)));
+    } catch (error: any) {
+      setWhatsappError(error.message || 'Não foi possível confirmar o código.');
+    } finally {
+      setVerifyingWhatsapp(false);
+    }
+  };
+
+  const handleChangeWhatsAppNumber = () => {
+    setWhatsappOtpRequest(null);
+    setWhatsappOtpCode('');
+    setWhatsappError('');
   };
 
   const handleChooseStartMode = async (mode: 'guided' | 'explore') => {
@@ -681,11 +757,11 @@ export default function Onboarding() {
             {/* Botão de Pular a Intro (apenas na apresentação) */}
             {activeStep === 'intro' && (
               <button
-                onClick={() => void handleStartOnboarding()}
-                disabled={savingWhatsapp}
+                onClick={() => setActiveSlide(3)}
+                disabled={activeSlide === 3}
                 className="text-xs font-semibold text-brand-text-muted hover:text-brand-primary px-3 py-1.5 rounded-xl hover:bg-brand-bg transition-colors"
               >
-                {savingWhatsapp ? 'Salvando...' : 'Pular'}
+                Pular apresentação
               </button>
             )}
           </div>
@@ -814,7 +890,7 @@ export default function Onboarding() {
                           WhatsApp obrigatório
                         </label>
                         <div
-                          className={`flex w-full overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary ${whatsappError ? 'border-red-400 focus-within:border-red-500 focus-within:ring-red-500' : 'border-brand-border'}`}
+                          className={`flex w-full overflow-hidden rounded-xl border bg-white shadow-sm transition-colors focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary ${whatsappError && !whatsappOtpRequest ? 'border-red-400 focus-within:border-red-500 focus-within:ring-red-500' : 'border-brand-border'}`}
                         >
                           <div className="relative flex shrink-0 items-center border-r border-brand-border bg-brand-bg/60">
                             <div className="pointer-events-none flex min-w-[92px] items-center justify-center gap-1.5 px-3 text-sm font-semibold text-brand-text" aria-hidden="true">
@@ -829,7 +905,7 @@ export default function Onboarding() {
                               aria-label="País do WhatsApp"
                               title="Selecionar país e DDI"
                               value={whatsappCountry}
-                              disabled={savingWhatsapp}
+                              disabled={savingWhatsapp || verifyingWhatsapp || Boolean(whatsappOtpRequest)}
                               onChange={(event) => {
                                 const nextCountry = event.target.value as CountryCode;
                                 setWhatsappCountry(nextCountry);
@@ -857,15 +933,63 @@ export default function Onboarding() {
                               if (whatsappError) setWhatsappError('');
                             }}
                             placeholder={whatsappCountry === 'BR' ? '(99) 99999-9999' : 'Número do WhatsApp'}
-                            disabled={savingWhatsapp}
+                            disabled={savingWhatsapp || verifyingWhatsapp || Boolean(whatsappOtpRequest)}
                             className="min-w-0 flex-1 border-0 bg-white px-3 py-3 text-sm text-brand-text outline-none ring-0 placeholder:text-brand-text-muted/70 focus:border-0 focus:outline-none focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                             aria-invalid={Boolean(whatsappError)}
                             aria-describedby={whatsappError ? 'onboarding-whatsapp-error' : 'onboarding-whatsapp-help'}
                           />
                         </div>
                         <p id="onboarding-whatsapp-help" className="text-[10px] leading-relaxed text-brand-text-muted">
-                          Selecione o país e informe o número com DDD. Esse dado poderá ser alterado depois no seu perfil.
+                          Enviaremos um código de 6 dígitos para confirmar que este número pertence a você.
                         </p>
+                        {whatsappOtpRequest && (
+                          <div className="mt-3 space-y-3 rounded-xl border border-brand-primary/20 bg-brand-primary/[0.04] p-3">
+                            <div className="flex items-start gap-2 text-brand-text">
+                              <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand-primary" />
+                              <p className="text-[11px] leading-relaxed">
+                                Código enviado para <strong>{whatsappOtpRequest.maskedPhone}</strong>. Ele expira em 5 minutos.
+                              </p>
+                            </div>
+                            <div>
+                              <label htmlFor="onboarding-whatsapp-otp" className="sr-only">Código de verificação</label>
+                              <input
+                                id="onboarding-whatsapp-otp"
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                maxLength={6}
+                                autoFocus
+                                value={whatsappOtpCode}
+                                onChange={(event) => {
+                                  setWhatsappOtpCode(event.target.value.replace(/\D/g, '').slice(0, 6));
+                                  if (whatsappError) setWhatsappError('');
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' && whatsappOtpCode.length === 6 && !verifyingWhatsapp) {
+                                    event.preventDefault();
+                                    void handleVerifyWhatsAppOtp();
+                                  }
+                                }}
+                                placeholder="000000"
+                                disabled={verifyingWhatsapp}
+                                aria-invalid={Boolean(whatsappError)}
+                                aria-describedby={whatsappError ? 'onboarding-whatsapp-error' : undefined}
+                                className="w-full rounded-xl border border-brand-border bg-white px-4 py-3 text-center font-mono text-xl font-bold tracking-[0.35em] text-brand-text outline-none transition focus:border-brand-primary focus:ring-1 focus:ring-brand-primary disabled:opacity-60"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void requestWhatsAppOtp()}
+                              disabled={savingWhatsapp || verifyingWhatsapp || whatsappResendSeconds > 0}
+                              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-brand-primary disabled:cursor-not-allowed disabled:text-brand-text-muted"
+                            >
+                              <RotateCcw size={13} className={savingWhatsapp ? 'animate-spin' : ''} />
+                              {whatsappResendSeconds > 0
+                                ? `Reenviar código em ${whatsappResendSeconds}s`
+                                : savingWhatsapp ? 'Reenviando...' : 'Reenviar código'}
+                            </button>
+                          </div>
+                        )}
                         {whatsappError && (
                           <p id="onboarding-whatsapp-error" className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-700">
                             {whatsappError}
@@ -1076,16 +1200,19 @@ export default function Onboarding() {
                 {/* Botão Voltar */}
                 <button
                   type="button"
-                  disabled={activeSlide === 0}
-                  onClick={() => setActiveSlide((prev) => prev - 1)}
+                  disabled={activeSlide === 0 && !whatsappOtpRequest}
+                  onClick={() => {
+                    if (whatsappOtpRequest) handleChangeWhatsAppNumber();
+                    else setActiveSlide((prev) => prev - 1);
+                  }}
                   className="px-4 py-2 text-xs font-bold text-brand-text-muted hover:text-brand-primary rounded-xl hover:bg-brand-bg transition-colors disabled:opacity-0 disabled:pointer-events-none"
                 >
                   <ChevronLeft size={16} className="inline mr-1" />
-                  Voltar
+                  {whatsappOtpRequest ? 'Alterar número' : 'Voltar'}
                 </button>
 
                 {/* Dots centralizados no Desktop */}
-                <div className="hidden md:flex items-center gap-1.5">
+                <div className={`hidden items-center gap-1.5 ${whatsappOtpRequest ? '' : 'md:flex'}`}>
                   {[...Array(4)].map((_, idx) => (
                     <button
                       key={idx}
@@ -1110,12 +1237,16 @@ export default function Onboarding() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => void handleStartOnboarding()}
-                    disabled={savingWhatsapp}
+                    onClick={() => void (whatsappOtpRequest ? handleVerifyWhatsAppOtp() : requestWhatsAppOtp())}
+                    disabled={savingWhatsapp || verifyingWhatsapp || (Boolean(whatsappOtpRequest) && whatsappOtpCode.length !== 6)}
                     className="btn-primary px-6 py-2.5 text-xs font-bold inline-flex items-center gap-1.5 shadow-md shadow-brand-primary/15"
                   >
-                    {savingWhatsapp ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={14} />}
-                    {savingWhatsapp ? 'Salvando WhatsApp...' : 'Iniciar Configuração'}
+                    {savingWhatsapp || verifyingWhatsapp ? <Loader2 size={14} className="animate-spin" /> : whatsappOtpRequest ? <ShieldCheck size={14} /> : <ArrowRight size={14} />}
+                    {savingWhatsapp
+                      ? 'Enviando código...'
+                      : verifyingWhatsapp
+                        ? 'Confirmando...'
+                        : whatsappOtpRequest ? 'Confirmar código' : 'Enviar código'}
                   </button>
                 )}
               </>

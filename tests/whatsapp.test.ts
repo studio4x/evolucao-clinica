@@ -189,6 +189,22 @@ assert.equal(templateRepo.pendingInputs[0]?.messageType, "template");
 assert.equal(templateRepo.pendingInputs[0]?.templateName, "ec_jornada_ativacao");
 assert.equal(JSON.stringify(templateRepo.pendingInputs[0]?.requestPayload).includes("Mariana"), false);
 assert.equal(JSON.stringify(templateRepo.pendingInputs[0]?.requestPayload).includes("Cadastre seu primeiro paciente"), false);
+await templateResult.sendTemplate({
+  userId: "user-123",
+  recipientPhone: "5511999991234",
+  type: "template",
+  templateName: "ativacao_whatsapp_profissional",
+  languageCode: "pt_BR",
+  components: [
+    { type: "body", parameters: [{ type: "text", text: "123456" }] },
+    { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: "123456" }] }
+  ]
+});
+assert.equal(templateRequestBody.template.components[1].type, "button");
+assert.equal(templateRequestBody.template.components[1].sub_type, "url");
+assert.equal(templateRequestBody.template.components[1].index, "0");
+assert.equal(templateRequestBody.template.components[1].parameters[0].text, "123456");
+assert.equal(JSON.stringify(templateRepo.pendingInputs[1]?.requestPayload).includes("123456"), false);
 await assert.rejects(
   () => templateResult.sendTemplate({
     recipientPhone: "5511999991234",

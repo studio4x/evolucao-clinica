@@ -363,6 +363,9 @@ export function createWhatsAppClient(deps: WhatsAppClientDependencies) {
             language: { code: languageCode },
             components: components.map((component) => ({
               type: component.type,
+              ...(component.type === "button"
+                ? { sub_type: component.sub_type, index: component.index }
+                : {}),
               parameter_count: component.parameters.length
             }))
           }
