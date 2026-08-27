@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { normalizeWhatsAppPhone } from "../whatsapp/whatsappClient.js";
+import { isWhatsAppNumberUniqueViolation, WhatsAppNumberAlreadyInUseError } from "../whatsapp/whatsappUniqueness.js";
 import { DEFAULT_RUNTIME_CONFIG, LIFECYCLE_COMPLETION_WINDOW_DAYS, LIFECYCLE_TIMEZONE, type LifecycleRuntimeConfig } from "./lifecycleConstants.js";
 import { LIFECYCLE_EVENT_NAMES, type LifecycleDependencies, type LifecycleEventName, type LifecycleEventSource, type LifecycleState } from "./lifecycleTypes.js";
 
@@ -205,6 +206,7 @@ export async function updateLifecyclePreferences(deps: LifecycleDependencies, us
   }
 
   const { data, error } = await deps.supabaseAdmin.from("communication_preferences").upsert({ user_id: userId, ...update }, { onConflict: "user_id" }).select("*").single();
+  if (isWhatsAppNumberUniqueViolation(error)) throw new WhatsAppNumberAlreadyInUseError();
   if (error) throw new Error(error.message || "Falha ao atualizar preferências.");
   return data;
 }

@@ -22,5 +22,7 @@ assert.match(migrationSource, /whatsapp_opt_in boolean NOT NULL DEFAULT false/);
 assert.match(migrationSource, /whatsapp_opt_out_at timestamptz/);
 assert.match(serviceWorkerSource, /pathname\.startsWith\("\/api\/communication\/"\)/);
 assert.match(routesSource, /Cache-Control.*no-store/);
+assert.match(routesSource, /WhatsAppNumberAlreadyInUseError/);
+assert.match(routesSource, /res\.status\(error\.httpStatus\)\.json/);
 
 console.log('WhatsApp opt-in tests passed.');

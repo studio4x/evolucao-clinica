@@ -1,6 +1,7 @@
 import { createHmac, randomInt, randomUUID, timingSafeEqual } from "node:crypto";
 import { maskWhatsAppPhone, normalizeWhatsAppPhone } from "./whatsappClient.js";
 import type { WhatsAppClient } from "./whatsappClient.js";
+import { isWhatsAppNumberUniqueViolation, WHATSAPP_ALREADY_IN_USE_MESSAGE } from "./whatsappUniqueness.js";
 
 const OTP_LENGTH = 6;
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -142,6 +143,20 @@ export function createWhatsAppOtpService(deps: WhatsAppOtpDependencies) {
           expiresInSeconds: 0,
           resendAfterSeconds: 0,
         };
+      }
+
+      const { data: existingOwner, error: existingOwnerError } = await deps.supabaseAdmin
+        .from("communication_preferences")
+        .select("user_id")
+        .eq("whatsapp_number", phoneNumber)
+        .neq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+      if (existingOwnerError) {
+        throw new WhatsAppOtpError("Não foi possível validar a disponibilidade deste WhatsApp.", "whatsapp_availability_lookup_failed", 500);
+      }
+      if (existingOwner) {
+        throw new WhatsAppOtpError(WHATSAPP_ALREADY_IN_USE_MESSAGE, "whatsapp_already_in_use", 409);
       }
 
       const { data: latest, error: latestError } = await deps.supabaseAdmin
@@ -325,6 +340,9 @@ export function createWhatsAppOtpService(deps: WhatsAppOtpDependencies) {
           whatsapp_verified_at: verifiedIso,
         }, { onConflict: "user_id" });
       if (preferencesUpdateError) {
+        if (isWhatsAppNumberUniqueViolation(preferencesUpdateError)) {
+          throw new WhatsAppOtpError(WHATSAPP_ALREADY_IN_USE_MESSAGE, "whatsapp_already_in_use", 409);
+        }
         throw new WhatsAppOtpError("Não foi possível salvar o WhatsApp verificado.", "preferences_update_failed", 500);
       }
 

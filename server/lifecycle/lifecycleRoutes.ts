@@ -7,6 +7,7 @@ import { scheduleLifecycleMessages } from "./lifecycleScheduler.js";
 import { renderLifecycleMessage, resolveLifecycleUrl } from "./lifecycleRenderer.js";
 import { LIFECYCLE_ACTIVATION_CAMPAIGN_KEY } from "./lifecycleConstants.js";
 import { LIFECYCLE_EVENT_NAMES, type LifecycleDependencies, type LifecycleEventName } from "./lifecycleTypes.js";
+import { WhatsAppNumberAlreadyInUseError } from "../whatsapp/whatsappUniqueness.js";
 
 function asyncRoute(handler: (req: any, res: any) => Promise<unknown>) {
   return (req: any, res: any) => handler(req, res).catch((error) => {
@@ -154,9 +155,16 @@ export function createLifecycleService(deps: LifecycleDependencies) {
         return res.json({ preferences: await getLifecyclePreferences(deps, req.user.id) });
       }));
       app.put("/api/communication/preferences", middleware.requireAuth, asyncRoute(async (req, res) => {
-        const preferences = await updateLifecyclePreferences(deps, req.user.id, req.body || {});
-        if (preferences.lifecycle_enabled === false) await suppressLifecycleDispatches(deps, req.user.id, "lifecycle_disabled_by_user");
-        return res.json({ preferences });
+        try {
+          const preferences = await updateLifecyclePreferences(deps, req.user.id, req.body || {});
+          if (preferences.lifecycle_enabled === false) await suppressLifecycleDispatches(deps, req.user.id, "lifecycle_disabled_by_user");
+          return res.json({ preferences });
+        } catch (error) {
+          if (error instanceof WhatsAppNumberAlreadyInUseError) {
+            return res.status(error.httpStatus).json({ error: error.message, code: error.code });
+          }
+          throw error;
+        }
       }));
 
       const unsubscribe = asyncRoute(async (req, res) => {

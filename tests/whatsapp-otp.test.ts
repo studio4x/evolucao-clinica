@@ -8,6 +8,11 @@ import {
   verifyWhatsAppOtpDigest,
   WhatsAppOtpError,
 } from "../server/whatsapp/whatsappOtp.js";
+import {
+  isWhatsAppNumberUniqueViolation,
+  WHATSAPP_ALREADY_IN_USE_MESSAGE,
+  WhatsAppNumberAlreadyInUseError,
+} from "../server/whatsapp/whatsappUniqueness.js";
 
 const config = getWhatsAppOtpConfigFromEnv({
   WHATSAPP_APP_SECRET: "a".repeat(32),
@@ -39,12 +44,19 @@ assert.deepEqual(buildWhatsAppOtpTemplateComponents("123456"), [
   { type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: "123456" }] },
 ]);
 assert.throws(() => buildWhatsAppOtpTemplateComponents("12345"), WhatsAppOtpError);
+assert.equal(isWhatsAppNumberUniqueViolation({ code: "23505" }), true);
+assert.equal(isWhatsAppNumberUniqueViolation({ code: "23514" }), false);
+assert.equal(new WhatsAppNumberAlreadyInUseError().message, WHATSAPP_ALREADY_IN_USE_MESSAGE);
 
 const serviceSource = readFileSync("server/whatsapp/whatsappOtp.ts", "utf8");
 const serverSource = readFileSync("server.ts", "utf8");
 const onboardingSource = readFileSync("src/pages/Onboarding.tsx", "utf8");
 const migrationSource = readFileSync(
   "supabase/migrations/20260827153113_add_whatsapp_otp_verification.sql",
+  "utf8",
+);
+const uniquenessMigrationSource = readFileSync(
+  "supabase/migrations/20260827172723_ensure_unique_professional_whatsapp.sql",
   "utf8",
 );
 
@@ -57,6 +69,8 @@ assert.match(serviceSource, /code_digest: codeDigest/);
 assert.doesNotMatch(serviceSource, /code:\s*code,\s*attempt_count/);
 assert.match(serviceSource, /templateName: deps\.config\.templateName/);
 assert.match(serviceSource, /whatsapp_verified_number: row\.phone_number/);
+assert.match(serviceSource, /\.neq\("user_id", userId\)/);
+assert.match(serviceSource, /"whatsapp_already_in_use", 409/);
 
 assert.match(serverSource, /\/api\/onboarding\/whatsapp-verification/);
 assert.match(serverSource, /express\.json\(\{ limit: "2kb" \}\)/);
@@ -74,5 +88,8 @@ assert.match(migrationSource, /REVOKE ALL ON TABLE public\.whatsapp_otp_challeng
 assert.match(migrationSource, /GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public\.whatsapp_otp_challenges TO service_role/);
 assert.match(migrationSource, /protect_whatsapp_verification_state_trigger/);
 assert.match(migrationSource, /whatsapp_verified_number = whatsapp_number/);
+assert.match(uniquenessMigrationSource, /communication_preferences_whatsapp_number_format_check/);
+assert.match(uniquenessMigrationSource, /CREATE UNIQUE INDEX communication_preferences_whatsapp_number_unique_idx/);
+assert.match(uniquenessMigrationSource, /WHERE whatsapp_number IS NOT NULL/);
 
 console.log("WhatsApp OTP tests passed.");
