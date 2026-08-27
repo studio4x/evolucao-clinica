@@ -467,6 +467,7 @@ export default function AdminCampaignDispatch() {
     setElapsedSeconds(0);
     setConfirmed(false);
     setRunRecovered(false);
+    void loadRound4Readiness();
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
