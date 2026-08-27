@@ -1,0 +1,74 @@
+name: Patch readiness refresh on new batch
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-refresh-readiness-on-new-batch.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Patch AdminCampaignDispatch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/pages/AdminCampaignDispatch.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          old = """  const resetRun = () => {
+    if (runActive) return;
+    window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
+    setResult(null);
+    setStatusResult(null);
+    setStatusError('');
+    setErrorMessage('');
+    setDispatchStartedAt(null);
+    setElapsedSeconds(0);
+    setConfirmed(false);
+    setRunRecovered(false);
+  };"""
+
+          new = """  const resetRun = () => {
+    if (runActive) return;
+    window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
+    setResult(null);
+    setStatusResult(null);
+    setStatusError('');
+    setErrorMessage('');
+    setDispatchStartedAt(null);
+    setElapsedSeconds(0);
+    setConfirmed(false);
+    setRunRecovered(false);
+    void loadRound4Readiness();
+  };"""
+
+          if old not in text:
+              raise SystemExit('resetRun target not found; refusing broad edit')
+
+          updated = text.replace(old, new, 1)
+          if updated.count('void loadRound4Readiness();') < 2:
+              raise SystemExit('readiness refresh assertion failed')
+
+          path.write_text(updated, encoding='utf-8')
+          PY
+      - name: Validate
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+      - name: Commit functional change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/AdminCampaignDispatch.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: refresh round readiness when preparing new batch"
+          git push
