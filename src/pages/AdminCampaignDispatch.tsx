@@ -28,7 +28,7 @@ const TEMPLATES = [
   {
     value: 'convite_jornada_ec_15dias_v1',
     label: 'Recomendado — Jornada 15 dias',
-    description: 'Vencedor da Rodada 2 e modelo principal mantido para a Rodada 4.'
+    description: 'Vencedor da Rodada 2 e modelo principal mantido para a Rodada 5.'
   },
   {
     value: 'convite_jornada_ec_organizacao_v2',
@@ -81,7 +81,7 @@ type DispatchStatusResult = {
   error?: string;
 };
 
-type Round4ReadinessResult = {
+type Round5ReadinessResult = {
   ok: boolean;
   status?: string;
   template?: string;
@@ -155,7 +155,7 @@ const errorLabels: Record<string, string> = {
   n8n_status_rejected: 'O n8n recusou a consulta de acompanhamento.',
   n8n_status_timeout: 'A consulta de acompanhamento demorou além do esperado.',
   n8n_status_unavailable: 'Não foi possível consultar o andamento no n8n.',
-  round4_data_incomplete: 'Os dados de preparação da Rodada 4 ainda não estão completos na fonte.',
+  round5_data_incomplete: 'Os dados de preparação da Rodada 5 ainda não estão completos na fonte.',
   server_configuration_missing: 'Configuração server-side indisponível.',
   admin_validation_failed: 'Não foi possível validar a permissão administrativa.'
 };
@@ -217,9 +217,9 @@ export default function AdminCampaignDispatch() {
   const [errorMessage, setErrorMessage] = useState('');
   const [dispatchStartedAt, setDispatchStartedAt] = useState<number | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [round4Readiness, setRound4Readiness] = useState<Round4ReadinessResult | null>(null);
-  const [round4ReadinessLoading, setRound4ReadinessLoading] = useState(false);
-  const [round4ReadinessError, setRound4ReadinessError] = useState('');
+  const [round5Readiness, setRound5Readiness] = useState<Round5ReadinessResult | null>(null);
+  const [round5ReadinessLoading, setRound5ReadinessLoading] = useState(false);
+  const [round5ReadinessError, setRound5ReadinessError] = useState('');
   const [runStateRestored, setRunStateRestored] = useState(false);
   const [runRecovered, setRunRecovered] = useState(false);
 
@@ -289,14 +289,14 @@ export default function AdminCampaignDispatch() {
     };
   }, []);
 
-  const loadRound4Readiness = useCallback(async () => {
+  const loadRound5Readiness = useCallback(async () => {
     if (!accessToken) return;
 
-    setRound4ReadinessLoading(true);
+    setRound5ReadinessLoading(true);
     try {
       const refreshNonce = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const response = await fetch(
-        `/api/admin/campaign-dashboard?round=4&refresh=${encodeURIComponent(refreshNonce)}`,
+        `/api/admin/campaign-dashboard?round=5&refresh=${encodeURIComponent(refreshNonce)}`,
         {
           method: 'GET',
           headers: {
@@ -309,29 +309,29 @@ export default function AdminCampaignDispatch() {
         }
       );
 
-      const body = await response.json().catch(() => ({ ok: false, error: 'invalid_response' })) as Round4ReadinessResult;
+      const body = await response.json().catch(() => ({ ok: false, error: 'invalid_response' })) as Round5ReadinessResult;
       if (!response.ok || !body.ok) {
-        setRound4ReadinessError(errorLabels[String(body.error || '')] || 'Não foi possível consultar a preparação da Rodada 4 agora.');
+        setRound5ReadinessError(errorLabels[String(body.error || '')] || 'Não foi possível consultar a preparação da Rodada 5 agora.');
         return;
       }
 
-      setRound4Readiness({
+      setRound5Readiness({
         ...body,
         overall: body.overall ? { ...body.overall } : undefined
       });
-      setRound4ReadinessError('');
+      setRound5ReadinessError('');
     } catch (error) {
-      console.error('[AdminCampaignDispatch] Falha ao consultar preparação da Rodada 4:', error);
-      setRound4ReadinessError('Falha de comunicação ao consultar a preparação da Rodada 4.');
+      console.error('[AdminCampaignDispatch] Falha ao consultar preparação da Rodada 5:', error);
+      setRound5ReadinessError('Falha de comunicação ao consultar a preparação da Rodada 5.');
     } finally {
-      setRound4ReadinessLoading(false);
+      setRound5ReadinessLoading(false);
     }
   }, [accessToken]);
 
   useEffect(() => {
     if (!accessToken) return;
-    void loadRound4Readiness();
-  }, [accessToken, loadRound4Readiness]);
+    void loadRound5Readiness();
+  }, [accessToken, loadRound5Readiness]);
 
   useEffect(() => {
     if (!dispatchStartedAt || statusResult?.complete) return;
@@ -419,14 +419,14 @@ export default function AdminCampaignDispatch() {
   const safeErrorExecutionUrl = isSafeN8nExecutionUrl(statusResult?.error_execution_url)
     ? statusResult?.error_execution_url
     : '';
-  const round4Configuration = sheet === 'Psicologia e Saúde Mental';
+  const round5Configuration = sheet === 'Psicologia e Saúde Mental';
   const winnerTemplateSelected = template === 'convite_jornada_ec_15dias_v1';
-  const round4Planned = Math.max(0, Number(round4Readiness?.overall?.planned || 0));
-  const round4Released = Math.max(0, Number(round4Readiness?.overall?.released || 0));
-  const round4Processed = Math.max(0, Number(round4Readiness?.overall?.processed || 0));
-  const round4ReadinessAvailable = Boolean(round4Readiness?.ok);
-  const round4DispatchBlocked = round4Configuration && (!round4ReadinessAvailable || round4Released === 0);
-  const quantityExceedsReleased = round4Configuration && round4ReadinessAvailable && quantity > round4Released;
+  const round5Planned = Math.max(0, Number(round5Readiness?.overall?.planned || 0));
+  const round5Released = Math.max(0, Number(round5Readiness?.overall?.released || 0));
+  const round5Processed = Math.max(0, Number(round5Readiness?.overall?.processed || 0));
+  const round5ReadinessAvailable = Boolean(round5Readiness?.ok);
+  const round5DispatchBlocked = round5Configuration && (!round5ReadinessAvailable || round5Released === 0);
+  const quantityExceedsReleased = round5Configuration && round5ReadinessAvailable && quantity > round5Released;
 
   const requestedTotal = Math.max(0, Number(result?.quantity || 0));
   const selectedTotal = Math.max(0, Number(statusResult?.selected || 0));
@@ -467,7 +467,7 @@ export default function AdminCampaignDispatch() {
     setElapsedSeconds(0);
     setConfirmed(false);
     setRunRecovered(false);
-    void loadRound4Readiness();
+    void loadRound5Readiness();
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -604,7 +604,7 @@ export default function AdminCampaignDispatch() {
             <div>
               <div className="flex items-center gap-2 text-base font-bold text-brand-primary">
                 <ShieldCheck className="h-5 w-5" />
-                Pré-checagem da Rodada 4
+                Pré-checagem da Rodada 5
               </div>
               <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
                 Leitura do dashboard administrativo. “Liberados” indica apenas <strong>SIM na origem</strong>; a elegibilidade final ainda depende de todas as travas do workflow. Os follow-ups da captação permanecem desativados.
@@ -612,53 +612,53 @@ export default function AdminCampaignDispatch() {
             </div>
             <button
               type="button"
-              onClick={() => void loadRound4Readiness()}
-              disabled={round4ReadinessLoading}
+              onClick={() => void loadRound5Readiness()}
+              disabled={round5ReadinessLoading}
               className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-blue-200 bg-white px-3.5 py-2 text-xs font-bold text-brand-primary transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <RefreshCw className={`h-4 w-4 ${round4ReadinessLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${round5ReadinessLoading ? 'animate-spin' : ''}`} />
               Atualizar dados
             </button>
           </div>
 
-          {round4ReadinessLoading && !round4Readiness ? (
+          {round5ReadinessLoading && !round5Readiness ? (
             <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-brand-text-muted">
               <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
               Consultando a preparação atual...
             </div>
-          ) : round4Readiness ? (
+          ) : round5Readiness ? (
             <div className="mt-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Planejados</p>
-                  <p className="mt-1 text-xl font-bold text-brand-text">{round4Planned}</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round5Planned}</p>
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Liberados na origem</p>
-                  <p className="mt-1 text-xl font-bold text-brand-text">{round4Released}</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round5Released}</p>
                 </div>
                 <div className="rounded-2xl border border-blue-100 bg-white px-4 py-3">
                   <p className="text-[11px] font-bold uppercase tracking-wide text-brand-text-muted">Processados</p>
-                  <p className="mt-1 text-xl font-bold text-brand-text">{round4Processed}</p>
+                  <p className="mt-1 text-xl font-bold text-brand-text">{round5Processed}</p>
                 </div>
               </div>
               <div className="flex flex-col gap-1 text-[11px] text-brand-text-muted sm:flex-row sm:items-center sm:justify-between">
-                <span><strong>Status:</strong> {round4Readiness.status || 'PREPARADA / AGUARDANDO ENVIOS'}</span>
-                <span><strong>Atualizado:</strong> {formatDateTime(round4Readiness.updated_at)}</span>
+                <span><strong>Status:</strong> {round5Readiness.status || 'PREPARADA / AGUARDANDO ENVIOS'}</span>
+                <span><strong>Atualizado:</strong> {formatDateTime(round5Readiness.updated_at)}</span>
               </div>
-              {round4Released === 0 && (
+              {round5Released === 0 && (
                 <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  Nenhum contato da Rodada 4 está liberado na origem. A execução permanece bloqueada nesta configuração até uma nova consulta confirmar pelo menos um contato liberado.
+                  Nenhum contato da Rodada 5 está liberado na origem. A execução permanece bloqueada nesta configuração até uma nova consulta confirmar pelo menos um contato liberado.
                 </div>
               )}
             </div>
           ) : null}
 
-          {round4ReadinessError && (
+          {round5ReadinessError && (
             <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{round4ReadinessError} A consulta indisponível não libera contatos nem inicia envios.</span>
+              <span>{round5ReadinessError} A consulta indisponível não libera contatos nem inicia envios.</span>
             </div>
           )}
         </section>
@@ -947,17 +947,17 @@ export default function AdminCampaignDispatch() {
             </div>
           </div>
 
-          {round4Configuration && !winnerTemplateSelected && (
+          {round5Configuration && !winnerTemplateSelected && (
             <div className="mt-5 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              Para a Rodada 4, o modelo recomendado é <strong>convite_jornada_ec_15dias_v1</strong>, vencedor da Rodada 2. O template selecionado agora não é o recomendado.
+              Para a Rodada 5, o modelo recomendado é <strong>convite_jornada_ec_15dias_v1</strong>, vencedor da Rodada 2. O template selecionado agora não é o recomendado.
             </div>
           )}
 
-          {quantityExceedsReleased && round4Released > 0 && (
+          {quantityExceedsReleased && round5Released > 0 && (
             <div className="mt-5 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-relaxed text-blue-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              O teto solicitado ({quantity}) é maior que os {round4Released} contato(s) atualmente liberado(s) na origem. O workflow processará apenas os que também passarem pelas demais travas de elegibilidade.
+              O teto solicitado ({quantity}) é maior que os {round5Released} contato(s) atualmente liberado(s) na origem. O workflow processará apenas os que também passarem pelas demais travas de elegibilidade.
             </div>
           )}
 
@@ -1008,7 +1008,7 @@ export default function AdminCampaignDispatch() {
             </p>
             <button
               type="submit"
-              disabled={!confirmed || submitting || runActive || round4DispatchBlocked}
+              disabled={!confirmed || submitting || runActive || round5DispatchBlocked}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
