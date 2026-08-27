@@ -17,48 +17,7 @@ jobs:
           fetch-depth: 0
       - name: Patch AdminCampaignDispatch
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('src/pages/AdminCampaignDispatch.tsx')
-          text = path.read_text(encoding='utf-8')
-
-          old = """  const resetRun = () => {
-    if (runActive) return;
-    window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
-    setResult(null);
-    setStatusResult(null);
-    setStatusError('');
-    setErrorMessage('');
-    setDispatchStartedAt(null);
-    setElapsedSeconds(0);
-    setConfirmed(false);
-    setRunRecovered(false);
-  };"""
-
-          new = """  const resetRun = () => {
-    if (runActive) return;
-    window.localStorage.removeItem(DISPATCH_RUN_STORAGE_KEY);
-    setResult(null);
-    setStatusResult(null);
-    setStatusError('');
-    setErrorMessage('');
-    setDispatchStartedAt(null);
-    setElapsedSeconds(0);
-    setConfirmed(false);
-    setRunRecovered(false);
-    void loadRound4Readiness();
-  };"""
-
-          if old not in text:
-              raise SystemExit('resetRun target not found; refusing broad edit')
-
-          updated = text.replace(old, new, 1)
-          if updated.count('void loadRound4Readiness();') < 2:
-              raise SystemExit('readiness refresh assertion failed')
-
-          path.write_text(updated, encoding='utf-8')
-          PY
+          python -c "from pathlib import Path; p=Path('src/pages/AdminCampaignDispatch.tsx'); t=p.read_text(encoding='utf-8'); old='    setRunRecovered(false);\\n  };'; new='    setRunRecovered(false);\\n    void loadRound4Readiness();\\n  };'; assert old in t, 'resetRun target not found'; u=t.replace(old,new,1); assert u.count('void loadRound4Readiness();') >= 2, 'refresh assertion failed'; p.write_text(u,encoding='utf-8')"
       - name: Validate
         run: |
           npm ci
