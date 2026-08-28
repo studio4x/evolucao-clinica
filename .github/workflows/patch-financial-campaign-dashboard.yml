@@ -1,0 +1,33 @@
+name: Patch financial campaign dashboard
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-financial-campaign-dashboard.yml'
+      - '.github/scripts/patch_financial_dashboard.py'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply patch
+        run: python .github/scripts/patch_financial_dashboard.py
+      - name: Validate
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+      - name: Commit functional change
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/pages/AdminCampaignDashboard.tsx
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: add financial metrics to campaign dashboard"
+          git push
