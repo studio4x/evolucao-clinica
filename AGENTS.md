@@ -13,6 +13,8 @@
 - Repositório oficial: [studio4x/evolucao-clinica](https://github.com/studio4x/evolucao-clinica).
 
 
+- O dashboard de captação por rodada deve seguir obrigatoriamente [`archicteture/CAPTACAO_DASHBOARD_PADRAO.md`](archicteture/CAPTACAO_DASHBOARD_PADRAO.md); novas rodadas adicionam dados ao componente padronizado e não criam layouts próprios.
+
 ## Execução
 
 - Preserve mudanças do usuário.

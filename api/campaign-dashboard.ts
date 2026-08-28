@@ -58,6 +58,57 @@ const callN8n = async (
   }
 };
 
+const normalizeDashboardBody = (round: number, source: Record<string, unknown>) => {
+  const body: Record<string, unknown> = { ...source };
+  const overall =
+    source.overall && typeof source.overall === 'object'
+      ? { ...(source.overall as Record<string, unknown>) }
+      : {};
+
+  if (round === 1) {
+    const sent = Number(overall.sent || 0);
+    const responses = Number(overall.responses || 0);
+    const interested = Number(overall.interested || 0);
+    const groupMembers = Number(overall.group_members || 0);
+    const identifiedMembers = Array.isArray(source.group_members) ? source.group_members.length : 0;
+
+    if (overall.planned === undefined) overall.planned = sent;
+    if (overall.processed === undefined) overall.processed = sent;
+
+    body.sample_size = Number(source.sample_size || sent);
+    body.status = String(source.status || 'ENCERRADA');
+    body.template = String(source.template || 'MULTIPLOS_TEMPLATES_HISTORICOS');
+    body.origin_decision = String(
+      source.origin_decision ||
+      'Rodada histórica com múltiplos templates, preservada para comparação.'
+    );
+    body.contacts_sheet_url = String(
+      source.contacts_sheet_url ||
+      'https://docs.google.com/spreadsheets/d/1PwouSDq1gi0588hlfzo2jCeoCwZ79z4IAxEm3w2thJg/edit'
+    );
+
+    if (!Array.isArray(source.funnel)) {
+      body.funnel = [
+        { key: 'processed', label: 'Processados', value: sent },
+        { key: 'sent', label: 'Enviados', value: sent },
+        { key: 'responses', label: 'Respostas', value: responses },
+        { key: 'interested', label: 'Interessados', value: interested },
+        { key: 'group_members', label: 'No grupo agora', value: groupMembers }
+      ];
+    }
+
+    if (identifiedMembers !== groupMembers) {
+      body.data_warning =
+        `${groupMembers} membro(s) atual(is) são contabilizados no funil, mas ${identifiedMembers} possuem identificação nominal na lista histórica. Essa diferença não invalida as métricas agregadas.`;
+    }
+  }
+
+  body.overall = overall;
+  body.ok = true;
+  delete body.error;
+  return body;
+};
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0');
   res.setHeader('CDN-Cache-Control', 'no-store');
@@ -76,7 +127,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ ok: false, error: 'authentication_required' });
   }
 
-  const round = Number(req.query.round || 2);
+  const round = Number(req.query.round || 5);
   if (![1, 2, 3, 4, 5].includes(round)) {
     return res.status(400).json({ ok: false, error: 'unsupported_round' });
   }
@@ -130,13 +181,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     4: 'dashboard_round4',
     5: 'dashboard_round5'
   };
-  const action = actionByRound[round];
 
   try {
     const { response: n8nResponse, body: n8nBody } = await callN8n(
       webhookUrl,
       internalToken,
-      { action },
+      { action: actionByRound[round] },
       55_000
     );
 
@@ -152,17 +202,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    if (n8nBody.ok !== true) {
+    const recoverableLegacyRound1 = Boolean(
+      round === 1 &&
+      n8nBody.error === 'round1_data_incomplete' &&
+      n8nBody.overall &&
+      typeof n8nBody.overall === 'object'
+    );
+
+    if (n8nBody.ok !== true && !recoverableLegacyRound1) {
       return res.status(502).json({
         ok: false,
         error: typeof n8nBody.error === 'string' ? n8nBody.error : 'n8n_dashboard_unavailable'
       });
     }
 
+    const dashboardBody = normalizeDashboardBody(round, n8nBody);
     const unitCostBrl = readMarketingUnitCostBrl();
 
     return res.status(200).json({
-      ...n8nBody,
+      ...dashboardBody,
       financial_config: {
         currency: 'BRL',
         category: 'MARKETING',
