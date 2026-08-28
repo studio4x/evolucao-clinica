@@ -1,6 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
+const DEFAULT_META_MARKETING_UNIT_COST_BRL = 0.3217;
+
+const readMarketingUnitCostBrl = () => {
+  const raw = String(process.env.EVOLUCAO_CLINICA_META_MARKETING_UNIT_COST_BRL || '')
+    .trim()
+    .replace(',', '.');
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_META_MARKETING_UNIT_COST_BRL;
+};
+
 const readBearerToken = (req: VercelRequest) => {
   const authorization = String(req.headers.authorization || '').trim();
   const match = authorization.match(/^Bearer\s+(.+)$/i);
@@ -147,7 +159,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    return res.status(200).json(n8nBody);
+    const unitCostBrl = readMarketingUnitCostBrl();
+
+    return res.status(200).json({
+      ...n8nBody,
+      financial_config: {
+        currency: 'BRL',
+        category: 'MARKETING',
+        unit_cost_brl: unitCostBrl,
+        billing_basis: 'delivered_template_message',
+        effective_from: '2026-07-01',
+        configurable_by: 'EVOLUCAO_CLINICA_META_MARKETING_UNIT_COST_BRL'
+      }
+    });
   } catch (error) {
     const isAbort = error instanceof Error && error.name === 'AbortError';
     console.error('[CampaignDashboard] Falha ao consultar dashboard no n8n.', {
