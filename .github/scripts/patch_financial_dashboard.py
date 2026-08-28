@@ -127,12 +127,12 @@ replace_once(
 )
 
 # Todas as abas individuais recebem a mesma secao financeira antes do conteudo especifico.
-individual_anchor = '        {data && isRound1 && overall ? ('
+individual_anchor = '        {!showGeneral && data && isRound1 && overall ? ('
 if individual_anchor not in text:
     raise SystemExit('individual round anchor not found')
 text = text.replace(
     individual_anchor,
-    "        {data && !showGeneral && overall ? (\n          <FinancialSection\n            title={`Financeiro — Rodada ${selectedRound}`}\n            overall={overall}\n            financialConfig={data.financial_config}\n            helper={`Estimativa financeira do convite inicial da Rodada ${selectedRound}.`}\n          />\n        ) : null}\n\n" + individual_anchor,
+    "        {!showGeneral && data && overall ? (\n          <FinancialSection\n            title={`Financeiro — Rodada ${selectedRound}`}\n            overall={overall}\n            financialConfig={data.financial_config}\n            helper={`Estimativa financeira do convite inicial da Rodada ${selectedRound}.`}\n          />\n        ) : null}\n\n" + individual_anchor,
     1,
 )
 
