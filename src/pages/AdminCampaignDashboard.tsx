@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   BarChart3,
   CheckCircle2,
+  DollarSign,
   ExternalLink,
   FileSpreadsheet,
   Loader2,
@@ -150,6 +151,14 @@ type DashboardPayload = {
   scope?: string;
   read_only?: boolean;
   workflow?: string;
+  financial_config?: {
+    currency?: string;
+    category?: string;
+    unit_cost_brl?: number;
+    billing_basis?: string;
+    effective_from?: string;
+    configurable_by?: string;
+  };
   updated_at?: string;
   sample_size?: number;
   status?: string;
@@ -227,11 +236,21 @@ const templateLabels: Record<string, string> = {
   followup_jornada_sem_cadastro_v1: 'Sem cadastro v1'
 };
 
+const DEFAULT_META_MARKETING_UNIT_COST_BRL = 0.3217;
+
 const formatPercent = (value?: number) =>
   `${Number(value || 0).toLocaleString('pt-BR', {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1
   })}%`;
+
+const formatCurrency = (value?: number, maximumFractionDigits = 2) =>
+  new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: maximumFractionDigits,
+    maximumFractionDigits
+  }).format(Number(value || 0));
 
 const formatDateTime = (value?: string) => {
   if (!value) return '—';
@@ -429,6 +448,56 @@ function FunnelSection({ title, funnel, base }: { title: string; funnel: Dashboa
 }
 
 
+
+function FinancialSection({
+  title,
+  overall,
+  financialConfig,
+  helper
+}: {
+  title: string;
+  overall: NonNullable<DashboardPayload['overall']>;
+  financialConfig?: DashboardPayload['financial_config'];
+  helper?: string;
+}) {
+  const unitCost = Number(financialConfig?.unit_cost_brl || DEFAULT_META_MARKETING_UNIT_COST_BRL);
+  const hasDeliveredMetric = typeof overall.delivered === 'number';
+  const billableMessages = Number(hasDeliveredMetric ? overall.delivered : overall.sent || 0);
+  const estimatedSpend = billableMessages * unitCost;
+  const responses = Number(overall.responses || 0);
+  const interested = Number(overall.interested || 0);
+  const groupMembers = Number(overall.group_members || 0);
+  const costPerResponse = responses > 0 ? estimatedSpend / responses : 0;
+  const costPerInterested = interested > 0 ? estimatedSpend / interested : 0;
+  const costPerGroupMember = groupMembers > 0 ? estimatedSpend / groupMembers : 0;
+
+  return (
+    <section className="rounded-3xl border border-emerald-200 bg-emerald-50/60 p-5 shadow-sm">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-emerald-800"><DollarSign className="h-5 w-5" /><h2 className="font-display text-lg font-bold">{title}</h2></div>
+          <p className="mt-1 text-xs text-emerald-800/80">{helper || 'Estimativa da tarifa Meta para mensagens de template Marketing entregues.'}</p>
+        </div>
+        <div className="rounded-2xl border border-emerald-200 bg-white/80 px-4 py-3 text-xs text-emerald-900">
+          <p className="font-semibold">Tarifa unitária de referência</p>
+          <p className="mt-1 text-lg font-black">{formatCurrency(unitCost, 4)}</p>
+          <p className="mt-1 text-[11px] text-emerald-800/70">Marketing • Brasil • vigente desde 01/07/2026</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded-2xl border border-emerald-200 bg-white p-4"><p className="text-xs font-semibold text-emerald-800">Custo Meta estimado</p><p className="mt-1 text-2xl font-bold text-emerald-950">{formatCurrency(estimatedSpend)}</p><p className="mt-1 text-xs text-emerald-800/70">{billableMessages} mensagem(ns) faturável(is)</p></div>
+        <div className="rounded-2xl border border-emerald-200 bg-white p-4"><p className="text-xs font-semibold text-emerald-800">Custo por resposta</p><p className="mt-1 text-2xl font-bold text-emerald-950">{responses > 0 ? formatCurrency(costPerResponse) : '—'}</p><p className="mt-1 text-xs text-emerald-800/70">{responses} resposta(s)</p></div>
+        <div className="rounded-2xl border border-emerald-200 bg-white p-4"><p className="text-xs font-semibold text-emerald-800">Custo por interessado</p><p className="mt-1 text-2xl font-bold text-emerald-950">{interested > 0 ? formatCurrency(costPerInterested) : '—'}</p><p className="mt-1 text-xs text-emerald-800/70">{interested} interessado(s)</p></div>
+        <div className="rounded-2xl border border-emerald-200 bg-white p-4"><p className="text-xs font-semibold text-emerald-800">Custo por membro atual</p><p className="mt-1 text-2xl font-bold text-emerald-950">{groupMembers > 0 ? formatCurrency(costPerGroupMember) : '—'}</p><p className="mt-1 text-xs text-emerald-800/70">{groupMembers} no grupo agora</p></div>
+        <div className="rounded-2xl border border-emerald-200 bg-white p-4"><p className="text-xs font-semibold text-emerald-800">Base de cobrança</p><p className="mt-1 text-2xl font-bold text-emerald-950">{billableMessages}</p><p className="mt-1 text-xs text-emerald-800/70">{hasDeliveredMetric ? 'Entregues' : 'Envios registrados*'}</p></div>
+      </div>
+
+      <p className="mt-3 text-[11px] text-emerald-900/65">* A Meta cobra template Marketing por mensagem entregue. Nas fontes históricas que não possuem uma métrica separada de entrega, o dashboard usa os envios registrados como aproximação. Valores são estimativas da tarifa Meta e podem divergir do faturamento final por ajustes da conta.</p>
+    </section>
+  );
+}
+
 function GeneralDashboardSection({ payloads }: { payloads: DashboardPayload[] }) {
   const snapshots = payloads
     .filter(payload => payload?.ok && payload.overall)
@@ -442,6 +511,7 @@ function GeneralDashboardSection({ payloads }: { payloads: DashboardPayload[] })
         updated_at: payload.updated_at,
         processed,
         sent,
+        billable: Number(overall.delivered ?? overall.sent ?? 0),
         responses: Number(overall.responses || 0),
         interested: Number(overall.interested || 0),
         no_interest: Number(overall.no_interest || 0),
@@ -456,6 +526,7 @@ function GeneralDashboardSection({ payloads }: { payloads: DashboardPayload[] })
     (acc, item) => ({
       processed: acc.processed + item.processed,
       sent: acc.sent + item.sent,
+      billable: acc.billable + item.billable,
       responses: acc.responses + item.responses,
       interested: acc.interested + item.interested,
       no_interest: acc.no_interest + item.no_interest,
@@ -463,10 +534,24 @@ function GeneralDashboardSection({ payloads }: { payloads: DashboardPayload[] })
       failures: acc.failures + item.failures,
       pending_meta: acc.pending_meta + item.pending_meta
     }),
-    { processed: 0, sent: 0, responses: 0, interested: 0, no_interest: 0, group_members: 0, failures: 0, pending_meta: 0 }
+    { processed: 0, sent: 0, billable: 0, responses: 0, interested: 0, no_interest: 0, group_members: 0, failures: 0, pending_meta: 0 }
   );
 
   const rate = (value: number, base: number) => base > 0 ? (value / base) * 100 : 0;
+  const financialConfig = payloads.find(payload => Number(payload.financial_config?.unit_cost_brl || 0) > 0)?.financial_config;
+  const generalOverall: NonNullable<DashboardPayload['overall']> = {
+    delivered: total.billable,
+    sent: total.sent,
+    responses: total.responses,
+    interested: total.interested,
+    no_interest: total.no_interest,
+    group_members: total.group_members,
+    failures: total.failures,
+    pending_meta: total.pending_meta,
+    response_rate: rate(total.responses, total.billable),
+    interest_rate: rate(total.interested, total.billable),
+    response_to_interest_rate: rate(total.interested, total.responses)
+  };
   const funnel = [
     { key: 'processed', label: 'Processados', value: total.processed },
     { key: 'sent', label: 'Enviados', value: total.sent },
@@ -515,6 +600,8 @@ function GeneralDashboardSection({ payloads }: { payloads: DashboardPayload[] })
         </div>
       </section>
 
+      <FinancialSection title="Financeiro geral — todas as rodadas" overall={generalOverall} financialConfig={financialConfig} helper="Consolidação financeira das mensagens iniciais das Rodadas 1 a 5." />
+
       <FunnelSection title="Funil geral — todas as rodadas" funnel={funnel} base={Math.max(1, total.processed)} />
 
       <section className="rounded-3xl border border-brand-border bg-white p-5 shadow-sm">
@@ -522,7 +609,7 @@ function GeneralDashboardSection({ payloads }: { payloads: DashboardPayload[] })
         <p className="mt-1 text-xs text-brand-text-muted">Leitura rápida dos principais estágios para identificar evolução entre as coortes.</p>
         <div className="mt-5 overflow-x-auto">
           <table className="min-w-full border-separate border-spacing-0 text-sm">
-            <thead><tr className="text-left text-xs uppercase tracking-wide text-brand-text-muted">{['Rodada', 'Processados', 'Enviados', 'Respostas', 'Interessados', 'No grupo', 'Falhas', 'Status'].map(label => <th key={label} className="border-b border-brand-border px-3 py-3 font-bold">{label}</th>)}</tr></thead>
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-brand-text-muted">{['Rodada', 'Processados', 'Enviados', 'Respostas', 'Interessados', 'No grupo', 'Custo Meta', 'Falhas', 'Status'].map(label => <th key={label} className="border-b border-brand-border px-3 py-3 font-bold">{label}</th>)}</tr></thead>
             <tbody>
               {snapshots.map(item => (
                 <tr key={item.round} className="text-brand-text">
@@ -532,6 +619,7 @@ function GeneralDashboardSection({ payloads }: { payloads: DashboardPayload[] })
                   <td className="border-b border-brand-border/70 px-3 py-3">{item.responses}</td>
                   <td className="border-b border-brand-border/70 px-3 py-3 font-semibold">{item.interested}</td>
                   <td className="border-b border-brand-border/70 px-3 py-3">{item.group_members}</td>
+                  <td className="border-b border-brand-border/70 px-3 py-3 font-semibold text-emerald-800">{formatCurrency(item.billable * Number(financialConfig?.unit_cost_brl || DEFAULT_META_MARKETING_UNIT_COST_BRL))}</td>
                   <td className="border-b border-brand-border/70 px-3 py-3">{item.failures}</td>
                   <td className="border-b border-brand-border/70 px-3 py-3"><span className="rounded-full border border-brand-border bg-brand-bg px-2.5 py-1 text-xs font-bold">{item.status}</span></td>
                 </tr>
@@ -760,6 +848,15 @@ export default function AdminCampaignDashboard() {
         {showGeneral && generalLoading && generalData.length === 0 ? <div className="flex min-h-64 items-center justify-center rounded-3xl border border-brand-border bg-white shadow-sm"><div className="flex items-center gap-3 text-sm text-brand-text-muted"><Loader2 className="h-5 w-5 animate-spin text-brand-primary" /> Consolidando todas as rodadas...</div></div> : null}
 
         {showGeneral && generalData.length > 0 ? <GeneralDashboardSection payloads={generalData} /> : null}
+
+        {!showGeneral && data && overall ? (
+          <FinancialSection
+            title={`Financeiro — Rodada ${selectedRound}`}
+            overall={overall}
+            financialConfig={data.financial_config}
+            helper={`Estimativa financeira do convite inicial da Rodada ${selectedRound}.`}
+          />
+        ) : null}
 
         {!showGeneral && data && isRound1 && overall ? (
           <>
