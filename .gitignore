@@ -8,6 +8,7 @@ coverage/
 !.env.example
 .vercel
 supabase/.temp/
+scratch/
 
 # Credenciais privadas de contas de serviço
 docs/evolucaoclinica-*.json

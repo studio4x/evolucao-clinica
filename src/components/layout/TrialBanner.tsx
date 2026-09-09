@@ -1,10 +1,29 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { Sparkles, CreditCard } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
 export default function TrialBanner() {
-  const { subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const { user, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const [activationManaged, setActivationManaged] = useState(false);
+  const [trialActivated, setTrialActivated] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id || subscriptionPlan !== 'trial') return;
+    let active = true;
+    void supabase
+      .from('professionals')
+      .select('trial_activation_deadline_at, trial_activated_at')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active || error) return;
+        setActivationManaged(Boolean(data?.trial_activation_deadline_at));
+        setTrialActivated(Boolean(data?.trial_activated_at));
+      });
+    return () => { active = false; };
+  }, [subscriptionPlan, user?.id]);
 
   if (subscriptionPlan !== 'trial' || subscriptionStatus !== 'trialing') {
     return null;
@@ -25,12 +44,13 @@ export default function TrialBanner() {
   }
 
   return (
-    <div className="bg-gradient-to-r from-brand-primary/95 to-brand-primary bg-brand-primary text-white py-2 px-4 shadow-md flex items-center justify-between text-xs md:text-sm font-medium z-30 relative">
-      <div className="flex items-center space-x-2 mx-auto md:mx-0">
+    <div className="bg-gradient-to-r from-brand-primary/95 to-brand-primary bg-brand-primary text-white py-2 px-3 sm:px-4 shadow-md flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs md:text-sm font-medium z-30 relative">
+      <div className="flex items-center space-x-2 min-w-0">
         <Sparkles className="w-4 h-4 text-amber-300 animate-pulse flex-shrink-0" />
         <span>
-          Você está utilizando o <strong>teste gratuito de 7 dias</strong>.{' '}
-          {daysRemaining === 1 ? (
+          {activationManaged && !trialActivated ? (
+            <>Conclua sua <strong>primeira evolução</strong> para iniciar seus 7 dias completos. Você tem {daysRemaining === 1 ? <strong>1 dia</strong> : <strong>{daysRemaining} dias</strong>} para concluir esta etapa.</>
+          ) : daysRemaining === 1 ? (
             <span>Resta apenas <strong>1 dia</strong> para conhecer as funcionalidades disponíveis no período de avaliação.</span>
           ) : daysRemaining === 0 ? (
             <span>Seu teste gratuito <strong>termina hoje</strong>!</span>
@@ -42,7 +62,7 @@ export default function TrialBanner() {
       
       <Link 
         to="/painel/subscription" 
-        className="hidden md:flex items-center space-x-1.5 bg-white text-brand-primary px-3 py-1 rounded-lg text-xs font-bold shadow hover:bg-brand-bg transition-colors duration-200"
+        className="flex w-full sm:w-auto shrink-0 items-center justify-center space-x-1.5 bg-white text-brand-primary px-3 py-1.5 rounded-lg text-xs font-bold shadow hover:bg-brand-bg transition-colors duration-200"
       >
         <CreditCard className="w-3.5 h-3.5" />
         <span>Assinar Plano</span>

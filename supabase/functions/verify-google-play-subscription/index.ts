@@ -16,6 +16,7 @@ import {
 } from "../_shared/billing.ts";
 import { enqueueAndDeliverAnalyticsEvent } from "../_shared/analyticsDelivery.ts";
 import { enqueueAndDeliverMetaPurchase } from "../_shared/metaDelivery.ts";
+import { normalizeCheckoutAttemptId, recordCheckoutAttempt } from "../_shared/checkoutAttempts.ts";
 
 async function sha256(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -102,9 +103,7 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .maybeSingle();
     const attributionMetadata = analyticsConsent?.analytics_granted ? analyticsAttribution(attribution) : {};
-    const attemptId = typeof checkoutAttemptId === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(checkoutAttemptId)
-      ? checkoutAttemptId
-      : undefined;
+    const attemptId = normalizeCheckoutAttemptId(checkoutAttemptId);
     const previousMetadata = tokenOwner?.metadata && typeof tokenOwner.metadata === "object" ? tokenOwner.metadata : {};
     const initialOrderId = previousMetadata.initialOrderId || (parsed.entitled ? parsed.latestOrderId : null);
     const subscriptionMetadata = {
@@ -170,6 +169,18 @@ serve(async (req) => {
       play_purchase_token: normalizedToken,
     }, { onConflict: "payment_provider,provider_transaction_id" });
     if (transactionError) throw transactionError;
+
+    await recordCheckoutAttempt(admin, {
+      attemptId,
+      professionalId: user.id,
+      planId: plan.id,
+      provider: "google_play",
+      channel: "android",
+      status: parsed.entitled ? "paid" : parsed.status === "pending" ? "pending" : "failed",
+      couponPresent: Boolean(coupon),
+      errorCode: parsed.entitled || parsed.status === "pending" ? null : "google_play_not_entitled",
+      providerReference: parsed.latestOrderId || null,
+    });
 
     if (parsed.entitled && parsed.latestOrderId) {
       const occurredAt = purchase?.startTime || new Date().toISOString();

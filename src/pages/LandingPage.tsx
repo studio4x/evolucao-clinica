@@ -1299,7 +1299,7 @@ export default function LandingPage() {
                           : 'btn-outline shadow-sm hover:border-brand-primary/50'
                       }`}
                     >
-                      {isYearly ? 'Assinar Plano Anual' : 'Experimentar Plano Mensal'}
+                      {isYearly ? 'Assinar Plano Anual' : 'Assinar Plano Mensal'}
                     </Link>
                   </div>
                   

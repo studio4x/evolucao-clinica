@@ -12,6 +12,7 @@ import {
   jsonResponse,
   requireAuthenticatedUser,
 } from "../_shared/billing.ts";
+import { normalizeCheckoutAttemptId, recordCheckoutAttempt } from "../_shared/checkoutAttempts.ts";
 
 async function tokenFingerprint(value: string) {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -90,9 +91,16 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .maybeSingle();
     const attributionMetadata = analyticsConsent?.analytics_granted ? analyticsAttribution(attribution) : {};
-    const attemptId = typeof checkoutAttemptId === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(checkoutAttemptId)
-      ? checkoutAttemptId
-      : undefined;
+    const attemptId = normalizeCheckoutAttemptId(checkoutAttemptId);
+    await recordCheckoutAttempt(admin, {
+      attemptId,
+      professionalId: user.id,
+      planId: plan.id,
+      provider: "stripe",
+      channel: "android",
+      status: "started",
+      couponPresent: Boolean(couponCode),
+    });
 
     const { data: pending } = await admin
       .from("billing_subscriptions")
@@ -110,6 +118,16 @@ serve(async (req) => {
         const existingClientSecret = existingInvoice?.confirmation_secret?.client_secret ||
           existingInvoice?.payment_intent?.client_secret;
         if (existingClientSecret) {
+          await recordCheckoutAttempt(admin, {
+            attemptId,
+            professionalId: user.id,
+            planId: plan.id,
+            provider: "stripe",
+            channel: "android",
+            status: "pending",
+            couponPresent: Boolean(couponCode),
+            providerReference: existing.id,
+          });
           return jsonResponse({
             clientSecret: existingClientSecret,
             publishableKey: config.stripePublishableKey,
@@ -186,6 +204,17 @@ serve(async (req) => {
       stripe_customer_id: customer.id,
       updated_at: new Date().toISOString(),
     }).eq("id", user.id);
+
+    await recordCheckoutAttempt(admin, {
+      attemptId,
+      professionalId: user.id,
+      planId: plan.id,
+      provider: "stripe",
+      channel: "android",
+      status: "pending",
+      couponPresent: Boolean(coupon),
+      providerReference: subscription.id,
+    });
 
     return jsonResponse({
       clientSecret,

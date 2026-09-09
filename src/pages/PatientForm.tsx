@@ -398,12 +398,13 @@ export default function PatientForm() {
       }
       const msg = error.message || "";
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials') || msg.includes('INSUFFICIENT_SCOPES')) {
-        await showAlert("Sua sessão do Google expirou. Por favor, clique em 'Renovar Autenticação' abaixo para continuar.", {
-          title: "Sessão Expirada",
+        await showAlert("Sua conta precisa autorizar o Google Drive e o Google Docs. Seus dados preenchidos foram preservados; confirme a reconexão para continuar deste ponto.", {
+          title: "Permissão do Google necessária",
           variant: "warning",
           icon: "warning"
         });
         setGoogleAccessToken(null);
+        setIsSecurityModalOpen(true);
       } else if (msg.includes('userRateLimitExceeded') || msg.includes('rateLimitExceeded') || msg.includes('quotaExceeded')) {
         await showAlert("O Google está limitando temporariamente a criação do documento. Tente novamente em alguns segundos.", {
           title: "Limite do Google",

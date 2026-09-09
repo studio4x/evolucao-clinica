@@ -12,6 +12,7 @@ import {
   jsonResponse,
   requireAuthenticatedUser,
 } from "../_shared/billing.ts";
+import { normalizeCheckoutAttemptId, recordCheckoutAttempt } from "../_shared/checkoutAttempts.ts";
 
 async function resolveCoupon(admin: any, stripe: any, planId: string, couponCode: unknown, isProduction: boolean) {
   const code = String(couponCode || "").trim().toUpperCase();
@@ -83,14 +84,23 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .maybeSingle();
     const attributionMetadata = analyticsConsent?.analytics_granted ? analyticsAttribution(attribution) : {};
-    const attemptId = typeof checkoutAttemptId === "string" && /^[a-zA-Z0-9-]{1,80}$/.test(checkoutAttemptId) ? checkoutAttemptId : undefined;
+    const attemptId = normalizeCheckoutAttemptId(checkoutAttemptId);
+    await recordCheckoutAttempt(admin, {
+      attemptId,
+      professionalId: user.id,
+      planId: plan.id,
+      provider: "stripe",
+      channel: "web",
+      status: "started",
+      couponPresent: Boolean(couponCode),
+    });
     const params: any = {
       mode: "subscription",
       customer: customer.id,
       client_reference_id: user.id,
       line_items: [{ price: plan.stripePriceId, quantity: 1 }],
       success_url: `${config.appOrigin}/checkout/success?session_id={CHECKOUT_SESSION_ID}&plan=${encodeURIComponent(plan.id)}`,
-      cancel_url: `${config.appOrigin}/checkout?plan=${encodeURIComponent(plan.id)}&checkout=cancelled`,
+      cancel_url: `${config.appOrigin}/checkout?plan=${encodeURIComponent(plan.id)}&checkout=cancelled${attemptId ? `&attempt_id=${encodeURIComponent(attemptId)}` : ""}`,
       locale: "pt-BR",
       allow_promotion_codes: false,
       billing_address_collection: "auto",
@@ -129,6 +139,17 @@ serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create(params);
     if (!session.url) throw new Error("A Stripe não retornou a URL segura do checkout.");
+
+    await recordCheckoutAttempt(admin, {
+      attemptId,
+      professionalId: user.id,
+      planId: plan.id,
+      provider: "stripe",
+      channel: "web",
+      status: "session_created",
+      couponPresent: Boolean(coupon),
+      providerReference: session.id,
+    });
 
     return jsonResponse({ checkoutUrl: session.url });
   } catch (error) {

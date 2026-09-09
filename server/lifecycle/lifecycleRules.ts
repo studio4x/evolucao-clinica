@@ -49,7 +49,7 @@ function messageConfig(rule: LifecycleRule, fallback: Record<string, unknown>) {
 
 const FALLBACK_RULE_MESSAGES: Record<string, Record<string, unknown>> = {
   no_return_after_registration: { subject: "Sua conta está pronta para continuar", preheader: "Acesse a plataforma e continue pela primeira etapa.", body: "Sua conta no Evolução Clínica já está disponível. Acesse a plataforma e comece por uma ação simples.", cta_label: "Acessar minha conta", cta_route: "/painel/dashboard", category: "activation" },
-  onboarding_incomplete_24h: { subject: "Falta pouco para concluir sua configuração", preheader: "Retome o onboarding e deixe sua conta pronta para o primeiro atendimento.", body: "Seu cadastro foi concluído, mas a configuração inicial ainda está pendente. Retome o onboarding para preparar sua conta e continuar exatamente de onde parou.", cta_label: "Concluir minha configuração", cta_route: "/onboarding", category: "activation" },
+  onboarding_incomplete_24h: { subject: "Seu próximo passo no Evolução Clínica", preheader: "Continue exatamente do ponto em que você parou.", body: "Você já iniciou sua configuração. O próximo passo recomendado é: {{titulo_proxima_acao}}.\n\n{{descricao_proxima_acao}}", cta_label: "{{texto_cta_proxima_acao}}", cta_route: "{{url_proxima_acao}}", category: "activation" },
   evolution_processing_too_long: { subject: "Sua evolução ainda está em processamento", preheader: "Acesse a plataforma para verificar o status.", body: "Uma evolução iniciada ainda não foi concluída. Acesse a plataforma para verificar o status.", cta_label: "Verificar evolução", cta_route: "/painel/history", category: "technical" },
   trial_expiring_3d: { subject: "Seu período de teste termina em 3 dias", preheader: "Conheça as opções para continuar.", body: "Seu período de teste termina em {{data_fim_teste}}. Conheça as opções disponíveis para continuar.", cta_label: "Conhecer os planos", cta_route: "/painel/subscription", category: "commercial", commercial: true },
   trial_expiring_1d: { subject: "Seu teste termina amanhã", preheader: "Continue com o Evolução Clínica.", body: "Seu período de teste termina amanhã. Conheça os planos disponíveis para continuar.", cta_label: "Continuar com o Evolução Clínica", cta_route: "/painel/subscription", category: "commercial", commercial: true },
@@ -202,10 +202,15 @@ export function getContextualActionPendingAt(state: LifecycleState): string | nu
   return null;
 }
 
-export function shouldSkipSequenceStep(step: LifecycleStep, state: LifecycleState): string | null {
+export function shouldSkipSequenceStep(step: LifecycleStep, state: LifecycleState, now = new Date()): string | null {
   if (step.step_key === "day_02" && state.patientsCount > 0) return "ação já concluída: paciente existente";
   if (step.step_key === "day_03" && state.linkedRecordsCount > 0) return "ação já concluída: prontuário vinculado";
   if (step.step_key === "day_04" && state.evolutionsCount > 0) return "ação já concluída: evolução existente";
+  const trialAccessEnded = state.subscriptionPlan === "trial"
+    && state.subscriptionStatus !== "active"
+    && Boolean(state.trialEndsAt)
+    && new Date(state.trialEndsAt as string).getTime() <= now.getTime();
+  if (trialAccessEnded) return "teste encerrado: sequência educativa finalizada";
   if (step.status !== "active" || !step.enabled) return "passo não está ativo";
   return null;
 }

@@ -11,6 +11,7 @@ export const LIFECYCLE_EVENT_NAMES = [
   "document_area_viewed", "subscription_page_viewed", "support_opened", "trial_started",
   "trial_expiring", "trial_expired", "subscription_started", "subscription_renewed",
   "subscription_status_changed", "subscription_cancel_requested", "subscription_cancelled",
+  "trial_activated", "guided_demo_started", "guided_demo_completed",
   "account_inactive", "account_reactivated", "account_deleted", "email_unsubscribed"
 ] as const;
 

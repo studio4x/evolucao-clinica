@@ -9,6 +9,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
+import { clearCheckoutAttempt, readCheckoutAttempt, recordClientCheckoutAttempt } from '../services/checkoutTelemetry';
 
 
 const DEFAULT_PLANS = [
@@ -28,7 +29,7 @@ const DEFAULT_PLANS = [
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { user, profileRole, trialEndsAt, setProfileInfo } = useAuthStore();
+  const { user, profileRole, subscriptionPlan, trialEndsAt, setProfileInfo } = useAuthStore();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
 
@@ -39,8 +40,11 @@ export default function CheckoutPage() {
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const [showTrialModal, setShowTrialModal] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+  const [feedbackUrl, setFeedbackUrl] = useState('');
 
   const [plans, setPlans] = useState<any[]>([]);
+  const isTrialExpired = subscriptionPlan === 'trial'
+    && Boolean(trialEndsAt && new Date(trialEndsAt).getTime() <= Date.now());
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -60,6 +64,36 @@ export default function CheckoutPage() {
 
     fetchPlans();
   }, []);
+
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') !== 'cancelled') return;
+    const remembered = readCheckoutAttempt();
+    if (!remembered) return;
+
+    void recordClientCheckoutAttempt({
+      attemptId: remembered.attemptId,
+      userId: user.id,
+      planId: remembered.planId,
+      provider: 'stripe',
+      channel: 'web',
+      status: 'cancelled',
+    });
+    clearCheckoutAttempt();
+    setPaymentError('O pagamento foi cancelado antes da confirmação. Nenhuma cobrança foi concluída.');
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !isTrialExpired) return;
+    void supabase.auth.getSession().then(async ({ data }) => {
+      const token = data.session?.access_token;
+      if (!token) return;
+      const response = await fetch('/api/lifecycle/continuity-feedback-link', { headers: { Authorization: `Bearer ${token}` } });
+      const payload = await response.json().catch(() => ({}));
+      if (response.ok && typeof payload.url === 'string') setFeedbackUrl(payload.url);
+    });
+  }, [isTrialExpired, user]);
 
   const getPlanDetails = (planId: string) => {
     return (plans.length > 0 ? plans : DEFAULT_PLANS).find((plan) => plan.id === planId) || DEFAULT_PLANS.find((plan) => plan.id === planId) || DEFAULT_PLANS[0];
@@ -95,6 +129,7 @@ export default function CheckoutPage() {
     );
     sessionStorage.removeItem('pending_checkout_flow');
     sessionStorage.removeItem('selected_checkout_plan');
+    clearCheckoutAttempt();
     navigate(`/checkout/success?provider=${result.provider}&plan=${plan}`, {
       state: {
         transactionId: result.transactionId || result.subscriptionId || `${result.provider}-${Date.now()}`,
@@ -207,6 +242,7 @@ export default function CheckoutPage() {
   const handleStartTrial = () => {
     sessionStorage.removeItem('pending_checkout_flow');
     sessionStorage.removeItem('selected_checkout_plan');
+    clearCheckoutAttempt();
     const destination = getOnboardingDestination(user?.id);
     navigate(destination, { replace: true });
   };
@@ -369,16 +405,29 @@ export default function CheckoutPage() {
 
           {/* CTA ALTERNATIVO DE AVALIAÇÃO GRATUITA */}
           <div className="card bg-white/70 backdrop-blur-sm border border-brand-border/70 p-6 md:p-8 rounded-3xl shadow-lg space-y-5 text-center max-w-xl mx-auto animate-fade-in" style={{ animationDelay: '0.1s' }}>
-            <h3 className="text-base font-bold text-brand-text">Ainda com dúvidas?</h3>
+            <h3 className="text-base font-bold text-brand-text">{isTrialExpired ? 'O que impediu você de avançar?' : 'Ainda com dúvidas?'}</h3>
             <p className="text-xs text-brand-text-muted leading-relaxed max-w-md mx-auto">
-              Está na dúvida se vai valer a pena adquirir uma assinatura da Evolução Clínica? Sem problemas, faça um teste gratuito por até 7 dias para conhecer toda a ferramenta e suas funcionalidades.
+              {isTrialExpired
+                ? 'Sua resposta nos ajuda a remover barreiras reais da experiência de avaliação.'
+                : 'Conclua sua primeira evolução em até 72 horas. A partir dessa entrega, você terá 7 dias completos para testar a plataforma no seu fluxo real.'}
             </p>
-            <button
-              onClick={() => setShowTrialModal(true)}
-              className="btn-outline px-6 py-3 text-xs font-bold transition-all hover:border-brand-primary flex items-center gap-1.5 mx-auto cursor-pointer"
-            >
-              Experimentar por 7 dias grátis <ArrowRight size={14} />
-            </button>
+            {!isTrialExpired && (
+              <button
+                onClick={() => setShowTrialModal(true)}
+                className="btn-outline px-6 py-3 text-xs font-bold transition-all hover:border-brand-primary flex items-center gap-1.5 mx-auto cursor-pointer"
+              >
+                Começar avaliação gratuita <ArrowRight size={14} />
+              </button>
+            )}
+            {feedbackUrl && (
+              <button
+                type="button"
+                onClick={() => navigate(feedbackUrl)}
+                className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-brand-text-muted underline underline-offset-4 transition hover:text-brand-primary"
+              >
+                Conte o que impediu você de testar melhor
+              </button>
+            )}
           </div>
           
         </div>
@@ -412,7 +461,7 @@ export default function CheckoutPage() {
             <div className="space-y-2">
               <h4 className="text-lg font-bold text-brand-text">Iniciar Teste Gratuito?</h4>
               <p className="text-xs text-brand-text-muted leading-relaxed">
-                Você deseja iniciar sua avaliação gratuita de 7 dias e conhecer todas as funcionalidades da Evolução Clínica? Você poderá assinar um plano a qualquer momento pelo painel.
+                Conclua sua primeira evolução em até 72 horas para iniciar 7 dias completos de avaliação. Você poderá assinar um plano a qualquer momento pelo painel.
               </p>
             </div>
             

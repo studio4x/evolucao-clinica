@@ -652,6 +652,8 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                 <Detail label="Provedor de cobrança" value={p.billing_provider} />
                 <Detail label="ID do cliente Stripe" value={p.stripe_customer_id} mono />
                 <Detail label="Fim do período de teste" value={dateValue(p.trial_ends_at)} />
+                <Detail label="Prazo para ativar o teste" value={dateValue(p.trial_activation_deadline_at)} />
+                <Detail label="Teste ativado pela primeira evolução" value={dateValue(p.trial_activated_at)} />
                 <Detail
                   label="Vencimento da assinatura"
                   value={p.subscription_plan === 'courtesy' || p.subscription_plan === 'none' ? 'Sem expiração' : dateValue(p.subscription_ends_at)}

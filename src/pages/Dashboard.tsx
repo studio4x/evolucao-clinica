@@ -10,6 +10,7 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { OnboardingProgressCard } from '../components/onboarding/OnboardingProgressCard';
+import { FirstValueDemoCard } from '../components/onboarding/FirstValueDemoCard';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -457,7 +458,10 @@ export default function Dashboard() {
       </div>
 
       {user?.id && profileRole !== 'admin' && (
-        <OnboardingProgressCard userId={user.id} />
+        <>
+          <FirstValueDemoCard userId={user.id} />
+          <OnboardingProgressCard userId={user.id} />
+        </>
       )}
 
       {showSubscriptionCta && (
@@ -467,20 +471,20 @@ export default function Dashboard() {
             <div className="space-y-2 max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-white px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-700">
                 <CreditCard size={12} />
-                <span>{subscriptionPlan === 'trial' ? 'Teste gratuito de 7 dias' : 'Plano recomendado'}</span>
+                <span>{subscriptionPlan === 'trial' ? 'Avaliação gratuita' : 'Plano recomendado'}</span>
               </div>
               <h2 className="text-xl md:text-2xl font-display font-bold text-amber-900">
                 {subscriptionPlan === 'trial' && isSubscriptionExpired
                   ? 'Seu teste gratuito de 7 dias terminou. Escolha um plano para continuar.'
                   : subscriptionStatus === 'trialing'
-                    ? 'Seu teste gratuito de 7 dias está ativo. Conheça os planos disponíveis para continuar.'
+                    ? 'Aproveite seu período de avaliação e conheça os planos disponíveis.'
                   : 'Seu acesso precisa de um plano ativo para seguir sem interrupções.'}
               </h2>
               <p className="text-sm md:text-base text-amber-800 leading-relaxed">
                 {subscriptionPlan === 'trial' && isSubscriptionExpired
                   ? 'O acesso completo foi encerrado ao final do teste gratuito. Abra a página de assinatura para reativar a plataforma.'
                   : subscriptionStatus === 'trialing'
-                    ? 'Aproveite acesso completo por 7 dias e escolha o plano ideal antes do teste terminar.'
+                    ? 'Conclua seu primeiro fluxo real, explore os recursos no seu ritmo e escolha um plano antes do período terminar.'
                     : 'Abra a página de assinatura para ativar seu plano e liberar o uso completo da plataforma.'}
               </p>
             </div>

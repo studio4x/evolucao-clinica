@@ -10,6 +10,7 @@ import {
 import { enqueueAndDeliverAnalyticsEvent } from "../_shared/analyticsDelivery.ts";
 import { enqueueAndDeliverMetaPurchase } from "../_shared/metaDelivery.ts";
 import { buildFirstStripePurchaseEvent } from "../_shared/stripeAnalytics.ts";
+import { normalizeCheckoutAttemptId, recordCheckoutAttempt } from "../_shared/checkoutAttempts.ts";
 
 function asId(value: any) {
   return typeof value === "string" ? value : value?.id || null;
@@ -152,6 +153,18 @@ serve(async (req) => {
         if (subscriptionId) {
           const subscription = await stripe.subscriptions.retrieve(subscriptionId);
           const synced = await syncStripeSubscription(admin, subscription);
+          if (synced) {
+            await recordCheckoutAttempt(admin, {
+              attemptId: normalizeCheckoutAttemptId(subscription?.metadata?.checkoutAttemptId || session?.metadata?.checkoutAttemptId),
+              professionalId: synced.userId,
+              planId: synced.planId,
+              provider: "stripe",
+              channel: String(subscription?.metadata?.checkoutChannel || "web").startsWith("android") ? "android" : "web",
+              status: "pending",
+              couponPresent: Boolean(subscription?.metadata?.couponCode),
+              providerReference: session.id,
+            });
+          }
           if (synced && !synced.duplicate) {
             const { data: current } = await admin.from("billing_subscriptions")
               .select("metadata")
@@ -293,6 +306,16 @@ serve(async (req) => {
           status: synced.status,
           currentPeriodEnd: synced.currentPeriodEnd,
         });
+        await recordCheckoutAttempt(admin, {
+          attemptId: normalizeCheckoutAttemptId(subscription?.metadata?.checkoutAttemptId),
+          professionalId: synced.userId,
+          planId: synced.planId,
+          provider: "stripe",
+          channel: String(subscription?.metadata?.checkoutChannel || "web").startsWith("android") ? "android" : "web",
+          status: "paid",
+          couponPresent: Boolean(subscription?.metadata?.couponCode),
+          providerReference: invoice.id,
+        });
         const { data: plan } = await admin.from("plans").select("name").eq("id", synced.planId).maybeSingle();
         const attribution = {
           clientId: typeof subscription?.metadata?.ga4ClientId === "string" ? subscription.metadata.ga4ClientId : undefined,
@@ -389,6 +412,17 @@ serve(async (req) => {
           planId: synced.planId,
           status: synced.status,
           currentPeriodEnd: synced.currentPeriodEnd,
+        });
+        await recordCheckoutAttempt(admin, {
+          attemptId: normalizeCheckoutAttemptId(subscription?.metadata?.checkoutAttemptId),
+          professionalId: synced.userId,
+          planId: synced.planId,
+          provider: "stripe",
+          channel: String(subscription?.metadata?.checkoutChannel || "web").startsWith("android") ? "android" : "web",
+          status: "failed",
+          couponPresent: Boolean(subscription?.metadata?.couponCode),
+          errorCode: "invoice_payment_failed",
+          providerReference: invoice.id,
         });
         break;
       }

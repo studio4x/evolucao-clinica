@@ -92,6 +92,7 @@ import {
   getProfessionalClinicalMetrics,
   getProfessionalOnboardingEligibility
 } from "./server/admin/professionalOverview.js";
+import { getConversionFunnel } from "./server/admin/conversionFunnel.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -100,6 +101,7 @@ export const app = express();
 app.disable("x-powered-by");
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
+const TRIAL_ACTIVATION_WINDOW_HOURS = 72;
 const DEFAULT_PRODUCTION_ORIGIN = "https://www.evolucaoclinica.app.br";
 const PRODUCTION_ORIGIN = resolveProductionOrigin(process.env.PUBLIC_APP_URL, DEFAULT_PRODUCTION_ORIGIN);
 
@@ -465,17 +467,15 @@ function escapeHtml(value: unknown) {
     .replace(/'/g, "&#39;");
 }
 
-function getTrialEndsAt(baseDate = new Date()) {
-  return new Date(baseDate.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-}
-
 function buildTrialSubscriptionWindow(baseDate = new Date()) {
-  const trialEndsAt = getTrialEndsAt(baseDate);
+  const activationDeadline = new Date(baseDate.getTime() + TRIAL_ACTIVATION_WINDOW_HOURS * 60 * 60 * 1000).toISOString();
   return {
     subscription_plan: "trial",
     subscription_status: "trialing",
-    subscription_ends_at: trialEndsAt,
-    trial_ends_at: trialEndsAt
+    subscription_ends_at: activationDeadline,
+    trial_ends_at: activationDeadline,
+    trial_activation_deadline_at: activationDeadline,
+    trial_activated_at: null
   };
 }
 
@@ -3911,10 +3911,14 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
         photo_url: createdUser.user_metadata?.avatar_url || null,
         role: "therapist",
         status: targetStatus,
-        subscription_plan: "trial",
-        subscription_status: "trialing",
-        subscription_ends_at: null,
-        trial_ends_at: null,
+        ...(requireApproval ? {
+          subscription_plan: "trial",
+          subscription_status: "trialing",
+          subscription_ends_at: null,
+          trial_ends_at: null,
+          trial_activation_deadline_at: null,
+          trial_activated_at: null
+        } : buildTrialSubscriptionWindow(new Date(now))),
         created_at: now,
         updated_at: now
       });
@@ -3965,6 +3969,26 @@ app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any,
   } catch (err: any) {
     console.error("Erro ao criar profissional manualmente:", err);
     return res.status(500).json({ error: err.message || "Erro ao criar profissional." });
+  }
+});
+
+app.get("/api/admin/conversion-funnel", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const days = Number(req.query?.days || 30);
+    return res.json(await getConversionFunnel(supabaseAdmin, days));
+  } catch (error: any) {
+    console.error("[AdminConversionFunnel] Falha ao carregar funil:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar o funil de ativação." });
+  }
+});
+
+app.get("/api/lifecycle/continuity-feedback-link", requireAuth, async (req: any, res) => {
+  try {
+    const token = await ensureCommunicationToken({ supabaseAdmin }, req.user.id);
+    return res.json({ url: `/feedback/continuidade?token=${encodeURIComponent(token)}` });
+  } catch (error: any) {
+    console.error("[ContinuityFeedback] Falha ao emitir link autenticado:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível abrir o formulário de feedback." });
   }
 });
 
@@ -4258,9 +4282,22 @@ async function sendOnboardingAccessGrantedNotice(
 }
 
 async function sendOnboardingApprovalNotice(targetUserId: string) {
+  const { data: professional, error } = await supabaseAdmin
+    .from("professionals")
+    .select("subscription_plan, trial_ends_at")
+    .eq("id", targetUserId)
+    .maybeSingle();
+  if (error) throw error;
+  if (professional?.subscription_plan === "trial" && !professional.trial_ends_at) {
+    const { error: trialError } = await supabaseAdmin
+      .from("professionals")
+      .update({ ...buildTrialSubscriptionWindow(), updated_at: new Date().toISOString() })
+      .eq("id", targetUserId);
+    if (trialError) throw trialError;
+  }
   return sendOnboardingAccessGrantedNotice(targetUserId, {
     title: "Acesso liberado",
-    content: "Seu cadastro foi aprovado. Você já pode acessar a plataforma normalmente.",
+    content: `Seu cadastro foi aprovado. Conclua sua primeira evolução em até ${TRIAL_ACTIVATION_WINDOW_HOURS} horas para iniciar ${TRIAL_DURATION_DAYS} dias completos de teste gratuito.`,
     type: "success",
     link: "/painel/dashboard"
   });
@@ -4397,7 +4434,7 @@ async function bootstrapOnboardingAccess(user: any) {
     });
     await sendOnboardingAccessGrantedNotice(user.id, {
       title: "Acesso liberado",
-      content: `Sua conta foi criada com ${TRIAL_DURATION_DAYS} dias de teste gratuito. Durante esse período, você tem acesso completo como assinante. Ao final do prazo, será necessário escolher um plano para continuar.`,
+      content: `Sua conta está liberada. Conclua sua primeira evolução em até ${TRIAL_ACTIVATION_WINDOW_HOURS} horas para iniciar ${TRIAL_DURATION_DAYS} dias completos de teste gratuito.`,
       type: "success",
       link: "/painel/dashboard"
     });

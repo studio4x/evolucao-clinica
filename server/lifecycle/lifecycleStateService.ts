@@ -8,8 +8,17 @@ export async function recalculateLifecycleUserState(deps: LifecycleDependencies,
   const { data, error } = await deps.supabaseAdmin.rpc("recalculate_lifecycle_user_state", { target_user_id: userId });
   if (error) throw new Error(error.message || "Falha ao recalcular estado lifecycle via RPC.");
 
+  // O gatilho de correção de atividade real roda após o upsert do RPC. Releia
+  // o estado para nunca tomar decisões com os contadores anteriores ao gatilho.
+  const refreshed = await deps.supabaseAdmin
+    .from("lifecycle_user_state")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (refreshed.error) throw new Error(refreshed.error.message);
+
   return {
-    ...mapState(data),
+    ...mapState(refreshed.data || data),
     registeredAt: profile.created_at || null,
     fullName: profile.full_name || "Profissional",
     email: profile.google_email || "",

@@ -21,6 +21,7 @@ import JourneyAdmin from '../components/admin/JourneyAdmin';
 import DailyPushNotificationManager from '../components/admin/DailyPushNotificationManager';
 import PushNotificationCasesManager from '../components/admin/PushNotificationCasesManager';
 import LifecycleAdmin from '../components/admin/LifecycleAdmin';
+import { AdminConversionFunnel } from '../components/admin/AdminConversionFunnel';
 import SubscriptionCouponsAdmin from '../components/admin/SubscriptionCouponsAdmin';
 import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsModal';
 import { showAlert, showConfirm } from '../store/modalStore';
@@ -6961,6 +6962,7 @@ export default function AdminPanel() {
               </div>
             ) : activeTab === 'lifecycle' ? (
               <div className="space-y-6 animate-fadeIn">
+                <AdminConversionFunnel />
                 <LifecycleAdmin />
               </div>
             ) : activeTab === 'feedback' ? (

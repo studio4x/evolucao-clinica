@@ -11,7 +11,9 @@ export type LifecycleFrontendEvent =
   | 'onboarding_resumed'
   | 'onboarding_step_viewed'
   | 'onboarding_step_completed'
-  | 'onboarding_step_error';
+  | 'onboarding_step_error'
+  | 'guided_demo_started'
+  | 'guided_demo_completed';
 
 export async function trackLifecycleEvent(
   eventName: LifecycleFrontendEvent,

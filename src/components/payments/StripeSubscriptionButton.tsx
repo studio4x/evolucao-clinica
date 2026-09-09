@@ -14,6 +14,11 @@ import {
   waitForConfirmedSubscription
 } from '../../services/billing';
 import { getCheckoutAttribution, getCheckoutAttributionWithRetry, trackBeginCheckout, trackStripeAndroidPurchaseOnce } from '../../services/analytics';
+import {
+  clearCheckoutAttempt,
+  recordClientCheckoutAttempt,
+  rememberCheckoutAttempt,
+} from '../../services/checkoutTelemetry';
 
 export type ConfirmedBillingResult = {
   provider: 'stripe' | 'google_play';
@@ -62,7 +67,7 @@ export function StripeSubscriptionButton({
   const activePlanRef = useRef<BillingPlanId | null>(null);
   const checkoutContextRef = useRef<{
     attemptId: string;
-    attribution: ReturnType<typeof getCheckoutAttribution>;
+    attribution: ReturnType<typeof getCheckoutAttribution> | Awaited<ReturnType<typeof getCheckoutAttribution>>;
     couponCode?: string;
     googlePlayOfferId?: string;
   } | null>(null);
@@ -75,6 +80,21 @@ export function StripeSubscriptionButton({
 
   const fail = (error: unknown) => {
     const normalized = error instanceof Error ? error : new Error(String(error));
+    const context = checkoutContextRef.current;
+    const activePlan = activePlanRef.current;
+    if (user && context && activePlan) {
+      void recordClientCheckoutAttempt({
+        attemptId: context.attemptId,
+        userId: user.id,
+        planId: activePlan,
+        provider: hasNativeBillingBridge() ? 'android_billing' : 'stripe',
+        channel: hasNativeBillingBridge() ? 'android' : 'web',
+        status: 'failed',
+        couponPresent: Boolean(context.couponCode),
+        error: normalized,
+      });
+    }
+    clearCheckoutAttempt();
     checkoutContextRef.current = null;
     setBusy(false);
     onError?.(normalized);
@@ -94,6 +114,17 @@ export function StripeSubscriptionButton({
           if (!event.externalTransactionToken) throw new Error('A Play Store não retornou o token da escolha.');
           const checkoutContext = checkoutContextRef.current;
           const attribution = await getCheckoutAttributionWithRetry(checkoutContext?.attribution);
+          if (user && checkoutContext) {
+            void recordClientCheckoutAttempt({
+              attemptId: checkoutContext.attemptId,
+              userId: user.id,
+              planId: activePlan,
+              provider: 'android_billing',
+              channel: 'android',
+              status: 'provider_opened',
+              couponPresent: Boolean(checkoutContext.couponCode),
+            });
+          }
           const mobile = await createStripeMobileSubscription(
             activePlan,
             event.externalTransactionToken,
@@ -150,6 +181,7 @@ export function StripeSubscriptionButton({
             amount: verified.amount,
             currency: verified.currency
           });
+          clearCheckoutAttempt();
           checkoutContextRef.current = null;
           return;
         }
@@ -186,11 +218,25 @@ export function StripeSubscriptionButton({
             amount: transaction?.amount,
             currency: transaction?.currency
           });
+          clearCheckoutAttempt();
           checkoutContextRef.current = null;
           return;
         }
 
         if (event.type === 'billing_cancelled' || event.type === 'stripe_payment_cancelled') {
+          const checkoutContext = checkoutContextRef.current;
+          if (user && checkoutContext) {
+            void recordClientCheckoutAttempt({
+              attemptId: checkoutContext.attemptId,
+              userId: user.id,
+              planId: activePlan,
+              provider: 'android_billing',
+              channel: 'android',
+              status: 'cancelled',
+              couponPresent: Boolean(checkoutContext.couponCode),
+            });
+          }
+          clearCheckoutAttempt();
           checkoutContextRef.current = null;
           setBusy(false);
           return;
@@ -215,7 +261,23 @@ export function StripeSubscriptionButton({
     try {
       const checkoutAttemptId = crypto.randomUUID();
       const normalizedCouponCode = couponCode?.trim() || undefined;
-      if (hasNativeBillingBridge()) {
+      const nativeCheckout = hasNativeBillingBridge();
+      rememberCheckoutAttempt({ attemptId: checkoutAttemptId, planId });
+      checkoutContextRef.current = {
+        attemptId: checkoutAttemptId,
+        attribution: getCheckoutAttribution(),
+        couponCode: normalizedCouponCode,
+      };
+      await recordClientCheckoutAttempt({
+        attemptId: checkoutAttemptId,
+        userId: user.id,
+        planId,
+        provider: nativeCheckout ? 'android_billing' : 'stripe',
+        channel: nativeCheckout ? 'android' : 'web',
+        status: 'started',
+        couponPresent: Boolean(normalizedCouponCode),
+      });
+      if (nativeCheckout) {
         const googlePlayOfferId = normalizedCouponCode
           ? (await resolveGooglePlayOffer(planId, normalizedCouponCode)).offerId
           : undefined;
@@ -231,8 +293,22 @@ export function StripeSubscriptionButton({
       }
 
       const attribution = await getCheckoutAttribution();
+      checkoutContextRef.current = {
+        attemptId: checkoutAttemptId,
+        attribution,
+        couponCode: normalizedCouponCode,
+      };
       trackBeginCheckout(planId, planName || planId, price || 0, 'stripe', checkoutAttemptId);
       const { checkoutUrl } = await createStripeCheckoutSession(planId, normalizedCouponCode, attribution, checkoutAttemptId);
+      await recordClientCheckoutAttempt({
+        attemptId: checkoutAttemptId,
+        userId: user.id,
+        planId,
+        provider: 'stripe',
+        channel: 'web',
+        status: 'provider_opened',
+        couponPresent: Boolean(normalizedCouponCode),
+      });
       window.location.assign(checkoutUrl);
     } catch (error) {
       fail(error);
