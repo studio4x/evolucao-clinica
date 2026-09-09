@@ -10,7 +10,6 @@ Fazer o profissional chegar ao primeiro valor real da plataforma antes de consum
 
 - O novo usuário tem uma janela inicial de 72 horas para concluir a primeira evolução real.
 - Os sete dias completos de avaliação começam somente quando a evolução estiver processada e adicionada ao prontuário do Google Docs.
-- O painel apresenta uma demonstração fictícia de dois minutos para quem ainda não concluiu uma evolução real.
 - Falhas de permissão Google preservam o formulário e abrem diretamente a reconexão necessária.
 - O banner de avaliação e o CTA de assinatura permanecem visíveis também no celular.
 - A sequência educativa deixa de avançar depois do encerramento do trial.

@@ -10,7 +10,6 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { OnboardingProgressCard } from '../components/onboarding/OnboardingProgressCard';
-import { FirstValueDemoCard } from '../components/onboarding/FirstValueDemoCard';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -458,10 +457,7 @@ export default function Dashboard() {
       </div>
 
       {user?.id && profileRole !== 'admin' && (
-        <>
-          <FirstValueDemoCard userId={user.id} />
-          <OnboardingProgressCard userId={user.id} />
-        </>
+        <OnboardingProgressCard userId={user.id} />
       )}
 
       {showSubscriptionCta && (
