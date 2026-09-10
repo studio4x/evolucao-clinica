@@ -9,8 +9,10 @@ import {
   Globe2,
   LogIn,
   Loader2,
+  Maximize2,
   Mail,
   MessageCircle,
+  Minimize2,
   Monitor,
   RefreshCw,
   Search,
@@ -437,6 +439,23 @@ export default function ProfessionalFunnelKanban() {
   const [emailProfessional, setEmailProfessional] = useState<FunnelProfessional | null>(null);
   const [whatsappTarget, setWhatsappTarget] = useState<ProfessionalWhatsAppTarget>(() => readProfessionalWhatsAppTarget());
   const [contactUpdatingKey, setContactUpdatingKey] = useState('');
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setIsFullscreen(false);
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleEscape);
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener('keydown', handleEscape);
+    };
+  }, [isFullscreen]);
 
   const loadBoard = useCallback(async () => {
     setLoading(true);
@@ -534,7 +553,11 @@ export default function ProfessionalFunnelKanban() {
   }, {}), [filteredProfessionals]);
 
   return (
-    <div className="space-y-5 animate-fadeIn" data-testid="professional-funnel-kanban">
+    <div
+      className={isFullscreen ? 'fixed inset-0 z-[80] min-h-full overflow-y-auto bg-brand-bg p-3 sm:p-6' : 'space-y-5 animate-fadeIn'}
+      data-testid="professional-funnel-kanban"
+      data-fullscreen={isFullscreen ? 'true' : 'false'}
+    >
       <section className="rounded-3xl border border-brand-primary/15 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
@@ -547,6 +570,17 @@ export default function ProfessionalFunnelKanban() {
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() => setIsFullscreen((current) => !current)}
+              aria-pressed={isFullscreen}
+              data-testid="professional-funnel-fullscreen-toggle"
+              title={isFullscreen ? 'Voltar à exibição normal' : 'Abrir funil em tela cheia'}
+              className="btn-outline inline-flex items-center justify-center gap-2 px-4 py-2 text-xs"
+            >
+              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              {isFullscreen ? 'Voltar à exibição normal' : 'Tela cheia'}
+            </button>
             <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-border bg-brand-bg/30 px-3 py-2" title="A preferência fica salva neste navegador administrativo.">
               <div className="flex items-center gap-2">
                 {whatsappTarget === 'desktop' ? <Monitor size={15} className="text-emerald-700" /> : <Globe2 size={15} className="text-emerald-700" />}
