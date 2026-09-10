@@ -349,9 +349,14 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                 }[String(p.onboarding_status || '')] || 'Não informado'}
               />
               <Detail
-                label="Forma escolhida para começar"
-                value={p.onboarding_mode === 'guided' ? 'Configuração guiada' : p.onboarding_mode === 'explore' ? 'Explorar primeiro' : 'Não escolhida'}
+                label="Caminho inicial escolhido"
+                value={p.onboarding_initial_mode === 'guided' ? 'Configurar com ajuda' : p.onboarding_initial_mode === 'explore' ? 'Conhecer o aplicativo primeiro' : 'Não registrado'}
               />
+              <Detail
+                label="Modo atual do onboarding"
+                value={p.onboarding_mode === 'guided' ? 'Configuração guiada' : p.onboarding_mode === 'explore' ? 'Explorando o aplicativo' : 'Não escolhido'}
+              />
+              <Detail label="Escolha registrada em" value={dateValue(p.onboarding_choice_at)} />
               <Detail
                 label="Etapa atual"
                 value={{

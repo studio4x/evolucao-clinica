@@ -16,6 +16,7 @@ Fazer o profissional chegar ao primeiro valor real da plataforma antes de consum
 - A mensagem condicional de retomada aponta para a próxima ação concreta e permanece em `draft`, sem envio automático.
 - O checkout registra início, abertura do provedor, pendência, pagamento, cancelamento e falha, sem armazenar cartão, conteúdo clínico, e-mail ou telefone.
 - O admin exibe o funil dos últimos 30 dias, a primeira evolução em até 48 horas, retorno em outro dia, erros de escopo Google e estados do checkout.
+- A primeira escolha do onboarding é preservada de forma imutável e exibida no profissional separadamente do modo atual.
 - Usuários com trial encerrado podem responder ao formulário autenticado de continuidade.
 
 ## Definições de medição
@@ -29,6 +30,7 @@ Fazer o profissional chegar ao primeiro valor real da plataforma antes de consum
 | Primeira evolução em 48h | Primeira evolução real concluída em até 48 horas do cadastro |
 | Retorno | Atividade real de produto em pelo menos dois dias distintos |
 | Conversão paga | Plano pago com assinatura ativa entre usuários cujo trial já amadureceu ou que já pagaram |
+| Caminho inicial | Primeira escolha explícita entre configurar com ajuda e conhecer o aplicativo primeiro |
 
 Abertura de e-mail, entrega de mensagem e atualização automática de perfil não contam como uso do produto.
 

@@ -147,7 +147,11 @@ assert.match(modalSource, /Pacientes e uso clínico/);
 assert.match(modalSource, /Minutos transcritos/);
 assert.match(modalSource, /professional-onboarding-eligibility/);
 assert.match(modalSource, /professional-clinical-metrics/);
-assert.match(serverSource, /onboarding_status, onboarding_mode, onboarding_current_step/);
-assert.match(modalSource, /Forma escolhida para começar/);
+assert.match(serverSource, /onboarding_status, onboarding_initial_mode, onboarding_mode, onboarding_current_step/);
+assert.match(modalSource, /Caminho inicial escolhido/);
+assert.match(modalSource, /Configurar com ajuda/);
+assert.match(modalSource, /Conhecer o aplicativo primeiro/);
+assert.match(modalSource, /Modo atual do onboarding/);
+assert.match(modalSource, /Escolha registrada em/);
 
 console.log('Professional overview tests passed.');
