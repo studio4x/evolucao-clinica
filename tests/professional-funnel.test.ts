@@ -5,6 +5,10 @@ import {
   getProfessionalCommercialStatus,
   getProfessionalFunnelStage,
 } from '../server/admin/professionalFunnel.js';
+import {
+  buildProfessionalFunnelMessage,
+  buildProfessionalWhatsAppUrl,
+} from '../src/utils/professionalFunnelMessages.js';
 
 const createdAt = '2026-09-01T10:00:00.000Z';
 const professional = (id: string, patch: Record<string, unknown> = {}) => ({
@@ -44,6 +48,7 @@ const board = buildProfessionalFunnelBoard({
   professionals,
   states,
   otps: [{ user_id: 'whatsapp', verified_at: '2026-09-01T10:05:00.000Z' }],
+  preferences: [{ user_id: 'whatsapp', whatsapp_number: '+55 (11) 99999-9999', whatsapp_opt_in: true }],
   now: new Date('2026-09-10T00:00:00.000Z'),
 });
 
@@ -63,10 +68,40 @@ assert.deepEqual(board.stageCounts, {
 assert.equal(board.professionals.find((item) => item.id === 'returned')?.stage, 'returned', 'a etapa mais avançada deve prevalecer');
 assert.equal(board.professionals.find((item) => item.id === 'paid')?.stage, 'paid', 'assinatura ativa deve prevalecer sobre uso');
 assert.equal(board.professionals.find((item) => item.id === 'choice')?.onboardingInitialMode, 'guided');
+assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappNumber, '5511999999999');
+assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappOptIn, true);
 
 assert.equal(getProfessionalFunnelStage({ professional: professional('u1'), state: null, whatsappVerifiedAt: null }), 'registered');
 assert.equal(getProfessionalCommercialStatus(professional('expired', { trial_ends_at: '2026-09-01T00:00:00.000Z' }), new Date('2026-09-10T00:00:00.000Z')), 'trial_expired');
 assert.equal(getProfessionalCommercialStatus(professional('courtesy', { subscription_plan: 'courtesy', subscription_status: 'active' }), new Date('2026-09-10T00:00:00.000Z')), 'courtesy');
+
+const expiredTrialMessage = buildProfessionalFunnelMessage({
+  fullName: 'Ana Souza',
+  stage: 'returned',
+  commercialStatus: 'trial_expired',
+});
+assert.match(expiredTrialMessage.subject, /progresso continua salvo/i);
+assert.equal(expiredTrialMessage.actionPath, '/painel/subscription');
+assert.match(expiredTrialMessage.whatsappText, /Olá, Ana!/);
+assert.match(expiredTrialMessage.whatsappText, /https:\/\/www\.evolucaoclinica\.app\.br\/painel\/subscription/);
+
+const expiredEarlyStageMessage = buildProfessionalFunnelMessage({
+  fullName: 'Marina Alves',
+  stage: 'onboarding_choice',
+  commercialStatus: 'trial_expired',
+});
+assert.equal(expiredEarlyStageMessage.actionPath, '/painel/subscription', 'trial esgotado não deve apontar para uma rota bloqueada');
+assert.match(expiredEarlyStageMessage.paragraphs.join(' '), /cadastrar seu primeiro paciente/);
+
+const courtesyMessage = buildProfessionalFunnelMessage({
+  fullName: 'João Lima',
+  stage: 'returned',
+  commercialStatus: 'courtesy',
+});
+assert.equal(courtesyMessage.actionPath, '/painel/dashboard', 'cortesia não deve receber CTA de contratação');
+assert.doesNotMatch(courtesyMessage.paragraphs.join(' '), /assinar|plano disponível/i);
+assert.match(buildProfessionalWhatsAppUrl('5511999999999', 'Olá!') || '', /^https:\/\/wa\.me\/5511999999999\?text=/);
+assert.equal(buildProfessionalWhatsAppUrl('123', 'Olá!'), null);
 
 const serverSource = readFileSync('server.ts', 'utf8');
 const routeStart = serverSource.indexOf('app.get("/api/admin/professional-funnel"');
@@ -74,6 +109,15 @@ const routeSource = serverSource.slice(routeStart, serverSource.indexOf('app.get
 assert.ok(routeStart >= 0, 'endpoint administrativo do quadro deve existir');
 assert.match(routeSource, /requireAuth, requireAdmin/);
 assert.match(routeSource, /Cache-Control", "no-store/);
+
+const emailRouteStart = serverSource.indexOf('app.post("/api/admin/professional-funnel/email"');
+const emailRouteSource = serverSource.slice(emailRouteStart, serverSource.indexOf('app.get("/api/lifecycle/continuity-feedback-link"', emailRouteStart));
+assert.ok(emailRouteStart >= 0, 'endpoint administrativo de e-mail do funil deve existir');
+assert.match(emailRouteSource, /requireAuth, requireAdmin/);
+assert.match(emailRouteSource, /buildProfessionalFunnelMessage/);
+assert.match(emailRouteSource, /source: "funnel-stage"/);
+assert.match(emailRouteSource, /sendTransactionalEmail/);
+assert.doesNotMatch(emailRouteSource, /req\.body\?\.(subject|content|recipientEmail)/, 'destinatário e conteúdo devem ser definidos no servidor');
 
 const adminSource = readFileSync('src/pages/AdminPanel.tsx', 'utf8');
 assert.match(adminSource, /\/admin\/professional-funnel/);
@@ -84,5 +128,9 @@ const componentSource = readFileSync('src/components/admin/ProfessionalFunnelKan
 assert.match(componentSource, /Cada profissional aparece somente na etapa mais avançada/);
 assert.match(componentSource, /ProfessionalDetailsModal/);
 assert.match(componentSource, /Buscar por nome ou e-mail/);
+assert.match(componentSource, /Preparar WhatsApp para/);
+assert.match(componentSource, /Preparar e-mail para/);
+assert.match(componentSource, /Revisar e enviar/);
+assert.match(componentSource, /Enviar e-mail/);
 
 console.log('professional-funnel.test.ts: OK');

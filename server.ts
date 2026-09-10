@@ -94,6 +94,7 @@ import {
 } from "./server/admin/professionalOverview.js";
 import { getConversionFunnel } from "./server/admin/conversionFunnel.js";
 import { getProfessionalFunnelBoard } from "./server/admin/professionalFunnel.js";
+import { buildProfessionalFunnelMessage } from "./src/utils/professionalFunnelMessages.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -1273,7 +1274,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 }
 
 type EmailProvider = "smtp" | "brevo";
-type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend" | "funnel-stage";
 type NotificationOrigin = "platform" | "manual-push" | "manual-email" | "onboarding";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean; whatsapp?: boolean };
 type NotificationWhatsAppResult = WhatsAppSendResult | {
@@ -3990,6 +3991,93 @@ app.get("/api/admin/professional-funnel", requireAuth, requireAdmin, async (_req
   } catch (error: any) {
     console.error("[ProfessionalFunnel] Falha ao carregar quadro:", error?.message || error);
     return res.status(500).json({ error: "Não foi possível carregar o funil dos profissionais." });
+  }
+});
+
+app.post("/api/admin/professional-funnel/email", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const professionalId = String(req.body?.professionalId || "").trim();
+    const requestedStage = String(req.body?.stage || "").trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(professionalId)) {
+      return res.status(400).json({ error: "Profissional inválido." });
+    }
+
+    const board = await getProfessionalFunnelBoard(supabaseAdmin);
+    const professional = board.professionals.find((item) => item.id === professionalId);
+    if (!professional) return res.status(404).json({ error: "Profissional não encontrado no funil." });
+    if (requestedStage !== professional.stage) {
+      return res.status(409).json({ error: "A etapa do profissional mudou. Atualize o funil antes de enviar." });
+    }
+    if (!professional.email || !professional.email.includes("@")) {
+      return res.status(422).json({ error: "O profissional não possui um e-mail válido cadastrado." });
+    }
+
+    const content = buildProfessionalFunnelMessage({
+      fullName: professional.fullName,
+      stage: professional.stage,
+      commercialStatus: professional.commercialStatus,
+    });
+    const actionUrl = `${PRODUCTION_ORIGIN}${content.actionPath}`;
+    const preferencesUrl = `${PRODUCTION_ORIGIN}/preferencias-de-comunicacao`;
+    const supportUrl = `${PRODUCTION_ORIGIN}/painel/support`;
+    let unsubscribeUrl = `${PRODUCTION_ORIGIN}/descadastro`;
+    try {
+      const unsubscribeToken = await ensureCommunicationToken({ supabaseAdmin }, professional.id);
+      unsubscribeUrl = `${unsubscribeUrl}?token=${encodeURIComponent(unsubscribeToken)}`;
+    } catch (tokenError: any) {
+      console.warn("[ProfessionalFunnelEmail] Link de descadastro indisponível:", tokenError?.message || tokenError);
+    }
+
+    const theme = await getEmailTheme();
+    const bodyHtml = content.paragraphs
+      .map((paragraph) => `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.7; color:${theme.text};">${escapeHtml(paragraph)}</p>`)
+      .join("");
+    const htmlContent = buildEmailShell(theme, {
+      title: "Seu próximo passo",
+      secondaryTitle: escapeHtml(content.subject),
+      compactTitle: true,
+      headerEyebrow: "Evolução Clínica",
+      subtitle: content.preheader,
+      bodyHtml: `
+        <p style="margin:0 0 16px 0; font-size:16px; line-height:1.7; color:${theme.text};">Olá, <strong>${escapeHtml(professional.fullName.split(/\s+/)[0] || "profissional")}</strong>!</p>
+        ${bodyHtml}
+        <div style="text-align:center; margin:28px 0 8px 0;">
+          ${buildEmailButton(theme, actionUrl, content.actionLabel)}
+        </div>
+      `,
+      footerHtml: `Mensagem enviada pela equipe da Evolução Clínica.<br/><a href="${escapeHtml(preferencesUrl)}">Preferências de comunicação</a> · <a href="${escapeHtml(unsubscribeUrl)}">Descadastrar e-mails</a> · <a href="${escapeHtml(supportUrl)}">Suporte</a>`,
+    });
+    const textContent = [
+      `Olá, ${professional.fullName.split(/\s+/)[0] || "profissional"}!`,
+      "",
+      ...content.paragraphs.flatMap((paragraph) => [paragraph, ""]),
+      `${content.actionLabel}: ${actionUrl}`,
+      "",
+      `Preferências: ${preferencesUrl}`,
+      `Descadastro: ${unsubscribeUrl}`,
+      `Suporte: ${supportUrl}`,
+    ].join("\n");
+
+    const result = await sendTransactionalEmail(await getNotificationSettings(), {
+      userId: professional.id,
+      recipientEmail: professional.email,
+      recipientName: professional.fullName,
+      subject: content.subject,
+      textContent,
+      htmlContent,
+      source: "funnel-stage",
+      allowFallback: true,
+    });
+
+    return res.json({
+      success: true,
+      stage: professional.stage,
+      provider: result.provider,
+      deliveryId: result.emailDeliveryId,
+    });
+  } catch (error: any) {
+    console.error("[ProfessionalFunnelEmail] Falha no envio:", error?.message || error);
+    return res.status(500).json({ error: error?.message || "Não foi possível enviar o e-mail." });
   }
 });
 

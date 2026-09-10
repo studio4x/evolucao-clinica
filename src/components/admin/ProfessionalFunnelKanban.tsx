@@ -7,12 +7,20 @@ import {
   CreditCard,
   Filter,
   Loader2,
+  Mail,
+  MessageCircle,
   RefreshCw,
   Search,
+  Send,
   UserRound,
   Users,
+  X,
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import {
+  buildProfessionalFunnelMessage,
+  buildProfessionalWhatsAppUrl,
+} from '../../utils/professionalFunnelMessages';
 import ProfessionalDetailsModal from './ProfessionalDetailsModal';
 
 type StageKey = 'registered' | 'whatsapp_verified' | 'onboarding_choice' | 'first_patient' | 'linked_record' | 'first_evolution' | 'returned' | 'paid';
@@ -23,6 +31,8 @@ type FunnelProfessional = {
   id: string;
   fullName: string;
   email: string;
+  whatsappNumber: string | null;
+  whatsappOptIn: boolean;
   accountStatus: string;
   createdAt: string;
   onboardingInitialMode: string | null;
@@ -117,9 +127,26 @@ const daysUntil = (value?: string | null) => {
   return Math.ceil((timestamp - Date.now()) / (24 * 60 * 60 * 1000));
 };
 
-function ProfessionalCard({ professional, onOpen }: { professional: FunnelProfessional; onOpen: () => void }) {
+function ProfessionalCard({
+  professional,
+  onOpen,
+  onOpenEmail,
+}: {
+  professional: FunnelProfessional;
+  onOpen: () => void;
+  onOpenEmail: () => void;
+}) {
   const commercial = COMMERCIAL_PRESENTATION[professional.commercialStatus];
   const trialDays = daysUntil(professional.trialEndsAt);
+  const message = buildProfessionalFunnelMessage({
+    fullName: professional.fullName,
+    stage: professional.stage,
+    commercialStatus: professional.commercialStatus,
+  });
+  const whatsappUrl = professional.whatsappNumber
+    ? buildProfessionalWhatsAppUrl(professional.whatsappNumber, message.whatsappText)
+    : null;
+  const hasEmail = professional.email.includes('@');
   const initials = professional.fullName
     .split(/\s+/)
     .filter(Boolean)
@@ -128,64 +155,208 @@ function ProfessionalCard({ professional, onOpen }: { professional: FunnelProfes
     .join('') || 'PR';
 
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group w-full rounded-2xl border border-brand-border/70 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-brand-primary/35 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
-      aria-label={`Abrir detalhes de ${professional.fullName}`}
-    >
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-xs font-bold text-brand-primary">
-          {initials}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-brand-text" title={professional.fullName}>{professional.fullName}</p>
-              <p className="truncate text-[11px] text-brand-text-muted" title={professional.email}>{professional.email}</p>
+    <article className="overflow-hidden rounded-2xl border border-brand-border/70 bg-white shadow-sm transition hover:-translate-y-0.5 hover:border-brand-primary/35 hover:shadow-md">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="group w-full p-4 text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-primary/30"
+        aria-label={`Abrir detalhes de ${professional.fullName}`}
+      >
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-xs font-bold text-brand-primary">
+            {initials}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-brand-text" title={professional.fullName}>{professional.fullName}</p>
+                <p className="truncate text-[11px] text-brand-text-muted" title={professional.email}>{professional.email}</p>
+              </div>
+              <ChevronRight className="mt-1 shrink-0 text-brand-text-muted transition group-hover:translate-x-0.5 group-hover:text-brand-primary" size={16} />
             </div>
-            <ChevronRight className="mt-1 shrink-0 text-brand-text-muted transition group-hover:translate-x-0.5 group-hover:text-brand-primary" size={16} />
           </div>
         </div>
-      </div>
 
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${commercial.className}`}>{commercial.label}</span>
-        <span className="rounded-full border border-brand-border bg-brand-bg/60 px-2 py-0.5 text-[10px] font-semibold text-brand-text-muted">
-          {initialModeLabel(professional.onboardingInitialMode)}
-        </span>
-        {professional.accountStatus !== 'active' && (
-          <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
-            Conta {professional.accountStatus === 'pending' ? 'pendente' : 'inativa'}
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${commercial.className}`}>{commercial.label}</span>
+          <span className="rounded-full border border-brand-border bg-brand-bg/60 px-2 py-0.5 text-[10px] font-semibold text-brand-text-muted">
+            {initialModeLabel(professional.onboardingInitialMode)}
           </span>
-        )}
-      </div>
+          {professional.accountStatus !== 'active' && (
+            <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+              Conta {professional.accountStatus === 'pending' ? 'pendente' : 'inativa'}
+            </span>
+          )}
+        </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
-        <div className="rounded-lg bg-brand-bg/60 px-1 py-2" title="Pacientes cadastrados">
-          <p className="text-sm font-bold text-brand-text">{professional.metrics.patientsCount}</p>
-          <p className="text-[9px] uppercase text-brand-text-muted">Pacientes</p>
+        <div className="mt-3 grid grid-cols-3 gap-1.5 text-center">
+          <div className="rounded-lg bg-brand-bg/60 px-1 py-2" title="Pacientes cadastrados">
+            <p className="text-sm font-bold text-brand-text">{professional.metrics.patientsCount}</p>
+            <p className="text-[9px] uppercase text-brand-text-muted">Pacientes</p>
+          </div>
+          <div className="rounded-lg bg-brand-bg/60 px-1 py-2" title="Evoluções concluídas ou registradas">
+            <p className="text-sm font-bold text-brand-text">{professional.metrics.evolutionsCount}</p>
+            <p className="text-[9px] uppercase text-brand-text-muted">Evoluções</p>
+          </div>
+          <div className="rounded-lg bg-brand-bg/60 px-1 py-2" title="Dias com uso real da plataforma">
+            <p className="text-sm font-bold text-brand-text">{professional.metrics.usageDaysCount}</p>
+            <p className="text-[9px] uppercase text-brand-text-muted">Dias de uso</p>
+          </div>
         </div>
-        <div className="rounded-lg bg-brand-bg/60 px-1 py-2" title="Evoluções concluídas ou registradas">
-          <p className="text-sm font-bold text-brand-text">{professional.metrics.evolutionsCount}</p>
-          <p className="text-[9px] uppercase text-brand-text-muted">Evoluções</p>
-        </div>
-        <div className="rounded-lg bg-brand-bg/60 px-1 py-2" title="Dias com uso real da plataforma">
-          <p className="text-sm font-bold text-brand-text">{professional.metrics.usageDaysCount}</p>
-          <p className="text-[9px] uppercase text-brand-text-muted">Dias de uso</p>
-        </div>
-      </div>
 
-      <div className="mt-3 space-y-1.5 border-t border-brand-border/50 pt-3 text-[10px] text-brand-text-muted">
-        <p className="flex items-center gap-1.5"><CalendarDays size={12} />Cadastro: {formatDate(professional.createdAt)}</p>
-        {professional.commercialStatus === 'trial_active' && trialDays !== null && (
-          <p className="flex items-center gap-1.5 text-sky-700"><Clock3 size={12} />Trial termina {trialDays <= 0 ? 'hoje' : `em ${trialDays} dia${trialDays === 1 ? '' : 's'}`}</p>
+        <div className="mt-3 space-y-1.5 border-t border-brand-border/50 pt-3 text-[10px] text-brand-text-muted">
+          <p className="flex items-center gap-1.5"><CalendarDays size={12} />Cadastro: {formatDate(professional.createdAt)}</p>
+          {professional.commercialStatus === 'trial_active' && trialDays !== null && (
+            <p className="flex items-center gap-1.5 text-sky-700"><Clock3 size={12} />Trial termina {trialDays <= 0 ? 'hoje' : `em ${trialDays} dia${trialDays === 1 ? '' : 's'}`}</p>
+          )}
+          <p className={`flex items-center gap-1.5 font-semibold ${professional.stage === 'paid' ? 'text-emerald-700' : 'text-brand-primary'}`}>
+            {professional.stage === 'paid' ? <CheckCircle2 size={12} /> : <ChevronRight size={12} />}{NEXT_ACTION[professional.stage]}
+          </p>
+        </div>
+      </button>
+
+      {(whatsappUrl || hasEmail) && <div className={`grid gap-2 border-t border-brand-border/60 bg-brand-bg/20 p-2.5 ${whatsappUrl && hasEmail ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        {whatsappUrl && (
+          <a
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-2 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100"
+            aria-label={`Preparar WhatsApp para ${professional.fullName}`}
+            title={professional.whatsappOptIn ? 'Abrir conversa no WhatsApp' : 'Abrir conversa no WhatsApp; não há opt-in registrado na plataforma'}
+          >
+            <MessageCircle size={14} />WhatsApp
+          </a>
         )}
-        <p className={`flex items-center gap-1.5 font-semibold ${professional.stage === 'paid' ? 'text-emerald-700' : 'text-brand-primary'}`}>
-          {professional.stage === 'paid' ? <CheckCircle2 size={12} /> : <ChevronRight size={12} />}{NEXT_ACTION[professional.stage]}
-        </p>
+        {hasEmail && (
+          <button
+            type="button"
+            onClick={onOpenEmail}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2 py-2 text-[11px] font-bold text-sky-700 transition hover:bg-sky-100"
+            aria-label={`Preparar e-mail para ${professional.fullName}`}
+          >
+            <Mail size={14} />E-mail
+          </button>
+        )}
+      </div>}
+    </article>
+  );
+}
+
+function FunnelEmailModal({ professional, onClose }: { professional: FunnelProfessional | null; onClose: () => void }) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  useEffect(() => {
+    setSending(false);
+    setError('');
+    setSuccess('');
+  }, [professional?.id]);
+
+  useEffect(() => {
+    if (!professional) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !sending) onClose();
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [onClose, professional, sending]);
+
+  if (!professional) return null;
+
+  const content = buildProfessionalFunnelMessage({
+    fullName: professional.fullName,
+    stage: professional.stage,
+    commercialStatus: professional.commercialStatus,
+  });
+  const firstName = professional.fullName.trim().split(/\s+/)[0] || 'profissional';
+
+  const sendEmail = async () => {
+    setSending(true);
+    setError('');
+    setSuccess('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão administrativa não encontrada.');
+      const response = await fetch('/api/admin/professional-funnel/email', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ professionalId: professional.id, stage: professional.stage }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o e-mail.');
+      setSuccess(`E-mail enviado com sucesso via ${payload.provider === 'brevo' ? 'Brevo' : 'SMTP'}.`);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : 'Não foi possível enviar o e-mail.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Preparar e-mail do funil">
+      <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-brand-border bg-white shadow-2xl">
+        <header className="flex items-start justify-between gap-4 border-b border-brand-border px-5 py-4 sm:px-6">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-brand-primary">E-mail conforme a etapa atual</p>
+            <h2 className="mt-1 font-display text-xl font-bold text-brand-text">Revisar e enviar</h2>
+            <p className="mt-1 text-xs text-brand-text-muted">O conteúdo está pronto e não precisa ser editado.</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={sending} className="rounded-full p-2 text-brand-text-muted transition hover:bg-brand-bg hover:text-brand-text disabled:opacity-50" aria-label="Fechar e-mail">
+            <X size={20} />
+          </button>
+        </header>
+
+        <div className="overflow-y-auto p-5 sm:p-6">
+          <div className="mb-4 grid gap-3 rounded-2xl border border-brand-border bg-brand-bg/30 p-4 text-xs sm:grid-cols-2">
+            <div><span className="block font-bold uppercase tracking-wide text-brand-text-muted">Para</span><span className="mt-1 block break-all font-semibold text-brand-text">{professional.fullName} · {professional.email}</span></div>
+            <div><span className="block font-bold uppercase tracking-wide text-brand-text-muted">Assunto</span><span className="mt-1 block font-semibold text-brand-text">{content.subject}</span></div>
+          </div>
+
+          <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border border-brand-border bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-brand-border px-6 py-4">
+              <span className="font-display text-base font-extrabold text-brand-primary">Evolução Clínica</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Seu próximo passo</span>
+            </div>
+            <div className="bg-gradient-to-br from-brand-primary to-brand-secondary px-6 py-7 text-white">
+              <h3 className="text-xl font-bold">{content.subject}</h3>
+              <p className="mt-2 text-sm text-white/85">{content.preheader}</p>
+            </div>
+            <div className="space-y-4 px-6 py-7 text-sm leading-relaxed text-brand-text">
+              <p>Olá, <strong>{firstName}</strong>!</p>
+              {content.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+              <div className="pt-2 text-center">
+                <span className="inline-flex rounded-xl bg-brand-primary px-5 py-3 font-bold text-white">{content.actionLabel}</span>
+              </div>
+            </div>
+            <div className="border-t border-brand-border bg-brand-bg/40 px-6 py-4 text-center text-[10px] text-brand-text-muted">
+              Mensagem enviada pela equipe da Evolução Clínica · Preferências de comunicação · Descadastro · Suporte
+            </div>
+          </div>
+
+          {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+          {success && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">{success}</div>}
+        </div>
+
+        <footer className="border-t border-brand-border bg-white p-4 sm:px-6">
+          <button
+            type="button"
+            onClick={() => void sendEmail()}
+            disabled={sending || Boolean(success)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-primary px-5 py-3 text-sm font-bold text-white transition hover:bg-brand-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {sending ? <Loader2 className="animate-spin" size={18} /> : success ? <CheckCircle2 size={18} /> : <Send size={18} />}
+            {sending ? 'Enviando...' : success ? 'E-mail enviado' : 'Enviar e-mail'}
+          </button>
+        </footer>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -196,6 +367,7 @@ export default function ProfessionalFunnelKanban() {
   const [search, setSearch] = useState('');
   const [commercialFilter, setCommercialFilter] = useState<CommercialFilter>('all');
   const [selectedProfessional, setSelectedProfessional] = useState<FunnelProfessional | null>(null);
+  const [emailProfessional, setEmailProfessional] = useState<FunnelProfessional | null>(null);
 
   const loadBoard = useCallback(async () => {
     setLoading(true);
@@ -339,7 +511,12 @@ export default function ProfessionalFunnelKanban() {
                     </header>
                     <div className="max-h-[62vh] space-y-3 overflow-y-auto p-3">
                       {professionals.length > 0 ? professionals.map((professional) => (
-                        <ProfessionalCard key={professional.id} professional={professional} onOpen={() => setSelectedProfessional(professional)} />
+                        <ProfessionalCard
+                          key={professional.id}
+                          professional={professional}
+                          onOpen={() => setSelectedProfessional(professional)}
+                          onOpenEmail={() => setEmailProfessional(professional)}
+                        />
                       )) : (
                         <div className="rounded-xl border border-dashed border-brand-border bg-white/60 px-3 py-8 text-center text-xs text-brand-text-muted">
                           Nenhum profissional nesta etapa com os filtros atuais.
@@ -362,6 +539,7 @@ export default function ProfessionalFunnelKanban() {
         } : null}
         onClose={() => setSelectedProfessional(null)}
       />
+      <FunnelEmailModal professional={emailProfessional} onClose={() => setEmailProfessional(null)} />
     </div>
   );
 }

@@ -45,6 +45,12 @@ export type ProfessionalFunnelOtpRow = {
   verified_at?: string | null;
 };
 
+export type ProfessionalFunnelPreferenceRow = {
+  user_id: string;
+  whatsapp_number?: string | null;
+  whatsapp_opt_in?: boolean | null;
+};
+
 const numericValue = (value: number | string | null | undefined) => {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -90,10 +96,12 @@ export function buildProfessionalFunnelBoard(input: {
   professionals: ProfessionalFunnelProfessionalRow[];
   states: ProfessionalFunnelStateRow[];
   otps: ProfessionalFunnelOtpRow[];
+  preferences?: ProfessionalFunnelPreferenceRow[];
   now?: Date;
 }) {
   const now = input.now || new Date();
   const stateByProfessional = new Map(input.states.map((state) => [state.user_id, state]));
+  const preferencesByProfessional = new Map((input.preferences || []).map((preferences) => [preferences.user_id, preferences]));
   const verifiedAtByProfessional = new Map<string, string>();
 
   input.otps.forEach((otp) => {
@@ -108,6 +116,7 @@ export function buildProfessionalFunnelBoard(input: {
     .filter((professional) => professional.role !== 'admin')
     .map((professional) => {
       const state = stateByProfessional.get(professional.id) || null;
+      const preferences = preferencesByProfessional.get(professional.id) || null;
       const whatsappVerifiedAt = verifiedAtByProfessional.get(professional.id) || null;
       const stage = getProfessionalFunnelStage({ professional, state, whatsappVerifiedAt });
       const stageReachedAtByKey: Partial<Record<ProfessionalFunnelStageKey, string | null | undefined>> = {
@@ -125,6 +134,8 @@ export function buildProfessionalFunnelBoard(input: {
         id: professional.id,
         fullName: professional.full_name?.trim() || 'Profissional sem nome',
         email: professional.google_email?.trim() || 'E-mail não informado',
+        whatsappNumber: String(preferences?.whatsapp_number || '').replace(/\D/g, '') || null,
+        whatsappOptIn: preferences?.whatsapp_opt_in === true,
         accountStatus: professional.status || 'pending',
         createdAt: professional.created_at,
         onboardingInitialMode: professional.onboarding_initial_mode || null,
@@ -187,15 +198,16 @@ async function fetchAllProfessionals(supabaseAdmin: any) {
 export async function getProfessionalFunnelBoard(supabaseAdmin: any) {
   const professionals = await fetchAllProfessionals(supabaseAdmin);
   const ids = professionals.map((professional) => professional.id);
-  if (ids.length === 0) return buildProfessionalFunnelBoard({ professionals: [], states: [], otps: [] });
+  if (ids.length === 0) return buildProfessionalFunnelBoard({ professionals: [], states: [], otps: [], preferences: [] });
 
   const states: ProfessionalFunnelStateRow[] = [];
   const otps: ProfessionalFunnelOtpRow[] = [];
+  const preferences: ProfessionalFunnelPreferenceRow[] = [];
   const chunkSize = 100;
 
   for (let index = 0; index < ids.length; index += chunkSize) {
     const chunk = ids.slice(index, index + chunkSize);
-    const [stateResult, otpResult] = await Promise.all([
+    const [stateResult, otpResult, preferencesResult] = await Promise.all([
       supabaseAdmin
         .from('lifecycle_user_state')
         .select('user_id, usage_days_count, patients_count, first_patient_at, linked_records_count, first_record_linked_at, evolutions_count, first_evolution_completed_at, last_activity_at, subscription_started_at')
@@ -205,12 +217,18 @@ export async function getProfessionalFunnelBoard(supabaseAdmin: any) {
         .select('user_id, verified_at')
         .in('user_id', chunk)
         .not('verified_at', 'is', null),
+      supabaseAdmin
+        .from('communication_preferences')
+        .select('user_id, whatsapp_number, whatsapp_opt_in')
+        .in('user_id', chunk),
     ]);
     if (stateResult.error) throw stateResult.error;
     if (otpResult.error) throw otpResult.error;
+    if (preferencesResult.error) throw preferencesResult.error;
     states.push(...(stateResult.data || []));
     otps.push(...(otpResult.data || []));
+    preferences.push(...(preferencesResult.data || []));
   }
 
-  return buildProfessionalFunnelBoard({ professionals, states, otps });
+  return buildProfessionalFunnelBoard({ professionals, states, otps, preferences });
 }
