@@ -7,6 +7,7 @@ import {
   CreditCard,
   Filter,
   Globe2,
+  LogIn,
   Loader2,
   Mail,
   MessageCircle,
@@ -42,6 +43,7 @@ type FunnelProfessional = {
   emailSentAt: string | null;
   accountStatus: string;
   createdAt: string;
+  lastAccessAt: string | null;
   onboardingInitialMode: string | null;
   onboardingChoiceAt: string | null;
   subscriptionPlan: string | null;
@@ -221,6 +223,7 @@ function ProfessionalCard({
 
         <div className="mt-3 space-y-1.5 border-t border-brand-border/50 pt-3 text-[10px] text-brand-text-muted">
           <p className="flex items-center gap-1.5"><CalendarDays size={12} />Cadastro: {formatDate(professional.createdAt)}</p>
+          <p className="flex items-center gap-1.5"><LogIn size={12} />Último acesso: {formatDateTime(professional.lastAccessAt)}</p>
           {professional.commercialStatus === 'trial_active' && trialDays !== null && (
             <p className="flex items-center gap-1.5 text-sky-700"><Clock3 size={12} />Trial termina {trialDays <= 0 ? 'hoje' : `em ${trialDays} dia${trialDays === 1 ? '' : 's'}`}</p>
           )}

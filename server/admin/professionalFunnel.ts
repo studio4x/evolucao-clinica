@@ -19,6 +19,7 @@ export type ProfessionalFunnelProfessionalRow = {
   role?: string | null;
   status?: string | null;
   created_at: string;
+  last_sign_in_at?: string | null;
   onboarding_initial_mode?: string | null;
   onboarding_choice_at?: string | null;
   subscription_plan?: string | null;
@@ -163,6 +164,7 @@ export function buildProfessionalFunnelBoard(input: {
         emailSentAt: contactStatus.emailSentAt,
         accountStatus: professional.status || 'pending',
         createdAt: professional.created_at,
+        lastAccessAt: professional.last_sign_in_at || null,
         onboardingInitialMode: professional.onboarding_initial_mode || null,
         onboardingChoiceAt: professional.onboarding_choice_at || null,
         subscriptionPlan: professional.subscription_plan || null,
@@ -220,9 +222,34 @@ async function fetchAllProfessionals(supabaseAdmin: any) {
   return rows;
 }
 
+async function fetchAuthLastSignIns(supabaseAdmin: any) {
+  const lastSignInByProfessional = new Map<string, string | null>();
+  const perPage = 1000;
+  for (let page = 1; ; page += 1) {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+    if (error) throw error;
+    const users = data?.users || [];
+    users.forEach((user: any) => {
+      lastSignInByProfessional.set(user.id, user.last_sign_in_at || null);
+    });
+    if (users.length < perPage) break;
+  }
+  return lastSignInByProfessional;
+}
+
 export async function getProfessionalFunnelBoard(supabaseAdmin: any) {
   const professionals = await fetchAllProfessionals(supabaseAdmin);
-  const ids = professionals.map((professional) => professional.id);
+  let lastSignInByProfessional = new Map<string, string | null>();
+  try {
+    lastSignInByProfessional = await fetchAuthLastSignIns(supabaseAdmin);
+  } catch (error: any) {
+    console.warn('[ProfessionalFunnel] Não foi possível carregar o último acesso pelo Auth:', error?.message || error);
+  }
+  const professionalsWithAccess = professionals.map((professional) => ({
+    ...professional,
+    last_sign_in_at: lastSignInByProfessional.get(professional.id) || null,
+  }));
+  const ids = professionalsWithAccess.map((professional) => professional.id);
   if (ids.length === 0) return buildProfessionalFunnelBoard({ professionals: [], states: [], otps: [], preferences: [], contactLogs: [] });
 
   const states: ProfessionalFunnelStateRow[] = [];
@@ -265,5 +292,5 @@ export async function getProfessionalFunnelBoard(supabaseAdmin: any) {
     contactLogs.push(...(contactLogsResult.data || []));
   }
 
-  return buildProfessionalFunnelBoard({ professionals, states, otps, preferences, contactLogs });
+  return buildProfessionalFunnelBoard({ professionals: professionalsWithAccess, states, otps, preferences, contactLogs });
 }

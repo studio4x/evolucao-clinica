@@ -26,7 +26,7 @@ const professional = (id: string, patch: Record<string, unknown> = {}) => ({
 
 const professionals = [
   professional('registered'),
-  professional('whatsapp'),
+  professional('whatsapp', { last_sign_in_at: '2026-09-05T14:30:00.000Z' }),
   professional('choice', { onboarding_initial_mode: 'guided', onboarding_choice_at: '2026-09-01T10:10:00.000Z' }),
   professional('patient', { onboarding_initial_mode: 'explore' }),
   professional('record', { onboarding_initial_mode: 'guided' }),
@@ -75,6 +75,7 @@ assert.equal(board.professionals.find((item) => item.id === 'paid')?.stage, 'pai
 assert.equal(board.professionals.find((item) => item.id === 'choice')?.onboardingInitialMode, 'guided');
 assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappNumber, '5511999999999');
 assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappOptIn, true);
+assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.lastAccessAt, '2026-09-05T14:30:00.000Z');
 assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappSentAt, '2026-09-02T10:00:00.000Z');
 assert.equal(board.professionals.find((item) => item.id === 'choice')?.emailSentAt, '2026-09-02T11:00:00.000Z');
 
@@ -117,6 +118,9 @@ const routeSource = serverSource.slice(routeStart, serverSource.indexOf('app.get
 assert.ok(routeStart >= 0, 'endpoint administrativo do quadro deve existir');
 assert.match(routeSource, /requireAuth, requireAdmin/);
 assert.match(routeSource, /Cache-Control", "no-store/);
+assert.match(routeSource, /getProfessionalFunnelBoard/);
+const funnelServerSource = readFileSync('server/admin/professionalFunnel.ts', 'utf8');
+assert.match(funnelServerSource, /auth\.admin\.listUsers\(\{ page, perPage \}\)/);
 
 const emailRouteStart = serverSource.indexOf('app.post("/api/admin/professional-funnel/email"');
 const emailRouteSource = serverSource.slice(emailRouteStart, serverSource.indexOf('app.get("/api/lifecycle/continuity-feedback-link"', emailRouteStart));
@@ -154,5 +158,6 @@ assert.match(componentSource, /persistProfessionalWhatsAppTarget/);
 assert.match(componentSource, /Marcar WhatsApp enviado/);
 assert.match(componentSource, /Marcar e-mail enviado/);
 assert.match(componentSource, /contact-status/);
+assert.match(componentSource, /Último acesso:/);
 
 console.log('professional-funnel.test.ts: OK');
