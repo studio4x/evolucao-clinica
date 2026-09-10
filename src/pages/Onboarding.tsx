@@ -308,6 +308,15 @@ export default function Onboarding() {
     }
   };
 
+  const handleSkipPresentation = () => {
+    if (activeStep !== 'intro' || activeSlide >= 3) return;
+
+    // O botão pula somente os slides informativos e leva o profissional
+    // diretamente ao passo prático, onde o WhatsApp é confirmado.
+    setWhatsappError('');
+    setActiveSlide(3);
+  };
+
   const handleConnectGoogleCalendar = async () => {
     setIsSecurityModalOpen(true);
   };
@@ -757,8 +766,11 @@ export default function Onboarding() {
             {/* Botão de Pular a Intro (apenas na apresentação) */}
             {activeStep === 'intro' && (
               <button
-                onClick={() => setActiveSlide(3)}
-                disabled={activeSlide === 3}
+                type="button"
+                onClick={handleSkipPresentation}
+                disabled={activeSlide >= 3}
+                aria-label="Pular apresentação e ir para os primeiros passos"
+                data-testid="onboarding-skip-presentation"
                 className="text-xs font-semibold text-brand-text-muted hover:text-brand-primary px-3 py-1.5 rounded-xl hover:bg-brand-bg transition-colors"
               >
                 Pular apresentação

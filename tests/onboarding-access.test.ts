@@ -112,6 +112,10 @@ assert.match(appSource, /hydrateOnboardingFromProfile\(session\.user\.id, profil
 assert.match(onboardingSource, /Como você prefere começar\?/);
 assert.match(onboardingSource, /Iniciar configuração guiada/);
 assert.match(onboardingSource, /Explorar o aplicativo/);
+assert.match(onboardingSource, /const handleSkipPresentation = \(\) =>/);
+assert.match(onboardingSource, /onClick=\{handleSkipPresentation\}/);
+assert.match(onboardingSource, /data-testid="onboarding-skip-presentation"/);
+assert.match(onboardingSource, /setActiveSlide\(3\)/);
 assert.match(progressCardSource, /Prepare seu espaço clínico no seu ritmo/);
 assert.match(progressCardSource, /Google Agenda/);
 assert.match(progressCardSource, /\(opcional\)/);
