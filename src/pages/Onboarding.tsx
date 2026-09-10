@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Volume2, Award, Compass, ListChecks, MessageCircle, RotateCcw } from 'lucide-react';
+import { Calendar, CheckCircle2, FileText, Mic, Sparkles, Users, ArrowRight, RefreshCw, Loader2, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Volume2, Award, Compass, ListChecks, MessageCircle, RotateCcw, LogOut } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
-import { chooseOnboardingMode, completeOnboarding, ensureOnboardingState, getOnboardingDestination, setOnboardingState } from '../utils/onboarding';
+import { chooseOnboardingMode, completeOnboarding, deferOnboarding, ensureOnboardingState, getOnboardingDestination, setOnboardingState } from '../utils/onboarding';
 import { classifyOnboardingError, isOnboardingChoiceRequired } from '../utils/onboardingState';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
@@ -103,6 +103,8 @@ export default function Onboarding() {
   const [whatsappOtpRequest, setWhatsappOtpRequest] = useState<WhatsAppOtpRequest | null>(null);
   const [whatsappOtpCode, setWhatsappOtpCode] = useState('');
   const [whatsappResendSeconds, setWhatsappResendSeconds] = useState(0);
+  const [exitingOnboarding, setExitingOnboarding] = useState(false);
+  const [exitError, setExitError] = useState('');
   const [choosingMode, setChoosingMode] = useState<'guided' | 'explore' | null>(null);
   const [choiceError, setChoiceError] = useState('');
 
@@ -315,6 +317,22 @@ export default function Onboarding() {
     // diretamente ao passo prático, onde o WhatsApp é confirmado.
     setWhatsappError('');
     setActiveSlide(3);
+  };
+
+  const handleExitOnboarding = async () => {
+    if (!user?.id || exitingOnboarding) return;
+
+    setExitError('');
+    setExitingOnboarding(true);
+    try {
+      await deferOnboarding(user.id, 'intro');
+      navigate('/painel/dashboard', { replace: true });
+    } catch (error) {
+      console.error('[Onboarding] Não foi possível sair do onboarding:', error);
+      setExitError('Não foi possível sair agora. Verifique sua conexão e tente novamente.');
+    } finally {
+      setExitingOnboarding(false);
+    }
   };
 
   const handleConnectGoogleCalendar = async () => {
@@ -954,6 +972,21 @@ export default function Onboarding() {
                         <p id="onboarding-whatsapp-help" className="text-[10px] leading-relaxed text-brand-text-muted">
                           Enviaremos um código de 6 dígitos para confirmar que este número pertence a você.
                         </p>
+                        <button
+                          type="button"
+                          onClick={() => void handleExitOnboarding()}
+                          disabled={exitingOnboarding}
+                          data-testid="onboarding-exit-to-app"
+                          className="inline-flex items-center gap-1.5 rounded-xl px-1 py-1 text-[11px] font-semibold text-brand-text-muted transition-colors hover:bg-brand-bg hover:text-brand-primary disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {exitingOnboarding ? <Loader2 size={13} className="animate-spin" /> : <LogOut size={13} />}
+                          {exitingOnboarding ? 'Saindo...' : 'Sair e voltar ao aplicativo'}
+                        </button>
+                        {exitError && (
+                          <p className="rounded-lg bg-red-50 px-3 py-2 text-[11px] font-medium text-red-700" role="alert">
+                            {exitError}
+                          </p>
+                        )}
                         {whatsappOtpRequest && (
                           <div className="mt-3 space-y-3 rounded-xl border border-brand-primary/20 bg-brand-primary/[0.04] p-3">
                             <div className="flex items-start gap-2 text-brand-text">
