@@ -52,7 +52,7 @@ export type ProfessionalFunnelPreferenceRow = {
 
 export type ProfessionalFunnelContactLogRow = {
   target_id: string;
-  metadata?: { channel?: string; sent?: boolean } | null;
+  metadata?: { channel?: string; sent?: boolean | string } | null;
   created_at: string;
 };
 
@@ -107,20 +107,21 @@ export function buildProfessionalFunnelBoard(input: {
   const stateByProfessional = new Map(input.states.map((state) => [state.user_id, state]));
   const preferencesByProfessional = new Map((input.preferences || []).map((preferences) => [preferences.user_id, preferences]));
   const contactStatusByProfessional = new Map<string, { whatsappSentAt: string | null; emailSentAt: string | null }>();
-  const contactStatusSeen = new Set<string>();
-  [...(input.contactLogs || [])]
-    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
-    .forEach((log) => {
-      const channel = log.metadata?.channel;
-      if (channel !== 'whatsapp' && channel !== 'email') return;
-      const seenKey = `${log.target_id}:${channel}`;
-      if (contactStatusSeen.has(seenKey)) return;
-      contactStatusSeen.add(seenKey);
-      const current = contactStatusByProfessional.get(log.target_id) || { whatsappSentAt: null, emailSentAt: null };
-      const key = channel === 'whatsapp' ? 'whatsappSentAt' : 'emailSentAt';
-      current[key] = log.metadata?.sent === true ? log.created_at : null;
-      contactStatusByProfessional.set(log.target_id, current);
-    });
+  const latestContactLogAt = new Map<string, number>();
+  [...(input.contactLogs || [])].forEach((log) => {
+    const channel = String(log.metadata?.channel || '').trim().toLowerCase();
+    if (channel !== 'whatsapp' && channel !== 'email') return;
+    const seenKey = `${log.target_id}:${channel}`;
+    const createdAt = new Date(log.created_at).getTime();
+    const latestAt = latestContactLogAt.get(seenKey);
+    if (latestAt !== undefined && (Number.isNaN(createdAt) || createdAt <= latestAt)) return;
+    latestContactLogAt.set(seenKey, Number.isNaN(createdAt) ? 0 : createdAt);
+    const current = contactStatusByProfessional.get(log.target_id) || { whatsappSentAt: null, emailSentAt: null };
+    const key = channel === 'whatsapp' ? 'whatsappSentAt' : 'emailSentAt';
+    const sent = log.metadata?.sent === true || String(log.metadata?.sent || '').trim().toLowerCase() === 'true';
+    current[key] = sent ? log.created_at : null;
+    contactStatusByProfessional.set(log.target_id, current);
+  });
   const verifiedAtByProfessional = new Map<string, string>();
 
   input.otps.forEach((otp) => {

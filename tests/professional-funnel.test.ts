@@ -51,8 +51,8 @@ const board = buildProfessionalFunnelBoard({
   otps: [{ user_id: 'whatsapp', verified_at: '2026-09-01T10:05:00.000Z' }],
   preferences: [{ user_id: 'whatsapp', whatsapp_number: '+55 (11) 99999-9999', whatsapp_opt_in: true }],
   contactLogs: [
-    { target_id: 'whatsapp', metadata: { channel: 'whatsapp', sent: true }, created_at: '2026-09-02T10:00:00.000Z' },
-    { target_id: 'whatsapp', metadata: { channel: 'whatsapp', sent: false }, created_at: '2026-09-01T10:00:00.000Z' },
+    { target_id: 'whatsapp', metadata: { channel: 'whatsapp', sent: true }, created_at: '2026-09-01T10:00:00.000Z' },
+    { target_id: 'whatsapp', metadata: { channel: 'WHATSAPP', sent: 'true' }, created_at: '2026-09-02T10:00:00.000Z' },
     { target_id: 'choice', metadata: { channel: 'email', sent: true }, created_at: '2026-09-02T11:00:00.000Z' },
   ],
   now: new Date('2026-09-10T00:00:00.000Z'),
