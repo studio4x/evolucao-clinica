@@ -61,9 +61,8 @@ assert.equal(board.total, 8, 'administradores não devem aparecer no quadro');
 assert.equal(board.professionals.length, 8);
 assert.equal(Object.values(board.stageCounts).reduce((total, count) => total + count, 0), board.total, 'cada profissional deve ocupar uma única coluna');
 assert.deepEqual(board.stageCounts, {
-  registered: 1,
+  registered: 2,
   whatsapp_verified: 1,
-  onboarding_choice: 1,
   first_patient: 1,
   linked_record: 1,
   first_evolution: 1,
@@ -72,6 +71,7 @@ assert.deepEqual(board.stageCounts, {
 });
 assert.equal(board.professionals.find((item) => item.id === 'returned')?.stage, 'returned', 'a etapa mais avançada deve prevalecer');
 assert.equal(board.professionals.find((item) => item.id === 'paid')?.stage, 'paid', 'assinatura ativa deve prevalecer sobre uso');
+assert.equal(board.professionals.find((item) => item.id === 'choice')?.stage, 'registered');
 assert.equal(board.professionals.find((item) => item.id === 'choice')?.onboardingInitialMode, 'guided');
 assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappNumber, '5511999999999');
 assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappOptIn, true);
@@ -95,11 +95,11 @@ assert.match(expiredTrialMessage.whatsappText, /https:\/\/www\.evolucaoclinica\.
 
 const expiredEarlyStageMessage = buildProfessionalFunnelMessage({
   fullName: 'Marina Alves',
-  stage: 'onboarding_choice',
+  stage: 'whatsapp_verified',
   commercialStatus: 'trial_expired',
 });
 assert.equal(expiredEarlyStageMessage.actionPath, '/painel/subscription', 'trial esgotado não deve apontar para uma rota bloqueada');
-assert.match(expiredEarlyStageMessage.paragraphs.join(' '), /cadastrar seu primeiro paciente/);
+assert.match(expiredEarlyStageMessage.paragraphs.join(' '), /escolher como começar/);
 
 const courtesyMessage = buildProfessionalFunnelMessage({
   fullName: 'João Lima',
@@ -146,6 +146,8 @@ assert.match(adminSource, /<ProfessionalFunnelKanban/);
 
 const componentSource = readFileSync('src/components/admin/ProfessionalFunnelKanban.tsx', 'utf8');
 assert.match(componentSource, /Cada profissional aparece somente na etapa mais avançada/);
+assert.doesNotMatch(componentSource, /onboarding_choice/);
+assert.match(componentSource, /Filtrar por caminho inicial/);
 assert.match(componentSource, /ProfessionalDetailsModal/);
 assert.match(componentSource, /Buscar por nome ou e-mail/);
 assert.match(componentSource, /Preparar WhatsApp para/);

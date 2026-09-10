@@ -1,7 +1,6 @@
 export const PROFESSIONAL_FUNNEL_STAGES = [
   { key: 'registered', label: 'Cadastro criado', description: 'Ainda não verificou o WhatsApp.' },
   { key: 'whatsapp_verified', label: 'WhatsApp verificado', description: 'Pronto para escolher como começar.' },
-  { key: 'onboarding_choice', label: 'Caminho escolhido', description: 'Escolheu ajuda guiada ou explorar primeiro.' },
   { key: 'first_patient', label: 'Primeiro paciente', description: 'Criou ao menos um paciente.' },
   { key: 'linked_record', label: 'Prontuário vinculado', description: 'Conectou ao menos um prontuário.' },
   { key: 'first_evolution', label: 'Primeira evolução', description: 'Concluiu a primeira evolução clínica.' },
@@ -94,7 +93,6 @@ export function getProfessionalFunnelStage(input: {
   if (state?.first_evolution_completed_at) return 'first_evolution';
   if (state?.first_record_linked_at || numericValue(state?.linked_records_count) > 0) return 'linked_record';
   if (state?.first_patient_at || numericValue(state?.patients_count) > 0) return 'first_patient';
-  if (professional.onboarding_initial_mode === 'guided' || professional.onboarding_initial_mode === 'explore') return 'onboarding_choice';
   if (input.whatsappVerifiedAt) return 'whatsapp_verified';
   return 'registered';
 }
@@ -146,7 +144,6 @@ export function buildProfessionalFunnelBoard(input: {
       const stageReachedAtByKey: Partial<Record<ProfessionalFunnelStageKey, string | null | undefined>> = {
         registered: professional.created_at,
         whatsapp_verified: whatsappVerifiedAt,
-        onboarding_choice: professional.onboarding_choice_at,
         first_patient: state?.first_patient_at,
         linked_record: state?.first_record_linked_at,
         first_evolution: state?.first_evolution_completed_at,

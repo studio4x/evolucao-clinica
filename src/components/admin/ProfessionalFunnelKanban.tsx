@@ -29,9 +29,10 @@ import {
 } from '../../utils/professionalFunnelMessages';
 import ProfessionalDetailsModal from './ProfessionalDetailsModal';
 
-type StageKey = 'registered' | 'whatsapp_verified' | 'onboarding_choice' | 'first_patient' | 'linked_record' | 'first_evolution' | 'returned' | 'paid';
+type StageKey = 'registered' | 'whatsapp_verified' | 'first_patient' | 'linked_record' | 'first_evolution' | 'returned' | 'paid';
 type CommercialStatus = 'paid' | 'courtesy' | 'trial_active' | 'trial_expired' | 'no_plan';
 type CommercialFilter = 'all' | CommercialStatus;
+type OnboardingModeFilter = 'all' | 'guided' | 'explore' | 'unset';
 
 type FunnelProfessional = {
   id: string;
@@ -79,10 +80,16 @@ const FILTERS: Array<{ key: CommercialFilter; label: string }> = [
   { key: 'no_plan', label: 'Sem plano' },
 ];
 
+const ONBOARDING_MODE_FILTERS: Array<{ key: OnboardingModeFilter; label: string }> = [
+  { key: 'all', label: 'Todos os caminhos' },
+  { key: 'guided', label: 'Configurar com ajuda' },
+  { key: 'explore', label: 'Conhecer primeiro' },
+  { key: 'unset', label: 'Caminho não registrado' },
+];
+
 const STAGE_COLORS: Record<StageKey, { header: string; count: string; border: string }> = {
   registered: { header: 'bg-slate-100 text-slate-800', count: 'bg-slate-200 text-slate-800', border: 'border-slate-200' },
   whatsapp_verified: { header: 'bg-cyan-50 text-cyan-800', count: 'bg-cyan-100 text-cyan-800', border: 'border-cyan-200' },
-  onboarding_choice: { header: 'bg-sky-50 text-sky-800', count: 'bg-sky-100 text-sky-800', border: 'border-sky-200' },
   first_patient: { header: 'bg-blue-50 text-blue-800', count: 'bg-blue-100 text-blue-800', border: 'border-blue-200' },
   linked_record: { header: 'bg-indigo-50 text-indigo-800', count: 'bg-indigo-100 text-indigo-800', border: 'border-indigo-200' },
   first_evolution: { header: 'bg-violet-50 text-violet-800', count: 'bg-violet-100 text-violet-800', border: 'border-violet-200' },
@@ -101,7 +108,6 @@ const COMMERCIAL_PRESENTATION: Record<CommercialStatus, { label: string; classNa
 const NEXT_ACTION: Record<StageKey, string> = {
   registered: 'Próximo: verificar WhatsApp',
   whatsapp_verified: 'Próximo: escolher como começar',
-  onboarding_choice: 'Próximo: cadastrar paciente',
   first_patient: 'Próximo: vincular prontuário',
   linked_record: 'Próximo: concluir evolução',
   first_evolution: 'Próximo: retornar ao app',
@@ -419,6 +425,7 @@ export default function ProfessionalFunnelKanban() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [commercialFilter, setCommercialFilter] = useState<CommercialFilter>('all');
+  const [onboardingModeFilter, setOnboardingModeFilter] = useState<OnboardingModeFilter>('all');
   const [selectedProfessional, setSelectedProfessional] = useState<FunnelProfessional | null>(null);
   const [emailProfessional, setEmailProfessional] = useState<FunnelProfessional | null>(null);
   const [whatsappTarget, setWhatsappTarget] = useState<ProfessionalWhatsAppTarget>(() => readProfessionalWhatsAppTarget());
@@ -505,12 +512,14 @@ export default function ProfessionalFunnelKanban() {
     const normalizedSearch = search.trim().toLocaleLowerCase('pt-BR');
     return board.professionals.filter((professional) => {
       const matchesFilter = commercialFilter === 'all' || professional.commercialStatus === commercialFilter;
+      const matchesMode = onboardingModeFilter === 'all'
+        || (onboardingModeFilter === 'unset' ? !professional.onboardingInitialMode : professional.onboardingInitialMode === onboardingModeFilter);
       const matchesSearch = !normalizedSearch
         || professional.fullName.toLocaleLowerCase('pt-BR').includes(normalizedSearch)
         || professional.email.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
-      return matchesFilter && matchesSearch;
+      return matchesFilter && matchesMode && matchesSearch;
     });
-  }, [board, commercialFilter, search]);
+  }, [board, commercialFilter, onboardingModeFilter, search]);
 
   const filteredCounts = useMemo(() => filteredProfessionals.reduce<Partial<Record<StageKey, number>>>((counts, professional) => {
     counts[professional.stage] = (counts[professional.stage] || 0) + 1;
@@ -527,7 +536,7 @@ export default function ProfessionalFunnelKanban() {
               <h1 className="font-display text-2xl font-bold">Funil dos profissionais</h1>
             </div>
             <p className="mt-1 max-w-3xl text-sm text-brand-text-muted">
-              Cada profissional aparece somente na etapa mais avançada que alcançou. Clique em um cartão para consultar todos os detalhes.
+              Cada profissional aparece somente na etapa mais avançada que alcançou. O caminho inicial fica como etiqueta e filtro de análise.
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
@@ -593,21 +602,39 @@ export default function ProfessionalFunnelKanban() {
               className="w-full rounded-xl border border-brand-border bg-white py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10"
             />
           </label>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="Filtrar por situação comercial">
-            <Filter className="shrink-0 text-brand-text-muted" size={15} />
-            {FILTERS.map((filter) => (
-              <button
-                key={filter.key}
-                type="button"
-                onClick={() => setCommercialFilter(filter.key)}
-                aria-pressed={commercialFilter === filter.key}
-                className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${commercialFilter === filter.key
-                  ? 'border-brand-primary bg-brand-primary text-white'
-                  : 'border-brand-border bg-white text-brand-text-muted hover:border-brand-primary/40 hover:text-brand-primary'}`}
-              >
-                {filter.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-2 lg:items-end">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="Filtrar por situação comercial">
+              <Filter className="shrink-0 text-brand-text-muted" size={15} />
+              {FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setCommercialFilter(filter.key)}
+                  aria-pressed={commercialFilter === filter.key}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${commercialFilter === filter.key
+                    ? 'border-brand-primary bg-brand-primary text-white'
+                    : 'border-brand-border bg-white text-brand-text-muted hover:border-brand-primary/40 hover:text-brand-primary'}`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="Filtrar por caminho inicial">
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Caminho:</span>
+              {ONBOARDING_MODE_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setOnboardingModeFilter(filter.key)}
+                  aria-pressed={onboardingModeFilter === filter.key}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${onboardingModeFilter === filter.key
+                    ? 'border-brand-primary bg-brand-primary text-white'
+                    : 'border-brand-border bg-white text-brand-text-muted hover:border-brand-primary/40 hover:text-brand-primary'}`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>

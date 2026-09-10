@@ -1,7 +1,6 @@
 export type ProfessionalFunnelMessageStage =
   | 'registered'
   | 'whatsapp_verified'
-  | 'onboarding_choice'
   | 'first_patient'
   | 'linked_record'
   | 'first_evolution'
@@ -77,16 +76,6 @@ export function buildProfessionalFunnelMessage(input: {
       ];
       actionLabel = 'Escolher como começar';
       actionPath = '/onboarding';
-      break;
-    case 'onboarding_choice':
-      subject = 'Cadastre seu primeiro paciente na Evolução Clínica';
-      preheader = 'O primeiro cadastro deixa sua rotina pronta para evoluir.';
-      paragraphs = [
-        'Você já escolheu como quer conhecer a plataforma. Agora é hora de cadastrar seu primeiro paciente.',
-        'Com esse cadastro, você poderá organizar o prontuário e preparar sua primeira evolução clínica com mais agilidade.',
-      ];
-      actionLabel = 'Cadastrar primeiro paciente';
-      actionPath = '/painel/patients/new?onboarding=1';
       break;
     case 'first_patient':
       subject = 'Conecte o prontuário do seu primeiro paciente';
@@ -168,7 +157,6 @@ export function buildProfessionalFunnelMessage(input: {
     const nextGoal: Record<Exclude<ProfessionalFunnelMessageStage, 'paid'>, string> = {
       registered: 'concluir a configuração da conta',
       whatsapp_verified: 'escolher como começar',
-      onboarding_choice: 'cadastrar seu primeiro paciente',
       first_patient: 'vincular seu primeiro prontuário',
       linked_record: 'concluir sua primeira evolução',
       first_evolution: 'continuar usando a plataforma nos próximos atendimentos',
