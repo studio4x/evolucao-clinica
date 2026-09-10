@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil, Tag, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil, Tag, ArrowUpDown, ArrowUp, ArrowDown, Columns3 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -24,6 +24,7 @@ import LifecycleAdmin from '../components/admin/LifecycleAdmin';
 import { AdminConversionFunnel } from '../components/admin/AdminConversionFunnel';
 import SubscriptionCouponsAdmin from '../components/admin/SubscriptionCouponsAdmin';
 import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsModal';
+import ProfessionalFunnelKanban from '../components/admin/ProfessionalFunnelKanban';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 import {
@@ -153,7 +154,7 @@ function ProfessionalAvatar({ professional }: { professional: Professional }) {
   );
 }
 
-type AdminTab = 'professionals' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'coupons' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'seo' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
+type AdminTab = 'professionals' | 'professional_funnel' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'coupons' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'seo' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
 type AdminNavItem = { key: AdminTab; label: string; icon: typeof Users };
 type AdminNavGroup = { title: string; items: AdminNavItem[] };
 type NotificationCenterChannel = 'email' | 'whatsapp' | 'push';
@@ -377,6 +378,7 @@ export default function AdminPanel() {
   }, [navigate, normalizedPath]);
 
   const getActiveTab = (): AdminTab => {
+    if (normalizedPath.endsWith('/professional-funnel')) return 'professional_funnel';
     if (normalizedPath.endsWith('/gemini-config')) return 'token_usage';
     if (normalizedPath.endsWith('/google-pay-config')) return 'google_pay_config';
     if (isTokenUsagePath) return 'token_usage';
@@ -409,6 +411,7 @@ export default function AdminPanel() {
       title: 'Atendimento & Usuários',
       items: [
         { key: 'professionals', label: 'Profissionais', icon: Users },
+        { key: 'professional_funnel', label: 'Funil dos Profissionais', icon: Columns3 },
         { key: 'migrations', label: 'Migrações VIP', icon: Database },
         { key: 'support', label: 'Suporte / Tickets', icon: LifeBuoy },
         { key: 'feedback', label: 'Sugestões & Avaliações', icon: MessageSquare },
@@ -448,6 +451,7 @@ export default function AdminPanel() {
 
   const setActiveTab = (tab: AdminTab) => {
     if (tab === 'professionals') navigate('/admin/professionals');
+    else if (tab === 'professional_funnel') navigate('/admin/professional-funnel');
     else if (tab === 'gemini_config') navigate(tokenUsageGeneralPath);
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
     else if (tab === 'token_usage') navigate(tokenUsageMetricsPath);
@@ -4498,6 +4502,8 @@ export default function AdminPanel() {
                   )}
                 </div>
               </div>
+            ) : activeTab === 'professional_funnel' ? (
+              <ProfessionalFunnelKanban />
             ) : activeTab === 'google_pay_config' ? (
               /* Aba de configuração de cobrança Stripe e Google Play */
               <div className="space-y-6">

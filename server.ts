@@ -93,6 +93,7 @@ import {
   getProfessionalOnboardingEligibility
 } from "./server/admin/professionalOverview.js";
 import { getConversionFunnel } from "./server/admin/conversionFunnel.js";
+import { getProfessionalFunnelBoard } from "./server/admin/professionalFunnel.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -3979,6 +3980,16 @@ app.get("/api/admin/conversion-funnel", requireAuth, requireAdmin, async (req: a
   } catch (error: any) {
     console.error("[AdminConversionFunnel] Falha ao carregar funil:", error?.message || error);
     return res.status(500).json({ error: "Não foi possível carregar o funil de ativação." });
+  }
+});
+
+app.get("/api/admin/professional-funnel", requireAuth, requireAdmin, async (_req: any, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    return res.json(await getProfessionalFunnelBoard(supabaseAdmin));
+  } catch (error: any) {
+    console.error("[ProfessionalFunnel] Falha ao carregar quadro:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar o funil dos profissionais." });
   }
 });
 
