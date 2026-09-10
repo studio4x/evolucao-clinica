@@ -153,6 +153,11 @@ const componentSource = readFileSync('src/components/admin/ProfessionalFunnelKan
 assert.match(componentSource, /Cada profissional aparece somente na etapa mais avançada/);
 assert.doesNotMatch(componentSource, /onboarding_choice/);
 assert.match(componentSource, /Filtrar por caminho inicial/);
+assert.match(componentSource, /Filtrar por contato/);
+assert.match(componentSource, /whatsapp_pending/);
+assert.match(componentSource, /email_pending/);
+assert.match(componentSource, /contactFilter === 'none'/);
+assert.match(componentSource, /Nenhum contato realizado/);
 assert.doesNotMatch(componentSource, /whatsapp_verified/);
 assert.match(componentSource, /WhatsApp confirmado/);
 assert.doesNotMatch(componentSource, /Cortesias/);

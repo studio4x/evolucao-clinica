@@ -35,6 +35,7 @@ type StageKey = 'registered' | 'first_patient' | 'linked_record' | 'first_evolut
 type CommercialStatus = 'paid' | 'trial_active' | 'trial_expired' | 'no_plan';
 type CommercialFilter = 'all' | CommercialStatus;
 type OnboardingModeFilter = 'all' | 'guided' | 'explore' | 'unset';
+type ContactFilter = 'all' | 'whatsapp_pending' | 'email_pending' | 'none';
 
 type FunnelProfessional = {
   id: string;
@@ -87,6 +88,13 @@ const ONBOARDING_MODE_FILTERS: Array<{ key: OnboardingModeFilter; label: string 
   { key: 'guided', label: 'Configurar com ajuda' },
   { key: 'explore', label: 'Conhecer primeiro' },
   { key: 'unset', label: 'Caminho não registrado' },
+];
+
+const CONTACT_FILTERS: Array<{ key: ContactFilter; label: string }> = [
+  { key: 'all', label: 'Todos os contatos' },
+  { key: 'whatsapp_pending', label: 'WhatsApp não enviado' },
+  { key: 'email_pending', label: 'E-mail não enviado' },
+  { key: 'none', label: 'Nenhum contato realizado' },
 ];
 
 const STAGE_COLORS: Record<StageKey, { header: string; count: string; border: string }> = {
@@ -435,6 +443,7 @@ export default function ProfessionalFunnelKanban() {
   const [search, setSearch] = useState('');
   const [commercialFilter, setCommercialFilter] = useState<CommercialFilter>('all');
   const [onboardingModeFilter, setOnboardingModeFilter] = useState<OnboardingModeFilter>('all');
+  const [contactFilter, setContactFilter] = useState<ContactFilter>('all');
   const [selectedProfessional, setSelectedProfessional] = useState<FunnelProfessional | null>(null);
   const [emailProfessional, setEmailProfessional] = useState<FunnelProfessional | null>(null);
   const [whatsappTarget, setWhatsappTarget] = useState<ProfessionalWhatsAppTarget>(() => readProfessionalWhatsAppTarget());
@@ -540,12 +549,16 @@ export default function ProfessionalFunnelKanban() {
       const matchesFilter = commercialFilter === 'all' || professional.commercialStatus === commercialFilter;
       const matchesMode = onboardingModeFilter === 'all'
         || (onboardingModeFilter === 'unset' ? !professional.onboardingInitialMode : professional.onboardingInitialMode === onboardingModeFilter);
+      const matchesContact = contactFilter === 'all'
+        || (contactFilter === 'whatsapp_pending' && !professional.whatsappSentAt)
+        || (contactFilter === 'email_pending' && !professional.emailSentAt)
+        || (contactFilter === 'none' && !professional.whatsappSentAt && !professional.emailSentAt);
       const matchesSearch = !normalizedSearch
         || professional.fullName.toLocaleLowerCase('pt-BR').includes(normalizedSearch)
         || professional.email.toLocaleLowerCase('pt-BR').includes(normalizedSearch);
-      return matchesFilter && matchesMode && matchesSearch;
+      return matchesFilter && matchesMode && matchesContact && matchesSearch;
     });
-  }, [board, commercialFilter, onboardingModeFilter, search]);
+  }, [board, commercialFilter, onboardingModeFilter, contactFilter, search]);
 
   const filteredCounts = useMemo(() => filteredProfessionals.reduce<Partial<Record<StageKey, number>>>((counts, professional) => {
     counts[professional.stage] = (counts[professional.stage] || 0) + 1;
@@ -665,6 +678,22 @@ export default function ProfessionalFunnelKanban() {
                   onClick={() => setOnboardingModeFilter(filter.key)}
                   aria-pressed={onboardingModeFilter === filter.key}
                   className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${onboardingModeFilter === filter.key
+                    ? 'border-brand-primary bg-brand-primary text-white'
+                    : 'border-brand-border bg-white text-brand-text-muted hover:border-brand-primary/40 hover:text-brand-primary'}`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1" aria-label="Filtrar por contato">
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Contato:</span>
+              {CONTACT_FILTERS.map((filter) => (
+                <button
+                  key={filter.key}
+                  type="button"
+                  onClick={() => setContactFilter(filter.key)}
+                  aria-pressed={contactFilter === filter.key}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition ${contactFilter === filter.key
                     ? 'border-brand-primary bg-brand-primary text-white'
                     : 'border-brand-border bg-white text-brand-text-muted hover:border-brand-primary/40 hover:text-brand-primary'}`}
                 >
