@@ -30,7 +30,7 @@ import {
 import ProfessionalDetailsModal from './ProfessionalDetailsModal';
 
 type StageKey = 'registered' | 'first_patient' | 'linked_record' | 'first_evolution' | 'returned' | 'paid';
-type CommercialStatus = 'paid' | 'courtesy' | 'trial_active' | 'trial_expired' | 'no_plan';
+type CommercialStatus = 'paid' | 'trial_active' | 'trial_expired' | 'no_plan';
 type CommercialFilter = 'all' | CommercialStatus;
 type OnboardingModeFilter = 'all' | 'guided' | 'explore' | 'unset';
 
@@ -77,7 +77,6 @@ const FILTERS: Array<{ key: CommercialFilter; label: string }> = [
   { key: 'trial_active', label: 'Trial ativo' },
   { key: 'trial_expired', label: 'Trial esgotado' },
   { key: 'paid', label: 'Plano pago' },
-  { key: 'courtesy', label: 'Cortesia' },
   { key: 'no_plan', label: 'Sem plano' },
 ];
 
@@ -99,7 +98,6 @@ const STAGE_COLORS: Record<StageKey, { header: string; count: string; border: st
 
 const COMMERCIAL_PRESENTATION: Record<CommercialStatus, { label: string; className: string }> = {
   paid: { label: 'Plano pago', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
-  courtesy: { label: 'Cortesia', className: 'border-purple-200 bg-purple-50 text-purple-700' },
   trial_active: { label: 'Trial ativo', className: 'border-sky-200 bg-sky-50 text-sky-700' },
   trial_expired: { label: 'Trial esgotado', className: 'border-red-200 bg-red-50 text-red-700' },
   no_plan: { label: 'Sem plano', className: 'border-slate-200 bg-slate-50 text-slate-600' },
@@ -591,10 +589,6 @@ export default function ProfessionalFunnelKanban() {
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
               <p className="flex items-center gap-2 text-xs font-semibold text-emerald-700"><CreditCard size={14} />Planos pagos</p>
               <p className="mt-1 text-2xl font-bold text-emerald-800">{board.commercialCounts.paid}</p>
-            </div>
-            <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4">
-              <p className="flex items-center gap-2 text-xs font-semibold text-purple-700"><CheckCircle2 size={14} />Cortesias</p>
-              <p className="mt-1 text-2xl font-bold text-purple-800">{board.commercialCounts.courtesy}</p>
             </div>
           </div>
         )}

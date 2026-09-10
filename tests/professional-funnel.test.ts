@@ -33,6 +33,7 @@ const professionals = [
   professional('evolution', { onboarding_initial_mode: 'guided' }),
   professional('returned', { onboarding_initial_mode: 'explore' }),
   professional('paid', { subscription_plan: 'monthly', subscription_status: 'active' }),
+  professional('courtesy', { subscription_plan: 'courtesy', subscription_status: 'active' }),
   professional('admin', { role: 'admin' }),
 ];
 
@@ -59,6 +60,7 @@ const board = buildProfessionalFunnelBoard({
 
 assert.equal(board.total, 8, 'administradores não devem aparecer no quadro');
 assert.equal(board.professionals.length, 8);
+assert.equal(board.professionals.some((item) => item.id === 'courtesy'), false, 'cortesias não devem aparecer no quadro');
 assert.equal(Object.values(board.stageCounts).reduce((total, count) => total + count, 0), board.total, 'cada profissional deve ocupar uma única coluna');
 assert.deepEqual(board.stageCounts, {
   registered: 3,
@@ -122,6 +124,7 @@ assert.match(routeSource, /Cache-Control", "no-store/);
 assert.match(routeSource, /getProfessionalFunnelBoard/);
 const funnelServerSource = readFileSync('server/admin/professionalFunnel.ts', 'utf8');
 assert.match(funnelServerSource, /auth\.admin\.listUsers\(\{ page, perPage \}\)/);
+assert.match(funnelServerSource, /professional\.subscription_plan !== 'courtesy'/);
 assert.doesNotMatch(funnelServerSource, /key: 'whatsapp_verified'/);
 
 const emailRouteStart = serverSource.indexOf('app.post("/api/admin/professional-funnel/email"');
@@ -152,6 +155,7 @@ assert.doesNotMatch(componentSource, /onboarding_choice/);
 assert.match(componentSource, /Filtrar por caminho inicial/);
 assert.doesNotMatch(componentSource, /whatsapp_verified/);
 assert.match(componentSource, /WhatsApp confirmado/);
+assert.doesNotMatch(componentSource, /Cortesias/);
 assert.match(componentSource, /ProfessionalDetailsModal/);
 assert.match(componentSource, /Buscar por nome ou e-mail/);
 assert.match(componentSource, /Preparar WhatsApp para/);

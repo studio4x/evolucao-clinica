@@ -132,7 +132,7 @@ export function buildProfessionalFunnelBoard(input: {
   });
 
   const professionals = input.professionals
-    .filter((professional) => professional.role !== 'admin')
+    .filter((professional) => professional.role !== 'admin' && professional.subscription_plan !== 'courtesy')
     .map((professional) => {
       const state = stateByProfessional.get(professional.id) || null;
       const preferences = preferencesByProfessional.get(professional.id) || null;
