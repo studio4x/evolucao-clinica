@@ -977,7 +977,7 @@ export default function Onboarding() {
                           onClick={() => void handleExitOnboarding()}
                           disabled={exitingOnboarding}
                           data-testid="onboarding-exit-to-app"
-                          className="inline-flex items-center gap-1.5 rounded-xl px-1 py-1 text-[11px] font-semibold text-brand-text-muted transition-colors hover:bg-brand-bg hover:text-brand-primary disabled:cursor-not-allowed disabled:opacity-60"
+                          className="btn-outline mt-2 w-full justify-center gap-1.5 border-brand-primary/30 py-2 text-xs font-semibold text-brand-primary hover:bg-brand-primary/5 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {exitingOnboarding ? <Loader2 size={13} className="animate-spin" /> : <LogOut size={13} />}
                           {exitingOnboarding ? 'Saindo...' : 'Sair e voltar ao aplicativo'}
