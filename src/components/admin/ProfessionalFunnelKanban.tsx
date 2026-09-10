@@ -6,9 +6,11 @@ import {
   Clock3,
   CreditCard,
   Filter,
+  Globe2,
   Loader2,
   Mail,
   MessageCircle,
+  Monitor,
   RefreshCw,
   Search,
   Send,
@@ -20,6 +22,9 @@ import { supabase } from '../../supabaseClient';
 import {
   buildProfessionalFunnelMessage,
   buildProfessionalWhatsAppUrl,
+  persistProfessionalWhatsAppTarget,
+  readProfessionalWhatsAppTarget,
+  type ProfessionalWhatsAppTarget,
 } from '../../utils/professionalFunnelMessages';
 import ProfessionalDetailsModal from './ProfessionalDetailsModal';
 
@@ -33,6 +38,8 @@ type FunnelProfessional = {
   email: string;
   whatsappNumber: string | null;
   whatsappOptIn: boolean;
+  whatsappSentAt: string | null;
+  emailSentAt: string | null;
   accountStatus: string;
   createdAt: string;
   onboardingInitialMode: string | null;
@@ -131,10 +138,16 @@ function ProfessionalCard({
   professional,
   onOpen,
   onOpenEmail,
+  onToggleContact,
+  contactUpdatingKey,
+  whatsappTarget,
 }: {
   professional: FunnelProfessional;
   onOpen: () => void;
   onOpenEmail: () => void;
+  onToggleContact: (channel: 'whatsapp' | 'email') => void;
+  contactUpdatingKey: string;
+  whatsappTarget: ProfessionalWhatsAppTarget;
 }) {
   const commercial = COMMERCIAL_PRESENTATION[professional.commercialStatus];
   const trialDays = daysUntil(professional.trialEndsAt);
@@ -144,9 +157,11 @@ function ProfessionalCard({
     commercialStatus: professional.commercialStatus,
   });
   const whatsappUrl = professional.whatsappNumber
-    ? buildProfessionalWhatsAppUrl(professional.whatsappNumber, message.whatsappText)
+    ? buildProfessionalWhatsAppUrl(professional.whatsappNumber, message.whatsappText, whatsappTarget)
     : null;
   const hasEmail = professional.email.includes('@');
+  const whatsappUpdating = contactUpdatingKey === `${professional.id}:whatsapp`;
+  const emailUpdating = contactUpdatingKey === `${professional.id}:email`;
   const initials = professional.fullName
     .split(/\s+/)
     .filter(Boolean)
@@ -215,7 +230,8 @@ function ProfessionalCard({
         </div>
       </button>
 
-      {(whatsappUrl || hasEmail) && <div className={`grid gap-2 border-t border-brand-border/60 bg-brand-bg/20 p-2.5 ${whatsappUrl && hasEmail ? 'grid-cols-2' : 'grid-cols-1'}`}>
+      {(whatsappUrl || hasEmail) && <div className="border-t border-brand-border/60 bg-brand-bg/20 p-2.5">
+        <div className={`grid gap-2 ${whatsappUrl && hasEmail ? 'grid-cols-2' : 'grid-cols-1'}`}>
         {whatsappUrl && (
           <a
             href={whatsappUrl}
@@ -223,7 +239,7 @@ function ProfessionalCard({
             rel="noopener noreferrer"
             className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-2 text-[11px] font-bold text-emerald-700 transition hover:bg-emerald-100"
             aria-label={`Preparar WhatsApp para ${professional.fullName}`}
-            title={professional.whatsappOptIn ? 'Abrir conversa no WhatsApp' : 'Abrir conversa no WhatsApp; não há opt-in registrado na plataforma'}
+            title={`${whatsappTarget === 'desktop' ? 'Abrir no WhatsApp Desktop' : 'Abrir no WhatsApp Web'}${professional.whatsappOptIn ? '' : '; não há opt-in registrado na plataforma'}`}
           >
             <MessageCircle size={14} />WhatsApp
           </a>
@@ -238,12 +254,45 @@ function ProfessionalCard({
             <Mail size={14} />E-mail
           </button>
         )}
+        </div>
+        <div className={`mt-2 grid gap-2 ${whatsappUrl && hasEmail ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {whatsappUrl && (
+            <button
+              type="button"
+              onClick={() => onToggleContact('whatsapp')}
+              disabled={whatsappUpdating}
+              aria-pressed={Boolean(professional.whatsappSentAt)}
+              className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition ${professional.whatsappSentAt
+                ? 'border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                : 'border-brand-border bg-white text-brand-text-muted hover:border-emerald-300 hover:text-emerald-700'}`}
+            >
+              {whatsappUpdating ? <Loader2 className="animate-spin" size={12} /> : <CheckCircle2 size={12} />}{professional.whatsappSentAt ? 'WhatsApp enviado' : 'Marcar WhatsApp enviado'}
+            </button>
+          )}
+          {hasEmail && (
+            <button
+              type="button"
+              onClick={() => onToggleContact('email')}
+              disabled={emailUpdating}
+              aria-pressed={Boolean(professional.emailSentAt)}
+              className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1.5 text-[10px] font-semibold transition ${professional.emailSentAt
+                ? 'border-sky-300 bg-sky-100 text-sky-800 hover:bg-sky-200'
+                : 'border-brand-border bg-white text-brand-text-muted hover:border-sky-300 hover:text-sky-700'}`}
+            >
+              {emailUpdating ? <Loader2 className="animate-spin" size={12} /> : <CheckCircle2 size={12} />}{professional.emailSentAt ? 'E-mail enviado' : 'Marcar e-mail enviado'}
+            </button>
+          )}
+        </div>
       </div>}
     </article>
   );
 }
 
-function FunnelEmailModal({ professional, onClose }: { professional: FunnelProfessional | null; onClose: () => void }) {
+function FunnelEmailModal({ professional, onClose, onEmailSent }: {
+  professional: FunnelProfessional | null;
+  onClose: () => void;
+  onEmailSent: (professionalId: string, sentAt: string | null) => void;
+}) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -291,6 +340,7 @@ function FunnelEmailModal({ professional, onClose }: { professional: FunnelProfe
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Não foi possível enviar o e-mail.');
+      onEmailSent(professional.id, payload.emailSentAt || new Date().toISOString());
       setSuccess(`E-mail enviado com sucesso via ${payload.provider === 'brevo' ? 'Brevo' : 'SMTP'}.`);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : 'Não foi possível enviar o e-mail.');
@@ -368,6 +418,8 @@ export default function ProfessionalFunnelKanban() {
   const [commercialFilter, setCommercialFilter] = useState<CommercialFilter>('all');
   const [selectedProfessional, setSelectedProfessional] = useState<FunnelProfessional | null>(null);
   const [emailProfessional, setEmailProfessional] = useState<FunnelProfessional | null>(null);
+  const [whatsappTarget, setWhatsappTarget] = useState<ProfessionalWhatsAppTarget>(() => readProfessionalWhatsAppTarget());
+  const [contactUpdatingKey, setContactUpdatingKey] = useState('');
 
   const loadBoard = useCallback(async () => {
     setLoading(true);
@@ -391,6 +443,59 @@ export default function ProfessionalFunnelKanban() {
   }, []);
 
   useEffect(() => { void loadBoard(); }, [loadBoard]);
+
+  const handleWhatsAppTargetChange = () => {
+    const nextTarget: ProfessionalWhatsAppTarget = whatsappTarget === 'web' ? 'desktop' : 'web';
+    setWhatsappTarget(nextTarget);
+    persistProfessionalWhatsAppTarget(nextTarget);
+  };
+
+  const handleContactStatus = async (professionalId: string, channel: 'whatsapp' | 'email') => {
+    if (!board) return;
+    const professional = board.professionals.find((item) => item.id === professionalId);
+    if (!professional) return;
+    const key = `${professionalId}:${channel}`;
+    const sent = channel === 'whatsapp' ? !professional.whatsappSentAt : !professional.emailSentAt;
+    setContactUpdatingKey(key);
+    setError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão administrativa não encontrada.');
+      const response = await fetch('/api/admin/professional-funnel/contact-status', {
+        method: 'POST',
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ professionalId, channel, sent }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível atualizar a marcação de contato.');
+      setBoard((current) => current ? {
+        ...current,
+        professionals: current.professionals.map((item) => item.id === professionalId
+          ? {
+            ...item,
+            whatsappSentAt: channel === 'whatsapp' ? payload.markedAt : item.whatsappSentAt,
+            emailSentAt: channel === 'email' ? payload.markedAt : item.emailSentAt,
+          }
+          : item),
+      } : current);
+    } catch (contactError) {
+      setError(contactError instanceof Error ? contactError.message : 'Não foi possível atualizar a marcação de contato.');
+    } finally {
+      setContactUpdatingKey('');
+    }
+  };
+
+  const markEmailSentAfterDelivery = (professionalId: string, sentAt: string | null) => {
+    setBoard((current) => current ? {
+      ...current,
+      professionals: current.professionals.map((item) => item.id === professionalId ? { ...item, emailSentAt: sentAt } : item),
+    } : current);
+  };
 
   const filteredProfessionals = useMemo(() => {
     if (!board) return [];
@@ -422,9 +527,30 @@ export default function ProfessionalFunnelKanban() {
               Cada profissional aparece somente na etapa mais avançada que alcançou. Clique em um cartão para consultar todos os detalhes.
             </p>
           </div>
-          <button type="button" onClick={() => void loadBoard()} disabled={loading} className="btn-outline inline-flex items-center justify-center gap-2 px-4 py-2 text-xs">
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar dados
-          </button>
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-border bg-brand-bg/30 px-3 py-2" title="A preferência fica salva neste navegador administrativo.">
+              <div className="flex items-center gap-2">
+                {whatsappTarget === 'desktop' ? <Monitor size={15} className="text-emerald-700" /> : <Globe2 size={15} className="text-emerald-700" />}
+                <div>
+                  <span className="block text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Destino do WhatsApp</span>
+                  <span className="block text-xs font-semibold text-brand-text">{whatsappTarget === 'desktop' ? 'WhatsApp Desktop' : 'WhatsApp Web'}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={whatsappTarget === 'desktop'}
+                aria-label="Alternar destino do WhatsApp entre Web e Desktop"
+                onClick={handleWhatsAppTargetChange}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${whatsappTarget === 'desktop' ? 'bg-emerald-600' : 'bg-slate-300'}`}
+              >
+                <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${whatsappTarget === 'desktop' ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            <button type="button" onClick={() => void loadBoard()} disabled={loading} className="btn-outline inline-flex items-center justify-center gap-2 px-4 py-2 text-xs">
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Atualizar dados
+            </button>
+          </div>
         </div>
 
         {board && (
@@ -516,6 +642,9 @@ export default function ProfessionalFunnelKanban() {
                           professional={professional}
                           onOpen={() => setSelectedProfessional(professional)}
                           onOpenEmail={() => setEmailProfessional(professional)}
+                          onToggleContact={(channel) => void handleContactStatus(professional.id, channel)}
+                          contactUpdatingKey={contactUpdatingKey}
+                          whatsappTarget={whatsappTarget}
                         />
                       )) : (
                         <div className="rounded-xl border border-dashed border-brand-border bg-white/60 px-3 py-8 text-center text-xs text-brand-text-muted">
@@ -539,7 +668,7 @@ export default function ProfessionalFunnelKanban() {
         } : null}
         onClose={() => setSelectedProfessional(null)}
       />
-      <FunnelEmailModal professional={emailProfessional} onClose={() => setEmailProfessional(null)} />
+      <FunnelEmailModal professional={emailProfessional} onClose={() => setEmailProfessional(null)} onEmailSent={markEmailSentAfterDelivery} />
     </div>
   );
 }

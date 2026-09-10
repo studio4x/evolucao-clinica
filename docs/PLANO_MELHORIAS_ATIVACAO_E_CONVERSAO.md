@@ -18,7 +18,7 @@ Fazer o profissional chegar ao primeiro valor real da plataforma antes de consum
 - O admin exibe o funil dos últimos 30 dias, a primeira evolução em até 48 horas, retorno em outro dia, erros de escopo Google e estados do checkout.
 - A primeira escolha do onboarding é preservada de forma imutável e exibida no profissional separadamente do modo atual.
 - O admin possui um quadro visual em formato kanban que posiciona cada profissional somente na etapa mais avançada comprovada, com busca, filtros comerciais e acesso aos detalhes individuais.
-- Cada cartão do kanban oferece uma mensagem contextual: o WhatsApp abre a conversa externa com o texto pronto quando há número cadastrado; o e-mail abre uma prévia completa e exige confirmação manual antes do envio pelo provedor configurado.
+- Cada cartão do kanban oferece uma mensagem contextual: o WhatsApp abre a conversa externa com o texto pronto quando há número cadastrado; o e-mail abre uma prévia completa e exige confirmação manual antes do envio pelo provedor configurado. O admin pode alternar entre WhatsApp Web/Desktop e marcar o envio de cada canal, com histórico operacional persistido.
 - Usuários com trial encerrado podem responder ao formulário autenticado de continuidade.
 
 ## Definições de medição

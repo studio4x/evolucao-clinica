@@ -24,6 +24,10 @@ export type ProfessionalFunnelMessage = {
   whatsappText: string;
 };
 
+export type ProfessionalWhatsAppTarget = 'web' | 'desktop';
+
+export const PROFESSIONAL_FUNNEL_WHATSAPP_TARGET_STORAGE_KEY = 'evolucao-clinica:admin-funnel-whatsapp-target';
+
 const APP_ORIGIN = 'https://www.evolucaoclinica.app.br';
 
 const firstNameFrom = (fullName: string) => {
@@ -189,8 +193,29 @@ export function buildProfessionalFunnelMessage(input: {
   };
 }
 
-export function buildProfessionalWhatsAppUrl(phoneNumber: string, message: string) {
+export function buildProfessionalWhatsAppUrl(phoneNumber: string, message: string, target: ProfessionalWhatsAppTarget = 'web') {
   const normalizedPhone = String(phoneNumber || '').replace(/\D/g, '');
   if (normalizedPhone.length < 8 || normalizedPhone.length > 15) return null;
-  return `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}`;
+  const encodedMessage = encodeURIComponent(message);
+  return target === 'desktop'
+    ? `whatsapp://send?phone=${normalizedPhone}&text=${encodedMessage}`
+    : `https://web.whatsapp.com/send?phone=${normalizedPhone}&text=${encodedMessage}`;
+}
+
+export function readProfessionalWhatsAppTarget(): ProfessionalWhatsAppTarget {
+  if (typeof window === 'undefined') return 'web';
+  try {
+    return window.localStorage.getItem(PROFESSIONAL_FUNNEL_WHATSAPP_TARGET_STORAGE_KEY) === 'desktop' ? 'desktop' : 'web';
+  } catch {
+    return 'web';
+  }
+}
+
+export function persistProfessionalWhatsAppTarget(target: ProfessionalWhatsAppTarget) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(PROFESSIONAL_FUNNEL_WHATSAPP_TARGET_STORAGE_KEY, target);
+  } catch {
+    // A preferência local não pode interromper o uso do funil.
+  }
 }

@@ -3994,11 +3994,65 @@ app.get("/api/admin/professional-funnel", requireAuth, requireAdmin, async (_req
   }
 });
 
+const PROFESSIONAL_FUNNEL_CONTACT_CHANNELS = new Set(["whatsapp", "email"]);
+const PROFESSIONAL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function recordProfessionalFunnelContactStatus(input: {
+  professionalId: string;
+  actorId: string;
+  channel: "whatsapp" | "email";
+  sent: boolean;
+}) {
+  const createdAt = new Date().toISOString();
+  const { error } = await supabaseAdmin.from("admin_audit_logs").insert({
+    event_type: "professional_funnel_contact_status",
+    actor_id: input.actorId,
+    target_type: "professional",
+    target_id: input.professionalId,
+    reason: input.sent ? "manual_contact_marked_sent" : "manual_contact_marked_not_sent",
+    metadata: { channel: input.channel, sent: input.sent },
+    created_at: createdAt,
+  });
+  if (error) throw error;
+  return createdAt;
+}
+
+app.post("/api/admin/professional-funnel/contact-status", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const professionalId = String(req.body?.professionalId || "").trim();
+    const channel = String(req.body?.channel || "").trim();
+    const sent = req.body?.sent;
+    if (!PROFESSIONAL_ID_PATTERN.test(professionalId) || !PROFESSIONAL_FUNNEL_CONTACT_CHANNELS.has(channel) || typeof sent !== "boolean") {
+      return res.status(400).json({ error: "Dados de contato inválidos." });
+    }
+
+    const { data: professional, error: professionalError } = await supabaseAdmin
+      .from("professionals")
+      .select("id, role")
+      .eq("id", professionalId)
+      .maybeSingle();
+    if (professionalError) throw professionalError;
+    if (!professional || professional.role === "admin") return res.status(404).json({ error: "Profissional não encontrado no funil." });
+
+    const markedAt = await recordProfessionalFunnelContactStatus({
+      professionalId,
+      actorId: req.user.id,
+      channel: channel as "whatsapp" | "email",
+      sent,
+    });
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ success: true, professionalId, channel, sent, markedAt: sent ? markedAt : null });
+  } catch (error: any) {
+    console.error("[ProfessionalFunnelContact] Falha ao atualizar marcação:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível atualizar a marcação de contato." });
+  }
+});
+
 app.post("/api/admin/professional-funnel/email", requireAuth, requireAdmin, async (req: any, res) => {
   try {
     const professionalId = String(req.body?.professionalId || "").trim();
     const requestedStage = String(req.body?.stage || "").trim();
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(professionalId)) {
+    if (!PROFESSIONAL_ID_PATTERN.test(professionalId)) {
       return res.status(400).json({ error: "Profissional inválido." });
     }
 
@@ -4069,11 +4123,24 @@ app.post("/api/admin/professional-funnel/email", requireAuth, requireAdmin, asyn
       allowFallback: true,
     });
 
+    let emailMarkedAt: string | null = null;
+    try {
+      emailMarkedAt = await recordProfessionalFunnelContactStatus({
+        professionalId: professional.id,
+        actorId: req.user.id,
+        channel: "email",
+        sent: true,
+      });
+    } catch (markError: any) {
+      console.warn("[ProfessionalFunnelEmail] Não foi possível registrar a marcação de envio:", markError?.message || markError);
+    }
+
     return res.json({
       success: true,
       stage: professional.stage,
       provider: result.provider,
       deliveryId: result.emailDeliveryId,
+      emailSentAt: emailMarkedAt,
     });
   } catch (error: any) {
     console.error("[ProfessionalFunnelEmail] Falha no envio:", error?.message || error);

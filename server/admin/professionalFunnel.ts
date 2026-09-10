@@ -51,6 +51,12 @@ export type ProfessionalFunnelPreferenceRow = {
   whatsapp_opt_in?: boolean | null;
 };
 
+export type ProfessionalFunnelContactLogRow = {
+  target_id: string;
+  metadata?: { channel?: string; sent?: boolean } | null;
+  created_at: string;
+};
+
 const numericValue = (value: number | string | null | undefined) => {
   const parsed = Number(value || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -97,11 +103,27 @@ export function buildProfessionalFunnelBoard(input: {
   states: ProfessionalFunnelStateRow[];
   otps: ProfessionalFunnelOtpRow[];
   preferences?: ProfessionalFunnelPreferenceRow[];
+  contactLogs?: ProfessionalFunnelContactLogRow[];
   now?: Date;
 }) {
   const now = input.now || new Date();
   const stateByProfessional = new Map(input.states.map((state) => [state.user_id, state]));
   const preferencesByProfessional = new Map((input.preferences || []).map((preferences) => [preferences.user_id, preferences]));
+  const contactStatusByProfessional = new Map<string, { whatsappSentAt: string | null; emailSentAt: string | null }>();
+  const contactStatusSeen = new Set<string>();
+  [...(input.contactLogs || [])]
+    .sort((left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime())
+    .forEach((log) => {
+      const channel = log.metadata?.channel;
+      if (channel !== 'whatsapp' && channel !== 'email') return;
+      const seenKey = `${log.target_id}:${channel}`;
+      if (contactStatusSeen.has(seenKey)) return;
+      contactStatusSeen.add(seenKey);
+      const current = contactStatusByProfessional.get(log.target_id) || { whatsappSentAt: null, emailSentAt: null };
+      const key = channel === 'whatsapp' ? 'whatsappSentAt' : 'emailSentAt';
+      current[key] = log.metadata?.sent === true ? log.created_at : null;
+      contactStatusByProfessional.set(log.target_id, current);
+    });
   const verifiedAtByProfessional = new Map<string, string>();
 
   input.otps.forEach((otp) => {
@@ -117,6 +139,7 @@ export function buildProfessionalFunnelBoard(input: {
     .map((professional) => {
       const state = stateByProfessional.get(professional.id) || null;
       const preferences = preferencesByProfessional.get(professional.id) || null;
+      const contactStatus = contactStatusByProfessional.get(professional.id) || { whatsappSentAt: null, emailSentAt: null };
       const whatsappVerifiedAt = verifiedAtByProfessional.get(professional.id) || null;
       const stage = getProfessionalFunnelStage({ professional, state, whatsappVerifiedAt });
       const stageReachedAtByKey: Partial<Record<ProfessionalFunnelStageKey, string | null | undefined>> = {
@@ -136,6 +159,8 @@ export function buildProfessionalFunnelBoard(input: {
         email: professional.google_email?.trim() || 'E-mail não informado',
         whatsappNumber: String(preferences?.whatsapp_number || '').replace(/\D/g, '') || null,
         whatsappOptIn: preferences?.whatsapp_opt_in === true,
+        whatsappSentAt: contactStatus.whatsappSentAt,
+        emailSentAt: contactStatus.emailSentAt,
         accountStatus: professional.status || 'pending',
         createdAt: professional.created_at,
         onboardingInitialMode: professional.onboarding_initial_mode || null,
@@ -198,16 +223,17 @@ async function fetchAllProfessionals(supabaseAdmin: any) {
 export async function getProfessionalFunnelBoard(supabaseAdmin: any) {
   const professionals = await fetchAllProfessionals(supabaseAdmin);
   const ids = professionals.map((professional) => professional.id);
-  if (ids.length === 0) return buildProfessionalFunnelBoard({ professionals: [], states: [], otps: [], preferences: [] });
+  if (ids.length === 0) return buildProfessionalFunnelBoard({ professionals: [], states: [], otps: [], preferences: [], contactLogs: [] });
 
   const states: ProfessionalFunnelStateRow[] = [];
   const otps: ProfessionalFunnelOtpRow[] = [];
   const preferences: ProfessionalFunnelPreferenceRow[] = [];
+  const contactLogs: ProfessionalFunnelContactLogRow[] = [];
   const chunkSize = 100;
 
   for (let index = 0; index < ids.length; index += chunkSize) {
     const chunk = ids.slice(index, index + chunkSize);
-    const [stateResult, otpResult, preferencesResult] = await Promise.all([
+    const [stateResult, otpResult, preferencesResult, contactLogsResult] = await Promise.all([
       supabaseAdmin
         .from('lifecycle_user_state')
         .select('user_id, usage_days_count, patients_count, first_patient_at, linked_records_count, first_record_linked_at, evolutions_count, first_evolution_completed_at, last_activity_at, subscription_started_at')
@@ -221,14 +247,23 @@ export async function getProfessionalFunnelBoard(supabaseAdmin: any) {
         .from('communication_preferences')
         .select('user_id, whatsapp_number, whatsapp_opt_in')
         .in('user_id', chunk),
+      supabaseAdmin
+        .from('admin_audit_logs')
+        .select('target_id, metadata, created_at')
+        .eq('event_type', 'professional_funnel_contact_status')
+        .eq('target_type', 'professional')
+        .in('target_id', chunk)
+        .order('created_at', { ascending: false }),
     ]);
     if (stateResult.error) throw stateResult.error;
     if (otpResult.error) throw otpResult.error;
     if (preferencesResult.error) throw preferencesResult.error;
+    if (contactLogsResult.error) throw contactLogsResult.error;
     states.push(...(stateResult.data || []));
     otps.push(...(otpResult.data || []));
     preferences.push(...(preferencesResult.data || []));
+    contactLogs.push(...(contactLogsResult.data || []));
   }
 
-  return buildProfessionalFunnelBoard({ professionals, states, otps, preferences });
+  return buildProfessionalFunnelBoard({ professionals, states, otps, preferences, contactLogs });
 }

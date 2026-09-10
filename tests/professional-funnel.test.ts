@@ -49,6 +49,11 @@ const board = buildProfessionalFunnelBoard({
   states,
   otps: [{ user_id: 'whatsapp', verified_at: '2026-09-01T10:05:00.000Z' }],
   preferences: [{ user_id: 'whatsapp', whatsapp_number: '+55 (11) 99999-9999', whatsapp_opt_in: true }],
+  contactLogs: [
+    { target_id: 'whatsapp', metadata: { channel: 'whatsapp', sent: true }, created_at: '2026-09-02T10:00:00.000Z' },
+    { target_id: 'whatsapp', metadata: { channel: 'whatsapp', sent: false }, created_at: '2026-09-01T10:00:00.000Z' },
+    { target_id: 'choice', metadata: { channel: 'email', sent: true }, created_at: '2026-09-02T11:00:00.000Z' },
+  ],
   now: new Date('2026-09-10T00:00:00.000Z'),
 });
 
@@ -70,6 +75,8 @@ assert.equal(board.professionals.find((item) => item.id === 'paid')?.stage, 'pai
 assert.equal(board.professionals.find((item) => item.id === 'choice')?.onboardingInitialMode, 'guided');
 assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappNumber, '5511999999999');
 assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappOptIn, true);
+assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsappSentAt, '2026-09-02T10:00:00.000Z');
+assert.equal(board.professionals.find((item) => item.id === 'choice')?.emailSentAt, '2026-09-02T11:00:00.000Z');
 
 assert.equal(getProfessionalFunnelStage({ professional: professional('u1'), state: null, whatsappVerifiedAt: null }), 'registered');
 assert.equal(getProfessionalCommercialStatus(professional('expired', { trial_ends_at: '2026-09-01T00:00:00.000Z' }), new Date('2026-09-10T00:00:00.000Z')), 'trial_expired');
@@ -100,7 +107,8 @@ const courtesyMessage = buildProfessionalFunnelMessage({
 });
 assert.equal(courtesyMessage.actionPath, '/painel/dashboard', 'cortesia não deve receber CTA de contratação');
 assert.doesNotMatch(courtesyMessage.paragraphs.join(' '), /assinar|plano disponível/i);
-assert.match(buildProfessionalWhatsAppUrl('5511999999999', 'Olá!') || '', /^https:\/\/wa\.me\/5511999999999\?text=/);
+assert.match(buildProfessionalWhatsAppUrl('5511999999999', 'Olá!') || '', /^https:\/\/web\.whatsapp\.com\/send\?phone=5511999999999&text=/);
+assert.match(buildProfessionalWhatsAppUrl('5511999999999', 'Olá!', 'desktop') || '', /^whatsapp:\/\/send\?phone=5511999999999&text=/);
 assert.equal(buildProfessionalWhatsAppUrl('123', 'Olá!'), null);
 
 const serverSource = readFileSync('server.ts', 'utf8');
@@ -119,6 +127,14 @@ assert.match(emailRouteSource, /source: "funnel-stage"/);
 assert.match(emailRouteSource, /sendTransactionalEmail/);
 assert.doesNotMatch(emailRouteSource, /req\.body\?\.(subject|content|recipientEmail)/, 'destinatário e conteúdo devem ser definidos no servidor');
 
+const contactRouteStart = serverSource.indexOf('app.post("/api/admin/professional-funnel/contact-status"');
+const contactRouteSource = serverSource.slice(contactRouteStart, emailRouteStart);
+assert.ok(contactRouteStart >= 0, 'endpoint administrativo de marcação de contato deve existir');
+assert.match(contactRouteSource, /requireAuth, requireAdmin/);
+assert.match(contactRouteSource, /recordProfessionalFunnelContactStatus/);
+assert.match(serverSource, /\.from\("admin_audit_logs"\)/);
+assert.match(serverSource, /event_type: "professional_funnel_contact_status"/);
+
 const adminSource = readFileSync('src/pages/AdminPanel.tsx', 'utf8');
 assert.match(adminSource, /\/admin\/professional-funnel/);
 assert.match(adminSource, /Funil dos Profissionais/);
@@ -132,5 +148,11 @@ assert.match(componentSource, /Preparar WhatsApp para/);
 assert.match(componentSource, /Preparar e-mail para/);
 assert.match(componentSource, /Revisar e enviar/);
 assert.match(componentSource, /Enviar e-mail/);
+assert.match(componentSource, /role="switch"/);
+assert.match(componentSource, /readProfessionalWhatsAppTarget/);
+assert.match(componentSource, /persistProfessionalWhatsAppTarget/);
+assert.match(componentSource, /Marcar WhatsApp enviado/);
+assert.match(componentSource, /Marcar e-mail enviado/);
+assert.match(componentSource, /contact-status/);
 
 console.log('professional-funnel.test.ts: OK');
