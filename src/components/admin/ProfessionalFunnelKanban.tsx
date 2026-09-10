@@ -29,7 +29,7 @@ import {
 } from '../../utils/professionalFunnelMessages';
 import ProfessionalDetailsModal from './ProfessionalDetailsModal';
 
-type StageKey = 'registered' | 'whatsapp_verified' | 'first_patient' | 'linked_record' | 'first_evolution' | 'returned' | 'paid';
+type StageKey = 'registered' | 'first_patient' | 'linked_record' | 'first_evolution' | 'returned' | 'paid';
 type CommercialStatus = 'paid' | 'courtesy' | 'trial_active' | 'trial_expired' | 'no_plan';
 type CommercialFilter = 'all' | CommercialStatus;
 type OnboardingModeFilter = 'all' | 'guided' | 'explore' | 'unset';
@@ -39,6 +39,7 @@ type FunnelProfessional = {
   fullName: string;
   email: string;
   whatsappNumber: string | null;
+  whatsappVerifiedAt: string | null;
   whatsappOptIn: boolean;
   whatsappSentAt: string | null;
   emailSentAt: string | null;
@@ -89,7 +90,6 @@ const ONBOARDING_MODE_FILTERS: Array<{ key: OnboardingModeFilter; label: string 
 
 const STAGE_COLORS: Record<StageKey, { header: string; count: string; border: string }> = {
   registered: { header: 'bg-slate-100 text-slate-800', count: 'bg-slate-200 text-slate-800', border: 'border-slate-200' },
-  whatsapp_verified: { header: 'bg-cyan-50 text-cyan-800', count: 'bg-cyan-100 text-cyan-800', border: 'border-cyan-200' },
   first_patient: { header: 'bg-blue-50 text-blue-800', count: 'bg-blue-100 text-blue-800', border: 'border-blue-200' },
   linked_record: { header: 'bg-indigo-50 text-indigo-800', count: 'bg-indigo-100 text-indigo-800', border: 'border-indigo-200' },
   first_evolution: { header: 'bg-violet-50 text-violet-800', count: 'bg-violet-100 text-violet-800', border: 'border-violet-200' },
@@ -107,7 +107,6 @@ const COMMERCIAL_PRESENTATION: Record<CommercialStatus, { label: string; classNa
 
 const NEXT_ACTION: Record<StageKey, string> = {
   registered: 'Próximo: verificar WhatsApp',
-  whatsapp_verified: 'Próximo: escolher como começar',
   first_patient: 'Próximo: vincular prontuário',
   linked_record: 'Próximo: concluir evolução',
   first_evolution: 'Próximo: retornar ao app',
@@ -163,6 +162,7 @@ function ProfessionalCard({
     fullName: professional.fullName,
     stage: professional.stage,
     commercialStatus: professional.commercialStatus,
+    whatsappVerified: Boolean(professional.whatsappVerifiedAt),
   });
   const whatsappUrl = professional.whatsappNumber
     ? buildProfessionalWhatsAppUrl(professional.whatsappNumber, message.whatsappText, whatsappTarget)
@@ -170,6 +170,9 @@ function ProfessionalCard({
   const hasEmail = professional.email.includes('@');
   const whatsappUpdating = contactUpdatingKey === `${professional.id}:whatsapp`;
   const emailUpdating = contactUpdatingKey === `${professional.id}:email`;
+  const nextAction = professional.stage === 'registered' && professional.whatsappVerifiedAt
+    ? 'Próximo: continuar configuração'
+    : NEXT_ACTION[professional.stage];
   const initials = professional.fullName
     .split(/\s+/)
     .filter(Boolean)
@@ -205,6 +208,11 @@ function ProfessionalCard({
           <span className="rounded-full border border-brand-border bg-brand-bg/60 px-2 py-0.5 text-[10px] font-semibold text-brand-text-muted">
             {initialModeLabel(professional.onboardingInitialMode)}
           </span>
+          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${professional.whatsappVerifiedAt
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-amber-200 bg-amber-50 text-amber-700'}`}>
+            {professional.whatsappVerifiedAt ? 'WhatsApp confirmado' : 'WhatsApp pendente'}
+          </span>
           {professional.accountStatus !== 'active' && (
             <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700">
               Conta {professional.accountStatus === 'pending' ? 'pendente' : 'inativa'}
@@ -234,7 +242,7 @@ function ProfessionalCard({
             <p className="flex items-center gap-1.5 text-sky-700"><Clock3 size={12} />Trial termina {trialDays <= 0 ? 'hoje' : `em ${trialDays} dia${trialDays === 1 ? '' : 's'}`}</p>
           )}
           <p className={`flex items-center gap-1.5 font-semibold ${professional.stage === 'paid' ? 'text-emerald-700' : 'text-brand-primary'}`}>
-            {professional.stage === 'paid' ? <CheckCircle2 size={12} /> : <ChevronRight size={12} />}{NEXT_ACTION[professional.stage]}
+            {professional.stage === 'paid' ? <CheckCircle2 size={12} /> : <ChevronRight size={12} />}{nextAction}
           </p>
         </div>
       </button>
@@ -327,6 +335,7 @@ function FunnelEmailModal({ professional, onClose, onEmailSent }: {
     fullName: professional.fullName,
     stage: professional.stage,
     commercialStatus: professional.commercialStatus,
+    whatsappVerified: Boolean(professional.whatsappVerifiedAt),
   });
   const firstName = professional.fullName.trim().split(/\s+/)[0] || 'profissional';
 

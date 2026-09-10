@@ -1,6 +1,5 @@
 export const PROFESSIONAL_FUNNEL_STAGES = [
-  { key: 'registered', label: 'Cadastro criado', description: 'Ainda não verificou o WhatsApp.' },
-  { key: 'whatsapp_verified', label: 'WhatsApp verificado', description: 'Pronto para escolher como começar.' },
+  { key: 'registered', label: 'Cadastro criado', description: 'Conta criada, sem avanço clínico registrado.' },
   { key: 'first_patient', label: 'Primeiro paciente', description: 'Criou ao menos um paciente.' },
   { key: 'linked_record', label: 'Prontuário vinculado', description: 'Conectou ao menos um prontuário.' },
   { key: 'first_evolution', label: 'Primeira evolução', description: 'Concluiu a primeira evolução clínica.' },
@@ -93,7 +92,6 @@ export function getProfessionalFunnelStage(input: {
   if (state?.first_evolution_completed_at) return 'first_evolution';
   if (state?.first_record_linked_at || numericValue(state?.linked_records_count) > 0) return 'linked_record';
   if (state?.first_patient_at || numericValue(state?.patients_count) > 0) return 'first_patient';
-  if (input.whatsappVerifiedAt) return 'whatsapp_verified';
   return 'registered';
 }
 
@@ -143,7 +141,6 @@ export function buildProfessionalFunnelBoard(input: {
       const stage = getProfessionalFunnelStage({ professional, state, whatsappVerifiedAt });
       const stageReachedAtByKey: Partial<Record<ProfessionalFunnelStageKey, string | null | undefined>> = {
         registered: professional.created_at,
-        whatsapp_verified: whatsappVerifiedAt,
         first_patient: state?.first_patient_at,
         linked_record: state?.first_record_linked_at,
         first_evolution: state?.first_evolution_completed_at,
@@ -156,6 +153,7 @@ export function buildProfessionalFunnelBoard(input: {
         fullName: professional.full_name?.trim() || 'Profissional sem nome',
         email: professional.google_email?.trim() || 'E-mail não informado',
         whatsappNumber: String(preferences?.whatsapp_number || '').replace(/\D/g, '') || null,
+        whatsappVerifiedAt,
         whatsappOptIn: preferences?.whatsapp_opt_in === true,
         whatsappSentAt: contactStatus.whatsappSentAt,
         emailSentAt: contactStatus.emailSentAt,

@@ -628,6 +628,8 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
 
               <Section icon={MessageCircle} title="WhatsApp e comunicação">
                 <Detail label="Número do WhatsApp" value={preferences?.whatsapp_number} />
+                <Detail label="WhatsApp verificado" value={preferences?.whatsapp_verified_number ? 'Sim' : 'Não'} />
+                <Detail label="Verificado em" value={dateValue(preferences?.whatsapp_verified_at)} />
                 <Detail label="Autorizou mensagens" value={preferences?.whatsapp_opt_in} />
                 <Detail label="WhatsApp habilitado" value={preferences?.whatsapp_enabled} />
                 <Detail label="Origem da autorização" value={preferences?.whatsapp_opt_in_source} />

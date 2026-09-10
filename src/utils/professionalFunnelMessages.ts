@@ -1,6 +1,5 @@
 export type ProfessionalFunnelMessageStage =
   | 'registered'
-  | 'whatsapp_verified'
   | 'first_patient'
   | 'linked_record'
   | 'first_evolution'
@@ -48,6 +47,7 @@ export function buildProfessionalFunnelMessage(input: {
   fullName: string;
   stage: ProfessionalFunnelMessageStage;
   commercialStatus: ProfessionalFunnelMessageCommercialStatus;
+  whatsappVerified?: boolean;
 }): ProfessionalFunnelMessage {
   const firstName = firstNameFrom(input.fullName);
   let subject: string;
@@ -58,23 +58,18 @@ export function buildProfessionalFunnelMessage(input: {
 
   switch (input.stage) {
     case 'registered':
-      subject = 'Vamos concluir seu acesso à Evolução Clínica?';
-      preheader = 'Falta apenas validar seu WhatsApp para avançar.';
-      paragraphs = [
-        'Seu cadastro na Evolução Clínica já foi criado.',
-        'Falta apenas confirmar seu WhatsApp para liberar o próximo passo e começar a conhecer a plataforma. Essa confirmação leva menos de um minuto.',
-      ];
+      subject = input.whatsappVerified ? 'Continue sua jornada na Evolução Clínica' : 'Vamos concluir seu acesso à Evolução Clínica?';
+      preheader = input.whatsappVerified ? 'Seu WhatsApp está confirmado. Continue pelo próximo passo.' : 'Falta apenas validar seu WhatsApp para avançar.';
+      paragraphs = input.whatsappVerified
+        ? [
+          'Seu cadastro na Evolução Clínica já foi criado e seu WhatsApp está confirmado.',
+          'Agora você pode continuar a configuração guiada ou conhecer o aplicativo primeiro.',
+        ]
+        : [
+          'Seu cadastro na Evolução Clínica já foi criado.',
+          'Falta apenas confirmar seu WhatsApp para liberar o próximo passo e começar a conhecer a plataforma. Essa confirmação leva menos de um minuto.',
+        ];
       actionLabel = 'Continuar configuração';
-      actionPath = '/onboarding';
-      break;
-    case 'whatsapp_verified':
-      subject = 'Escolha como quer começar na Evolução Clínica';
-      preheader = 'Seu WhatsApp já está verificado. Agora escolha o melhor caminho.';
-      paragraphs = [
-        'Seu WhatsApp já foi confirmado e o próximo passo está disponível.',
-        'Você pode configurar a plataforma com ajuda, passo a passo, ou conhecer o aplicativo primeiro e concluir a configuração depois.',
-      ];
-      actionLabel = 'Escolher como começar';
       actionPath = '/onboarding';
       break;
     case 'first_patient':
@@ -155,8 +150,7 @@ export function buildProfessionalFunnelMessage(input: {
 
   if (input.commercialStatus === 'trial_expired' && input.stage !== 'paid') {
     const nextGoal: Record<Exclude<ProfessionalFunnelMessageStage, 'paid'>, string> = {
-      registered: 'concluir a configuração da conta',
-      whatsapp_verified: 'escolher como começar',
+      registered: input.whatsappVerified ? 'continuar a configuração da conta' : 'concluir a configuração da conta',
       first_patient: 'vincular seu primeiro prontuário',
       linked_record: 'concluir sua primeira evolução',
       first_evolution: 'continuar usando a plataforma nos próximos atendimentos',

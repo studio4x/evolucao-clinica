@@ -3667,7 +3667,7 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
         .maybeSingle(),
       supabaseAdmin
         .from("communication_preferences")
-        .select("whatsapp_number, whatsapp_enabled, whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_source, whatsapp_opt_in_text_version, whatsapp_opt_out_at, whatsapp_opt_out_source, whatsapp_opt_out_reason, email_enabled, push_enabled, lifecycle_enabled, product_education_enabled, commercial_enabled, created_at, updated_at")
+        .select("whatsapp_number, whatsapp_verified_number, whatsapp_verified_at, whatsapp_enabled, whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_source, whatsapp_opt_in_text_version, whatsapp_opt_out_at, whatsapp_opt_out_source, whatsapp_opt_out_reason, email_enabled, push_enabled, lifecycle_enabled, product_education_enabled, commercial_enabled, created_at, updated_at")
         .eq("user_id", professionalId)
         .maybeSingle(),
       supabaseAdmin.auth.admin.getUserById(professionalId)
@@ -4070,6 +4070,7 @@ app.post("/api/admin/professional-funnel/email", requireAuth, requireAdmin, asyn
       fullName: professional.fullName,
       stage: professional.stage,
       commercialStatus: professional.commercialStatus,
+      whatsappVerified: Boolean(professional.whatsappVerifiedAt),
     });
     const actionUrl = `${PRODUCTION_ORIGIN}${content.actionPath}`;
     const preferencesUrl = `${PRODUCTION_ORIGIN}/preferencias-de-comunicacao`;
