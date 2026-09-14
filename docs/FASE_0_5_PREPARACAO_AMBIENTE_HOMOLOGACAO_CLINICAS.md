@@ -1,6 +1,6 @@
 # Fase 0.5 — Preparação segura do ambiente de homologação do Plano Clínica
 
-**Status:** hardening concluído; projeto Vercel staging provisionado sem deployment; Supabase staging e primeira publicação ainda bloqueados
+**Status:** Fase 0.5 operacionalmente concluída; Fase 1 ainda não iniciada
 
 **Data da auditoria:** 14/09/2026
 
@@ -9,6 +9,14 @@
 **Escopo:** ambientes, variáveis, integrações, fail-fast, guardas e pré-requisitos da futura branch `feat/clinicas`
 
 **Fora do escopo:** Fase 1, migrations empresariais, tabelas de organizações, RLS empresarial, cobrança do Plano Clínica, compartilhamento de pacientes e qualquer alteração no Supabase de produção
+
+## Atualização final — 14/09/2026
+
+O Supabase staging foi provisionado no projeto `hwkdwinfckmjoriqxbjk`, as credenciais exclusivas foram configuradas no projeto Vercel `evolucao-clinica-staging` e o primeiro deployment isolado foi validado. O banner, `/api/health`, identidade `staging`, ref efetivo e ausência de service role no DOM foram confirmados. Os cenários fail-fast, o bloqueio deny-by-default das integrações e o inventário somente leitura do Supabase de produção foram concluídos. O inventário detalhado está em [INVENTARIO_SUPABASE_PRODUCAO_PRE_CLINICAS.md](./INVENTARIO_SUPABASE_PRODUCAO_PRE_CLINICAS.md).
+
+Nenhuma migration, alteração de schema, dado, Auth, Storage, Vault, Edge Function ou cron de produção foi executada. Não foi identificado P0; os riscos P1/P2 registrados no inventário continuam sendo pré-requisitos de desenho e revisão antes da Fase 1.
+
+Os blocos de diagnóstico abaixo preservam o histórico da preparação e dos riscos encontrados antes do provisionamento. Para o estado atual, prevalecem esta atualização final e o inventário somente leitura vinculado acima.
 
 ## Conclusão executiva
 
