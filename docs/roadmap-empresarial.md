@@ -1,6 +1,6 @@
 # Roadmap Empresarial — Clínicas, Licenças, Equipes e Pacientes Compartilhados
 
-**Status:** Fase 0 consolidada — Fases 1 a 6 não iniciadas
+**Status:** Fase 0 consolidada — Fase 0.5 auditada com bloqueios operacionais — Fases 1 a 6 não iniciadas
 
 **Tipo:** Especificação funcional, de dados, segurança e implantação  
 **Escopo:** Plano empresarial para clínicas + colaboração profissional em pacientes  
@@ -856,6 +856,8 @@ O produto deve prever:
 **Encerramento:** a Fase 0 está documentalmente consolidada. Nenhuma funcionalidade, migration ou configuração de produção faz parte deste encerramento.
 
 ### Pré-requisitos operacionais antes da Fase 1 — não executados
+
+O diagnóstico, a matriz de ambientes, as variáveis, as guardas planejadas e os bloqueios estão consolidados em [`FASE_0_5_PREPARACAO_AMBIENTE_HOMOLOGACAO_CLINICAS.md`](FASE_0_5_PREPARACAO_AMBIENTE_HOMOLOGACAO_CLINICAS.md). A branch remota `feat/clinicas` não deve ser publicada até o encerramento dos bloqueios P0 ali registrados.
 
 - remover qualquer fallback que permita a uma build de homologação conectar-se silenciosamente ao Supabase de produção;
 - configurar `feat/clinicas`, projeto Vercel de homologação protegido e Supabase de staging isolado;
