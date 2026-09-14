@@ -104,16 +104,19 @@ Associação entre o perfil profissional existente e a organização.
 - `membership_role`: `owner`, `manager`, `professional`;
 - `status`: `active`, `suspended`, `removed`;
 - `clinical_access_enabled`;
-- `seat_required`, calculado/transacional e não editável pelo frontend;
 - ator e timestamps de convite/entrada/suspensão/remoção.
 
 Invariantes:
 
-- pelo menos um owner ativo;
-- remoção do último owner somente por transferência transacional;
-- `clinical_access_enabled = true` exige licença;
-- owner/manager administrativos podem existir sem consumir licença;
-- owner/manager com capacidade clínica consomem licença;
+- exatamente um owner ativo por organização operacional;
+- a unicidade do owner será garantida por índice único parcial, conceitualmente `UNIQUE (organization_id) WHERE membership_role = 'owner' AND status = 'active'`;
+- transferência de owner será uma transação que bloqueia a organização e suas memberships relevantes, valida organização/status/alvo, promove o novo owner, rebaixa o owner anterior e somente confirma se terminar com exatamente um owner ativo; qualquer erro causa rollback;
+- atualização ou exclusão direta que deixaria a organização sem owner ativo será rejeitada; remoção do owner atual exige transferência na mesma transação;
+- transferências concorrentes devem serializar no lock da organização e revalidar o estado antes do commit;
+- o alvo da transferência deve ser membership da mesma organização, ativo e elegível; alvo suspenso, removido, de outra organização ou inexistente é rejeitado; transferir para o owner atual é operação idempotente e não cria uma segunda associação;
+- `seat_required` não será persistido: a necessidade de licença é sempre derivada de `clinical_access_enabled`;
+- owner/manager administrativos podem existir sem capacidade clínica e sem licença; owner/manager com capacidade clínica seguem a mesma derivação e validação de licença dos demais profissionais;
+- contagem, reserva, ativação e disponibilidade de licenças pertencem ao serviço transacional da Fase 2, não à fundação da Fase 1A;
 - membership de uma organização nunca autoriza outra organização.
 
 ### 3.3 `organization_invitations`
@@ -167,11 +170,12 @@ O seletor de contexto deve limpar estado local inválido, mostrar organização 
 ### 5.1 Emissão
 
 1. owner/manager solicita convite no contexto da organização.
-2. O backend normaliza o e-mail e valida papel, estado da organização e licença, quando clínica.
-3. Uma transação reserva a licença clínica, se aplicável, com bloqueio contra concorrência.
+2. O backend normaliza o e-mail e valida papel, estado da organização e a intenção de capacidade clínica solicitada.
+3. A emissão do convite é separada do consumo de licença: convite administrativo pode ser criado sem assento; convite com intenção clínica registra apenas essa intenção nesta fase.
 4. O token puro é entregue apenas ao mecanismo de convite futuro; o banco guarda somente seu hash.
 5. O convite é de uso único, expira e pode ser revogado.
 6. O envio de e-mail permanece desabilitado na Fase 1A; testes usam token sintético controlado.
+7. Reserva de licença, ativação de `clinical_access_enabled` e criação de capacidade clínica dependem do serviço de licenças da Fase 2. Antes da Fase 2 não existe caminho de produção que ative capacidade clínica sem essa validação transacional; fixtures de staging só podem simular o estado sob controle explícito e nunca representam autorização de produção.
 
 ### 5.2 Usuário já existente
 
@@ -181,7 +185,7 @@ convite pendente
 → backend valida hash, expiração, status e e-mail autenticado
 → transação cria/ativa membership
 → convite vira accepted
-→ reserva vira active seat, se clínica
+→ capacidade clínica só é ativada após validação do serviço de licenças da Fase 2; sem esse serviço, o aceite permanece administrativo ou com intenção clínica pendente
 ```
 
 Não criar novo usuário Auth, não alterar o perfil pessoal e não migrar pacientes, evoluções ou assinatura individual.
@@ -199,6 +203,7 @@ convite pendente
 ```
 
 A criação da conta não concede membership automaticamente. Se a criação do perfil falhar, o aceite não deve ser confirmado; a rotina precisa ser idempotente e permitir retomada sem duplicar perfil, reserva ou membership.
+A criação/aceite do membership não concede, por si só, licença clínica. A ativação de capacidade clínica depende do serviço de licenças da Fase 2 e deve ser idempotente; sem sua validação, nenhum fluxo de produção pode criar capacidade clínica.
 
 ### 5.4 Regras contra abuso
 

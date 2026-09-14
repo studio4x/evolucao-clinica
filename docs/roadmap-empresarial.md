@@ -1,6 +1,6 @@
 # Roadmap Empresarial — Clínicas, Licenças, Equipes e Pacientes Compartilhados
 
-**Status:** Fase 0 consolidada — Fase 0.5 auditada com bloqueios operacionais — Fases 1 a 6 não iniciadas
+**Status:** Fase 0 consolidada — Fase 0.5 auditada — Fase 1A concluída — Fase 1B0 aplicada em staging e aprovada para revisão — Fase 1B1 em diante não iniciadas
 
 **Tipo:** Especificação funcional, de dados, segurança e implantação  
 **Escopo:** Plano empresarial para clínicas + colaboração profissional em pacientes  
@@ -871,6 +871,10 @@ O diagnóstico, a matriz de ambientes, as variáveis, as guardas planejadas e os
 ### Fase 1A — Desenho técnico da fundação empresarial — concluída documentalmente
 
 O desenho técnico foi consolidado em [`FASE_1A_DESENHO_FUNDACAO_EMPRESARIAL.md`](FASE_1A_DESENHO_FUNDACAO_EMPRESARIAL.md). A Fase 1A define contexto único por sessão/Auth staging, memberships referenciados ao perfil `professionals`/`auth.uid()`, aceite seguro de convites, bootstrap sanitizado e feature flag global + por organização. Nenhuma tabela, migration ou funcionalidade empresarial foi aplicada.
+
+### Fase 1B0 — Bootstrap individual sanitizado — aplicada em staging, aguardando revisão
+
+O baseline `20260914-individual-core-v1` foi aplicado exclusivamente no Supabase staging e está documentado em [`FASE_1B0_BOOTSTRAP_STAGING.md`](FASE_1B0_BOOTSTRAP_STAGING.md). Ele reproduz somente as tabelas e RLS necessárias ao fluxo individual, sem dados, Auth persistente, Storage, Vault, cron, integrações ou objetos empresariais. A Fase 1B1 (fundação de organização e identidade) permanece não iniciada e depende da revisão formal do gate 1B0.
 
 **Gate para implementação:** aprovação do desenho, baseline staging sanitizado, matriz RLS/grants, testes de concorrência de convites e validação de rollback. As URLs/Auth, DNS, Vercel, secrets e integrações da Fase 0.5 permanecem fora de escopo.
 
