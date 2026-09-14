@@ -1,6 +1,6 @@
 # Fase 0.5 — Preparação segura do ambiente de homologação do Plano Clínica
 
-**Status:** hardening concluído no código e na Vercel Production; provisionamento do staging ainda bloqueado
+**Status:** hardening concluído; projeto Vercel staging provisionado sem deployment; Supabase staging e primeira publicação ainda bloqueados
 
 **Data da auditoria:** 14/09/2026
 
@@ -16,7 +16,9 @@ A branch `feat/clinicas` **não deve ser publicada ainda**. O hardening de códi
 
 O Supabase staging não foi criado porque a organização já possui dois projetos e a API administrativa não informa o plano financeiro. A página de cobrança exige uma sessão interativa autenticada. Pela [tabela oficial de preços do Supabase](https://supabase.com/pricing), projetos adicionais em plano pago partem de US$ 10 por mês; portanto, a criação foi interrompida antes de qualquer possível cobrança.
 
-O projeto Vercel staging também não foi criado: o token disponível é restrito ao projeto de produção e a API retornou HTTP 403 para criação de projeto no time. Não houve deployment, domínio ou vínculo Git de staging. Nenhuma migration, alteração de schema ou mudança de dados foi executada no Supabase.
+O projeto Vercel `evolucao-clinica-staging` foi criado posteriormente pela sessão autenticada do painel, depois que o token de API restrito ao projeto de produção retornou HTTP 403. O projeto permanece sem vínculo Git e sem deployment. Foram cadastradas apenas configurações não sensíveis e deny-by-default; nenhuma credencial Supabase foi reutilizada. A autenticação da Vercel protege **todos os deployments** do projeto.
+
+O domínio `staging.evolucaoclinica.app.br` foi associado ao ambiente Production desse projeto, mas continua com `Invalid Configuration` até a criação externa do CNAME `staging` apontando para `fe82ddbba431ebd2.vercel-dns-017.com.` com proxy desativado. Nenhuma migration, alteração de schema ou mudança de dados foi executada no Supabase.
 
 ## Atualização operacional da Fase 0.5B
 
@@ -25,10 +27,12 @@ O projeto Vercel staging também não foi criado: o token disponível é restrit
 | Recurso | Resultado em 14/09/2026 | Estado seguro |
 |---|---|---|
 | Supabase staging | Não criado; possível custo adicional de US$ 10/mês exige confirmação do plano/cobrança | Produção intocada; nenhum projeto ou dado copiado |
-| Vercel staging | Não criado; credencial retornou HTTP 403 ao criar projeto no time | Nenhum deployment ou Git link inseguro foi produzido |
+| Vercel staging | Criado como `evolucao-clinica-staging` (`prj_Hmm2uRREtw4qOqPf3Lhg78702hlM`), sem Git e sem deployment | Vercel Authentication em `All Deployments`; nenhuma credencial Supabase cadastrada |
 | Vercel Production | `previewDeploymentsDisabled=true`; branch de produção permanece `main` | A futura `feat/clinicas` não gera Preview neste projeto |
 | Variáveis Production | Núcleo Supabase/URL reaplicado a partir das credenciais locais validadas; 25 novas variáveis/flags verificadas no escopo Production | Valores permanecem protegidos e não foram documentados |
-| Domínio de staging | Não configurado porque o projeto Vercel staging ainda não existe | Domínio público de produção não foi alterado |
+| Variáveis Vercel staging | 23 configurações não sensíveis no escopo Production do projeto; identidade `staging`, origem prevista e todas as integrações/feature flags desligadas | Faltam intencionalmente URL, anon key, service role, ref esperada e fingerprint do Supabase staging |
+| Domínio de staging | Associado ao projeto, aguardando CNAME externo `staging` → `fe82ddbba431ebd2.vercel-dns-017.com.` com proxy desativado | Domínio público de produção não foi alterado; não há conteúdo publicado |
+| Capacidade Vercel | Time no plano Hobby sinaliza recursos gratuitos excedidos; Functions Storage mostrava 50,63 GB usados de 10 GB | Nenhum primeiro deployment foi tentado; eventual upgrade ou cobrança depende de aprovação explícita |
 
 ### Hardening implementado
 
@@ -46,11 +50,12 @@ O projeto Vercel staging também não foi criado: o token disponível é restrit
 ### Gates que continuam fechados
 
 1. confirmar no painel autenticado do Supabase se um terceiro projeto está incluído ou aprovar o custo de US$ 10/mês;
-2. fornecer à automação uma credencial Vercel com permissão para criar e configurar projetos no time, ou criar manualmente `evolucao-clinica-staging`;
-3. criar o Supabase staging vazio e cadastrar exclusivamente suas credenciais no projeto Vercel staging;
-4. executar o primeiro deployment, validar banner, logs e negações de integração;
-5. somente então realizar o inventário read-only do banco de produção;
-6. criar `feat/clinicas` apenas após todos esses gates.
+2. criar o Supabase staging vazio e cadastrar exclusivamente suas credenciais no projeto Vercel staging;
+3. publicar o CNAME externo do domínio de homologação;
+4. confirmar capacidade gratuita disponível na Vercel ou aprovar conscientemente qualquer alteração de plano antes do primeiro deployment;
+5. executar o primeiro deployment, validar proteção, banner, logs e negações de integração;
+6. somente então realizar o inventário read-only do banco de produção;
+7. criar `feat/clinicas` apenas após todos esses gates.
 
 ---
 
@@ -388,7 +393,7 @@ Embora Supabase Branching ofereça ambientes separados, ele clona configuração
 
 ## E. Alterações de código necessárias
 
-Estas mudanças são o backlog técnico da Fase 0.5. Não foram implementadas nesta execução porque o ambiente staging ainda não existe e publicar o hardening parcialmente poderia causar indisponibilidade ou uma Preview insegura.
+As mudanças abaixo compunham o backlog técnico original da Fase 0.5. Os itens de hardening, fail-fast, flags, banner e testes já foram implementados e publicados em `main` com as flags de clínicas desligadas. Permanecem pendentes somente os itens que dependem do Supabase staging, de credenciais externas próprias ou do inventário read-only.
 
 | Arquivo previsto | Objetivo |
 |---|---|
@@ -493,19 +498,25 @@ Foram encontradas referências intencionais ao domínio público em `twa-manifes
 
 ## F. Itens executados com segurança
 
-- Confirmado `main` no commit aprovado e sincronizado antes desta documentação.
+- Implementado e publicado em `main` o hardening fail-fast de frontend, backend, API routes e código-fonte compartilhado das Edge Functions.
+- Removidos os fallbacks conhecidos para URL/anon key Supabase, origem pública, segredo de cron e segredo OTP.
+- Adicionadas identidade explícita de ambiente, validação de project ref/service role/origem e flags deny-by-default.
+- Adicionados banner de homologação e testes automatizados de isolamento; build, lint e suíte completa foram aprovados.
+- Confirmado smoke test autenticado do fluxo individual em produção sem banner de staging, com `/api/health` saudável.
+- Desativada a criação de Preview no projeto Vercel público; `main` permanece sua branch de produção.
+- Criado o projeto Vercel `evolucao-clinica-staging` sem Git e sem deployment.
+- Cadastradas 23 configurações não sensíveis no projeto staging, com integrações e Plano Clínica desligados.
+- Protegidos todos os futuros deployments do projeto staging por autenticação da Vercel.
+- Associado o domínio `staging.evolucaoclinica.app.br`, ainda sem DNS válido e sem conteúdo publicado.
 - Auditados código frontend, backend, API routes, Edge Functions, migrations, scripts, Vercel, Android/TWA e exemplos de ambiente.
 - Confirmado que `.env.local` é ignorado pelo Git; nenhum valor foi exibido ou commitado.
 - Confirmado que o `.env` versionado não possui variáveis configuradas.
-- Listados somente nomes, targets e escopo de branch das variáveis Vercel.
-- Confirmados 20 registros compartilhados entre Preview e Production e ausência de escopo de branch nesses registros.
-- Confirmada a existência separada das variáveis Supabase em Preview e Production, sem possibilidade de comparar os valores protegidos.
 - Confirmado que não existe `supabase/config.toml` no repositório.
 - Confirmados hardcodes e fallbacks adicionais além dos dois inicialmente conhecidos.
 - Confirmados jobs/migrations que usam domínio público, Vault e `pg_net`.
 - Confirmados buckets referenciados: `brand`, `notifications`, `support_attachments` e `temp-audio`.
 - Consultada documentação oficial atual da Vercel sobre Preview/Production e variáveis por ambiente e documentação do Supabase sobre ambientes isolados.
-- Nenhuma branch remota, Preview, deployment, migration, Edge Function, webhook ou mensagem foi criada/disparada.
+- Nenhuma branch `feat/clinicas`, Preview, deployment de staging, migration, publicação de Edge Function, webhook ou mensagem foi criada/disparada.
 - Nenhum dado ou schema de produção foi lido ou alterado.
 
 ---
@@ -514,15 +525,15 @@ Foram encontradas referências intencionais ao domínio público em `twa-manifes
 
 | Item | Motivo exato |
 |---|---|
-| Publicar `feat/clinicas` | O projeto atual pode criar Preview automaticamente; há variáveis externas compartilhadas e o isolamento das credenciais Supabase não foi comprovado. |
-| Remover fallbacks agora | Embora os nomes principais existam em Production, os valores não foram validados em uma build controlada; a mudança poderia derrubar a aplicação pública. |
-| Implementar guardas completas | Ainda não existem domínio, Supabase staging, refs/fingerprints e credenciais de teste contra os quais validar as guardas. |
-| Criar projeto Supabase staging | Não há autorização/configuração externa segura nesta execução; não se deve improvisar ou reutilizar produção. |
+| Publicar `feat/clinicas` | O Supabase staging ainda não existe e o primeiro deployment seguro ainda não foi validado. |
+| Criar projeto Supabase staging | A organização já possui dois projetos e o plano financeiro não pôde ser confirmado; um projeto adicional pode custar a partir de US$ 10/mês. |
+| Primeiro deployment Vercel staging | Faltam as credenciais exclusivas do Supabase staging e o time Hobby sinaliza recursos gratuitos excedidos. Nenhuma cobrança ou upgrade foi autorizado. |
+| Ativar domínio de staging | O CNAME externo ainda precisa ser criado no Cloudflare; o domínio está em `Invalid Configuration`. |
 | Aplicar migrations existentes em staging | O histórico contém jobs e origens reais; falta um bootstrap neutralizado e revisado. |
-| Inventariar banco real | A solicitação exige acesso read-only seguro e o schema implantado como fonte de verdade; isso ainda não foi fornecido/configurado. |
+| Inventariar banco real | Deve ocorrer somente depois do primeiro deployment isolado e requer uma conexão read-only que não foi configurada. |
 | Validar Stripe Test | Produtos, preços, endpoints e secrets Test ainda não existem no ambiente staging. |
-| Validar OAuth staging | Domínio, client/provider e redirects staging ainda não estão configurados. |
-| Habilitar mensageria, push, n8n, analytics ou Meta | Não existem guardas deny-by-default e destinos/projetos de teste confirmados. |
+| Validar OAuth staging | DNS, client/provider e redirects staging ainda não estão concluídos. |
+| Habilitar mensageria, push, n8n, analytics ou Meta | As guardas existem, mas não há destinos/projetos de teste confirmados; os switches permanecem `false`. |
 | Iniciar Fase 1 | Expressamente fora do escopo desta execução e bloqueada pelo gate técnico. |
 
 ---
@@ -531,18 +542,19 @@ Foram encontradas referências intencionais ao domínio público em `twa-manifes
 
 Antes de ser seguro criar e publicar `feat/clinicas`, deve ocorrer, nesta ordem:
 
-1. criar o projeto Supabase staging vazio e registrar suas credenciais separadas;
-2. definir o domínio de homologação;
-3. criar o projeto Vercel de homologação protegido **sem deployment inicial**;
-4. configurar o projeto público atual para não gerar Preview de `feat/clinicas`;
-5. cadastrar no projeto staging todas as variáveis de identidade e os switches outbound como `false`;
-6. confirmar via inspeção sanitizada que nenhuma credencial/URL externa real foi compartilhada;
-7. implementar em `main` o hardening fail-fast e as guardas, após validar as variáveis obrigatórias de Production;
-8. executar build/testes de ambiente e smoke test do fluxo individual em produção com as flags desligadas;
-9. criar a branch local `feat/clinicas`, conectar apenas ao Vercel staging e realizar o primeiro deployment com dados sintéticos;
-10. inventariar o banco real com acesso read-only antes de desenhar qualquer migration da Fase 1.
+1. **Pendente:** confirmar o plano/custo e criar o projeto Supabase staging vazio, registrando credenciais exclusivas.
+2. **Pendente:** criar o CNAME externo do domínio de homologação e aguardar validação.
+3. **Concluído:** criar o projeto Vercel de homologação protegido, sem deployment inicial.
+4. **Concluído:** impedir que o projeto público gere Preview da futura `feat/clinicas`.
+5. **Parcial:** identidade e switches outbound estão cadastrados como `false`; faltam somente as credenciais e fingerprints do Supabase staging.
+6. **Concluído até aqui:** nenhuma credencial externa real foi copiada para o projeto staging.
+7. **Concluído:** hardening fail-fast e guardas publicados em `main` com variáveis Production validadas.
+8. **Concluído:** build/testes de ambiente e smoke test do fluxo individual em produção foram aprovados.
+9. **Pendente:** restaurar capacidade gratuita da Vercel ou aprovar mudança de plano e realizar o primeiro deployment do código endurecido no projeto staging com dados sintéticos, sem criar ainda `feat/clinicas`.
+10. **Pendente:** inventariar o banco real com acesso read-only antes de desenhar qualquer migration da Fase 1.
+11. **Pendente:** somente depois do deployment isolado, da regressão de produção e do inventário, criar e publicar `feat/clinicas` sem iniciar a Fase 1.
 
-Até a conclusão dos itens 1 a 7, a decisão operacional permanece:
+Até a conclusão dos itens pendentes e a validação do primeiro deployment, a decisão operacional permanece:
 
 ```text
 feat/clinicas remota = não publicar
