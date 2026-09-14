@@ -1,0 +1,210 @@
+# Migração Vercel para scope dedicado
+
+**Data da execução:** 14/09/2026  
+**Escopo:** somente infraestrutura Vercel  
+**Estado:** bloqueada antes de qualquer transferência  
+**Checkpoint funcional:** `feat/clinicas` em `40bd76a`
+
+## Resumo executivo
+
+A topologia correta foi confirmada como Project Transfer entre teams/scopes:
+
+```text
+SOURCE: studio4xs-projects
+  -> TARGET: evolucao-clinica
+```
+
+O staging e a produção foram identificados, o destino não possui conflito de nomes e os projetos não foram recriados nem alterados. A transferência não pôde ser iniciada porque `VERCEL_ACCESS_TOKEN`, embora consiga listar o projeto de produção, não possui autoridade suficiente para iniciar `POST /projects/{id}/transfer-request` e retorna HTTP 404. A sessão autenticada do Dashboard da origem confirma os projetos, mas o team de destino pertence a outro login e não aparece como destino selecionável.
+
+Nenhuma alteração foi feita no Supabase, DNS, GitHub, código funcional, secrets, integrações ou plano Vercel. A Fase 1B1 continua bloqueada.
+
+## A. Acesso
+
+| Item | Resultado |
+|---|---|
+| Scope origem | `studio4xs-projects` |
+| Team ID origem real | `team_IRE2lAAPj5Ibe0OtvXlLpMBa` |
+| Scope destino | `evolucao-clinica` |
+| Team ID destino real | `team_opJQiM63Vn6P0uOe5Om8e1HD` |
+| Escopos diferentes | **PASS** |
+| Origem contém os projetos | **PASS**, confirmado no Dashboard e na API para produção |
+| Destino identificado | **PASS**, confirmado pelo token de destino e slug |
+| Conflito de nomes no destino | **PASS**, listagem do destino retornou zero projetos |
+| Permissão efetiva de origem para transferir | **FAIL**, o token legado recebeu HTTP 404 ao iniciar o transfer request |
+| Permissão de recebimento no destino | Owner confirmado pelo token de destino; aceite não foi tentado porque não houve código |
+| Método planejado | Project Transfer nativo da Vercel |
+| Método executado | Nenhum: bloqueado antes do início |
+
+O `VERCEL_ACCESS_TOKEN` foi usado como candidato de origem. A API permitiu listar o projeto de produção, mas `GET /v2/user` retornou 404, `GET /v2/teams` retornou 403 e o projeto staging retornou 404. O Dashboard autenticado como `studio4x` confirmou o team de origem e ambos os projetos.
+
+O token de destino autenticou a conta `evolucaoclinicaapp` e resolveu o team `evolucao-clinica` como Owner, no plano Hobby. Nenhum token ou valor de secret foi impresso.
+
+## B. Staging
+
+| Item | Origem / resultado |
+|---|---|
+| Nome | `evolucao-clinica-staging` |
+| Project ID antes | `prj_Hmm2uRREtw4qOqPf3Lhg78702hlM` |
+| Project ID depois | Não aplicável: não transferido |
+| Scope atual | `studio4xs-projects` |
+| Git | `studio4x/evolucao-clinica`, conectado |
+| Production Branch | `feat/clinicas` |
+| Checkpoint | deployment Ready em `40bd76a` |
+| Framework | Vite |
+| Node | 24.x, conforme configuração exibida |
+| Domínio | `staging.evolucaoclinica.app.br`, Valid Configuration |
+| Domínio alternativo | `project-j4206.vercel.app`, Valid Configuration |
+| HTTPS | Dashboard válido; resposta pública HTTP 200 |
+| Deployment Protection | configuração existente no projeto; a resposta pública sem sessão é a página de autenticação Vercel |
+| Environment variables | 28 nomes, somente Production, valores não registrados |
+| Supabase esperado | `hwkdwinfckmjoriqxbjk` |
+| Deployment | Ready em `40bd76a`; deployment controlado já existente antes desta execução |
+| Integrações | nenhuma instalada no Dashboard |
+| Cron Vercel | nenhum job exibido |
+| Web Analytics | não habilitado no overview |
+| Speed Insights | sem upgrade/habilitação adicional observada |
+| Transferido | **não** |
+
+O endpoint público `/api/health` do staging devolveu HTTP 200 com HTML da autenticação da Vercel, e não o JSON da aplicação. Por isso, health efetivo, banner, ref Supabase, Auth/RLS e isolamento pós-transferência não foram declarados como validados.
+
+## C. Produção
+
+| Item | Origem / resultado |
+|---|---|
+| Nome | `evolucao-clinica` |
+| Project ID antes | `prj_Ch3PtwRA03Ah1S8JSUqoCdxH4gCT` |
+| Project ID depois | Não aplicável: não transferido |
+| Scope atual | `studio4xs-projects` / `team_IRE2lAAPj5Ibe0OtvXlLpMBa` |
+| Git | `studio4x/evolucao-clinica`, conectado |
+| Production Branch | `main` |
+| Framework | Vite |
+| Node | 24.x |
+| Região de função | `iad1` |
+| Environment variables | 65 registros; nomes e scopes inventariados, valores não registrados |
+| Deployment atual Ready/Promoted | `dpl_56tNv8NQHhP4g58F2Ra2DasKJfSY` |
+| Commit atual | `d174cec66672354955f0a529aa07152f8e0e7c30` em `main` |
+| Domínios | `evolucaoclinica.app.br`, `www.evolucaoclinica.app.br`, `evolucao-clinica-five.vercel.app` |
+| HTTPS / health | **PASS**; `/api/health` respondeu `{"status":"ok"}` e a home respondeu HTTP 200 |
+| Preview deployments | desabilitados na configuração observada |
+| Speed Insights | habilitado com dados existentes; nenhuma alteração feita |
+| Transferido | **não** |
+
+## Inventário técnico e matriz de transferência
+
+| Configuração | Origem staging | Origem produção | Transferível automaticamente? | Validação pós-transferência |
+|---|---|---|---|---|
+| Project ID/nome | confirmado no Dashboard | confirmado pela API/Dashboard | Sim, preservando ID quando suportado | Não executada |
+| Git repository | `studio4x/evolucao-clinica` | `studio4x/evolucao-clinica` | Sim | Staging e produção confirmados antes |
+| Production Branch | `feat/clinicas` | `main` | Sim | Não executada |
+| Framework/root/build | Vite; root/build padrão | Vite; root/build padrão | Sim | Não executada |
+| Node/function region | Node 24.x; região não alterada | Node 24.x; `iad1` | Sim | Não executada |
+| Environment variables | 28, Production | 65, scopes preservados na origem | Project vars são copiadas; `vercel.json` `env`/`build.env` exigem tratamento separado | Não executada |
+| Domínios e aliases | 2 domínios válidos | 3 domínios/aliases de produção | Sim, por delegação nativa | Não executada |
+| Deployment Protection | proteção existente; autenticação observada no acesso público | inventário pós-transferência não iniciado | Configuração do projeto | Não executada |
+| Cron Jobs Vercel | nenhum exibido | não transferido/inventariado como execução | Sim quando configurado | Não executada |
+| Web Analytics | não habilitado | não alterado | Sim quando configurado | Não executada |
+| Speed Insights | não habilitado adicionalmente | habilitado com dados | Sim, conforme Project Transfer | Não executada |
+| Integrações Marketplace | nenhuma instalada no staging | nenhuma reconstrução executada | Não; requer reconexão/transferência própria | Não executada |
+| Edge Config/Global Config | não identificado | não identificado | Não; mecanismo separado | Não executada |
+| Vercel Blob | não identificado | não identificado | Não; mecanismo separado | Não executada |
+| Monitoring/logs | dados não migrados | dados não migrados | Não | Não executada |
+| Custom Log Drains | não identificado | não identificado | Não | Não executada |
+| Recursos team-level/shared vars | não confirmados como dependência | não confirmados como dependência | Não necessariamente | Bloqueio mantido antes da transferência |
+
+## D. Recursos não transferidos
+
+Como nenhum Project Transfer foi concluído, nenhum recurso foi movido. Para um futuro transfer nativo, a documentação oficial da Vercel indica que os itens abaixo não acompanham automaticamente o projeto e devem ser tratados separadamente, se existirem:
+
+- integrações Marketplace;
+- Edge Configs/Global Configs;
+- dados de uso;
+- seção Active Branches;
+- variáveis definidas em `env` ou `build.env` do `vercel.json`;
+- dados de Monitoring;
+- logs de runtime e build;
+- Custom Log Drains;
+- Vercel Blob;
+- Secure Compute, Static IPs, Sandboxes e Snapshots.
+
+No staging, o Dashboard confirmou **nenhuma integração instalada** e não exibiu cron jobs. Não foi feita reconstrução nem criação paga.
+
+## E. Integrações
+
+| Projeto | Antes | Depois | Ação |
+|---|---|---|---|
+| Staging | nenhuma integração instalada | inalterado | nenhuma |
+| Produção | transferência não iniciada; inventário de Marketplace não concluído | inalterado | nenhuma |
+| Supabase | associação permanece fora do escopo Vercel | inalterado | nenhuma |
+
+## F. DNS
+
+Não houve alteração de DNS, Cloudflare, aliases ou registros externos. Os domínios permaneceram nos projetos de origem.
+
+## G. Billing
+
+Nenhum upgrade, add-on, método de pagamento, feature paga ou cobrança foi solicitado. Origem e destino foram observados no plano Hobby. O team de origem exibe uso excedido de Functions Storage no Dashboard; isso não foi alterado nem usado como motivo para upgrade.
+
+## H. Segurança
+
+```text
+secrets expostos = não
+cross-environment = não
+Supabase staging alterado = não
+Supabase produção alterado = não
+dados reais utilizados = não
+```
+
+Não foram feitas chamadas de escrita ao Supabase. O conector MCP Supabase estava indisponível por erro de permissão `-32600`; isso impediu uma nova consulta remota, mas não causou alteração. Não foram criados usuários ou dados sintéticos nesta execução.
+
+## I. Git
+
+```text
+produção = main
+staging = feat/clinicas
+```
+
+O HEAD local permaneceu em `feat/clinicas` no checkpoint `40bd76a`, alinhado a `origin/feat/clinicas`. Não houve merge, reset ou alteração funcional.
+
+O deployment de produção observado na origem continua em `main`, commit `d174cec66672354955f0a529aa07152f8e0e7c30`. O deployment de staging observado no Dashboard corresponde ao checkpoint `40bd76a`.
+
+## J. Testes
+
+| Teste | Staging | Produção | Resultado |
+|---|---|---|---|
+| Health | HTTP 200, mas página de autenticação Vercel; JSON da app não comprovado | `{"status":"ok"}` | Staging não comprovado; produção PASS |
+| Domínio/HTTPS | Valid Configuration no Dashboard; HTTP 200 | domínios verificados; HTTP 200 | PASS pré-migração |
+| Build | deployment Ready em `40bd76a`; build local PASS | deployment Ready/Promoted | PASS pré-migração |
+| Git deployment | `studio4x/evolucao-clinica`, `feat/clinicas`, Ready | `studio4x/evolucao-clinica`, `main`, Ready | PASS pré-migração |
+| Supabase ref | esperado `hwkdwinfckmjoriqxbjk`; pós-transferência não aplicável | esperado `kvxboovgrrhhttaqinld`; pós-transferência não aplicável | sem regressão observada; pós-check não executado |
+| Environment isolation | `npm run test:environment-isolation` PASS | não aplicável ao transfer | PASS local |
+| Auth | baseline anterior documenta PASS; não repetido | não executado | pré-migração |
+| RLS staging | baseline anterior documenta PASS; não repetido | não executado | pré-migração |
+| Integrações OFF | nomes/flags deny-by-default presentes; valores não expostos | não alterado | staging pré-migração |
+| Feature flag Clínica | baseline anterior documenta OFF | não alterado | staging pré-migração |
+| `npm test` | PASS | PASS | PASS |
+| `npm run lint` | PASS | PASS | PASS |
+| `npm run build` | PASS, com aviso preexistente de chunks grandes | PASS local | PASS |
+| `git diff --check` | PASS | PASS | PASS |
+
+Os testes de código foram executados no checkpoint local. Nenhum teste pós-transferência foi declarado porque nenhuma transferência ocorreu.
+
+## K. Pendências concretas
+
+1. Disponibilizar um token Owner real do scope `studio4xs-projects` com permissão de Project Transfer, ou conceder ao login Owner da origem acesso ao team destino para que ele apareça no fluxo oficial.
+2. Repetir o gate de permissões pela API e criar o transfer request nativo do staging.
+3. Aceitar o código do transfer request com o token Owner do team `evolucao-clinica`, caso a Vercel mantenha o fluxo request/accept.
+4. Validar integralmente o staging após a transferência e somente então decidir sobre a produção.
+
+Não há pendência de DNS, código, Supabase, migrations, baseline, Fase 1B1 ou upgrade de plano.
+
+## L. Estado final
+
+**MIGRAÇÃO VERCEL BLOQUEADA**
+
+A execução termina aqui. A Fase 1B1 não foi retomada.
+
+## Referências
+
+- [Vercel — Transferring a project](https://vercel.com/docs/projects/transferring-projects)
+- [Vercel REST API — Create project transfer request](https://vercel.com/docs/rest-api/projects/create-project-transfer-request)
+- [Vercel REST API — Accept project transfer request](https://vercel.com/docs/rest-api/projects/accept-project-transfer-request)
