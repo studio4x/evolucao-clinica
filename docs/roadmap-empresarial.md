@@ -7,6 +7,56 @@
 
 ---
 
+## 0. Decisões da Fase 0
+
+Esta seção prevalece sobre propostas ou perguntas exploratórias das seções seguintes. Ela separa decisões já fechadas para a arquitetura de valores comerciais e jurídicos que ainda precisam de confirmação.
+
+### 0.1 Decisões fechadas
+
+| Tema | Definição para o primeiro ciclo |
+|---|---|
+| Nomenclatura | Na interface serão usados **Clínica**, **Equipe**, **Profissional** e **Licença**. No banco e no código, o limite de isolamento será chamado `organization`. |
+| Autorização | Não será criado um papel global `empresarial`. Os papéis globais atuais permanecem compatíveis e as permissões da clínica serão derivadas de `organization_memberships`. |
+| Papéis do MVP | Apenas `owner`, `manager` e `professional`. `clinical_supervisor` e `assistant` ficam fora do esquema inicial até existir especificação própria de acesso. |
+| Proprietário | Cada clínica terá um único `owner` principal no MVP. A troca de proprietário será transacional, confirmada e auditada; o último owner nunca poderá ser simplesmente removido. |
+| Consumo de licença | Somente a capacidade clínica ativa consome licença. `owner` e `manager` não consomem licença administrativa, mas consomem uma licença quando também atuarem como profissional clínico. Convite clínico pendente reserva uma licença. |
+| Múltiplas clínicas | O modelo permitirá que a mesma conta participe de mais de uma clínica. Toda ação terá um contexto ativo explícito; não haverá organização inferida silenciosamente no frontend. |
+| Paciente entre clínicas | Cada clínica terá seu próprio cadastro independente. Não haverá consolidação automática, busca global por CPF nem compartilhamento interclínicas no MVP. |
+| Paciente dentro da clínica | O paciente existirá uma vez no diretório da clínica, terá um profissional primário obrigatório e poderá ter profissionais secundários. |
+| Conteúdo clínico | Compartilhar o cadastro do paciente não compartilha evoluções, transcrições, relatórios, notas privadas ou documentos. Apenas o autor poderá ler o conteúdo clínico no MVP. |
+| Gestão | `owner` e `manager` verão dados cadastrais necessários e metadados operacionais, nunca o texto clínico. Não haverá exceção de supervisão no MVP. |
+| Reatribuição | A clínica poderá reatribuir pacientes em férias, afastamentos e desligamentos. Autoria, assinatura e histórico anteriores permanecem imutáveis e não são transferidos ao novo profissional. |
+| Cobrança do MVP | Stripe será o único fluxo automatizado. A assinatura terá item base e item por licença; a homologação usará Stripe Test Mode. Faturamento manual empresarial fica para uma fase posterior. |
+| Compatibilidade | Usuários individuais continuam no fluxo atual. Recursos empresariais serão aditivos e protegidos por feature flag por organização, desativada por padrão em produção. |
+| Cancelamento | Cancelar ou suspender uma assinatura nunca apaga automaticamente prontuários. Acesso, exportação, retenção e exclusão serão estados separados. |
+
+### 0.2 Definições comerciais e jurídicas pendentes
+
+Esses valores não devem ser fixados por suposição no código. A recomendação inicial serve apenas como ponto de partida para aprovação.
+
+| Definição pendente | Recomendação inicial | Onde bloqueia |
+|---|---|---|
+| Nome comercial do plano | **Plano Clínica** | Página comercial e checkout |
+| Quantidade mínima | **3 licenças clínicas** | Catálogo, checkout e validação de downgrade |
+| Preço base e preço por licença | Definir valores mensais e anuais no catálogo, nunca em constantes espalhadas | Cobrança e comunicação comercial |
+| Periodicidade | Mensal e anual; eventual desconto anual deve ser explícito | Produtos e preços do Stripe |
+| Tolerância por inadimplência | 7 dias antes da suspensão operacional, com avisos; depois, modo restrito sem exclusão de dados | Estado da assinatura e UX de bloqueio |
+| Retenção após cancelamento | Arquivar sem exclusão automática até política jurídica por categoria profissional | Exportação, exclusão e contrato |
+| Consentimento e privacidade | Registrar versão, finalidade, ator, data e origem; texto final sujeito a revisão jurídica/LGPD | Piloto com dados reais e lançamento público |
+
+### 0.3 Gates de início e liberação
+
+- **Gate técnico:** nenhuma migration empresarial será aplicada enquanto o ambiente de homologação não estiver isolado do Supabase de produção e o esquema real atual não tiver sido inventariado.
+- **Gate de cobrança:** checkout e alteração de licenças só começam depois da aprovação de preço, mínimo, periodicidade e tolerância.
+- **Gate clínico:** nenhum dado real será usado no piloto antes da aprovação dos textos de privacidade, consentimento e retenção.
+- **Gate de produção:** o merge poderá ocorrer com a feature flag desligada, mas sua ativação exige testes de isolamento entre duas clínicas, regressão completa do fluxo individual e plano de rollback validado.
+
+### 0.4 Limite da auditoria atual
+
+O repositório confirma o uso extensivo de `professional_id` nas telas e serviços de pacientes, evoluções, relatórios, backups e cobrança. A conexão disponível nesta revisão, porém, não possui permissão de leitura no projeto Supabase da Evolução Clínica. Por isso, o esquema e as políticas RLS do banco em produção ainda não são considerados inventariados; essa verificação será a primeira atividade do ambiente isolado.
+
+---
+
 ## 1. Visão geral
 
 O produto deverá ganhar um contexto empresarial para clínicas que concentre:
@@ -80,11 +130,11 @@ A evolução empresarial deve, portanto, adicionar uma camada de organização e
 
 É o espaço empresarial contratado. Possui identidade própria, dados cadastrais, contrato, quantidade de licenças, equipe, pacientes e regras de acesso.
 
-Uma organização não deve ser confundida com uma conta de usuário. Ela pode ter vários usuários e um usuário pode, no futuro, participar de mais de uma organização, desde que o contexto ativo seja explícito.
+Uma organização não deve ser confundida com uma conta de usuário. Ela pode ter vários usuários e um usuário pode participar de mais de uma organização, desde que o contexto ativo seja explícito.
 
-### 4.2 Regra de usuário `empresarial`
+### 4.2 Gestão empresarial sem papel global
 
-O papel global `empresarial` será reservado ao usuário responsável por administrar a clínica dentro da plataforma. Ele poderá:
+A administração da clínica será concedida pela associação ativa do usuário à organização, e não por um novo valor em `professionals.role`. Um `owner` ou `manager` poderá:
 
 - configurar a organização;
 - visualizar o contrato e a ocupação de licenças;
@@ -93,7 +143,7 @@ O papel global `empresarial` será reservado ao usuário responsável por admini
 - consultar indicadores operacionais;
 - abrir solicitações de suporte em nome da clínica.
 
-O papel `empresarial` não deve ser aplicado automaticamente a todos os profissionais da clínica. Os profissionais continuam sendo usuários clínicos, normalmente com papel `therapist`, e recebem permissões empresariais por meio da associação à organização.
+Os profissionais continuam sendo usuários clínicos, normalmente com papel global `therapist`, e recebem permissões empresariais somente por meio da associação à organização. Essa separação evita que uma permissão de uma clínica seja reutilizada indevidamente em outra e mantém o fluxo individual atual compatível.
 
 ### 4.3 Membro da organização
 
@@ -101,22 +151,19 @@ O papel `empresarial` não deve ser aplicado automaticamente a todos os profissi
 
 - `owner`: responsável contratual e administrativo principal;
 - `manager`: gestor empresarial autorizado pela clínica;
-- `clinical_supervisor`: papel futuro, com acesso clínico ampliado e consentimento explícito;
 - `professional`: profissional que consome uma licença e atende pacientes;
-- `assistant`: função futura, sem acesso ao conteúdo clínico por padrão.
 
-No primeiro MVP, `owner`, `manager` e `professional` são suficientes. `clinical_supervisor` e `assistant` podem ser modelados desde o início, mas liberados somente quando as políticas de acesso estiverem validadas.
+No primeiro MVP, somente `owner`, `manager` e `professional` serão modelados. `clinical_supervisor` e `assistant` serão adicionados futuramente por migration específica, depois que suas permissões e implicações clínicas estiverem aprovadas.
 
 ### 4.4 Licença
 
-Licença é a capacidade contratada para um usuário profissional. A conta empresarial pode existir sem consumir uma licença profissional, conforme a regra comercial definida no contrato. A política recomendada é:
+Licença é a capacidade contratada para um usuário profissional. A conta empresarial pode existir sem consumir uma licença profissional. A política definida para o MVP é:
 
-- `owner` e `manager`: não consomem licença clínica;
-- `professional`: consome uma licença;
-- `assistant`: não consome licença clínica no MVP, mas pode ter limite próprio no futuro;
+- `owner` e `manager`: não consomem licença quando exercem apenas função administrativa;
+- qualquer membro com capacidade clínica ativa, inclusive `owner` ou `manager`: consome uma licença;
 - convite pendente: reserva uma licença para impedir excesso de contratação durante o período de convite.
 
-Essa regra deve ser configurável no produto, mas nunca calculada apenas pela interface.
+Essa regra deve ser garantida transacionalmente no banco e nunca calculada apenas pela interface.
 
 ### 4.5 Paciente da clínica
 
@@ -180,8 +227,9 @@ Campos principais:
 - `organization_id`;
 - `professional_id` referenciando o perfil atual;
 - `membership_role`;
-- `status`: `invited`, `active`, `suspended`, `removed`;
-- `seat_required`;
+- `status`: `active`, `suspended`, `removed`;
+- `clinical_access_enabled`, indicando se a pessoa também pode atender dentro da clínica;
+- `seat_required`, derivado da capacidade clínica e não editável livremente pelo frontend;
 - `invited_by`;
 - `joined_at`, `suspended_at`, `removed_at`;
 - `created_at`, `updated_at`.
@@ -191,6 +239,8 @@ Restrições:
 - uma única associação ativa do mesmo usuário para a mesma organização;
 - pelo menos um `owner` ativo por organização;
 - não permitir remoção do último `owner` sem transferência de propriedade;
+- permitir que `owner` ou `manager` também tenha capacidade clínica sem criar uma segunda conta;
+- exigir licença ativa para qualquer associação com `clinical_access_enabled = true`;
 - o estado da associação é a fonte de verdade para acesso empresarial.
 
 ### 5.3 `organization_invitations`
@@ -203,6 +253,7 @@ Campos principais:
 - `organization_id`;
 - `email` normalizado;
 - `membership_role`;
+- `clinical_access_enabled`;
 - `token_hash`, nunca o token puro;
 - `status`: `pending`, `accepted`, `expired`, `revoked`;
 - `expires_at`;
@@ -235,6 +286,8 @@ Campos principais:
 - `created_at`, `updated_at`.
 
 O snapshot de preço é necessário para preservar o contrato histórico quando o preço público do plano mudar.
+
+`contracted_seats` representa o limite confirmado pela cobrança. `reserved_seats` e `active_seats` devem ser calculados das reservas e associações, ou mantidos somente por funções transacionais protegidas; o navegador não poderá atualizar contadores diretamente. A reserva ou ativação de licença deverá bloquear concorrência no banco para impedir dois convites de ocuparem a última vaga simultaneamente.
 
 ### 5.5 `organization_patients`
 
@@ -271,6 +324,13 @@ Campos principais:
 - `assigned_at`, `revoked_at`;
 - `created_at`, `updated_at`.
 
+Restrições:
+
+- no máximo uma atribuição ativa do mesmo profissional ao mesmo paciente da clínica;
+- exatamente um vínculo `primary` ativo para cada paciente ativo da clínica;
+- o profissional atribuído deve possuir associação clínica ativa e licença válida na mesma organização;
+- revogação de atribuição não apaga evoluções nem altera o autor dos registros existentes.
+
 No MVP, `can_create_evolution` pode ser verdadeiro para profissionais ativos e `can_view_shared_summary` falso até existir uma especificação de resumos compartilhados. O modelo deve evitar presumir que qualquer resumo é seguro para todos.
 
 ### 5.7 Evoluções e artefatos clínicos
@@ -300,6 +360,34 @@ Cada entidade deverá declarar se é:
 2. compartilhada no cadastro da clínica;
 3. visível somente para gestores;
 4. visível apenas com permissão clínica especial.
+
+### 5.8 `organization_audit_logs`
+
+Registro imutável das ações administrativas e excepcionais da clínica.
+
+Campos principais:
+
+- `id`, `organization_id` e `actor_professional_id`;
+- `action`, `target_type` e `target_id`;
+- `result` e metadados estritamente operacionais;
+- `request_id`, `ip_hash` quando necessário e `created_at`;
+- nunca armazenar texto clínico, token, segredo ou payload integral de integração.
+
+O cliente poderá consultar apenas eventos autorizados. A inclusão será feita por funções ou backend confiável, sem permissão de `UPDATE` ou `DELETE` para membros da clínica.
+
+### 5.9 `patient_sharing_records`
+
+Registro versionado da base e da comunicação de privacidade usada para o compartilhamento interno do cadastro do paciente.
+
+Campos principais:
+
+- `organization_patient_id`;
+- `legal_basis` e `purpose` aprovados para o fluxo;
+- `notice_version` e, quando aplicável, `consent_status`;
+- ator que registrou, origem, `recorded_at`, `revoked_at` e justificativa operacional;
+- referência ao documento aplicável, sem copiar conteúdo clínico para o registro.
+
+A base legal e a redação final não serão presumidas pela equipe técnica. O modelo apenas garante rastreabilidade para a decisão jurídica aprovada.
 
 ---
 
@@ -362,7 +450,7 @@ Nenhuma tela deve liberar licenças apenas porque o pagamento foi iniciado no na
 1. O comprador escolhe o plano empresarial e a quantidade de licenças.
 2. O checkout coleta dados da organização e do responsável.
 3. Após confirmação, cria-se a organização e a associação `owner`.
-4. O usuário responsável recebe o papel global `empresarial`.
+4. A autorização empresarial passa a ser derivada dessa associação, sem alterar o papel global do usuário.
 5. A assinatura e os assentos são gravados com status confirmado.
 6. O usuário é direcionado ao onboarding empresarial.
 7. A aplicação mostra um checklist: dados da clínica, equipe, licenças e pacientes.
@@ -420,7 +508,7 @@ Nenhuma tela deve liberar licenças apenas porque o pagamento foi iniciado no na
 
 ### Matriz inicial
 
-| Ação | Empresarial | Profissional atribuído | Profissional não atribuído | Admin da plataforma |
+| Ação | Owner/Manager | Profissional atribuído | Profissional não atribuído | Admin da plataforma |
 |---|---:|---:|---:|---:|
 | Gerenciar dados da clínica | Sim | Não | Não | Suporte auditado |
 | Convidar profissionais | Sim | Não | Não | Sim |
@@ -433,7 +521,7 @@ Nenhuma tela deve liberar licenças apenas porque o pagamento foi iniciado no na
 | Remover paciente da clínica | Sim, com confirmação | Não por padrão | Não | Sim |
 | Ver auditoria empresarial | Sim, sem conteúdo clínico | Não | Não | Sim |
 
-O papel `empresarial` deve administrar a operação, não receber acesso irrestrito ao prontuário clínico. Qualquer exceção de leitura clínica precisa ser uma permissão separada, com finalidade, consentimento e auditoria.
+O papel organizacional de gestão deve administrar a operação, não receber acesso irrestrito ao prontuário clínico. Qualquer exceção futura de leitura clínica precisará ser uma permissão separada, com finalidade, consentimento e auditoria.
 
 ### RLS e backend
 
@@ -451,9 +539,11 @@ Regras obrigatórias:
 - nunca confiar no `organization_id` enviado pelo navegador;
 - derivar o usuário de `auth.uid()`;
 - verificar associação ativa em todas as consultas sensíveis;
+- não usar `user_metadata` para autorização e não depender de um único papel de clínica gravado no JWT, pois associações podem mudar e um usuário pode participar de várias organizações;
 - separar leitura do cadastro do paciente da leitura da evolução;
 - impedir que uma política ampla de organização conceda leitura das evoluções;
 - usar RPCs `SECURITY DEFINER` somente com `search_path` controlado e validação de permissão;
+- conceder acesso às tabelas novas por grants mínimos explícitos, além de habilitar RLS;
 - registrar alterações de membros, licenças, atribuições e exportações.
 
 ---
@@ -520,23 +610,71 @@ O produto deve prever:
 
 ---
 
+## 10.1 Estratégia de implementação isolada
+
+### Topologia dos ambientes
+
+| Camada | Produção atual | Homologação de clínicas |
+|---|---|---|
+| Git | `main` | branch longa `feat/clinicas` e branches curtas derivadas dela |
+| Vercel | projeto e domínio público atuais | projeto Vercel separado, ligado ao mesmo repositório e com `feat/clinicas` como branch de produção da homologação |
+| Supabase | projeto atual, sem alterações durante o desenvolvimento | projeto Supabase de staging separado, sem dados reais e sem reutilização de credenciais de produção |
+| Stripe | Live Mode atual | Test Mode com produtos, preços e webhook próprios |
+| Mensageria | provedores e destinatários reais | envio bloqueado por padrão ou redirecionado para destinatários de teste autorizados |
+| Analytics | propriedade de produção | desabilitado ou marcado com ambiente de homologação, sem misturar conversões |
+| Android/TWA | continua apontando ao domínio público | validação inicial pelo navegador; nenhum novo `.aab` por mudanças apenas web/backend |
+
+### Guardas obrigatórias antes de publicar a primeira Preview
+
+1. A aplicação deve falhar de forma explícita quando `VITE_SUPABASE_URL` ou a chave pública esperada não estiverem configuradas; uma Preview nunca poderá usar valores de produção como fallback.
+2. O backend deve recusar inicialização em homologação se detectar URL, service role, Stripe Live Mode ou origem pública de produção.
+3. Variáveis da Vercel devem ser separadas por ambiente e revisadas por lista de nomes, sem registrar valores secretos neste documento ou nos logs.
+4. URLs de redirecionamento do Supabase Auth e dos provedores OAuth devem aceitar apenas os domínios de homologação definidos.
+5. A Preview deve exigir proteção de acesso e exibir um banner persistente de **Ambiente de homologação**.
+6. E-mails, WhatsApp, n8n, webhooks, cron e push devem começar desativados; cada integração será liberada isoladamente com destinos de teste.
+7. Serão usados somente usuários, clínicas, pacientes e documentos sintéticos.
+8. A branch Git de clínicas somente será conectada ao projeto Vercel de homologação depois que as variáveis isoladas estiverem cadastradas; um deployment automático, sozinho, não constitui isolamento de banco.
+
+### Estratégia de migrations e compatibilidade
+
+- migrations iniciais serão aditivas: novas tabelas, índices, funções e colunas anuláveis;
+- nenhuma coluna, constraint ou política usada pelo fluxo individual será removida ou reinterpretada no primeiro ciclo;
+- tabelas expostas pela Data API terão grants mínimos explícitos e RLS habilitada; RLS e grants serão tratados como camadas independentes;
+- políticas usarão associação ativa, contexto de organização validado no banco e `(select auth.uid())`, com índices nas colunas usadas por RLS e chaves estrangeiras;
+- funções privilegiadas ficarão fora do schema exposto quando possível, com `search_path` fixo e `EXECUTE` revogado de papéis que não precisem delas;
+- views expostas usarão `security_invoker = true` quando aplicável;
+- cada migration terá verificação de aplicação, teste de repetição quando pertinente e caminho de correção para frente; rollback não dependerá de apagar dados clínicos;
+- o fluxo individual será exercitado em toda fase, não apenas antes do lançamento.
+
+### Promoção e rollback
+
+1. Implementar e testar em `feat/clinicas` com banco isolado.
+2. Abrir Pull Request para `main` somente com build, testes, revisão de RLS e checklist de integrações aprovados.
+3. Aplicar primeiro migrations aditivas compatíveis, mantendo a feature flag desligada.
+4. Publicar o código compatível e executar smoke tests do fluxo individual.
+5. Ativar a funcionalidade apenas para uma organização piloto.
+6. Expandir gradualmente depois de observar erros, auditoria, cobrança e negações de acesso.
+7. Em incidente, desligar a feature flag e reverter a aplicação para um deployment conhecido; dados já persistidos permanecem preservados e eventuais correções de banco são feitas por nova migration.
+
+---
+
 ## 11. Plano de implementação futuro
 
-### Fase 0 — Decisões de produto e contrato
+### Fase 0 — Isolamento, inventário e decisões finais
 
-- confirmar nomenclatura `empresarial`, `clínica`, `profissional` e `licença`;
-- decidir se owner/manager consomem licença;
-- definir preços, mínimo de licenças, periodicidade e tolerância;
-- definir se o gestor poderá ver apenas indicadores ou também conteúdo clínico;
-- aprovar a política de paciente único por clínica;
-- aprovar textos de consentimento e privacidade.
+- remover qualquer fallback que permita a uma build de homologação conectar-se silenciosamente ao Supabase de produção;
+- configurar branch de desenvolvimento, projeto Vercel de homologação protegido e Supabase isolado;
+- inventariar o esquema real, constraints, funções, triggers, grants, RLS, Storage, Edge Functions e jobs;
+- registrar preços, mínimo de licenças, periodicidade e tolerância aprovados;
+- aprovar textos de consentimento, privacidade e retenção;
+- preparar dados sintéticos e matriz automatizada de testes de autorização.
 
-**Gate:** nenhuma migration antes dessas decisões.
+**Gate:** observar os gates técnico, comercial, clínico e de produção definidos na seção 0.3.
 
 ### Fase 1 — Fundação de organização e identidade
 
 - criar `organizations`, `organization_memberships` e `organization_invitations`;
-- ampliar o modelo de papéis com `empresarial` sem quebrar `admin` e `therapist`;
+- manter `admin` e `therapist` e derivar papéis empresariais das associações à organização;
 - criar funções de autorização e RLS;
 - construir onboarding mínimo da clínica;
 - validar convite, aceite, suspensão e transferência de owner.
@@ -572,7 +710,7 @@ O produto deve prever:
 - implementar auditoria;
 - implementar gestão de pacientes e reatribuição;
 - adicionar indicadores operacionais;
-- preparar papéis futuros de supervisor e assistente;
+- documentar, sem implementar, a futura extensão para supervisor e assistente;
 - documentar suporte e recuperação de conta.
 
 ### Fase 6 — Homologação e lançamento controlado
@@ -622,22 +760,25 @@ O produto deve prever:
 
 ---
 
-## 13. Perguntas que precisam de decisão antes da implementação
+## 13. Registro das decisões que antes estavam em aberto
 
-1. A licença inclui apenas profissionais clínicos ou também gestores?
-2. O número mínimo de licenças será um ou mais?
-3. O preço por licença é igual para todas as funções?
-4. O gestor empresarial poderá ver evoluções em situações de supervisão?
-5. Se puder, quais campos e qual processo de autorização serão exigidos?
-6. Uma clínica poderá ter mais de um owner?
-7. Um profissional poderá participar de várias clínicas usando a mesma conta?
-8. O paciente poderá pertencer a mais de uma clínica no futuro?
-9. Como será registrado o consentimento do paciente para compartilhamento interno?
-10. O paciente terá um profissional primário obrigatório?
-11. A clínica poderá reatribuir pacientes durante férias ou desligamentos?
-12. Qual será a política de retenção após cancelamento da assinatura?
-13. Haverá período de tolerância antes de bloquear acesso clínico?
-14. A cobrança será feita apenas pelo Stripe ou haverá faturamento manual empresarial?
+| Questão original | Decisão |
+|---|---|
+| Quem consome licença? | Apenas capacidade clínica ativa; gestor consome somente se também atuar como profissional. |
+| Existe mínimo de licenças? | Sim. Recomendação de 3, aguardando aprovação comercial. |
+| O preço muda por função? | Não no MVP, pois existe apenas uma categoria clínica que consome licença. |
+| Gestor vê evoluções? | Não no MVP, nem em supervisão. |
+| Quantos owners? | Um owner principal; transferência auditada. |
+| Uma conta participa de várias clínicas? | Sim, com contexto ativo explícito. |
+| O paciente pode aparecer em outra clínica? | Apenas como cadastro independente; sem vínculo ou consolidação entre organizações. |
+| Como registrar consentimento? | Registro versionado de finalidade, ator, data e origem; redação jurídica ainda pendente. |
+| Profissional primário é obrigatório? | Sim para paciente ativo da clínica. |
+| Pode haver reatribuição? | Sim, sem transferir autoria ou conteúdo histórico. |
+| O que ocorre após cancelamento? | Arquivamento sem exclusão automática; prazo final depende da política jurídica. |
+| Existe tolerância de pagamento? | Recomendação de 7 dias, aguardando aprovação comercial e operacional. |
+| Qual provedor de cobrança? | Stripe no MVP; faturamento manual fica fora do primeiro ciclo. |
+
+As únicas confirmações ainda necessárias estão concentradas na seção 0.2. Nenhuma decisão pendente autoriza enfraquecer RLS, compartilhar conteúdo clínico ou reutilizar o ambiente de produção na homologação.
 
 ---
 
