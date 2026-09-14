@@ -40,6 +40,7 @@ import type {
 import { mergeNotificationSettings } from "../src/utils/notificationSettings.js";
 
 const baseConfig = {
+  sendEnabled: true,
   accessToken: "test-token",
   phoneNumberId: "123456789",
   graphApiVersion: "v25.0",

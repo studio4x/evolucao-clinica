@@ -1,3 +1,5 @@
+import { assertPublicEffectEnabled } from '../config/publicFlags';
+
 export interface GoogleCalendarEvent {
   id: string;
   summary?: string;
@@ -18,6 +20,7 @@ export async function listGoogleCalendarEvents(
   timeMin: string,
   timeMax: string
 ): Promise<GoogleCalendarEvent[]> {
+  assertPublicEffectEnabled('google');
   const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`;
   
   const response = await fetch(url, {

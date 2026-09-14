@@ -10,6 +10,9 @@ import {
 const userId = "550e8400-e29b-41d4-a716-446655440000";
 const transactionId = "GPA.3301-4935-4297-12532";
 const occurredAt = "2026-08-18T18:29:00.000Z";
+(globalThis as unknown as { Deno: { env: { get(name: string): string | undefined } } }).Deno = {
+  env: { get: (name) => name === "META_DELIVERY_ENABLED" ? "true" : undefined },
+};
 const payload = await buildMetaPurchasePayload({ userId, transactionId, value: 39, currency: "BRL", occurredAt });
 assert.ok(payload, "compra confirmada deve formar o evento da Meta");
 assert.equal(validateMetaPurchasePayload(payload), null);
@@ -54,7 +57,12 @@ const sentAdmin = {
   },
 };
 
-(globalThis as unknown as { Deno: { env: { get(name: string): string | undefined } } }).Deno = { env: { get: (name) => name === "META_CAPI_TOKEN" ? "test-secret-token" : undefined } };
+(globalThis as unknown as { Deno: { env: { get(name: string): string | undefined } } }).Deno = {
+  env: { get: (name) => {
+    if (name === "META_DELIVERY_ENABLED") return "true";
+    return name === "META_CAPI_TOKEN" ? "test-secret-token" : undefined;
+  } },
+};
 const originalFetch = globalThis.fetch;
 let requestBody: Record<string, unknown> | null = null;
 globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {

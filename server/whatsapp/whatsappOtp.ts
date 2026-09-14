@@ -52,7 +52,7 @@ type WhatsAppOtpDependencies = {
 
 export function getWhatsAppOtpConfigFromEnv(env: NodeJS.ProcessEnv = process.env): WhatsAppOtpConfig {
   return {
-    secret: String(env.WHATSAPP_OTP_SECRET || env.WHATSAPP_APP_SECRET || env.WHATSAPP_ACCESS_TOKEN || "").trim(),
+    secret: String(env.WHATSAPP_OTP_SECRET || "").trim(),
     templateName: String(env.WHATSAPP_AUTH_TEMPLATE || "ativacao_whatsapp_profissional").trim(),
     languageCode: String(env.WHATSAPP_AUTH_TEMPLATE_LANGUAGE || "pt_BR").trim(),
   };

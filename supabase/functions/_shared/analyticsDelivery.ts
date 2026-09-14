@@ -46,6 +46,7 @@ export function validateMeasurementPayload(payload: any): string | null {
 }
 
 export async function enqueueAndDeliverAnalyticsEvent(admin: any, input: { eventKey: string; userId: string; eventName: AnalyticsEventName; provider?: AnalyticsPaymentProvider; params: Record<string, AnalyticsParameter>; attribution: Attribution; occurredAt: string }) {
+  if (String(Deno.env.get("ANALYTICS_SEND_ENABLED") || "").toLowerCase() !== "true") return "disabled_by_environment";
   const { data: consent } = await admin.from("analytics_consents").select("analytics_granted").eq("user_id", input.userId).maybeSingle();
   if (!consent?.analytics_granted) return "consent_denied";
   const payload = { params: input.params, attribution: input.attribution, occurredAt: input.occurredAt };
@@ -72,6 +73,7 @@ export async function enqueueAndDeliverAnalyticsEvent(admin: any, input: { event
 }
 
 export async function deliverAnalyticsRow(admin: any, row: any) {
+  if (String(Deno.env.get("ANALYTICS_SEND_ENABLED") || "").toLowerCase() !== "true") return "disabled_by_environment";
   const stored = row.payload || {};
   const eventPayload = buildMeasurementPayload({ eventName: row.event_name, userId: row.user_id, params: stored.params || {}, attribution: stored.attribution || {}, occurredAt: stored.occurredAt });
   const permanent = (message: string) => admin.from("analytics_event_deliveries").update({ status: "failed", next_attempt_at: null, locked_at: null, last_error: message, updated_at: new Date().toISOString() }).eq("id", row.id);

@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { loadServerEnvironment } from '../server/config/environment.js';
 
 const DEFAULT_META_MARKETING_UNIT_COST_BRL = 0.3217;
 
@@ -116,6 +117,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Pragma', 'no-cache');
   res.setHeader('Expires', '0');
   res.setHeader('Vary', 'Authorization');
+
+  try {
+    const environment = loadServerEnvironment(process.env);
+    environment.assertEnabled('n8n');
+    environment.assertEnabled('batchDispatch');
+  } catch {
+    return res.status(503).json({ ok: false, error: 'integration_disabled_by_environment' });
+  }
 
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');

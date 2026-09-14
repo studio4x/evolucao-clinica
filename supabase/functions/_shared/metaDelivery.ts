@@ -80,6 +80,7 @@ export async function enqueueAndDeliverMetaPurchase(admin: any, input: {
   currency: string;
   occurredAt: string;
 }) {
+  if (String(Deno.env.get("META_DELIVERY_ENABLED") || "").toLowerCase() !== "true") return "disabled_by_environment";
   const { data: consent } = await admin.from("analytics_consents").select("marketing_granted").eq("user_id", input.userId).maybeSingle();
   if (!consent?.marketing_granted) return "consent_denied";
   const payload = { transactionId: input.transactionId, value: input.value, currency: input.currency, occurredAt: input.occurredAt };
@@ -97,6 +98,7 @@ export async function enqueueAndDeliverMetaPurchase(admin: any, input: {
 }
 
 export async function deliverMetaRow(admin: any, row: any) {
+  if (String(Deno.env.get("META_DELIVERY_ENABLED") || "").toLowerCase() !== "true") return "disabled_by_environment";
   const stored = row.payload || {};
   const payload = await buildMetaPurchasePayload({
     userId: row.user_id,

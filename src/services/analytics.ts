@@ -1,6 +1,7 @@
 /** Privacy boundary for every client-side analytics integration. */
 
 import { sendAcquisitionTelemetry } from './acquisitionTelemetry';
+import { publicEffectFlags } from '../config/publicFlags';
 
 type MetaPixelFunction = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
@@ -364,6 +365,7 @@ export const syncAnalyticsConsentForCurrentUser = async (knownUserId?: string) =
 };
 export const initAnalytics = () => {
   if (!isBrowser()) return;
+  if (!publicEffectFlags.analytics && !testConfig) return;
   if (!initialized) {
     initialized = true;
     // This is synchronous and always precedes any Google script/config/event.
@@ -462,6 +464,7 @@ const normalizeEventName = (eventName: string) => { const normalized = eventName
 export const hasNativeAnalyticsBridge = () => Boolean(nativeBridge());
 export const trackEvent = (eventName: AnalyticsEventName | string, parameters: AnalyticsParameters = {}, options: { dedupeKey?: string; persistDedupe?: boolean } = {}) => {
   if (!isBrowser()) return false;
+  if (!publicEffectFlags.analytics && !testConfig) return false;
   const preferences = getConsentPreferences();
   const normalized = normalizeEventName(eventName);
   const analyticsAllowed = preferences?.analytics === true;

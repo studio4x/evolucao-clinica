@@ -31,6 +31,7 @@ export function getWhatsAppConfigFromEnv(
 ): WhatsAppConfig {
   const graphApiVersion = String(env.WHATSAPP_GRAPH_API_VERSION || DEFAULT_GRAPH_API_VERSION).trim();
   return {
+    sendEnabled: String(env.WHATSAPP_SEND_ENABLED || "").trim().toLowerCase() === "true",
     accessToken: String(env.WHATSAPP_ACCESS_TOKEN || "").trim(),
     phoneNumberId: String(env.WHATSAPP_PHONE_NUMBER_ID || "").trim(),
     graphApiVersion,
@@ -121,6 +122,7 @@ function sanitizedErrorPayload(error: WhatsAppMetaError): Record<string, unknown
 }
 
 function getConfigurationError(config: WhatsAppConfig): string | null {
+  if (!config.sendEnabled) return "Envio bloqueado por WHATSAPP_SEND_ENABLED=false.";
   const missing: string[] = [];
   if (!config.accessToken) missing.push("WHATSAPP_ACCESS_TOKEN");
   if (!config.phoneNumberId) missing.push("WHATSAPP_PHONE_NUMBER_ID");

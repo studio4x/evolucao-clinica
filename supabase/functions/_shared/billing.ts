@@ -45,6 +45,27 @@ export class BillingHttpError extends Error {
 }
 
 export async function getBillingConfig(admin: any) {
+  if (String(Deno.env.get("BILLING_ENABLED") || "").toLowerCase() !== "true") {
+    throw new BillingHttpError(503, "Cobrança desabilitada neste ambiente.");
+  }
+  const appEnvironment = String(Deno.env.get("APP_ENV") || "").trim().toLowerCase();
+  if (!["production", "staging", "development", "test"].includes(appEnvironment)) {
+    throw new BillingHttpError(503, "APP_ENV inválido ou ausente.");
+  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+  const expectedProjectRef = String(Deno.env.get("EXPECTED_SUPABASE_PROJECT_REF") || "").trim().toLowerCase();
+  const productionProjectRef = String(Deno.env.get("PRODUCTION_SUPABASE_PROJECT_REF") || "").trim().toLowerCase();
+  const actualProjectRef = (() => {
+    try { return new URL(supabaseUrl).hostname.match(/^([a-z0-9]{20})\.supabase\.co$/i)?.[1]?.toLowerCase() || ""; }
+    catch { return ""; }
+  })();
+  if (!expectedProjectRef || actualProjectRef !== expectedProjectRef) {
+    throw new BillingHttpError(503, "Projeto Supabase não corresponde ao ambiente esperado.");
+  }
+  if (appEnvironment === "staging" && (!productionProjectRef || actualProjectRef === productionProjectRef)) {
+    throw new BillingHttpError(503, "Staging não pode usar o projeto Supabase de produção.");
+  }
+
   const { data } = await admin
     .from("settings")
     .select("api_key")
@@ -66,6 +87,9 @@ export async function getBillingConfig(admin: any) {
   ).toUpperCase();
   const environment: BillingEnvironment = configuredEnvironment === "PRODUCTION" ? "PRODUCTION" : "TEST";
   const isProduction = environment === "PRODUCTION";
+  if (appEnvironment === "staging" && isProduction) {
+    throw new BillingHttpError(503, "Stripe Live é proibido em staging.");
+  }
 
   const stripeSecretKey = Deno.env.get(
     isProduction ? "STRIPE_SECRET_KEY_PROD" : "STRIPE_SECRET_KEY_TEST",
@@ -80,6 +104,16 @@ export async function getBillingConfig(admin: any) {
   const stripeWebhookSecret = Deno.env.get(
     isProduction ? "STRIPE_WEBHOOK_SECRET_PROD" : "STRIPE_WEBHOOK_SECRET_TEST",
   ) || "";
+  if (appEnvironment === "staging" && (stripeSecretKey.startsWith("sk_live_") || stripePublishableKey.startsWith("pk_live_"))) {
+    throw new BillingHttpError(503, "Credencial Stripe Live detectada em staging.");
+  }
+
+  const appOrigin = String(Deno.env.get("APP_ORIGIN") || "").replace(/\/$/, "");
+  const productionOrigin = String(Deno.env.get("PRODUCTION_APP_ORIGIN") || "").replace(/\/$/, "");
+  if (!appOrigin || !productionOrigin) throw new BillingHttpError(503, "Origens da aplicação não configuradas.");
+  if (appEnvironment === "staging" && appOrigin === productionOrigin) {
+    throw new BillingHttpError(503, "Origem pública de produção detectada em staging.");
+  }
 
   return {
     environment,
@@ -94,7 +128,7 @@ export async function getBillingConfig(admin: any) {
           : "STRIPE_SUBSCRIPTIONS_PAYMENT_METHOD_CONFIGURATION_ID_TEST",
       ) ||
       Deno.env.get("STRIPE_SUBSCRIPTIONS_PAYMENT_METHOD_CONFIGURATION_ID") || "",
-    appOrigin: (Deno.env.get("APP_ORIGIN") || "https://www.evolucaoclinica.app.br").replace(/\/$/, ""),
+    appOrigin,
     googlePackageName: Deno.env.get("GOOGLE_PLAY_PACKAGE_NAME") || "com.evolucaoclinica.app",
   };
 }

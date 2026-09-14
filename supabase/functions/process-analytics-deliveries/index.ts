@@ -11,6 +11,7 @@ function safeEqual(left: string, right: string) {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Método não permitido.", { status: 405 });
+  if (String(Deno.env.get("CRON_JOBS_ENABLED") || "").toLowerCase() !== "true") return new Response("Jobs desabilitados neste ambiente.", { status: 503 });
   const configuredToken = Deno.env.get("ANALYTICS_DELIVERY_CRON_TOKEN") || "";
   if (!safeEqual(req.headers.get("x-analytics-delivery-token") || "", configuredToken)) return new Response("Não autorizado.", { status: 401 });
   const body = await req.json().catch(() => ({}));

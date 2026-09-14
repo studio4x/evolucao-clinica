@@ -68,6 +68,7 @@ import { captureAcquisitionData, captureNativeInstallAttribution, syncAcquisitio
 import { calculateAcquisitionChannel, getAcquisitionDistribution, getAcquisitionPlatform } from './utils/acquisitionAttribution';
 import { isPublicAcquisitionPathname, sendAcquisitionTelemetry } from './services/acquisitionTelemetry';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
+import { EnvironmentBanner } from './components/layout/EnvironmentBanner';
 import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
@@ -794,6 +795,7 @@ export default function App() {
 
   return (
     <Router>
+      <EnvironmentBanner />
       <AnalyticsRouteObserver />
       <CookieConsent />
       <InstallPrompt />

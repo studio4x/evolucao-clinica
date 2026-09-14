@@ -20,6 +20,7 @@ export type WhatsAppMessageType =
   | "interactive";
 
 export type WhatsAppConfig = {
+  sendEnabled: boolean;
   accessToken: string;
   phoneNumberId: string;
   graphApiVersion: string;

@@ -1,4 +1,5 @@
 import { markdownToGoogleDocsText, textRunToMarkdown, type RichTextStyleRange } from '../utils/richText';
+import { assertPublicEffectEnabled } from '../config/publicFlags';
 
 const GOOGLE_API_MAX_ATTEMPTS = 3;
 const EVOLUTION_DIVIDER = "────────────────────────────────────────────────────────";
@@ -41,6 +42,7 @@ function isRetryableGoogleError(status: number, errorText: string) {
 }
 
 async function googleApiFetch(url: string, options: RequestInit, context: string) {
+  assertPublicEffectEnabled('google');
   for (let attempt = 1; attempt <= GOOGLE_API_MAX_ATTEMPTS; attempt++) {
     const response = await fetch(url, options);
 

@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
+import { loadServerEnvironment } from '../server/config/environment.js';
 
 const ALLOWED_SHEETS = new Set([
   'Terapia Ocupacional',
@@ -82,6 +83,14 @@ const callN8n = async (
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store');
+
+  try {
+    const environment = loadServerEnvironment(process.env);
+    environment.assertEnabled('n8n');
+    environment.assertEnabled('batchDispatch');
+  } catch {
+    return res.status(503).json({ ok: false, error: 'integration_disabled_by_environment' });
+  }
 
   if (req.method !== 'POST' && req.method !== 'GET') {
     res.setHeader('Allow', 'GET, POST');

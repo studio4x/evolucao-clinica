@@ -55,7 +55,9 @@ const fakeAdmin = {
     };
   }
 };
-(globalThis as unknown as { Deno: { env: { get(name: string): string | undefined } } }).Deno = { env: { get: () => undefined } };
+(globalThis as unknown as { Deno: { env: { get(name: string): string | undefined } } }).Deno = {
+  env: { get: (name) => name === "ANALYTICS_SEND_ENABLED" ? "true" : undefined },
+};
 const storedPayload = { params, attribution: base.attribution, occurredAt: base.occurredAt };
 assert.equal(await deliverAnalyticsRow(fakeAdmin, { id: 1, event_name: "purchase", user_id: base.userId, payload: storedPayload, attempt_count: 5 }), "secrets_missing_retry_scheduled");
 assert.equal(updates.at(-1)?.status, "pending");

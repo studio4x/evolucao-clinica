@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
+import { publicSupabaseEnvironment } from '../config/publicEnvironment';
 import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil, Tag, ArrowUpDown, ArrowUp, ArrowDown, Columns3 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
@@ -4812,7 +4813,7 @@ export default function AdminPanel() {
                         </span>
                         <div className="bg-white border border-brand-border/60 rounded-xl px-4 py-3 font-mono text-xs text-brand-primary font-bold break-all shadow-inner flex justify-between items-center select-all">
                           <span>
-                            {`${import.meta.env.VITE_SUPABASE_URL || 'https://kvxboovgrrhhttaqinld.supabase.co'}/functions/v1/stripe-webhook`}
+                            {`${publicSupabaseEnvironment.url}/functions/v1/stripe-webhook`}
                           </span>
                         </div>
                         <p className="text-[11px] text-brand-text-muted mt-2 leading-relaxed">

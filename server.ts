@@ -76,8 +76,7 @@ import {
   verifyJourneyPublicationAuthorization,
   JourneyPublicationValidationError,
   retryDelayMinutes,
-  publicJourneyUrls,
-  resolveProductionOrigin
+  publicJourneyUrls
 } from "./server/whatsapp/journeyPublications.js";
 import { publishDueJourneyContents } from "./server/journeys/journeyPublisher.js";
 import {
@@ -95,24 +94,23 @@ import {
 import { getConversionFunnel } from "./server/admin/conversionFunnel.js";
 import { getProfessionalFunnelBoard, PROFESSIONAL_FUNNEL_STAGES } from "./server/admin/professionalFunnel.js";
 import { buildProfessionalFunnelMessage } from "./src/utils/professionalFunnelMessages.js";
+import { loadServerEnvironment } from "./server/config/environment.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+
+const serverEnvironment = loadServerEnvironment(process.env);
 
 export const app = express();
 app.disable("x-powered-by");
 const PORT = Number(process.env.PORT) || 3000;
 const TRIAL_DURATION_DAYS = 7;
 const TRIAL_ACTIVATION_WINDOW_HOURS = 72;
-const DEFAULT_PRODUCTION_ORIGIN = "https://www.evolucaoclinica.app.br";
-const PRODUCTION_ORIGIN = resolveProductionOrigin(process.env.PUBLIC_APP_URL, DEFAULT_PRODUCTION_ORIGIN);
+const PRODUCTION_ORIGIN = serverEnvironment.publicOrigin;
 
 // Configuração do Supabase Admin: a Service Role é exclusivamente server-side.
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://kvxboovgrrhhttaqinld.supabase.co";
-const supabaseServiceKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-if (!supabaseServiceKey) {
-  throw new Error("SUPABASE_SERVICE_ROLE_KEY não configurada no servidor.");
-}
+const supabaseUrl = serverEnvironment.supabase.url;
+const supabaseServiceKey = serverEnvironment.serviceRoleKey;
 const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 const whatsappConfig = getWhatsAppConfigFromEnv();
 const whatsappRepository = createWhatsAppRepository(supabaseAdmin);
@@ -221,6 +219,7 @@ const selectRelevantSemanticMatches = (query: string, matches: any[]): any[] => 
  * Retorna { apiKey, modelName } com fallbacks para variáveis de ambiente e modelo padrão.
  */
 async function getGeminiSettings(): Promise<{ apiKey: string; modelName: string }> {
+  serverEnvironment.assertEnabled("gemini");
   let apiKey = "";
   let modelName = GEMINI_DEFAULT_MODEL;
 
@@ -481,24 +480,7 @@ function buildTrialSubscriptionWindow(baseDate = new Date()) {
   };
 }
 
-function hashString(value: string) {
-  let hash = 0;
-
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) - hash) + value.charCodeAt(i);
-    hash |= 0;
-  }
-
-  return Math.abs(hash).toString(36);
-}
-
-const CRON_SECRET = process.env.CRON_SECRET || hashString(
-  [
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    process.env.VITE_SUPABASE_ANON_KEY,
-    PRODUCTION_ORIGIN
-  ].filter(Boolean).join(":")
-);
+const CRON_SECRET = String(process.env.CRON_SECRET || "").trim();
 
 function getCronRequestSecret(req: any) {
   const authorization = String(req.headers.authorization || "");
@@ -507,6 +489,7 @@ function getCronRequestSecret(req: any) {
 }
 
 async function verifySupabaseCronRequest(req: any) {
+  if (!serverEnvironment.integrations.cron) return false;
   const candidate = getCronRequestSecret(req);
   if (!candidate) return false;
   if (candidate === CRON_SECRET) return true;
@@ -1602,6 +1585,10 @@ async function sendTransactionalEmail(
   settings: any,
   input: EmailDeliveryInput
 ): Promise<EmailDeliveryResult> {
+  serverEnvironment.assertEnabled("email");
+  if (String(input.source || "").toLowerCase().includes("lifecycle")) {
+    serverEnvironment.assertEnabled("lifecycle");
+  }
   const preferredProvider = normalizeEmailProvider(settings?.email_provider);
   const providers: EmailProvider[] = preferredProvider === "brevo" ? ["brevo", "smtp"] : ["smtp", "brevo"];
   const allowFallback = input.allowFallback !== false;
@@ -1674,6 +1661,9 @@ async function sendTransactionalEmail(
 async function revokeGoogleGrant(googleAccessToken?: string | null) {
   const token = String(googleAccessToken || "").trim();
   if (!token) {
+    return { revoked: false, skipped: true };
+  }
+  if (!serverEnvironment.integrations.google) {
     return { revoked: false, skipped: true };
   }
 
@@ -1929,6 +1919,7 @@ app.post("/api/webhooks/whatsapp", async (req: any, res) => {
 // Endpoint interno do roteador n8n. Não é callback da Meta e não compartilha
 // assinatura, segredo de app ou contrato do webhook público acima.
 app.post("/api/integrations/whatsapp/events", async (req, res) => {
+  if (!serverEnvironment.integrations.n8n) return res.status(503).json({ error: "Integração desabilitada neste ambiente." });
   if (!verifyWhatsAppN8nEventsAuthorization(
     String(req.headers.authorization || ""),
     whatsappConfig.n8nEventsToken
@@ -2442,6 +2433,7 @@ async function getJourneyPublicationResponse(publication: any) {
 }
 
 app.post("/api/integrations/whatsapp/journey-publications/claim", async (req, res) => {
+  if (!serverEnvironment.integrations.n8n) return res.status(503).json({ error: "Integração desabilitada neste ambiente." });
   if (!verifyJourneyPublicationToken(req, res)) return;
   try {
     const input = validateClaimPayload(req.body);
@@ -2492,6 +2484,7 @@ app.get("/api/admin/whatsapp/templates", requireAuth, requireAdmin, async (_req,
 });
 
 app.post("/api/integrations/whatsapp/journey-publications/complete", async (req, res) => {
+  if (!serverEnvironment.integrations.n8n) return res.status(503).json({ error: "Integração desabilitada neste ambiente." });
   if (!verifyJourneyPublicationToken(req, res)) return;
   try {
     const input = validateCompletePayload(req.body);
@@ -2512,6 +2505,7 @@ app.post("/api/integrations/whatsapp/journey-publications/complete", async (req,
 });
 
 app.post("/api/integrations/whatsapp/journey-publications/fail", async (req, res) => {
+  if (!serverEnvironment.integrations.n8n) return res.status(503).json({ error: "Integração desabilitada neste ambiente." });
   if (!verifyJourneyPublicationToken(req, res)) return;
   try {
     const input = validateFailPayload(req.body);
@@ -3769,6 +3763,7 @@ app.get("/api/admin/professionals/:professionalId/communications", requireAuth, 
 });
 
 app.post("/api/admin/professionals/:professionalId/journey-group-membership", requireAuth, requireAdmin, async (req: any, res) => {
+  if (!serverEnvironment.integrations.n8n) return res.status(503).json({ error: "Integração desabilitada neste ambiente." });
   const professionalId = String(req.params.professionalId || "").trim();
   if (!professionalId) {
     return res.status(400).json({ error: "ID do profissional ausente.", code: "professional_id_missing" });
@@ -4528,6 +4523,7 @@ const lifecycleService = createLifecycleService({
 // Internal opt-out webhook. It intentionally has a small body limit and never
 // returns or logs a phone number, token, headers, or raw payload.
 app.post("/api/integrations/whatsapp/opt-out", async (req, res) => {
+  if (!serverEnvironment.integrations.n8n) return res.status(503).json({ error: "Integração desabilitada neste ambiente." });
   if (!verifyWhatsAppOptOutAuthorization(String(req.headers.authorization || ""), whatsappConfig.optOutWebhookToken)) {
     return res.status(401).json({ error: "Token de integração ausente ou inválido." });
   }
@@ -4550,6 +4546,7 @@ app.post("/api/integrations/whatsapp/opt-out", async (req, res) => {
 // Internal n8n account lookup. It accepts only a normalized WhatsApp number
 // and returns the minimum account identity needed to route human support.
 app.post("/api/integrations/whatsapp/user-lookup", async (req, res) => {
+  if (!serverEnvironment.integrations.n8n) return res.status(503).json({ error: "Integração desabilitada neste ambiente." });
   res.set("Cache-Control", "no-store");
   if (!verifyWhatsAppUserLookupAuthorization(String(req.headers.authorization || ""), whatsappConfig.userLookupToken)) {
     return res.status(401).json({ error: "Token de integração ausente ou inválido." });
@@ -4759,6 +4756,8 @@ async function sendPushNotificationInternal(
   iconUrl?: string,
   pushCase: PushNotificationCase = "general"
 ): Promise<boolean> {
+  serverEnvironment.assertEnabled("push");
+  if (pushCase === "lifecycle") serverEnvironment.assertEnabled("lifecycle");
   const settings = await getNotificationSettings();
   if (!isPushNotificationCaseEnabled(settings, pushCase)) {
     console.info(`[Push] Envio ignorado: caso ${pushCase} está desativado.`);
@@ -6031,6 +6030,7 @@ app.get("/api/cron/publish-journey-contents", async (req: any, res) => {
 
 // 4.4. Cron para Enviar Notificação Push Diária Global
 app.get("/api/cron/send-daily-push", async (req: any, res) => {
+  if (!serverEnvironment.integrations.cron) return res.status(503).json({ error: "Jobs desabilitados neste ambiente." });
   let authorized = await verifySupabaseCronRequest(req);
   if (!authorized && typeof req.query.secret === "string") {
     const { data: cronConfig } = await supabaseAdmin
@@ -6724,6 +6724,7 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
 // 1. Gerar Relatório ou PDI com Gemini IA
 app.post("/api/patients/:id/ai-report", requireAuth, requireActiveSubscription, async (req: any, res) => {
   try {
+    serverEnvironment.assertEnabled("google");
     const patientId = req.params.id;
     const { period, startDate, endDate, type, googleAccessToken } = req.body;
 
@@ -7470,13 +7471,7 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 export async function startServer() {
   try {
-    // Startup check for Gemini API Key
-    const startupKey = process.env.GEMINI_API_KEY;
-    if (!startupKey) {
-      console.warn("Chave da API Gemini não detectada no início do servidor.");
-    } else {
-      console.log(`Servidor iniciado com chave Gemini detectada.`);
-    }
+    console.log(`[Environment] APP_ENV=${serverEnvironment.appEnv}; Supabase ref validado; efeitos externos controlados por flags.`);
 
     // Vite middleware for development
     if (process.env.NODE_ENV !== "production") {

@@ -2,6 +2,7 @@ import { supabase } from '../supabaseClient';
 import { resolveSupabaseFunctionErrorMessage } from '../utils/supabaseFunctionErrors';
 import type { CheckoutAttribution } from './analytics';
 import { classifyPaymentConfirmation } from '../utils/paymentConfirmation';
+import { assertPublicEffectEnabled } from '../config/publicFlags';
 
 export type BillingPlanId = 'monthly' | 'yearly';
 
@@ -56,6 +57,7 @@ export function hasNativeBillingBridge() {
 }
 
 async function invokeBillingFunction<T>(name: string, body: Record<string, unknown>): Promise<T> {
+  assertPublicEffectEnabled('billing');
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
     const message = await resolveSupabaseFunctionErrorMessage(

@@ -15,12 +15,12 @@ import {
 } from "../server/whatsapp/whatsappUniqueness.js";
 
 const config = getWhatsAppOtpConfigFromEnv({
-  WHATSAPP_APP_SECRET: "a".repeat(32),
+  WHATSAPP_OTP_SECRET: "a".repeat(32),
 } as NodeJS.ProcessEnv);
 assert.equal(config.secret, "a".repeat(32));
 assert.equal(config.templateName, "ativacao_whatsapp_profissional");
 assert.equal(config.languageCode, "pt_BR");
-assert.equal(getWhatsAppOtpConfigFromEnv({ WHATSAPP_ACCESS_TOKEN: "b".repeat(64) } as NodeJS.ProcessEnv).secret, "b".repeat(64));
+assert.equal(getWhatsAppOtpConfigFromEnv({ WHATSAPP_ACCESS_TOKEN: "b".repeat(64) } as NodeJS.ProcessEnv).secret, "");
 
 for (let index = 0; index < 50; index += 1) {
   assert.match(generateWhatsAppOtpCode(), /^\d{6}$/);

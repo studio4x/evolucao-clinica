@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
+import { assertPublicEffectEnabled } from '../config/publicFlags';
 
 export const GOOGLE_SCOPES = {
   driveFile: 'https://www.googleapis.com/auth/drive.file',
@@ -112,6 +113,7 @@ export const requestGoogleOAuth = async ({
   prompt,
   loginHint,
 }: RequestGoogleOAuthParams) => {
+  assertPublicEffectEnabled('google');
   if (isNativeGoogleOAuthClient() && !canUseNativeGoogleOAuthCallback()) {
     return {
       data: { provider: 'google', url: null },
