@@ -132,7 +132,7 @@ export default function Login() {
   }
 
   return (
-    <div className="w-full min-h-screen bg-[#edf4fa] flex flex-col justify-between relative overflow-hidden font-sans select-none">
+    <div className="relative flex min-h-screen min-h-[100dvh] w-full select-none flex-col justify-between overflow-x-hidden overflow-y-auto bg-[#edf4fa] font-sans">
       {/* Definidor de Animações CSS Customizadas */}
       <style>{`
         @keyframes floatCard {
@@ -206,7 +206,7 @@ export default function Login() {
 
       {/* Ilustração Visual do Fluxo de IA com Animações de Transição */}
       <div className={`flex-1 flex flex-col items-center justify-center px-4 max-w-2xl mx-auto w-full relative z-10 transition-all duration-1000 delay-150 transform ${isLoaded ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}>
-        <div className="w-full flex items-center justify-center gap-2 md:gap-4 py-4 md:py-8">
+        <div className="flex w-full scale-[0.84] items-center justify-center gap-2 py-4 min-[380px]:scale-100 md:gap-4 md:py-8">
           {/* Ícone de Microfone com efeito de respiro de gravação */}
           <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-white shadow-lg shadow-blue-500/10 border border-slate-100 flex items-center justify-center flex-shrink-0 hover:scale-105 transition-transform">
             <Mic className="w-6 h-6 md:w-7 md:h-7 text-[#0b5cad] animate-pulse" />
@@ -323,7 +323,7 @@ export default function Login() {
       </div>
 
       {/* Gaveta Inferior (Bottom Sheet Branco Ocupando a Tela Toda de Ponta a Ponta) */}
-      <div className={`w-full bg-white rounded-t-[36px] md:rounded-t-[44px] shadow-[0_-10px_30px_rgba(0,0,0,0.03)] border-t border-slate-100 p-6 md:p-8 flex flex-col items-center z-20 transition-all duration-700 ease-out transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
+      <div className={`z-20 flex w-full transform flex-col items-center rounded-t-[36px] border-t border-slate-100 bg-white p-6 pb-16 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] transition-all duration-700 ease-out md:rounded-t-[44px] md:p-8 ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-12 opacity-0'}`}>
         <div className="max-w-md w-full flex flex-col items-center">
           {/* Puxador da Gaveta */}
           <div className="w-12 h-1 bg-slate-300/80 rounded-full mb-5" />

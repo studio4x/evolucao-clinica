@@ -332,9 +332,9 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col border border-brand-border animate-in zoom-in-95 duration-200">
-        <div className="p-6 border-b border-brand-border flex items-center justify-between bg-stone-50/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-stone-900/60 p-2 backdrop-blur-sm animate-in fade-in duration-200 sm:p-4">
+      <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-brand-border bg-white shadow-2xl animate-in zoom-in-95 duration-200 sm:max-h-[calc(100dvh-2rem)]">
+        <div className="flex shrink-0 items-center justify-between border-b border-brand-border bg-stone-50/50 p-4 sm:p-6">
           <div className="flex items-center space-x-2 text-brand-primary font-display font-bold text-lg">
             <ShieldCheck className="text-brand-primary stroke-[2]" size={24} />
             <span>{modalConfig.headerTitle}</span>
@@ -350,7 +350,7 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
           )}
         </div>
 
-        <div className="p-6 space-y-5 overflow-hidden">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:space-y-5 sm:p-6">
           <div className="text-center space-y-2">
             <h3 className="font-display font-extrabold text-brand-primary text-xl">
               {modalConfig.contentTitle}
@@ -452,8 +452,8 @@ export const GoogleSecurityModal: React.FC<GoogleSecurityModalProps> = ({
           </div>
         </div>
 
-        <div className="p-6 bg-stone-50 border-t border-brand-border flex flex-col gap-3">
-          <div className="flex items-center justify-between text-xs text-brand-text-muted">
+        <div className="flex shrink-0 flex-col gap-3 border-t border-brand-border bg-stone-50 p-4 pb-16 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-brand-text-muted">
             <span>Slide {currentSlide + 1} de {slides.length}</span>
             <span>{isLastSlide ? 'Você pode prosseguir' : 'Leia com calma antes de avançar'}</span>
           </div>
