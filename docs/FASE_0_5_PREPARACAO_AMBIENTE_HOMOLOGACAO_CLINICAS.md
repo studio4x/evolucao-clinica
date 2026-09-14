@@ -1,6 +1,6 @@
 # Fase 0.5 — Preparação segura do ambiente de homologação do Plano Clínica
 
-**Status:** auditoria concluída; isolamento operacional ainda bloqueado
+**Status:** hardening concluído no código e na Vercel Production; provisionamento do staging ainda bloqueado
 
 **Data da auditoria:** 14/09/2026
 
@@ -12,13 +12,49 @@
 
 ## Conclusão executiva
 
-A branch `feat/clinicas` **não deve ser publicada ainda**. O projeto Vercel atual cria Preview para branches que não sejam a branch de produção, e o inventário remoto mostrou variáveis externas compartilhadas entre `preview` e `production`, sem escopo de branch. As credenciais do Supabase existem nos dois ambientes em registros separados, mas seus valores são protegidos e não puderam ser comparados; portanto, o isolamento do banco também não está comprovado.
+A branch `feat/clinicas` **não deve ser publicada ainda**. O hardening de código foi implementado, as novas variáveis obrigatórias foram cadastradas no escopo Production e a criação automática de Previews foi desativada no projeto Vercel público sem alterar a branch de produção `main`.
 
-O código ainda contém fallbacks silenciosos para o Supabase e para a origem pública de produção. Além disso, migrations históricas criam jobs que chamam o domínio público ou destinos guardados no Vault. Reaplicar o histórico sem um procedimento específico de staging pode fazer um banco isolado produzir efeitos fora dele.
+O Supabase staging não foi criado porque a organização já possui dois projetos e a API administrativa não informa o plano financeiro. A página de cobrança exige uma sessão interativa autenticada. Pela [tabela oficial de preços do Supabase](https://supabase.com/pricing), projetos adicionais em plano pago partem de US$ 10 por mês; portanto, a criação foi interrompida antes de qualquer possível cobrança.
 
-Nesta execução foram realizadas apenas inspeções locais e consultas remotas de metadados que não revelam valores. Nenhum secret foi lido para o relatório, nenhum deployment foi criado e nenhum banco foi alterado.
+O projeto Vercel staging também não foi criado: o token disponível é restrito ao projeto de produção e a API retornou HTTP 403 para criação de projeto no time. Não houve deployment, domínio ou vínculo Git de staging. Nenhuma migration, alteração de schema ou mudança de dados foi executada no Supabase.
+
+## Atualização operacional da Fase 0.5B
+
+### Recursos externos
+
+| Recurso | Resultado em 14/09/2026 | Estado seguro |
+|---|---|---|
+| Supabase staging | Não criado; possível custo adicional de US$ 10/mês exige confirmação do plano/cobrança | Produção intocada; nenhum projeto ou dado copiado |
+| Vercel staging | Não criado; credencial retornou HTTP 403 ao criar projeto no time | Nenhum deployment ou Git link inseguro foi produzido |
+| Vercel Production | `previewDeploymentsDisabled=true`; branch de produção permanece `main` | A futura `feat/clinicas` não gera Preview neste projeto |
+| Variáveis Production | Núcleo Supabase/URL reaplicado a partir das credenciais locais validadas; 25 novas variáveis/flags verificadas no escopo Production | Valores permanecem protegidos e não foram documentados |
+| Domínio de staging | Não configurado porque o projeto Vercel staging ainda não existe | Domínio público de produção não foi alterado |
+
+### Hardening implementado
+
+- `APP_ENV` e `VITE_APP_ENV` identificam explicitamente o ambiente;
+- URL, chave e `EXPECTED_SUPABASE_PROJECT_REF` são obrigatórios e validados antes da inicialização;
+- staging recusa o project ref e a origem pública de produção;
+- o cliente e o backend não possuem mais fallback para URL ou anon key de produção;
+- `CRON_SECRET` e `WHATSAPP_OTP_SECRET` não são mais derivados de credenciais sem relação;
+- flags de integrações usam comparação explícita com `true`; ausência equivale a bloqueio;
+- WhatsApp, e-mail, push, n8n, lotes, lifecycle, cron, Gemini, Analytics, Meta, billing e Google possuem guardas em seus pontos de efeito;
+- Stripe Live e origem de produção são recusados pelo código compartilhado de billing quando `APP_ENV=staging`;
+- o bundle de staging exibirá o banner persistente `AMBIENTE DE HOMOLOGAÇÃO`;
+- `VITE_CLINIC_FEATURE_ENABLED` e `CLINIC_FEATURE_ENABLED` permanecem `false` por padrão.
+
+### Gates que continuam fechados
+
+1. confirmar no painel autenticado do Supabase se um terceiro projeto está incluído ou aprovar o custo de US$ 10/mês;
+2. fornecer à automação uma credencial Vercel com permissão para criar e configurar projetos no time, ou criar manualmente `evolucao-clinica-staging`;
+3. criar o Supabase staging vazio e cadastrar exclusivamente suas credenciais no projeto Vercel staging;
+4. executar o primeiro deployment, validar banner, logs e negações de integração;
+5. somente então realizar o inventário read-only do banco de produção;
+6. criar `feat/clinicas` apenas após todos esses gates.
 
 ---
+
+As seções A a G abaixo preservam o diagnóstico-base do commit `d2c8afc`. Em caso de divergência de estado, a atualização operacional acima prevalece.
 
 ## A. Riscos encontrados
 
