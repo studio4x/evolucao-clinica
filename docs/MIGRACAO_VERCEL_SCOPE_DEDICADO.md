@@ -2,7 +2,7 @@
 
 **Data da execução:** 14/09/2026  
 **Escopo:** somente infraestrutura Vercel  
-**Estado:** bloqueada antes de qualquer transferência  
+**Estado atual:** staging transferido; produção não transferida  
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -14,9 +14,76 @@ SOURCE: studio4xs-projects
   -> TARGET: evolucao-clinica
 ```
 
-O staging e a produção foram identificados, o destino não possui conflito de nomes e os projetos não foram recriados nem alterados. A transferência não pôde ser iniciada porque `VERCEL_ACCESS_TOKEN`, embora consiga listar o projeto de produção, não possui autoridade suficiente para iniciar `POST /projects/{id}/transfer-request` e retorna HTTP 404. A sessão autenticada do Dashboard da origem confirma os projetos, mas o team de destino pertence a outro login e não aparece como destino selecionável.
+Na retomada, o novo `VERCEL_SOURCE_TOKEN` foi validado como Owner e o staging foi transferido pelo fluxo REST nativo: criação do transfer request HTTP 200 e aceite pelo destino HTTP 202. O Project ID, deployments, domínios e 29 environment variables foram preservados.
+
+A validação pós-transferência encontrou que o projeto staging no TARGET está sem vínculo Git e sem `productionBranch` no objeto de configuração retornado pela API. Os deployments preservam os metadados de `studio4x/evolucao-clinica` e `feat/clinicas`, mas não há evidência suficiente de Git webhook/auto-deploy funcionando no novo scope. Como esse gate falhou, a produção não foi transferida.
+
+O bloqueio anterior com `VERCEL_ACCESS_TOKEN` permanece registrado no histórico abaixo. A sessão Dashboard da origem confirmou originalmente os projetos, mas o team de destino pertence a outro login e não aparecia como destino selecionável.
 
 Nenhuma alteração foi feita no Supabase, DNS, GitHub, código funcional, secrets, integrações ou plano Vercel. A Fase 1B1 continua bloqueada.
+
+## Retomada — resultado atual
+
+### Acesso e transferência
+
+- `VERCEL_SOURCE_TOKEN`: validado pela API como usuário `studio4x`, Owner do team `studio4xs-projects`.
+- SOURCE real: `team_IRE2lAAPj5Ibe0OtvXlLpMBa` / `studio4xs-projects`.
+- TARGET real: `team_opJQiM63Vn6P0uOe5Om8e1HD` / `evolucao-clinica`, Owner, Hobby.
+- Os scopes são diferentes.
+- O valor local de `VERCEL_TARGET_TEAM_ID` não coincidiu com o ID canônico; foi usado exclusivamente o ID retornado pela API.
+- O TARGET estava vazio e sem conflito de nome antes do aceite.
+- Staging: `POST /projects/prj_Hmm2uRREtw4qOqPf3Lhg78702hlM/transfer-request?teamId=team_IRE2lAAPj5Ibe0OtvXlLpMBa` retornou HTTP 200.
+- Aceite: `PUT /projects/transfer-request/{code}?teamId=team_opJQiM63Vn6P0uOe5Om8e1HD` retornou HTTP 202.
+- O código temporário não foi impresso, salvo ou documentado.
+- Produção: não transferida.
+
+### Staging pós-transferência
+
+| Verificação | Resultado |
+|---|---|
+| Projeto pertence ao TARGET | **PASS**; `accountId=team_opJQiM63Vn6P0uOe5Om8e1HD` |
+| Project ID | **PASS**; preservado como `prj_Hmm2uRREtw4qOqPf3Lhg78702hlM` |
+| Nome | **PASS**; `evolucao-clinica-staging` |
+| Environment variables | **PASS**; 29 nomes/scopes preservados, valores não registrados |
+| Domínios | **PASS**; staging e `project-j4206.vercel.app` verificados |
+| Deployments | **PASS**; deployments Ready preservados, inclusive `40bd76a` |
+| Supabase ref | não revalidado pós-transferência; esperado `hwkdwinfckmjoriqxbjk` |
+| Git repository no projeto | **FAIL**; `linkRepo` e `linkOrg` vieram vazios na API TARGET |
+| Production Branch na configuração | **FAIL**; `productionBranch` veio vazio na API TARGET |
+| Git webhook/auto-deploy | **NÃO COMPROVADO**; não foi provocado deployment artificial |
+| `/api/health` efetivo | **NÃO COMPROVADO**; acesso público retornou proteção Vercel, não JSON da aplicação |
+| Produção | **NÃO TRANSFERIDA**, conforme gate |
+
+O commit `3c6cdc6` que aparece como último deployment staging é exclusivamente documental e deriva do primeiro relatório. O checkpoint funcional continua sendo `40bd76a`.
+
+Uma rechecagem 10 segundos após o aceite confirmou `accountId` no TARGET e deployment `READY`, mas `link` ausente, `repo` vazio e `productionBranch` vazio. Portanto, o problema não era apenas processamento assíncrono pendente.
+
+### Motivo do bloqueio da produção
+
+O Project Transfer preservou os deployments e os metadados históricos, mas a configuração atual do projeto no TARGET não comprova o vínculo Git nem a Production Branch. A correção exigiria uma ação adicional de integração/permissão GitHub, que não foi executada por estar fora do mecanismo mínimo de transferência e por poder alterar acesso externo. A produção permanece no SOURCE, intacta.
+
+### Segurança e escopo
+
+- Nenhuma migration, SQL, Auth, RLS, Storage, Vault, cron ou dado Supabase foi alterado.
+- Nenhum DNS, domínio, alias, GitHub ou código funcional foi alterado.
+- Nenhuma integração Marketplace, recurso pago, upgrade ou add-on foi criado.
+- Nenhuma credencial ou valor de environment variable foi registrado.
+- Não houve dados reais nem smoke test com efeitos externos.
+
+### Pendências da retomada
+
+1. Investigar e restabelecer, com autorização adequada, o vínculo Git de `studio4x/evolucao-clinica` no projeto staging já transferido para o TARGET.
+2. Confirmar `Production Branch=feat/clinicas` no projeto TARGET.
+3. Validar um Git webhook/auto-deploy real e health efetivo atravessando legitimamente a Deployment Protection.
+4. Somente após staging integralmente aprovado, repetir o gate e avaliar a transferência da produção.
+
+### Estado final da retomada
+
+**MIGRAÇÃO VERCEL PARCIAL — PRODUÇÃO NÃO TRANSFERIDA**
+
+## Histórico da primeira execução
+
+As seções A–L abaixo preservam o relatório da primeira execução, quando a origem ainda usava apenas o token legado e nenhum projeto havia sido transferido.
 
 ## A. Acesso
 
@@ -197,7 +264,7 @@ Os testes de código foram executados no checkpoint local. Nenhum teste pós-tra
 
 Não há pendência de DNS, código, Supabase, migrations, baseline, Fase 1B1 ou upgrade de plano.
 
-## L. Estado final
+## L. Estado final — histórico da primeira execução
 
 **MIGRAÇÃO VERCEL BLOQUEADA**
 
@@ -208,3 +275,7 @@ A execução termina aqui. A Fase 1B1 não foi retomada.
 - [Vercel — Transferring a project](https://vercel.com/docs/projects/transferring-projects)
 - [Vercel REST API — Create project transfer request](https://vercel.com/docs/rest-api/projects/create-project-transfer-request)
 - [Vercel REST API — Accept project transfer request](https://vercel.com/docs/rest-api/projects/accept-project-transfer-request)
+
+## Estado final atual
+
+**MIGRAÇÃO VERCEL PARCIAL — PRODUÇÃO NÃO TRANSFERIDA**
