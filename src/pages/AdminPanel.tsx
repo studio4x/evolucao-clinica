@@ -304,6 +304,19 @@ const addStoredManualPushNotificationId = (notificationId?: string | null) => {
   storeManualPushNotificationIds([...currentIds, notificationId]);
 };
 
+const getNotificationAudienceLabel = (notification: { audience_segment?: unknown }) => {
+  const segment = notification.audience_segment;
+  if (!segment || typeof segment !== 'object') return 'Segmentação não registrada';
+
+  const input = segment as Record<string, unknown>;
+  if (input.type === 'funnel_stage' && typeof input.stageLabel === 'string') {
+    return `Etapa do funil = ${input.stageLabel}`;
+  }
+  if (input.type === 'all') return 'Todos os profissionais (broadcast)';
+  if (input.type === 'specific') return 'Profissional específico';
+  return 'Segmentação não registrada';
+};
+
 function NotificationCenterHeader({
   activeChannel,
   onChange
@@ -1467,6 +1480,7 @@ export default function AdminPanel() {
           link: notification.link || undefined,
           imageUrl: notification.image_url || undefined,
           source: 'manual-push',
+          audience: notification.audience_segment || undefined,
           channels: { inApp: true, push: true, email: false, whatsapp: false }
         })
       });
@@ -2229,6 +2243,11 @@ export default function AdminPanel() {
     });
   };
 
+  const getManualNotificationAudience = () => ({
+    type: broadcastTarget,
+    ...(broadcastTarget === 'funnel_stage' ? { stageKey: selectedFunnelStage } : {}),
+  });
+
   // Disparar notificação (para todos, uma etapa do funil ou um profissional)
   const handleSendNotification = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2269,6 +2288,7 @@ export default function AdminPanel() {
               link: notifLink || undefined,
               imageUrl: notifImageUrl || undefined,
               source: 'manual-push',
+              audience: getManualNotificationAudience(),
               channels: { inApp: true, push: true, email: false, whatsapp: false }
           })
         });
@@ -2408,6 +2428,7 @@ export default function AdminPanel() {
               content: notifContent,
               type: 'info',
               source: 'manual-email',
+              audience: getManualNotificationAudience(),
               channels: { inApp: true, push: false, email: true, whatsapp: false }
             })
           });
@@ -5920,6 +5941,7 @@ export default function AdminPanel() {
                             <thead>
                               <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider">
                                 <th className="py-2.5 px-3">Profissional</th>
+                                <th className="py-2.5 px-3">Segmentação utilizada</th>
                                 <th className="py-2.5 px-3">Título / Mensagem</th>
                                 <th className="py-2.5 px-3">Tipo</th>
                                 <th className="py-2.5 px-3">Lido em</th>
@@ -5937,6 +5959,11 @@ export default function AdminPanel() {
                                     <p className="text-[10px] text-brand-text-muted">
                                       {n.professionals?.google_email || ''}
                                     </p>
+                                  </td>
+                                  <td className="py-2.5 px-3 min-w-[180px]">
+                                    <span className="inline-flex rounded-full border border-brand-primary/20 bg-brand-primary/5 px-2 py-1 text-[10px] font-semibold text-brand-primary">
+                                      {getNotificationAudienceLabel(n)}
+                                    </span>
                                   </td>
                                   <td className="py-2.5 px-3 max-w-xs">
                                     <div className="flex items-center gap-2">

@@ -93,7 +93,7 @@ import {
   getProfessionalOnboardingEligibility
 } from "./server/admin/professionalOverview.js";
 import { getConversionFunnel } from "./server/admin/conversionFunnel.js";
-import { getProfessionalFunnelBoard } from "./server/admin/professionalFunnel.js";
+import { getProfessionalFunnelBoard, PROFESSIONAL_FUNNEL_STAGES } from "./server/admin/professionalFunnel.js";
 import { buildProfessionalFunnelMessage } from "./src/utils/professionalFunnelMessages.js";
 
 dotenv.config();
@@ -749,6 +749,7 @@ async function insertNotificationRecord(record: {
   link?: string | null;
   image_url?: string | null;
   source?: NotificationOrigin;
+  audience_segment?: NotificationAudienceSegment | null;
 }) {
   const { data, error } = await supabaseAdmin
     .from("notifications")
@@ -759,7 +760,8 @@ async function insertNotificationRecord(record: {
       type: record.type,
       link: record.link ?? null,
       image_url: record.image_url ?? null,
-      source: record.source || "platform"
+      source: record.source || "platform",
+      audience_segment: record.audience_segment || {}
     })
     .select("*")
     .single();
@@ -1277,6 +1279,34 @@ type EmailProvider = "smtp" | "brevo";
 type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend" | "funnel-stage";
 type NotificationOrigin = "platform" | "manual-push" | "manual-email" | "onboarding";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean; whatsapp?: boolean };
+type NotificationAudienceSegment = {
+  type: "all" | "funnel_stage" | "specific";
+  label: string;
+  stageKey?: string;
+  stageLabel?: string;
+};
+
+const normalizeNotificationAudience = (value: unknown): NotificationAudienceSegment | null => {
+  if (!value || typeof value !== "object") return null;
+  const input = value as Record<string, unknown>;
+
+  if (input.type === "all") {
+    return { type: "all", label: "Todos os profissionais (broadcast)" };
+  }
+  if (input.type === "specific") {
+    return { type: "specific", label: "Profissional específico" };
+  }
+  if (input.type !== "funnel_stage" || typeof input.stageKey !== "string") return null;
+
+  const stage = PROFESSIONAL_FUNNEL_STAGES.find((candidate) => candidate.key === input.stageKey);
+  if (!stage) return null;
+  return {
+    type: "funnel_stage",
+    label: `Etapa do funil = ${stage.label}`,
+    stageKey: stage.key,
+    stageLabel: stage.label,
+  };
+};
 type NotificationWhatsAppResult = WhatsAppSendResult | {
   success: false;
   status: string;
@@ -4916,7 +4946,8 @@ async function sendNotificationInternal(
   imageUrl?: string,
   source: NotificationOrigin = "platform",
   channels: NotificationChannels = {},
-  pushCase?: PushNotificationCase
+  pushCase?: PushNotificationCase,
+  audienceSegment?: NotificationAudienceSegment | null
 ) {
   const persistentImageUrl = await persistNotificationImage(imageUrl);
   const notificationRecord = {
@@ -4926,7 +4957,8 @@ async function sendNotificationInternal(
     type,
     link,
     image_url: persistentImageUrl,
-    source
+    source,
+    audience_segment: audienceSegment
   };
 
   // A. Criar no banco (In-App)
@@ -5175,6 +5207,9 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
     : req.body.source === "manual-email"
       ? "manual-email"
       : "manual-push";
+  const audienceSegment = notificationSource === "manual-push" || notificationSource === "manual-email"
+    ? normalizeNotificationAudience(req.body?.audience)
+    : null;
   const requestedChannels = req.body?.channels || {};
   const channels: NotificationChannels = {
     inApp: requestedChannels.inApp !== false,
@@ -5212,7 +5247,7 @@ app.post("/api/notifications/send", requireAuth, async (req: any, res) => {
   }
 
   try {
-    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl, notificationSource, channels);
+    const result = await sendNotificationInternal(targetUserId, title, content, type, link, imageUrl, notificationSource, channels, undefined, audienceSegment);
     res.json({
       success: true,
       notification: result.notification,

@@ -19,6 +19,10 @@ const editableEmailTemplatesMigrationSource = readFileSync(
   "supabase/migrations/20260807090000_create_editable_email_templates.sql",
   "utf8"
 );
+const notificationAudienceMigrationSource = readFileSync(
+  "supabase/migrations/20260914175356_add_notification_audience_segment.sql",
+  "utf8"
+);
 
 assert.match(adminSource, /Central de Notificações/);
 assert.match(adminSource, /\/admin\/notifications\/email/);
@@ -75,8 +79,13 @@ assert.ok(deliveriesStart >= 0);
 assert.match(deliveriesSource, /\.is\("lifecycle_dispatch_id", null\)/);
 assert.match(deliveriesSource, /account_access_granted/);
 assert.match(serverSource, /source: record\.source \|\| "platform"/);
+assert.match(serverSource, /normalizeNotificationAudience/);
+assert.match(serverSource, /audience_segment/);
+assert.match(serverSource, /Etapa do funil =/);
 assert.match(serverSource, /"onboarding"/);
 assert.match(migrationSource, /SET source = 'onboarding'/);
+assert.match(notificationAudienceMigrationSource, /ADD COLUMN IF NOT EXISTS audience_segment JSONB/);
+assert.match(notificationAudienceMigrationSource, /NOT NULL DEFAULT '\{\}'::jsonb/);
 
 const funnelProfessionals = [
   { id: "registered", stage: "registered" as const },
