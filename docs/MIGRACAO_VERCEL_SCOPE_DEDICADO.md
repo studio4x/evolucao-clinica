@@ -2,7 +2,7 @@
 
 **Data da execução:** 14/09/2026  
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** staging transferido; produção não transferida  
+**Estado atual:** staging transferido; produção não transferida
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
