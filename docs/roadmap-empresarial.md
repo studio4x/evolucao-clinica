@@ -868,6 +868,12 @@ O diagnóstico, a matriz de ambientes, as variáveis, as guardas planejadas e os
 
 **Gate:** observar os gates técnico, de cobrança, clínico e de produção definidos na seção 0.3.
 
+### Fase 1A — Desenho técnico da fundação empresarial — concluída documentalmente
+
+O desenho técnico foi consolidado em [`FASE_1A_DESENHO_FUNDACAO_EMPRESARIAL.md`](FASE_1A_DESENHO_FUNDACAO_EMPRESARIAL.md). A Fase 1A define contexto único por sessão/Auth staging, memberships referenciados ao perfil `professionals`/`auth.uid()`, aceite seguro de convites, bootstrap sanitizado e feature flag global + por organização. Nenhuma tabela, migration ou funcionalidade empresarial foi aplicada.
+
+**Gate para implementação:** aprovação do desenho, baseline staging sanitizado, matriz RLS/grants, testes de concorrência de convites e validação de rollback. As URLs/Auth, DNS, Vercel, secrets e integrações da Fase 0.5 permanecem fora de escopo.
+
 ### Fase 1 — Fundação de organização e identidade
 
 - criar `organizations`, `organization_memberships` e `organization_invitations`;
