@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import {
+  getNotificationRecipientCount,
+  resolveFunnelStageRecipients,
+  resolveNotificationTargets,
+} from "../src/utils/notificationRecipients.js";
 
 const adminSource = readFileSync("src/pages/AdminPanel.tsx", "utf8");
 const emailHistorySource = readFileSync("src/pages/EmailHistory.tsx", "utf8");
@@ -20,6 +25,13 @@ assert.match(adminSource, /\/admin\/notifications\/email/);
 assert.match(adminSource, /\/admin\/notifications\/whatsapp/);
 assert.match(adminSource, /\/admin\/notifications\/push/);
 assert.match(adminSource, /<PushNotificationCasesManager\s*\/>/);
+assert.match(adminSource, /<NotificationRecipientSelector/);
+assert.match(adminSource, /\/api\/admin\/professional-funnel/);
+assert.match(adminSource, /Selecione uma etapa do funil para enviar a notificação\./);
+assert.match(adminSource, /Não há profissionais nesta etapa do funil no momento\./);
+assert.match(adminSource, /Confirmar envio/);
+assert.match(adminSource, /Enviar esta notificação para todos os/);
+assert.match(adminSource, /Enviar esta notificação para .* da etapa/);
 assert.doesNotMatch(adminSource, /label: 'Histórico de E-mails'/);
 assert.match(adminSource, /<EmailHistory[\s\S]*embedded/);
 assert.doesNotMatch(adminSource, /<option value="account_access_granted"/);
@@ -65,5 +77,51 @@ assert.match(deliveriesSource, /account_access_granted/);
 assert.match(serverSource, /source: record\.source \|\| "platform"/);
 assert.match(serverSource, /"onboarding"/);
 assert.match(migrationSource, /SET source = 'onboarding'/);
+
+const funnelProfessionals = [
+  { id: "registered", stage: "registered" as const },
+  { id: "first-patient", stage: "first_patient" as const },
+  { id: "linked-record", stage: "linked_record" as const },
+  { id: "first-evolution", stage: "first_evolution" as const },
+  { id: "returned", stage: "returned" as const },
+  { id: "paid", stage: "paid" as const },
+];
+const funnelBoard = {
+  professionals: funnelProfessionals,
+  stages: [
+    { key: "registered" as const, label: "Cadastro criado", description: "Conta criada" },
+    { key: "first_patient" as const, label: "Primeiro paciente", description: "Criou paciente" },
+    { key: "linked_record" as const, label: "Prontuário vinculado", description: "Vinculou prontuário" },
+    { key: "first_evolution" as const, label: "Primeira evolução", description: "Concluiu evolução" },
+    { key: "returned" as const, label: "Retornou ao app", description: "Usou em dois dias" },
+    { key: "paid" as const, label: "Plano assinado", description: "Assinatura ativa" },
+  ],
+  stageCounts: {
+    registered: 1,
+    first_patient: 1,
+    linked_record: 1,
+    first_evolution: 1,
+    returned: 1,
+    paid: 1,
+  },
+  total: 6,
+};
+
+for (const professional of funnelProfessionals) {
+  const selected = resolveFunnelStageRecipients(funnelProfessionals, professional.stage);
+  assert.deepEqual(selected.map((item) => item.id), [professional.id], `a etapa ${professional.stage} deve ser exclusiva`);
+  assert.equal(
+    resolveNotificationTargets({ target: "funnel_stage", professionals: [], selectedFunnelStage: professional.stage, funnelBoard }).join(","),
+    professional.id,
+    `a segmentação deve usar somente o stage final ${professional.stage}`,
+  );
+}
+
+assert.deepEqual(resolveFunnelStageRecipients(funnelProfessionals, "registered"), [{ id: "registered", stage: "registered" }]);
+assert.deepEqual(resolveFunnelStageRecipients([], "paid"), [], "etapa sem profissionais não pode gerar destinatários");
+assert.deepEqual(resolveNotificationTargets({ target: "funnel_stage", professionals: [], selectedFunnelStage: "", funnelBoard }), []);
+assert.equal(getNotificationRecipientCount({ target: "funnel_stage", professionals: [], selectedFunnelStage: "paid", funnelBoard }), 1);
+assert.deepEqual(resolveNotificationTargets({ target: "specific", professionals: [{ id: "specific", full_name: "", google_email: "" }], specificProfessionalId: "specific" }), ["specific"]);
+assert.deepEqual(resolveNotificationTargets({ target: "all", professionals: [{ id: "one", full_name: "", google_email: "" }, { id: "two", full_name: "", google_email: "" }] }), ["one", "two"]);
 
 console.log("Notification center tests passed.");

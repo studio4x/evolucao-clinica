@@ -82,6 +82,13 @@ assert.equal(board.professionals.find((item) => item.id === 'whatsapp')?.whatsap
 assert.equal(board.professionals.find((item) => item.id === 'choice')?.emailSentAt, '2026-09-02T11:00:00.000Z');
 
 assert.equal(getProfessionalFunnelStage({ professional: professional('u1'), state: null, whatsappVerifiedAt: null }), 'registered');
+const progressionProfessional = professional('progression');
+assert.equal(getProfessionalFunnelStage({ professional: progressionProfessional, state: null }), 'registered');
+assert.equal(getProfessionalFunnelStage({ professional: progressionProfessional, state: { user_id: progressionProfessional.id, patients_count: 1 } }), 'first_patient');
+assert.equal(getProfessionalFunnelStage({ professional: progressionProfessional, state: { user_id: progressionProfessional.id, patients_count: 1, linked_records_count: 1 } }), 'linked_record');
+assert.equal(getProfessionalFunnelStage({ professional: progressionProfessional, state: { user_id: progressionProfessional.id, patients_count: 1, linked_records_count: 1, evolutions_count: 1, first_evolution_completed_at: '2026-09-05T10:00:00.000Z' } }), 'first_evolution');
+assert.equal(getProfessionalFunnelStage({ professional: progressionProfessional, state: { user_id: progressionProfessional.id, usage_days_count: 2, evolutions_count: 1, first_evolution_completed_at: '2026-09-05T10:00:00.000Z' } }), 'returned');
+assert.equal(getProfessionalFunnelStage({ professional: { ...progressionProfessional, subscription_plan: 'monthly', subscription_status: 'active' }, state: { user_id: progressionProfessional.id, usage_days_count: 2 } }), 'paid');
 assert.equal(getProfessionalCommercialStatus(professional('expired', { trial_ends_at: '2026-09-01T00:00:00.000Z' }), new Date('2026-09-10T00:00:00.000Z')), 'trial_expired');
 assert.equal(getProfessionalCommercialStatus(professional('courtesy', { subscription_plan: 'courtesy', subscription_status: 'active' }), new Date('2026-09-10T00:00:00.000Z')), 'courtesy');
 

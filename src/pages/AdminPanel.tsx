@@ -25,6 +25,7 @@ import { AdminConversionFunnel } from '../components/admin/AdminConversionFunnel
 import SubscriptionCouponsAdmin from '../components/admin/SubscriptionCouponsAdmin';
 import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsModal';
 import ProfessionalFunnelKanban from '../components/admin/ProfessionalFunnelKanban';
+import NotificationRecipientSelector from '../components/admin/NotificationRecipientSelector';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 import {
@@ -49,6 +50,12 @@ import {
   isTechnicalPlatformMarker,
   type AcquisitionData
 } from '../utils/acquisitionAttribution';
+import {
+  resolveNotificationTargets,
+  type BroadcastTarget,
+  type ProfessionalFunnelBoardForNotifications,
+} from '../utils/notificationRecipients';
+import type { ProfessionalFunnelStageKey } from '../../server/admin/professionalFunnel';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -1360,8 +1367,12 @@ export default function AdminPanel() {
   const [whatsappTemplatesError, setWhatsappTemplatesError] = useState('');
   const [whatsappConsentMetrics, setWhatsappConsentMetrics] = useState<{ enabled: number; optedIn: number; numberWithoutConsent: number; optOutProcessed: number; lastOptOutAt: string | null; tokenConfigured: boolean } | null>(null);
 
-  const [broadcastTarget, setBroadcastTarget] = useState<'all' | 'specific'>('all');
+  const [broadcastTarget, setBroadcastTarget] = useState<BroadcastTarget>('all');
   const [selectedProfessionalId, setSelectedProfessionalId] = useState('');
+  const [selectedFunnelStage, setSelectedFunnelStage] = useState<ProfessionalFunnelStageKey | ''>('');
+  const [professionalFunnel, setProfessionalFunnel] = useState<ProfessionalFunnelBoardForNotifications | null>(null);
+  const [professionalFunnelLoading, setProfessionalFunnelLoading] = useState(false);
+  const [professionalFunnelError, setProfessionalFunnelError] = useState('');
   const [notifTitle, setNotifTitle] = useState('');
   const [notifContent, setNotifContent] = useState('');
   const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
@@ -1580,6 +1591,43 @@ export default function AdminPanel() {
     if (user && profileRole === 'admin' && (activeTab === 'push_notifications' || activeTab === 'email_notifications' || activeTab === 'vapid_keys' || activeTab === 'whatsapp_config')) {
       fetchSmtpAndLogs();
     }
+  }, [user, profileRole, activeTab]);
+
+  useEffect(() => {
+    if (!user || profileRole !== 'admin' || (activeTab !== 'push_notifications' && activeTab !== 'email_notifications')) return;
+
+    let cancelled = false;
+    const fetchProfessionalFunnel = async () => {
+      setProfessionalFunnelLoading(true);
+      setProfessionalFunnelError('');
+      try {
+        const session = await supabase.auth.getSession();
+        const token = session.data.session?.access_token;
+        if (!token) throw new Error('Não autenticado.');
+
+        const response = await fetch('/api/admin/professional-funnel', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os dados atuais do funil.');
+        if (!Array.isArray(data.professionals) || !Array.isArray(data.stages) || !data.stageCounts) {
+          throw new Error('A resposta do funil está incompleta.');
+        }
+        if (!cancelled) setProfessionalFunnel(data as ProfessionalFunnelBoardForNotifications);
+      } catch (error: any) {
+        if (!cancelled) {
+          setProfessionalFunnel(null);
+          setProfessionalFunnelError(error?.message || 'Não foi possível carregar os dados atuais do funil.');
+        }
+      } finally {
+        if (!cancelled) setProfessionalFunnelLoading(false);
+      }
+    };
+
+    void fetchProfessionalFunnel();
+    return () => {
+      cancelled = true;
+    };
   }, [user, profileRole, activeTab]);
 
   useEffect(() => {
@@ -2134,13 +2182,58 @@ export default function AdminPanel() {
     }
   };
 
-  // Disparar notificação (para todos ou um profissional)
-  const handleSendNotification = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const resolveManualNotificationTargets = () => {
     if (broadcastTarget === 'specific' && !selectedProfessionalId) {
       alert('Selecione um profissional para enviar a notificação.');
-      return;
+      return null;
     }
+    if (broadcastTarget === 'funnel_stage' && !selectedFunnelStage) {
+      alert('Selecione uma etapa do funil para enviar a notificação.');
+      return null;
+    }
+    if (broadcastTarget === 'funnel_stage' && (professionalFunnelLoading || professionalFunnelError || !professionalFunnel)) {
+      alert(professionalFunnelError || 'Os dados do funil ainda não estão disponíveis para este envio.');
+      return null;
+    }
+
+    const targets = resolveNotificationTargets({
+      target: broadcastTarget,
+      professionals,
+      specificProfessionalId: selectedProfessionalId,
+      selectedFunnelStage,
+      funnelBoard: professionalFunnel,
+    });
+    if (targets.length === 0) {
+      alert(broadcastTarget === 'funnel_stage'
+        ? 'Não há profissionais nesta etapa do funil no momento.'
+        : 'Nenhum profissional destinatário encontrado.');
+      return null;
+    }
+    return targets;
+  };
+
+  const confirmManualNotificationTargets = async (targetCount: number) => {
+    if (broadcastTarget === 'specific') return true;
+
+    const stageLabel = professionalFunnel?.stages.find((stage) => stage.key === selectedFunnelStage)?.label;
+    const message = broadcastTarget === 'funnel_stage'
+      ? `Enviar esta notificação para ${targetCount} profissional${targetCount === 1 ? '' : 'is'} da etapa '${stageLabel || selectedFunnelStage}'?`
+      : `Enviar esta notificação para todos os ${targetCount} profissionais selecionados?`;
+
+    return showConfirm(message, {
+      title: 'Confirmar envio',
+      confirmLabel: 'Confirmar envio',
+      cancelLabel: 'Cancelar',
+      variant: 'warning',
+      icon: 'warning',
+    });
+  };
+
+  // Disparar notificação (para todos, uma etapa do funil ou um profissional)
+  const handleSendNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targets = resolveManualNotificationTargets();
+    if (!targets || !(await confirmManualNotificationTargets(targets.length))) return;
 
     setNotifSending(true);
     setNotifSendSuccess(false);
@@ -2152,17 +2245,6 @@ export default function AdminPanel() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       if (!token) throw new Error('Não autenticado.');
-
-      let targets: string[] = [];
-      if (broadcastTarget === 'all') {
-        targets = professionals.map(p => p.id);
-      } else {
-        targets = [selectedProfessionalId];
-      }
-
-      if (targets.length === 0) {
-        throw new Error('Nenhum profissional destinatário encontrado.');
-      }
 
       let successCount = 0;
       let errorMsg = '';
@@ -2283,10 +2365,8 @@ export default function AdminPanel() {
 
   const handleSendEmailNotification = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (broadcastTarget === 'specific' && !selectedProfessionalId) {
-      alert('Selecione um profissional para enviar o e-mail.');
-      return;
-    }
+    const targets = resolveManualNotificationTargets();
+    if (!targets || !(await confirmManualNotificationTargets(targets.length))) return;
 
     setNotifSending(true);
     setNotifSendSuccess(false);
@@ -2297,17 +2377,6 @@ export default function AdminPanel() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       if (!token) throw new Error('Não autenticado.');
-
-      let targets: string[] = [];
-      if (broadcastTarget === 'all') {
-        targets = professionals.map(p => p.id);
-      } else {
-        targets = [selectedProfessionalId];
-      }
-
-      if (targets.length === 0) {
-        throw new Error('Nenhum profissional destinatário encontrado.');
-      }
 
       let successCount = 0;
       let errorMsg = '';
@@ -5691,38 +5760,18 @@ export default function AdminPanel() {
                           </div>
                         )}
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Destinatário</label>
-                            <select
-                              value={broadcastTarget}
-                              onChange={(e) => setBroadcastTarget(e.target.value as any)}
-                              className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                            >
-                              <option value="all">Todos os Profissionais (Broadcast)</option>
-                              <option value="specific">Profissional Específico</option>
-                            </select>
-                          </div>
-
-                          {broadcastTarget === 'specific' && (
-                            <div className="space-y-1">
-                              <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Selecionar Profissional</label>
-                              <select
-                                value={selectedProfessionalId}
-                                onChange={(e) => setSelectedProfessionalId(e.target.value)}
-                                required
-                                className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                              >
-                                <option value="">-- Escolha o Profissional --</option>
-                                {professionals.map(p => (
-                                  <option key={p.id} value={p.id}>
-                                    {p.full_name} ({p.google_email || 'Sem e-mail'})
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </div>
+                        <NotificationRecipientSelector
+                          target={broadcastTarget}
+                          onTargetChange={setBroadcastTarget}
+                          selectedProfessionalId={selectedProfessionalId}
+                          onProfessionalChange={setSelectedProfessionalId}
+                          selectedFunnelStage={selectedFunnelStage}
+                          onFunnelStageChange={setSelectedFunnelStage}
+                          professionals={professionals}
+                          funnelBoard={professionalFunnel}
+                          funnelLoading={professionalFunnelLoading}
+                          funnelError={professionalFunnelError}
+                        />
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="md:col-span-2 space-y-1">
@@ -6127,36 +6176,18 @@ export default function AdminPanel() {
                         </div>
                       )}
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Destinatário</label>
-                        <select
-                          value={broadcastTarget}
-                          onChange={(e) => setBroadcastTarget(e.target.value as any)}
-                          className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                        >
-                          <option value="all">Todos os Profissionais (Broadcast)</option>
-                          <option value="specific">Profissional Específico</option>
-                        </select>
-                      </div>
-
-                      {broadcastTarget === 'specific' && (
-                        <div className="space-y-1">
-                          <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Selecionar Profissional</label>
-                          <select
-                            value={selectedProfessionalId}
-                            onChange={(e) => setSelectedProfessionalId(e.target.value)}
-                            required
-                            className="w-full px-3.5 py-2.5 border border-brand-border rounded-xl text-sm outline-none focus:border-brand-primary bg-brand-bg/40 font-medium"
-                          >
-                            <option value="">-- Escolha o Profissional --</option>
-                            {professionals.map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.full_name} ({p.google_email || 'Sem e-mail'})
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                      <NotificationRecipientSelector
+                        target={broadcastTarget}
+                        onTargetChange={setBroadcastTarget}
+                        selectedProfessionalId={selectedProfessionalId}
+                        onProfessionalChange={setSelectedProfessionalId}
+                        selectedFunnelStage={selectedFunnelStage}
+                        onFunnelStageChange={setSelectedFunnelStage}
+                        professionals={professionals}
+                        funnelBoard={professionalFunnel}
+                        funnelLoading={professionalFunnelLoading}
+                        funnelError={professionalFunnelError}
+                      />
 
                       <div className="space-y-1">
                         <label className="text-xs font-bold text-brand-text uppercase tracking-wider block">Assunto do E-mail</label>
