@@ -167,6 +167,6 @@ Pré-requisitos não executados e obrigatórios antes de migrations empresariais
 - Fail-fast e isolamento staging/produção validados.
 - Integrações externas em staging permaneceram bloqueadas.
 - Nenhuma correção, migration, alteração de schema, Auth, Storage, Vault, Edge Function, cron ou dado de produção foi realizada.
-- Branch `feat/clinicas` e o projeto Vercel de homologação só devem conter a base documental/hardening; nenhuma funcionalidade Clínica foi iniciada.
+- Branch `feat/clinicas` foi criada a partir de `d174cec` e enviada ao GitHub; o ambiente Production do projeto Vercel `evolucao-clinica-staging` foi configurado para acompanhar essa branch. A branch contém somente a base documental/hardening; nenhuma funcionalidade Clínica foi iniciada.
 
 Este documento é pré-requisito de revisão para a Fase 1 e não autoriza sua execução automaticamente.
