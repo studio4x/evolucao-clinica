@@ -18,6 +18,15 @@ Nenhuma migration, alteração de schema, dado, Auth, Storage, Vault, Edge Funct
 
 Os blocos de diagnóstico abaixo preservam o histórico da preparação e dos riscos encontrados antes do provisionamento. Para o estado atual, prevalecem esta atualização final e o inventário somente leitura vinculado acima.
 
+### Validação posterior do domínio de homologação
+
+- `staging.evolucaoclinica.app.br` resolve por CNAME para `fe82ddbba431ebd2.vercel-dns-017.com`.
+- A Vercel reporta `Valid Configuration` e o domínio está associado ao projeto `evolucao-clinica-staging`; não foi encontrado no projeto de produção.
+- O certificado TLS é válido para o hostname e foi emitido pela Let’s Encrypt. A proteção de deployment permanece ativa: requisições sem sessão recebem redirecionamento SSO; a sessão autenticada carrega a aplicação.
+- O runtime servido pelo domínio contém o banner de homologação, o ref staging `hwkdwinfckmjoriqxbjk` e não contém o ref de produção `kvxboovgrrhhttaqinld` nem service role no DOM.
+- No Supabase staging, `site_url` foi configurada para `https://staging.evolucaoclinica.app.br` e a allow-list preserva localhost, aliases `.vercel.app` do staging e o deep link nativo. O projeto de produção não foi alterado.
+- `external_google_enabled` permanece `false`. Para uma etapa futura, o callback do provedor deverá usar o endpoint Auth do projeto staging e o redirecionamento da aplicação staging; nenhum cliente OAuth de produção foi reutilizado.
+
 ## Conclusão executiva
 
 A branch `feat/clinicas` **não deve ser publicada ainda**. O hardening de código foi implementado, as novas variáveis obrigatórias foram cadastradas no escopo Production e a criação automática de Previews foi desativada no projeto Vercel público sem alterar a branch de produção `main`.
