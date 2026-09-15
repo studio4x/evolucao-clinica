@@ -21,6 +21,7 @@ import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js
 import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
+import { registerClinicContextRoutes } from "./server/clinic/clinicContextRoutes.js";
 import {
   completeMetaRegistrationEvent,
   prepareMetaRegistrationEvent,
@@ -7431,6 +7432,12 @@ app.get("/api/public/reports/:reportId", async (req, res) => {
 
 lifecycleService.registerRoutes(app, { requireAuth, requireAdmin });
 registerWhatsAppOtpRoutes(app, { requireAuth, service: whatsappOtpService });
+registerClinicContextRoutes(app, {
+  requireAuth,
+  supabaseUrl,
+  serviceRoleKey: supabaseServiceKey,
+  clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
+});
 
 // API 404 Catch-all
 app.all(/^\/api\/.*$/, (req, res) => {

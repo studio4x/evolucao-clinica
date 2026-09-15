@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb, Info, Image, Cloud } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb, Info, Image, Cloud, Building2, type LucideIcon } from 'lucide-react';
 import { UserAvatar } from './common/UserAvatar';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
@@ -12,9 +12,15 @@ import { runAutoBackupIfNeeded } from '../services/backupService';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { isAndroidDevice, redirectToGooglePlay } from '../utils/googlePlay';
 import { showAlert } from '../store/modalStore';
+import { publicEffectFlags } from '../config/publicFlags';
+import { useClinicContextStore } from '../store/clinicContextStore';
+import { ClinicContextSelector } from './clinic/ClinicContextSelector';
+
+type PanelNavItem = { name: string; path: string; icon: LucideIcon; isPremium?: boolean };
 
 export default function Layout() {
   const { user, profileRole, googleAccessToken, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const { activeContext, reset: resetClinicContext } = useClinicContextStore();
   const siteConfig = useSiteConfig();
   const navigate = useNavigate();
   const location = useLocation();
@@ -175,11 +181,12 @@ export default function Layout() {
   };
 
   const handleLogout = async () => {
+    resetClinicContext();
     await supabase.auth.signOut();
     navigate('/login');
   };
 
-  const navItems = [
+  const personalNavItems: PanelNavItem[] = [
     { name: 'Dashboard', path: '/painel/dashboard', icon: LayoutDashboard },
     { name: 'Pacientes', path: '/painel/patients', icon: Users },
     { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
@@ -194,18 +201,33 @@ export default function Layout() {
   ];
 
   if (profileRole === 'admin') {
-    navItems.push({ name: 'Painel Admin', path: '/admin', icon: ShieldCheck });
+    personalNavItems.push({ name: 'Painel Admin', path: '/admin', icon: ShieldCheck });
   }
 
-  navItems.push({ name: 'Sobre o app', path: '/painel/about', icon: Info });
+  personalNavItems.push({ name: 'Sobre o app', path: '/painel/about', icon: Info });
 
-  const bottomNavItems = [
+  const clinicNavItems: PanelNavItem[] = [
+    { name: 'Visão da clínica', path: '/painel/clinica', icon: Building2 },
+    { name: 'Meu Perfil', path: '/painel/profile', icon: User },
+    { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
+    { name: 'Sobre o app', path: '/painel/about', icon: Info },
+  ];
+  const isClinicContext = publicEffectFlags.clinicFeature && activeContext.type === 'organization';
+  const navItems = isClinicContext ? clinicNavItems : personalNavItems;
+
+  const personalBottomNavItems: PanelNavItem[] = [
     { name: 'Início', path: '/painel/dashboard', icon: LayoutDashboard },
     { name: 'Pacientes', path: '/painel/patients', icon: Users },
     { name: 'Histórico', path: '/painel/history', icon: HistoryIcon },
     { name: 'Notif.', path: '/painel/notifications', icon: Bell },
     { name: 'Mais', path: '#menu', icon: Menu },
   ];
+  const clinicBottomNavItems: PanelNavItem[] = [
+    { name: 'Clínica', path: '/painel/clinica', icon: Building2 },
+    { name: 'Perfil', path: '/painel/profile', icon: User },
+    { name: 'Mais', path: '#menu', icon: Menu },
+  ];
+  const bottomNavItems = isClinicContext ? clinicBottomNavItems : personalBottomNavItems;
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">
@@ -276,6 +298,8 @@ export default function Layout() {
                 </div>
               )}
             </div>
+
+            {publicEffectFlags.clinicFeature && <ClinicContextSelector collapsed={isCollapsed} />}
 
             <nav className="space-y-1">
               {navItems.map((item) => {
@@ -437,6 +461,8 @@ export default function Layout() {
               <p className="text-xs text-brand-text-muted truncate">{user?.email}</p>
             </div>
           </div>
+
+          {publicEffectFlags.clinicFeature && <ClinicContextSelector />}
 
           {/* Navigation Links */}
           <nav className="space-y-0.5">

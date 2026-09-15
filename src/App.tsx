@@ -43,6 +43,7 @@ const CommunicationPreferences = lazyWithRetry(() => import('./pages/Communicati
 const Unsubscribe = lazyWithRetry(() => import('./pages/Unsubscribe'), 'Unsubscribe');
 const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedback'), 'ContinuityFeedback');
 const TrialExtensionRedeem = lazyWithRetry(() => import('./pages/TrialExtensionRedeem'), 'TrialExtensionRedeem');
+const ClinicShell = lazyWithRetry(() => import('./pages/ClinicShell'), 'ClinicShell');
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
@@ -69,6 +70,9 @@ import { calculateAcquisitionChannel, getAcquisitionDistribution, getAcquisition
 import { isPublicAcquisitionPathname, sendAcquisitionTelemetry } from './services/acquisitionTelemetry';
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
 import { EnvironmentBanner } from './components/layout/EnvironmentBanner';
+import { ClinicRoute } from './components/clinic/ClinicRoute';
+import { PersonalContextRoute } from './components/clinic/PersonalContextRoute';
+import { useClinicContextStore } from './store/clinicContextStore';
 import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
@@ -412,6 +416,7 @@ export default function App() {
     clearSilentGoogleRefreshFlag(useAuthStore.getState().googleAccessUserId);
     setUser(null);
     setProfileInfo(null, null, null, null, null, null);
+    useClinicContextStore.getState().reset();
     setAnalyticsUser(null);
     clearPendingGoogleScopes();
     await supabase.auth.signOut();
@@ -463,6 +468,14 @@ export default function App() {
       }
 
       return data;
+    };
+
+    const hydrateClinicContexts = async (session: any) => {
+      if (!session?.user?.id || !session.access_token) {
+        useClinicContextStore.getState().reset();
+        return;
+      }
+      await useClinicContextStore.getState().hydrateForUser(session.user.id, session.access_token);
     };
 
     const handleAuthSession = async (session: any) => {
@@ -544,6 +557,7 @@ export default function App() {
               }
               clearSilentGoogleRefreshFlag(session.user.id);
             }
+            await hydrateClinicContexts(session);
             setAuthReady(true);
             return;
           }
@@ -607,6 +621,7 @@ export default function App() {
               profileData.subscription_ends_at,
               profileData.trial_ends_at
             );
+            await hydrateClinicContexts(session);
             setAnalyticsUser(session.user.id, {
               professional_segment: typeof profileData.professional_title === 'string' ? profileData.professional_title : null,
               work_context: typeof profileData.work_context === 'string' ? profileData.work_context : null,
@@ -723,6 +738,7 @@ export default function App() {
           }
         } else {
           await clearProfessionalChannel();
+          useClinicContextStore.getState().reset();
           setAnalyticsUser(null);
           pendingOnboardingNoticeRef.current = null;
           clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
@@ -793,6 +809,27 @@ export default function App() {
     };
   }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleAccessTokenIssuedAt, setGoogleGrantedScopes]);
 
+  useEffect(() => {
+    const revalidateOnForeground = () => {
+      if (document.visibilityState !== 'visible') return;
+      void (async () => {
+        const user = useAuthStore.getState().user;
+        if (!user) return;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user.id === user.id) {
+          await useClinicContextStore.getState().revalidateForUser(user.id, session.access_token);
+        }
+      })();
+    };
+
+    document.addEventListener('visibilitychange', revalidateOnForeground);
+    window.addEventListener('pageshow', revalidateOnForeground);
+    return () => {
+      document.removeEventListener('visibilitychange', revalidateOnForeground);
+      window.removeEventListener('pageshow', revalidateOnForeground);
+    };
+  }, []);
+
   return (
     <Router>
       <EnvironmentBanner />
@@ -833,17 +870,18 @@ export default function App() {
           {/* Client/Therapist Panel Routes */}
           <Route path="/painel" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="patients" element={<Patients />} />
-            <Route path="patients/new" element={<PatientForm />} />
-            <Route path="patients/:id/edit" element={<PatientForm />} />
-            <Route path="patients/:id" element={<PatientDetail />} />
-            <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
-            <Route path="history" element={<History />} />
-            <Route path="tutorial" element={<Tutorial />} />
-            <Route path="share-target" element={<ShareTarget />} />
+            <Route path="clinica" element={<ClinicRoute><ClinicShell /></ClinicRoute>} />
+            <Route path="dashboard" element={<PersonalContextRoute><Dashboard /></PersonalContextRoute>} />
+            <Route path="patients" element={<PersonalContextRoute><Patients /></PersonalContextRoute>} />
+            <Route path="patients/new" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />
+            <Route path="patients/:id/edit" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />
+            <Route path="patients/:id" element={<PersonalContextRoute><PatientDetail /></PersonalContextRoute>} />
+            <Route path="patients/:id/evolutions/new" element={<PersonalContextRoute><NewEvolution /></PersonalContextRoute>} />
+            <Route path="history" element={<PersonalContextRoute><History /></PersonalContextRoute>} />
+            <Route path="tutorial" element={<PersonalContextRoute><Tutorial /></PersonalContextRoute>} />
+            <Route path="share-target" element={<PersonalContextRoute><ShareTarget /></PersonalContextRoute>} />
             <Route path="subscription" element={<Subscription />} />
-            <Route path="migration" element={<Migration />} />
+            <Route path="migration" element={<PersonalContextRoute><Migration /></PersonalContextRoute>} />
             <Route path="profile" element={<Profile />} />
             <Route path="logotipo-personalizado" element={<CustomLogo />} />
             <Route path="backup-exportacao" element={<BackupExport />} />
