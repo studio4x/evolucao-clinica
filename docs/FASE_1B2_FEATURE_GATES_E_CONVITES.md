@@ -126,4 +126,70 @@ Antes de produção permanecem obrigatórios: enforcement real de `CLINIC_FEATUR
 
 **FASE 1B2 APROVADA PARA REVISÃO**
 
+## 12. Revisão pós-implementação / hardening
+
+### Identidade real do ambiente
+
+A primeira implementação usava `allowed_environment` apenas contra a própria
+lista de valores permitidos (`staging`/`production`). Isso era semanticamente
+redundante: qualquer valor aceito pelo `CHECK` passaria pela expressão e não
+identificaria o banco real.
+
+O artefato `20260915_05_harden_runtime_environment.sql` adiciona
+`private.runtime_environment`, uma tabela singleton privada, com a identidade
+consciente `staging` criada exclusivamente no projeto
+`hwkdwinfckmjoriqxbjk`. Ela possui RLS com `USING/WITH CHECK false` para
+`anon`/`authenticated`, nenhum grant de cliente e não depende de frontend,
+`VITE_`, hostname, JWT editável ou payload. A ausência da linha é inválida.
+
+`private.is_clinic_global_enabled()` agora exige simultaneamente:
+
+| runtime do banco | `allowed_environment` | `enabled` | resultado |
+| --- | --- | --- | --- |
+| `staging` | `staging` | `false` | OFF |
+| `staging` | `staging` | `true` | ON |
+| `staging` | `production` | `true` | OFF |
+| ausente | `staging` | `true` | OFF |
+| `staging` | configuração ausente | `true` | OFF |
+
+Na futura preparação de produção, uma migration/bootstrap explícita deverá
+criar `environment_name = 'production'` e manter `enabled = false` por padrão.
+Não há detecção automática por hostname ou variável de frontend.
+
+### Política do token bruto
+
+O raw invitation token continua retornado uma única vez somente para o smoke
+controlado de staging. Ele nunca é persistido: apenas `token_hash` fica no
+banco. Antes de qualquer UI, envio ou produção, a emissão e o envio deverão
+ocorrer em backend/server-side controlado; o segredo deverá existir apenas em
+memória do processo de envio e jamais chegar a logs, analytics, documentação,
+telemetria ou frontend como operação normal. Esta limitação é blocker para
+envio real/produção.
+
+O aceite continua usando `auth.users.email` como fonte autoritativa,
+`email_confirmed_at` obrigatório e nenhum `user_metadata` para autorização.
+`token_hash` não é selecionável por `authenticated`, e intenção clínica não
+concede `clinical_access_enabled`.
+
+### Visibilidade de convites
+
+A policy `organization_invitations_select_manager` foi revisada. O princípio
+de least privilege aplicado é: owner pode ler convites de `manager` e
+`professional`; manager lê somente convites de `professional`. Manager não
+obtém visibilidade de convites de manager, pois não pode emiti-los nem
+revogá-los.
+
+### Revalidação e estado final
+
+O hardening foi aplicado somente no staging e revalidado com matriz completa
+de binding, gates globais/organizacionais, emissão, aceite, revogação,
+cross-tenant, anon deny, grants e cleanup. Ao final, o runtime permaneceu
+`staging`, `allowed_environment` permaneceu `staging` e o gate global ficou
+`enabled=false`. Não foram alteradas produção, Vercel, `main`, as seis tabelas
+individuais, UI, e-mail, billing ou seats.
+
+Blockers restantes antes de produção: implementar a entrega server-side do
+convite sem retornar raw token ao cliente e preparar uma identidade explícita
+`production` em migration/bootstrap próprio, com gate inicialmente OFF.
+
 Isso não autoriza ativação em produção nem a próxima fase automaticamente.

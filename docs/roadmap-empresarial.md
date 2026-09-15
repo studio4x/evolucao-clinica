@@ -1,6 +1,6 @@
 # Roadmap Empresarial — Clínicas, Licenças, Equipes e Pacientes Compartilhados
 
-**Status:** Fase 0 consolidada — Fase 0.5 auditada — Fase 1A concluída — Fase 1B0 aprovada — Fase 1B1 revisada e endurecida em staging — Fase 1B2 implementada em staging, aguardando revisão — etapas posteriores não iniciadas
+**Status:** Fase 0 consolidada — Fase 0.5 auditada — Fase 1A concluída — Fase 1B0 aprovada — Fase 1B1 revisada e endurecida em staging — Fase 1B2.1 revisada e endurecida em staging, aguardando revisão — etapas posteriores não iniciadas
 
 **Tipo:** Especificação funcional, de dados, segurança e implantação  
 **Escopo:** Plano empresarial para clínicas + colaboração profissional em pacientes  
@@ -884,11 +884,11 @@ O artefato controlado [`20260915_01_organizations_memberships.sql`](../supabase/
 
 O smoke Auth/RLS passou com A/B/C/D, cleanup sem resíduos e baseline individual preservado. A revisão 1B1.1 também endureceu a seleção de memberships históricos na transferência de owner, formalizou owner anterior como manager com preservação de `clinical_access_enabled` e passou a matriz de estados, autorização e concorrência. O enforcement server-side de feature flag permanece gate obrigatório antes de produção. O resultado é **FASE 1B1 REVISADA E ENDURECIDA — APTO PARA FASE 1B2**, sem iniciar a Fase 1B2 nem concluir a Fase 1 empresarial.
 
-### Fase 1B2 — Feature gates e convites — implementada em staging, aguardando revisão
+### Fase 1B2 — Feature gates e convites — revisada e endurecida em staging, aguardando revisão
 
-Os artefatos controlados [`20260915_03_clinic_feature_gates.sql`](../supabase/clinic-migrations/20260915_03_clinic_feature_gates.sql) e [`20260915_04_organization_invitations.sql`](../supabase/clinic-migrations/20260915_04_organization_invitations.sql) foram aplicados exclusivamente no staging `hwkdwinfckmjoriqxbjk` e estão documentados em [`FASE_1B2_FEATURE_GATES_E_CONVITES.md`](FASE_1B2_FEATURE_GATES_E_CONVITES.md). A entrega cobre apenas gate global DB-side deny-by-default, flag `clinic` por organização, RLS/grants, emissão/revogação/aceite de convites, expiração lógica e testes sintéticos de abuso, concorrência e isolamento. A flag global voltou a OFF após o smoke; produção, UI, envio real, billing, seats, pacientes compartilhados e Fase 1B3 permanecem fora do escopo.
+Os artefatos controlados [`20260915_03_clinic_feature_gates.sql`](../supabase/clinic-migrations/20260915_03_clinic_feature_gates.sql), [`20260915_04_organization_invitations.sql`](../supabase/clinic-migrations/20260915_04_organization_invitations.sql) e [`20260915_05_harden_runtime_environment.sql`](../supabase/clinic-migrations/20260915_05_harden_runtime_environment.sql) foram aplicados exclusivamente no staging `hwkdwinfckmjoriqxbjk` e estão documentados em [`FASE_1B2_FEATURE_GATES_E_CONVITES.md`](FASE_1B2_FEATURE_GATES_E_CONVITES.md). A entrega cobre gate global DB-side deny-by-default com identidade privada real do ambiente, flag `clinic` por organização, RLS/grants, emissão/revogação/aceite de convites, expiração lógica, visibilidade mínima para manager e testes sintéticos de abuso, concorrência e isolamento. A flag global voltou a OFF após o smoke; produção, UI, envio real, billing, seats, pacientes compartilhados e Fase 1B3 permanecem fora do escopo.
 
-O resultado é **FASE 1B2 APROVADA PARA REVISÃO**, não conclusão da Fase 1 empresarial. Antes de produção ainda são obrigatórios enforcement operacional de `CLINIC_FEATURE_ENABLED`, ativação administrativa auditada por organização, gates jurídicos e as fases posteriores de licenças e pacientes compartilhados.
+O resultado é **FASE 1B2 REVISADA E ENDURECIDA — APTO PARA FASE 1B3**, não conclusão da Fase 1 empresarial. Antes de produção ainda são obrigatórios o envio server-side sem retorno de raw token ao cliente, identidade explícita `production` em bootstrap próprio, enforcement operacional de `CLINIC_FEATURE_ENABLED`, ativação administrativa auditada por organização, gates jurídicos e as fases posteriores de licenças e pacientes compartilhados. A Fase 1B3 não foi iniciada.
 
 ### Fase 1 — Fundação de organização e identidade
 
