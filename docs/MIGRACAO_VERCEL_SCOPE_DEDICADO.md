@@ -2,7 +2,7 @@
 
 **Data da execução:** 15/09/2026
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** produção transferida para o TARGET e validada em runtime; validação final parcial por falha preexistente no `npm test`
+**Estado atual:** migração Vercel concluída e validada; falha isolada do `npm test` classificada como pendência preexistente fora do escopo da migração
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -176,14 +176,44 @@ O staging foi validado integralmente e permanece íntegro no TARGET. A tentativa
 - O redeploy controlado oficial preservou o SHA `d174cec66672354955f0a529aa07152f8e0e7c30` e criou `dpl_4D56yBHzJqZuu3rs4JVJY5EBoUNm`, `READY`, `target=production`, branch `main`. O alias customizado foi atualizado pelo CLI oficial.
 - O apex respondeu HTTPS com redirect 308 para `www`; o domínio `www` respondeu HTTPS 200 com exatamente `{"status":"ok"}` em `/api/health`. A homepage carregou o dashboard real no browser, sem banner `AMBIENTE DE HOMOLOGAÇÃO`.
 - A inspeção do bundle runtime encontrou somente o ref Supabase de produção `kvxboovgrrhhttaqinld`; o ref staging `hwkdwinfckmjoriqxbjk`, a URL staging e literals de service role não apareceram. Não houve cross-environment observado.
-- Testes locais: `npm run test:environment-isolation` **PASS**; `npm run lint` **PASS**; `npm run build` **PASS** com aviso preexistente de chunks grandes; `git diff --check` **PASS**. `npm test` **FAIL** em `tests/analytics.test.ts:205`, com `2 !== 3` para a expectativa de retry `3`; nenhum código foi alterado nesta execução e a falha foi registrada separadamente.
+- Testes locais: `npm run test:environment-isolation` **PASS**; `npm run lint` **PASS**; `npm run build` **PASS** com aviso preexistente de chunks grandes; `git diff --check` **PASS**. `npm test` possui uma falha isolada em `tests/analytics.test.ts:205`, com `2 !== 3` para a expectativa de retry `3`; ela é **PENDÊNCIA PREEXISTENTE / NÃO CAUSADA PELA MIGRAÇÃO** e não invalida os gates de infraestrutura/runtime.
+- A evidência Git final confirma 18 commits entre `40bd76a` e `7589e6a`, com o único caminho alterado sendo `docs/MIGRACAO_VERCEL_SCOPE_DEDICADO.md`. Não houve alteração em código da aplicação, testes, `package.json`, dependências, configuração funcional, Supabase ou migrations.
 - Staging não foi alterado. Nenhum SQL, Supabase, DNS, GitHub, env var, integração, upgrade, add-on ou Fase 1B1 foi executado nesta retomada.
 
 ### Estado atual da transferência
 
-**MIGRAÇÃO VERCEL PARCIAL — PRODUÇÃO TRANSFERIDA MAS AINDA NÃO VALIDADA**
+**MIGRAÇÃO VERCEL CONCLUÍDA E VALIDADA**
 
-O Project Transfer e os gates de infraestrutura/runtime foram concluídos, mas a suíte local completa permanece pendente pela falha isolada de `npm test` descrita acima.
+O Project Transfer e todos os gates de infraestrutura/runtime foram concluídos. A falha isolada do `npm test` permanece registrada separadamente e será investigada antes da autorização da Fase 1B1.
+
+## Pendência técnica pós-migração
+
+- arquivo: `tests/analytics.test.ts`
+- linha aproximada: `205`
+- cenário: expectativa de retry `3`, resultado `2`
+- classificação: pendência de suíte/teste
+- relação com migração Vercel: nenhuma evidência de causalidade; não houve alteração de código entre `40bd76a` e `7589e6a`
+- ação futura: investigar antes de autorizar a Fase 1B1
+
+## Estado final dos projetos Vercel
+
+```text
+PRODUÇÃO
+team      = evolucao-clinica
+team ID   = team_opJQiM63Vn6P0uOe5Om8e1HD
+branch    = main
+Supabase  = kvxboovgrrhhttaqinld
+
+STAGING
+team      = evolucao-clinica
+team ID   = team_opJQiM63Vn6P0uOe5Om8e1HD
+branch    = feat/clinicas
+Supabase  = hwkdwinfckmjoriqxbjk
+```
+
+- A API confirmou ambos os projetos no TARGET e retornou HTTP 404 para ambos os Project IDs quando consultados no antigo SOURCE `studio4xs-projects`.
+- O SOURCE antigo ainda contém projetos não relacionados (`dashboard-ads-s4x`, `unificador-csv`, `homecare-match` e outros), mas nenhum projeto do Evolução Clínica permanece operacionalmente dependente dele.
+- Nenhum recurso histórico do SOURCE foi excluído.
 
 ## Histórico da primeira execução
 
@@ -383,4 +413,4 @@ A execução termina aqui. A Fase 1B1 não foi retomada.
 
 ## Estado final atual
 
-**MIGRAÇÃO VERCEL PARCIAL — PRODUÇÃO TRANSFERIDA MAS AINDA NÃO VALIDADA**
+**MIGRAÇÃO VERCEL CONCLUÍDA E VALIDADA**
