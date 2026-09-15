@@ -872,11 +872,17 @@ O diagnóstico, a matriz de ambientes, as variáveis, as guardas planejadas e os
 
 O desenho técnico foi consolidado em [`FASE_1A_DESENHO_FUNDACAO_EMPRESARIAL.md`](FASE_1A_DESENHO_FUNDACAO_EMPRESARIAL.md). A Fase 1A define contexto único por sessão/Auth staging, memberships referenciados ao perfil `professionals`/`auth.uid()`, aceite seguro de convites, bootstrap sanitizado e feature flag global + por organização. Nenhuma tabela, migration ou funcionalidade empresarial foi aplicada.
 
-### Fase 1B0 — Bootstrap individual sanitizado — aplicada em staging, aguardando revisão
+### Fase 1B0 — Bootstrap individual sanitizado — aplicada em staging, aprovada para revisão
 
-O baseline `20260914-individual-core-v1` foi aplicado exclusivamente no Supabase staging e está documentado em [`FASE_1B0_BOOTSTRAP_STAGING.md`](FASE_1B0_BOOTSTRAP_STAGING.md). Ele reproduz somente as tabelas e RLS necessárias ao fluxo individual, sem dados, Auth persistente, Storage, Vault, cron, integrações ou objetos empresariais. A Fase 1B1 (fundação de organização e identidade) permanece não iniciada e depende da revisão formal do gate 1B0.
+O baseline `20260914-individual-core-v1` foi aplicado exclusivamente no Supabase staging e está documentado em [`FASE_1B0_BOOTSTRAP_STAGING.md`](FASE_1B0_BOOTSTRAP_STAGING.md). Ele reproduz somente as tabelas e RLS necessárias ao fluxo individual, sem dados, Auth persistente, Storage, Vault, cron, integrações ou objetos empresariais. A Fase 1B1 foi implementada em staging conforme seção seguinte e permanece sujeita à revisão formal antes de qualquer expansão de escopo.
 
 **Gate para implementação:** aprovação do desenho, baseline staging sanitizado, matriz RLS/grants, testes de concorrência de convites e validação de rollback. As URLs/Auth, DNS, Vercel, secrets e integrações da Fase 0.5 permanecem fora de escopo.
+
+### Fase 1B1 — Fundação de organizações e memberships — implementada em staging, aguardando revisão
+
+O artefato controlado [`20260915_01_organizations_memberships.sql`](../supabase/clinic-migrations/20260915_01_organizations_memberships.sql) foi aplicado exclusivamente no staging `hwkdwinfckmjoriqxbjk` e documentado em [`FASE_1B1_FUNDACAO_ORGANIZACOES_MEMBERSHIPS.md`](FASE_1B1_FUNDACAO_ORGANIZACOES_MEMBERSHIPS.md). A implementação cobre somente `organizations`, `organization_memberships`, autorização, invariantes de owner, grants, RLS e o smoke multi-tenant. A criação de convites, billing, pacientes compartilhados, UI e produção permanece fora de escopo.
+
+O smoke Auth/RLS passou com A/B/C/D, cleanup sem resíduos e baseline individual preservado. O resultado é **FASE 1B1 APROVADA PARA REVISÃO**, não conclusão da Fase 1 empresarial.
 
 ### Fase 1 — Fundação de organização e identidade
 
