@@ -2,7 +2,7 @@
 
 **Data da execução:** 15/09/2026
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** staging transferido e validado nos gates de configuração/runtime; Auth/RLS bloqueado por credencial administrativa inacessível
+**Estado atual:** staging transferido e validado nos gates de configuração/runtime; Auth/RLS bloqueado porque a criação de uma Secret API Key temporária não foi aceita pela Management API
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -47,6 +47,9 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 - O bundle público contém o literal do ref de produção por causa da variável de guarda `VITE_PRODUCTION_SUPABASE_PROJECT_REF`; a URL efetiva de conexão e o health runtime continuam no staging. Isso não é uma credencial, mas deve ser tratado separadamente se “ref de produção ausente” significar ausência literal no bundle.
 - A Management API oficial Supabase, em modo read-only, confirmou exatamente as seis tabelas públicas individuais: `professionals`, `evolution_templates`, `patients`, `evolutions`, `patient_reports` e `plans`; RLS habilitada nas seis; zero usuários Auth e zero linhas nessas tabelas; zero buckets Storage; zero secrets Vault; ausência do schema `cron`; nenhum objeto empresarial. O artefato/manifest continua identificando o baseline como `20260914-individual-core-v1`; o banco não mantém tabela de metadados desse rótulo.
 - O smoke Auth/RLS não foi executado: a API Vercel não permite descriptografar a `SUPABASE_SERVICE_ROLE_KEY` sensível para o token disponível; a chave local pertence à produção e não foi usada. O conector MCP Supabase também continua sem permissão `-32600`. Nenhum usuário ou dado sintético foi criado nesta retomada.
+- Na retomada final do gate, a ref `hwkdwinfckmjoriqxbjk` foi confirmada diretamente pela Management API como o projeto staging saudável. A listagem de API keys retornou somente metadados (duas legacy, uma `publishable` e uma `secret`); nenhum valor foi registrado.
+- Foram tentadas somente chamadas oficiais de criação de API key temporária, com o nome solicitado e payload documentado (`type=secret`, `secret_jwt_template.role=service_role`), com e sem `reveal=true`. Todas retornaram HTTP 400; a variante de diagnóstico `publishable` também retornou HTTP 400. Não houve resposta 201, portanto nenhuma chave temporária foi criada. A confirmação posterior listou zero ocorrências dos nomes de diagnóstico e quatro chaves existentes.
+- A chave `default` `secret` existente e a legacy `service_role` não foram usadas como atalho, pois não atenderiam ao requisito de credencial administrativa exclusiva e temporária. Nenhum usuário, dado sintético ou alteração de schema foi criado nesta tentativa.
 - Testes locais atuais: `npm run test:environment-isolation` PASS; `npm test` PASS; `npm run lint` PASS; `npm run build` PASS com aviso preexistente de chunks grandes; `git diff --check` PASS.
 - Não houve redeploy de produção, promoção, alteração de DNS, alteração no GitHub ou transferência de produção.
 
@@ -80,33 +83,33 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 | `/api/health` efetivo | **PASS**; `vercel curl` protegido retornou `{"status":"ok"}` |
 | Banner autenticado | **PASS EQUIVALENTE**; código + texto no bundle remoto + configuração staging; proteção permaneceu ON |
 | Baseline live | **PASS estrutural**; seis tabelas, RLS, zero dados, zero Storage/Vault/cron; rótulo confirmado no artefato |
-| Auth/RLS sintético | **BLOQUEADO**; não havia service role do staging segura para criar/remover usuários |
-| Ref de produção no bundle | **ATENÇÃO**; literal presente como guarda Vite, mas conexão efetiva aponta somente para staging |
+| Auth/RLS sintético | **BLOQUEADO**; a criação da Secret API Key temporária pela Management API retornou HTTP 400; nenhum usuário/dado foi criado |
+| Ref de produção no bundle | **REFERÊNCIA DE GUARDA — NÃO É CONEXÃO COM PRODUÇÃO**; literal presente somente na guarda Vite, conexão efetiva aponta para staging |
 | Produção | **NÃO TRANSFERIDA**, conforme gate |
 
 O redeploy pós-reconexão usou o deployment existente, sem commit ou mudança funcional artificial. O SHA do deployment é `9dbf4e66ec731e9cccc17a022f64301f7811752d`, na branch `feat/clinicas`.
 
 ### Motivo do bloqueio da produção
 
-O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git, a Production Branch, o health e a identidade staging agora estão corretos no TARGET. A produção permanece no SOURCE, intacta; o bloqueio restante é o smoke Auth/RLS e a decisão sobre o literal do ref de produção no bundle público.
+O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git, a Production Branch, o health e a identidade staging agora estão corretos no TARGET. A produção permanece no SOURCE, intacta; o único bloqueio restante é o smoke Auth/RLS, porque a Management API rejeitou a criação da credencial temporária necessária.
 
 ### Segurança e escopo
 
 - Nenhuma migration, SQL de escrita, Auth, RLS, Storage, Vault, cron ou dado Supabase foi alterado.
 - Nenhum DNS, domínio, alias, código funcional ou configuração GitHub foi alterado automaticamente; a autorização GitHub foi feita manualmente pelo usuário.
 - Nenhuma integração Marketplace, recurso pago, upgrade ou add-on foi criado.
-- Nenhuma credencial ou valor de environment variable foi registrado.
+- Nenhuma credencial ou valor de environment variable foi registrado. Nenhuma chave temporária foi criada; as quatro chaves existentes permaneceram inalteradas.
 - Não houve dados reais, integrações ou smoke test parcial; nenhum dado sintético foi criado porque a credencial staging segura não estava disponível.
 
 ### Pendências da retomada
 
-1. Conceder ao token TARGET permissão oficial para ler temporariamente a secret sensível do projeto, ou fornecer mecanismo equivalente seguro, para executar e remover o smoke Auth/RLS sintético.
-2. Decidir se a exigência “ref de produção ausente” proíbe o literal público usado pela guarda `VITE_PRODUCTION_SUPABASE_PROJECT_REF`; a conexão efetiva já está comprovadamente no staging.
-3. Somente após esses gates serem revisados, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
+1. Ação humana necessária no Dashboard do Supabase staging: `Evolução Clínica Staging → Settings → API Keys`; criar uma Secret API Key temporária para validação administrativa, preferencialmente com nome `staging-migration-validation-20260915`, e disponibilizá-la por canal seguro. A Management API possui leitura, mas todas as tentativas oficiais de criação retornaram HTTP 400.
+2. Executar o smoke Auth/RLS, remover os dados sintéticos e revogar a chave temporária após a validação.
+3. Somente após esse gate ser revisado, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
 
 ### Estado final da retomada
 
-**STAGING VERCEL AINDA BLOQUEADO**
+**STAGING VERCEL AINDA BLOQUEADO — NECESSÁRIA SECRET KEY TEMPORÁRIA DO SUPABASE STAGING**
 
 ## Histórico da primeira execução
 
