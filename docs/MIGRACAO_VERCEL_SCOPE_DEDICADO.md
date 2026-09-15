@@ -2,7 +2,7 @@
 
 **Data da execução:** 15/09/2026
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** staging validado; transferência de produção bloqueada no aceite Vercel por requisito de billing/método de pagamento do TARGET
+**Estado atual:** produção transferida para o TARGET e validada em runtime; validação final parcial por falha preexistente no `npm test`
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -103,8 +103,8 @@ Validações e resultado:
 | `patients` A/B | nomes sintéticos + `synthetic validation` | **0** |
 | `evolutions` A/B | `2099-01-01` / `2099-01-02` + flags sintéticas | **0** |
 | `evolution_templates` / `patient_reports` | referências aos profissionais sintéticos | **0** |
-- Testes locais atuais: `npm run test:environment-isolation` PASS; `npm test` PASS; `npm run lint` PASS; `npm run build` PASS com aviso preexistente de chunks grandes; `git diff --check` PASS.
-- Não houve redeploy de produção, promoção, alteração de DNS, alteração no GitHub ou transferência de produção.
+- Na execução anterior de validação do staging: `npm run test:environment-isolation` PASS; `npm test` PASS; `npm run lint` PASS; `npm run build` PASS com aviso preexistente de chunks grandes; `git diff --check` PASS.
+- Naquele checkpoint não houve redeploy de produção, promoção, alteração de DNS, alteração no GitHub ou transferência de produção; o resultado atual está registrado em “Retomada final”.
 
 ### Acesso e transferência
 
@@ -164,6 +164,26 @@ O staging foi validado integralmente e permanece íntegro no TARGET. A tentativa
 ### Estado final da retomada
 
 **MIGRAÇÃO VERCEL BLOQUEADA**
+
+### Retomada final — transferência de produção e gates pós-transferência — 15/09/2026
+
+- A confirmação manual do Dashboard sobre o cartão `Default` no team TARGET foi aceita para a retomada, sem alteração de billing, plano, add-on ou cobrança.
+- As confirmações anteriores validaram SOURCE `team_IRE2lAAPj5Ibe0OtvXlLpMBa`, TARGET `team_opJQiM63Vn6P0uOe5Om8e1HD`, projeto `prj_Ch3PtwRA03Ah1S8JSUqoCdxH4gCT` no SOURCE e ausência de conflito de nome no TARGET.
+- Uma chamada inicial de aceite sem corpo JSON retornou HTTP 400 com `Invalid JSON`; seguindo o contrato oficial, foi criado um novo request e feita uma única tentativa corrigida com `Content-Type: application/json` e `newProjectName=evolucao-clinica`. O aceite retornou HTTP 202. O código do request não foi registrado.
+- A API confirmou o projeto no TARGET (`accountId=team_opJQiM63Vn6P0uOe5Om8e1HD`) e retornou HTTP 404 ao consultar o mesmo Project ID no SOURCE. Project ID e nome foram preservados.
+- Git permaneceu conectado a `studio4x/evolucao-clinica`, com Production Branch `main`. Os três domínios/aliases permaneceram: `evolucaoclinica.app.br`, `www.evolucaoclinica.app.br` e `evolucao-clinica-five.vercel.app`.
+- As 65 environment variables foram preservadas. `APP_ENV=production`, `VITE_APP_ENV=production`, `EXPECTED_SUPABASE_PROJECT_REF=kvxboovgrrhhttaqinld` e `VITE_EXPECTED_SUPABASE_PROJECT_REF=kvxboovgrrhhttaqinld` foram confirmados pela API. `PUBLIC_APP_URL` e `VITE_SUPABASE_URL` de produção são variáveis sensíveis não descriptografáveis pelo token; a URL pública, o domínio efetivo e o bundle validaram o runtime de produção.
+- O redeploy controlado oficial preservou o SHA `d174cec66672354955f0a529aa07152f8e0e7c30` e criou `dpl_4D56yBHzJqZuu3rs4JVJY5EBoUNm`, `READY`, `target=production`, branch `main`. O alias customizado foi atualizado pelo CLI oficial.
+- O apex respondeu HTTPS com redirect 308 para `www`; o domínio `www` respondeu HTTPS 200 com exatamente `{"status":"ok"}` em `/api/health`. A homepage carregou o dashboard real no browser, sem banner `AMBIENTE DE HOMOLOGAÇÃO`.
+- A inspeção do bundle runtime encontrou somente o ref Supabase de produção `kvxboovgrrhhttaqinld`; o ref staging `hwkdwinfckmjoriqxbjk`, a URL staging e literals de service role não apareceram. Não houve cross-environment observado.
+- Testes locais: `npm run test:environment-isolation` **PASS**; `npm run lint` **PASS**; `npm run build` **PASS** com aviso preexistente de chunks grandes; `git diff --check` **PASS**. `npm test` **FAIL** em `tests/analytics.test.ts:205`, com `2 !== 3` para a expectativa de retry `3`; nenhum código foi alterado nesta execução e a falha foi registrada separadamente.
+- Staging não foi alterado. Nenhum SQL, Supabase, DNS, GitHub, env var, integração, upgrade, add-on ou Fase 1B1 foi executado nesta retomada.
+
+### Estado atual da transferência
+
+**MIGRAÇÃO VERCEL PARCIAL — PRODUÇÃO TRANSFERIDA MAS AINDA NÃO VALIDADA**
+
+O Project Transfer e os gates de infraestrutura/runtime foram concluídos, mas a suíte local completa permanece pendente pela falha isolada de `npm test` descrita acima.
 
 ## Histórico da primeira execução
 
@@ -363,4 +383,4 @@ A execução termina aqui. A Fase 1B1 não foi retomada.
 
 ## Estado final atual
 
-**STAGING VERCEL AINDA BLOQUEADO**
+**MIGRAÇÃO VERCEL PARCIAL — PRODUÇÃO TRANSFERIDA MAS AINDA NÃO VALIDADA**
