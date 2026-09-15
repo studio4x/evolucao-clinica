@@ -2,7 +2,7 @@
 
 **Data da execução:** 15/09/2026
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** staging transferido, porém ainda bloqueado na reconexão Git; produção não transferida
+**Estado atual:** staging transferido, Git reconectado, porém bloqueado na Production Branch; produção não transferida
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -16,11 +16,11 @@ SOURCE: studio4xs-projects
 
 Na retomada, o novo `VERCEL_SOURCE_TOKEN` foi validado como Owner e o staging foi transferido pelo fluxo REST nativo: criação do transfer request HTTP 200 e aceite pelo destino HTTP 202. O Project ID, deployments, domínios e 29 environment variables foram preservados.
 
-A validação pós-transferência encontrou que o projeto staging no TARGET está sem vínculo Git e sem `productionBranch` no objeto de configuração retornado pela API. Os deployments preservam os metadados de `studio4x/evolucao-clinica` e `feat/clinicas`, mas não há evidência suficiente de Git webhook/auto-deploy funcionando no novo scope. A tentativa de reconexão pelo CLI oficial confirmou que o novo login ainda não possui uma Login Connection com o GitHub. Como esse gate falhou, a produção não foi transferida.
+A validação pós-transferência encontrou inicialmente que o projeto staging no TARGET estava sem vínculo Git. Após a autorização manual informada pelo usuário, o CLI oficial reconectou o projeto a `studio4x/evolucao-clinica`; a API, porém, confirmou `productionBranch=main`. O gate exigido é `feat/clinicas`, portanto nenhum deployment controlado foi iniciado e a produção não foi transferida.
 
 O bloqueio anterior com `VERCEL_ACCESS_TOKEN` permanece registrado no histórico abaixo. A sessão Dashboard da origem confirmou originalmente os projetos, mas o team de destino pertence a outro login e não aparecia como destino selecionável.
 
-Nenhuma alteração foi feita no Supabase, DNS, GitHub, código funcional, secrets, integrações ou plano Vercel. A Fase 1B1 continua bloqueada.
+Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código funcional, secrets, integrações ou plano Vercel. A autorização GitHub foi feita manualmente pelo usuário. A Fase 1B1 continua bloqueada.
 
 ## Retomada — resultado atual
 
@@ -29,22 +29,24 @@ Nenhuma alteração foi feita no Supabase, DNS, GitHub, código funcional, secre
 - O token do TARGET confirmou o team canônico `evolucao-clinica` e o projeto `evolucao-clinica-staging` no mesmo Project ID `prj_Hmm2uRREtw4qOqPf3Lhg78702hlM`.
 - O projeto continua no TARGET, sem conflito de nome; a produção continua no SOURCE.
 - O `.vercel/project.json` local foi atualizado para o mesmo Project ID de staging e para o `orgId` canônico do TARGET. O arquivo continua ignorado pelo Git.
-- A tentativa oficial foi feita com `npx vercel@latest git connect --yes`, usando o remoto exato `https://github.com/studio4x/evolucao-clinica.git`, o escopo TARGET e modo não interativo.
-- Resultado: **BLOQUEADO** por HTTP 400: `You need to add a Login Connection to your GitHub account first.` Nenhuma alteração foi feita no GitHub, no repositório, no projeto de produção, nos domínios ou nas variáveis.
-- Após a tentativa, a API do TARGET continuou retornando `link`/`gitRepository` ausentes e `productionBranch` vazio; não houve restauração parcial a ser confundida com sucesso.
+- A nova tentativa oficial `npx vercel@latest git connect --yes`, usando o remoto exato `https://github.com/studio4x/evolucao-clinica.git`, o escopo TARGET e modo não interativo, retornou **Connected**.
+- A API confirmou `link.type=github`, organização `studio4x`, repositório `evolucao-clinica` e credencial Git associada. O repositório foi confirmado como público; não houve bloqueio de plano Hobby por repositório privado.
+- A API confirmou `link.productionBranch=main`, divergente do gate obrigatório `feat/clinicas`.
+- A REST pública rejeitou `productionBranch` e `link` como propriedades de atualização do projeto (HTTP 400). O CLI oficial disponível não oferece uma opção de Branch Tracking. Nenhuma alteração de branch foi aplicada por tentativa especulativa.
+- Não houve deployment, redeploy, alteração de domínio, variável, projeto de produção ou código.
 
 ### Ação humana exata necessária
 
-O proprietário do login Vercel do TARGET (`evolucaoclinicaapp`) precisa, no Dashboard da Vercel, adicionar uma **Login Connection com GitHub** e autorizar a integração GitHub da Vercel para `studio4x/evolucao-clinica`. Se o repositório estiver sob uma organização, o proprietário/membro autorizado da organização também precisa permitir o acesso do Vercel GitHub App ao repositório. Nenhuma alteração desse lado foi feita automaticamente.
+O proprietário do login Vercel do TARGET (`evolucaoclinicaapp`) precisa, no Dashboard da Vercel, abrir `evolucao-clinica-staging` → **Settings** → **Environments** → ambiente **Production** → **Branch Tracking**, informar `feat/clinicas` e salvar. Essa é a superfície oficial documentada para configurar uma branch de produção não padrão. A Login Connection e o acesso do GitHub App já foram resolvidos manualmente pelo usuário.
 
-Depois dessa autorização, a reconexão poderá ser repetida no projeto já existente e a Production Branch deverá ser confirmada como `feat/clinicas`. Não é necessário criar projeto, trocar Project ID, recriar variáveis/domínios ou gerar commit artificial.
+Depois de salvar essa configuração, a API deverá retornar `link.productionBranch=feat/clinicas`; então será possível retomar o deployment controlado e os gates restantes. Não é necessário criar projeto, trocar Project ID, recriar variáveis/domínios ou gerar commit artificial.
 
 ### Gates auditados antes da parada
 
 - Os 29 nomes de environment variables permanecem no TARGET; seus valores não foram registrados.
 - A auditoria sem exposição de valores confirmou `APP_ENV=staging`, `VITE_APP_ENV=staging`, `PUBLIC_APP_URL` do staging e as referências Supabase esperadas (`hwkdwinfckmjoriqxbjk`), além da URL Supabase correspondente.
 - As flags de email, WhatsApp, push, n8n, Gemini, analytics, Meta, cron, billing, Google, lifecycle, Clinic e batch permanecem desativadas. A chave de service role existe somente como variável server-side; não há variável Vite equivalente.
-- Deployment Protection não foi desabilitada nem alterada. O health efetivo, o banner autenticado, o webhook/auto-deploy, o baseline Supabase e o smoke Auth/RLS não foram declarados como PASS porque a parada obrigatória ocorreu antes da reconexão Git e do novo deployment.
+- Deployment Protection não foi desabilitada nem alterada. O health efetivo, o banner autenticado, o deployment de `feat/clinicas`, o baseline Supabase e o smoke Auth/RLS não foram declarados como PASS porque a parada obrigatória ocorreu com a Production Branch ainda em `main`.
 - Validação local: `npm run lint` e `npm run build` passaram; `npm test` foi interrompido por falha preexistente em `tests/analytics.test.ts` (retry limitado: atual 2, esperado 3). Nenhum código foi alterado para contornar essa falha.
 - `git diff --check` passou após a atualização documental.
 - Não houve redeploy, promoção, alteração de DNS, alteração no GitHub ou transferência de produção.
@@ -72,34 +74,34 @@ Depois dessa autorização, a reconexão poderá ser repetida no projeto já exi
 | Environment variables | **PASS**; 29 nomes/scopes preservados, valores não registrados |
 | Domínios | **PASS**; staging e `project-j4206.vercel.app` verificados |
 | Deployments | **PASS**; deployments Ready preservados, inclusive `40bd76a` |
-| Supabase ref | não revalidado pós-transferência; esperado `hwkdwinfckmjoriqxbjk` |
-| Git repository no projeto | **FAIL**; `linkRepo` e `linkOrg` vieram vazios na API TARGET |
-| Production Branch na configuração | **FAIL**; `productionBranch` veio vazio na API TARGET |
+| Supabase ref | **PASS na auditoria das variáveis**; esperado `hwkdwinfckmjoriqxbjk`; deployment runtime ainda não executado |
+| Git repository no projeto | **PASS**; `link.type=github`, `org=studio4x`, `repo=evolucao-clinica` |
+| Production Branch na configuração | **FAIL**; `link.productionBranch=main`, esperado `feat/clinicas` |
 | Git webhook/auto-deploy | **NÃO COMPROVADO**; não foi provocado deployment artificial |
 | `/api/health` efetivo | **NÃO COMPROVADO**; acesso público retornou proteção Vercel, não JSON da aplicação |
 | Produção | **NÃO TRANSFERIDA**, conforme gate |
 
 O commit `3c6cdc6` que aparece como último deployment staging é exclusivamente documental e deriva do primeiro relatório. O checkpoint funcional continua sendo `40bd76a`.
 
-Uma rechecagem 10 segundos após o aceite confirmou `accountId` no TARGET e deployment `READY`, mas `link` ausente, `repo` vazio e `productionBranch` vazio. Portanto, o problema não era apenas processamento assíncrono pendente.
+Após a reconexão manual do GitHub, uma nova consulta confirmou o vínculo Git correto e `link.productionBranch=main`. Portanto, o único bloqueio atual de configuração Vercel é a branch de produção divergente; nenhum deployment novo foi criado para evitar validar a branch errada.
 
 ### Motivo do bloqueio da produção
 
-O Project Transfer preservou os deployments e os metadados históricos, mas a configuração atual do projeto no TARGET não comprova o vínculo Git nem a Production Branch. A correção exigiria uma ação adicional de integração/permissão GitHub, que não foi executada por estar fora do mecanismo mínimo de transferência e por poder alterar acesso externo. A produção permanece no SOURCE, intacta.
+O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git foi restaurado, mas a configuração atual do projeto no TARGET ainda aponta a Production Branch para `main`, enquanto staging exige `feat/clinicas`. A produção permanece no SOURCE, intacta.
 
 ### Segurança e escopo
 
 - Nenhuma migration, SQL, Auth, RLS, Storage, Vault, cron ou dado Supabase foi alterado.
-- Nenhum DNS, domínio, alias, GitHub ou código funcional foi alterado.
+- Nenhum DNS, domínio, alias, código funcional ou configuração GitHub foi alterado automaticamente; a autorização GitHub foi feita manualmente pelo usuário.
 - Nenhuma integração Marketplace, recurso pago, upgrade ou add-on foi criado.
 - Nenhuma credencial ou valor de environment variable foi registrado.
 - Não houve dados reais nem smoke test com efeitos externos.
 
 ### Pendências da retomada
 
-1. Investigar e restabelecer, com autorização adequada, o vínculo Git de `studio4x/evolucao-clinica` no projeto staging já transferido para o TARGET.
-2. Confirmar `Production Branch=feat/clinicas` no projeto TARGET.
-3. Validar um Git webhook/auto-deploy real e health efetivo atravessando legitimamente a Deployment Protection.
+1. Configurar `Production Branch=feat/clinicas` no projeto staging do TARGET.
+2. Validar um deployment controlado de `feat/clinicas`, Git webhook/auto-deploy e health efetivo atravessando legitimamente a Deployment Protection.
+3. Executar os gates restantes de banner, Supabase, baseline e smoke Auth/RLS.
 4. Somente após staging integralmente aprovado, repetir o gate e avaliar a transferência da produção.
 
 ### Estado final da retomada
@@ -298,6 +300,7 @@ A execução termina aqui. A Fase 1B1 não foi retomada.
 ## Referências
 
 - [Vercel — Transferring a project](https://vercel.com/docs/projects/transferring-projects)
+- [Vercel — Deploying Git repositories / Production Branch](https://vercel.com/docs/git)
 - [Vercel REST API — Create project transfer request](https://vercel.com/docs/rest-api/projects/create-project-transfer-request)
 - [Vercel REST API — Accept project transfer request](https://vercel.com/docs/rest-api/projects/accept-project-transfer-request)
 
