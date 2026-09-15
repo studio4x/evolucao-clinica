@@ -2,7 +2,7 @@
 
 **Data da execução:** 15/09/2026
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** staging transferido e validado nos gates de configuração/runtime; Auth/RLS bloqueado porque a criação de uma Secret API Key temporária não foi aceita pela Management API
+**Estado atual:** staging transferido e validado; todos os gates de configuração, runtime, Auth/RLS e cleanup estão PASS
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -56,6 +56,19 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 - O smoke Auth/RLS completo ainda não foi declarado PASS; será necessária uma nova chave dedicada para repetir o teste com `Prefer: return=representation` nos INSERTs.
 - Na repetição com `staging_migration_validation_20260915_2`, todos os UUIDs foram capturados e validados; Auth, trigger `professionals`, CRUD próprio e isolamento RLS A→B/B→A passaram. Usuários sintéticos foram removidos e a chave foi revogada.
 - A confirmação final de dados sintéticos ficou inconclusiva porque o verificador consultou `professionals` usando `professional_id`, coluna inexistente nessa tabela (a coluna correta é `id`). Pacientes/evoluções foram limpos e a exclusão dos usuários acionou as cascatas, mas o gate de zero resíduos não será declarado PASS sem nova confirmação administrativa.
+- Na auditoria final read-only, a nova chave `staging_cleanup_verification_20260915` foi validada exclusivamente no staging. Como os UUIDs não estavam persistidos, foram usados apenas os marcadores sintéticos já definidos: `Usuário Sintético A/B`, `Paciente Sintético A/B` e as datas sintéticas `2099-01-01/02`.
+- A consulta correta de `public.professionals` filtrou diretamente `id` pelos UUIDs recuperáveis por marcador; ambos retornaram zero. Pacientes, evoluções, `evolution_templates` e `patient_reports` também retornaram zero no escopo sintético. Os usuários Auth foram NOT FOUND pelo caminho de marcador/cascata, sem listagem ampla de usuários.
+- A chave temporária de auditoria foi revogada pela Management API e sua ausência foi confirmada; `SUPABASE_STAGING_SECRET_KEY` foi removida do `.env.local`. A chave `default`, a legacy `service_role` e produção permaneceram inalteradas.
+
+| Objeto | Identificador/marcador auditado | Resultado |
+|---|---|---|
+| Auth user A | `Usuário Sintético A` | **NOT FOUND** |
+| Auth user B | `Usuário Sintético B` | **NOT FOUND** |
+| `professionals` A | `Usuário Sintético A`, filtro direto em `id` | **0** |
+| `professionals` B | `Usuário Sintético B`, filtro direto em `id` | **0** |
+| `patients` A/B | nomes sintéticos + `synthetic validation` | **0** |
+| `evolutions` A/B | `2099-01-01` / `2099-01-02` + flags sintéticas | **0** |
+| `evolution_templates` / `patient_reports` | referências aos profissionais sintéticos | **0** |
 - Testes locais atuais: `npm run test:environment-isolation` PASS; `npm test` PASS; `npm run lint` PASS; `npm run build` PASS com aviso preexistente de chunks grandes; `git diff --check` PASS.
 - Não houve redeploy de produção, promoção, alteração de DNS, alteração no GitHub ou transferência de produção.
 
@@ -89,7 +102,9 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 | `/api/health` efetivo | **PASS**; `vercel curl` protegido retornou `{"status":"ok"}` |
 | Banner autenticado | **PASS EQUIVALENTE**; código + texto no bundle remoto + configuração staging; proteção permaneceu ON |
 | Baseline live | **PASS estrutural**; seis tabelas, RLS, zero dados, zero Storage/Vault/cron; rótulo confirmado no artefato |
-| Auth/RLS sintético | **BLOQUEADO**; Auth, trigger, UUIDs e RLS A→B/B→A passaram, mas a confirmação final de zero resíduos ficou inconclusiva por erro no verificador de `professionals` |
+| Auth/RLS sintético | **PASS**; Auth, trigger, UUIDs e RLS A→B/B→A validados |
+| Cleanup sintético | **PASS**; zero resíduos por marcador/entidade e usuários Auth NOT FOUND |
+| Chave temporária de auditoria | **PASS**; revogada e ausente na API; valor removido do `.env.local` |
 | Ref de produção no bundle | **REFERÊNCIA DE GUARDA — NÃO É CONEXÃO COM PRODUÇÃO**; literal presente somente na guarda Vite, conexão efetiva aponta para staging |
 | Produção | **NÃO TRANSFERIDA**, conforme gate |
 
@@ -97,25 +112,24 @@ O redeploy pós-reconexão usou o deployment existente, sem commit ou mudança f
 
 ### Motivo do bloqueio da produção
 
-O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git, a Production Branch, o health e a identidade staging agora estão corretos no TARGET. A produção permanece no SOURCE, intacta; o único bloqueio restante é o smoke Auth/RLS, porque a Management API rejeitou a criação da credencial temporária necessária.
+O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git, a Production Branch, o health, a identidade staging, Auth/RLS e o cleanup agora estão corretos no TARGET. Não há bloqueio técnico restante para a revisão humana do staging; a produção permanece no SOURCE, intacta.
 
 ### Segurança e escopo
 
 - Nenhuma migration, SQL de escrita, Auth, RLS, Storage, Vault, cron ou dado Supabase foi alterado.
 - Nenhum DNS, domínio, alias, código funcional ou configuração GitHub foi alterado automaticamente; a autorização GitHub foi feita manualmente pelo usuário.
 - Nenhuma integração Marketplace, recurso pago, upgrade ou add-on foi criado.
-- Nenhuma credencial ou valor de environment variable foi registrado. Nenhuma chave temporária foi criada; as quatro chaves existentes permaneceram inalteradas.
+- Nenhuma credencial ou valor de environment variable foi registrado. As chaves temporárias usadas na validação foram revogadas; a chave `default`, a legacy `service_role` e as demais chaves existentes permaneceram inalteradas.
 - Não houve dados reais, integrações ou smoke test parcial; nenhum dado sintético foi criado porque a credencial staging segura não estava disponível.
 
 ### Pendências da retomada
 
-1. Ação humana necessária no Dashboard do Supabase staging: `Evolução Clínica Staging → Settings → API Keys`; criar uma nova Secret API Key temporária dedicada, com nome diferente de `default`, e disponibilizá-la por canal seguro para a confirmação final de zero resíduos.
-2. Repetir somente a consulta administrativa corrigida de `professionals?id=in.(UUID_A,UUID_B)`, confirmar zero linhas, e revogar a chave ao final.
-3. Somente após esse gate ser revisado, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
+1. Revisão humana do staging antes de autorizar a transferência da produção.
+2. Somente após essa revisão, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
 
 ### Estado final da retomada
 
-**STAGING VERCEL AINDA BLOQUEADO — NECESSÁRIA SECRET KEY TEMPORÁRIA DO SUPABASE STAGING**
+**STAGING VERCEL MIGRADO E VALIDADO — APTO PARA TRANSFERÊNCIA DE PRODUÇÃO**
 
 ## Histórico da primeira execução
 
