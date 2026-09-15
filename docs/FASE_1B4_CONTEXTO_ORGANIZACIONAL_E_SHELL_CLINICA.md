@@ -38,6 +38,8 @@ Quando uma organização está ativa, a navegação fica mínima e as rotas pess
 
 O teste `tests/clinic-context.test.ts` cobre o contrato da rota, uso do JWT no cliente RLS, ausência de identidade fornecida pelo navegador, flag pública, store separado, contexto pessoal padrão, hidratação, seleção explícita, revalidação com revogação, fallback pessoal, logout e isolamento entre usuários.
 
+O push de `62dd42a` gerou deployment `READY` no projeto Vercel staging `evolucao-clinica-staging` do TARGET. A tentativa sem sessão no alias protegido retornou a tela de Deployment Protection em HTML; ela não foi considerada resposta da API. A prova autenticada do contrato foi feita localmente com o código publicado apontando exclusivamente para o banco staging.
+
 Estado read-only do staging após o cleanup da validação:
 
 ```text
