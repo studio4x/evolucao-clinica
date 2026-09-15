@@ -50,6 +50,7 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 - Na retomada final do gate, a ref `hwkdwinfckmjoriqxbjk` foi confirmada diretamente pela Management API como o projeto staging saudável. A listagem de API keys retornou somente metadados (duas legacy, uma `publishable` e uma `secret`); nenhum valor foi registrado.
 - Foram tentadas somente chamadas oficiais de criação de API key temporária, com o nome solicitado e payload documentado (`type=secret`, `secret_jwt_template.role=service_role`), com e sem `reveal=true`. Todas retornaram HTTP 400; a variante de diagnóstico `publishable` também retornou HTTP 400. Não houve resposta 201, portanto nenhuma chave temporária foi criada. A confirmação posterior listou zero ocorrências dos nomes de diagnóstico e quatro chaves existentes.
 - A chave `default` `secret` existente e a legacy `service_role` não foram usadas como atalho, pois não atenderiam ao requisito de credencial administrativa exclusiva e temporária. Nenhum usuário, dado sintético ou alteração de schema foi criado nesta tentativa.
+- A credencial inserida em `SUPABASE_STAGING_SECRET_KEY` foi validada sem registrar seu valor e corresponde à `secret` existente com nome `default`. Ela foi recusada antes de qualquer chamada Auth/RLS; nenhuma chave, usuário ou dado foi alterado.
 - Testes locais atuais: `npm run test:environment-isolation` PASS; `npm test` PASS; `npm run lint` PASS; `npm run build` PASS com aviso preexistente de chunks grandes; `git diff --check` PASS.
 - Não houve redeploy de produção, promoção, alteração de DNS, alteração no GitHub ou transferência de produção.
 
@@ -103,7 +104,7 @@ O Project Transfer preservou os deployments e os metadados históricos. O víncu
 
 ### Pendências da retomada
 
-1. Ação humana necessária no Dashboard do Supabase staging: `Evolução Clínica Staging → Settings → API Keys`; criar uma Secret API Key temporária para validação administrativa, preferencialmente com nome `staging-migration-validation-20260915`, e disponibilizá-la por canal seguro. A Management API possui leitura, mas todas as tentativas oficiais de criação retornaram HTTP 400.
+1. Ação humana necessária no Dashboard do Supabase staging: `Evolução Clínica Staging → Settings → API Keys`; criar uma Secret API Key temporária dedicada, com nome diferente de `default` (preferencialmente `staging-migration-validation-20260915`), e disponibilizá-la por canal seguro. A credencial fornecida correspondeu à chave `default` e não foi usada.
 2. Executar o smoke Auth/RLS, remover os dados sintéticos e revogar a chave temporária após a validação.
 3. Somente após esse gate ser revisado, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
 
