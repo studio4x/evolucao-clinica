@@ -1,6 +1,6 @@
 # Roadmap Empresarial — Clínicas, Licenças, Equipes e Pacientes Compartilhados
 
-**Status:** Fase 0 consolidada — Fase 0.5 auditada — Fase 1A concluída — Fase 1B0 aprovada — Fase 1B1 revisada e endurecida em staging — Fase 1B2 não iniciada
+**Status:** Fase 0 consolidada — Fase 0.5 auditada — Fase 1A concluída — Fase 1B0 aprovada — Fase 1B1 revisada e endurecida em staging — Fase 1B2 implementada em staging, aguardando revisão — etapas posteriores não iniciadas
 
 **Tipo:** Especificação funcional, de dados, segurança e implantação  
 **Escopo:** Plano empresarial para clínicas + colaboração profissional em pacientes  
@@ -883,6 +883,12 @@ O baseline `20260914-individual-core-v1` foi aplicado exclusivamente no Supabase
 O artefato controlado [`20260915_01_organizations_memberships.sql`](../supabase/clinic-migrations/20260915_01_organizations_memberships.sql) foi aplicado exclusivamente no staging `hwkdwinfckmjoriqxbjk` e documentado em [`FASE_1B1_FUNDACAO_ORGANIZACOES_MEMBERSHIPS.md`](FASE_1B1_FUNDACAO_ORGANIZACOES_MEMBERSHIPS.md). A implementação cobre somente `organizations`, `organization_memberships`, autorização, invariantes de owner, grants, RLS e o smoke multi-tenant. A criação de convites, billing, pacientes compartilhados, UI e produção permanece fora de escopo.
 
 O smoke Auth/RLS passou com A/B/C/D, cleanup sem resíduos e baseline individual preservado. A revisão 1B1.1 também endureceu a seleção de memberships históricos na transferência de owner, formalizou owner anterior como manager com preservação de `clinical_access_enabled` e passou a matriz de estados, autorização e concorrência. O enforcement server-side de feature flag permanece gate obrigatório antes de produção. O resultado é **FASE 1B1 REVISADA E ENDURECIDA — APTO PARA FASE 1B2**, sem iniciar a Fase 1B2 nem concluir a Fase 1 empresarial.
+
+### Fase 1B2 — Feature gates e convites — implementada em staging, aguardando revisão
+
+Os artefatos controlados [`20260915_03_clinic_feature_gates.sql`](../supabase/clinic-migrations/20260915_03_clinic_feature_gates.sql) e [`20260915_04_organization_invitations.sql`](../supabase/clinic-migrations/20260915_04_organization_invitations.sql) foram aplicados exclusivamente no staging `hwkdwinfckmjoriqxbjk` e estão documentados em [`FASE_1B2_FEATURE_GATES_E_CONVITES.md`](FASE_1B2_FEATURE_GATES_E_CONVITES.md). A entrega cobre apenas gate global DB-side deny-by-default, flag `clinic` por organização, RLS/grants, emissão/revogação/aceite de convites, expiração lógica e testes sintéticos de abuso, concorrência e isolamento. A flag global voltou a OFF após o smoke; produção, UI, envio real, billing, seats, pacientes compartilhados e Fase 1B3 permanecem fora do escopo.
+
+O resultado é **FASE 1B2 APROVADA PARA REVISÃO**, não conclusão da Fase 1 empresarial. Antes de produção ainda são obrigatórios enforcement operacional de `CLINIC_FEATURE_ENABLED`, ativação administrativa auditada por organização, gates jurídicos e as fases posteriores de licenças e pacientes compartilhados.
 
 ### Fase 1 — Fundação de organização e identidade
 
