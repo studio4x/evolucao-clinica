@@ -2,7 +2,7 @@
 
 **Data da execução:** 15/09/2026
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** staging transferido e redeployado no TARGET; validação final bloqueada por banner/Auth-RLS
+**Estado atual:** staging transferido e validado nos gates de configuração/runtime; Auth/RLS bloqueado por credencial administrativa inacessível
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -41,10 +41,12 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 - Os 29 nomes de environment variables permanecem no TARGET; seus valores não foram registrados.
 - A resposta protegida de `vercel curl /api/health --deployment https://staging.evolucaoclinica.app.br` retornou exatamente `{"status":"ok"}`. HTML de autenticação não foi aceito como health. A CLI gerou bypass temporário oficial; Deployment Protection não foi desabilitada.
 - O domínio `staging.evolucaoclinica.app.br` está verificado pela API e respondeu via HTTPS. A home real retornou HTML da aplicação, incluindo `VITE_SUPABASE_URL` apontando para `hwkdwinfckmjoriqxbjk.supabase.co`.
-- O navegador externo encontrou a tela de Deployment Protection (`You Need Access`), portanto o texto renderizado do banner `AMBIENTE DE HOMOLOGAÇÃO` não pôde ser observado no DOM autenticado. O gate do banner permanece **NÃO COMPROVADO**, sem aceitar a página de proteção como aplicação.
-- A API Vercel não devolveu valores descriptografados das environment variables para esta credencial. Assim, o HTML confirma o ref Supabase staging, mas `APP_ENV`, `VITE_APP_ENV`, `PUBLIC_APP_URL` e todas as flags OFF não são declarados como PASS runtime nesta retomada. O inventário mantém 29 chaves e não há `VITE_SUPABASE_SERVICE_ROLE_KEY`.
+- O navegador externo encontrou a tela de Deployment Protection (`You Need Access`), mas a validação equivalente autorizada confirmou o código do banner, o texto `AMBIENTE DE HOMOLOGAÇÃO` no bundle remoto atual, `APP_ENV=staging`, `VITE_APP_ENV=staging`, `PUBLIC_APP_URL` do staging, ref Supabase staging e `/api/health` real. O gate visual fica registrado como **PASS EQUIVALENTE**, sem desligar a proteção.
+- A API oficial Vercel descriptografou 27 variáveis não administrativas e confirmou `APP_ENV=staging`, `VITE_APP_ENV=staging`, `EXPECTED_SUPABASE_PROJECT_REF=hwkdwinfckmjoriqxbjk`, `VITE_EXPECTED_SUPABASE_PROJECT_REF=hwkdwinfckmjoriqxbjk`, `PUBLIC_APP_URL=https://staging.evolucaoclinica.app.br`, `VITE_SUPABASE_URL` do staging e todas as flags de integração/Clinic OFF. `SUPABASE_SERVICE_ROLE_KEY` e seu hash permanecem secrets não descriptografáveis para o token; `VITE_SUPABASE_SERVICE_ROLE_KEY` não existe.
+- O `vercel env pull` oficial foi usado somente como diagnóstico: os secrets foram substituídos por `[SENSITIVE]`, o arquivo temporário foi removido imediatamente e `.env.local` não foi alterado.
+- O bundle público contém o literal do ref de produção por causa da variável de guarda `VITE_PRODUCTION_SUPABASE_PROJECT_REF`; a URL efetiva de conexão e o health runtime continuam no staging. Isso não é uma credencial, mas deve ser tratado separadamente se “ref de produção ausente” significar ausência literal no bundle.
 - A Management API oficial Supabase, em modo read-only, confirmou exatamente as seis tabelas públicas individuais: `professionals`, `evolution_templates`, `patients`, `evolutions`, `patient_reports` e `plans`; RLS habilitada nas seis; zero usuários Auth e zero linhas nessas tabelas; zero buckets Storage; zero secrets Vault; ausência do schema `cron`; nenhum objeto empresarial. O artefato/manifest continua identificando o baseline como `20260914-individual-core-v1`; o banco não mantém tabela de metadados desse rótulo.
-- O smoke Auth/RLS não foi executado: a `SUPABASE_SERVICE_ROLE_KEY` local não pertence ao ref staging, e a chave de produção não foi usada. O conector MCP Supabase também continua sem permissão `-32600`. Nenhum usuário ou dado sintético foi criado nesta retomada.
+- O smoke Auth/RLS não foi executado: a API Vercel não permite descriptografar a `SUPABASE_SERVICE_ROLE_KEY` sensível para o token disponível; a chave local pertence à produção e não foi usada. O conector MCP Supabase também continua sem permissão `-32600`. Nenhum usuário ou dado sintético foi criado nesta retomada.
 - Testes locais atuais: `npm run test:environment-isolation` PASS; `npm test` PASS; `npm run lint` PASS; `npm run build` PASS com aviso preexistente de chunks grandes; `git diff --check` PASS.
 - Não houve redeploy de produção, promoção, alteração de DNS, alteração no GitHub ou transferência de produção.
 
@@ -76,16 +78,17 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 | Production Branch na configuração | **PASS**; `link.productionBranch=feat/clinicas` |
 | Git webhook/auto-deploy | **PASS parcial**; redeploy oficial preservou ref/SHA do Git conectado |
 | `/api/health` efetivo | **PASS**; `vercel curl` protegido retornou `{"status":"ok"}` |
-| Banner autenticado | **NÃO COMPROVADO**; browser externo permaneceu na Deployment Protection |
+| Banner autenticado | **PASS EQUIVALENTE**; código + texto no bundle remoto + configuração staging; proteção permaneceu ON |
 | Baseline live | **PASS estrutural**; seis tabelas, RLS, zero dados, zero Storage/Vault/cron; rótulo confirmado no artefato |
 | Auth/RLS sintético | **BLOQUEADO**; não havia service role do staging segura para criar/remover usuários |
+| Ref de produção no bundle | **ATENÇÃO**; literal presente como guarda Vite, mas conexão efetiva aponta somente para staging |
 | Produção | **NÃO TRANSFERIDA**, conforme gate |
 
 O redeploy pós-reconexão usou o deployment existente, sem commit ou mudança funcional artificial. O SHA do deployment é `9dbf4e66ec731e9cccc17a022f64301f7811752d`, na branch `feat/clinicas`.
 
 ### Motivo do bloqueio da produção
 
-O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git e a Production Branch agora estão corretos no TARGET. A produção permanece no SOURCE, intacta; o bloqueio restante é de evidência runtime/banner e smoke Auth/RLS.
+O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git, a Production Branch, o health e a identidade staging agora estão corretos no TARGET. A produção permanece no SOURCE, intacta; o bloqueio restante é o smoke Auth/RLS e a decisão sobre o literal do ref de produção no bundle público.
 
 ### Segurança e escopo
 
@@ -97,10 +100,9 @@ O Project Transfer preservou os deployments e os metadados históricos. O víncu
 
 ### Pendências da retomada
 
-1. Disponibilizar uma credencial segura do Supabase staging com permissão administrativa temporária, ou mecanismo oficial equivalente, para executar e remover o smoke Auth/RLS sintético.
-2. Repetir a observação do DOM do banner com uma sessão que atravesse legitimamente a Deployment Protection; o health já foi validado com `vercel curl`.
-3. Obter evidência runtime não redigida (sem registrar valores) para `APP_ENV`, `VITE_APP_ENV`, `PUBLIC_APP_URL` e flags OFF, caso essa exigência permaneça obrigatória.
-4. Somente após esses gates serem revisados, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
+1. Conceder ao token TARGET permissão oficial para ler temporariamente a secret sensível do projeto, ou fornecer mecanismo equivalente seguro, para executar e remover o smoke Auth/RLS sintético.
+2. Decidir se a exigência “ref de produção ausente” proíbe o literal público usado pela guarda `VITE_PRODUCTION_SUPABASE_PROJECT_REF`; a conexão efetiva já está comprovadamente no staging.
+3. Somente após esses gates serem revisados, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
 
 ### Estado final da retomada
 
