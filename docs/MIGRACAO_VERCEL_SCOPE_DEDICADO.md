@@ -51,6 +51,7 @@ Validações e resultado:
 - A confirmação posterior mostrou o projeto de produção ainda no SOURCE, com o mesmo Project ID, e nenhum conflito de nome no TARGET. Portanto, a produção **não foi transferida**.
 - A [documentação oficial da Vercel sobre transferência de projetos](https://vercel.com/docs/projects/transferring-projects) exige método de pagamento válido no team de destino para evitar interrupção durante a transferência. Como o TARGET Hobby não possui método de pagamento, a ação humana necessária é resolver esse requisito no billing do TARGET; nenhuma cobrança deve ser aceita automaticamente.
 - Não houve alteração de código, Supabase, DNS, env vars, deployment, domínio, alias, staging ou Fase 1B1.
+- Na revalidação desta retomada, o projeto permaneceu no SOURCE (`accountId=team_IRE2lAAPj5Ibe0OtvXlLpMBa`), o TARGET continuou Hobby sem método de pagamento e não foi criado novo transfer request. Recurso exigido: método de pagamento válido no TARGET; preço e periodicidade: não exibidos pela API e nenhuma cobrança foi iniciada; impacto: o aceite do Project Transfer permanece bloqueado e a produção continua no SOURCE.
 
 ### Retomada pós-transferência — 15/09/2026
 
