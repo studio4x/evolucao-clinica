@@ -116,6 +116,7 @@ Invariantes:
 - o alvo da transferência deve ser membership da mesma organização, ativo e elegível; alvo suspenso, removido, de outra organização ou inexistente é rejeitado; transferir para o owner atual é operação idempotente e não cria uma segunda associação;
 - `seat_required` não será persistido: a necessidade de licença é sempre derivada de `clinical_access_enabled`;
 - owner/manager administrativos podem existir sem capacidade clínica e sem licença; owner/manager com capacidade clínica seguem a mesma derivação e validação de licença dos demais profissionais;
+- **decisão formalizada para transferência:** o owner anterior permanece `active` como `manager`, e `clinical_access_enabled` é preservado sem alteração; a transferência muda a responsabilidade administrativa, não revoga por si só a capacidade clínica;
 - contagem, reserva, ativação e disponibilidade de licenças pertencem ao serviço transacional da Fase 2, não à fundação da Fase 1A;
 - membership de uma organização nunca autoriza outra organização.
 

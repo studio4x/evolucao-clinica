@@ -1,6 +1,6 @@
 # Roadmap Empresarial — Clínicas, Licenças, Equipes e Pacientes Compartilhados
 
-**Status:** Fase 0 consolidada — Fase 0.5 auditada — Fase 1A concluída — Fase 1B0 aplicada em staging e aprovada para revisão — Fase 1B1 em diante não iniciadas
+**Status:** Fase 0 consolidada — Fase 0.5 auditada — Fase 1A concluída — Fase 1B0 aprovada — Fase 1B1 revisada e endurecida em staging — Fase 1B2 não iniciada
 
 **Tipo:** Especificação funcional, de dados, segurança e implantação  
 **Escopo:** Plano empresarial para clínicas + colaboração profissional em pacientes  
@@ -878,11 +878,11 @@ O baseline `20260914-individual-core-v1` foi aplicado exclusivamente no Supabase
 
 **Gate para implementação:** aprovação do desenho, baseline staging sanitizado, matriz RLS/grants, testes de concorrência de convites e validação de rollback. As URLs/Auth, DNS, Vercel, secrets e integrações da Fase 0.5 permanecem fora de escopo.
 
-### Fase 1B1 — Fundação de organizações e memberships — implementada em staging, aguardando revisão
+### Fase 1B1 — Fundação de organizações e memberships — revisada e endurecida em staging
 
 O artefato controlado [`20260915_01_organizations_memberships.sql`](../supabase/clinic-migrations/20260915_01_organizations_memberships.sql) foi aplicado exclusivamente no staging `hwkdwinfckmjoriqxbjk` e documentado em [`FASE_1B1_FUNDACAO_ORGANIZACOES_MEMBERSHIPS.md`](FASE_1B1_FUNDACAO_ORGANIZACOES_MEMBERSHIPS.md). A implementação cobre somente `organizations`, `organization_memberships`, autorização, invariantes de owner, grants, RLS e o smoke multi-tenant. A criação de convites, billing, pacientes compartilhados, UI e produção permanece fora de escopo.
 
-O smoke Auth/RLS passou com A/B/C/D, cleanup sem resíduos e baseline individual preservado. O resultado é **FASE 1B1 APROVADA PARA REVISÃO**, não conclusão da Fase 1 empresarial.
+O smoke Auth/RLS passou com A/B/C/D, cleanup sem resíduos e baseline individual preservado. A revisão 1B1.1 também endureceu a seleção de memberships históricos na transferência de owner, formalizou owner anterior como manager com preservação de `clinical_access_enabled` e passou a matriz de estados, autorização e concorrência. O enforcement server-side de feature flag permanece gate obrigatório antes de produção. O resultado é **FASE 1B1 REVISADA E ENDURECIDA — APTO PARA FASE 1B2**, sem iniciar a Fase 1B2 nem concluir a Fase 1 empresarial.
 
 ### Fase 1 — Fundação de organização e identidade
 

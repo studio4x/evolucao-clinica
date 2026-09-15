@@ -1,6 +1,6 @@
 # Fase 1B1 — Fundação de organizações e memberships
 
-**Status:** implementada exclusivamente em staging; aguardando revisão formal
+**Status:** revisada e endurecida exclusivamente em staging; apta para Fase 1B2
 **Branch:** `feat/clinicas`
 **Staging:** Supabase `hwkdwinfckmjoriqxbjk`
 **Produção:** Supabase `kvxboovgrrhhttaqinld` — não alterada
@@ -59,7 +59,33 @@ Resultado:
 - cleanup completo: zero usuários, professionals, organizações e memberships sintéticos;
 - baseline individual após cleanup: seis tabelas preservadas.
 
-## 4. Advisors
+## Revisão pós-implementação / hardening
+
+A revisão identificou uma ambiguidade na seleção do alvo de `transfer_organization_owner`: a consulta original filtrava apenas por organização e profissional. Assim, um membership histórico `removed` podia ser selecionado quando coexistia com um novo membership `active` para a mesma pessoa. A reprodução sintética pré-correção, com `removed` + `active`, retornou `403` sem alterar o owner; o resultado dependia da linha escolhida pela consulta, portanto não era uma garantia de segurança.
+
+O hardening foi aplicado somente no staging pelo artefato versionado [`20260915_02_harden_owner_transfer.sql`](../supabase/clinic-migrations/20260915_02_harden_owner_transfer.sql). A seleção agora inclui explicitamente `status = 'active'`, sem `LIMIT 1`; o histórico `removed` é preservado e a unicidade parcial de memberships não removidos permanece inalterada. A definição efetiva foi conferida pela Management API: `SECURITY DEFINER`, `search_path` fixo, `auth.uid()` validado, `EXECUTE` negado a `PUBLIC`/`anon` e concedido somente a `authenticated`.
+
+Resultado da matriz pós-correção:
+
+- A owner → B active: PASS;
+- exatamente um owner ativo após a transferência: PASS;
+- A permanece manager ativo e preserva `clinical_access_enabled`: PASS;
+- coexistência de membership histórico `removed` + membership atual `active`, com transferência para o ativo: PASS;
+- somente `removed`, `suspended`, inexistente e outra organização: DENY;
+- caller manager e caller professional: DENY;
+- transferência para o próprio owner: idempotente PASS;
+- duas transferências concorrentes: nunca zero nem dois owners ativos, PASS;
+- cleanup: zero usuários Auth, professionals, organizações e memberships sintéticos; baseline individual preservado.
+
+Gates locais desta revisão: `npm run test:environment-isolation`, `npm test`, `npm run lint`, `npm run build` e `git diff --check`: PASS. O build emitiu somente o aviso não bloqueante já conhecido sobre chunks grandes.
+
+A regra de owner → manager foi formalizada também na Fase 1A. Membership administrativo não liga capacidade clínica por si só; o valor existente de `clinical_access_enabled` é apenas preservado durante a troca.
+
+### Gate de feature flag antes de produção
+
+A exposição autenticada dos RPCs públicos de criação e transferência permanece intencional e protegida por validação de identidade, grants mínimos, RLS e invariantes transacionais. Entretanto, a aplicação da feature empresarial ainda não existe no banco/backend: antes de qualquer produção, deve haver enforcement server-side cumulativo `ambiente permitido AND global ON AND organization ON AND membership/permissão válida`. Global OFF deve negar mesmo com flag da organização ON; membership sozinho nunca pode habilitar Plano Clínica. A estratégia proposta para a Fase 1B2 é implementar uma resolução de gate no backend/RLS/RPC, com kill switch global e flag persistida por organização, sem depender de UI ou `VITE_`; essa tabela e essa mudança não foram criadas nesta revisão. O gap é blocker de produção, mas não impede a revisão de 1B1 para a Fase 1B2.
+
+## 4. Advisors pós-hardening
 
 Os Advisors foram consultados pela Management API oficial após a aplicação:
 
@@ -75,6 +101,6 @@ Não foram criados convites, aceite/envio de convite, feature flags por organiza
 
 ## 6. Decisão
 
-**FASE 1B1 APROVADA PARA REVISÃO**
+**FASE 1B1 REVISADA E ENDURECIDA — APTO PARA FASE 1B2**
 
-Esta decisão não autoriza convites, billing, pacientes compartilhados, UI empresarial ou qualquer alteração de produção. A suíte de repositório e a revisão formal dos Advisors permanecem gates para a próxima autorização.
+Esta decisão não inicia a Fase 1B2 nem autoriza convites, billing, pacientes compartilhados, UI empresarial ou qualquer alteração de produção. O enforcement server-side de feature flag permanece obrigatório antes de produção.
