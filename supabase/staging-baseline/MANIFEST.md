@@ -38,3 +38,11 @@
 4. Confirmar a versão e executar advisors/testes sem inserir dados reais.
 
 O arquivo não é uma cópia das 148 migrations históricas e não deve ser aplicado na produção.
+
+## Extensão empresarial posterior
+
+Os artefatos empresariais da Fase 1B1/1B2/1B3 ficam fora deste baseline sanitizado e foram aplicados somente no staging autorizado. A correção de hardening da Fase 1B3.1 é:
+
+- `supabase/clinic-migrations/20260915_09_harden_membership_lifecycle_selection.sql` — redefine somente `suspend_organization_member` para selecionar explicitamente a membership `active` corrente, preservando memberships `removed` históricas.
+
+O artefato 09 não deve ser reaplicado em produção nem usado para reconstruir o baseline individual.

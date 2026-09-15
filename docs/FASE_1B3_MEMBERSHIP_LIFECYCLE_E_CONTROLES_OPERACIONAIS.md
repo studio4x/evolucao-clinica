@@ -118,3 +118,15 @@ Todos os gates locais passaram:
 `FASE 1B3 APROVADA PARA REVISÃO`
 
 Este resultado não autoriza automaticamente Fase 1B4, UI, convites reais, billing, seats, Stripe, pacientes compartilhados, Fase 2 ou produção.
+
+## 8. Revisão pós-implementação / hardening
+
+Foi identificado e corrigido um edge case na seleção de membership do `suspend_organization_member`: após remoção e novo aceite, uma mesma pessoa pode possuir uma linha histórica `removed` e uma associação corrente `active`. A ordenação anterior por uma expressão booleana, combinada com `LIMIT 1`, podia selecionar a linha histórica primeiro e impedir a suspensão da associação atual.
+
+O artefato corretivo `20260915_09_harden_membership_lifecycle_selection.sql` foi criado separadamente, aplicado somente no staging e não reaplicou o SQL 06. A seleção agora exige `status = 'active'` e não usa `ORDER BY`/`LIMIT` para ocultar ambiguidade. O índice parcial existente garante no máximo uma membership não removida por organização/profissional.
+
+O cenário obrigatório foi reproduzido com `B1 = removed`, seguido de novo convite/aceite `B2 = active`. A suspensão alterou somente B2 e o evento `member_suspended` referenciou B2; a reativação alterou somente B2 e o evento `member_reactivated` referenciou B2; a remoção seguinte preservou B1 e B2 como histórico. O cenário também confirmou que manager administra professional, mas não manager/owner, professional não administra e owner permanece protegido.
+
+Foi validada a revogação imediata pelo mesmo token de B para organizações, memberships e RPC empresarial, seguida de recuperação após reativação. Auditoria, gates de ambiente, rollout, rate limiting, isolamento cruzado e cleanup permaneceram íntegros. Ao final, runtime/allowed permaneceram `staging`, o global ficou OFF e todos os resíduos sintéticos ficaram em zero.
+
+Os Advisors foram executados novamente: Security retornou 10 WARN intencionais e Performance 9 INFO, sem P0/P1 novo em relação à Fase 1B3. Nenhum WARN histórico foi alterado fora do escopo.

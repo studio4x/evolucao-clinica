@@ -1037,7 +1037,7 @@ As únicas pendências restantes estão concentradas na seção 0.2 e dizem resp
 
 A Fase 1B3 foi concluída exclusivamente no Supabase staging `hwkdwinfckmjoriqxbjk`, na branch `feat/clinicas`, com os artefatos 06–08 já aplicados e verificados sem reaplicação. O lifecycle de memberships, rollout administrativo, auditoria privada e rate limiting foram validados com smoke focal usando sessões normais, isolamento individual A/B, regressão local e cleanup completo.
 
-O estado final confirmado é `runtime=staging`, `allowed_environment=staging`, gate global OFF, limites padrão restaurados e zero fixtures sintéticas. Security e Performance Advisors não reportaram P0/P1 novo; os WARN/INFO intencionais estão documentados em [`FASE_1B3_MEMBERSHIP_LIFECYCLE_E_CONTROLES_OPERACIONAIS.md`](FASE_1B3_MEMBERSHIP_LIFECYCLE_E_CONTROLES_OPERACIONAIS.md). Produção, Fase 1B4 e fases posteriores continuam fora do escopo.
+O estado final confirmado é `runtime=staging`, `allowed_environment=staging`, gate global OFF, limites padrão restaurados e zero fixtures sintéticas. O hardening 1B3.1 corrigiu a seleção de membership corrente após reingresso, sem alterar o SQL 06 aplicado. Security e Performance Advisors não reportaram P0/P1 novo; os WARN/INFO intencionais estão documentados em [`FASE_1B3_MEMBERSHIP_LIFECYCLE_E_CONTROLES_OPERACIONAIS.md`](FASE_1B3_MEMBERSHIP_LIFECYCLE_E_CONTROLES_OPERACIONAIS.md). Produção, Fase 1B4 e fases posteriores continuam fora do escopo.
 
 Resultado: **FASE 1B3 APROVADA PARA REVISÃO**.
 
