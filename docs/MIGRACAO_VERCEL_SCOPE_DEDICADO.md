@@ -2,7 +2,7 @@
 
 **Data da execução:** 15/09/2026
 **Escopo:** somente infraestrutura Vercel  
-**Estado atual:** staging transferido e validado; todos os gates de configuração, runtime, Auth/RLS e cleanup estão PASS
+**Estado atual:** staging validado; transferência de produção bloqueada no aceite Vercel por requisito de billing/método de pagamento do TARGET
 **Checkpoint funcional:** `feat/clinicas` em `40bd76a`
 
 ## Resumo executivo
@@ -23,6 +23,34 @@ O bloqueio anterior com `VERCEL_ACCESS_TOKEN` permanece registrado no histórico
 Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código funcional, secrets, integrações ou plano Vercel. A autorização GitHub foi feita manualmente pelo usuário. A Fase 1B1 continua bloqueada.
 
 ## Retomada — resultado atual
+
+### Transferência de produção — snapshot e bloqueio — 15/09/2026
+
+Snapshot read-only imediatamente antes da tentativa:
+
+| Verificação | Resultado |
+|---|---|
+| Projeto / Project ID | `evolucao-clinica` / `prj_Ch3PtwRA03Ah1S8JSUqoCdxH4gCT` |
+| SOURCE | `team_IRE2lAAPj5Ibe0OtvXlLpMBa` / `studio4xs-projects`; membership **OWNER** |
+| TARGET | `team_opJQiM63Vn6P0uOe5Om8e1HD` / `evolucao-clinica`; membership **OWNER** |
+| Scopes diferentes | **PASS** |
+| TARGET conflito de nome | **PASS**; nenhum projeto `evolucao-clinica` no TARGET antes da tentativa |
+| Git / Production Branch | `studio4x/evolucao-clinica` / `main` |
+| Deployment Ready/Promoted | `dpl_56tNv8NQHhP4g58F2Ra2DasKJfSY`; SHA `d174cec66672354955f0a529aa07152f8e0e7c30` |
+| Domínios / aliases | `evolucaoclinica.app.br`, `www.evolucaoclinica.app.br`, `evolucao-clinica-five.vercel.app` |
+| Environment variables | **65** registros; valores não registrados; targets `development`, `preview` e `production` |
+| Framework / Node / região | Vite / Node `24.x` / `iad1` |
+| Proteção / observabilidade | Deployment Protection presente; Speed Insights habilitado; Web Analytics desabilitado |
+| TARGET plano / pagamento | Hobby; método de pagamento válido ausente |
+
+Validações e resultado:
+
+- SOURCE e TARGET foram revalidados pela API oficial com tokens separados; nenhum token foi exposto.
+- Dois Project Transfer requests oficiais foram criados com SOURCE, cada um retornando HTTP 200; os códigos permaneceram somente em memória e não foram documentados.
+- Os dois aceites com TARGET retornaram HTTP 400. Nenhuma cobrança, upgrade ou alteração de plano foi executada.
+- A confirmação posterior mostrou o projeto de produção ainda no SOURCE, com o mesmo Project ID, e nenhum conflito de nome no TARGET. Portanto, a produção **não foi transferida**.
+- A [documentação oficial da Vercel sobre transferência de projetos](https://vercel.com/docs/projects/transferring-projects) exige método de pagamento válido no team de destino para evitar interrupção durante a transferência. Como o TARGET Hobby não possui método de pagamento, a ação humana necessária é resolver esse requisito no billing do TARGET; nenhuma cobrança deve ser aceita automaticamente.
+- Não houve alteração de código, Supabase, DNS, env vars, deployment, domínio, alias, staging ou Fase 1B1.
 
 ### Retomada pós-transferência — 15/09/2026
 
@@ -112,7 +140,7 @@ O redeploy pós-reconexão usou o deployment existente, sem commit ou mudança f
 
 ### Motivo do bloqueio da produção
 
-O Project Transfer preservou os deployments e os metadados históricos. O vínculo Git, a Production Branch, o health, a identidade staging, Auth/RLS e o cleanup agora estão corretos no TARGET. Não há bloqueio técnico restante para a revisão humana do staging; a produção permanece no SOURCE, intacta.
+O staging foi validado integralmente e permanece íntegro no TARGET. A tentativa de Project Transfer da produção foi criada, mas o aceite retornou HTTP 400; o TARGET Hobby não possui método de pagamento válido. A produção permanece no SOURCE, intacta, sem cobrança ou upgrade automático.
 
 ### Segurança e escopo
 
@@ -124,12 +152,12 @@ O Project Transfer preservou os deployments e os metadados históricos. O víncu
 
 ### Pendências da retomada
 
-1. Revisão humana do staging antes de autorizar a transferência da produção.
-2. Somente após essa revisão, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
+1. Resolver manualmente o requisito de billing/método de pagamento no TARGET, sem aceitar upgrade ou cobrança automaticamente.
+2. Reexecutar o Project Transfer nativo somente após confirmação humana desse requisito. A Fase 1B1 não foi retomada.
 
 ### Estado final da retomada
 
-**STAGING VERCEL MIGRADO E VALIDADO — APTO PARA TRANSFERÊNCIA DE PRODUÇÃO**
+**MIGRAÇÃO VERCEL BLOQUEADA**
 
 ## Histórico da primeira execução
 
