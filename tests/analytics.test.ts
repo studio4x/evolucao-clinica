@@ -93,6 +93,14 @@ function trackedDataLayerEvents() {
   return windowMock.dataLayer.filter((entry): entry is Record<string, unknown> => Boolean(entry && !Array.isArray(entry) && typeof entry === 'object' && 'event' in entry));
 }
 
+async function waitForCondition(condition: () => boolean, timeoutMs = 4_000, intervalMs = 10) {
+  const deadline = Date.now() + timeoutMs;
+  while (!condition()) {
+    if (Date.now() >= deadline) throw new Error('condição não atingida dentro do timeout');
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 resetRuntime();
 analytics.initAnalytics();
 assert.equal(scripts.size, 0, 'GTM/GA4/Meta não podem carregar antes do consentimento');
@@ -201,7 +209,7 @@ analytics.configureAnalyticsForTests({
 setRoute('/login');
 analytics.initAnalytics();
 analytics.setConsentPreferences({ analytics: false, marketing: true });
-await new Promise((resolve) => setTimeout(resolve, 1_350));
+await waitForCondition(() => dynamicAttempts === 3);
 assert.equal(dynamicAttempts, 3, 'configuração dinâmica deve usar retry limitado');
 assert.equal(fbqCalls.filter((call) => call[0] === 'track' && call[1] === 'PageView').length, 1, 'retry não duplica PageView');
 
