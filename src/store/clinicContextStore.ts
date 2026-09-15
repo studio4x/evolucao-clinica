@@ -89,7 +89,7 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
         if (get().userId !== userId) return;
 
         const organizations = payload.organizations.filter(
-          (organization) => organization.id && organization.operationalStatus !== "archived" && organization.clinicalAccessEnabled === true,
+          (organization) => Boolean(organization.id) && organization.operationalStatus !== "archived",
         );
         const storedOrganizationId = readStoredOrganizationId(userId);
         const restoredOrganization = organizations.find(({ id }) => id === storedOrganizationId);

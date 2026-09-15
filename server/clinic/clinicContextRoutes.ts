@@ -38,6 +38,14 @@ function normalizeOrganization(row: any) {
   };
 }
 
+export function resolveClinicOrganizations(rows: any[]) {
+  return rows
+    .filter((row) => row?.status === "active")
+    .map(normalizeOrganization)
+    .filter((organization): organization is NonNullable<ReturnType<typeof normalizeOrganization>> => organization !== null)
+    .filter((organization) => organization.operationalStatus !== "archived");
+}
+
 export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDeps) {
   app.get("/api/clinic/contexts", deps.requireAuth, async (req: ClinicRequest, res: ClinicResponse) => {
     res.setHeader("Cache-Control", "private, no-store");
@@ -72,10 +80,7 @@ export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDe
         return res.status(503).json({ ok: false, error: "context_resolution_failed" });
       }
 
-      const organizations = (data || [])
-        .map(normalizeOrganization)
-        .filter((organization): organization is NonNullable<ReturnType<typeof normalizeOrganization>> => organization !== null)
-        .filter((organization) => organization.operationalStatus !== "archived" && organization.clinicalAccessEnabled);
+      const organizations = resolveClinicOrganizations(data || []);
 
       return res.json({
         ok: true,
@@ -88,4 +93,3 @@ export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDe
     }
   });
 }
-

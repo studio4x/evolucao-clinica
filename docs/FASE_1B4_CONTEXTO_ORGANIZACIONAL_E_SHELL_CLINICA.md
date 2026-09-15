@@ -13,7 +13,7 @@ Foi criado `GET /api/clinic/contexts` em `server/clinic/clinicContextRoutes.ts`.
 - exige Bearer token e identidade real validada por `requireAuth`;
 - exige `CLINIC_FEATURE_ENABLED=true` no servidor;
 - executa a consulta com o JWT do usuário no PostgREST, respeitando RLS;
-- considera apenas membership `active`, organização não arquivada e `clinical_access_enabled=true`;
+- considera apenas membership `active`, organização não arquivada e autorização RLS; `clinical_access_enabled` é retornado como capacidade informativa, não como requisito de contexto;
 - não aceita `professional_id` do navegador;
 - retorna somente `personal.available` e os campos mínimos da organização: id, nome, nome comercial, status, papel e acesso clínico;
 - responde `private, no-store` e não registra tokens, hashes, documentos, contatos ou dados clínicos.
@@ -65,8 +65,18 @@ git diff --check
 
 ## 6. Build e próximo passo
 
-A build web exibida no rodapé foi incrementada para `v1.10.866`. Não houve alteração de `PLAY_STORE_VERSION` ou de artefatos Android.
+A build web exibida no rodapé foi incrementada para `v1.10.868`. Não houve alteração de `PLAY_STORE_VERSION` ou de artefatos Android.
 
-Resultado: **FASE 1B4 APROVADA PARA REVISÃO**.
+Resultado inicial: **FASE 1B4 APROVADA PARA REVISÃO**.
 
 Este resultado não autoriza Fase 1B5, lifecycle UI, convites, billing, seats, Stripe, pacientes compartilhados, Fase 2 ou qualquer operação em produção.
+
+## 7. Hardening 1B4.1 — Membership vs capacidade clínica
+
+O contexto organizacional agora é derivado da participação válida: membership ativa, organização não arquivada, flags habilitadas e RLS autorizando a linha. `clinical_access_enabled` permanece no payload para informar capacidade clínica, mas não decide se a organização aparece no seletor.
+
+Assim, owner, manager ou professional administrativos podem selecionar a clínica mesmo com `clinicalAccessEnabled=false`; isso não concede acesso a pacientes, evoluções, documentos, atendimento ou assento. Apenas fases futuras poderão usar essa capacidade para liberar recursos clínicos e seats. A assinatura individual continua sob o `ProtectedRoute` existente, sem bypass por membership.
+
+O smoke 1B4.1 cobre owner/manager/professional ativos com capacidade false, professional com capacidade true, memberships suspensas/removidas, histórico `removed + active`, múltiplas clínicas com capacidades mistas e isolamento cross-tenant. O staging foi limpo ao final e permaneceu com gate global OFF.
+
+Resultado: **FASE 1B4 REVISADA E ENDURECIDA — APTO PARA FASE 1B5**.

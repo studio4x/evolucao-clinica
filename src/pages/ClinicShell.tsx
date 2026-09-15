@@ -31,7 +31,7 @@ export default function ClinicShell() {
         </div>
         <dl className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Status operacional</dt><dd className="mt-1 font-semibold text-brand-text">{organization.operationalStatus}</dd></div>
-          <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Permissão clínica</dt><dd className="mt-1 font-semibold text-brand-text">{organization.clinicalAccessEnabled ? "Ativa" : "Inativa"}</dd></div>
+          <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Acesso clínico</dt><dd className="mt-1 font-semibold text-brand-text">{organization.clinicalAccessEnabled ? "Habilitado" : "Não habilitado"}</dd></div>
           <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Dados clínicos compartilhados</dt><dd className="mt-1 font-semibold text-brand-text">Não disponíveis nesta fase</dd></div>
         </dl>
       </section>
@@ -43,4 +43,3 @@ export default function ClinicShell() {
     </div>
   );
 }
-

@@ -1043,13 +1043,13 @@ Resultado: **FASE 1B3 APROVADA PARA REVISÃO**.
 
 ---
 
-## 14.1. Fase 1B4 — contexto organizacional e shell clínico
+## 14.1. Fase 1B4/1B4.1 — contexto organizacional, shell clínico e hardening
 
-A Fase 1B4 foi implementada na branch `feat/clinicas` com resolução server-side de contextos via JWT/RLS, store separado do estado de autenticação, seletor explícito “Minha conta / Clínica”, revalidação por sessão/foreground/troca de contexto e guardas de rota. O shell `/painel/clinica` é somente leitura e não acessa pacientes, evoluções, documentos ou métricas.
+A Fase 1B4 foi implementada na branch `feat/clinicas` com resolução server-side de contextos via JWT/RLS, store separado do estado de autenticação, seletor explícito “Minha conta / Clínica”, revalidação por sessão/foreground/troca de contexto e guardas de rota. O shell `/painel/clinica` é somente leitura e não acessa pacientes, evoluções, documentos ou métricas. O hardening 1B4.1 separa membership ativa de `clinical_access_enabled`: capacidade clínica informa autorização futura, mas não impede a entrada no contexto organizacional.
 
 As flags permanecem independentes: `CLINIC_FEATURE_ENABLED` controla o backend e `VITE_CLINIC_FEATURE_ENABLED` controla a UX. O desligamento retorna ao fluxo individual; revogação de membership remove o contexto e cai para “Minha conta”. Produção, Fase 1B5, convites/UI de lifecycle, billing, seats, Stripe, pacientes compartilhados e Fase 2 continuam fora do escopo. O staging permanece com runtime `staging`, gate global OFF e sem fixtures sintéticas.
 
-Resultado: **FASE 1B4 APROVADA PARA REVISÃO**.
+Resultado: **FASE 1B4 REVISADA E ENDURECIDA — APTO PARA FASE 1B5**.
 
 ---
 
