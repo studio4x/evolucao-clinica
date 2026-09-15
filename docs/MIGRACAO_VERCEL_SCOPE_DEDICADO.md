@@ -52,8 +52,10 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 - A chave `default` `secret` existente e a legacy `service_role` não foram usadas como atalho, pois não atenderiam ao requisito de credencial administrativa exclusiva e temporária. Nenhum usuário, dado sintético ou alteração de schema foi criado nesta tentativa.
 - A credencial inserida em `SUPABASE_STAGING_SECRET_KEY` foi validada sem registrar seu valor e corresponde à `secret` existente com nome `default`. Ela foi recusada antes de qualquer chamada Auth/RLS; nenhuma chave, usuário ou dado foi alterado.
 - Na tentativa seguinte, a chave dedicada `staging_migration_validation_20260915` foi validada contra a ref staging. O Auth Admin exigiu um User-Agent não-browser; com essa proteção respeitada, a criação e o login dos dois usuários sintéticos funcionaram.
-- A execução foi interrompida no primeiro `INSERT` de paciente porque a resposta PostgREST não solicitava representação e não devolveu o UUID; não foi uma falha de RLS. O `finally` removeu os usuários e os dados por `professional_id`, confirmou zero resíduos antes da revogação e a Management API confirmou a remoção da chave dedicada. O valor revogado foi limpo do `.env.local`.
+- A execução foi interrompida no primeiro `INSERT` de paciente porque a resposta PostgREST não solicitava representação e não devolveu o UUID; não foi uma falha de RLS. O `finally` removeu os usuários e os dados por `professional_id`, mas a verificação de `professionals` usou a coluna errada; a Management API confirmou a remoção da chave dedicada. O valor revogado foi limpo do `.env.local`.
 - O smoke Auth/RLS completo ainda não foi declarado PASS; será necessária uma nova chave dedicada para repetir o teste com `Prefer: return=representation` nos INSERTs.
+- Na repetição com `staging_migration_validation_20260915_2`, todos os UUIDs foram capturados e validados; Auth, trigger `professionals`, CRUD próprio e isolamento RLS A→B/B→A passaram. Usuários sintéticos foram removidos e a chave foi revogada.
+- A confirmação final de dados sintéticos ficou inconclusiva porque o verificador consultou `professionals` usando `professional_id`, coluna inexistente nessa tabela (a coluna correta é `id`). Pacientes/evoluções foram limpos e a exclusão dos usuários acionou as cascatas, mas o gate de zero resíduos não será declarado PASS sem nova confirmação administrativa.
 - Testes locais atuais: `npm run test:environment-isolation` PASS; `npm test` PASS; `npm run lint` PASS; `npm run build` PASS com aviso preexistente de chunks grandes; `git diff --check` PASS.
 - Não houve redeploy de produção, promoção, alteração de DNS, alteração no GitHub ou transferência de produção.
 
@@ -87,7 +89,7 @@ Nenhuma alteração automática foi feita no Supabase, DNS, GitHub, código func
 | `/api/health` efetivo | **PASS**; `vercel curl` protegido retornou `{"status":"ok"}` |
 | Banner autenticado | **PASS EQUIVALENTE**; código + texto no bundle remoto + configuração staging; proteção permaneceu ON |
 | Baseline live | **PASS estrutural**; seis tabelas, RLS, zero dados, zero Storage/Vault/cron; rótulo confirmado no artefato |
-| Auth/RLS sintético | **BLOQUEADO**; a criação da Secret API Key temporária pela Management API retornou HTTP 400; nenhum usuário/dado foi criado |
+| Auth/RLS sintético | **BLOQUEADO**; Auth, trigger, UUIDs e RLS A→B/B→A passaram, mas a confirmação final de zero resíduos ficou inconclusiva por erro no verificador de `professionals` |
 | Ref de produção no bundle | **REFERÊNCIA DE GUARDA — NÃO É CONEXÃO COM PRODUÇÃO**; literal presente somente na guarda Vite, conexão efetiva aponta para staging |
 | Produção | **NÃO TRANSFERIDA**, conforme gate |
 
@@ -107,8 +109,8 @@ O Project Transfer preservou os deployments e os metadados históricos. O víncu
 
 ### Pendências da retomada
 
-1. Ação humana necessária no Dashboard do Supabase staging: `Evolução Clínica Staging → Settings → API Keys`; criar uma Secret API Key temporária dedicada, com nome diferente de `default` (preferencialmente `staging-migration-validation-20260915`), e disponibilizá-la por canal seguro. A credencial fornecida correspondeu à chave `default` e não foi usada.
-2. Executar o smoke Auth/RLS, remover os dados sintéticos e revogar a chave temporária após a validação.
+1. Ação humana necessária no Dashboard do Supabase staging: `Evolução Clínica Staging → Settings → API Keys`; criar uma nova Secret API Key temporária dedicada, com nome diferente de `default`, e disponibilizá-la por canal seguro para a confirmação final de zero resíduos.
+2. Repetir somente a consulta administrativa corrigida de `professionals?id=in.(UUID_A,UUID_B)`, confirmar zero linhas, e revogar a chave ao final.
 3. Somente após esse gate ser revisado, avaliar a transferência da produção. A Fase 1B1 não foi retomada.
 
 ### Estado final da retomada
