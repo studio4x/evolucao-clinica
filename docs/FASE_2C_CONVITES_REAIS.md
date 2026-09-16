@@ -1,7 +1,7 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data: 2026-09-16. Branch: `feat/clinicas`. Referência: `2c5de70`.
-Build web: `v1.10.876`; Android/Play Store inalterado (`1.0.87`), sem AAB.
+Build web: `v1.10.877`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
@@ -205,6 +205,11 @@ deployment staging foi recusado por schema de `vercel.json`: headers da landing
 haviam sido inseridos em rewrites. Corrigido na seção headers, com teste
 permanente de estrutura e build incrementada; não houve promoção do deployment
 ERROR ao domínio. O último READY anterior permaneceu disponível nesse intervalo.
+O teste security-policy detectou que a CSP específica precedia a global na
+lista; a ordem foi corrigida (global primeiro, exceção restritiva depois), sem
+afrouxar a CSP da landing nem remover a regressão existente. Essas duas falhas
+foram introduzidas nesta implementação, corrigidas aqui e não reclassificadas
+como preexistentes.
 
 Cleanup PASS após cada smoke: auth.users=0, professionals=0, organizations=0,
 invitations=0, deliveries=0, handoffs=0, audit=0. Remoção limitada aos UUIDs

@@ -99,15 +99,6 @@
   ],
   "headers": [
     {
-      "source": "/convite-clinica",
-      "headers": [
-        { "key": "Cache-Control", "value": "private, no-store" },
-        { "key": "Referrer-Policy", "value": "no-referrer" },
-        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
-        { "key": "Content-Security-Policy", "value": "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" }
-      ]
-    },
-    {
       "source": "/(.*)",
       "headers": [
         {
@@ -130,6 +121,15 @@
           "key": "Permissions-Policy",
           "value": "camera=(), microphone=(self), geolocation=()"
         }
+      ]
+    },
+    {
+      "source": "/convite-clinica",
+      "headers": [
+        { "key": "Cache-Control", "value": "private, no-store" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Robots-Tag", "value": "noindex, nofollow" },
+        { "key": "Content-Security-Policy", "value": "default-src 'none'; script-src 'self'; connect-src 'self'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'" }
       ]
     },
     {
