@@ -13,6 +13,9 @@ let clock = Date.now();
 const users = new Map([["owner", { id: owner, email: "owner@example.invalid", confirmed: true }], ["manager", { id: manager, email: "manager@example.invalid", confirmed: true }], ["recipient", { id: recipient, email: "recipient@example.invalid", confirmed: true }], ["stranger", { id: stranger, email: "stranger@example.invalid", confirmed: true }]]);
 const rows: any[] = [], deliveries: any[] = [], handoffs: any[] = [], memberships: any[] = [], audits: any[] = [], genericEmails: any[] = [], analytics: any[] = [];
 const providerPayloads: any[] = [];
+const capturedLogs: string[] = [];
+const originalConsole = { log: console.log, warn: console.warn, error: console.error };
+for (const level of ["log", "warn", "error"] as const) console[level] = (...values: unknown[]) => { capturedLogs.push(values.map((value) => value instanceof Error ? value.stack || value.message : typeof value === "string" ? value : JSON.stringify(value)).join(" ")); };
 const sentinel = randomBytes(32).toString("hex");
 let nextToken = sentinel, failTransport = false, maliciousError = false;
 let seq = Promise.resolve();
@@ -104,6 +107,8 @@ try {
   const initial = await Promise.all([request("", "owner", createBody()), request("", "owner", createBody())]);
   assert.deepEqual(initial.map((r) => r.status).sort(), [201, 409]); assert.equal(rows.length, 1); assert.deepEqual(seats(), { reserved: 1, active: 0 });
   assert.ok(providerPayloads[0].html.includes(`#invite=${sentinel}`)); assert.ok(!snapshots().includes(sentinel));
+  assert.doesNotMatch(providerPayloads[0].html, /<img|<script|utm_|tracking|facebook|analytics/i);
+  assert.equal((providerPayloads[0].html.match(/<a /g) || []).length, 1);
   const listing = await request(`?organizationId=${org}`, "owner"); assert.equal(listing.status, 200); assert.ok(!JSON.stringify(listing.data).includes(sentinel));
   for (const action of ["resend", "revoke"]) assert.equal((await request(`/${rows[0].id}/${action}`, "owner", { organizationId: otherOrg })).status, 403);
   assert.equal((await request(`?organizationId=${otherOrg}`, "owner")).status, 403);
@@ -137,6 +142,7 @@ try {
   maliciousError = true; assert.equal((await request(`?organizationId=${org}`, "owner")).data.error, "invitation_operation_failed"); maliciousError = false;
   const badJson = await fetch(`${base}/api/clinic/invitations/handoff`, { method: "POST", headers: { Origin: origin, "Content-Type": "application/json" }, body: `{"token":"${sentinel}"` }); assert.equal(badJson.status, 400); assert.ok(!(await badJson.text()).includes(sentinel));
   assert.ok(!snapshots().includes(sentinel)); assert.ok(!responses.join("").includes(sentinel)); assert.equal(genericEmails.length, 0); assert.equal(analytics.length, 0);
+  assert.ok(!capturedLogs.join("\n").includes(sentinel), "No invitation secret in captured runtime logs/errors");
   for (const path of ["src/pages/ClinicTeam.tsx", "src/pages/ClinicInvitationAccept.tsx", "src/components/clinic/ClinicInvitations.tsx", "docs/roadmap-empresarial.md"]) assert.ok(!readFileSync(path, "utf8").includes(sentinel));
   const sql = readFileSync("supabase/clinic-migrations/20260916_21_secure_clinic_invitation_delivery.sql", "utf8");
   const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
@@ -150,5 +156,8 @@ try {
   const prodServer = prod.listen(0, "127.0.0.1"); await new Promise<void>((r) => prodServer.once("listening", r));
   try { const addr = prodServer.address() as any; const result = await fetch(`http://127.0.0.1:${addr.port}/api/clinic/invitations/handoff`); assert.equal(result.status, 503); }
   finally { await new Promise<void>((r) => prodServer.close(() => r())); }
-  console.log("clinic invitations: HTTP issuance/handoff/acceptance, privacy, rotation, seats, tenant isolation and mock concurrency PASS");
-} finally { await new Promise<void>((resolve) => server.close(() => resolve())); }
+  originalConsole.log("clinic invitations: HTTP issuance/handoff/acceptance, privacy, captured logs, rotation, seats, tenant isolation and mock concurrency PASS");
+} finally {
+  Object.assign(console, originalConsole);
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+}

@@ -158,13 +158,15 @@ try {
   console.log(JSON.stringify({ staging: ref, technicalSmoke: "PASS", transport: "mock", externalEmails: 0, auth: "generateLink + verifyOtp; normal recipient sessions", pendingReservationConversion: "PASS", tenantIsolation: "PASS", concurrency: "PASS", secretLeak: "PASS", legacyGrants: "REVOKED", ids: { organizations: organizationIds, invitations: [managerInvite, existingId, newId, raceId] } }));
 } finally {
   await new Promise<void>((r) => server.close(() => r()));
+  // Close the global gate before cleanup: a later cleanup error must not leave
+  // enterprise access enabled while fixtures await bounded recovery.
+  await sql("update private.clinic_runtime_config set enabled=false where id=true");
   // Exact run-owned IDs only; immutable audit cleanup is explicitly staging.
   for (const id of organizationIds) {
     assert.ok(uuid(id));
     await sql(`begin; select private.purge_organization_admin_events_for_staging_cleanup('${id}'); delete from public.organization_invitations where organization_id='${id}'; delete from public.organization_feature_flags where organization_id='${id}'; delete from private.organization_subscriptions where organization_id='${id}'; delete from public.organization_memberships where organization_id='${id}'; delete from public.organizations where id='${id}'; commit;`);
   }
   for (const id of userIds) checked(await admin.auth.admin.deleteUser(id), "auth_cleanup");
-  await sql("update private.clinic_runtime_config set enabled=false where id=true");
   const remaining = (await sql("select (select count(*) from auth.users) users,(select count(*) from public.professionals) professionals,(select count(*) from public.organizations) organizations,(select count(*) from public.organization_invitations) invitations,(select count(*) from private.organization_invitation_deliveries) deliveries,(select count(*) from private.organization_invitation_handoffs) handoffs,(select count(*) from private.organization_admin_events) audit,(select enabled from private.clinic_runtime_config where id=true) gate"))[0];
   for (const [key, value] of Object.entries(remaining)) assert.equal(value, key === "gate" ? false : 0, `cleanup_${key}`);
   console.log(JSON.stringify({ cleanup: "PASS", remaining, externalEmails: 0 }));

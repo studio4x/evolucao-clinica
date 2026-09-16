@@ -1,7 +1,7 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data: 2026-09-16. Branch: `feat/clinicas`. Referência: `2c5de70`.
-Build web: `v1.10.877`; Android/Play Store inalterado (`1.0.87`), sem AAB.
+Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
@@ -154,7 +154,7 @@ DTO sem token, erro bruto sanitizado, fragment exchange simulado, landing/CSP,
 cookie, TTL, e-mail confirmado/mismatch, replay, falha, rotação, tenants, seats,
 concurrency mock e isolamento produção. Sentinel gerado somente em runtime;
 conteúdo sensível fica apenas em payload mock/memória, ausente dos snapshots,
-respostas, ledger genérico, analytics e arquivos verificados. Não é uma suíte
+respostas, logs/erros efetivamente capturados, ledger genérico, analytics e arquivos verificados. Não é uma suíte
 somente regex, nem pretende substituir concorrência PostgreSQL real.
 
 `scripts/clinic-invitations-staging-smoke.ts --confirm-staging-only`: duas
@@ -197,6 +197,30 @@ Referências: [linter RLS](https://supabase.com/docs/guides/database/database-li
 [SMTP/TLS/logging](https://nodemailer.com/smtp),
 [generateLink](https://supabase.com/docs/reference/javascript/auth-admin-generatelink),
 [verifyOtp](https://supabase.com/docs/reference/javascript/auth-verifyotp).
+
+## Runtime staging e publicação
+
+Commits publicados em `feat/clinicas`: `5988a01` (implementação), `b881061`
+(schema headers), `c2ddfe0` (ordem CSP). Sem merge/push em main.
+Deployment funcional `c2ddfe0`:
+`dpl_Awdrm6mqywatTweSjqrNXuEbkSRP`, estado READY, projeto staging existente.
+Também o deployment `b881061` ficou READY.
+
+Health real HTTPS do domínio staging, atravessando Deployment Protection com
+`vercel curl`: HTTP200, corpo exato `{"status":"ok"}`, não HTML de autenticação.
+Landing final retorna HTTP503 enquanto `CLINIC_FEATURE_ENABLED=false` (estado
+final deliberadamente fechado), com no-store/no-referrer/noindex,nofollow/
+nosniff/DENY/CSP default-src none efetivos. API handoff sem feature habilitada
+retorna feature_unavailable/503. Não declarar browser/OAuth/landing habilitada
+como smoke real aprovado: HTML200/exchange foram verificados no teste funcional
+mock, e o banco real via smoke técnico local→staging descrito acima.
+
+Configuração Vercel relida pela API oficial: APP_ENV/VITE_APP_ENV staging,
+PUBLIC_APP_URL staging, URL Supabase ref `hwkdwinfckmjoriqxbjk`,
+CLINIC_FEATURE_ENABLED/VITE_CLINIC_FEATURE_ENABLED false, EMAIL_SEND_ENABLED
+false, billing false, invitation delivery false. As 29 variáveis anteriores
+foram mantidas; apenas os dois gates false explícitos adicionados (total31).
+Sem credenciais do transporte dedicado ou cópia de secrets de produção.
 
 ## Cleanup e próximo passo
 
