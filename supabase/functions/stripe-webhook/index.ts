@@ -63,6 +63,10 @@ async function resolveOwner(admin: any, subscription: any) {
 }
 
 async function syncStripeSubscription(admin: any, subscription: any) {
+  if (subscription?.metadata?.billingScope === "clinic" || subscription?.metadata?.billing_scope === "clinic") {
+    console.log("[stripe-webhook] clinic billing subscription ignored by individual pipeline");
+    return null;
+  }
   const { userId, planId } = await resolveOwner(admin, subscription);
   if (!userId || !planId) {
     console.warn(`[stripe-webhook] Assinatura ${subscription.id} sem vínculo de usuário/plano.`);

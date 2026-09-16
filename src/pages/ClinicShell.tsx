@@ -1,4 +1,5 @@
-import { Building2, ShieldCheck } from "lucide-react";
+import { Building2, CreditCard, ShieldCheck } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PanelPageHeader } from "../components/layout/PanelPageHeader";
 import { useClinicContextStore } from "../store/clinicContextStore";
 
@@ -34,6 +35,14 @@ export default function ClinicShell() {
           <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Acesso clínico</dt><dd className="mt-1 font-semibold text-brand-text">{organization.clinicalAccessEnabled ? "Habilitado" : "Não habilitado"}</dd></div>
           <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Dados clínicos compartilhados</dt><dd className="mt-1 font-semibold text-brand-text">Não disponíveis nesta fase</dd></div>
         </dl>
+      </section>
+
+      <section className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand-border bg-white p-5 shadow-sm">
+        <div>
+          <h2 className="text-lg font-semibold text-brand-text">Contratação e licenças</h2>
+          <p className="mt-1 text-sm text-brand-text-muted">Consulte o status financeiro e o limite de licenças da clínica.</p>
+        </div>
+        <Link to="/painel/clinica/contratar" className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white"><CreditCard size={17} /> Abrir cobrança</Link>
       </section>
 
       <section className="rounded-2xl border border-dashed border-brand-border bg-white p-5" aria-labelledby="clinic-members-heading">

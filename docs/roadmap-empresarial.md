@@ -1097,9 +1097,13 @@ mantém a separação entre contrato financeiro e estado operacional: `restricte
 não é promovido automaticamente a `full`, e a conversão de convite clínico usa
 a reserva já existente sem consumir uma segunda vaga.
 
-A implementação é exclusivamente staging e não iniciou Stripe, Checkout,
-webhook, cobrança, convites reais, pacientes/evoluções organizacionais ou
-produção. Ver [relatório da Fase 2A](FASE_2A_MOTOR_LICENCAS_ENTITLEMENT.md).
+A implementação da Fase 2A permanece exclusivamente staging. A Fase 2B foi
+executada também somente em staging, em Stripe Test Mode, com catálogo
+idempotente, Checkout empresarial, webhook assinado, reconciliação server-side,
+alteração de seats e cancelamento ao fim do período. O smoke foi limpo ao final:
+não há organizações, subscriptions ou dados sintéticos remanescentes e o gate
+global voltou a OFF. Não houve Stripe Live, cobrança real, produção, convites
+reais ou pacientes/evoluções organizacionais. Ver os relatórios da [Fase 2A](FASE_2A_MOTOR_LICENCAS_ENTITLEMENT.md) e da [Fase 2B](FASE_2B_STRIPE_TEST_BILLING_CLINICA.md).
 
 ---
 

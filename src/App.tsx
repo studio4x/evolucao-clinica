@@ -45,6 +45,8 @@ const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedbac
 const TrialExtensionRedeem = lazyWithRetry(() => import('./pages/TrialExtensionRedeem'), 'TrialExtensionRedeem');
 const ClinicShell = lazyWithRetry(() => import('./pages/ClinicShell'), 'ClinicShell');
 const ClinicTeam = lazyWithRetry(() => import('./pages/ClinicTeam'), 'ClinicTeam');
+const ClinicBilling = lazyWithRetry(() => import('./pages/ClinicBilling'), 'ClinicBilling');
+const ClinicBillingSuccess = lazyWithRetry(() => import('./pages/ClinicBilling').then((module) => ({ default: module.ClinicBillingSuccess })), 'ClinicBillingSuccess');
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
@@ -877,6 +879,8 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="clinica" element={<ClinicRoute><ClinicShell /></ClinicRoute>} />
             <Route path="clinica/equipe" element={<ClinicRoute><ClinicTeam /></ClinicRoute>} />
+            <Route path="clinica/contratar" element={<ClinicRoute><ClinicBilling /></ClinicRoute>} />
+            <Route path="clinica/contratacao/sucesso" element={<ClinicRoute><ClinicBillingSuccess /></ClinicRoute>} />
             <Route path="dashboard" element={<PersonalContextRoute><Dashboard /></PersonalContextRoute>} />
             <Route path="patients" element={<PersonalContextRoute><Patients /></PersonalContextRoute>} />
             <Route path="patients/new" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />
