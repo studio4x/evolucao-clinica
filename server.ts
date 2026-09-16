@@ -23,6 +23,8 @@ import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
 import { registerClinicContextRoutes } from "./server/clinic/clinicContextRoutes.js";
 import { registerClinicTeamRoutes } from "./server/clinic/clinicTeamRoutes.js";
+import { registerClinicInvitationRoutes } from "./server/clinic/clinicInvitationRoutes.js";
+import { createInvitationTransport } from "./server/clinic/clinicInvitationEmail.js";
 import { registerClinicEntitlementRoutes } from "./server/clinic/clinicEntitlementRoutes.js";
 import {
   completeMetaRegistrationEvent,
@@ -1816,6 +1818,18 @@ app.use("/api/integrations/whatsapp/opt-out", express.json({ limit: "8kb" }));
 app.use("/api/integrations/whatsapp/user-lookup", express.json({ limit: "2kb" }));
 app.use("/api/onboarding/whatsapp-verification", express.json({ limit: "2kb" }));
 // Middleware
+// Sensitive invitation requests are parsed/handled before generic request/error
+// middleware. No invitation content reaches the generic e-mail ledger.
+registerClinicInvitationRoutes(app, {
+  appEnv: serverEnvironment.appEnv,
+  supabaseUrl,
+  publicOrigin: serverEnvironment.publicOrigin,
+  clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
+  deliveryEnabled: process.env.CLINIC_INVITATION_DELIVERY_ENABLED === "true",
+  transport: createInvitationTransport(process.env),
+  admin: supabaseAdmin,
+});
+
 app.use(express.json({
   limit: '10mb',
   verify: (req, _res, buf) => {

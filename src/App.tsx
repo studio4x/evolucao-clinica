@@ -45,6 +45,7 @@ const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedbac
 const TrialExtensionRedeem = lazyWithRetry(() => import('./pages/TrialExtensionRedeem'), 'TrialExtensionRedeem');
 const ClinicShell = lazyWithRetry(() => import('./pages/ClinicShell'), 'ClinicShell');
 const ClinicTeam = lazyWithRetry(() => import('./pages/ClinicTeam'), 'ClinicTeam');
+const ClinicInvitationAccept = lazyWithRetry(() => import('./pages/ClinicInvitationAccept'), 'ClinicInvitationAccept');
 const ClinicBilling = lazyWithRetry(() => import('./pages/ClinicBilling'), 'ClinicBilling');
 const ClinicBillingSuccess = lazyWithRetry(() => import('./pages/ClinicBilling').then((module) => ({ default: module.ClinicBillingSuccess })), 'ClinicBillingSuccess');
 
@@ -76,6 +77,8 @@ import { EnvironmentBanner } from './components/layout/EnvironmentBanner';
 import { ClinicRoute } from './components/clinic/ClinicRoute';
 import { PersonalContextRoute } from './components/clinic/PersonalContextRoute';
 import { useClinicContextStore } from './store/clinicContextStore';
+import { canEnterInvitedClinic } from './utils/clinicInvitationAccess';
+import { publicEffectFlags } from './config/publicFlags';
 import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
@@ -174,7 +177,14 @@ function AnalyticsRouteObserver() {
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const clinicContext = useClinicContextStore();
   const location = useLocation();
+  const isClinicRoute = location.pathname === '/painel/clinica' || location.pathname.startsWith('/painel/clinica/');
+  const invitedClinicAccess = Boolean(user && canEnterInvitedClinic({
+    pathname: location.pathname, featureEnabled: publicEffectFlags.clinicFeature,
+    contextStatus: clinicContext.status, contextUserId: clinicContext.userId, userId: user.id,
+    activeContext: clinicContext.activeContext, organizations: clinicContext.organizations,
+  }));
   const isOnboardingRoute = location.pathname.startsWith('/onboarding') || location.pathname.startsWith('/checkout');
   
   if (!isAuthReady) {
@@ -189,7 +199,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <SplashScreen message="Carregando seus dados..." />;
   }
   
-  if (profileStatus === 'pending') {
+  if (profileStatus === 'pending' && isClinicRoute && ['idle', 'loading'].includes(clinicContext.status)) {
+    return <SplashScreen message="Validando seu acesso à clínica..." />;
+  }
+  if (profileStatus === 'pending' && !invitedClinicAccess) {
     return <Navigate to="/pending" replace />;
   }
   
@@ -204,7 +217,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // Se o fluxo pendente de checkout do plano da home estiver ativo
   const isPendingCheckoutFlow = typeof window !== 'undefined' && window.sessionStorage.getItem('pending_checkout_flow') === 'true';
 
-  if (isPendingCheckoutFlow && profileRole !== 'admin') {
+  if (isPendingCheckoutFlow && profileRole !== 'admin' && !invitedClinicAccess) {
     const now = new Date();
     const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
     const isExpired = endsAt ? endsAt < now : false;
@@ -220,8 +233,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       window.sessionStorage.removeItem('pending_checkout_flow');
     }
   }
-
-  const isClinicRoute = location.pathname === '/painel/clinica' || location.pathname.startsWith('/painel/clinica/');
 
   if (
     profileRole !== 'admin'
@@ -853,6 +864,8 @@ export default function App() {
         <Suspense fallback={<SplashScreen message="Carregando..." />}>
           <Routes>
           <Route path="/login" element={<Login />} />
+          {/* Recipient handoff must precede personal subscription/onboarding guards. */}
+          <Route path="/painel/convite-clinica" element={<ClinicInvitationAccept />} />
           <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
           <Route path="/checkout/success" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />
           <Route path="/checkout/sucess" element={<ProtectedRoute><SuccessPage /></ProtectedRoute>} />

@@ -80,6 +80,11 @@ self.addEventListener("activate", (event) => {
 // Fetch Strategy
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+  // Sensitive invitation entrypoint/API must never be cached, inspected or
+  // replaced with an application-shell fallback (including offline mode).
+  if (url.origin === self.location.origin &&
+      (url.pathname === "/convite-clinica" || url.pathname === "/painel/convite-clinica" ||
+       url.pathname.startsWith("/api/clinic/invitations"))) return;
 
   // --- SHARE TARGET INTERCEPTION ---
   const isShareTarget = event.request.method === "POST" && 

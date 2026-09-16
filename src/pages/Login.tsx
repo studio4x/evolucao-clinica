@@ -20,6 +20,8 @@ export default function Login() {
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [searchParams] = useSearchParams();
   const fromPlan = searchParams.get('from_plan');
+  // A single safe allowlisted return path; never forward tokens/OAuth state.
+  const invitationNext = searchParams.get('next') === '/painel/convite-clinica';
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -77,6 +79,10 @@ export default function Login() {
 
   useEffect(() => {
     if (isAuthReady && user) {
+      if (invitationNext) {
+        navigate('/painel/convite-clinica', { replace: true });
+        return;
+      }
       const isPendingCheckoutFlow = sessionStorage.getItem('pending_checkout_flow') === 'true';
       const now = new Date();
       const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
@@ -99,7 +105,7 @@ export default function Login() {
         navigate('/painel/dashboard', { replace: true });
       }
     }
-  }, [user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, navigate]);
+  }, [user, isAuthReady, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, navigate, invitationNext]);
 
   const executeGoogleLogin = async () => {
     setLoading(true);
@@ -112,7 +118,7 @@ export default function Login() {
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'login',
         currentGrantedScopes: [],
-        redirectTo: window.location.origin + '/login',
+        redirectTo: window.location.origin + (invitationNext ? '/login?next=%2Fpainel%2Fconvite-clinica' : '/login'),
         prompt: forcePrompt ? 'consent select_account' : undefined,
       });
       if (error) throw error;

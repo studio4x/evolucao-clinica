@@ -7,6 +7,7 @@ import { useAuthStore } from "../store/authStore";
 import { useClinicContextStore } from "../store/clinicContextStore";
 import { publicEffectFlags } from "../config/publicFlags";
 import { supabase } from "../supabaseClient";
+import { ClinicInvitations } from "../components/clinic/ClinicInvitations";
 import {
   changeClinicTeamRole,
   ClinicTeamApiError,
@@ -294,6 +295,7 @@ export default function ClinicTeam() {
           </>
         )}
       </section>
+      {organizationId && isAdmin && <ClinicInvitations organizationId={organizationId} actorRole={actorRole as "owner" | "manager"} seats={seatSummary} onChanged={refreshAfterMutation} />}
     </div>
   );
 }

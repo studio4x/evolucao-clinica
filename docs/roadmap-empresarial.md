@@ -1109,6 +1109,16 @@ reais ou pacientes/evoluções organizacionais. Ver os relatórios da [Fase 2A](
 
 ## 15. Resultado esperado
 
+Atualização 2026-09-16 — Fase 2C: emissão server-side, ledger privado sem
+conteúdo sensível, landing isolada, handoff HttpOnly de 45 min, aceite autenticado,
+rotação/revogação e UI Equipe implementados em `feat/clinicas`. Migration 21
+e smoke técnico mock-transport no staging PASS, com concorrência PostgreSQL
+real e cleanup zero. Envio externo não realizado: faltam provider staging
+com tracking/reescrita OFF e Auth Google staging (`external_google_enabled=false`).
+Estado: **FASE 2C BLOQUEADA** para smoke externo; gates global/entrega/billing
+OFF, produção/Stripe/pacientes intactos. Ver [relatório Fase 2C](FASE_2C_CONVITES_REAIS.md).
+Fase 3 e pacientes compartilhados continuam não autorizados.
+
 Ao final do roadmap, a Evolução Clínica terá dois modelos coexistindo com segurança:
 
 - **modelo individual:** o profissional mantém seus pacientes e evoluções no contexto pessoal atual;
