@@ -1053,6 +1053,28 @@ Resultado: **FASE 1B4 REVISADA E ENDURECIDA — APTO PARA FASE 1B5**.
 
 ---
 
+## 14.2. Fase 1B5 — gestão segura da equipe e lifecycle
+
+A Fase 1B5 foi implementada na branch `feat/clinicas` exclusivamente para o
+staging `hwkdwinfckmjoriqxbjk`. O cliente server-side das rotas clínicas agora
+usa a chave pública do próprio ambiente com o JWT do usuário, sem
+`service_role` em caminhos user-scoped. Foi criado um diretório mínimo via RPC
+controlada, sem ampliar a RLS individual de `professionals`, e fachadas para
+suspensão, reativação, remoção, alteração de papel e transferência de owner.
+
+A UI `/painel/clinica/equipe` é administrativa, respeita owner/manager/professional,
+preserva histórico `removed`, revalida contexto após mutações e não cria convites,
+seats, billing, dados clínicos compartilhados ou toggle de capacidade clínica.
+
+O smoke staging confirmou isolamento cross-tenant, histórico, concorrência de
+owner, revogação no mesmo token, cleanup zero e gate global OFF. Security e
+Performance Advisors foram revisados sem P0/P1 novo; as ocorrências WARN/INFO
+permanecem documentadas. Produção não foi alterada.
+
+Resultado: **FASE 1B5 APROVADA PARA REVISÃO**.
+
+---
+
 ## 15. Resultado esperado
 
 Ao final do roadmap, a Evolução Clínica terá dois modelos coexistindo com segurança:

@@ -12,6 +12,7 @@ const baseServerEnv = {
   APP_ENV: "production",
   VITE_APP_ENV: "production",
   VITE_SUPABASE_URL: `https://${productionRef}.supabase.co`,
+  VITE_SUPABASE_ANON_KEY: "anon-test",
   SUPABASE_SERVICE_ROLE_KEY: "sb_secret_test_value",
   EXPECTED_SUPABASE_PROJECT_REF: productionRef,
   PRODUCTION_SUPABASE_PROJECT_REF: productionRef,

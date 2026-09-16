@@ -34,12 +34,25 @@ function validateServiceRoleKey(input: { key: string; expectedProjectRef: string
   }
 }
 
+function validatePublicSupabaseKey(input: { key: string; expectedProjectRef: string }) {
+  const payload = readJwtPayload(input.key);
+  if (!payload) return;
+
+  if (payload.role !== "anon" && payload.role !== "publishable") {
+    throw new Error("VITE_SUPABASE_ANON_KEY não possui papel público compatível.");
+  }
+  if (payload.ref && String(payload.ref).toLowerCase() !== input.expectedProjectRef.toLowerCase()) {
+    throw new Error("VITE_SUPABASE_ANON_KEY pertence a outro projeto Supabase.");
+  }
+}
+
 export function loadServerEnvironment(env: NodeJS.ProcessEnv = process.env) {
   const appEnv = parseAppEnvironment(env.APP_ENV);
   const publicAppEnv = parseAppEnvironment(env.VITE_APP_ENV);
   if (appEnv !== publicAppEnv) throw new Error("APP_ENV e VITE_APP_ENV devem identificar o mesmo ambiente.");
 
   const serviceRoleKey = requireEnvironmentValue(env, "SUPABASE_SERVICE_ROLE_KEY");
+  const supabaseAnonKey = requireEnvironmentValue(env, "VITE_SUPABASE_ANON_KEY");
   const expectedProjectRef = requireEnvironmentValue(env, "EXPECTED_SUPABASE_PROJECT_REF");
   const supabase = validateSupabaseEnvironmentBinding({
     appEnv,
@@ -53,6 +66,7 @@ export function loadServerEnvironment(env: NodeJS.ProcessEnv = process.env) {
     expectedProjectRef,
     expectedSha256: env.SUPABASE_SERVICE_ROLE_KEY_SHA256,
   });
+  validatePublicSupabaseKey({ key: supabaseAnonKey, expectedProjectRef });
 
   const publicOrigin = new URL(requireEnvironmentValue(env, "PUBLIC_APP_URL")).origin;
   const productionOrigin = new URL(requireEnvironmentValue(env, "PRODUCTION_APP_ORIGIN")).origin;
@@ -77,6 +91,7 @@ export function loadServerEnvironment(env: NodeJS.ProcessEnv = process.env) {
     productionOrigin,
     supabase,
     serviceRoleKey,
+    supabaseAnonKey,
     integrations,
     clinicFeatureEnabled: String(env.CLINIC_FEATURE_ENABLED || "").trim().toLowerCase() === "true",
     assertEnabled: (integration: ExternalIntegration) => assertIntegrationEnabled(integrations, integration),

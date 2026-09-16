@@ -1,9 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
+import { createUserScopedClient } from "../supabase/createUserScopedClient.js";
 
 type ClinicContextRouteDeps = {
   requireAuth: any;
   supabaseUrl: string;
-  serviceRoleKey: string;
+  supabaseAnonKey: string;
   clinicFeatureEnabled: boolean;
 };
 
@@ -62,11 +62,10 @@ export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDe
     }
 
     try {
-      // O JWT permanece como identidade efetiva no PostgREST. A chave de serviço
-      // apenas inicializa o cliente server-side; ela não é enviada ao navegador.
-      const userScopedClient = createClient(deps.supabaseUrl, deps.serviceRoleKey, {
-        auth: { autoRefreshToken: false, persistSession: false },
-        global: { headers: { Authorization: `Bearer ${token}` } },
+      const userScopedClient = createUserScopedClient({
+        supabaseUrl: deps.supabaseUrl,
+        supabaseAnonKey: deps.supabaseAnonKey,
+        accessToken: token,
       });
 
       const { data, error } = await userScopedClient

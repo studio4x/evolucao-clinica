@@ -11,6 +11,7 @@ push` nem incluídos em um bootstrap automático.
 | `20260915_03_clinic_feature_gates.sql` | gate global privado, flags por organização, RLS empresarial e proteção dos RPCs existentes | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260915_04_organization_invitations.sql` | convites, token hash, emissão, revogação, aceite transacional, expiração lógica e grants | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260915_05_harden_runtime_environment.sql` | identidade privada singleton do ambiente, binding explícito do gate global e deny-by-default | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260916_10_organization_team_directory.sql` | diretório mínimo via RPC controlada; memberships active/suspended e perfis mínimos, sem ampliar RLS de `professionals` | `hwkdwinfckmjoriqxbjk` (staging) |
 
 Fora do escopo desta série: billing/licenças, pacientes compartilhados,
 `org_id` em tabelas individuais, UI, integrações e produção.

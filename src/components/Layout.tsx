@@ -20,7 +20,7 @@ type PanelNavItem = { name: string; path: string; icon: LucideIcon; isPremium?: 
 
 export default function Layout() {
   const { user, profileRole, googleAccessToken, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
-  const { activeContext, reset: resetClinicContext } = useClinicContextStore();
+  const { organizations, activeContext, reset: resetClinicContext } = useClinicContextStore();
   const siteConfig = useSiteConfig();
   const navigate = useNavigate();
   const location = useLocation();
@@ -206,8 +206,14 @@ export default function Layout() {
 
   personalNavItems.push({ name: 'Sobre o app', path: '/painel/about', icon: Info });
 
+  const activeOrganization = activeContext.type === 'organization'
+    ? organizations.find(({ id }) => id === activeContext.organizationId)
+    : null;
   const clinicNavItems: PanelNavItem[] = [
     { name: 'Visão da clínica', path: '/painel/clinica', icon: Building2 },
+    ...(['owner', 'manager'].includes(activeOrganization?.membershipRole || '')
+      ? [{ name: 'Equipe', path: '/painel/clinica/equipe', icon: Users }]
+      : []),
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
     { name: 'Sobre o app', path: '/painel/about', icon: Info },

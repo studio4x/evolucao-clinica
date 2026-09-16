@@ -13,7 +13,8 @@ const storeSource = readFileSync("src/store/clinicContextStore.ts", "utf8");
 assert.match(routeSource, /app\.get\("\/api\/clinic\/contexts"/);
 assert.match(routeSource, /organization_memberships/);
 assert.match(routeSource, /organizations!inner\(id,name,trade_name,operational_status\)/);
-assert.match(routeSource, /global: \{ headers: \{ Authorization: `Bearer \$\{token\}` \} \}/);
+assert.match(routeSource, /createUserScopedClient/);
+assert.doesNotMatch(routeSource, /serviceRoleKey|SUPABASE_SERVICE_ROLE_KEY/);
 assert.match(routeSource, /\.eq\("professional_id", userId\)/);
 assert.doesNotMatch(routeSource, /req\.(query|body|params).*professional_id/);
 assert.match(routeSource, /Cache-Control/);
@@ -51,7 +52,7 @@ let capturedHandler: ((request: any, response: any) => Promise<unknown>) | null 
 let capturedMiddleware: unknown;
 registerClinicContextRoutes(
   { get: (_path: string, middleware: unknown, handler: (request: any, response: any) => Promise<unknown>) => { capturedMiddleware = middleware; capturedHandler = handler; } },
-  { requireAuth: () => undefined, supabaseUrl: "https://staging.example.com", serviceRoleKey: "server-only", clinicFeatureEnabled: false },
+  { requireAuth: () => undefined, supabaseUrl: "https://staging.example.com", supabaseAnonKey: "anon-test", clinicFeatureEnabled: false },
 );
 assert.equal(typeof capturedMiddleware, "function");
 assert.ok(capturedHandler);

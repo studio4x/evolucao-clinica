@@ -44,6 +44,7 @@ const Unsubscribe = lazyWithRetry(() => import('./pages/Unsubscribe'), 'Unsubscr
 const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedback'), 'ContinuityFeedback');
 const TrialExtensionRedeem = lazyWithRetry(() => import('./pages/TrialExtensionRedeem'), 'TrialExtensionRedeem');
 const ClinicShell = lazyWithRetry(() => import('./pages/ClinicShell'), 'ClinicShell');
+const ClinicTeam = lazyWithRetry(() => import('./pages/ClinicTeam'), 'ClinicTeam');
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
@@ -871,6 +872,7 @@ export default function App() {
           <Route path="/painel" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="clinica" element={<ClinicRoute><ClinicShell /></ClinicRoute>} />
+            <Route path="clinica/equipe" element={<ClinicRoute><ClinicTeam /></ClinicRoute>} />
             <Route path="dashboard" element={<PersonalContextRoute><Dashboard /></PersonalContextRoute>} />
             <Route path="patients" element={<PersonalContextRoute><Patients /></PersonalContextRoute>} />
             <Route path="patients/new" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />

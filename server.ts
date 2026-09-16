@@ -22,6 +22,7 @@ import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettin
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
 import { registerClinicContextRoutes } from "./server/clinic/clinicContextRoutes.js";
+import { registerClinicTeamRoutes } from "./server/clinic/clinicTeamRoutes.js";
 import {
   completeMetaRegistrationEvent,
   prepareMetaRegistrationEvent,
@@ -7435,7 +7436,13 @@ registerWhatsAppOtpRoutes(app, { requireAuth, service: whatsappOtpService });
 registerClinicContextRoutes(app, {
   requireAuth,
   supabaseUrl,
-  serviceRoleKey: supabaseServiceKey,
+  supabaseAnonKey: serverEnvironment.supabaseAnonKey,
+  clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
+});
+registerClinicTeamRoutes(app, {
+  requireAuth,
+  supabaseUrl,
+  supabaseAnonKey: serverEnvironment.supabaseAnonKey,
   clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
 });
 
