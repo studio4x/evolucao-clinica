@@ -4,6 +4,7 @@ import { registerClinicEntitlementRoutes } from "../server/clinic/clinicEntitlem
 
 const migration = readFileSync("supabase/clinic-migrations/20260916_11_organization_entitlements_and_seats.sql", "utf8");
 const hardeningMigration = readFileSync("supabase/clinic-migrations/20260916_12_harden_entitlement_snapshots_and_invitation_expiry.sql", "utf8");
+const reservationHardeningMigration = readFileSync("supabase/clinic-migrations/20260916_13_harden_reserved_seat_conversion_and_operational_restriction.sql", "utf8");
 const route = readFileSync("server/clinic/clinicEntitlementRoutes.ts", "utf8");
 const service = readFileSync("src/services/clinicEntitlement.ts", "utf8");
 const page = readFileSync("src/pages/ClinicTeam.tsx", "utf8");
@@ -45,6 +46,16 @@ assert.match(hardeningMigration, /'accepted', false/);
 assert.match(hardeningMigration, /p_event_type => 'invitation_expired'/);
 assert.doesNotMatch(hardeningMigration.slice(hardeningMigration.indexOf("CREATE OR REPLACE FUNCTION private.organization_entitlement_mode"), hardeningMigration.indexOf("CREATE OR REPLACE FUNCTION public.set_organization_clinic_rollout_state")), /clinic_plan_catalog|catalog\.enabled|base_amount_minor = s\.|seat_amount_minor = s\./);
 assert.doesNotMatch(hardeningMigration, /stripe_(customer|subscription|price|item)_id/);
+assert.match(reservationHardeningMigration, /organization_entitlement_mode/);
+assert.match(reservationHardeningMigration, /operational_status = 'restricted'/);
+assert.match(reservationHardeningMigration, /organization_subscription_access_mode/);
+assert.match(reservationHardeningMigration, /v_usage\.reserved_seats < 1/);
+assert.match(reservationHardeningMigration, /The pending invitation itself is already counted/);
+assert.doesNotMatch(reservationHardeningMigration, /available_seats < 1/);
+assert.match(reservationHardeningMigration, /private\.organization_subscriptions[\s\S]*FOR UPDATE/);
+assert.match(reservationHardeningMigration, /invitation\.status = 'expired'/);
+assert.match(reservationHardeningMigration, /'accepted', false/);
+assert.doesNotMatch(reservationHardeningMigration, /stripe_(customer|subscription|price|item)_id/);
 assert.match(route, /\/api\/clinic\/entitlement/);
 assert.match(route, /clinical-access/);
 assert.match(route, /createUserScopedClient/);

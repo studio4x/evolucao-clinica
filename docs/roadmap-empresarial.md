@@ -1092,7 +1092,10 @@ active+reserved)`. `past_due` possui grace de 7 dias; depois, o workspace fica
 `restricted`, preservando leitura/administração básica e bloqueando expansão.
 O catálogo representa a oferta comercial atual: `enabled=false` impede novas
 vendas, mas não revoga contratos históricos, cujos valores são snapshots
-contratuais independentes de alterações futuras no catálogo.
+contratuais independentes de alterações futuras no catálogo. O hardening também
+mantém a separação entre contrato financeiro e estado operacional: `restricted`
+não é promovido automaticamente a `full`, e a conversão de convite clínico usa
+a reserva já existente sem consumir uma segunda vaga.
 
 A implementação é exclusivamente staging e não iniciou Stripe, Checkout,
 webhook, cobrança, convites reais, pacientes/evoluções organizacionais ou

@@ -92,6 +92,24 @@ revogação e aceite. A transição `pending -> expired` agora grava
 accepted: false}` sem criar membership ou seat. A transição é idempotente e
 não duplica auditoria.
 
+## Hardening 2A.2
+
+A migration corretiva `20260916_13_harden_reserved_seat_conversion_and_operational_restriction.sql`
+foi aplicada somente no staging. O convite clínico pending é o proprietário da
+reserva: o aceite bloqueia a assinatura, valida a reserva ainda existente e
+converte atomicamente `reserved -> active`, sem exigir uma segunda vaga. A
+última vaga, duas aceitações concorrentes do mesmo token e a expiração seguida
+de novo convite passaram; o token concorrente materializou no máximo uma
+membership ativa e um seat clínico.
+
+O estado operacional `restricted` agora domina o modo de entitlement do
+workspace, mesmo quando o contrato financeiro ainda é `full`. Assim, leitura,
+resumo e ações redutivas autorizadas continuam disponíveis, enquanto convite,
+aceite, reativação e habilitação clínica permanecem negados; nenhuma alteração
+financeira futura pode promover automaticamente um workspace operacionalmente
+restrito. A matriz também confirmou cross-tenant deny e não introduziu Stripe,
+Checkout ou efeitos de integração.
+
 ## Convites e lifecycle
 
 Convite administrativo exige `full` e não reserva seat. Convite clínico exige
