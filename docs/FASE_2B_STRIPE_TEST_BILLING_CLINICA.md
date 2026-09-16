@@ -2,12 +2,12 @@
 
 ## Estado
 
-**FASE 2B AINDA BLOQUEADA**
+**FASE 2B FINALMENTE ENCERRADA — APTO PARA FASE 2C**
 
-Hardening 2B.3 implementado, publicado somente no staging e validado localmente.
-Falta o smoke real de Checkout COMPLETE após ownership transfer: o pagamento
-sintético final não foi enviado sem a confirmação solicitada no momento da ação.
-Os demais cenários executados passaram; cleanup final zero e gates OFF.
+Hardening 2B.3 implementado, publicado somente no staging e validado localmente
+e com smoke real de Checkout COMPLETE após ownership transfer. O pagamento foi
+concluído em Stripe Test e reconciliado server-side; cleanup final zero e gates
+OFF.
 
 Execução concluída exclusivamente no Supabase staging `hwkdwinfckmjoriqxbjk`, na conta Stripe Test `Sandbox Evolução Clínica` (`acct_1TmBy9PI1KSTkIQA`). Nenhum objeto Live, projeto de produção, DNS, Supabase produção ou cobrança real foi utilizado.
 
@@ -279,16 +279,22 @@ separadamente pelos handlers reais com transporte mock.
 As primeiras execuções do harness encontraram particularidades de transporte
 (resposta vazia no cadastro de secret e encerramento de stdin) e o pré-requisito
 FULL do RPC de owner transfer. Não foram falhas de autorização dos endpoints;
-o harness foi ajustado. As execuções interrompidas anteriores ao último Checkout
-tiveram cleanup zero e gates OFF confirmados. O último Checkout Test foi
+o harness foi ajustado. As execuções interrompidas anteriores ao ciclo final
+tiveram cleanup zero e gates OFF confirmados. No ciclo final, o Checkout Test foi
 inspecionado no navegador, confirmando Sandbox, base 1, seats 3 e R$ 139,60/mês
-simulados. Não houve envio de pagamento. Como a confirmação no momento da ação
-não chegou nesta execução, a Session
-`cs_test_b1WOyDRxYwRn9mZbEnNIiJvTTdTruljm7UEjTeh9Cg8bc6sxnOmlqrEbmg`
-foi expirada oficialmente e os fixtures foram removidos. Para retomar este gate,
-será necessário preparar novo fixture descartável e confirmar um único pagamento
-Test antes do envio, sem ativação manual nem alteração financeira para forçar
-sucesso. A confirmação pelo redirect não substitui Stripe e estado server-side.
+simulados. O pagamento foi concluído com `livemode=false`, sem ativação manual ou
+alteração financeira para forçar sucesso. A Session
+`cs_test_b1xNrtCLiowIZie0a2vU3raAV9y1zpK6RAyAQos2mDpLWrgfqngogCJKkE` retornou
+`complete`/`paid`, e a Subscription
+`sub_1UGNzYPI1KSTkIQA9QrbZ7p7` foi reconciliada pelo webhook. O redirect posterior
+encontrou a Deployment Protection do staging; ele não foi usado como prova de
+pagamento.
+
+No cenário final, o ex-owner recebeu `403/not_authorized` sem recovery, o
+current owner reconciliou a Session COMPLETE com resposta `activated`, a Session
+permaneceu `complete`, houve exatamente uma Subscription, com base 1 e seats 3,
+e o estado local ficou `active`/`full` com rollout habilitado. A tentativa
+histórica do owner original foi preservada apenas como histórico do iniciador.
 
 ### Cleanup e Advisors pós-execução 2B.3
 
@@ -315,9 +321,9 @@ criação de tabelas/índices nesta migration; não foi feita otimização fora 
 | Stripe de tenant não autorizado não consultado | PASS — transporte instrumentado dos handlers reais |
 | Owner stale recovery / nova chave / past_due grace | PASS — smoke e regressões locais |
 | Ex-owner DENY; current owner OPEN/EXPIRED | PASS — smoke Test |
-| COMPLETE/activated após ownership transfer | PASS local; PENDENTE smoke real — pagamento Test não enviado |
+| COMPLETE/activated após ownership transfer | PASS — smoke real Stripe Test; ex-owner DENY, current owner `activated`, Session não expirada e uma Subscription |
 | Webhook/individual/concurrency/idempotência | PASS — webhook real e suíte de regressão |
-| Migration 20 / Functions staging / grants | PASS — estado final seats/cancel versão 62; checkout versão 64; JWT verificado (versões também avançam com atualização de secrets) |
+| Migration 20 / Functions staging / grants | PASS — estado final seats/cancel versão 71; checkout versão 73; JWT verificado |
 | Cleanup final / gates OFF | PASS — zero fixtures; global false; CLINIC_BILLING_ENABLED=false |
 | Advisors | PASS — Security 14 WARN; Performance 18 INFO, inalterados pós-cleanup |
 | npm test, lint, build, diff check | PASS; build mantém apenas aviso preexistente de chunk |
@@ -326,12 +332,11 @@ criação de tabelas/índices nesta migration; não foi feita otimização fora 
 
 ## Resultado 2B.3
 
-**FASE 2B AINDA BLOQUEADA**
+**FASE 2B FINALMENTE ENCERRADA — APTO PARA FASE 2C**
 
-Única pendência de aprovação desta etapa: confirmar e executar o smoke real de
-pagamento Checkout COMPLETE após ownership transfer. Os testes dos helpers e
-handlers reais para esse cenário passaram; não são apresentados como pagamento
-hospedado efetivamente executado. Não iniciar Fase 2C enquanto o gate não fechar.
+O smoke real de pagamento Checkout COMPLETE após ownership transfer passou com
+webhook/reconciliação server-side, autorização do current owner e negativa do
+ex-owner. A Fase 2C não foi iniciada nesta execução.
 
 ## Resultado 2B.2
 
