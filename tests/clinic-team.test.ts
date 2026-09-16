@@ -37,7 +37,7 @@ assert.match(pageSource, /Equipe/);
 assert.match(pageSource, /Remover da clínica/);
 assert.match(pageSource, /transferClinicOwner/);
 assert.match(pageSource, /professional.*=>.*\/painel\/clinica|!isAdmin/);
-assert.doesNotMatch(pageSource, /create_organization_invitation|raw_token|seat|Stripe|billing/i);
+assert.doesNotMatch(pageSource, /create_organization_invitation|raw_token|Stripe|billing/i);
 assert.match(appSource, /clinica\/equipe/);
 assert.match(layoutSource, /name: 'Equipe'/);
 

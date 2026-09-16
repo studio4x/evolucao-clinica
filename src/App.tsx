@@ -219,9 +219,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const isClinicRoute = location.pathname === '/painel/clinica' || location.pathname.startsWith('/painel/clinica/');
+
   if (
     profileRole !== 'admin'
     && user
+    && !isClinicRoute
     && !isOnboardingComplete(user.id)
     && !canAccessApplication(user.id)
   ) {
@@ -237,6 +240,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   // Mantém acessíveis as páginas de conta e recursos premium mesmo sem plano ativo,
   // para que o usuário possa gerenciar a conta ou contratar novamente.
   if (
+    isClinicRoute ||
     location.pathname === '/painel/subscription' ||
     location.pathname === '/painel/profile' ||
     location.pathname === '/painel/logotipo-personalizado' ||

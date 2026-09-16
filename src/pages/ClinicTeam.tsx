@@ -15,6 +15,12 @@ import {
   transferClinicOwner,
   type ClinicTeamMember,
 } from "../services/clinicTeam";
+import {
+  ClinicEntitlementApiError,
+  fetchClinicEntitlement,
+  setClinicMemberClinicalAccess,
+  type ClinicSeatSummary,
+} from "../services/clinicEntitlement";
 
 function memberLabel(member: ClinicTeamMember) {
   return member.full_name?.trim() || "Profissional";
@@ -40,6 +46,7 @@ export default function ClinicTeam() {
   const [loading, setLoading] = useState(true);
   const [busyProfessionalId, setBusyProfessionalId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [seatSummary, setSeatSummary] = useState<ClinicSeatSummary | null>(null);
 
   const organizationId = activeContext.type === "organization" ? activeContext.organizationId : null;
   const organization = organizationId ? organizations.find(({ id }) => id === organizationId) : null;
@@ -54,14 +61,19 @@ export default function ClinicTeam() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token || session.user.id !== user.id) throw new ClinicTeamApiError(401, "authentication_required");
-      const nextMembers = await fetchClinicTeam(session.access_token, requestOrganizationId);
+      const [nextMembers, nextSeatSummary] = await Promise.all([
+        fetchClinicTeam(session.access_token, requestOrganizationId),
+        fetchClinicEntitlement(session.access_token, requestOrganizationId),
+      ]);
       const currentContext = useClinicContextStore.getState().activeContext;
       if (currentContext.type === "organization" && currentContext.organizationId === requestOrganizationId) {
         setMembers(nextMembers);
+        setSeatSummary(nextSeatSummary);
       }
     } catch (cause) {
       const teamError = cause instanceof ClinicTeamApiError ? cause : new ClinicTeamApiError(503, "team_operation_failed");
       setMembers([]);
+      setSeatSummary(null);
       setError(teamError.code);
       if (teamError.status === 401 || teamError.status === 403) {
         const { data: { session } } = await supabase.auth.getSession();
@@ -183,6 +195,41 @@ export default function ClinicTeam() {
     }
   }, [actorRole, busyProfessionalId, organizationId, refreshAfterMutation, user]);
 
+  const runClinicalAccessChange = useCallback(async (member: ClinicTeamMember) => {
+    if (!organizationId || !user || actorRole !== "owner" || member.status !== "active" || busyProfessionalId) return;
+    const enabled = !member.clinical_access_enabled;
+    if (enabled && seatSummary && seatSummary.available_seats < 1) {
+      await showAlert("Não há licenças disponíveis para habilitar o acesso clínico. Gerenciamento de quantidade será disponibilizado em etapa posterior.", {
+        title: "Nenhuma licença disponível", variant: "warning", icon: "info",
+      });
+      return;
+    }
+    const confirmed = await showConfirm(
+      `${enabled ? "Habilitar" : "Desabilitar"} o acesso clínico de ${memberLabel(member)}?`,
+      { title: enabled ? "Habilitar acesso clínico" : "Desabilitar acesso clínico", confirmLabel: enabled ? "Habilitar" : "Desabilitar", cancelLabel: "Cancelar", variant: enabled ? "info" : "warning", icon: "question" },
+    );
+    if (!confirmed) return;
+    const reason = await showPrompt("Motivo opcional para o registro administrativo:", {
+      title: "Registrar motivo", confirmLabel: "Continuar", cancelLabel: "Pular", placeholder: "Motivo (opcional)", icon: "info",
+    });
+    setBusyProfessionalId(member.professional_id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token || session.user.id !== user.id) throw new Error("authentication_required");
+      await setClinicMemberClinicalAccess(session.access_token, organizationId, member.professional_id, enabled, reason || undefined);
+      await refreshAfterMutation();
+    } catch (cause) {
+      await showAlert(cause instanceof ClinicEntitlementApiError && cause.status === 409
+        ? "Não há licenças disponíveis para habilitar o acesso clínico. Gerenciamento de quantidade será disponibilizado em etapa posterior."
+        : "Não foi possível atualizar o acesso clínico. A equipe será atualizada.", {
+          title: "Acesso clínico não alterado", variant: "danger", icon: "warning",
+        });
+      await refreshAfterMutation();
+    } finally {
+      setBusyProfessionalId(null);
+    }
+  }, [actorRole, busyProfessionalId, organizationId, refreshAfterMutation, seatSummary, user]);
+
   const visibleMembers = useMemo(() => members.filter((member) => member.status === "active" || member.status === "suspended"), [members]);
 
   if (!publicEffectFlags.clinicFeature) return <Navigate to="/painel/dashboard" replace />;
@@ -195,6 +242,12 @@ export default function ClinicTeam() {
         description={`Membros administrativos de ${organization.tradeName || organization.name}.`}
         icon={Users}
       />
+
+      {seatSummary?.entitlement_mode === "restricted" && (
+        <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-medium text-amber-900">
+          Clínica em modo restrito. Ações de expansão permanecem desabilitadas.
+        </div>
+      )}
 
       {error && (
         <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
@@ -215,6 +268,15 @@ export default function ClinicTeam() {
           </button>
         </div>
 
+        {seatSummary && (
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Resumo de licenças">
+            <SeatMetric label="Licenças contratadas" value={seatSummary.contracted_seats} />
+            <SeatMetric label="Licenças em uso" value={seatSummary.active_seats} />
+            <SeatMetric label="Licenças reservadas" value={seatSummary.reserved_seats} />
+            <SeatMetric label="Licenças disponíveis" value={seatSummary.available_seats} />
+          </div>
+        )}
+
         {loading && visibleMembers.length === 0 ? (
           <div className="flex items-center gap-3 py-12 text-sm text-brand-text-muted"><Loader2 className="animate-spin" size={20} aria-hidden="true" />Carregando equipe…</div>
         ) : visibleMembers.length === 0 ? (
@@ -225,10 +287,10 @@ export default function ClinicTeam() {
               <table className="w-full min-w-[760px] text-left text-sm">
                 <caption className="sr-only">Membros da equipe da clínica</caption>
                 <thead><tr className="border-b border-brand-border text-xs uppercase tracking-wide text-brand-text-muted"><th className="px-3 py-3">Membro</th><th className="px-3 py-3">Papel</th><th className="px-3 py-3">Status</th><th className="px-3 py-3">Acesso clínico</th><th className="px-3 py-3">Ações</th></tr></thead>
-                <tbody>{visibleMembers.map((member) => <TeamRow key={member.membership_id} member={member} actorRole={actorRole as "owner" | "manager"} actorId={user?.id} busy={busyProfessionalId === member.professional_id} onAction={runMemberAction} onRoleChange={runRoleChange} onTransfer={runOwnerTransfer} />)}</tbody>
+                <tbody>{visibleMembers.map((member) => <TeamRow key={member.membership_id} member={member} actorRole={actorRole as "owner" | "manager"} actorId={user?.id} busy={busyProfessionalId === member.professional_id} onAction={runMemberAction} onRoleChange={runRoleChange} onTransfer={runOwnerTransfer} onClinicalAccess={runClinicalAccessChange} entitlementMode={seatSummary?.entitlement_mode || "none"} availableSeats={seatSummary?.available_seats ?? 0} />)}</tbody>
               </table>
             </div>
-            <div className="mt-6 grid gap-3 md:hidden">{visibleMembers.map((member) => <TeamCard key={member.membership_id} member={member} actorRole={actorRole as "owner" | "manager"} actorId={user?.id} busy={busyProfessionalId === member.professional_id} onAction={runMemberAction} onRoleChange={runRoleChange} onTransfer={runOwnerTransfer} />)}</div>
+            <div className="mt-6 grid gap-3 md:hidden">{visibleMembers.map((member) => <TeamCard key={member.membership_id} member={member} actorRole={actorRole as "owner" | "manager"} actorId={user?.id} busy={busyProfessionalId === member.professional_id} onAction={runMemberAction} onRoleChange={runRoleChange} onTransfer={runOwnerTransfer} onClinicalAccess={runClinicalAccessChange} entitlementMode={seatSummary?.entitlement_mode || "none"} availableSeats={seatSummary?.available_seats ?? 0} />)}</div>
           </>
         )}
       </section>
@@ -244,6 +306,9 @@ type TeamActionsProps = {
   onAction: (member: ClinicTeamMember, action: "suspend" | "reactivate" | "remove") => void;
   onRoleChange: (member: ClinicTeamMember, role: "manager" | "professional") => void;
   onTransfer: (member: ClinicTeamMember) => void;
+  onClinicalAccess: (member: ClinicTeamMember) => void;
+  entitlementMode: "full" | "restricted" | "none";
+  availableSeats: number;
 };
 
 function canManage(actorRole: TeamActionsProps["actorRole"], member: ClinicTeamMember, actorId?: string) {
@@ -251,9 +316,10 @@ function canManage(actorRole: TeamActionsProps["actorRole"], member: ClinicTeamM
   return actorRole === "owner" || member.membership_role === "professional";
 }
 
-function TeamActions({ member, actorRole, actorId, busy, onAction, onRoleChange, onTransfer }: TeamActionsProps) {
+function TeamActions({ member, actorRole, actorId, busy, onAction, onRoleChange, onTransfer, onClinicalAccess, entitlementMode, availableSeats }: TeamActionsProps) {
   const allowed = canManage(actorRole, member, actorId);
-  if (!allowed) return <span className="text-xs text-brand-text-muted">Sem ações</span>;
+  const canManageClinical = actorRole === "owner" && member.status === "active";
+  if (!allowed && !canManageClinical) return <span className="text-xs text-brand-text-muted">Sem ações</span>;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -266,6 +332,7 @@ function TeamActions({ member, actorRole, actorId, busy, onAction, onRoleChange,
       {member.status === "active" ? <button type="button" onClick={() => void onAction(member, "suspend")} disabled={busy} className="min-h-10 rounded-lg border border-amber-200 px-3 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60">Suspender</button> : <button type="button" onClick={() => void onAction(member, "reactivate")} disabled={busy} className="min-h-10 rounded-lg border border-emerald-200 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60">Reativar</button>}
       <button type="button" onClick={() => void onAction(member, "remove")} disabled={busy} className="min-h-10 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">Remover da clínica</button>
       {actorRole === "owner" && member.status === "active" && <button type="button" onClick={() => void onTransfer(member)} disabled={busy} className="min-h-10 rounded-lg border border-brand-border px-3 text-xs font-semibold text-brand-primary hover:bg-brand-bg disabled:opacity-60">Transferir ownership</button>}
+      {canManageClinical && (member.clinical_access_enabled || entitlementMode === "full") && <button type="button" onClick={() => void onClinicalAccess(member)} disabled={busy || (!member.clinical_access_enabled && availableSeats < 1)} title={!member.clinical_access_enabled && availableSeats < 1 ? "Não há licenças disponíveis para habilitar o acesso clínico." : undefined} className="min-h-10 rounded-lg border border-brand-primary/30 px-3 text-xs font-semibold text-brand-primary hover:bg-brand-bg disabled:cursor-not-allowed disabled:opacity-60">{member.clinical_access_enabled ? "Desabilitar acesso clínico" : "Habilitar acesso clínico"}</button>}
     </div>
   );
 }
@@ -279,11 +346,15 @@ function MemberStatus({ status }: { status: ClinicTeamMember["status"] }) {
 }
 
 function TeamRow(props: TeamActionsProps) {
-  const { member, actorRole, actorId, busy, onAction, onRoleChange, onTransfer } = props;
-  return <tr className="border-b border-brand-border/70 align-top last:border-0"><td className="px-3 py-4"><MemberIdentity member={member} /></td><td className="px-3 py-4"><span className="inline-flex items-center gap-1.5 text-sm text-brand-text">{member.membership_role === "owner" ? <Crown size={15} aria-hidden="true" /> : member.membership_role === "manager" ? <UserRoundCog size={15} aria-hidden="true" /> : <UserRound size={15} aria-hidden="true" />}{roleLabel(member.membership_role)}</span></td><td className="px-3 py-4"><MemberStatus status={member.status} /></td><td className="px-3 py-4 text-sm text-brand-text">{member.clinical_access_enabled ? "Habilitado" : "Não habilitado"}</td><td className="px-3 py-4"><TeamActions member={member} actorRole={actorRole} actorId={actorId} busy={busy} onAction={onAction} onRoleChange={onRoleChange} onTransfer={onTransfer} /></td></tr>;
+  const { member, actorRole, actorId, busy, onAction, onRoleChange, onTransfer, onClinicalAccess, entitlementMode, availableSeats } = props;
+  return <tr className="border-b border-brand-border/70 align-top last:border-0"><td className="px-3 py-4"><MemberIdentity member={member} /></td><td className="px-3 py-4"><span className="inline-flex items-center gap-1.5 text-sm text-brand-text">{member.membership_role === "owner" ? <Crown size={15} aria-hidden="true" /> : member.membership_role === "manager" ? <UserRoundCog size={15} aria-hidden="true" /> : <UserRound size={15} aria-hidden="true" />}{roleLabel(member.membership_role)}</span></td><td className="px-3 py-4"><MemberStatus status={member.status} /></td><td className="px-3 py-4 text-sm text-brand-text">{member.clinical_access_enabled ? "Habilitado" : "Não habilitado"}</td><td className="px-3 py-4"><TeamActions {...props} /></td></tr>;
 }
 
 function TeamCard(props: TeamActionsProps) {
-  const { member, actorRole, actorId, busy, onAction, onRoleChange, onTransfer } = props;
-  return <article className="rounded-2xl border border-brand-border p-4"><MemberIdentity member={member} /><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-brand-text-muted">Papel</dt><dd className="mt-1 font-semibold text-brand-text">{roleLabel(member.membership_role)}</dd></div><div><dt className="text-xs text-brand-text-muted">Status</dt><dd className="mt-1"><MemberStatus status={member.status} /></dd></div><div><dt className="text-xs text-brand-text-muted">Acesso clínico</dt><dd className="mt-1 font-semibold text-brand-text">{member.clinical_access_enabled ? "Habilitado" : "Não habilitado"}</dd></div></dl><div className="mt-4"><TeamActions member={member} actorRole={actorRole} actorId={actorId} busy={busy} onAction={onAction} onRoleChange={onRoleChange} onTransfer={onTransfer} /></div></article>;
+  const { member } = props;
+  return <article className="rounded-2xl border border-brand-border p-4"><MemberIdentity member={member} /><dl className="mt-4 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-brand-text-muted">Papel</dt><dd className="mt-1 font-semibold text-brand-text">{roleLabel(member.membership_role)}</dd></div><div><dt className="text-xs text-brand-text-muted">Status</dt><dd className="mt-1"><MemberStatus status={member.status} /></dd></div><div><dt className="text-xs text-brand-text-muted">Acesso clínico</dt><dd className="mt-1 font-semibold text-brand-text">{member.clinical_access_enabled ? "Habilitado" : "Não habilitado"}</dd></div></dl><div className="mt-4"><TeamActions {...props} /></div></article>;
+}
+
+function SeatMetric({ label, value }: { label: string; value: number }) {
+  return <div className="rounded-xl border border-brand-border bg-brand-bg/40 p-3"><p className="text-xs text-brand-text-muted">{label}</p><p className="mt-1 text-2xl font-bold text-brand-text">{value}</p></div>;
 }

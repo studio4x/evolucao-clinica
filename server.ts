@@ -23,6 +23,7 @@ import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
 import { registerClinicContextRoutes } from "./server/clinic/clinicContextRoutes.js";
 import { registerClinicTeamRoutes } from "./server/clinic/clinicTeamRoutes.js";
+import { registerClinicEntitlementRoutes } from "./server/clinic/clinicEntitlementRoutes.js";
 import {
   completeMetaRegistrationEvent,
   prepareMetaRegistrationEvent,
@@ -7440,6 +7441,12 @@ registerClinicContextRoutes(app, {
   clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
 });
 registerClinicTeamRoutes(app, {
+  requireAuth,
+  supabaseUrl,
+  supabaseAnonKey: serverEnvironment.supabaseAnonKey,
+  clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
+});
+registerClinicEntitlementRoutes(app, {
   requireAuth,
   supabaseUrl,
   supabaseAnonKey: serverEnvironment.supabaseAnonKey,

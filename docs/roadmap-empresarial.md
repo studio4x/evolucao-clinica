@@ -1075,6 +1075,28 @@ Resultado: **FASE 1B5 APROVADA PARA REVISÃO**.
 
 ---
 
+## 14.3. Fase 2A — motor de licenças, entitlement e capacidade clínica
+
+A Fase 2A separa definitivamente os entitlements individual e empresarial: a
+clínica não cancela nem altera o plano individual, e membership empresarial
+não concede recursos pessoais premium. O contrato empresarial é a fonte de
+capacidade do workspace, com catálogo interno do Plano Clínica, snapshots
+monetários em centavos e mínimo contratado de 3 seats.
+
+`active_seats`, `reserved_seats` e `available_seats` são sempre derivados das
+memberships e convites válidos. Owner/manager administrativo não consome seat
+quando `clinical_access_enabled=false`; membership suspensa não consome seat;
+convite clínico pending reserva seat; aceite converte a reserva em seat ativo.
+Redução futura nunca poderá deixar o contrato abaixo de `max(3,
+active+reserved)`. `past_due` possui grace de 7 dias; depois, o workspace fica
+`restricted`, preservando leitura/administração básica e bloqueando expansão.
+
+A implementação é exclusivamente staging e não iniciou Stripe, Checkout,
+webhook, cobrança, convites reais, pacientes/evoluções organizacionais ou
+produção. Ver [relatório da Fase 2A](FASE_2A_MOTOR_LICENCAS_ENTITLEMENT.md).
+
+---
+
 ## 15. Resultado esperado
 
 Ao final do roadmap, a Evolução Clínica terá dois modelos coexistindo com segurança:
