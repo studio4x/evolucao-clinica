@@ -2,7 +2,12 @@
 
 ## Estado
 
-**FASE 2B REVISADA E ENDURECIDA — APTO PARA FASE 2C**
+**FASE 2B AINDA BLOQUEADA**
+
+Hardening 2B.3 implementado, publicado somente no staging e validado localmente.
+Falta o smoke real de Checkout COMPLETE após ownership transfer: o pagamento
+sintético final não foi enviado sem a confirmação solicitada no momento da ação.
+Os demais cenários executados passaram; cleanup final zero e gates OFF.
 
 Execução concluída exclusivamente no Supabase staging `hwkdwinfckmjoriqxbjk`, na conta Stripe Test `Sandbox Evolução Clínica` (`acct_1TmBy9PI1KSTkIQA`). Nenhum objeto Live, projeto de produção, DNS, Supabase produção ou cobrança real foi utilizado.
 
@@ -178,6 +183,155 @@ O teste contratual e o smoke controlado cobrem: lost idempotency key, Stripe apl
 | `git diff --check` | PASS |
 | Produção / Live / cobrança real | NÃO EXECUTADO |
 | Fase 2C / convites reais / e-mail | NÃO EXECUTADO |
+
+## Hardening 2B.3 — autorização antes de recovery
+
+Execução de 16/09/2026, exclusivamente em `feat/clinicas`, Supabase staging
+`hwkdwinfckmjoriqxbjk` e Stripe Test `acct_1TmBy9PI1KSTkIQA` (Sandbox Evolução
+Clínica). Build `v1.10.874`; versão móvel mantida, sem `.aab`.
+
+### Autorização e isolamento
+
+Seats, cancel e checkout agora seguem JWT validado → organização do request →
+current active owner → configuração/Sandbox → recovery. O ator vem apenas de
+`user.id`; campos de actor, owner ou role enviados pelo browser não conferem
+autoridade. A migration 20 adiciona `assert_clinic_billing_owner_authorized`,
+validando organização não archived, professional existente e membership active
+owner da mesma organização. Os erros são neutros (`403/not_authorized`), inclusive
+para UUID de organização inexistente.
+
+O helper de stale recovery recebe o actor e repete a autorização internamente,
+antes de consultar a operação ou Stripe; confirma ainda que a assinatura resolvida
+pertence à organização autorizada. A autorização é independente de entitlement
+FULL: contratos `past_due`, `unpaid` ou `canceled` podem precisar de recovery.
+A elegibilidade de **nova** alteração comercial continua separada, no prepare e
+na validação de estado Stripe. Autorização é revalidada antes dos principais
+side effects de recovery/Stripe.
+
+Manager permanece read-only no status. Manager, professional, usuário sem
+membership, ex-owner e owner de outro tenant não provocam recovery de billing.
+Webhook assinado e reconciliação administrativa service-role continuam sem
+dependência de JWT owner; nenhum guard de usuário foi inserido no webhook.
+
+As duas RPCs novas têm `SECURITY DEFINER`, search path vazio e nomes qualificados;
+EXECUTE foi negado a PUBLIC/anon/authenticated e concedido apenas a service_role.
+Os grants privados de get/hold/expire das migrations anteriores foram conferidos
+e preservados. Migrations 14–19 não foram alteradas; a migration 20 e o MANIFEST
+foram aplicados somente no staging pela Management API, sem `db push`.
+
+### Checkout durante ownership transfer
+
+`ownerProfessionalId` no Stripe é o **iniciador histórico**, não a autorização
+atual. O lookup administrativo por organização requer current owner também no
+banco e encontra tentativas do owner anterior. Inclui o contrato já `activated`,
+pois o webhook pode concluir a tentativa antes do retorno do novo owner.
+
+- Session OPEN do antigo owner: expiração oficial no Stripe, nova consulta do
+  estado autoritativo e materialização local expired antes de iniciar a tentativa
+  do owner atual; a URL antiga não é reutilizada em nome do novo owner.
+- Session EXPIRED: materialização local e nova tentativa permitida.
+- Session COMPLETE: nunca expirar; validar Session/itens/organização e
+  Subscription/customer antes de reconciliar o contrato, sem segundo checkout.
+  COMPLETE tem precedência sobre um `expires_at` passado.
+- Se pagamento vencer a corrida de expiração, reconciliar COMPLETE; se a
+  expiração falhar e a Session permanecer aberta, bloquear nova contratação.
+- Tentativa started sem Session permanece protegida pela lease; stale pode ser
+  materializada como expired. Metadata histórica não é reescrita.
+
+O comportamento segue a [expiração oficial de Checkout Session da Stripe](https://docs.stripe.com/api/checkout/sessions/expire)
+e o hardening de [funções de banco do Supabase](https://supabase.com/docs/guides/database/functions).
+
+### Evidência dos testes e smoke 2B.3
+
+`tests/clinic-billing-authorization.test.ts` transpila e executa os handlers e
+helpers **efetivamente publicados**, substituindo apenas transporte de banco,
+Stripe e serve. As negativas comprovam somente a chamada de owner assertion,
+zero construção/consulta/update Stripe e zero RPC de operação, assinatura,
+pending reduction ou checkout. Cobertura adicional: defesa interna do helper,
+recovery aplicado/não aplicado/decrease/cancel/pending, estado financeiro
+past_due/unpaid/canceled, contrato cross-tenant, checkout OPEN/EXPIRED/COMPLETE,
+contrato já activated, corrida de pagamento e expiração inconclusiva. Seats e
+cancel executados contra Subscription mock realmente `past_due` permanecem PASS.
+
+No smoke real, todos os endpoints usaram bearer de usuários sintéticos logados
+normalmente. Foram observados PASS para:
+
+- trigger Auth → professionals e login normal;
+- owner A → operação stale B DENY, manager/professional/sem membership DENY,
+  com snapshots de operações, subscription (incluindo pending reduction) e
+  attempts inalterados e resposta sem metadata de outro tenant;
+- UUID aleatório: erro neutro; manager: status read-only permitido;
+- owner autorizado: stale untouched recuperada com chave nova e alteração Test;
+- ex-owner: checkout DENY; current owner: Session OPEN antiga expirada e nova
+  tentativa própria; Session EXPIRED antiga resolvida;
+- grace `past_due` local futura: owner PASS, manager DENY; cancel owner PASS;
+- contratos Test iniciais criados com cartão/token de teste e reconciliados pelo
+  webhook Stripe assinado, independente de usuário owner.
+
+Limite explícito dos fixtures: o RPC normal de transferir owner exige workspace
+FULL e não permite a transferência em pending_setup. Para exercitar checkout
+pré-contratação, apenas as memberships dos fixtures descartáveis foram trocadas
+transacionalmente (owner antigo → manager, novo → owner), respeitando a invariante
+de um owner ativo. Nenhum estado financeiro/ativação foi forçado. A grace local
+é fixture de elegibilidade; o cenário de Stripe realmente past_due foi validado
+separadamente pelos handlers reais com transporte mock.
+
+As primeiras execuções do harness encontraram particularidades de transporte
+(resposta vazia no cadastro de secret e encerramento de stdin) e o pré-requisito
+FULL do RPC de owner transfer. Não foram falhas de autorização dos endpoints;
+o harness foi ajustado. As execuções interrompidas anteriores ao último Checkout
+tiveram cleanup zero e gates OFF confirmados. O último Checkout Test foi
+inspecionado no navegador, confirmando Sandbox, base 1, seats 3 e R$ 139,60/mês
+simulados. Não houve envio de pagamento. Como a confirmação no momento da ação
+não chegou nesta execução, a Session
+`cs_test_b1WOyDRxYwRn9mZbEnNIiJvTTdTruljm7UEjTeh9Cg8bc6sxnOmlqrEbmg`
+foi expirada oficialmente e os fixtures foram removidos. Para retomar este gate,
+será necessário preparar novo fixture descartável e confirmar um único pagamento
+Test antes do envio, sem ativação manual nem alteração financeira para forçar
+sucesso. A confirmação pelo redirect não substitui Stripe e estado server-side.
+
+### Cleanup e Advisors pós-execução 2B.3
+
+Confirmadas zero linhas dos UUIDs sintéticos em Auth, professionals,
+organizations, memberships, subscriptions, checkout attempts, billing operations,
+invitations, flags, audit, Stripe events/transactions locais, patients e evolutions.
+Sessions Auth sintéticas foram removidas; Sessions Checkout abertas foram
+expiradas, subscriptions Test canceladas e customers temporários removidos, sem
+erros de cleanup. Catálogo estrutural Products/Prices e webhook endpoint mantidos.
+Gate DB global `false` e `CLINIC_BILLING_ENABLED=false` restaurados.
+
+Security Advisor: **14 WARN**, mesmos tipos preexistentes
+(`extension_in_public`, `authenticated_security_definer_function_executable`);
+nenhum novo P0/P1. Performance Advisor: **18 INFO**, tipos preexistentes
+(`unindexed_foreign_keys`, `unused_index`). Não houve mudança das contagens nem
+criação de tabelas/índices nesta migration; não foi feita otimização fora do escopo.
+
+### Gates finais 2B.3
+
+| Gate | Evidência atual |
+| --- | --- |
+| Owner antes de seat/cancel/checkout recovery | PASS — handlers reais e smoke staging |
+| Manager/professional/sem membership/cross-tenant DENY | PASS — sem side effects ou metadata |
+| Stripe de tenant não autorizado não consultado | PASS — transporte instrumentado dos handlers reais |
+| Owner stale recovery / nova chave / past_due grace | PASS — smoke e regressões locais |
+| Ex-owner DENY; current owner OPEN/EXPIRED | PASS — smoke Test |
+| COMPLETE/activated após ownership transfer | PASS local; PENDENTE smoke real — pagamento Test não enviado |
+| Webhook/individual/concurrency/idempotência | PASS — webhook real e suíte de regressão |
+| Migration 20 / Functions staging / grants | PASS — estado final seats/cancel versão 62; checkout versão 64; JWT verificado (versões também avançam com atualização de secrets) |
+| Cleanup final / gates OFF | PASS — zero fixtures; global false; CLINIC_BILLING_ENABLED=false |
+| Advisors | PASS — Security 14 WARN; Performance 18 INFO, inalterados pós-cleanup |
+| npm test, lint, build, diff check | PASS; build mantém apenas aviso preexistente de chunk |
+| Produção, Stripe Live, catálogo, endpoint webhook, DNS, main | NÃO ALTERADOS |
+| Fase 2C, convites reais, e-mail, dados clínicos compartilhados | NÃO EXECUTADOS |
+
+## Resultado 2B.3
+
+**FASE 2B AINDA BLOQUEADA**
+
+Única pendência de aprovação desta etapa: confirmar e executar o smoke real de
+pagamento Checkout COMPLETE após ownership transfer. Os testes dos helpers e
+handlers reais para esse cenário passaram; não são apresentados como pagamento
+hospedado efetivamente executado. Não iniciar Fase 2C enquanto o gate não fechar.
 
 ## Resultado 2B.2
 

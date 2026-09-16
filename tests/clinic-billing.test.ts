@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import "./clinic-billing-authorization.test.ts";
 
 const files = [
   "supabase/clinic-migrations/20260916_14_clinic_stripe_billing.sql",

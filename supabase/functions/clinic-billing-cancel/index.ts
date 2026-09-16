@@ -6,6 +6,7 @@ import {
   createClinicAdminClient,
   createClinicStripe,
   assertSandboxAccount,
+  assertClinicBillingOwnerAuthorized,
   getClinicConfig,
   requireClinicUser,
   requireJsonObject,
@@ -27,13 +28,14 @@ serve(async (req) => {
   try {
     const admin = createClinicAdminClient();
     const user = await requireClinicUser(req, admin);
+    const body = requireJsonObject(await req.json());
+    organizationId = requireUuid(body.organizationId, "organizationId");
+    await assertClinicBillingOwnerAuthorized(admin, organizationId, user.id);
     const config = await getClinicConfig(true);
     const stripe = createClinicStripe(config.secretKey);
     await assertSandboxAccount(stripe);
-    const body = requireJsonObject(await req.json());
-    organizationId = requireUuid(body.organizationId, "organizationId");
     const idempotencyKey = requireUuid(body.idempotencyKey, "idempotencyKey");
-    let recovery = await recoverStaleClinicBillingOperation(admin, stripe, organizationId);
+    let recovery = await recoverStaleClinicBillingOperation(admin, stripe, organizationId, user.id);
     if (recovery?.status === "pending_payment") {
       return clinicJsonResponse({ status: "pending_payment", operation_id: recovery.operation.operation_id, payment_action_required: true });
     }
@@ -45,7 +47,7 @@ serve(async (req) => {
       p_idempotency_key: idempotencyKey,
     });
     if (prepared.recovery_required) {
-      recovery = await recoverStaleClinicBillingOperation(admin, stripe, organizationId);
+      recovery = await recoverStaleClinicBillingOperation(admin, stripe, organizationId, user.id);
       if (recovery?.status === "pending_payment") {
         return clinicJsonResponse({ status: "pending_payment", operation_id: recovery.operation.operation_id, payment_action_required: true });
       }
@@ -67,6 +69,7 @@ serve(async (req) => {
     assertClinicBillingMutationStatus(current);
     if (current.organizationId !== organizationId) throw new ClinicBillingHttpError(409, "A assinatura Stripe mudou antes do cancelamento.", "stale_subscription_state");
     let updated: any;
+    await assertClinicBillingOwnerAuthorized(admin, organizationId, user.id);
     try {
       stripeMutationAttempted = true;
       updated = await stripe.subscriptions.update(prepared.subscription_id, { cancel_at_period_end: true } as any, { idempotencyKey: `clinic:billing:${organizationId}:${operationId}` });

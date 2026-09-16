@@ -6,6 +6,7 @@ import {
   createClinicAdminClient,
   createClinicStripe,
   assertSandboxAccount,
+  assertClinicBillingOwnerAuthorized,
   getCatalog,
   getCheckoutAttempt,
   getOpenCheckoutAttemptForOrganization,
@@ -17,6 +18,7 @@ import {
   requireUuid,
   rpc,
   reconcileClinicStripeSubscription,
+  resolveClinicSubscription,
   validatePrice,
 } from "../_shared/clinicBilling.ts";
 
@@ -44,20 +46,26 @@ async function inspectCheckoutSession(stripe: any, sessionId: string, attemptId:
     throw error;
   }
   if (session?.livemode === true) throw new ClinicBillingHttpError(503, "Stripe Live é proibido nesta fase.", "stripe_live_forbidden");
-  const expired = session?.status === "expired" || Number(session?.expires_at || 0) <= Math.floor(Date.now() / 1000);
-  if (expired) return { session, expired: true };
-  if (session?.status === "complete") return { session, expired: false, complete: true };
-  if (session?.status !== "open") throw new ClinicBillingHttpError(409, "A Checkout Session não está aberta nem concluída.", "checkout_session_mismatch");
   assertCheckoutSessionPayload(session, attemptId, organizationId, planCode, seats, catalog);
+  // A completed payment remains completed after expires_at; never expire its contract.
+  if (session?.status === "complete") return { session, expired: false, complete: true };
+  if (session?.status === "expired") return { session, expired: true, complete: false };
+  if (session?.status !== "open") throw new ClinicBillingHttpError(409, "A Checkout Session não está aberta nem concluída.", "checkout_session_mismatch");
   return { session, expired: false, complete: false };
 }
 
-async function reconcileCompletedCheckoutAttempt(admin: any, stripe: any, attempt: any, organizationId: string, planCode: string, seats: number, catalog: any) {
+export async function reconcileCompletedCheckoutAttempt(admin: any, stripe: any, attempt: any, organizationId: string, planCode: string, seats: number, catalog: any, actorId: string) {
+  await assertClinicBillingOwnerAuthorized(admin, organizationId, actorId);
   if (!attempt?.stripe_checkout_session_id) throw new ClinicBillingHttpError(409, "Checkout concluído sem Session recuperável.", "checkout_contract_unresolved");
   const inspected = await inspectCheckoutSession(stripe, attempt.stripe_checkout_session_id, attempt.attempt_id, organizationId, planCode, seats, catalog);
   if (!inspected.complete) throw new ClinicBillingHttpError(409, "Checkout concluído sem contrato Stripe finalizado.", "checkout_contract_unresolved");
   const subscriptionId = typeof inspected.session.subscription === "string" ? inspected.session.subscription : inspected.session.subscription?.id || attempt.stripe_subscription_id;
   if (!subscriptionId) throw new ClinicBillingHttpError(409, "Checkout concluído sem Subscription recuperável.", "checkout_contract_unresolved");
+  const contract = await resolveClinicSubscription(stripe, subscriptionId, catalog);
+  if (contract.organizationId !== organizationId || contract.customerId !== (typeof inspected.session.customer === "string" ? inspected.session.customer : inspected.session.customer?.id)) {
+    throw new ClinicBillingHttpError(409, "O contrato não corresponde ao checkout da organização autorizada.", "checkout_session_mismatch");
+  }
+  await assertClinicBillingOwnerAuthorized(admin, organizationId, actorId);
   const reconciled = await reconcileClinicStripeSubscription(admin, stripe, subscriptionId);
   const status = reconciled.local?.financial_status === "active" ? "activated" : "completed";
   await rpc(admin, "update_clinic_checkout_attempt", {
@@ -70,19 +78,41 @@ async function reconcileCompletedCheckoutAttempt(admin: any, stripe: any, attemp
   return { status, attemptId: attempt.attempt_id, subscriptionId, reused: true, billing: reconciled.local };
 }
 
-async function recoverCheckoutCandidate(admin: any, stripe: any, candidate: any, organizationId: string, planCode: string, seats: number, catalog: any) {
-  if (candidate.status === "completed") return reconcileCompletedCheckoutAttempt(admin, stripe, candidate, organizationId, planCode, seats, catalog);
+export async function recoverCheckoutCandidate(admin: any, stripe: any, candidate: any, organizationId: string, planCode: string, seats: number, catalog: any, actorId: string) {
+  await assertClinicBillingOwnerAuthorized(admin, organizationId, actorId);
+  if (candidate.organization_id !== organizationId) throw new ClinicBillingHttpError(403, "Operação de billing não autorizada.", "not_authorized");
+  const formerOwner = candidate.actor_professional_id && candidate.actor_professional_id !== actorId;
+  if (formerOwner) {
+    planCode = requirePlanCode(candidate.plan_code);
+    catalog = await getCatalog(admin, planCode);
+    seats = requireSeats(candidate.requested_seats, Number(catalog.minimum_contracted_seats));
+  }
+  if (["completed", "activated"].includes(candidate.status)) return reconcileCompletedCheckoutAttempt(admin, stripe, candidate, organizationId, planCode, seats, catalog, actorId);
   if (candidate.status === "session_created" && candidate.stripe_checkout_session_id) {
-    const inspected = await inspectCheckoutSession(stripe, candidate.stripe_checkout_session_id, candidate.attempt_id, organizationId, planCode, seats, catalog);
+    let inspected = await inspectCheckoutSession(stripe, candidate.stripe_checkout_session_id, candidate.attempt_id, organizationId, planCode, seats, catalog);
+    if (inspected.complete) return reconcileCompletedCheckoutAttempt(admin, stripe, candidate, organizationId, planCode, seats, catalog, actorId);
+    if (formerOwner && !inspected.expired) {
+      await assertClinicBillingOwnerAuthorized(admin, organizationId, actorId);
+      try {
+        await stripe.checkout.sessions.expire(candidate.stripe_checkout_session_id);
+      } catch {
+        // Payment may have won the race. Re-read authoritative Stripe state;
+        // an open/inconclusive result must block, not produce another charge.
+      }
+      inspected = await inspectCheckoutSession(stripe, candidate.stripe_checkout_session_id, candidate.attempt_id, organizationId, planCode, seats, catalog);
+      if (inspected.complete) return reconcileCompletedCheckoutAttempt(admin, stripe, candidate, organizationId, planCode, seats, catalog, actorId);
+      if (!inspected.expired) throw new ClinicBillingHttpError(409, "O checkout anterior ainda não foi resolvido.", "checkout_contract_unresolved");
+    }
     if (inspected.expired) {
+      await assertClinicBillingOwnerAuthorized(admin, organizationId, actorId);
       await rpc(admin, "expire_clinic_checkout_attempt", { p_attempt_id: candidate.attempt_id, p_reason: "stripe_checkout_session_expired" });
       return null;
     }
-    if (inspected.complete) return reconcileCompletedCheckoutAttempt(admin, stripe, candidate, organizationId, planCode, seats, catalog);
     return { checkoutUrl: inspected.session.url, attemptId: candidate.attempt_id, reused: true };
   }
   const expiresAtMs = Date.parse(String(candidate.expires_at || ""));
   if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+    await assertClinicBillingOwnerAuthorized(admin, organizationId, actorId);
     await rpc(admin, "expire_clinic_checkout_attempt", { p_attempt_id: candidate.attempt_id, p_reason: "started_attempt_stale" });
     return null;
   }
@@ -95,11 +125,12 @@ serve(async (req) => {
   try {
     const admin = createClinicAdminClient();
     const user = await requireClinicUser(req, admin);
+    const body = requireJsonObject(await req.json());
+    const organizationId = requireUuid(body.organizationId, "organizationId");
+    await assertClinicBillingOwnerAuthorized(admin, organizationId, user.id);
     const config = await getClinicConfig(true);
     const stripe = createClinicStripe(config.secretKey);
     await assertSandboxAccount(stripe);
-    const body = requireJsonObject(await req.json());
-    const organizationId = requireUuid(body.organizationId, "organizationId");
     const planCode = requirePlanCode(body.planCode);
     const catalog = await getCatalog(admin, planCode);
     const seats = requireSeats(body.contractedSeats, Number(catalog.minimum_contracted_seats));
@@ -110,7 +141,7 @@ serve(async (req) => {
       throw new ClinicBillingHttpError(409, "O payload não corresponde à tentativa de checkout persistida.", "checkout_attempt_payload_mismatch");
     }
     if (!candidate) candidate = await getOpenCheckoutAttemptForOrganization(admin, organizationId, user.id);
-    if (candidate && (candidate.organization_id !== organizationId || candidate.plan_code !== planCode || Number(candidate.requested_seats) !== seats)) {
+    if (candidate && (candidate.organization_id !== organizationId || (candidate.actor_professional_id === user.id && (candidate.plan_code !== planCode || Number(candidate.requested_seats) !== seats)))) {
       throw new ClinicBillingHttpError(409, "Já existe checkout aberto com payload diferente.", "checkout_open_payload_conflict");
     }
     if (candidate) {
@@ -119,9 +150,9 @@ serve(async (req) => {
       }
     }
     if (candidate) {
-      const recovered = await recoverCheckoutCandidate(admin, stripe, candidate, organizationId, planCode, seats, catalog);
+      const recovered = await recoverCheckoutCandidate(admin, stripe, candidate, organizationId, planCode, seats, catalog, user.id);
       if (recovered) return clinicJsonResponse(recovered);
-      if (candidate.attempt_id === attemptId && suppliedAttemptId) throw new ClinicBillingHttpError(409, "A tentativa de checkout expirou; inicie uma nova tentativa.", "checkout_attempt_expired");
+      if (candidate.actor_professional_id === user.id && candidate.attempt_id === attemptId && suppliedAttemptId) throw new ClinicBillingHttpError(409, "A tentativa de checkout expirou; inicie uma nova tentativa.", "checkout_attempt_expired");
       attemptId = crypto.randomUUID();
     }
 
@@ -140,7 +171,7 @@ serve(async (req) => {
     }
     if (started?.recovery_required) {
       const staleCandidate = { ...started, attempt_id: started.attempt_id };
-      const recovered = await recoverCheckoutCandidate(admin, stripe, staleCandidate, organizationId, planCode, seats, catalog);
+      const recovered = await recoverCheckoutCandidate(admin, stripe, staleCandidate, organizationId, planCode, seats, catalog, user.id);
       if (recovered) return clinicJsonResponse(recovered);
       started = await rpc<any>(admin, "start_clinic_checkout_attempt", {
         p_organization_id: organizationId,
@@ -151,9 +182,9 @@ serve(async (req) => {
       });
     }
     if (started?.organization_id !== organizationId) throw new ClinicBillingHttpError(403, "Organização não autorizada.", "not_authorized");
-    if (started?.status === "completed") return clinicJsonResponse(await reconcileCompletedCheckoutAttempt(admin, stripe, started, organizationId, planCode, seats, catalog));
+    if (started?.status === "completed") return clinicJsonResponse(await reconcileCompletedCheckoutAttempt(admin, stripe, started, organizationId, planCode, seats, catalog, user.id));
     if (started?.status === "session_created" && started.stripe_checkout_session_id) {
-      const recovered = await recoverCheckoutCandidate(admin, stripe, started, organizationId, planCode, seats, catalog);
+      const recovered = await recoverCheckoutCandidate(admin, stripe, started, organizationId, planCode, seats, catalog, user.id);
       if (recovered) return clinicJsonResponse(recovered);
     }
 
@@ -167,11 +198,13 @@ serve(async (req) => {
       if (customer?.deleted) customer = null;
     }
     if (!customer) {
+      await assertClinicBillingOwnerAuthorized(admin, organizationId, user.id);
       customer = await stripe.customers.create({
         name: organization.trade_name || organization.name,
         metadata: { app: "evolucao_clinica", billingScope: "clinic", billing_scope: "clinic", organizationId, ownerProfessionalId: user.id, environment: "staging" },
       }, { idempotencyKey: `clinic:checkout-customer:${attemptId}` });
     }
+    await assertClinicBillingOwnerAuthorized(admin, organizationId, user.id);
     const session: any = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customer.id,
@@ -189,7 +222,7 @@ serve(async (req) => {
     await rpc(admin, "update_clinic_checkout_attempt", { p_attempt_id: attemptId, p_status: "session_created", p_stripe_checkout_session_id: session.id, p_stripe_customer_id: customer.id });
     return clinicJsonResponse({ checkoutUrl: session.url, attemptId });
   } catch (error) {
-    console.error("[create-clinic-stripe-checkout-session]", error instanceof Error ? error.message : "unknown");
+    console.error("[create-clinic-stripe-checkout-session]", error instanceof ClinicBillingHttpError ? error.code : "processing_error");
     return clinicJsonResponse({ error: error instanceof ClinicBillingHttpError ? error.code : "clinic_checkout_failed" }, error instanceof ClinicBillingHttpError ? error.status : 400);
   }
 });

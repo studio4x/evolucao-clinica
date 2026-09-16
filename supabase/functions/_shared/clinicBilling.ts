@@ -121,6 +121,19 @@ export async function getCatalog(admin: any, planCode: string) {
   return rpc<any>(admin, "get_clinic_stripe_catalog", { p_plan_code: planCode });
 }
 
+// Actor is derived from the verified JWT, never from browser metadata.
+// Recovery authorization is independent of financial entitlement/mutability.
+export async function assertClinicBillingOwnerAuthorized(admin: any, organizationId: string, actorId: string) {
+  const authorized = await rpc<any>(admin, "assert_clinic_billing_owner_authorized", {
+    p_organization_id: organizationId,
+    p_actor_professional_id: actorId,
+  });
+  if (authorized?.organization_id !== organizationId || authorized?.actor_professional_id !== actorId || authorized?.role !== "owner" || authorized?.operational_status === "archived") {
+    throw new ClinicBillingHttpError(403, "Operação de billing não autorizada.", "not_authorized");
+  }
+  return authorized;
+}
+
 export async function validatePrice(stripe: Stripe, priceId: string, catalog: any, component: "base" | "seat") {
   const price: any = await stripe.prices.retrieve(priceId, { expand: ["product"] } as any);
   const expectedAmount = component === "base" ? Number(catalog.base_amount_minor) : Number(catalog.seat_amount_minor);
@@ -145,7 +158,8 @@ export async function getCheckoutAttempt(admin: any, attemptId: string, actorId:
 }
 
 export async function getOpenCheckoutAttemptForOrganization(admin: any, organizationId: string, actorId: string) {
-  return rpc<any>(admin, "get_open_clinic_checkout_attempt_for_organization", {
+  await assertClinicBillingOwnerAuthorized(admin, organizationId, actorId);
+  return rpc<any>(admin, "get_open_clinic_checkout_attempt_for_organization_admin", {
     p_organization_id: organizationId,
     p_actor_professional_id: actorId,
   });
@@ -206,7 +220,8 @@ export function assertClinicBillingMutationStatus(resolved: any) {
   return resolved;
 }
 
-export async function recoverStaleClinicBillingOperation(admin: any, stripe: Stripe, organizationId: string) {
+export async function recoverStaleClinicBillingOperation(admin: any, stripe: Stripe, organizationId: string, actorProfessionalId: string) {
+  await assertClinicBillingOwnerAuthorized(admin, organizationId, actorProfessionalId);
   const stale = await rpc<any>(admin, "get_stale_clinic_billing_operation", { p_organization_id: organizationId });
   if (!stale?.recovery_required) return null;
   if (!stale.stripe_subscription_id) {
@@ -221,12 +236,14 @@ export async function recoverStaleClinicBillingOperation(admin: any, stripe: Str
   }
   const catalog = await getCatalog(admin, planCode);
   const resolved = await resolveClinicSubscription(stripe, stale.stripe_subscription_id, catalog);
+  if (resolved.organizationId !== organizationId) throw new ClinicBillingHttpError(409, "A assinatura não corresponde à organização autorizada.", "stale_subscription_state");
   const latestInvoice: any = preliminary?.latest_invoice;
   const paymentIntentStatus = typeof latestInvoice?.payment_intent === "object" ? latestInvoice.payment_intent?.status : "";
   const pendingPayment = Boolean(
     resolved.subscription?.pending_update ||
     (latestInvoice?.status === "open" && ["processing", "requires_action", "requires_payment_method"].includes(paymentIntentStatus)),
   );
+  await assertClinicBillingOwnerAuthorized(admin, organizationId, actorProfessionalId);
   if (pendingPayment) {
     const held = await rpc<any>(admin, "hold_clinic_billing_operation_pending_payment", {
       p_operation_id: stale.operation_id,
