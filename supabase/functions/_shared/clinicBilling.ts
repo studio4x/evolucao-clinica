@@ -109,6 +109,8 @@ export async function rpc<T>(admin: any, name: string, args: Record<string, unkn
     if (error.code === "23505") throw new ClinicBillingHttpError(409, "Operação de billing já existe ou está em conflito.", "billing_conflict");
     if (error.code === "23514") throw new ClinicBillingHttpError(409, "A operação violaria a capacidade contratada.", "capacity_conflict");
     if (error.code === "P0001") throw new ClinicBillingHttpError(409, "Estado Stripe ou contrato empresarial inválido.", "reconciliation_rejected");
+    if (error.code === "P0003") throw new ClinicBillingHttpError(409, "O payload não corresponde à operação persistida.", "payload_mismatch");
+    if (error.code === "P0004") throw new ClinicBillingHttpError(409, "Já existe uma operação de billing em andamento.", "billing_operation_in_progress");
     if (error.code === "P0002") throw new ClinicBillingHttpError(404, "Recurso de billing não encontrado.", "billing_not_found");
     throw new ClinicBillingHttpError(500, "Falha na operação de billing.", "billing_database_error");
   }
@@ -213,6 +215,11 @@ export async function reconcileClinicStripeSubscription(admin: any, stripe: Stri
     p_stripe_seat_quantity: resolved.seatQuantity,
     p_current_period_start: resolved.currentPeriodStart,
     p_current_period_end: resolved.currentPeriodEnd,
+    p_cancel_at_period_end: resolved.cancelAtPeriodEnd,
+  });
+  await rpc<number>(admin, "complete_clinic_billing_operations_for_subscription", {
+    p_stripe_subscription_id: subscriptionId,
+    p_seat_quantity: resolved.seatQuantity,
     p_cancel_at_period_end: resolved.cancelAtPeriodEnd,
   });
   return { catalog, resolved, local };

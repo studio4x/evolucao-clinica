@@ -76,11 +76,14 @@ serve(async (req) => {
       const invoice: any = event.data.object;
       const invoiceId = String(invoice.id || "");
       if (!/^in_[A-Za-z0-9]+$/.test(invoiceId)) throw new ClinicBillingHttpError(400, "Invoice Stripe inválida.", "stripe_invoice_invalid");
+      const amountMinor = event.type === "invoice.payment_failed"
+        ? Number(invoice.amount_due ?? invoice.amount_paid ?? 0)
+        : Number(invoice.amount_paid ?? invoice.amount_due ?? 0);
       await rpc(admin, "record_clinic_stripe_transaction", {
         p_organization_id: reconciled.resolved.organizationId,
         p_stripe_invoice_id: invoiceId,
         p_stripe_subscription_id: subscriptionId,
-        p_amount_minor: Number(invoice.amount_paid ?? invoice.amount_due ?? 0),
+        p_amount_minor: amountMinor,
         p_currency: String(invoice.currency || "brl").toUpperCase(),
         p_status: event.type === "invoice.paid" ? "paid" : "failed",
         p_billing_reason: invoice.billing_reason || null,

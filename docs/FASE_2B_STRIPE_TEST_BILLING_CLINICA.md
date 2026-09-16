@@ -70,15 +70,50 @@ Confirmação final no staging:
 
 As secrets de integração permanecem apenas no ambiente staging pelos nomes necessários às Functions; seus valores não são documentados. Não houve alteração da chave `default` nem uso de qualquer chave Live.
 
+## Hardening 2B.1
+
+A migration `20260916_18_harden_clinic_billing_operations.sql` foi aplicada somente no staging. As migrations 14–17 não foram editadas.
+
+- `private.clinic_billing_operations` mantém histórico de operações comerciais, payload, chave idempotente, assinatura vinculada, estado e lease de 5 minutos.
+- Um índice parcial permite no máximo uma operação aberta por organização entre seat increase, seat decrease e cancelamento.
+- A preparação usa advisory lock transacional por organização; seat versus cancel e duas alterações de seats competem pela mesma fronteira.
+- O mesmo payload idempotente reutiliza a operação; alteração de seats, plano ou organização no mesmo checkout attempt retorna conflito controlado.
+- A criação do Customer e da Checkout Session usa chaves Stripe derivadas do attempt; double-click não cria duas sessões.
+- Retry após lease vencido pode reassumir a operação; o reconciliador marca a operação como concluída quando a quantidade/estado atual da Stripe confirma o objetivo.
+- O claim de webhook usa `processing_started_at` e lease: duplicata processando retorna sem segundo worker; evento stale ou failed pode ser retomado.
+- `invoice.payment_failed` grava `amount_due`; `invoice.paid` grava `amount_paid`.
+- Reconciliação continua buscando a Subscription atual na Stripe, preservando segurança para eventos fora de ordem.
+
+### Smoke funcional 2B.1
+
+Executado com fixtures staging e objetos Stripe Test temporários, removidos ao final:
+
+- double-click same attempt/same payload: PASS, uma Checkout Session;
+- mesmo attempt com seats/plano/organização divergentes: PASS, `checkout_attempt_payload_mismatch`;
+- attempts diferentes na mesma organização: PASS, uma tentativa aberta;
+- seat 3→4 versus 3→5 concorrente: PASS, uma lease e um conflito;
+- recovery de operação `processing` stale após mudança Stripe: PASS;
+- seat change versus cancelamento concorrente: PASS, uma operação e um conflito;
+- claim de webhook duplicado concorrente: PASS, segundo claim `in_progress`;
+- claim stale de webhook: PASS, reclaim permitido;
+- ledger `payment_failed` com `amount_paid=0` e `amount_due=13960`: PASS, valor esperado 13960;
+- `livemode=false` em todos os objetos Test observados; catálogo Products/Prices e endpoint webhook existentes foram apenas reutilizados.
+
+IDs Test do smoke 2B.1, não secretos: Checkout `cs_test_b1PZdtJZVra7JpO3WQ2Wuz7nz5cHpE1H6SE6ZcyF4qystv3HhghvXzzOlG`, Customer `cus_VGsNjuTyxM6oTa` e Subscription `sub_1UGKdDPI1KSTkIQASLKY9juU`. Foram removidos no cleanup.
+
+### Advisors
+
+Security Advisor e Performance Advisor foram consultados pela Management API oficial do staging. Não há descoberta nova P0/P1. Permanecem WARN/INFO preexistentes fora do hardening: extensão `vector` em `public`, funções organizacionais SECURITY DEFINER expostas para `authenticated` e avisos informativos de índices/FKs; nenhum deles foi reclassificado como falha nova desta fase.
+
 ## Implementação entregue
 
-- migrations `20260916_14` a `20260916_17` aplicadas somente no staging;
+- migrations `20260916_14` a `20260916_18` aplicadas somente no staging;
 - wrappers server-side para catálogo, checkout, lookup, reconciliação, seats e cancelamento;
 - Edge Functions de catálogo, checkout, seats, status, cancelamento e webhook Stripe;
 - proteção explícita de ambiente staging/Test Mode e validação da conta Sandbox;
 - ledger idempotente de eventos e transações;
 - gate global e rollout por organização preservados;
-- teste estático `tests/clinic-billing.test.ts`.
+- teste contratual funcional `tests/clinic-billing.test.ts` com modelo de lease, idempotência, claim e ledger.
 
 ## Gates finais
 
@@ -90,10 +125,33 @@ As secrets de integração permanecem apenas no ambiente staging pelos nomes nec
 | Webhook server-side e reconciliação | PASS |
 | Subscription base=1 / seats=3 | PASS |
 | Seats increase/decrease/cancel | PASS |
+| Checkout payload imutável | PASS |
+| Double-click / uma Checkout Session | PASS |
+| Uma operação aberta por organização | PASS |
+| Seat operations serializadas | PASS |
+| Seat versus cancel serializado | PASS |
+| Lease stale recuperável | PASS |
+| Pending payment idempotente | PASS — contrato preservado; fluxo Test não exigiu ação adicional |
+| Webhook duplicate/stale claim | PASS |
+| Out-of-order por Subscription atual | PASS — reconciliador preservado |
+| `payment_failed` usa `amount_due` | PASS |
+| `invoice.paid` usa `amount_paid` | PASS |
 | Isolamento staging | PASS |
 | Cleanup sintético | PASS |
+| Security Advisor — P0/P1 novos | PASS — zero |
+| Performance Advisor revisado | PASS — apenas INFO preexistentes |
+| `npm test` | PASS |
+| `npm run lint` | PASS |
+| `npm run build` | PASS — aviso de tamanho de chunk existente, sem erro |
+| `git diff --check` | PASS |
 | Produção / Live / cobrança real | NÃO EXECUTADO |
 | Fase 2C / convites reais / e-mail | NÃO EXECUTADO |
+
+## Resultado 2B.1
+
+**FASE 2B REVISADA E ENDURECIDA — APTO PARA FASE 2C**
+
+Este resultado não inicia a Fase 2C.
 
 ## Pendências e limites
 
