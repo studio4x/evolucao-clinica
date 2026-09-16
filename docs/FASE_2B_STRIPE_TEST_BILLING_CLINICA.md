@@ -124,7 +124,7 @@ O teste contratual e o smoke controlado cobrem: lost idempotency key, Stripe apl
 ## Implementação entregue
 
 - migrations `20260916_14` a `20260916_18` aplicadas somente no staging;
-- migration `20260916_19` preparada para aplicação somente no staging;
+- migration `20260916_19` aplicada somente no staging;
 - wrappers server-side para catálogo, checkout, lookup, reconciliação, seats e cancelamento;
 - Edge Functions de catálogo, checkout, seats, status, cancelamento e webhook Stripe;
 - proteção explícita de ambiente staging/Test Mode e validação da conta Sandbox;
@@ -178,6 +178,12 @@ O teste contratual e o smoke controlado cobrem: lost idempotency key, Stripe apl
 | `git diff --check` | PASS |
 | Produção / Live / cobrança real | NÃO EXECUTADO |
 | Fase 2C / convites reais / e-mail | NÃO EXECUTADO |
+
+## Resultado 2B.2
+
+**FASE 2B REVISADA E ENDURECIDA — APTO PARA FASE 2C**
+
+Este resultado encerra a execução 2B.2 e não inicia a Fase 2C.
 
 ## Resultado 2B.1
 
