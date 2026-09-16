@@ -12,6 +12,8 @@ import {
   requireJsonObject,
   requireUuid,
   rpc,
+  assertClinicBillingMutationStatus,
+  recoverStaleClinicBillingOperation,
   reconcileClinicStripeSubscription,
   resolveClinicSubscription,
 } from "../_shared/clinicBilling.ts";
@@ -34,16 +36,37 @@ serve(async (req) => {
     organizationIdForCleanup = organizationId;
     const targetSeats = Number(body.contractedSeats);
     const idempotencyKey = requireUuid(body.idempotencyKey, "idempotencyKey");
-    const status = await rpc<any>(admin, "get_clinic_billing_status", { p_organization_id: organizationId, p_actor_professional_id: user.id });
-    const currentSeats = Number(status?.subscription?.contracted_seats || 0);
+    let recovery = await recoverStaleClinicBillingOperation(admin, stripe, organizationId);
+    if (recovery?.status === "pending_payment") {
+      return clinicJsonResponse({ status: "pending_payment", operation_id: recovery.operation.operation_id, payment_action_required: true, target_seats: targetSeats });
+    }
+    let status = await rpc<any>(admin, "get_clinic_billing_status", { p_organization_id: organizationId, p_actor_professional_id: user.id });
+    let currentSeats = Number(status?.subscription?.contracted_seats || 0);
     operationType = targetSeats < currentSeats ? "seat_decrease" : "seat_increase";
-    const prepared = await rpc<any>(admin, "prepare_clinic_billing_operation", {
+    let prepared = await rpc<any>(admin, "prepare_clinic_billing_operation", {
       p_organization_id: organizationId,
       p_actor_professional_id: user.id,
       p_operation_type: operationType,
       p_target_seats: targetSeats,
       p_idempotency_key: idempotencyKey,
     });
+    if (prepared.recovery_required) {
+      recovery = await recoverStaleClinicBillingOperation(admin, stripe, organizationId);
+      if (recovery?.status === "pending_payment") {
+        return clinicJsonResponse({ status: "pending_payment", operation_id: recovery.operation.operation_id, payment_action_required: true, target_seats: targetSeats });
+      }
+      status = await rpc<any>(admin, "get_clinic_billing_status", { p_organization_id: organizationId, p_actor_professional_id: user.id });
+      currentSeats = Number(status?.subscription?.contracted_seats || 0);
+      operationType = targetSeats < currentSeats ? "seat_decrease" : "seat_increase";
+      prepared = await rpc<any>(admin, "prepare_clinic_billing_operation", {
+        p_organization_id: organizationId,
+        p_actor_professional_id: user.id,
+        p_operation_type: operationType,
+        p_target_seats: targetSeats,
+        p_idempotency_key: idempotencyKey,
+      });
+      if (prepared.recovery_required) throw new ClinicBillingHttpError(503, "A recuperação da operação comercial não foi conclusiva.", "stale_operation_inconclusive");
+    }
     operationId = prepared.operation_id;
     if (prepared.status === "completed") return clinicJsonResponse({ status: "confirmed", operation: operationType, operation_id: operationId, target_seats: targetSeats, reused: true });
     const catalog = await getCatalog(admin, String(status?.subscription?.plan_code || ""));
@@ -58,6 +81,7 @@ serve(async (req) => {
       throw new ClinicBillingHttpError(409, "Já existe uma alteração comercial em andamento.", "billing_operation_in_progress");
     }
     const current = await resolveClinicSubscription(stripe, prepared.subscription_id, catalog);
+    assertClinicBillingMutationStatus(current);
     if (current.seatItemId !== prepared.stripe_reference || current.organizationId !== organizationId) throw new ClinicBillingHttpError(409, "A assinatura Stripe mudou antes da operação.", "stale_subscription_state");
     let updated: any;
     try {

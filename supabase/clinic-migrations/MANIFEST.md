@@ -20,6 +20,7 @@ push` nem incluídos em um bootstrap automático.
 | `20260916_16_clinic_stripe_checkout_lookup.sql` | lookup autenticado server-side de checkout attempt | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_17_clinic_stripe_cancellation_wrapper.sql` | preparação service-role de cancelamento ao fim do período | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_18_harden_clinic_billing_operations.sql` | lease de operações comerciais, idempotência de payload, serialização por organização e claim com lease de webhooks | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260916_19_harden_clinic_billing_recovery.sql` | recovery conclusivo de operações stale, expiração/reuso de checkout e aceitação de `past_due` dentro da grace | `hwkdwinfckmjoriqxbjk` (staging) |
 
 Fora do escopo desta série: pacientes compartilhados, `org_id` em tabelas
 individuais, convites reais, integrações não autorizadas, Stripe Live e

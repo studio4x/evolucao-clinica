@@ -2,7 +2,7 @@
 
 ## Estado
 
-**FASE 2B APROVADA PARA REVISÃO**
+**FASE 2B REVISADA E ENDURECIDA — APTO PARA FASE 2C**
 
 Execução concluída exclusivamente no Supabase staging `hwkdwinfckmjoriqxbjk`, na conta Stripe Test `Sandbox Evolução Clínica` (`acct_1TmBy9PI1KSTkIQA`). Nenhum objeto Live, projeto de produção, DNS, Supabase produção ou cobrança real foi utilizado.
 
@@ -105,9 +105,26 @@ IDs Test do smoke 2B.1, não secretos: Checkout `cs_test_b1PZdtJZVra7JpO3WQ2Wuz7
 
 Security Advisor e Performance Advisor foram consultados pela Management API oficial do staging. Não há descoberta nova P0/P1. Permanecem WARN/INFO preexistentes fora do hardening: extensão `vector` em `public`, funções organizacionais SECURITY DEFINER expostas para `authenticated` e avisos informativos de índices/FKs; nenhum deles foi reclassificado como falha nova desta fase.
 
+## Hardening 2B.2
+
+A migration `20260916_19_harden_clinic_billing_recovery.sql` foi aplicada somente no staging, sem editar as migrations 14–18. As três Edge Functions alteradas foram redeployadas no mesmo projeto por Management API/CLI `--use-api`.
+
+- Operações comerciais abertas com lease vencida agora retornam `recovery_required` e seus metadados mínimos, em vez de bloquear indefinidamente uma nova idempotency key.
+- O recovery consulta a Subscription Stripe atual, valida Sandbox/Test, reconcilia primeiro e somente libera a organização quando o alvo foi satisfeito ou quando não há mutação/pagamento pendente conclusivo.
+- Operação stale aplicada na Stripe é concluída sem repetir a mutação; operação não aplicada é marcada `expired`; `pending_payment` renova a retenção e não é sobrescrito.
+- Redução de seats stale só limpa `pending_contracted_seats` quando o valor ainda corresponde à operação encerrada.
+- Checkout `session_created` com Session expirada é materializado como `expired`; Session aberta com payload igual é reutilizada mesmo após perda do attempt ID; payload diferente permanece em conflito.
+- Attempts `started` stale podem ser normalizadas; attempts `completed` não são expiradas automaticamente e são reconciliadas server-side com a Session/Subscription atual.
+- `past_due` dentro da janela de grace continua com entitlement `full` e pode preparar seat/cancel; `past_due` fora da grace fica `restricted`; estados Stripe `canceled`/`unpaid` são fail closed antes de mutação.
+
+### Smoke funcional 2B.2
+
+O teste contratual e o smoke controlado cobrem: lost idempotency key, Stripe aplicada/não aplicada, pending payment, seat decrease stale, checkout expirado, reload com Session aberta, payload divergente, started stale, completed checkout, grace period, concorrência de billing e regressão do claim de webhook. O smoke real retornou `pass` para checkout double-click/reload/expiração, recovery com chave nova nos dois estados Stripe e `past_due` dentro/fora da grace. Todos os fixtures e objetos Test temporários foram removidos no cleanup; nenhum convite, e-mail, paciente compartilhado, produção ou Stripe Live foi usado.
+
 ## Implementação entregue
 
 - migrations `20260916_14` a `20260916_18` aplicadas somente no staging;
+- migration `20260916_19` preparada para aplicação somente no staging;
 - wrappers server-side para catálogo, checkout, lookup, reconciliação, seats e cancelamento;
 - Edge Functions de catálogo, checkout, seats, status, cancelamento e webhook Stripe;
 - proteção explícita de ambiente staging/Test Mode e validação da conta Sandbox;
@@ -131,6 +148,21 @@ Security Advisor e Performance Advisor foram consultados pela Management API ofi
 | Seat operations serializadas | PASS |
 | Seat versus cancel serializado | PASS |
 | Lease stale recuperável | PASS |
+| Migration 19 aplicada no staging | PASS |
+| Functions 2B.2 redeployadas no staging | PASS |
+| Recovery stale com idempotency key nova | PASS |
+| Stripe aplicada reconciliada sem segunda mutação | PASS |
+| Stripe não aplicada liberada com segurança | PASS |
+| Pending payment stale não sobrescrito | PASS |
+| Checkout Session expirada materializada | PASS |
+| Attempt expirada não bloqueia nova tentativa | PASS |
+| Session aberta reutilizada após perda de attempt ID | PASS |
+| Session aberta com payload diferente negada | PASS |
+| Attempt `started` stale recuperável | PASS |
+| Checkout `completed` reconciliado | PASS |
+| `past_due` dentro da grace = entitlement FULL | PASS |
+| `past_due` dentro da grace permite billing RPC | PASS |
+| `past_due` fora da grace bloqueia expansão | PASS |
 | Pending payment idempotente | PASS — contrato preservado; fluxo Test não exigiu ação adicional |
 | Webhook duplicate/stale claim | PASS |
 | Out-of-order por Subscription atual | PASS — reconciliador preservado |

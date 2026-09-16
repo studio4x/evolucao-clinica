@@ -144,6 +144,13 @@ export async function getCheckoutAttempt(admin: any, attemptId: string, actorId:
   return rpc<any>(admin, "get_clinic_checkout_attempt", { p_attempt_id: attemptId, p_actor_professional_id: actorId });
 }
 
+export async function getOpenCheckoutAttemptForOrganization(admin: any, organizationId: string, actorId: string) {
+  return rpc<any>(admin, "get_open_clinic_checkout_attempt_for_organization", {
+    p_organization_id: organizationId,
+    p_actor_professional_id: actorId,
+  });
+}
+
 export async function resolveClinicSubscription(stripe: Stripe, subscriptionId: string, catalog: any) {
   const subscription: any = await stripe.subscriptions.retrieve(subscriptionId, { expand: ["items.data.price.product", "latest_invoice"] } as any);
   if (subscription?.livemode === true || subscription?.metadata?.billingScope !== "clinic" && subscription?.metadata?.billing_scope !== "clinic") {
@@ -190,6 +197,55 @@ export async function resolveClinicSubscription(stripe: Stripe, subscriptionId: 
     currentPeriodEnd: toIso(periodEnd),
     cancelAtPeriodEnd: subscription.cancel_at_period_end === true,
   };
+}
+
+export function assertClinicBillingMutationStatus(resolved: any) {
+  if (!resolved || !["active", "past_due"].includes(resolved.stripeStatus)) {
+    throw new ClinicBillingHttpError(409, "A assinatura Stripe não está em estado mutável para esta operação.", "stripe_status_not_mutable");
+  }
+  return resolved;
+}
+
+export async function recoverStaleClinicBillingOperation(admin: any, stripe: Stripe, organizationId: string) {
+  const stale = await rpc<any>(admin, "get_stale_clinic_billing_operation", { p_organization_id: organizationId });
+  if (!stale?.recovery_required) return null;
+  if (!stale.stripe_subscription_id) {
+    throw new ClinicBillingHttpError(503, "A operação stale não possui assinatura Stripe recuperável.", "stale_operation_inconclusive");
+  }
+
+  const preliminary: any = await stripe.subscriptions.retrieve(stale.stripe_subscription_id, { expand: ["items.data.price.product", "latest_invoice.payment_intent"] } as any);
+  if (preliminary?.livemode === true) throw new ClinicBillingHttpError(503, "Stripe Live é proibido nesta fase.", "stripe_live_forbidden");
+  const planCode = String(preliminary?.metadata?.planCode || "");
+  if (!['clinic_monthly', 'clinic_yearly'].includes(planCode)) {
+    throw new ClinicBillingHttpError(409, "A operação stale não possui plano Stripe recuperável.", "stale_operation_inconclusive");
+  }
+  const catalog = await getCatalog(admin, planCode);
+  const resolved = await resolveClinicSubscription(stripe, stale.stripe_subscription_id, catalog);
+  const latestInvoice: any = preliminary?.latest_invoice;
+  const paymentIntentStatus = typeof latestInvoice?.payment_intent === "object" ? latestInvoice.payment_intent?.status : "";
+  const pendingPayment = Boolean(
+    resolved.subscription?.pending_update ||
+    (latestInvoice?.status === "open" && ["processing", "requires_action", "requires_payment_method"].includes(paymentIntentStatus)),
+  );
+  if (pendingPayment) {
+    const held = await rpc<any>(admin, "hold_clinic_billing_operation_pending_payment", {
+      p_operation_id: stale.operation_id,
+      p_error_code: "payment_action_required",
+    });
+    return { status: "pending_payment", operation: held, resolved };
+  }
+
+  await reconcileClinicStripeSubscription(admin, stripe, stale.stripe_subscription_id);
+  const afterReconcile = await rpc<any>(admin, "get_clinic_billing_operation", { p_operation_id: stale.operation_id });
+  if (afterReconcile?.status === "completed") {
+    return { status: "completed", operation: afterReconcile, resolved };
+  }
+
+  const released = await rpc<any>(admin, "expire_stale_clinic_billing_operation", {
+    p_operation_id: stale.operation_id,
+    p_error_code: "stale_operation_released",
+  });
+  return { status: released?.status === "completed" ? "completed" : "expired", operation: released, resolved };
 }
 
 export async function reconcileClinicStripeSubscription(admin: any, stripe: Stripe, subscriptionId: string) {
