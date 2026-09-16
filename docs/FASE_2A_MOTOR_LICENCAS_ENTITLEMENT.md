@@ -29,7 +29,9 @@ objetos externos:
 com uma linha por organização e snapshots monetários. O contrato aceita
 `active`, `past_due`, `canceled` e `unpaid`; não há trial automático. O mínimo
 é três seats e nenhuma tabela empresarial fica acessível diretamente ao
-cliente.
+cliente. O catálogo representa a oferta comercial atual; a subscription é o
+snapshot histórico do contrato. Portanto, `enabled=false` impede novas vendas
+administrativas futuras, mas não cancela contratos existentes.
 
 ## Entitlement e capacidade
 
@@ -58,6 +60,37 @@ Operações que consomem capacidade bloqueiam a linha da assinatura da
 organização: convite clínico, aceite clínico, habilitação e reativação clínica.
 Emissão, aceite e lifecycle usam a mesma fronteira antes das decisões de
 capacidade; o rate limit existente permanece ativo.
+
+## Hardening 2A.1
+
+A migration corretiva `20260916_12_harden_entitlement_snapshots_and_invitation_expiry.sql`
+foi aplicada somente no staging, sem editar ou reaplicar o SQL 11. A
+`organization_subscriptions.plan_code` agora possui FK `ON DELETE RESTRICT` e
+há constraint de coerência `clinic_monthly -> monthly` e
+`clinic_yearly -> annual`. O helper estrutural valida somente invariantes do
+contrato, incluindo capacidade e datas; ele não compara snapshots monetários
+com o catálogo atual.
+
+`organization_subscription_access_mode` é independente do status operacional e
+da flag da organização. O rollout exige runtime/global gate válidos, exatamente
+um owner ativo, contrato estruturalmente válido e modo financeiro `full`; a
+transição de `pending_setup` para `active` e a flag são confirmadas na mesma
+transação. `active` com cancelamento no fim do período só é FULL enquanto o
+período ainda não encerrou; `past_due` só é FULL dentro da grace. `unpaid`,
+`canceled` e estados financeiros vencidos não são FULL.
+
+O preço e o estado `enabled` do catálogo foram alterados temporariamente no
+smoke e restaurados. O contrato histórico permaneceu FULL, com contexto,
+summary e lifecycle disponíveis; plano desabilitado não revogou entitlement.
+O helper `is_clinic_plan_sellable` deixa explícita a regra para provisionamento
+administrativo futuro: plano desabilitado não inicia novo contrato. Stripe e
+checkout continuam na Fase 2B.
+
+A expiração lógica foi restaurada nas três rotas: emissão de novo convite,
+revogação e aceite. A transição `pending -> expired` agora grava
+`invitation_expired` e o aceite vencido retorna `{status: "expired",
+accepted: false}` sem criar membership ou seat. A transição é idempotente e
+não duplica auditoria.
 
 ## Convites e lifecycle
 
@@ -126,10 +159,13 @@ reativação; owner-only, manager read-only, capacidade sem assinatura pessoal,
 clínicas independentes.
 
 O cleanup confirmou `auth_users=0`, `professionals=0`, `organizations=0`,
-`memberships=0`, `invitations=0`, `subscriptions=0` e `audit_events=0` para os
-fixtures sintéticos. A verificação posterior confirmou runtime `staging`,
-`allowed_staging=true`, gate global `false`, RLS nas tabelas relevantes e
-helpers privados `SECURITY DEFINER` com `search_path` fixado.
+`memberships=0`, `invitations=0`, `subscriptions=0`, `flags=0`,
+`audit_events=0`, `patients=0` e `evolutions=0` para os fixtures sintéticos. A
+verificação posterior confirmou catálogo restaurado, runtime `staging`,
+`allowed_environment=staging`, gate global `false`, constraints validadas, RLS
+nas tabelas relevantes e helpers privados `SECURITY DEFINER` com
+`search_path` fixado, sem ACL de execução para `PUBLIC`, `anon` ou
+`authenticated`.
 
 Os advisors oficiais retornaram HTTP 200 com zero lints de segurança e zero
 lints de performance. Os gates locais também passaram: `npm test`,
@@ -145,7 +181,7 @@ escopo. Nenhum preço é exibido como cobrança e nenhum ID externo é criado.
 
 ## Resultado
 
-**FASE 2A APROVADA PARA REVISÃO**
+**FASE 2A REVISADA E ENDURECIDA — APTO PARA FASE 2B**
 
 Não foram iniciados Stripe, Checkout, webhooks, cobrança, proration, Customer
 Portal, alteração comercial de quantidade, convite real/e-mail, pacientes ou

@@ -13,6 +13,7 @@ push` nem incluídos em um bootstrap automático.
 | `20260915_05_harden_runtime_environment.sql` | identidade privada singleton do ambiente, binding explícito do gate global e deny-by-default | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_10_organization_team_directory.sql` | diretório mínimo via RPC controlada; memberships active/suspended e perfis mínimos, sem ampliar RLS de `professionals` | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_11_organization_entitlements_and_seats.sql` | catálogo Plano Clínica, contratos empresariais, entitlement full/restricted/none, seats derivados, reserva/aceite, lifecycle clínico, invariant concorrente e resumo controlado | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260916_12_harden_entitlement_snapshots_and_invitation_expiry.sql` | snapshots contratuais independentes do catálogo atual, FK/intervalo estrutural, elegibilidade financeira de rollout e expiração/audit idempotentes | `hwkdwinfckmjoriqxbjk` (staging) |
 
 Fora do escopo desta série: billing/licenças, pacientes compartilhados,
 `org_id` em tabelas individuais, UI, integrações e produção.

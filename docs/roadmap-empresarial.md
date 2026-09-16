@@ -1090,6 +1090,9 @@ convite clínico pending reserva seat; aceite converte a reserva em seat ativo.
 Redução futura nunca poderá deixar o contrato abaixo de `max(3,
 active+reserved)`. `past_due` possui grace de 7 dias; depois, o workspace fica
 `restricted`, preservando leitura/administração básica e bloqueando expansão.
+O catálogo representa a oferta comercial atual: `enabled=false` impede novas
+vendas, mas não revoga contratos históricos, cujos valores são snapshots
+contratuais independentes de alterações futuras no catálogo.
 
 A implementação é exclusivamente staging e não iniciou Stripe, Checkout,
 webhook, cobrança, convites reais, pacientes/evoluções organizacionais ou
