@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import express from "express";
-import { registerClinicInvitationRoutes, hashInvitationSecret, INVITATION_LANDING_SCRIPT } from "../server/clinic/clinicInvitationRoutes.js";
+import { registerClinicInvitationRoutes, hashInvitationSecret, INVITATION_LANDING_SCRIPT, INVITATION_CSP } from "../server/clinic/clinicInvitationRoutes.js";
 import { createInvitationTransport, renderInvitationMail } from "../server/clinic/clinicInvitationEmail.js";
 import { canEnterInvitedClinic } from "../src/utils/clinicInvitationAccess.js";
 
@@ -139,6 +139,10 @@ try {
   assert.ok(!snapshots().includes(sentinel)); assert.ok(!responses.join("").includes(sentinel)); assert.equal(genericEmails.length, 0); assert.equal(analytics.length, 0);
   for (const path of ["src/pages/ClinicTeam.tsx", "src/pages/ClinicInvitationAccept.tsx", "src/components/clinic/ClinicInvitations.tsx", "docs/roadmap-empresarial.md"]) assert.ok(!readFileSync(path, "utf8").includes(sentinel));
   const sql = readFileSync("supabase/clinic-migrations/20260916_21_secure_clinic_invitation_delivery.sql", "utf8");
+  const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
+  for (const rewrite of vercel.rewrites) { assert.equal(typeof rewrite.destination, "string"); assert.deepEqual(Object.keys(rewrite).sort(), ["destination", "source"]); }
+  assert.ok(vercel.routes.some((route: any) => route.src === "^/convite-clinica$" && route.dest === "/api/index.ts"));
+  assert.ok(vercel.headers.find((entry: any) => entry.source === "/convite-clinica").headers.some((header: any) => header.key === "Content-Security-Policy" && header.value === INVITATION_CSP));
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.create_organization_invitation\(uuid,text,text,boolean\) FROM PUBLIC,anon,authenticated,service_role/);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION[\s\S]+TO service_role/); assert.match(sql, /v_usage\.reserved_seats < 1/);
   // The entire subsystem fails closed in production, even with delivery enabled.

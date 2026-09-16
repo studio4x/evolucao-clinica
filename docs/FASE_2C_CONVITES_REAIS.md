@@ -1,7 +1,7 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data: 2026-09-16. Branch: `feat/clinicas`. Referência: `2c5de70`.
-Build web: `v1.10.875`; Android/Play Store inalterado (`1.0.87`), sem AAB.
+Build web: `v1.10.876`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
@@ -199,6 +199,12 @@ Referências: [linter RLS](https://supabase.com/docs/guides/database/database-li
 [verifyOtp](https://supabase.com/docs/reference/javascript/auth-verifyotp).
 
 ## Cleanup e próximo passo
+
+Git: implementação `5988a01`, publicada somente em `feat/clinicas`. O primeiro
+deployment staging foi recusado por schema de `vercel.json`: headers da landing
+haviam sido inseridos em rewrites. Corrigido na seção headers, com teste
+permanente de estrutura e build incrementada; não houve promoção do deployment
+ERROR ao domínio. O último READY anterior permaneceu disponível nesse intervalo.
 
 Cleanup PASS após cada smoke: auth.users=0, professionals=0, organizations=0,
 invitations=0, deliveries=0, handoffs=0, audit=0. Remoção limitada aos UUIDs
