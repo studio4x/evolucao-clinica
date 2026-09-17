@@ -37,7 +37,11 @@ import android.widget.Toast;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.graphics.Insets;
 import androidx.core.content.FileProvider;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.webkit.ServiceWorkerControllerCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -131,6 +135,10 @@ public class LauncherActivity extends ComponentActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // O targetSdk 36 mantém a Activity edge-to-edge. O container nativo passa
+        // a ser o único responsável pelos system bars e pelo display cutout.
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+
         // O LauncherActivity original do Bubblewrap usa uma janela translúcida porque
         // apenas encaminha a navegação para o Chrome/TWA. Como esta Activity agora
         // mantém um WebView próprio, garantimos uma superfície opaca e acelerada para
@@ -178,6 +186,7 @@ public class LauncherActivity extends ComponentActivity {
 
         swipeRefreshLayout.addView(webView);
         setContentView(swipeRefreshLayout);
+        applyWindowInsetsToNativeContainer(swipeRefreshLayout);
 
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -193,6 +202,27 @@ public class LauncherActivity extends ComponentActivity {
         });
 
         webView.loadUrl(resolveLaunchUrl(getIntent()));
+    }
+
+    /**
+     * Mantém o conteúdo nativo fora das barras do sistema e encaminha ao WebView
+     * uma cópia sem os tipos já tratados, evitando padding duplicado no CSS.
+     * IME fica deliberadamente fora dos tipos tratados para preservar o resize e
+     * o scrollIntoView nativos quando o teclado aparece.
+     */
+    private void applyWindowInsetsToNativeContainer(View rootView) {
+        ViewCompat.setOnApplyWindowInsetsListener(rootView, (view, windowInsets) -> {
+            int handledTypes = WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout();
+            Insets insets = windowInsets.getInsets(handledTypes);
+
+            view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+
+            return new WindowInsetsCompat.Builder(windowInsets)
+                    .setInsets(handledTypes, Insets.NONE)
+                    .build();
+        });
+        ViewCompat.requestApplyInsets(rootView);
     }
 
     @Override

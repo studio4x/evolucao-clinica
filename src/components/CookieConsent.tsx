@@ -102,7 +102,7 @@ export const CookieConsent = () => {
         <button
           type="button"
           onClick={() => window.dispatchEvent(new Event('cookie-consent-open'))}
-          className="fixed bottom-4 left-4 z-[60] hidden h-10 items-center gap-2 rounded-full border border-brand-border/70 bg-white/95 px-3 text-xs font-semibold text-brand-primary shadow-md backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-brand-primary/30 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 md:inline-flex"
+          className="app-cookie-floating fixed left-4 z-[60] hidden h-10 items-center gap-2 rounded-full border border-brand-border/70 bg-white/95 px-3 text-xs font-semibold text-brand-primary shadow-md backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:border-brand-primary/30 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary focus-visible:ring-offset-2 md:inline-flex"
           aria-label="Abrir preferências de privacidade e cookies"
           title="Privacidade e cookies"
         >
@@ -112,7 +112,7 @@ export const CookieConsent = () => {
       )}
 
       {visible && !preferencesOpen && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4 z-[70] shadow-2xl">
+        <div className="app-safe-bottom fixed left-0 right-0 bg-white border-t border-gray-100 p-4 z-[70] shadow-2xl">
           <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-gray-600 leading-relaxed">
               Usamos tecnologias opcionais somente com sua autorização para medir desempenho e, separadamente, ativar recursos de publicidade.

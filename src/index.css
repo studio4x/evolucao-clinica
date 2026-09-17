@@ -20,6 +20,13 @@
 }
 
 @layer base {
+  :root {
+    --app-safe-area-top: env(safe-area-inset-top, 0px);
+    --app-safe-area-right: env(safe-area-inset-right, 0px);
+    --app-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+    --app-safe-area-left: env(safe-area-inset-left, 0px);
+  }
+
   body {
     @apply bg-brand-bg text-brand-text font-sans antialiased selection:bg-brand-accent/30 overflow-x-hidden;
   }
@@ -48,6 +55,79 @@
 
   .input-field {
     @apply w-full rounded-xl border-brand-border shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm transition-colors duration-200 bg-white;
+  }
+}
+
+/* O container Android já aplica esses insets nativamente. Zerar as variáveis
+   no WebView evita que a mesma área seja compensada novamente pelo CSS. */
+.is-webview {
+  --app-safe-area-top: 0px;
+  --app-safe-area-right: 0px;
+  --app-safe-area-bottom: 0px;
+  --app-safe-area-left: 0px;
+}
+
+/* A área reservada precisa acompanhar a posição real da bottom navigation. */
+.app-main-content {
+  padding-bottom: calc(4rem + var(--app-safe-area-bottom));
+}
+
+.app-mobile-menu-header {
+  padding-top: max(1rem, var(--app-safe-area-top));
+  padding-right: max(1rem, var(--app-safe-area-right));
+  padding-bottom: 1rem;
+  padding-left: max(1rem, var(--app-safe-area-left));
+}
+
+.app-mobile-menu-content {
+  padding-bottom: calc(6rem + var(--app-safe-area-bottom));
+}
+
+.app-mobile-bottom-nav {
+  bottom: var(--app-safe-area-bottom);
+  padding-top: 0.5rem;
+  padding-right: max(0.5rem, var(--app-safe-area-right));
+  padding-bottom: 0.5rem;
+  padding-left: max(0.5rem, var(--app-safe-area-left));
+}
+
+.app-safe-bottom {
+  bottom: var(--app-safe-area-bottom);
+}
+
+.app-safe-bottom-4 {
+  bottom: calc(1rem + var(--app-safe-area-bottom));
+}
+
+.app-install-bottom {
+  bottom: var(--app-safe-area-bottom);
+}
+
+.app-cookie-floating {
+  bottom: calc(1rem + var(--app-safe-area-bottom));
+}
+
+.app-safe-bottom-padding {
+  padding-bottom: calc(1rem + var(--app-safe-area-bottom));
+}
+
+.app-floating-bottom {
+  bottom: calc(1.5rem + var(--app-safe-area-bottom));
+}
+
+.app-floating-bottom-high {
+  bottom: calc(6rem + var(--app-safe-area-bottom));
+}
+
+@media (min-width: 768px) {
+  .app-install-bottom {
+    bottom: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .app-main-content {
+    padding-bottom: 0;
   }
 }
 

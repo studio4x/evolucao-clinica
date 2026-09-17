@@ -384,7 +384,7 @@ export default function Layout() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-x-hidden flex flex-col pb-16 md:pb-0">
+      <div className="app-main-content flex-1 overflow-x-hidden flex flex-col">
         <TrialBanner />
         <main className="w-full max-w-[1440px] p-4 md:p-8 mx-auto flex-1 [&>div]:w-full [&>div]:max-w-none">
           <Outlet />
@@ -401,7 +401,7 @@ export default function Layout() {
         }
       `}>
         {/* Mobile Menu Header */}
-        <div className="bg-white border-b border-brand-border/60 p-4 flex justify-between items-center shrink-0">
+        <div className="app-mobile-menu-header bg-white border-b border-brand-border/60 flex justify-between items-center shrink-0">
           {(siteConfig.logo_light_url || siteConfig.logo_dark_url) ? (
             <img
               src={appendBrandAssetVersion(siteConfig.logo_light_url || siteConfig.logo_dark_url, assetSignature)}
@@ -423,7 +423,7 @@ export default function Layout() {
         </div>
 
         {/* Mobile Menu Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 pb-24 pb-safe">
+        <div className="app-mobile-menu-content flex-1 overflow-y-auto p-4 space-y-6">
           {/* User Profile Info Card */}
           <div className="flex items-center space-x-3 p-4 bg-brand-bg rounded-xl border border-brand-border/50">
             <UserAvatar
@@ -516,7 +516,7 @@ export default function Layout() {
       <OfflineQueueMonitor />
 
       {/* Menu Inferior Mobile */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center py-2 pb-safe">
+      <div className="app-mobile-bottom-nav md:hidden fixed left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-brand-border/60 shadow-lg flex justify-around items-center">
         {bottomNavItems.map((item) => {
           const Icon = item.icon;
           const isMais = item.name === 'Mais';

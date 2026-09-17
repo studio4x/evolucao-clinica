@@ -124,7 +124,7 @@ export const InstallPrompt = () => {
   return (
     <>
       {/* ── BANNER PERSISTENTE (Mobile e Desktop: Flutuante na parte inferior) ── */}
-      <div className="fixed bottom-0 left-0 right-0 md:left-auto md:bottom-6 md:right-6 z-[9999] p-4 md:p-0 pointer-events-none">
+      <div className="app-install-bottom fixed left-0 right-0 md:left-auto md:right-6 z-[9999] p-4 md:p-0 pointer-events-none">
         <div className="w-full md:max-w-md bg-white/95 backdrop-blur-md rounded-2xl md:rounded-3xl border border-brand-border/60 shadow-2xl p-4 flex items-center justify-between gap-4 pointer-events-auto transition-all duration-300 transform translate-y-0 scale-100 hover:shadow-brand-primary/10">
           
           {/* Lado Esquerdo: Ícone da Marca e Textos */}

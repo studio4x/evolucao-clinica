@@ -2418,7 +2418,7 @@ export default function PatientDetail() {
         }
       `}</style>
       <div className="xl:hidden h-40" aria-hidden="true" />
-      <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,env(safe-area-inset-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
+      <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,var(--app-safe-area-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <PanelPageHeader
           icon={User}
           title={patient.full_name}
@@ -4609,7 +4609,7 @@ export default function PatientDetail() {
               <RichTextEditor value={editingEvolutionText} onChange={setEditingEvolutionText} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} label="Conteúdo da evolução" />
               <p className="text-[11px] text-brand-text-muted">Negrito, itálico, sublinhado, títulos e listas são mantidos ao salvar no Google Docs.</p>
             </div>
-            <div className="flex flex-col-reverse gap-2 border-t border-brand-border bg-stone-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-row sm:justify-end">
+            <div className="app-safe-bottom-padding flex flex-col-reverse gap-2 border-t border-brand-border bg-stone-50 p-4 sm:flex-row sm:justify-end">
               <button type="button" onClick={closeEvolutionEditor} disabled={savingEvolutionId === editingEvolutionId} className="btn-outline">Cancelar</button>
               <button type="button" onClick={() => void handleSaveEditedEvolution(editingEvolutionId)} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="btn-primary disabled:opacity-50">
                 {savingEvolutionId === editingEvolutionId ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}<span>{savingEvolutionId === editingEvolutionId ? 'Salvando...' : 'Salvar alterações'}</span>

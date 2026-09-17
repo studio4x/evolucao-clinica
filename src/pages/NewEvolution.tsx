@@ -2124,7 +2124,7 @@ export default function NewEvolution() {
 
             {/* Modal Footer */}
             {!modalLoading && !modalError && (
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-brand-border bg-stone-50 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:flex-nowrap sm:space-x-3 sm:pb-4">
+              <div className="app-safe-bottom-padding flex shrink-0 flex-wrap items-center justify-end gap-3 border-t border-brand-border bg-stone-50 px-6 py-4 sm:flex-nowrap sm:space-x-3 sm:pb-4">
                 <button
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 bg-white border border-brand-border rounded-xl text-sm font-medium text-brand-text hover:bg-stone-100 transition-colors"

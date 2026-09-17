@@ -140,7 +140,7 @@ export function OfflineQueueMonitor() {
   };
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 md:left-auto md:w-96 bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl p-4 z-[60] text-white overflow-hidden animate-in slide-in-from-bottom-5">
+    <div className="app-safe-bottom-4 fixed left-4 right-4 md:left-auto md:w-96 bg-slate-900 border border-slate-700 shadow-2xl rounded-2xl p-4 z-[60] text-white overflow-hidden animate-in slide-in-from-bottom-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-2">
           {isSyncing ? (
