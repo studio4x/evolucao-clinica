@@ -16,7 +16,7 @@ export function OfflineQueueMonitor() {
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const { googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const { googleAccessToken, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const loadQueue = async () => {
@@ -112,6 +112,9 @@ export function OfflineQueueMonitor() {
           const transcription = await transcribeAudio({
             audioBlob: blob,
             mimeType: mime,
+            subscriptionPlan,
+            evolutionId: item.id,
+            audioKey: `${item.id}:${index}`,
             onRetry: (attempt) => setSyncStatus(`Processando ${item.patientName}... (IA Tentativa ${attempt})`)
           });
 
