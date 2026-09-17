@@ -1039,3 +1039,55 @@ Nenhum OAuth browser, convite E2E, handoff, aceite browser ou novo smoke foi
 executado. O próximo passo obrigatório é um novo smoke de contexto/aceite com
 fixture controlada e gate autorizado, ou uma autorização equivalente para um
 harness positivo que não altere os gates globais.
+
+### Novo smoke real pós-hardening ACL/RLS — staging — 2026-09-17 — `efb80ff`
+
+Execução exclusivamente no staging `hwkdwinfckmjoriqxbjk`, com os quatro gates
+temporários habilitados somente durante o smoke. O global clinic gate também
+foi habilitado apenas durante a janela do fixture; delivery, billing, Stripe,
+Brevo, produção, DNS, Drive e `main` permaneceram fora do escopo.
+
+#### Resultado observado
+
+- OAuth Google real: PASS. O callback retornou ao Supabase staging e à origem
+  staging; a sessão autenticada e o e-mail confirmado foram reconhecidos pelo
+  fluxo normal.
+- Landing segura: PASS. O fragmento foi trocado por handoff HttpOnly e a URL
+  final ficou em `/painel/convite-clinica`; o token bruto não foi registrado no
+  relatório, nos logs ou em analytics, e nenhuma operação de Drive ocorreu.
+- Fixture: PASS na preparação. Organização, owner sintético, subscription
+  ativa, rollout, entitlement e reserva clínica foram criados apenas para
+  este run.
+- Aceite transacional: PASS no banco, uma única vez. A invitation foi marcada
+  como `accepted`, a membership clínica foi criada e a reserva foi convertida.
+- Contexto/UI pós-aceite: BLOQUEADO. A conta Google selecionada estava com o
+  perfil individual preexistente em status `pending`; a aplicação direcionou
+  para “Aguardando Aprovação” e não concluiu a seleção/navegação para
+  `/painel/clinica`. O usuário preexistente não foi aprovado ou alterado.
+- Não houve evidência de `42501` no aceite nem de falha nova da ACL/RLS; a
+  falha deste run é de aprovação do perfil/contexto pós-aceite.
+
+#### Restauração e evidências finais
+
+- Cleanup: PASS. Owner, organização, convite, handoff, membership,
+  subscription, rollout e auditoria sintéticos foram removidos; o usuário
+  Google preexistente foi preservado.
+- Global clinic gate: `false`.
+- Gates Vercel temporários: restaurados para `false` e redeploy final READY.
+- `CLINIC_INVITATION_DELIVERY_ENABLED=false` e
+  `CLINIC_BILLING_ENABLED=false` permaneceram inalterados; nenhum e-mail foi
+  enviado.
+- `/api/health` no domínio staging, atravessando a proteção pela sessão
+  autenticada do Edge: HTTP 200 com `{"status":"ok"}`. Respostas HTML da
+  proteção Vercel sem sessão não foram contabilizadas como health.
+- Security Advisor após cleanup: baseline preservado em `12 WARN / 2 INFO`,
+  sem finding novo relacionado ao helper, schema privado, `anon` ou RLS.
+- Gates locais: `test:clinic-workspace-acl`, `test:clinic-context`,
+  `test:clinic-invitations`, `test:environment-isolation`, `npm test`, lint,
+  build e `git diff --check`: PASS.
+
+**Estado desta execução:** **FASE 2C BLOQUEADA — CONTEXTO PÓS-ACEITE AINDA
+FALHA**. Para nova tentativa, selecionar manualmente uma conta Google de teste
+controlada cujo perfil individual já esteja aprovado, sem alterar o usuário
+preexistente usado neste run. O gate Brevo tracking/link rewriting continua
+pendente e separado.
