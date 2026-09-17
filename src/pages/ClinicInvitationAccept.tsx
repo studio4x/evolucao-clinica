@@ -8,6 +8,7 @@ import { selectAcceptedClinicContext } from "../utils/clinicInvitationAccess";
 import { ClinicAccessOptions } from "../components/clinic/ClinicAccessOptions";
 
 type Handoff = { organizationName: string; role: string; clinical: boolean; expiresAt: string };
+const clinic2cDiag = (checkpoint: string, details: Record<string, unknown>) => console.info("[Clinic2CDiag]", checkpoint, details);
 export default function ClinicInvitationAccept() {
   const { user, isAuthReady } = useAuthStore();
   const clinicContext = useClinicContextStore();
@@ -30,10 +31,13 @@ export default function ClinicInvitationAccept() {
     return () => { active = false; };
   }, [user?.id]);
   const openClinic = async (organizationId: string, accessToken: string) => {
+    clinic2cDiag("O1/O2", { component_user: Boolean(user), auth_match: Boolean(user && useAuthStore.getState().user?.id === user.id) });
     if (!user || useAuthStore.getState().user?.id !== user.id) throw new Error("authentication_required");
     const store = useClinicContextStore.getState();
+    clinic2cDiag("O3/O4", { clinic_store_user: store.userId === null ? "null" : store.userId === user.id ? "same" : "different", clinic_context_status: store.status });
     await store.refreshAfterMutation(user.id, accessToken);
     const refreshed = useClinicContextStore.getState();
+    clinic2cDiag("F5", { expected_org_found: refreshed.organizations.some(({ id }) => id === organizationId) });
     if (refreshed.userId !== user.id || refreshed.status !== "ready") throw new Error("context_unavailable");
     if (useAuthStore.getState().user?.id !== user.id) throw new Error("authentication_required");
     selectAcceptedClinicContext(refreshed, organizationId);
@@ -58,9 +62,11 @@ export default function ClinicInvitationAccept() {
     let accepted = false;
     try {
       const { data } = await supabase.auth.getSession();
+      clinic2cDiag("A1/A2", { session_present: Boolean(data.session), session_matches_component: Boolean(data.session && data.session.user.id === user.id) });
       if (!data.session || data.session.user.id !== user.id) throw new Error("authentication_required");
       const result = await invitationRequest("/accept", data.session.access_token, {});
       accepted = true;
+      clinic2cDiag("A3/A4", { accept_completed: true, auth_store_matches_component: useAuthStore.getState().user?.id === user.id });
       if (useAuthStore.getState().user?.id !== user.id) return;
       setAcceptedOrganizationId(result.organizationId);
       await openClinic(result.organizationId, data.session.access_token);

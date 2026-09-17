@@ -20,12 +20,14 @@ export class ClinicContextApiError extends Error {
 }
 
 export async function fetchClinicContexts(accessToken: string): Promise<ClinicContextsPayload> {
+  console.info("[Clinic2CDiag]", "F1", { fetch_started: true });
   const response = await fetch("/api/clinic/contexts", {
     method: "GET",
     cache: "no-store",
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   const body = await response.json().catch(() => ({}));
+  console.info("[Clinic2CDiag]", "F2/F3/F4", { status: response.status, error: typeof body?.error === "string" ? body.error : null, organizations_count: Array.isArray(body?.organizations) ? body.organizations.length : null });
 
   if (!response.ok) {
     throw new ClinicContextApiError(response.status, typeof body?.error === "string" ? body.error : "context_resolution_failed");
