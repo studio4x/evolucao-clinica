@@ -1341,3 +1341,22 @@ Validação de recuperação no staging, em 17/09/2026:
   um novo OAuth nem capturou a ordem HTTP de um novo POST de aceite seguido de
   GET contexts; portanto não declara PASS integral de um novo smoke E2E.
 - Sem alteração de schema, ACL/RLS, billing, aprovação pessoal ou Android.
+
+Encerramento desta rodada de correções:
+
+- `6620f8e`, build web `v1.10.887`, deployment
+  `dpl_AorCxdyHHX9Ru1puVfTTJY9MCazG`, `READY`: a mensagem de recuperação
+  foi conferida no Edge, e o clique na clínica pela página de convite consumido
+  abriu novamente o contexto organizacional.
+- A suíte geral foi repetida após a última alteração e passou integralmente,
+  com a mesma normalização temporária de CRLF, revertida ao final.
+- Foram removidos somente a organização e o owner Auth sintéticos confirmados
+  desta execução. Memberships, invitations, handoffs, deliveries, auditoria,
+  assinatura sintética e rollout desse conjunto ficaram em zero. A conta
+  Google preexistente foi preservada com seu perfil `pending`.
+- O gate global foi fechado antes do cleanup. As quatro flags temporárias
+  de clínica/Google no projeto staging foram restauradas para `false` e
+  conferidas individualmente por leitura de valor descriptografado. Delivery
+  e billing continuaram `false`. Nenhum envio ou cobrança real foi efetuado.
+- Os helpers `can_access_organization_workspace` e `is_clinic_feature_enabled`
+  conservaram EXECUTE para authenticated/postgres, sem EXECUTE anon/service_role.
