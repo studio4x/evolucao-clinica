@@ -1614,3 +1614,18 @@ NEEDS_MIGRATION=false
 
 A fixture desta tentativa foi removida e o gate global permaneceu `false`.
 Nenhum helper, policy, grant, migration, resolver ou integração foi alterado.
+
+### Retomada do acesso Google no staging — 2026-09-17
+
+O alerta `Integração google desabilitada neste ambiente` foi reproduzido e
+atribuído às flags de integração do projeto Vercel de staging, não ao e-mail
+da conta. As variáveis `GOOGLE_INTEGRATIONS_ENABLED` e
+`VITE_GOOGLE_INTEGRATIONS_ENABLED` foram habilitadas temporariamente somente no
+projeto `evolucao-clinica-staging`, sem alteração de produção, e o deployment
+`dpl_8xbvj8rs5rJ75gdbkKcRKKwPJRuW` ficou `READY` com o alias
+`staging.evolucaoclinica.app.br`.
+
+O Edge foi reaberto na rota de login e o fluxo chegou ao seletor de contas
+Google, com retorno configurado para o Supabase staging. Nenhuma conta foi
+selecionada automaticamente e nenhuma permissão foi aceita. As flags devem ser
+restauradas para `false` após a validação autenticada controlada.
