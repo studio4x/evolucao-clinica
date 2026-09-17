@@ -26,8 +26,6 @@ type HydrationRequest = { userId: string; generation: number; promise: Promise<v
 let inFlight: HydrationRequest | null = null;
 const revalidationInFlight = new Map<string, Promise<void>>();
 const generationByUser = new Map<string, number>();
-const clinic2cDiag = (checkpoint: string, details: Record<string, unknown>) => console.info("[Clinic2CDiag]", checkpoint, details);
-const storeUserClassification = (currentUserId: string | null, userId: string) => currentUserId === null ? "null" : currentUserId === userId ? "same" : "different";
 
 function currentGeneration(userId: string) {
   return generationByUser.get(userId) ?? 0;
@@ -93,10 +91,8 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
 
   hydrateForUser: async (userId, accessToken) => {
     const previousUserId = get().userId;
-    clinic2cDiag("H1/H2", { hydrate_entered: true, previous_store_user: storeUserClassification(previousUserId, userId) });
     if (previousUserId && previousUserId !== userId) advanceGeneration(previousUserId);
     const generation = currentGeneration(userId);
-    clinic2cDiag("H3", { inflight: inFlight ? inFlight.userId === userId ? inFlight.generation === generation ? "same_generation" : "different_generation" : "different_user" : "none" });
     if (inFlight && inFlight.userId === userId && inFlight.generation === generation) return inFlight.promise;
 
     clearStoredContext(previousUserId && previousUserId !== userId ? previousUserId : null);
@@ -105,7 +101,6 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
     let request!: Promise<void>;
     request = (async () => {
       try {
-        clinic2cDiag("H4", { fetch_about_to_start: true });
         const payload = await fetchClinicContexts(accessToken);
         if (get().userId !== userId || currentGeneration(userId) !== generation) return;
 
@@ -161,14 +156,8 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
 
   refreshAfterMutation: async (userId, accessToken) => {
     const currentUserId = get().userId;
-    clinic2cDiag("R1/R2", { refresh_entered: true, current_store_user: storeUserClassification(currentUserId, userId) });
-    if (currentUserId !== null && currentUserId !== userId) {
-      clinic2cDiag("R3", { mismatch_guard: "blocked", refresh_exit_reason: "store_user_mismatch" });
-      return;
-    }
-    clinic2cDiag("R3", { mismatch_guard: "pass" });
+    if (currentUserId !== null && currentUserId !== userId) return;
     advanceGeneration(userId);
-    clinic2cDiag("R4/R5", { generation_advanced: true, hydrate_called: true });
     revalidationInFlight.delete(userId);
     await get().hydrateForUser(userId, accessToken);
   },
