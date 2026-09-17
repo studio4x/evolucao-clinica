@@ -7515,7 +7515,6 @@ registerClinicContextRoutes(app, {
   requireAuth,
   supabaseUrl,
   supabaseAnonKey: serverEnvironment.supabaseAnonKey,
-  supabaseAdmin,
   clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
   appEnv: serverEnvironment.appEnv,
 });
