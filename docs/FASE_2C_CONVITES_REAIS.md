@@ -940,3 +940,102 @@ privilégios amplos a `PUBLIC`/`anon`.
 **Conclusão:** a Fase 2C permanece bloqueada especificamente por uma
 inconsistência ACL/RLS no staging. Aguardando autorização separada para a
 correção e novo smoke.
+
+### Hardening corretivo ACL/RLS — staging — 2026-09-17
+
+Execução autorizada exclusivamente no Supabase staging
+`hwkdwinfckmjoriqxbjk`, a partir do commit de referência `9b6c7f1`. Produção,
+`main`, Stripe, Brevo, DNS e Drive não foram tocados.
+
+#### Pré-check e aplicação
+
+- A configuração efetiva da Data API foi consultada pela Management API oficial:
+  `db_schema = public,graphql_public`; `private` não está exposto como schema
+  RPC/PostgREST.
+- A função antes da aplicação permaneceu
+  `private.can_access_organization_workspace(uuid)`, retorno `boolean`,
+  `STABLE`, `SECURITY DEFINER`, owner `postgres`,
+  `search_path = pg_catalog, private, public`, sem argumento de `user_id` e
+  com autorização vinculada a `auth.uid()`.
+- Migration criada:
+  `20260916_22_restore_workspace_rls_execute.sql`.
+- A migration executa `REVOKE ALL` para `PUBLIC`, `anon`, `authenticated` e
+  `service_role`, depois concede somente `EXECUTE` a `authenticated` e
+  adiciona comentário explicativo. Não altera corpo, owner, search_path ou
+  policies.
+- A CLI Supabase não estava instalada no ambiente; a sequência existente foi
+  inspecionada e a migration `20260916_22` foi criada manualmente no diretório
+  canônico `supabase/clinic-migrations`, seguindo o próximo identificador
+  válido. A aplicação foi feita somente pela Management API do staging.
+
+#### ACL antes/depois
+
+Antes:
+
+- `authenticated`: `EXECUTE=false`;
+- `anon`: `false`;
+- `service_role`: `false`;
+- `postgres`: `true`;
+- `proacl`: `{postgres=X/postgres}`.
+
+Depois:
+
+- `authenticated`: `EXECUTE=true`;
+- `anon`: `false`;
+- `service_role`: `false`;
+- `postgres`: `true`;
+- `proacl`: `{postgres=X/postgres,authenticated=X/postgres}`.
+
+`routine_privileges` mostra somente `authenticated` e `postgres`. As policies
+`organizations_select_entitled_member` e
+`memberships_select_entitled_member` continuam referenciando a função correta.
+
+#### Testes de autorização
+
+- Teste estático da migration: PASS. Confirma grant seletivo, ausência de
+  wrapper/public function, ausência de alteração de policy e bloqueio de grants
+  para `PUBLIC`, `anon` e `service_role`.
+- Harness somente leitura com papel `authenticated`: PASS. Organização
+  inexistente não foi autorizada; organizações e memberships visíveis foram
+  `0`.
+- Validações de membership `suspended`/`removed`, entitlement incompatível e
+  cenário positivo não foram executadas porque o staging está sem organizações
+  ou memberships (`0`) e o global clinic gate permanece `false`. Criar fixture
+  e habilitar o gate para contornar isso contrariaria a autorização desta
+  execução. Nenhum fixture foi criado.
+
+#### Advisors
+
+O MCP não tinha permissão; o Security Advisor oficial foi consultado pela
+Management API e retornou HTTP 200:
+
+- `12 WARN`: `10 authenticated_security_definer_function_executable`,
+  `extension_in_public` para `vector` e `auth_leaked_password_protection`;
+- `2 INFO`: `rls_enabled_no_policy` nas tabelas privadas de delivery/handoff.
+
+Não há finding novo para `can_access_organization_workspace` nem para exposição
+do schema `private`. O aviso de senha vazada é de configuração/Auth e não foi
+alterado por esta migration; os demais avisos são existentes/intencionais no
+baseline empresarial. Nenhum P0/P1 foi introduzido pelo patch ACL.
+
+#### Gates e validação local
+
+Permaneceram OFF: global clinic gate, `CLINIC_FEATURE_ENABLED`,
+`VITE_CLINIC_FEATURE_ENABLED`, `VITE_GOOGLE_INTEGRATIONS_ENABLED`,
+`GOOGLE_INTEGRATIONS_ENABLED`, `CLINIC_INVITATION_DELIVERY_ENABLED` e
+`CLINIC_BILLING_ENABLED`.
+
+PASS local:
+
+- `npm run test:clinic-context`;
+- `npm run test:clinic-invitations`;
+- `npm run test:environment-isolation`;
+- `npm test` completo;
+- `npm run lint`;
+- `npm run build`;
+- `git diff --check`.
+
+Nenhum OAuth browser, convite E2E, handoff, aceite browser ou novo smoke foi
+executado. O próximo passo obrigatório é um novo smoke de contexto/aceite com
+fixture controlada e gate autorizado, ou uma autorização equivalente para um
+harness positivo que não altere os gates globais.
