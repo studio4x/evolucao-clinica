@@ -10,7 +10,7 @@ import { cert, getApps, initializeApp, type App as FirebaseAdminApp } from "fire
 import { getMessaging } from "firebase-admin/messaging";
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const mammoth = require("mammoth");
@@ -18,6 +18,10 @@ const pdfParse = require("pdf-parse");
 import { defaultColors, defaultSiteConfig, normalizeSiteConfig } from "./src/utils/brandConfig.js";
 import { getBrandAssetSignature } from "./src/utils/brandAssets.js";
 import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js";
+import { AUDIO_LIMITS, getAudioLimitPolicy } from "./src/utils/audioLimits.js";
+import { getAudioDurationSecondsFromBuffer } from "./server/audioDuration.js";
+import { transcribeGeminiAudio } from "./server/audioTranscriptionTransport.js";
+import { buildAuthoritativeAudioKey } from "./server/audioIdempotency.js";
 import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
@@ -146,8 +150,6 @@ const getFirebaseMessaging = () => {
 const GEMINI_DEFAULT_MODEL = "gemini-3.5-flash";
 const GEMINI_TRANSCRIPTION_FALLBACK_MODEL = "gemini-3.5-flash";
 const TEMP_AUDIO_BUCKET = "temp-audio";
-const TRANSCRIPTION_MAX_DURATION_SECONDS = 20 * 60;
-const TRANSCRIPTION_MAX_FILE_BYTES = 20 * 1024 * 1024;
 const TRANSCRIPTION_RATE_LIMIT_MAX_REQUESTS = 5;
 const TRANSCRIPTION_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const TRANSCRIPTION_MONTHLY_LIMIT_SECONDS = 20 * 60 * 60;
@@ -351,14 +353,31 @@ function getCurrentUsageMonth(now = new Date()): string {
   return `${year}-${month}-01`;
 }
 
-function parseAudioDurationSeconds(value: unknown): number | null {
-  const parsed = typeof value === "number" ? value : Number(value);
+type ServerAudioPolicy = ReturnType<typeof getAudioLimitPolicy>;
 
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return null;
-  }
+async function resolveServerAudioPolicyDetails(professionalId: string): Promise<{
+  plan: "trial" | "monthly" | "yearly";
+  policy: ServerAudioPolicy;
+}> {
+  const { data, error } = await supabaseAdmin
+    .from("professionals")
+    .select("subscription_plan, subscription_status, subscription_ends_at")
+    .eq("id", professionalId)
+    .maybeSingle();
 
-  return Math.ceil(parsed);
+  if (error || !data) return { plan: "monthly", policy: AUDIO_LIMITS.conservative };
+
+  const entitled = data.subscription_status === "active" || data.subscription_status === "trialing";
+  const notExpired = !data.subscription_ends_at || new Date(data.subscription_ends_at).getTime() >= Date.now();
+  const verifiedYearly = data.subscription_plan === "yearly" && entitled && notExpired;
+  const verifiedTrial = data.subscription_plan === "trial" && entitled && notExpired;
+  const plan = verifiedYearly ? "yearly" : verifiedTrial ? "trial" : "monthly";
+
+  return { plan, policy: getAudioLimitPolicy(verifiedYearly ? "yearly" : "monthly") };
+}
+
+async function resolveServerAudioPolicy(professionalId: string): Promise<ServerAudioPolicy> {
+  return (await resolveServerAudioPolicyDetails(professionalId)).policy;
 }
 
 function isUsageTrackingTableMissing(error: { message?: string } | null | undefined) {
@@ -1829,6 +1848,15 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+app.get("/api/ai/audio-policy", requireAuth, async (req: any, res) => {
+  const resolved = await resolveServerAudioPolicyDetails(req.user.id);
+  res.json({
+    plan: resolved.plan,
+    maxEvolutionDurationSeconds: resolved.policy.maxDurationSeconds,
+    maxFileBytes: resolved.policy.maxFileBytes,
+  });
+});
+
 const ACQUISITION_TELEMETRY_EVENTS = new Set([
   "acquisition_arrival",
   "consent_banner_shown",
@@ -2198,17 +2226,24 @@ app.post("/api/ai/validate-key", requireAuth, async (req: any, res) => {
 app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
   let storageAdmin: any = null;
   let audioPathToCleanup: string | null = null;
+  let audioReservationId: string | null = null;
+  let audioReservationCommitted = false;
+  let audioReservationMode: "new" | "replay" | null = null;
 
   try {
-    const { audioPath, mimeType, prompt, audioDuration } = req.body || {};
-    const requestedAudioDurationSeconds = parseAudioDurationSeconds(audioDuration);
+    const { audioPath, mimeType, prompt, evolutionId, audioKey } = req.body || {};
+    const audioPolicy = await resolveServerAudioPolicy(req.user.id);
 
-    if (!audioPath || !mimeType || !requestedAudioDurationSeconds) {
-      return res.status(400).json({ error: "Parâmetros 'audioPath', 'mimeType' e 'audioDuration' são obrigatórios." });
-    }
-
-    if (requestedAudioDurationSeconds > TRANSCRIPTION_MAX_DURATION_SECONDS) {
-      return res.status(400).json({ error: "O áudio excede o limite máximo de 20 minutos por evolução." });
+    if (
+      typeof audioPath !== "string" || !audioPath ||
+      typeof mimeType !== "string" || !mimeType ||
+      typeof evolutionId !== "string" || !/^[0-9a-f]{8}-[0-9a-f-]{27,28}$/i.test(evolutionId) ||
+      typeof audioKey !== "string" || !audioKey.trim() || audioKey.length > 256
+    ) {
+      return res.status(400).json({
+        code: "AUDIO_REQUEST_INVALID",
+        error: "Parâmetros 'audioPath', 'mimeType', 'evolutionId' e 'audioKey' são obrigatórios."
+      });
     }
 
     if (typeof audioPath !== "string" || !audioPath.startsWith(`${req.user.id}/`)) {
@@ -2234,30 +2269,16 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     const requestedMimeType = normalizeAudioMimeType(mimeType);
     const transcriptionPrompt = prompt || `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Retorne somente a transcrição final em texto corrido, sem títulos, sem cabeçalhos, sem resumos, sem contexto adicional, sem explicações, sem listas e sem qualquer frase de abertura ou encerramento.`;
     const usageMonth = getCurrentUsageMonth();
-    const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(req.user.id, usageMonth);
+    const { data: evolution, error: evolutionError } = await supabaseAdmin
+      .from("evolutions")
+      .select("id")
+      .eq("id", evolutionId)
+      .eq("professional_id", req.user.id)
+      .maybeSingle();
+    if (evolutionError) throw new Error(evolutionError.message || "Não foi possível validar a evolução.");
+    if (!evolution) return res.status(404).json({ code: "EVOLUTION_NOT_FOUND", error: "Evolução não encontrada." });
 
-    if (
-      currentUsageSeconds >= TRANSCRIPTION_MONTHLY_LIMIT_SECONDS ||
-      currentUsageSeconds + requestedAudioDurationSeconds > TRANSCRIPTION_MONTHLY_LIMIT_SECONDS
-    ) {
-      return res.status(403).json({
-        error: "Limite mensal de transcrição de áudio atingido. Adquira um pacote de horas adicionais."
-      });
-    }
-
-    // 1. Obter a chave do Gemini e resolver o modelo configurado para transcrição
-    const { apiKey, modelName } = await getGeminiSettings();
-
-    if (!apiKey) {
-      return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
-    }
-
-    const transcriptionModel = resolveTranscriptionModel(modelName);
-
-    console.log(`[AI-Backend] Usando modelo de transcrição: ${transcriptionModel}`);
-    const ai = new GoogleGenAI({ apiKey });
-
-    console.log(`[AI-Backend] Baixando áudio do Storage (${TEMP_AUDIO_BUCKET}/${audioPath})...`);
+    console.log(`[AI-Backend] Baixando áudio temporário do Storage (${TEMP_AUDIO_BUCKET})...`);
     const { data: audioFile, error: downloadError } = await storageAdmin.storage
       .from(TEMP_AUDIO_BUCKET)
       .download(audioPath);
@@ -2268,88 +2289,162 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
 
     const audioBuffer = Buffer.from(await audioFile.arrayBuffer());
 
-    if (audioBuffer.byteLength > TRANSCRIPTION_MAX_FILE_BYTES) {
-      return res.status(400).json({ error: "O áudio excede o tamanho máximo permitido de 20 MB por evolução." });
+    if (audioBuffer.byteLength > audioPolicy.maxFileBytes) {
+      return res.status(400).json({
+        code: "AUDIO_FILE_SIZE_LIMIT",
+        error: `O arquivo de áudio pode ter no máximo ${Math.round(audioPolicy.maxFileBytes / 1024 / 1024)} MB.`
+      });
     }
 
     const normalizedMimeType = resolveAudioMimeTypeFromContent(requestedMimeType, audioBuffer);
-
-    const audioBase64 = audioBuffer.toString("base64");
-
-    console.log(`[AI-Backend] Transcrevendo áudio via backend (duração estimada: ${requestedAudioDurationSeconds}s)...`);
-
-    const geminiResponse = await ai.models.generateContent({
-      model: transcriptionModel,
-      contents: {
-        parts: [
-          { text: transcriptionPrompt },
-          { inlineData: { data: audioBase64, mimeType: normalizedMimeType } }
-        ]
-      }
-    });
-
-    const transcription = geminiResponse.text;
-    if (!transcription) {
-      throw new Error("O Gemini não retornou nenhum texto de transcrição.");
-    }
-
-    try {
-      const updatedUsageSeconds = await incrementMonthlyTranscriptionUsageSeconds(
-        req.user.id,
-        usageMonth,
-        requestedAudioDurationSeconds
-      );
-      console.log(`[AI-Backend] Consumo mensal atualizado: ${updatedUsageSeconds}s no mês ${usageMonth}.`);
-    } catch (usageTrackingError) {
-      console.error("[AI-Backend] Erro ao atualizar usage_tracking:", usageTrackingError);
-    }
-
-    // 3. Registrar o log de consumo diretamente no banco
-    const usageMetadata = (geminiResponse as any).usageMetadata;
-    if (usageMetadata) {
-      const promptTokens = usageMetadata.promptTokenCount || 0;
-      const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
-      const totalTokens = usageMetadata.totalTokenCount || 0;
-      const costUsd = estimateGeminiTranscriptionCostUsd({
-        model: transcriptionModel,
-        promptTokens,
-        candidatesTokens,
+    const authoritativeDuration = await getAudioDurationSecondsFromBuffer(audioBuffer, normalizedMimeType);
+    if (!authoritativeDuration || !Number.isFinite(authoritativeDuration)) {
+      return res.status(400).json({
+        code: "AUDIO_DURATION_UNAVAILABLE",
+        error: "Não foi possível identificar a duração real do áudio no servidor."
       });
+    }
+    const authoritativeAudioDurationSeconds = Math.max(1, Math.ceil(authoritativeDuration));
+
+    if (authoritativeAudioDurationSeconds > audioPolicy.maxDurationSeconds) {
+      return res.status(400).json({
+        code: "AUDIO_EVOLUTION_DURATION_LIMIT",
+        error: `O áudio excede o limite máximo de ${audioPolicy.maxDurationSeconds / 60} minutos por evolução.`
+      });
+    }
+
+    const authoritativeAudioKey = buildAuthoritativeAudioKey(evolutionId, audioKey, audioBuffer);
+    const requestedReservationId = randomUUID();
+    const { data: reservation, error: reservationError } = await supabaseAdmin.rpc("reserve_evolution_audio_seconds", {
+      p_evolution_id: evolutionId,
+      p_professional_id: req.user.id,
+      p_duration_seconds: authoritativeAudioDurationSeconds,
+      p_limit_seconds: audioPolicy.maxDurationSeconds,
+      p_reservation_id: requestedReservationId,
+      p_audio_key: authoritativeAudioKey,
+    });
+    if (reservationError) throw new Error(reservationError.message || "Não foi possível validar o limite de áudio da evolução.");
+    if (reservation === "existing_completed") {
+      audioReservationMode = "replay";
+    }
+    if (reservation === "existing_pending") {
+      return res.status(409).json({ code: "AUDIO_PROCESSING_IN_PROGRESS", error: "Este áudio já está sendo processado." });
+    }
+    if (reservation === "reserved") {
+      audioReservationMode = "new";
+      audioReservationId = requestedReservationId;
+    } else if (reservation !== "existing_completed") {
+      return res.status(403).json({
+        code: "AUDIO_EVOLUTION_DURATION_LIMIT",
+        error: `Esta evolução pode ter até ${audioPolicy.maxDurationSeconds / 60} minutos de áudio.`
+      });
+    }
+
+    if (audioReservationMode === "new") {
+      const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(req.user.id, usageMonth);
+      if (
+        currentUsageSeconds >= TRANSCRIPTION_MONTHLY_LIMIT_SECONDS ||
+        currentUsageSeconds + authoritativeAudioDurationSeconds > TRANSCRIPTION_MONTHLY_LIMIT_SECONDS
+      ) {
+        return res.status(403).json({
+          code: "AUDIO_MONTHLY_QUOTA_LIMIT",
+          error: "Limite mensal de transcrição de áudio atingido. Adquira um pacote de horas adicionais."
+        });
+      }
+    }
+
+    const { apiKey, modelName } = await getGeminiSettings();
+    if (!apiKey) return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
+
+    const transcriptionModel = resolveTranscriptionModel(modelName);
+    const ai = new GoogleGenAI({ apiKey });
+
+    const transportResult = await transcribeGeminiAudio(ai, {
+      audioBuffer,
+      mimeType: normalizedMimeType,
+      prompt: transcriptionPrompt,
+      model: transcriptionModel,
+      durationSeconds: authoritativeAudioDurationSeconds,
+    }, (event) => console.log("[AI-Backend] Transporte Gemini", event));
+    const { transcription } = transportResult;
+
+    if (audioReservationMode === "new") {
+      const { error: completeReservationError } = await supabaseAdmin.rpc("complete_evolution_audio_reservation", {
+        p_reservation_id: audioReservationId,
+        p_professional_id: req.user.id,
+      });
+      if (completeReservationError) throw new Error(completeReservationError.message || "Não foi possível concluir a reserva de áudio.");
+      audioReservationCommitted = true;
 
       try {
-        await supabaseAdmin.from('usage_logs').insert({
-          professional_id: req.user.id,
+        const updatedUsageSeconds = await incrementMonthlyTranscriptionUsageSeconds(
+          req.user.id,
+          usageMonth,
+          authoritativeAudioDurationSeconds
+        );
+        console.log(`[AI-Backend] Consumo mensal atualizado: ${updatedUsageSeconds}s no mês ${usageMonth}.`);
+      } catch (usageTrackingError) {
+        console.error("[AI-Backend] Erro ao atualizar usage_tracking:", usageTrackingError);
+      }
+
+      // Registra consumo faturável apenas para reservas novas; replay técnico
+      // não duplica quota nem usage_logs.
+      const usageMetadata = transportResult.usageMetadata;
+      if (usageMetadata) {
+        const promptTokens = usageMetadata.promptTokenCount || 0;
+        const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
+        const totalTokens = usageMetadata.totalTokenCount || 0;
+        const costUsd = estimateGeminiTranscriptionCostUsd({
           model: transcriptionModel,
-          prompt_tokens: promptTokens,
-          candidates_tokens: candidatesTokens,
-          total_tokens: totalTokens,
-          cost_usd: costUsd,
-          audio_duration_seconds: requestedAudioDurationSeconds,
-          created_at: new Date().toISOString()
+          promptTokens,
+          candidatesTokens,
         });
-        console.log("[AI-Backend] Log de consumo gravado com sucesso.");
-      } catch (dbError) {
-        console.error("[AI-Backend] Erro ao gravar log de consumo:", dbError);
+
+        try {
+          await supabaseAdmin.from('usage_logs').insert({
+            professional_id: req.user.id,
+            model: transcriptionModel,
+            prompt_tokens: promptTokens,
+            candidates_tokens: candidatesTokens,
+            total_tokens: totalTokens,
+            cost_usd: costUsd,
+            audio_duration_seconds: authoritativeAudioDurationSeconds,
+            created_at: new Date().toISOString()
+          });
+          console.log("[AI-Backend] Log de consumo gravado com sucesso.");
+        } catch (dbError) {
+          console.error("[AI-Backend] Erro ao gravar log de consumo:", dbError);
+        }
       }
     }
 
-    res.json({ success: true, transcription });
+    res.json({ success: true, transcription, durationSeconds: authoritativeAudioDurationSeconds, transport: transportResult.method });
   } catch (err: any) {
     const errorMessage = extractReadableErrorMessage(err);
     const quotaRelated = isQuotaRelatedError(err);
-    console.error("[AI-Backend] Erro na transcrição via backend:", err);
+    console.error("[AI-Backend] Erro na transcrição via backend:", String(errorMessage || "erro").replace(/[\r\n]/g, " ").slice(0, 240));
     res.status(quotaRelated ? 429 : 500).json({ error: errorMessage || "Erro interno ao processar a transcrição." });
   } finally {
+    if (audioReservationId && !audioReservationCommitted) {
+      try {
+        await supabaseAdmin.rpc("release_evolution_audio_seconds", {
+          p_reservation_id: audioReservationId,
+          p_professional_id: req.user.id
+        });
+      } catch (releaseError: any) {
+        console.error("[AI-Backend] Falha ao liberar reserva de áudio:", String(releaseError?.message || "erro").replace(/[\r\n]/g, " ").slice(0, 160));
+      }
+    }
     if (audioPathToCleanup && storageAdmin) {
       try {
         const { error: cleanupError } = await storageAdmin.storage.from(TEMP_AUDIO_BUCKET).remove([audioPathToCleanup]);
         if (cleanupError) {
-          console.error(`[AI-Backend] Falha ao remover áudio temporário (${audioPathToCleanup}):`, cleanupError);
+          console.error("[AI-Backend] Falha ao remover áudio temporário:", String(cleanupError?.message || "erro").replace(/[\r\n]/g, " ").slice(0, 160));
         } else {
-          console.log(`[AI-Backend] Áudio temporário removido com sucesso: ${audioPathToCleanup}`);
+          console.log("[AI-Backend] Áudio temporário removido com sucesso", { cleanup: true });
         }
       } catch (cleanupErr) {
-        console.error(`[AI-Backend] Erro inesperado ao limpar áudio temporário (${audioPathToCleanup}):`, cleanupErr);
+        console.error("[AI-Backend] Erro inesperado ao limpar áudio temporário:", String((cleanupErr as any)?.message || "erro").replace(/[\r\n]/g, " ").slice(0, 160));
       }
     }
   }

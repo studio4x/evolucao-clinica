@@ -420,7 +420,10 @@ export default function History() {
         const originalTranscription = await transcribeAudio({
           audioBlob,
           mimeType: audioBlob.type || 'audio/webm',
-          audioDuration: evo.audio_duration_seconds || 0
+          audioDuration: evo.audio_duration_seconds || 0,
+          subscriptionPlan,
+          evolutionId: evo.id,
+          audioKey: evo.id
         });
 
         const { error: originalSaveError } = await supabase

@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes } from '../../services/googleAuth';
 import { showAlert } from '../../store/modalStore';
 import { CloudOff, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
+import { syncOfflineEvolutionItem } from '../../services/offlineEvolutionSync';
 
 export function OfflineQueueMonitor() {
   const [queue, setQueue] = useState<PendingEvolution[]>([]);
@@ -16,7 +17,7 @@ export function OfflineQueueMonitor() {
   const [syncStatus, setSyncStatus] = useState<string>('');
   const [hasError, setHasError] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const { googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const { googleAccessToken, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const loadQueue = async () => {
@@ -84,86 +85,31 @@ export function OfflineQueueMonitor() {
 
     for (const item of queue) {
       try {
-        const audioBlobs = getPendingEvolutionAudioBlobs(item);
-        if (audioBlobs.length === 0) {
-          throw new Error('Nenhum áudio encontrado para sincronizar.');
-        }
-
-        setSyncStatus(
-          audioBlobs.length > 1
-            ? `Processando ${item.patientName}... (IA ${audioBlobs.length} áudios)`
-            : `Processando ${item.patientName}... (IA)`
-        );
-        
-        const transcriptions: string[] = [];
-
-        for (let index = 0; index < audioBlobs.length; index += 1) {
-          const blob = audioBlobs[index];
-          // WhatsApp PWA costuma vir genérico, previne IA de errar
-          let mime = blob.type || item.mimeType;
-          if (!mime || mime === 'application/octet-stream') mime = 'audio/ogg';
-
-          setSyncStatus(
-            audioBlobs.length > 1
-              ? `Processando ${item.patientName}... (IA ${index + 1}/${audioBlobs.length})`
-              : `Processando ${item.patientName}... (IA)`
-          );
-
-          const transcription = await transcribeAudio({
-            audioBlob: blob,
-            mimeType: mime,
-            onRetry: (attempt) => setSyncStatus(`Processando ${item.patientName}... (IA Tentativa ${attempt})`)
-          });
-
-          if (!transcription) throw new Error("A IA retornou um texto vazio.");
-          transcriptions.push(transcription.trim());
-        }
-
-        const originalTranscription = transcriptions.join('\n\n');
-        const templateId = typeof item.evolutionData?.template_id === 'string' && item.evolutionData.template_id
-          ? item.evolutionData.template_id
-          : null;
-
-        const { error: originalSaveError } = await supabase
-          .from('evolutions')
-          .upsert({
-            ...item.evolutionData,
-            transcription_status: 'processing',
-            transcription_text: '',
-            original_transcription_text: originalTranscription,
-            updated_at: new Date().toISOString()
-          });
-        if (originalSaveError) throw originalSaveError;
-
-        const evolutionText = templateId
-          ? await convertEvolutionToTemplate(originalTranscription, templateId)
-          : originalTranscription;
-
-        setSyncStatus(`Inserindo ${item.patientName} no Google Docs...`);
-        await appendToGoogleDoc(
+        const audioCount = getPendingEvolutionAudioBlobs(item).length;
+        await syncOfflineEvolutionItem(item, {
+          subscriptionPlan,
           googleAccessToken,
-          item.googleDocId,
-          item.sessionDate,
-          evolutionText,
-          {
-            sessionTime: item.sessionTime || (item.evolutionData?.session_time) || undefined,
-            evolutionId: item.id
-          }
-        );
-
-        setSyncStatus(`Salvando ${item.patientName}...`);
-        const { error: upsertError } = await supabase
-          .from('evolutions')
-          .upsert({
-            ...item.evolutionData,
-            transcription_status: 'completed',
-            transcription_text: evolutionText,
-            original_transcription_text: originalTranscription,
-            google_doc_append_status: 'completed',
-            google_doc_append_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-        if (upsertError) throw upsertError;
+          upsertEvolution: async (payload) => supabase.from('evolutions').upsert(payload),
+          transcribeAudio: async (options) => transcribeAudio({
+            ...options,
+            onRetry: (attempt) => setSyncStatus(`Processando ${item.patientName}... (IA Tentativa ${attempt})`),
+          }),
+          convertEvolutionToTemplate,
+          appendToGoogleDoc,
+          onProgress: (progress) => {
+            if (progress.phase === 'transcription') {
+              setSyncStatus(
+                audioCount > 1
+                  ? `Processando ${item.patientName}... (IA ${progress.index + 1}/${progress.total})`
+                  : `Processando ${item.patientName}... (IA)`
+              );
+            } else if (progress.phase === 'google-docs') {
+              setSyncStatus(`Inserindo ${item.patientName} no Google Docs...`);
+            } else {
+              setSyncStatus(`Salvando ${item.patientName}...`);
+            }
+          },
+        });
 
         // Removendo da fila
         await removePendingEvolution(item.id);

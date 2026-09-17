@@ -1,5 +1,6 @@
 import { supabase } from "../supabaseClient";
 import { getAudioDurationFromBlob } from "../utils/audioDuration";
+import { getAudioLimitPolicy, type AudioSubscriptionPlan } from "../utils/audioLimits";
 
 export interface TranscriptionOptions {
   audioBlob: Blob;
@@ -8,10 +9,11 @@ export interface TranscriptionOptions {
   onRetry?: (attempt: number, delay: number, isFallback: boolean) => void;
   audioDuration?: number; // em segundos
   customPrompt?: string;
+  subscriptionPlan?: AudioSubscriptionPlan;
+  evolutionId: string;
+  audioKey: string;
 }
 
-const MAX_AUDIO_DURATION_SECONDS = 20 * 60;
-const MAX_AUDIO_SIZE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_TRANSCRIPTION_PROMPT = `Transcreva integralmente este áudio clínico em português do Brasil, preservando o sentido do relato da terapeuta ocupacional. Corrija apenas vícios de fala, repetições desnecessárias e ruídos de linguagem. Não invente informações. Retorne somente a transcrição final em texto corrido, sem títulos, sem cabeçalhos, sem resumos, sem contexto adicional, sem explicações, sem listas e sem qualquer frase de abertura ou encerramento.`;
 
 export const resolveAudioMimeType = (mimeType?: string, fileName?: string): string => {
@@ -96,7 +98,10 @@ const isHardLimitError = (message: string): boolean => {
     normalized.includes('(http 400)') ||
     normalized.includes('(http 403)') ||
     normalized.includes('limite máximo de 20 minutos') ||
+    normalized.includes('limite máximo de 50 minutos') ||
     normalized.includes('tamanho máximo permitido de 20 mb') ||
+    normalized.includes('arquivo de áudio pode ter no máximo 20 mb') ||
+    normalized.includes('arquivo de áudio pode ter no máximo 60 mb') ||
     normalized.includes('muitas solicitações de transcrição') ||
     normalized.includes('limite mensal de transcrição de áudio atingido') ||
     normalized.includes('duração do áudio é obrigatória')
@@ -104,18 +109,23 @@ const isHardLimitError = (message: string): boolean => {
 };
 
 export const transcribeAudio = async (options: TranscriptionOptions): Promise<string> => {
-  const { audioBlob, mimeType, fileName, onRetry, audioDuration, customPrompt } = options;
+  const { audioBlob, mimeType, fileName, onRetry, audioDuration, customPrompt, subscriptionPlan, evolutionId, audioKey } = options;
+  const audioPolicy = getAudioLimitPolicy(subscriptionPlan);
   const maxRetries = 3;
   let retryCount = 0;
   const normalizedMimeType = resolveAudioMimeType(mimeType || audioBlob.type, fileName);
   const prompt = customPrompt || DEFAULT_TRANSCRIPTION_PROMPT;
 
-  if (typeof audioDuration === 'number' && Number.isFinite(audioDuration) && audioDuration > MAX_AUDIO_DURATION_SECONDS) {
-    throw new Error("O áudio excede o limite máximo de 20 minutos por evolução.");
+  if (!evolutionId || !audioKey) {
+    throw new Error("Não foi possível identificar a evolução e o áudio para validar o limite.");
   }
 
-  if (audioBlob.size > MAX_AUDIO_SIZE_BYTES) {
-    throw new Error("O áudio excede o tamanho máximo permitido de 20 MB por evolução.");
+  if (typeof audioDuration === 'number' && Number.isFinite(audioDuration) && audioDuration > audioPolicy.maxDurationSeconds) {
+    throw new Error(`O áudio excede o limite máximo de ${audioPolicy.maxDurationSeconds / 60} minutos por evolução.`);
+  }
+
+  if (audioBlob.size > audioPolicy.maxFileBytes) {
+    throw new Error(`O arquivo de áudio pode ter no máximo ${Math.round(audioPolicy.maxFileBytes / 1024 / 1024)} MB.`);
   }
 
   // O seletor de arquivos do Android pode devolver um File vinculado a um
@@ -136,8 +146,8 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
     throw new Error("Não foi possível identificar a duração do áudio. Reproduza o arquivo ou selecione-o novamente antes de processar.");
   }
 
-  if (detectedAudioDuration > MAX_AUDIO_DURATION_SECONDS) {
-    throw new Error("O áudio excede o limite máximo de 20 minutos por evolução.");
+  if (detectedAudioDuration > audioPolicy.maxDurationSeconds) {
+    throw new Error(`O áudio excede o limite máximo de ${audioPolicy.maxDurationSeconds / 60} minutos por evolução.`);
   }
 
   const audioDurationSeconds = Math.max(1, Math.ceil(detectedAudioDuration));
@@ -186,7 +196,9 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
           audioPath,
           mimeType: normalizedMimeType,
           prompt,
-          audioDuration: audioDurationSeconds
+          audioDuration: audioDurationSeconds,
+          evolutionId,
+          audioKey
         })
       });
 
@@ -201,7 +213,9 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
       }
 
       if (!response.ok) {
-        throw new Error(`${data.error || 'Erro do servidor'} (HTTP ${response.status})`);
+        const serverError = new Error(`${data.error || 'Erro do servidor'} (HTTP ${response.status})`) as Error & { code?: string };
+        serverError.code = typeof data.code === 'string' ? data.code : undefined;
+        throw serverError;
       }
 
       if (!data.success || !data.transcription) {
@@ -219,7 +233,15 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
                            normalizedErrorContent.includes('resource_exhausted');
       const isBucketError = isBucketMissingError(errorContent);
       const isModelError = isModelConfigurationError(errorContent);
-      const isPolicyError = isHardLimitError(errorContent);
+      const isPolicyError = isHardLimitError(errorContent) || [
+        'AUDIO_REQUEST_INVALID',
+        'AUDIO_DURATION_UNAVAILABLE',
+        'AUDIO_EVOLUTION_DURATION_LIMIT',
+        'AUDIO_FILE_SIZE_LIMIT',
+        'AUDIO_MONTHLY_QUOTA_LIMIT',
+        'AUDIO_ALREADY_PROCESSED',
+        'AUDIO_PROCESSING_IN_PROGRESS',
+      ].includes(error?.code);
 
       console.error("[AI-Service] Erro na transcrição:", errorContent);
       
