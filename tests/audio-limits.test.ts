@@ -5,12 +5,15 @@ import { transcribeGeminiAudio } from '../server/audioTranscriptionTransport';
 const run = async () => {
   assert.equal(getAudioLimitPolicy('trial').maxDurationSeconds, 1200);
   assert.equal(getAudioLimitPolicy('monthly').maxDurationSeconds, 1200);
-  assert.equal(getAudioLimitPolicy('yearly').maxDurationSeconds, 3000);
+  assert.equal(getAudioLimitPolicy('yearly').maxDurationSeconds, 3600);
   assert.equal(getAudioLimitPolicy('unknown' as never).maxDurationSeconds, 1200);
   assert.equal(isAudioDurationAllowed(0, 1200, AUDIO_LIMITS.conservative), true);
   assert.equal(isAudioDurationAllowed(0, 1201, AUDIO_LIMITS.conservative), false);
-  assert.equal(isAudioDurationAllowed(2400, 600, AUDIO_LIMITS.yearly), true);
-  assert.equal(isAudioDurationAllowed(2400, 601, AUDIO_LIMITS.yearly), false);
+  assert.equal(isAudioDurationAllowed(0, 3599, AUDIO_LIMITS.yearly), true);
+  assert.equal(isAudioDurationAllowed(0, 3600, AUDIO_LIMITS.yearly), true);
+  assert.equal(isAudioDurationAllowed(0, 3601, AUDIO_LIMITS.yearly), false);
+  assert.equal(isAudioDurationAllowed(3000, 600, AUDIO_LIMITS.yearly), true);
+  assert.equal(isAudioDurationAllowed(3000, 601, AUDIO_LIMITS.yearly), false);
   assert.equal(isAudioFileSizeAllowed(20 * 1024 * 1024, AUDIO_LIMITS.conservative), true);
   assert.equal(isAudioFileSizeAllowed(20 * 1024 * 1024 + 1, AUDIO_LIMITS.conservative), false);
   assert.equal(isAudioFileSizeAllowed(60 * 1024 * 1024, AUDIO_LIMITS.yearly), true);
