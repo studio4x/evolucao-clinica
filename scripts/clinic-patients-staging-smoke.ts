@@ -9,7 +9,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 assert.ok(process.argv.includes("--confirm-staging-only"), "Explicit staging-only flag required");
 const ref = "hwkdwinfckmjoriqxbjk";
 const url = `https://${ref}.supabase.co`;
-const env = dotenv.parse(readFileSync(".env.local"));
+const envFile = process.env.SUPABASE_SMOKE_ENV_FILE || ".env.local";
+const env = dotenv.parse(readFileSync(envFile));
 assert.ok(env.SUPABASE_ACCESS_TOKEN, "Management API credential required");
 
 async function management(query: string) {
@@ -37,6 +38,7 @@ const fixtures: Record<string, { id: string; email: string; client: SupabaseClie
 let sharedPatientId: string | null = null;
 let personalPatientId: string | null = null;
 let gateEnabled = false;
+let baselineProfessionalIds: string[] = [];
 
 const keys = await getKeys();
 const serviceKey = keys.find((key) => key.name === "service_role")?.api_key;
@@ -61,7 +63,7 @@ async function organization(actor: string) {
   const row = checked(await fixtures[actor].client.rpc("create_organization_with_owner", { p_name: `Clínica sintética F3 ${run} ${actor}` }), "create_org");
   const id = row.id as string;
   assert.ok(id); organizationIds.push(id);
-  await management(`insert into private.organization_subscriptions(organization_id,plan_code,billing_interval,currency,base_amount_minor,seat_amount_minor,minimum_contracted_seats,contracted_seats,financial_status) values('${id}','clinic_monthly','monthly','BRL',4990,2990,3,3,'active')`);
+  await management(`insert into private.organization_subscriptions(organization_id,plan_code,billing_interval,currency,base_amount_minor,seat_amount_minor,minimum_contracted_seats,contracted_seats,financial_status) values('${id}','clinic_monthly','monthly','BRL',4990,2990,3,8,'active')`);
   checked(await admin.rpc("set_organization_clinic_rollout_state", { p_organization_id: id, p_enabled: true, p_reason: "Fase 3 synthetic patient smoke" }), "rollout");
   return id;
 }
@@ -73,29 +75,40 @@ async function rpc(name: string, actor: string, args: Record<string, unknown>) {
 try {
   const environment = (await management("select environment_name from private.runtime_environment where id=true"))[0];
   assert.equal(environment.environment_name, "staging");
-  await fixture("ownerA"); await fixture("managerA"); await fixture("primaryA"); await fixture("secondaryA"); await fixture("consultantA"); await fixture("extraA"); await fixture("ownerB");
+  baselineProfessionalIds = ((await management("select id from public.professionals")) as Array<{ id: string }>).map((row) => row.id);
+  await fixture("ownerA"); await fixture("managerA"); await fixture("primaryA"); await fixture("secondaryA"); await fixture("consultantA"); await fixture("extraA"); await fixture("unassignedA"); await fixture("ownerB");
   await management("update private.clinic_runtime_config set enabled=true, updated_at=clock_timestamp() where id=true"); gateEnabled = true;
   const orgA = await organization("ownerA"); const orgB = await organization("ownerB");
   await management(`update public.organization_memberships set clinical_access_enabled=true where organization_id='${orgA}' and professional_id in ('${fixtures.ownerA.id}','${fixtures.primaryA.id}','${fixtures.secondaryA.id}','${fixtures.consultantA.id}','${fixtures.extraA.id}')`);
-  await management(`insert into public.organization_memberships(organization_id,professional_id,membership_role,status,clinical_access_enabled,created_by) values('${orgA}','${fixtures.managerA.id}','manager','active',false,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.primaryA.id}','professional','active',true,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.secondaryA.id}','professional','active',true,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.consultantA.id}','professional','active',true,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.extraA.id}','professional','active',true,'${fixtures.ownerA.id}')`);
+  await management(`update public.organization_memberships set clinical_access_enabled=true where organization_id='${orgB}' and professional_id='${fixtures.ownerB.id}'`);
+  await management(`insert into public.organization_memberships(organization_id,professional_id,membership_role,status,clinical_access_enabled,created_by) values('${orgA}','${fixtures.managerA.id}','manager','active',false,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.primaryA.id}','professional','active',true,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.secondaryA.id}','professional','active',true,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.consultantA.id}','professional','active',true,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.extraA.id}','professional','active',true,'${fixtures.ownerA.id}'),('${orgA}','${fixtures.unassignedA.id}','professional','active',true,'${fixtures.ownerA.id}')`);
   const created = checked(await rpc("create_organization_patient", "ownerA", { p_organization_id: orgA, p_full_name: "Paciente sintético F3", p_birth_date: "1988-03-04", p_phone: "5511999999999", p_primary_professional_id: fixtures.primaryA.id, p_secondary_professional_ids: [fixtures.secondaryA.id], p_consultant_professional_ids: [fixtures.consultantA.id] }), "create_patient");
   sharedPatientId = created.patient_id;
   const opId = created.organization_patient_id as string;
   const ownerList = checked(await rpc("list_organization_patients", "ownerA", { p_organization_id: orgA }), "owner_list"); assert.equal(ownerList.length, 1);
   const secondaryDetail = checked(await rpc("get_organization_patient", "secondaryA", { p_organization_patient_id: opId }), "secondary_read"); assert.equal(secondaryDetail.currentAssignmentRole, "secondary");
   const primaryDetail = checked(await rpc("get_organization_patient", "primaryA", { p_organization_patient_id: opId }), "primary_read"); assert.equal(primaryDetail.currentAssignmentRole, "primary");
+  const consultantDetail = checked(await rpc("get_organization_patient", "consultantA", { p_organization_patient_id: opId }), "consultant_read"); assert.equal(consultantDetail.currentAssignmentRole, "consultant");
   checked(await rpc("update_organization_patient", "primaryA", { p_organization_patient_id: opId, p_full_name: "Paciente sintético F3 atualizado", p_birth_date: "1988-03-04", p_phone: "5511999999999", p_status: "active" }), "primary_edit");
   const secondaryEdit = await rpc("update_organization_patient", "secondaryA", { p_organization_patient_id: opId, p_full_name: "Tentativa indevida", p_birth_date: "1988-03-04", p_phone: null, p_status: "active" }); assert.equal(secondaryEdit.error?.code, "42501");
+  const consultantEdit = await rpc("update_organization_patient", "consultantA", { p_organization_patient_id: opId, p_full_name: "Tentativa indevida", p_birth_date: "1988-03-04", p_phone: null, p_status: "active" }); assert.equal(consultantEdit.error?.code, "42501");
+  const unassignedRead = await rpc("get_organization_patient", "unassignedA", { p_organization_patient_id: opId }); assert.equal(unassignedRead.error?.code, "42501");
+  const unassignedList = checked(await rpc("list_organization_patients", "unassignedA", { p_organization_id: orgA }), "unassigned_list"); assert.equal(unassignedList.length, 0);
   const crossTenant = await rpc("get_organization_patient", "ownerB", { p_organization_patient_id: opId }); assert.equal(crossTenant.error?.code, "42501");
   const managerList = checked(await rpc("list_organization_patients", "managerA", { p_organization_id: orgA }), "manager_list"); assert.equal(managerList.length, 1);
   const managerIneligible = await rpc("add_organization_patient_assignment", "managerA", { p_organization_patient_id: opId, p_professional_id: fixtures.managerA.id, p_assignment_role: "secondary" }); assert.equal(managerIneligible.error?.code, "42501");
   const added = checked(await rpc("add_organization_patient_assignment", "ownerA", { p_organization_patient_id: opId, p_professional_id: fixtures.extraA.id, p_assignment_role: "consultant" }), "add_consultant");
   checked(await rpc("revoke_organization_patient_assignment", "ownerA", { p_assignment_id: added.id }), "revoke_consultant");
+  const patientB = checked(await rpc("create_organization_patient", "ownerB", { p_organization_id: orgB, p_full_name: "Paciente sintético F3 B", p_birth_date: "1990-04-05", p_phone: null, p_primary_professional_id: fixtures.ownerB.id, p_secondary_professional_ids: [], p_consultant_professional_ids: [] }), "create_patient_b");
+  const crossTenantPatientB = await rpc("get_organization_patient", "ownerA", { p_organization_patient_id: patientB.organization_patient_id }); assert.equal(crossTenantPatientB.error?.code, "42501");
   const personalInsert = checked(await fixtures.ownerA.client.from("patients").insert({ professional_id: fixtures.ownerA.id, full_name: "Paciente pessoal sintético F3" }).select("id").single(), "personal_patient"); personalPatientId = personalInsert.id;
+  checked(await fixtures.ownerA.client.from("patients").update({ full_name: "Paciente pessoal sintético F3 atualizado" }).eq("id", personalPatientId).select("id").single(), "personal_patient_update");
   const personalRows = checked(await fixtures.ownerA.client.from("patients").select("id").eq("professional_id", fixtures.ownerA.id), "personal_list"); assert.ok(personalRows.some((row: any) => row.id === personalPatientId));
+  const otherPersonalRows = await fixtures.ownerB.client.from("patients").select("id").eq("id", personalPatientId); assert.ok(!otherPersonalRows.error && otherPersonalRows.data?.length === 0);
+  const businessInPersonalContext = await fixtures.ownerA.client.from("patients").select("id").eq("id", sharedPatientId); assert.ok(!businessInPersonalContext.error && businessInPersonalContext.data?.length === 0);
   const directBusinessRows = await fixtures.secondaryA.client.from("organization_patients").select("id").eq("id", opId); assert.ok(directBusinessRows.error || directBusinessRows.data?.length === 0);
   const evolutionCount = (await management("select count(*)::int count from public.evolutions"))[0].count;
-  console.log(JSON.stringify({ staging: ref, phase: "3", smoke: "PASS", organizationIsolation: "PASS", primaryEdit: "PASS", secondaryReadonly: "PASS", crossTenantDenied: "PASS", personalIsolation: "PASS", evolutionsChanged: false, evolutionCount }));
+  console.log(JSON.stringify({ staging: ref, phase: "3", smoke: "PASS", organizationIsolation: "PASS", primaryEdit: "PASS", secondaryReadonly: "PASS", consultantReadonly: "PASS", unassignedDenied: "PASS", crossTenantDenied: "PASS", personalIsolation: "PASS", evolutionsChanged: false, evolutionCount }));
 } finally {
   if (organizationIds.length) {
     const ids = organizationIds.map((id) => `'${id}'`).join(",");
@@ -104,7 +117,8 @@ try {
     await management("update private.clinic_runtime_config set enabled=false, updated_at=clock_timestamp() where id=true");
   }
   for (const id of userIds) await admin.auth.admin.deleteUser(id);
-  const remaining = (await management("select (select enabled from private.clinic_runtime_config where id=true) gate,(select count(*) from public.organizations) organizations,(select count(*) from public.organization_patients) organization_patients,(select count(*) from public.patient_professional_assignments) assignments"))[0];
-  assert.equal(remaining.gate, false); assert.equal(Number(remaining.organizations), 0); assert.equal(Number(remaining.organization_patients), 0); assert.equal(Number(remaining.assignments), 0);
-  console.log(JSON.stringify({ cleanup: "PASS", clinicGate: false, organizations: 0, organizationPatients: 0, assignments: 0, controlledProfessionalsPreserved: true }));
+  const remaining = (await management(`select (select enabled from private.clinic_runtime_config where id=true) gate,(select count(*) from public.organizations where id in (${organizationIds.map((id) => `'${id}'`).join(",")})) organizations,(select count(*) from public.organization_patients where organization_id in (${organizationIds.map((id) => `'${id}'`).join(",")})) organization_patients,(select count(*) from public.patient_professional_assignments where organization_patient_id in (select id from public.organization_patients where organization_id in (${organizationIds.map((id) => `'${id}'`).join(",")}))) assignments`))[0];
+  const afterProfessionalIds = ((await management("select id from public.professionals")) as Array<{ id: string }>).map((row) => row.id);
+  assert.equal(remaining.gate, false); assert.equal(Number(remaining.organizations), 0); assert.equal(Number(remaining.organization_patients), 0); assert.equal(Number(remaining.assignments), 0); assert.deepEqual(afterProfessionalIds.sort(), baselineProfessionalIds.sort());
+  console.log(JSON.stringify({ cleanup: "PASS", clinicGate: false, organizations: 0, organizationPatients: 0, assignments: 0, syntheticPatients: 0, controlledProfessionalsPreserved: true }));
 }

@@ -1117,12 +1117,14 @@ real e cleanup zero. Envio externo não realizado: faltam provider staging
 com tracking/reescrita OFF e Auth Google staging (`external_google_enabled=false`).
 Estado: **FASE 2C BLOQUEADA** para smoke externo; gates global/entrega/billing
 OFF, produção/Stripe/pacientes intactos. Ver [relatório Fase 2C](FASE_2C_CONVITES_REAIS.md).
-Atualização 2026-09-17 — Fase 3: pacientes compartilhados implementados no
-código e preparados para validação controlada no staging. A entrega inclui
+Atualização 2026-09-17 — Fase 3: pacientes compartilhados implementados e
+validados no staging `hwkdwinfckmjoriqxbjk`. A entrega inclui
 `organization_patients`, atribuições Primary/Secondary/Consultor, RPCs
-server-side, isolamento dos pacientes pessoais e UI dedicada, sem alterar
-`evolutions`. O smoke sintético e a aplicação da migration permanecem limitados
-ao staging; a Fase 4 não foi iniciada.
+server-side, isolamento dos pacientes pessoais, correção ACL do helper RLS e
+UI dedicada, sem alterar `evolutions`. O smoke sintético passou com isolamento
+cross-tenant, Secondary/Consultor somente leitura e regressão pessoal; a
+fixture foi limpa, o gate terminou OFF e profissionais controlados preexistentes
+foram preservados. A Fase 4 não foi iniciada.
 
 Ao final do roadmap, a Evolução Clínica terá dois modelos coexistindo com segurança:
 

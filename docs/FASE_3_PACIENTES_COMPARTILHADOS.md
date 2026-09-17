@@ -1,7 +1,12 @@
 # Fase 3 — Pacientes compartilhados
 
-Estado: implementada no código e schema aplicado no Supabase staging; smoke
-sintético pendente de credencial de Management API local.
+Estado: validada no código e no Supabase staging `hwkdwinfckmjoriqxbjk`.
+
+O blocker ACL encontrado após a primeira aplicação foi corrigido pela
+`20260916_25_restore_personal_patient_policy_helper_execute.sql`. O helper
+continua privado, `SECURITY DEFINER`, com o mesmo corpo e `search_path`; apenas
+`authenticated` recebeu `EXECUTE`, porque a policy pessoal de `patients` o
+invoca diretamente. `PUBLIC`, `anon` e `service_role` permanecem sem execução.
 
 ## Escopo
 
@@ -52,3 +57,12 @@ A migration `20260916_23_shared_clinic_patients.sql` é aditiva e destinada
 exclusivamente ao projeto `hwkdwinfckmjoriqxbjk`. O gate clínico deve permanecer
 desligado fora do smoke sintético controlado. A Fase 4 e o compartilhamento de
 evoluções não fazem parte desta entrega.
+
+Validação final executada em 17/09/2026: ACL do helper pessoal com
+`authenticated` autorizado e `anon`/`service_role` negados; regressão pessoal
+de criar/listar/editar aprovada; smoke sintético multi-tenant aprovado com
+Primary editável, Secondary/Consultor somente leitura, membro não atribuído e
+cross-tenant negados, isolamento pessoal aprovado e `evolutions` inalterada.
+A limpeza removeu a fixture, assinaturas/entitlements, memberships,
+atribuições, pacientes sintéticos e flags relacionadas; o gate global terminou
+OFF e os profissionais controlados preexistentes foram preservados.
