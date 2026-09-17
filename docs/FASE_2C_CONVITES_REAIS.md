@@ -1,7 +1,7 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data inicial: 2026-09-16. Retomada: 2026-09-17. Branch: `feat/clinicas`.
-Referência inicial: `2c5de70`; referência da retomada atual: `be17fbb`.
+Referência inicial: `2c5de70`; referência da retomada atual: `13240ec`.
 Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
@@ -12,19 +12,24 @@ com transporte mock concluídos; nenhum e-mail externo enviado.
 
 Bloqueios confirmados, não hipóteses:
 
-1. Deployment Protection já atravessada pelo login Vercel manual autorizado;
-   a aplicação carrega no Edge e **You Need Access não aparece mais**.
-   O login Google da aplicação está bloqueado pelo gate público
-   `VITE_GOOGLE_INTEGRATIONS_ENABLED=false`, antes de abrir OAuth.
-   `GOOGLE_INTEGRATIONS_ENABLED=false` também permanece no staging.
+1. Deployment Protection foi atravessada pelo login Vercel manual autorizado;
+   a aplicação carregou no Edge e **You Need Access não apareceu mais**.
+   Os dois gates Google foram habilitados temporariamente somente no projeto
+   staging, para o smoke, e foram restaurados para `false` no redeploy final.
 2. Tracking/link rewriting da Brevo ainda não comprovados OFF. SMTP atual
    PASS após revisão manual das credenciais; flag de tracking false preservada,
    delivery OFF. Autorização do remetente não comprovada por verify.
 3. Google provider está **ON** na revalidação atual; `mailer_autoconfirm=false`.
-   OAuth browser/callback/email confirmado/redirect do convite ainda não
-   validados. Não chegou a aparecer escolha de conta Google nesta tentativa;
-   nenhuma conta pessoal/profissional foi selecionada pelo agente.
-4. Destinatário controlado e autorização específica para o primeiro envio
+   A conta Google controlada foi selecionada manualmente no Edge; o callback
+   retornou ao domínio staging, a rota protegida carregou sem a tela de login,
+   e a consulta administrativa confirmou um único usuário recente com e-mail
+   e `email_confirmed_at`. Nenhuma senha foi solicitada ou registrada.
+4. O handoff real permaneceu bloqueado pelo `CLINIC_FEATURE_ENABLED=false` do
+   deployment: `/convite-clinica` respondeu `Convites indisponíveis`, portanto
+   o script de fragment exchange não foi executado. Não habilitei esse gate
+   adicional, não enviei e-mail e não declarei PASS para token raw, OAuth state,
+   storage, metadata, logs, analytics ou histórico.
+5. Destinatário controlado e autorização específica para o primeiro envio
    ainda precisam ser fornecidos depois de resolver os gates técnicos.
 
 Não solicitar confirmação de envio como se estes pré-requisitos estivessem
@@ -554,3 +559,47 @@ convite sintético e cleanup; parar para autorização explícita de UM envio.
 Somente depois validar recebimento/link sem tracking, handoff/browser/login,
 aceite/contexto, clínico/admin conforme autorização e cleanup final. Até lá
 não declarar FASE 2C APROVADA PARA REVISÃO.
+
+### Retomada do smoke Google — 2026-09-17 — commit `13240ec`
+
+Execução limitada ao projeto staging `evolucao-clinica-staging`, no team
+TARGET, sem alteração de produção, Stripe, DNS, Brevo, Drive ou `main`.
+
+- Gates temporários Vercel `VITE_GOOGLE_INTEGRATIONS_ENABLED=true` e
+  `GOOGLE_INTEGRATIONS_ENABLED=true`: aplicados somente ao staging para o
+  smoke e depois restaurados para `false` pela API oficial.
+- Deployment temporário `dpl_AKeBr3eLi8rxwDH7BCcunrtgkDP4`: READY, commit
+  `13240ec`; `vercel curl` por Deployment Protection retornou HTTP 200 e
+  corpo exato `{"status":"ok"}`.
+- OAuth real no Edge: conta controlada selecionada manualmente pelo usuário;
+  callback retornou ao Supabase staging e ao domínio staging, sem senha
+  solicitada/registrada. A rota `/painel/convite-clinica` carregou e não
+  exibiu `You Need Access`; o resultado da aplicação sem fixture foi a
+  mensagem de acesso ao convite, esperada sem handoff.
+- Supabase Auth staging: consulta administrativa sanitizada confirmou um
+  usuário recente, e-mail presente e `email_confirmed_at` preenchido. Não
+  foram registrados e-mail, UUID, código OAuth, state ou credenciais.
+- Fixture sintética: organização, owner, subscription/entitlement full,
+  convite e delivery mock foram criados apenas para preparar o teste e foram
+  removidos completamente. Nenhum e-mail foi enviado.
+- Handoff: bloqueado antes do fragment exchange porque o deployment mantém
+  `CLINIC_FEATURE_ENABLED=false`; `/convite-clinica` respondeu
+  `Convites indisponíveis`. O gate de feature não foi habilitado fora da
+  autorização recebida. Assim, não há evidência PASS para HttpOnly handoff,
+  OAuth repetido dentro do convite, aceite/contexto ou ausência do token raw
+  em todas as superfícies solicitadas.
+- Cleanup Supabase: `auth.users=0`, `professionals=0`, `organizations=0`,
+  `organization_memberships=0`, `organization_invitations=0`,
+  `organization_invitation_deliveries=0`, `organization_invitation_handoffs=0`,
+  `organization_admin_events=0`; global clinic gate `false`.
+- Redeploy final `dpl_3j3RiS8gfhEWVogXKBP2Wgc1aEFy`: READY, mesmo commit e
+  Project ID. `/api/health` atravessado pela proteção retornou HTTP 200 com
+  `{"status":"ok"}`. A API confirmou os dois gates Google com valor
+  efetivo `false`, `CLINIC_INVITATION_DELIVERY_ENABLED=false` e
+  `CLINIC_BILLING_ENABLED=false` preservados.
+
+Estado desta retomada: **FASE 2C BLOQUEADA — GOOGLE AUTH STAGING**. O OAuth
+básico chegou a completar o callback, mas o handoff seguro não pôde ser
+executado sem habilitar `CLINIC_FEATURE_ENABLED`, que não estava autorizado.
+Tracking/link rewriting Brevo continua um gate separado e nenhum envio foi
+realizado. Fase 3 não iniciada.
