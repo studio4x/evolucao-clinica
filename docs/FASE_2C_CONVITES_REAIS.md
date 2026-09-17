@@ -1,31 +1,33 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data inicial: 2026-09-16. Retomada: 2026-09-17. Branch: `feat/clinicas`.
-Referência inicial: `2c5de70`; referência desta configuração: `df25ae6`.
+Referência inicial: `2c5de70`; referência da retomada atual: `9f5decc`.
 Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
-**FASE 2C BLOQUEADA** para smoke externo. Implementação e smoke técnico
+**FASE 2C BLOQUEADA — DEPLOYMENT PROTECTION** para smoke browser/externo.
+Implementação e smoke técnico
 com transporte mock concluídos; nenhum e-mail externo enviado.
 
 Bloqueios confirmados, não hipóteses:
 
-1. As seis variáveis SMTP dedicadas foram configuradas no projeto Vercel
-   staging na retomada de 2026-09-17, sem copiar credenciais de produção.
-   DNS/conexão/TLS/certificado PASS, mas `verify()` falhou na autenticação:
-   `EAUTH`, resposta SMTP `535`. Tracking/reescrita ainda não comprovados OFF.
-   O sender permanece fechado, com delivery OFF. O baseline staging não
-   contém a tabela genérica `settings`; o sender dedicado não depende dela.
-2. A Management API de Auth retorna `external_google_enabled=false` no staging.
-   A UI existente possui login/cadastro Google, não cadastro por senha.
-   O fluxo OAuth recebido por e-mail não pode ser declarado validado assim.
-   `mailer_autoconfirm=false`; não foi alterada configuração de Auth/OAuth.
-3. Destinatário controlado e autorização específica para o primeiro envio
-   ainda precisam ser fornecidos no momento do smoke, após resolver 1–2.
+1. O browser conectado retorna **You Need Access** ao acessar o domínio staging;
+   a conta Vercel da sessão não possui acesso ao TARGET. O bloqueio ocorre
+   antes do login Google da aplicação, não no callback. Necessário login
+   Vercel autorizado no browser, mantendo Deployment Protection.
+2. Tracking/link rewriting da Brevo ainda não comprovados OFF. SMTP atual
+   PASS após revisão manual das credenciais; flag de tracking false preservada,
+   delivery OFF. Autorização do remetente não comprovada por verify.
+3. Google provider está **ON** na revalidação atual; `mailer_autoconfirm=false`.
+   OAuth browser/callback/email confirmado/redirect do convite ainda não
+   validados. Identidade Google controlada de teste foi solicitada ao usuário;
+   nenhuma conta pessoal/profissional foi usada por suposição.
+4. Destinatário controlado e autorização específica para o primeiro envio
+   ainda precisam ser fornecidos depois de resolver os gates técnicos.
 
 Não solicitar confirmação de envio como se estes pré-requisitos estivessem
-atendidos. Nenhum smoke externo, recebimento ou comportamento do provider
+atendidos. Nenhum smoke externo, recebimento ou comportamento de tracking do provider
 é declarado PASS. Não iniciar Fase 3/pacientes compartilhados.
 
 ## Isolamento e gates
@@ -227,6 +229,90 @@ Sem credenciais do transporte dedicado ou cópia de secrets de produção.
 
 ## Cleanup e próximo passo
 
+### Revalidação atual após revisão manual — referência `9f5decc`
+
+`.env.local` ignorado pelo Git e não rastreado, confirmado antes das operações.
+Presença PASS das seis variáveis SMTP e das seis referências
+`GOOGLE_AUTH_STAGING_*`, sem exibir valores. Formato SMTP esperado e URLs
+Google staging PASS. Referência local GOOGLE_AUTH_STAGING_ENABLED não está
+true; não foi alterada nem utilizada como estado autoritativo do provider.
+
+Somente `CLINIC_INVITATION_SMTP_USER` divergia da configuração Vercel anterior;
+atualizado a partir do arquivo local, exclusivamente no projeto staging.
+As demais variáveis SMTP já correspondiam ao arquivo. Total37 env vars,
+delivery/billing OFF, tracking false preservado. Google Client Secret não
+propagado à Vercel nem a variável VITE_. Não consultadas credenciais de produção.
+Relitura individual das env vars PASS sem stdout dos valores.
+
+Redeploy oficial do commit `9f5decc`:
+`dpl_4K1rJgZptonprdaGm4ATUeRi99Kb`, READY, mesmo Project ID staging existente,
+TARGET e branch `feat/clinicas`. Ambiente Vercel `production` aqui corresponde
+ao deployment da branch de produção **do projeto staging**, não à produção
+do aplicativo. APP_ENV/VITE_APP_ENV staging, URL pública staging e Supabase
+`hwkdwinfckmjoriqxbjk` revalidados. Health HTTPS via `vercel curl` PASS tanto
+na URL do deployment quanto no domínio customizado: HTTP200 e
+`{"status":"ok"}` exato, não HTML de autenticação.
+
+SMTP com opções equivalentes às do sender existente, sem mudar código:
+
+- Provider: Brevo configured, SMTP key dedicada fornecida pelo usuário presente.
+- DNS, connection, STARTTLS, certificate: PASS; TLS1.3 com certificado validado.
+- `transporter.verify()` / authentication: **PASS**, uma tentativa AUTH.
+- Brevo sender: **NOT VERIFIED**; formato PASS, autorização não demonstrada
+  por verify e nenhum envio executado para tentar prová-la.
+- Tracking/link rewriting: **PENDING**, flag false preservada; nenhuma alteração
+  global da Brevo. Anonymous Tracking não equivale a OFF conforme referência
+  oficial acima. Necessária garantia por mensagem/integração que não impacte
+  transacionais de produção; não implementado header sem documentação oficial.
+- E-mails externos: **0**; `sendMail()` não executado.
+
+A falha EAUTH/535 registrada na seção histórica abaixo **não persiste** nesta
+tentativa. Não assumir que nova SMTP key isola tracking ou autentica o remetente.
+
+Supabase Auth autoritativo revalidado: Google provider **ON**, Client ID
+corresponde à referência local, Site URL staging correto, redirect exato
+`/painel/convite-clinica` permitido. Wildcard staging já existente permaneceu
+inalterado; não aberta nova permissão. mailer_autoconfirm false preservado.
+Nenhum novo OAuth Client criado, nenhum secret rotacionado, nenhuma alteração
+na configuração Auth pelo agente. A comparação de secret não foi usada como
+prova: leitura da configuração não demonstra funcionamento do OAuth browser.
+O código usa retorno intermediário `/login?next=%2Fpainel%2Fconvite-clinica`,
+e depois a rota segura; Client ID/Secret não foram expostos.
+
+Browser real conectado (Edge): acesso a `/login?next=...` no domínio staging
+retornou **You Need Access** da Vercel, antes de renderizar a aplicação.
+Não solicitado acesso por botão, não removida proteção, não criada exceção
+pública nem bypass persistente. Somente esse browser está conectado.
+Segundo a [documentação Vercel](https://vercel.com/docs/deployment-protection/methods-to-bypass-deployment-protection),
+há métodos oficiais para automação/compartilhamento; não foram criadas novas
+credenciais de bypass nem enfraquecida proteção para substituir o login humano.
+A alternativa mínima escolhida é entrar no browser com a conta Vercel já
+autorizada para o TARGET, sem mudar permissões. Aba mantida para essa ação.
+Solicitada também identidade Google controlada de teste, sem senha.
+
+OAuth browser: **BLOCKED / gate não PASS**. Callback, return staging,
+professional via trigger, email confirmado e invite OAuth redirect:
+**PENDING — não executados**, não falha comprovada do provider Google.
+Nenhum usuário/convite criado, nenhum token de convite gerado ou transportado,
+nenhum email_confirmed_at editado. Não houve teste fragment/handoff/OAuth real
+nesta retomada; testes mock existentes não substituem esse gate.
+
+Testes reexecutados: environment-isolation PASS, clinic-invitations PASS,
+`npm test` completo PASS, lint PASS, build PASS; warning preexistente de
+chunks >500kB. Varredura da build: SMTP USER/PASS e Google Client Secret ausentes.
+Nenhuma alteração funcional/schema/migration/build web/Android.
+`git diff --check` PASS; alteração e publicação somente documentais em
+`feat/clinicas`, sem merge em main.
+Cleanup somente leitura PASS: users/professionals/organizations/memberships/
+invitations/deliveries/handoffs/audit todos zero. Global clinic gate false,
+delivery/billing false; feature não foi habilitada temporariamente.
+Supabase produção, Vercel produção, key SMTP produção, Google OAuth produção,
+Stripe, DNS, main e patients/evolutions: **NÃO ALTERADOS** pelo agente.
+Configuração global Brevo **NÃO ALTERADA**. Primeiro envio externo continua
+sem autorização; Fase3 não iniciada. Retomar OAuth somente após acesso Vercel
+no browser e definição da conta Google controlada, sem alterar infraestrutura
+de produção nem enviar e-mail.
+
 ### Configuração SMTP dedicada — retomada após `df25ae6`
 
 Antes da configuração, `git check-ignore .env.local` PASS e
@@ -355,7 +441,8 @@ invitations=0, deliveries=0, handoffs=0, audit=0. Remoção limitada aos UUIDs
 criados nesta execução, com helper staging de audit; sem limpeza histórica.
 Gate global false, entrega false e billing false. E-mails externos: **0**.
 
-Resolver provider dedicado/tracking e Auth Google staging. Depois revalidar
+Resolver garantia de tracking/rewrite, acesso Vercel no browser e smoke OAuth
+Google staging (provider já ON, SMTP verify já PASS). Depois revalidar
 todos os gates técnicos/runtime, informar destinatário controlado, provider,
 convite sintético e cleanup; parar para autorização explícita de UM envio.
 Somente depois validar recebimento/link sem tracking, handoff/browser/login,
