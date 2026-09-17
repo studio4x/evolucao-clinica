@@ -48,11 +48,8 @@ export function resolveClinicOrganizations(rows: any[]) {
 }
 
 export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDeps) {
-  const isDiagnosticRequest = (req: ClinicRequest) =>
-    deps.appEnv === "staging" && req.headers["x-phase-2c-diagnostic"] === "phase2c-context-matrix-20260917";
-
   app.post("/api/clinic/contexts/diagnostic-matrix", deps.requireAuth, async (req: ClinicRequest, res: ClinicResponse) => {
-    if (!isDiagnosticRequest(req)) {
+    if (deps.appEnv !== "staging" || req.headers["x-phase-2c-diagnostic"] !== "phase2c-context-matrix-20260917") {
       return res.status(404).json({ ok: false, error: "not_found" });
     }
 
@@ -117,7 +114,7 @@ export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDe
     res.setHeader("Cache-Control", "private, no-store");
     res.setHeader("Vary", "Authorization");
 
-    if (!deps.clinicFeatureEnabled && !isDiagnosticRequest(req)) {
+    if (!deps.clinicFeatureEnabled) {
       return res.status(503).json({ ok: false, error: "feature_unavailable" });
     }
 
