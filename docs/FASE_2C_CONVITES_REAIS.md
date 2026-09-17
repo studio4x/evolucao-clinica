@@ -1,28 +1,29 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data inicial: 2026-09-16. Retomada: 2026-09-17. Branch: `feat/clinicas`.
-Referência inicial: `2c5de70`; referência da retomada atual: `9f5decc`.
+Referência inicial: `2c5de70`; referência da retomada atual: `be17fbb`.
 Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
-**FASE 2C BLOQUEADA — DEPLOYMENT PROTECTION** para smoke browser/externo.
+**FASE 2C BLOQUEADA — GOOGLE AUTH STAGING** para smoke browser/externo.
 Implementação e smoke técnico
 com transporte mock concluídos; nenhum e-mail externo enviado.
 
 Bloqueios confirmados, não hipóteses:
 
-1. O browser conectado retorna **You Need Access** ao acessar o domínio staging;
-   a conta Vercel da sessão não possui acesso ao TARGET. O bloqueio ocorre
-   antes do login Google da aplicação, não no callback. Necessário login
-   Vercel autorizado no browser, mantendo Deployment Protection.
+1. Deployment Protection já atravessada pelo login Vercel manual autorizado;
+   a aplicação carrega no Edge e **You Need Access não aparece mais**.
+   O login Google da aplicação está bloqueado pelo gate público
+   `VITE_GOOGLE_INTEGRATIONS_ENABLED=false`, antes de abrir OAuth.
+   `GOOGLE_INTEGRATIONS_ENABLED=false` também permanece no staging.
 2. Tracking/link rewriting da Brevo ainda não comprovados OFF. SMTP atual
    PASS após revisão manual das credenciais; flag de tracking false preservada,
    delivery OFF. Autorização do remetente não comprovada por verify.
 3. Google provider está **ON** na revalidação atual; `mailer_autoconfirm=false`.
    OAuth browser/callback/email confirmado/redirect do convite ainda não
-   validados. Identidade Google controlada de teste foi solicitada ao usuário;
-   nenhuma conta pessoal/profissional foi usada por suposição.
+   validados. Não chegou a aparecer escolha de conta Google nesta tentativa;
+   nenhuma conta pessoal/profissional foi selecionada pelo agente.
 4. Destinatário controlado e autorização específica para o primeiro envio
    ainda precisam ser fornecidos depois de resolver os gates técnicos.
 
@@ -228,6 +229,62 @@ foram mantidas; apenas os dois gates false explícitos adicionados (total31).
 Sem credenciais do transporte dedicado ou cópia de secrets de produção.
 
 ## Cleanup e próximo passo
+
+### Retomada OAuth após acesso Vercel manual — referência `be17fbb`
+
+Branch feat/clinicas, HEAD be17fbb e worktree limpo no início. A mesma aba
+Edge estava na URL autorizada `/login?next=%2Fpainel%2Fconvite-clinica`:
+aplicação real carregada, banner AMBIENTE DE HOMOLOGAÇÃO, botão Acessar com
+Google e build v1.10.878. **You Need Access ausente**. Não recarregada a aba
+desnecessariamente; não alterada Deployment Protection, não criado bypass,
+não tornada pública nenhuma URL staging.
+
+Baseline somente leitura antes do login: users/professionals/organizations/
+memberships/invitations/deliveries/handoffs/audit zero e gate global false.
+Acionados Acessar com Google e slides do modal de segurança existente,
+depois Continuar para o Google. O browser permaneceu no login staging,
+com um alerta JavaScript ativo; não houve tela de escolha de conta.
+O controle da aba sofreu timeout ao tentar tratar o alerta e foi recuperado
+sem mecanismo alternativo de automação. Não coletadas senhas/cookies/tokens
+de sessão, não registrada conta pessoal, não repetido o login.
+
+Causa do bloqueio no fluxo da aplicação: `requestGoogleOAuth()` executa
+`assertPublicEffectEnabled('google')` **antes** de signInWithOAuth e de
+armazenar escopos pendentes. API oficial Vercel confirma
+`VITE_GOOGLE_INTEGRATIONS_ENABLED=false` e `GOOGLE_INTEGRATIONS_ENABLED=false`
+no projeto staging. A condição lança o erro definido no código:
+`Integração google desabilitada neste ambiente.`
+Essa mensagem é determinada pelo guard; o texto do alerta/log não foi
+extraído do browser após o timeout. Não atribuir o bloqueio a Google Cloud,
+Client Secret, callback ou Vercel sem evidência desses passos.
+
+Supabase Auth revalidado separadamente: Google provider ON e
+mailer_autoconfirm false. Provider ON não sobrepõe o gate frontend.
+Outro limite relevante para a próxima decisão: o fluxo existente usa o
+conjunto login com escopo `drive.file`, não somente autenticação básica.
+Não habilitado o gate Google amplo nem mudado esse contrato funcional
+automaticamente para contornar o isolamento. É necessário decidir/autorizar
+a configuração temporária staging ou o isolamento entre OAuth de login e
+integrações Drive/Calendar antes de retomar o browser. Não implementado fix.
+
+Gates desta tentativa: aplicação/Deployment Protection PASS; login Google
+**BLOCKED antes de OAuth**; callback Supabase, sessão, auth.users.email,
+email_confirmed_at e retorno seguro `/painel/convite-clinica` **PENDING**.
+Não é prova de falha do provider OAuth, mas impede validar o fluxo real pedido.
+Fixture fragment/handoff/OAuth **não iniciado**, pois depende do OAuth básico
+PASS. Não gerado token de convite; ausência de vazamento de token nos canais
+pedidos não foi declarada como PASS runtime sem esse teste.
+
+Cleanup relido após tentativa: todos os oito contadores permanecem zero.
+Nenhum usuário/fixture criado, nenhum dado removido, nenhum email_confirmed_at
+editado. Delivery/billing/global clinic gate false; feature frontend/backend
+também false. Nenhuma alteração em env vars, schema, Auth ou código nesta
+retomada. E-mails externos zero; tracking/link rewriting permanece PENDING,
+sem alteração global Brevo. SMTP PASS e testes PASS anteriores são históricos
+registrados, não reexecutados nesta tentativa somente browser/leitura/docs.
+`git diff --check` PASS na atualização documental. Produção, Stripe, DNS,
+main, patients/evolutions e Fase3 intocados. Estado atual:
+**FASE 2C BLOQUEADA — GOOGLE AUTH STAGING**.
 
 ### Revalidação atual após revisão manual — referência `9f5decc`
 
@@ -441,8 +498,9 @@ invitations=0, deliveries=0, handoffs=0, audit=0. Remoção limitada aos UUIDs
 criados nesta execução, com helper staging de audit; sem limpeza histórica.
 Gate global false, entrega false e billing false. E-mails externos: **0**.
 
-Resolver garantia de tracking/rewrite, acesso Vercel no browser e smoke OAuth
-Google staging (provider já ON, SMTP verify já PASS). Depois revalidar
+Resolver garantia de tracking/rewrite e gate do login Google staging para
+o smoke OAuth (acesso Vercel resolvido, provider ON, SMTP verify PASS).
+Depois revalidar
 todos os gates técnicos/runtime, informar destinatário controlado, provider,
 convite sintético e cleanup; parar para autorização explícita de UM envio.
 Somente depois validar recebimento/link sem tracking, handoff/browser/login,
