@@ -81,6 +81,10 @@
       "destination": "/api/campaign-dashboard"
     },
     {
+      "source": "/api/support-ai",
+      "destination": "/api/support-ai"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.ts"
     },

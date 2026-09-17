@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, Paperclip, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { createSupportTicket, SupportTicketCategory } from '../../services/support';
+import { processSupportAiEvent } from '../../services/supportAi';
 import { hasActivePaidAccess, hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
 
 interface SupportTicketModalProps {
@@ -56,9 +57,12 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
     try {
       setLoading(true);
       setError('');
-      await createSupportTicket(subject, category, description, file);
+      const ticket = await createSupportTicket(subject, category, description, file);
+
+      void processSupportAiEvent(ticket.id, 'create').catch((aiError) => {
+        console.error('[SupportAI] Falha ao processar abertura do chamado:', aiError);
+      });
       
-      // Reset form
       setSubject('');
       setCategory('general');
       setDescription('');
@@ -74,7 +78,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
     }
   };
 
-  // Dynamic SLA Message based on the user's subscription plan
   let slaMessage = (
     <div className="bg-gray-50 text-gray-700 p-4 rounded-2xl border border-gray-200 text-xs leading-relaxed">
       <strong>Prazo padrão de resposta:</strong> até 48 horas úteis (Segunda a Sexta, das 08:00 às 18:00).
@@ -107,8 +110,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm transition-opacity">
       <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh] animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Header */}
         <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between bg-brand-primary text-white">
           <div>
             <h3 className="text-lg font-bold font-display">Novo Chamado</h3>
@@ -123,7 +124,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4">
           {error && (
             <div className="bg-rose-50 text-rose-700 p-3.5 rounded-2xl border border-rose-100 text-xs flex items-center space-x-2">
@@ -134,7 +134,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
 
           {slaMessage}
 
-          {/* Subject */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-brand-text uppercase tracking-wide">Assunto</label>
             <input
@@ -148,7 +147,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
             />
           </div>
 
-          {/* Category */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-brand-text uppercase tracking-wide">Categoria</label>
             <select
@@ -164,7 +162,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
             </select>
           </div>
 
-          {/* Message/Description */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-brand-text uppercase tracking-wide">Como podemos ajudar?</label>
             <textarea
@@ -178,7 +175,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
             />
           </div>
 
-          {/* File Attachment */}
           <div className="space-y-2">
             <label className="text-xs font-semibold text-brand-text uppercase tracking-wide block">Anexo (opcional)</label>
             <div className="flex items-center space-x-2">
@@ -215,7 +211,6 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
           </div>
         </form>
 
-        {/* Footer */}
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end space-x-3">
           <button
             type="button"
