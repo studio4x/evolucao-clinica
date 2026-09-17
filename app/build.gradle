@@ -138,7 +138,7 @@ task generateShorcutsFile {
             twaManifest.shortcuts.eachWithIndex { s, i ->
                 'shortcut'(
                         'android:shortcutId': 'shortcut' + i,
-                        'android:enabled': 'true',
+                        'android:enabled': true,
                         'android:icon': '@drawable/' + s.icon,
                         'android:shortcutShortLabel': '@string/shortcut_short_name_' + i,
                         'android:shortcutLongLabel': '@string/shortcut_name_' + i) {
@@ -149,6 +149,7 @@ task generateShorcutsFile {
                             'android:data': s.url)
                     'categories'('android:name': 'android.intent.category.LAUNCHER')
                 }
+            }
         }
     shortcutsFile.text = shortcutsXml.toString() + '\n'
 }
