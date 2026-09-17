@@ -26,7 +26,7 @@ type HydrationRequest = { userId: string; generation: number; promise: Promise<v
 let inFlight: HydrationRequest | null = null;
 const revalidationInFlight = new Map<string, Promise<void>>();
 const generationByUser = new Map<string, number>();
-const clinic2cDiag = (checkpoint: string, details: Record<string, unknown>) => console.info(`[Clinic2CDiag] ${checkpoint} ${JSON.stringify(details)}`);
+const clinic2cDiag = (checkpoint: string, details: Record<string, unknown>) => console.info("[Clinic2CDiag]", checkpoint, details);
 const storeUserClassification = (currentUserId: string | null, userId: string) => currentUserId === null ? "null" : currentUserId === userId ? "same" : "different";
 
 function currentGeneration(userId: string) {
