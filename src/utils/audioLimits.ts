@@ -6,7 +6,7 @@ export const AUDIO_LIMITS = {
     maxFileBytes: 20 * 1024 * 1024,
   },
   yearly: {
-    maxDurationSeconds: 50 * 60,
+    maxDurationSeconds: 60 * 60,
     maxFileBytes: 60 * 1024 * 1024,
   },
 } as const;

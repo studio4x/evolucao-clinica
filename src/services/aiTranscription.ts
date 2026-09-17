@@ -98,7 +98,7 @@ const isHardLimitError = (message: string): boolean => {
     normalized.includes('(http 400)') ||
     normalized.includes('(http 403)') ||
     normalized.includes('limite máximo de 20 minutos') ||
-    normalized.includes('limite máximo de 50 minutos') ||
+    normalized.includes('limite máximo de 60 minutos') ||
     normalized.includes('tamanho máximo permitido de 20 mb') ||
     normalized.includes('arquivo de áudio pode ter no máximo 20 mb') ||
     normalized.includes('arquivo de áudio pode ter no máximo 60 mb') ||

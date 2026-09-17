@@ -79,7 +79,7 @@ export default function TermsOfService() {
               de áudio está sujeita a limites técnicos e comerciais.
             </p>
             <ul className="list-disc pl-5 space-y-1 text-sm md:text-base">
-              <li>Cada evolução aceita até 20 minutos de áudio no Trial e plano mensal, ou até 50 minutos no plano anual, conforme o limite de arquivo aplicável.</li>
+              <li>Cada evolução aceita até 20 minutos de áudio no Trial e plano mensal, ou até 60 minutos no plano anual, conforme o limite de arquivo aplicável.</li>
               <li>O uso da rota de transcrição pode ser limitado a até 5 solicitações por minuto por profissional autenticado.</li>
               <li>As transcrições de áudio estão sujeitas a política de uso justo de até 1.200 minutos por mês por profissional, salvo contratação de capacidade adicional.</li>
               <li>Ao atingir o limite mensal vigente, novas transcrições poderão ser bloqueadas até a renovação do ciclo ou aquisição de pacote complementar.</li>
