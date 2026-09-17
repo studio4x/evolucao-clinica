@@ -1535,3 +1535,82 @@ build foram revertidos. O deploy final sem instrumentação ficou `READY`, com
 Estado: **CHECKPOINT PÓS-ACEITE IDENTIFICADO — FASE 2C AINDA BLOQUEADA**.
 Nenhuma correção funcional foi aplicada. Produção, `main`, Stripe, Brevo,
 DNS, Google Drive, schema e RLS permaneceram intactos.
+
+### Auditoria server-side final da resolução de contexto — 2026-09-17
+
+Esta tentativa permaneceu exclusivamente diagnóstica. A sessão Edge do
+profissional controlado não estava autenticada ao retomar a execução e havia
+mais de um profissional com status `pending`; por isso a matriz não foi
+executada com um JWT substituto ou com outro perfil.
+
+Estado administrativo já comprovado na fixture anterior:
+
+```text
+ADMIN_MEMBERSHIP_EXISTS=true
+ADMIN_MEMBERSHIP_STATUS_ACTIVE=true
+ADMIN_CLINICAL_ACCESS=true
+ADMIN_ORGANIZATION_EXISTS=true
+ADMIN_ORGANIZATION_NOT_ARCHIVED=true
+ADMIN_ENTITLEMENT_MODE=full
+```
+
+Matriz JWT-scoped desta tentativa:
+
+```text
+A_STATUS=not_executed
+A_ERROR_CODE=null
+A_ROWS_COUNT=null
+A_EXPECTED_MEMBERSHIP_FOUND=not_tested
+
+B_STATUS=not_executed
+B_ERROR_CODE=null
+B_ROWS_COUNT=null
+B_EXPECTED_MEMBERSHIP_FOUND=not_tested
+B_NESTED_ORGANIZATION_PRESENT=not_tested
+
+C_STATUS=not_executed
+C_ERROR_CODE=null
+C_ROWS_COUNT=null
+C_EXPECTED_ORGANIZATION_FOUND=not_tested
+
+D_NOT_EXECUTED_REASON=JWT da conta controlada indisponivel no navegador; executar A/B/C ou criar wrapper alteraria o escopo de seguranca
+```
+
+Inspeção somente leitura da definição efetiva no staging:
+
+```text
+RLS_ORGANIZATION_MEMBERSHIPS=true
+RLS_ORGANIZATIONS=true
+MEMBERSHIPS_SELECT_GRANT=true
+ORGANIZATIONS_SELECT_GRANT=true
+HELPER_CAN_ACCESS_EXECUTE_GRANT=true
+HELPER_FEATURE_EXECUTE_GRANT=true
+HELPER_ENTITLEMENT_EXECUTE_GRANT=false
+FK_RELATION=organization_memberships.organization_id -> organizations.id (organization_memberships_organization_id_fkey)
+FK_AMBIGUOUS=false
+```
+
+Os três helpers são `SECURITY DEFINER`, proprietários `postgres`, `STABLE` e
+usam `search_path=pg_catalog,private,public`. A definição efetiva de
+`can_access_organization_workspace` exige `auth.uid()`, feature global e da
+organização, entitlement `full/restricted` e membership `active`. A definição
+efetiva de `is_clinic_feature_enabled` exige o gate global e a flag `clinic`.
+`organization_entitlement_mode` consulta a organização e a assinatura; seu
+`EXECUTE` não é concedido diretamente a `authenticated`, mas é usado pelos
+helpers `SECURITY DEFINER`.
+
+```text
+ENDPOINT_STATUS=not_executed_in_this_attempt
+ENDPOINT_ERROR=null
+ENDPOINT_ORGANIZATIONS_COUNT=null
+ENDPOINT_EXPECTED_ORG_FOUND=not_tested
+ROOT_CAUSE_LAYER=OTHER
+ROOT_CAUSE=O primeiro ponto observado na execução controlada anterior foi F4: o endpoint retornou HTTP 200 com organizations_count=0 apesar de invitation accepted, membership active e clinical_access_enabled=true. A matriz A/B/C necessária para separar membership RLS, visibilidade da organization, relacionamento PostgREST e normalização não pôde ser repetida sem o JWT exato.
+MINIMAL_PATCH_RECOMMENDED=Repetir A/B/C com a sessão controlada autenticada; somente então separar membership sem join, organization direta e nested join antes de escolher correção no resolver.
+NEEDS_BACKEND_CHANGE=undetermined
+NEEDS_RLS_CHANGE=undetermined
+NEEDS_MIGRATION=false
+```
+
+A fixture desta tentativa foi removida e o gate global permaneceu `false`.
+Nenhum helper, policy, grant, migration, resolver ou integração foi alterado.
