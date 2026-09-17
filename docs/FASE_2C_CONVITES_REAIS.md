@@ -1285,3 +1285,35 @@ login preservando o destino `/painel/convite-clinica`, sem aceitar o convite e
 sem alterar o `professional.status`. O botão também permanece disponível quando
 o convite não está carregado, permitindo trocar de conta sem aceitar nada,
 mesmo quando não há sessão ativa. A versão web desta correção é `v1.10.885`.
+
+### Correção de recuperação pós-aceite e entrada após novo login
+
+O convite do smoke foi aceito pelo fluxo normal. A consulta somente leitura
+confirmou membership profissional ativa, acesso clínico habilitado e perfil
+individual ainda `pending`. O handoff consumido não pode ser usado como prova
+de um convite inválido nem exige gerar outra invitation.
+
+Foi corrigida uma falha na preparação anterior da fixture: o destinatário havia
+sido colocado como owner da organização sintética. Essa fixture foi removida e
+recriada com owner sintético separado e zero memberships do destinatário antes
+do aceite; o convite clínico foi emitido pela RPC oficial com provider `mock`,
+sem envio de e-mail. A recusa HTTP 403 daquela fixture não era falha de OAuth.
+
+Correções frontend na versão web `v1.10.886`:
+
+- `refreshAfterMutation` também inicia uma leitura fresca quando o store ainda
+  não foi inicializado; mantém o bloqueio de refresh para outro usuário.
+- A tela de perfil pending oferece entrada explícita nas clínicas retornadas
+  pelo servidor. A seleção aguarda nova leitura autoritativa e valida sessão,
+  usuário do store, status e presença da organização antes de navegar.
+- A tela de convite sem handoff oferece as mesmas entradas autorizadas.
+- Quando o POST de aceite já teve sucesso, uma falha posterior de contexto
+  preserva o recibo de aceite e oferece retry somente do contexto; não repete
+  o POST nem altera manualmente membership/invitation.
+- O ProtectedRoute, a aprovação individual, as ACL/RLS e as regras de billing
+  continuam sem alterações. Uma conta pending não ganha acesso pessoal.
+
+Os testes cobrem store não inicializado, troca de usuário, seleção forjada,
+novo login com seleção explícita e revogação do vínculo na leitura fresca,
+além das corridas pós-mutation já existentes. A validação runtime desta
+correção será registrada abaixo após deployment no staging.

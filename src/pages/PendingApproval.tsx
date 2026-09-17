@@ -7,6 +7,7 @@ import { AppVersion } from '../components/layout/AppVersion';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
+import { ClinicAccessOptions } from '../components/clinic/ClinicAccessOptions';
 
 export default function PendingApproval() {
   const { user, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, setUser, setProfileInfo } = useAuthStore();
@@ -173,6 +174,8 @@ export default function PendingApproval() {
                 <span className="text-brand-text-muted">({user?.email})</span>
               </div>
             </div>
+
+            {!isInactive && profileStatus === 'pending' && <ClinicAccessOptions />}
 
             <button
               onClick={handleLogout}

@@ -155,7 +155,8 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
   },
 
   refreshAfterMutation: async (userId, accessToken) => {
-    if (get().userId !== userId) return;
+    const currentUserId = get().userId;
+    if (currentUserId !== null && currentUserId !== userId) return;
     advanceGeneration(userId);
     revalidationInFlight.delete(userId);
     await get().hydrateForUser(userId, accessToken);

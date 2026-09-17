@@ -32,9 +32,6 @@ assert.match(layoutSource, /md:hidden/);
 assert.match(selectorSource, /aria-label="Selecionar contexto"/);
 assert.match(storeSource, /refreshAfterMutation/);
 assert.match(storeSource, /currentGeneration\(userId\) !== generation/);
-assert.ok(acceptSource.indexOf('invitationRequest("/accept"') < acceptSource.indexOf("refreshAfterMutation"));
-assert.ok(acceptSource.indexOf("refreshAfterMutation") < acceptSource.indexOf("selectAcceptedClinicContext(refreshed"));
-assert.ok(acceptSource.indexOf("selectAcceptedClinicContext(refreshed") < acceptSource.indexOf('navigate("/painel/clinica"'));
 assert.match(acceptSource, /supabase\.auth\.signOut\(\)/);
 assert.match(acceptSource, /Sair e acessar com outra conta/);
 
@@ -270,4 +267,46 @@ assert.deepEqual(useClinicContextStore.getState().organizations.map(({ id }) => 
 useClinicContextStore.getState().reset();
 assert.equal(useClinicContextStore.getState().userId, null);
 assert.equal(useClinicContextStore.getState().organizations.length, 0);
+
+// The accept route can finish before global auth hydration initializes this
+// store. A mutation refresh must still fetch and authorize the new membership.
+let coldRefreshRequests = 0;
+(globalThis as any).fetch = async () => {
+  coldRefreshRequests += 1;
+  return new Response(JSON.stringify({ personal: { available: true }, organizations: [{
+    id: "org-cold", name: "Clínica Cold", tradeName: null, operationalStatus: "active",
+    membershipRole: "professional", clinicalAccessEnabled: true,
+  }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+};
+await useClinicContextStore.getState().refreshAfterMutation("user-cold", "token-cold");
+assert.equal(coldRefreshRequests, 1);
+state = useClinicContextStore.getState();
+assert.equal(state.userId, "user-cold");
+assert.equal(state.status, "ready");
+selectAcceptedClinicContext(state, "org-cold");
+assert.deepEqual(useClinicContextStore.getState().activeContext, { type: "organization", organizationId: "org-cold" });
+
+// A refresh for an earlier account cannot replace the current account's list.
+await useClinicContextStore.getState().refreshAfterMutation("user-previous", "token-previous");
+assert.equal(coldRefreshRequests, 1);
+assert.equal(useClinicContextStore.getState().userId, "user-cold");
+assert.throws(() => selectAcceptedClinicContext(useClinicContextStore.getState(), "org-forged"), /context_unavailable/);
+
+// A new login does not inherit a selection; explicit, server-validated entry
+// can select the clinic again without resubmitting an already accepted invite.
+useClinicContextStore.getState().reset();
+await useClinicContextStore.getState().hydrateForUser("user-cold", "token-cold");
+assert.deepEqual(useClinicContextStore.getState().activeContext, { type: "personal" });
+await useClinicContextStore.getState().refreshAfterMutation("user-cold", "token-cold");
+selectAcceptedClinicContext(useClinicContextStore.getState(), "org-cold");
+assert.deepEqual(useClinicContextStore.getState().activeContext, { type: "organization", organizationId: "org-cold" });
+
+// Removed membership: the next authoritative read revokes the old selection.
+(globalThis as any).fetch = async () => new Response(JSON.stringify({ personal: { available: true }, organizations: [] }), {
+  status: 200, headers: { "Content-Type": "application/json" },
+});
+await useClinicContextStore.getState().refreshAfterMutation("user-cold", "token-cold");
+assert.throws(() => selectAcceptedClinicContext(useClinicContextStore.getState(), "org-cold"), /context_unavailable/);
+assert.deepEqual(useClinicContextStore.getState().activeContext, { type: "personal" });
+useClinicContextStore.getState().reset();
 console.log("clinic context tests: ok");
