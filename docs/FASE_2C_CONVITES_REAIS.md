@@ -1407,3 +1407,54 @@ Não houve alteração de código, schema, RLS, produção, Stripe, DNS, Brevo,
 Google Drive ou Android nesta tentativa. O próximo passo é investigar a
 captura da GET `/api/clinic/contexts` e somente então repetir um novo smoke;
 este resultado não autoriza envio real de e-mail.
+
+### Diagnóstico contexts pós-aceite — 2026-09-17 — commit `7c208ed`
+
+Execução exclusivamente no staging, com provider `mock`, sem e-mail real e
+sem alteração funcional. O deployment de diagnóstico
+`dpl_28BBMd64R7Wg2dKYo7eKrr4G48gB` ficou `READY` na branch `feat/clinicas`.
+
+Campos obrigatórios do diagnóstico:
+
+- `AUTO_GET`: **não** — os logs de runtime registraram o POST de aceite com
+  status `200`, mas não registraram uma requisição automática a
+  `/api/clinic/contexts` após o aceite.
+- `AUTO_GET_STATUS`: **não aplicável**.
+- `AUTO_GET_ERROR`: **não aplicável**.
+- `AUTO_GET_ORG_COUNT`: **não aplicável**.
+- `AUTO_GET_EXPECTED_ORG`: **não comprovado**.
+- `MANUAL_GET_STATUS`: `401`.
+- `MANUAL_GET_ERROR`: `authentication_required` / `Token de autorização
+  ausente`. A chamada manual foi feita pela navegação do navegador e não
+  carregou o Bearer da sessão; nenhum token foi extraído ou registrado.
+- `MANUAL_GET_ORG_COUNT`: `null`.
+- `MANUAL_GET_EXPECTED_ORG`: `false`.
+- `POST_ACCEPT_STATUS`: `200`.
+- `ORDEM_ACCEPT_GET`: POST concluído; nenhuma GET automática observada. A
+  chamada manual 401 ocorreu posteriormente e não substitui a automática.
+- `PRIMEIRO_PONTO_DE_FALHA`: após o aceite, antes de uma GET automática de
+  `/api/clinic/contexts`; a UI exibiu “Seu convite já foi aceito, mas não foi
+  possível carregar a clínica”.
+- `CLASSIFICAÇÃO`: **não conclusiva entre A–F**. A condição AUTO_GET=false foi
+  comprovada, mas a condição exigida para A (MANUAL_GET=200 com organização)
+  não foi obtida porque a chamada manual não estava autenticada.
+- `CAUSA_CONFIRMADA`: o frontend não produziu uma chamada automática de
+  contexts observável imediatamente após o aceite. Não foi possível afirmar,
+  nesta rodada, se `refreshAfterMutation` não foi alcançado ou se falhou antes
+  de emitir a requisição.
+- `PRÓXIMA_CORREÇÃO_PROVÁVEL`: instrumentar/capturar o caminho de
+  `refreshAfterMutation` e a sessão autenticada no próximo diagnóstico; não
+  aplicar patch sem essa evidência.
+
+Estado: **DIAGNÓSTICO CONTEXTS CAPTURADO — FASE 2C AINDA BLOQUEADA**.
+
+Banco após o aceite: invitation `accepted`, membership `active`,
+`clinical_access_enabled=true` e perfil controlado preservado como `pending`.
+Cleanup: **PASS**, sem resíduos da organização, owner Auth sintético,
+invitation, membership, handoff, delivery, subscription, rollout ou auditoria.
+
+Restauração: gate global `false`; quatro flags temporárias de clínica/Google
+`false`; delivery e billing permaneceram `false`. Redeploy final
+`dpl_8kimwJDao5FXaeTiyryyZvxhZ8xf` ficou `READY`, `/api/health` retornou
+`{"status":"ok"}` e `/convite-clinica` voltou a informar `Convites indisponíveis`.
+Produção, `main`, Stripe, Brevo, DNS e Drive permaneceram intactos.
