@@ -2297,7 +2297,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     }
 
     const normalizedMimeType = resolveAudioMimeTypeFromContent(requestedMimeType, audioBuffer);
-    const authoritativeDuration = await getAudioDurationSecondsFromBuffer(audioBuffer);
+    const authoritativeDuration = await getAudioDurationSecondsFromBuffer(audioBuffer, normalizedMimeType);
     if (!authoritativeDuration || !Number.isFinite(authoritativeDuration)) {
       return res.status(400).json({
         code: "AUDIO_DURATION_UNAVAILABLE",

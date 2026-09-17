@@ -17,11 +17,11 @@ wavHeader.writeUInt16LE(16, 34);
 wavHeader.write('data', 36, 'ascii');
 wavHeader.writeUInt32LE(16000 * 2, 40);
 
-const duration = await getAudioDurationSecondsFromBuffer(wavHeader);
+const duration = await getAudioDurationSecondsFromBuffer(wavHeader, 'audio/wav');
 assert.equal(duration, 2);
 
 const serverSource = await readFile(new URL('../server.ts', import.meta.url), 'utf8');
-assert.match(serverSource, /getAudioDurationSecondsFromBuffer\(audioBuffer\)/);
+assert.match(serverSource, /getAudioDurationSecondsFromBuffer\(audioBuffer,\s*normalizedMimeType\)/);
 assert.match(serverSource, /p_duration_seconds: authoritativeAudioDurationSeconds/);
 assert.match(serverSource, /audio_duration_seconds: authoritativeAudioDurationSeconds/);
 assert.doesNotMatch(serverSource, /requestedAudioDurationSeconds/);
