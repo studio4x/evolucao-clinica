@@ -770,3 +770,41 @@ alterados.
 
 Resultado: **FASE 2C BLOQUEADA — GLOBAL CLINIC GATE**. Tracking/link
 rewriting Brevo continua pendente. Fase 3 não iniciada.
+
+### Smoke real pós-patch de contexto — 2026-09-17 — build `v1.10.879`
+
+Execução restrita ao staging, sem alteração em produção, Stripe, Brevo, DNS,
+Drive ou `main`. Os gates temporários foram habilitados somente no projeto
+staging, incluindo o contraparte público `VITE_CLINIC_FEATURE_ENABLED`, e
+restaurados ao final.
+
+- Deployment temporário `dpl_CnCNVjZjxmTJjWzmLh7tWQjTxxsF`: READY;
+  `/api/health` PASS com `{"status":"ok"}`;
+- handoff real: PASS; o convite foi carregado após o fragment exchange e o
+  raw token não foi registrado no relatório;
+- aceite server-side: PASS; convite `accepted`, membership `active`,
+  `clinical_access_enabled=true`, organização ativa e seat convertido;
+- leitura fresca de `/api/clinic/contexts`: **FAIL**; a sessão autenticada
+  recebeu erro de permissão `42501` para a função
+  `can_access_organization_workspace`;
+- organização no contexto: FAIL; por consequência, `selectContext`,
+  `activeContext.type="organization"` e navegação final para
+  `/painel/clinica` não puderam ser confirmados. A UI exibiu o erro genérico
+  após o aceite;
+- nenhum retry manual arbitrário ou novo patch foi aplicado.
+
+Cleanup concluído somente para a fixture desta execução: organização,
+membership, convite, delivery mock, handoff, subscription, feature flag,
+professional e owner sintético ficaram em zero. Nenhum e-mail foi enviado.
+O usuário Google controlado existente não foi removido.
+
+Restauração concluída: global clinic gate `false`; `CLINIC_FEATURE_ENABLED`,
+`VITE_CLINIC_FEATURE_ENABLED`, `VITE_GOOGLE_INTEGRATIONS_ENABLED` e
+`GOOGLE_INTEGRATIONS_ENABLED` `false`; delivery e billing permaneceram
+`false`. Deployment final `dpl_GuCZJxoHX8RPjtkvkY2fX2byst7J`: READY; health do
+deployment e do domínio staging: HTTP 200 com `{"status":"ok"}`.
+
+Resultado desta execução: **FASE 2C BLOQUEADA — CONTEXTO PÓS-ACEITE AINDA
+FALHA**. A pendência é a permissão da função usada pela política RLS de
+workspace; deve ser investigada separadamente antes de novo smoke. Tracking/
+link rewriting Brevo continua pendente. Fase 3 não iniciada.
