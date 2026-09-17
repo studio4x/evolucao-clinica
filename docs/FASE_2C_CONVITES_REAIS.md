@@ -30,6 +30,80 @@ staging existente `prj_Hmm2uRREtw4qOqPf3Lhg78702hlM`, branch `feat/clinicas`.
 API revalida `APP_ENV=staging`, URL Supabase exata e origem
 `https://staging.evolucaoclinica.app.br`. Em produção/development falha fechada.
 
+### Diagnóstico somente leitura — resolução de contexto pós-aceite — 2026-09-17
+
+**Causa raiz provável, confirmada pelo caminho de código:** há uma corrida de
+hidratação no frontend. O bootstrap de autenticação chama
+`hydrateForUser` antes ou durante a entrada no convite. O store mantém uma
+promessa global `inFlight` por usuário e `revalidateForUser` apenas delega para
+`hydrateForUser`; se a primeira consulta ainda estiver pendente, a revalidação
+pós-aceite reutiliza a mesma promessa em vez de iniciar uma leitura nova.
+
+O fluxo de aceite então recebe `organizationId`, chama a revalidação, verifica
+se a organização já apareceu no array e lança `context_unavailable` quando a
+resposta reutilizada ainda representa o estado anterior, sem membership. O
+`catch` de `ClinicInvitationAccept` converte esse erro não mapeado na mensagem
+genérica exibida no browser. Isso explica o aceite backend PASS seguido de erro
+visual/contextual.
+
+Arquivos e pontos relevantes:
+
+- `src/pages/ClinicInvitationAccept.tsx`: aceite, revalidação imediata,
+  verificação por `organizationId` e navegação final;
+- `src/store/clinicContextStore.ts`: deduplicação global `inFlight` e ausência
+  de uma invalidação/força de refetch específica para pós-aceite;
+- `src/App.tsx`: hidratação de contextos durante `INITIAL_SESSION`/`SIGNED_IN`
+  e revalidação em eventos de foreground/pageshow;
+- `server/clinic/clinicContextRoutes.ts`: consulta autenticada de memberships
+  ativas por `professional_id`, com join obrigatório da organização;
+- `src/services/clinicContext.ts`: `cache: no-store`, portanto o indício
+  principal não é cache HTTP, mas deduplicação/estado em memória.
+
+**RLS e entitlement:** as policies de `organization_memberships` e
+`organizations` delegam a `private.can_access_organization_workspace`, que
+exige `auth.uid()`, gate global, feature flag da organização, entitlement
+`full`/`restricted` e membership ativa. A resolução de entitlement também
+valida subscription estrutural e seats. Não há evidência nesta investigação de
+claim de `user_metadata` ou refresh obrigatório de JWT; a consulta usa o Bearer
+token atual e `auth.uid()`. A dependência de entitlement é real e deve ser
+mantida no próximo teste, mas não explica sozinha o padrão observado quando o
+aceite já retornou membership ativa.
+
+**Seleção explícita:** o frontend já usa o `organizationId` retornado pelo
+aceite, mas `selectContext` só persiste a seleção se a organização já estiver
+presente no array hidratado. Não existe seleção por nome nem endpoint separado
+de seleção. O ponto frágil é a disponibilidade da organização no momento da
+segunda leitura.
+
+**Limite da evidência:** não foi feita nova criação de fixture e não houve
+requisição autenticada adicional ao endpoint em staging nesta investigação.
+Assim, a corrida frontend é evidência de código e a causa mais provável; o
+status exato da resposta real de `/api/clinic/contexts` durante o smoke original
+não foi capturado.
+
+**Testes existentes:** `test:clinic-context` cobre transformação, filtros
+locais, persistência e revalidação sequencial; `test:clinic-invitations` cobre
+aceite server-side, concorrência do aceite e isolamento. Nenhum cobre a
+interseção accept → revalidate enquanto uma hidratação anterior está pendente,
+nem a resolução autenticada real de contextos imediatamente após o aceite.
+
+**Correção mínima proposta, não implementada:** tornar a revalidação
+pós-aceite uma leitura nova/forçada após a conclusão da consulta anterior, ou
+invalidar explicitamente a promessa em voo antes de refazer a consulta; depois
+selecionar o `organizationId` retornado somente contra a resposta fresca. O
+aceite server-side e as verificações RLS/entitlement devem permanecer
+autoritativos.
+
+Classificação proposta para o próximo patch: migration **não necessária**;
+alteração de RLS **não indicada**; contrato de API **não precisa mudar**;
+alteração de frontend/store **necessária**; novo smoke real **necessário após
+o patch**. Não foram feitas alterações nesta investigação.
+
+O deployment de restauração `dpl_7ALNQTDj1xxYTm6dwu3Ac34v5UU5` correspondeu
+ao estado funcional anterior. O push documental posterior gerou
+`dpl_7pHMjiVVYwXjebk8jcDiCo2F7vND`, também `READY`, com health oficial PASS;
+essa é a origem da divergência documental de IDs, não uma mudança funcional.
+
 `CLINIC_INVITATION_DELIVERY_ENABLED=false` e `CLINIC_BILLING_ENABLED=false`
 foram explicitados somente no projeto staging. O gate global DB terminou
 `false`. O gate de entrega é separado de billing e do histórico genérico de
