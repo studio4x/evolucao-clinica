@@ -212,7 +212,7 @@ const readShareTargetAuthRecovery = (): ShareTargetAuthRecovery | null => {
 
 export default function ShareTarget() {
   const navigate = useNavigate();
-  const { user, googleAccessToken, googleAccessTokenIssuedAt, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const { user, googleAccessToken, googleAccessTokenIssuedAt, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan } = useAuthStore();
   const authRecoveryRef = useRef(readShareTargetAuthRecovery());
   const [patients, setPatients] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -675,6 +675,9 @@ export default function ShareTarget() {
         audioBlob: audioFile,
         mimeType,
         audioDuration: safeAudioDuration,
+        subscriptionPlan,
+        evolutionId,
+        audioKey: evolutionId,
         onRetry: (attempt, delay, isFallback) => {
           setErrorMessage(`Etapa 2/4: Retentativa IA ${attempt}/3 em ${Math.round(delay/1000)}s...`);
         }

@@ -17,6 +17,7 @@ import { sendNotification } from '../services/notificationHelper';
 import { deferOnboarding, setOnboardingState } from '../utils/onboarding';
 import { classifyOnboardingError } from '../utils/onboardingState';
 import { getAudioDurationFromBlob } from '../utils/audioDuration';
+import { AUDIO_LIMITS, isAudioDurationAllowed, isAudioFileSizeAllowed, type AudioLimitPolicy } from '../utils/audioLimits';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor } from '../components/common/RichTextEditor';
@@ -32,6 +33,7 @@ type AudioEvolutionItem = {
   source: 'recording' | 'upload' | 'draft';
   name: string;
   mimeType: string;
+  audioKey: string;
 };
 
 type EvolutionInputMode = 'text' | 'audio' | 'hybrid';
@@ -208,10 +210,35 @@ export default function NewEvolution() {
     setGoogleAccessToken, 
     isAuthReady,
     subscriptionStatus,
+    subscriptionPlan,
     subscriptionEndsAt,
     profileRole
   } = useAuthStore();
   const hasGoogleSession = Boolean(googleAccessToken);
+  const [serverAudioPolicy, setServerAudioPolicy] = useState<AudioLimitPolicy>(AUDIO_LIMITS.conservative);
+  const audioPolicy = serverAudioPolicy;
+
+  useEffect(() => {
+    if (!isAuthReady || !user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const response = await fetch('/api/ai/audio-policy', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { maxEvolutionDurationSeconds?: number; maxFileBytes?: number };
+        if (!cancelled && (data.maxEvolutionDurationSeconds === AUDIO_LIMITS.conservative.maxDurationSeconds || data.maxEvolutionDurationSeconds === AUDIO_LIMITS.yearly.maxDurationSeconds) && (data.maxFileBytes === AUDIO_LIMITS.conservative.maxFileBytes || data.maxFileBytes === AUDIO_LIMITS.yearly.maxFileBytes)) {
+          setServerAudioPolicy({ maxDurationSeconds: data.maxEvolutionDurationSeconds, maxFileBytes: data.maxFileBytes });
+        }
+      } catch {
+        // A falha de UX não altera a política autoritativa do backend.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isAuthReady, user?.id]);
   const hasClinicalAccess = hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const isPlanActive = () => {
@@ -502,7 +529,7 @@ export default function NewEvolution() {
   }, [audioItems]);
 
   const getTotalAudioDuration = (items: AudioEvolutionItem[]) => {
-    return items.reduce((total, item) => total + (item.duration || 0), 0);
+    return items.reduce((total, item) => total + Math.max(0, Math.ceil(item.duration || 0)), 0);
   };
 
   const getSupportedRecordingMimeType = () => {
@@ -518,7 +545,10 @@ export default function NewEvolution() {
     return candidates.find((mimeType) => MediaRecorder.isTypeSupported?.(mimeType)) || '';
   };
 
-  const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string, fallbackDuration = 0) => {
+  const createAudioItem = async (blob: Blob, source: AudioEvolutionItem['source'], name: string, fallbackDuration = 0, audioKey = uuidv4()) => {
+    if (!isAudioFileSizeAllowed(blob.size, audioPolicy)) {
+      throw new Error(`O arquivo de áudio pode ter no máximo ${Math.round(audioPolicy.maxFileBytes / 1024 / 1024)} MB.`);
+    }
     const mimeType = resolveAudioMimeType(blob.type, name);
     // Mantemos o Blob/File original. Alguns WebViews Android falham ao reenviar
     // um Blob recriado a partir de um URI do seletor de arquivos. O MIME corrigido
@@ -529,6 +559,7 @@ export default function NewEvolution() {
 
     return {
       id: uuidv4(),
+      audioKey,
       blob,
       url,
       duration: Number.isFinite(duration) ? duration : 0,
@@ -701,9 +732,9 @@ export default function NewEvolution() {
     };
   }, []);
 
-  const hydrateAudioItems = async (blobs: Blob[], source: AudioEvolutionItem['source']) => {
+  const hydrateAudioItems = async (blobs: Blob[], source: AudioEvolutionItem['source'], stablePrefix: string) => {
     const items = await Promise.all(
-      blobs.map((blob, index) => createAudioItem(blob, source, `Áudio ${index + 1}`))
+      blobs.map((blob, index) => createAudioItem(blob, source, `Áudio ${index + 1}`, 0, `${stablePrefix}:${index}`))
     );
     return items;
   };
@@ -713,7 +744,7 @@ export default function NewEvolution() {
     try {
       clearAuthRecoveryFlag();
       const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
-      const items = await hydrateAudioItems(blobs, 'draft');
+      const items = await hydrateAudioItems(blobs, 'draft', recoveredDraft.id);
       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
       updateAudioItems(items);
       setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
@@ -743,7 +774,7 @@ export default function NewEvolution() {
     try {
       clearAuthRecoveryFlag();
       const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
-      const items = await hydrateAudioItems(blobs, 'draft');
+      const items = await hydrateAudioItems(blobs, 'draft', recoveredDraft.id);
       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
       updateAudioItems(items);
       setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
@@ -918,6 +949,13 @@ export default function NewEvolution() {
 
   const startRecording = async () => {
     try {
+      const remainingSeconds = audioPolicy.maxDurationSeconds - getTotalAudioDuration(audioItemsRef.current);
+      if (remainingSeconds <= 0) {
+        await showAlert(`Esta evolução pode ter até ${audioPolicy.maxDurationSeconds / 60} minutos de áudio.`, {
+          title: 'Limite de áudio atingido', variant: 'warning', icon: 'warning'
+        });
+        return;
+      }
       isDiscardingRef.current = false;
       const isAndroidDevice = /Android/i.test(navigator.userAgent);
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -1013,6 +1051,22 @@ export default function NewEvolution() {
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => {
           const next = prev + 1;
+          const recordingLimit = Math.max(0, audioPolicy.maxDurationSeconds - getTotalAudioDuration(audioItemsRef.current));
+          if (next >= recordingLimit) {
+            window.setTimeout(() => {
+              if (mediaRecorderRef.current?.state === 'recording') {
+                mediaRecorderRef.current.stop();
+                setIsRecording(false);
+                setIsPaused(false);
+                if (timerRef.current) clearInterval(timerRef.current);
+                void showAlert(`O limite de ${audioPolicy.maxDurationSeconds / 60} minutos desta evolução foi atingido. O áudio capturado foi salvo.`, {
+                  title: 'Limite de áudio atingido',
+                  variant: 'info',
+                  icon: 'info'
+                });
+              }
+            }, 0);
+          }
           recordingTimeRef.current = next;
           return next;
         });
@@ -1047,6 +1101,20 @@ export default function NewEvolution() {
       timerRef.current = window.setInterval(() => {
         setRecordingTime(prev => {
           const next = prev + 1;
+          const recordingLimit = Math.max(0, audioPolicy.maxDurationSeconds - getTotalAudioDuration(audioItemsRef.current));
+          if (next >= recordingLimit) {
+            window.setTimeout(() => {
+              if (mediaRecorderRef.current?.state === 'recording') {
+                mediaRecorderRef.current.stop();
+                setIsRecording(false);
+                setIsPaused(false);
+                if (timerRef.current) clearInterval(timerRef.current);
+                void showAlert(`O limite de ${audioPolicy.maxDurationSeconds / 60} minutos desta evolução foi atingido. O áudio capturado foi salvo.`, {
+                  title: 'Limite de áudio atingido', variant: 'info', icon: 'info'
+                });
+              }
+            }, 0);
+          }
           recordingTimeRef.current = next;
           return next;
         });
@@ -1118,18 +1186,28 @@ export default function NewEvolution() {
       return;
     }
 
-    const newItems = await Promise.all(
-      files.map(async (file, index) => {
-        const item = await createAudioItem(
-          file,
-          'upload',
-          file.name || `Arquivo ${index + 1}`
-        );
-        return item;
-      })
-    );
+    let newItems: AudioEvolutionItem[];
+    try {
+      newItems = await Promise.all(
+        files.map(async (file, index) => createAudioItem(file, 'upload', file.name || `Arquivo ${index + 1}`))
+      );
+    } catch (error: any) {
+      await showAlert(error?.message || 'Não foi possível adicionar o arquivo de áudio.', {
+        title: 'Arquivo não aceito', variant: 'warning', icon: 'warning'
+      });
+      return;
+    }
 
     const nextItems = [...audioItemsRef.current, ...newItems];
+    if (!isAudioDurationAllowed(getTotalAudioDuration(audioItemsRef.current), getTotalAudioDuration(newItems), audioPolicy)) {
+      newItems.forEach(item => URL.revokeObjectURL(item.url));
+      await showAlert(`Esta evolução pode ter até ${audioPolicy.maxDurationSeconds / 60} minutos de áudio.`, {
+        title: 'Limite de áudio atingido',
+        variant: 'warning',
+        icon: 'warning'
+      });
+      return;
+    }
     updateAudioItems(nextItems);
     if (status !== 'processing') setStatus('idle');
     await persistDraft(nextItems);
@@ -1231,6 +1309,9 @@ export default function NewEvolution() {
           mimeType: item.mimeType,
           fileName: item.name,
           audioDuration: item.duration,
+          subscriptionPlan,
+          evolutionId,
+          audioKey: item.audioKey,
           onRetry: (attempt, delay, isFallback) => {
             console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
           }
@@ -1598,7 +1679,11 @@ export default function NewEvolution() {
 
           {inputMode !== 'text' && (
           <div>
-          <label className="block text-sm font-medium text-brand-text mb-4">Áudio da Evolução</label>
+            <label className="block text-sm font-medium text-brand-text mb-4">Áudio da Evolução</label>
+            <p className="mb-4 text-sm text-brand-text-muted">
+              Até {audioPolicy.maxDurationSeconds / 60} minutos de áudio por evolução • até {Math.round(audioPolicy.maxFileBytes / 1024 / 1024)} MB por arquivo.
+              {audioItems.length > 0 && ` ${formatTime(getTotalAudioDuration(audioItems))} de ${formatTime(audioPolicy.maxDurationSeconds)} utilizados.`}
+            </p>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Record Audio */}
@@ -1698,7 +1783,7 @@ export default function NewEvolution() {
                 <div>
                   <p className="text-sm font-semibold text-brand-primary">Áudios adicionados</p>
                   <p className="text-xs text-brand-text-muted">
-                    {audioItems.length} arquivo(s) • {formatTime(getTotalAudioDuration(audioItems))} total
+                    {audioItems.length} arquivo(s) • {formatTime(getTotalAudioDuration(audioItems))} de {formatTime(audioPolicy.maxDurationSeconds)} utilizados
                   </p>
                 </div>
                 {!isRecording && status !== 'processing' && (

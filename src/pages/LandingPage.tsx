@@ -239,7 +239,7 @@ export default function LandingPage() {
   const faqs = [
     {
       q: "Como o aplicativo grava e transcreve os áudios?",
-      a: "Você pode gravar diretamente pelo microfone do celular ou computador dentro do aplicativo ou compartilhar um arquivo de áudio gravado no WhatsApp ou no gravador do celular. Cada evolução aceita áudios de até 20 minutos e até 20 MB por arquivo. A transcrição segue uma política de uso justo mensal de até 20 horas por profissional, com opção de contratação adicional quando necessário."
+      a: "Você pode gravar diretamente pelo microfone do celular ou computador dentro do aplicativo ou compartilhar um arquivo de áudio gravado no WhatsApp ou no gravador do celular. Cada evolução aceita até 20 minutos no Trial e plano mensal, ou até 50 minutos no plano anual. A transcrição segue uma política de uso justo mensal de até 20 horas por profissional, com opção de contratação adicional quando necessário."
     },
     {
       q: "Como funciona a integração com o Google Drive?",
@@ -1043,7 +1043,7 @@ export default function LandingPage() {
               <ul className="space-y-4">
                 <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
                   <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
-                  <span><strong>Grave áudios de até 20 minutos por evolução</strong> e deixe nossa IA transcrever e organizar o registro clínico.</span>
+                  <span><strong>Grave até 20 minutos por evolução no Trial e mensal, ou até 50 minutos no anual</strong> e deixe nossa IA transcrever e organizar o registro clínico.</span>
                 </li>
                 <li className="flex gap-3 text-sm text-brand-text leading-relaxed">
                   <Check size={18} className="text-brand-primary flex-shrink-0 mt-0.5" />
