@@ -21,6 +21,7 @@ import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js
 import { AUDIO_LIMITS, getAudioLimitPolicy } from "./src/utils/audioLimits.js";
 import { getAudioDurationSecondsFromBuffer } from "./server/audioDuration.js";
 import { transcribeGeminiAudio } from "./server/audioTranscriptionTransport.js";
+import { buildAuthoritativeAudioKey } from "./server/audioIdempotency.js";
 import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
@@ -2227,6 +2228,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
   let audioPathToCleanup: string | null = null;
   let audioReservationId: string | null = null;
   let audioReservationCommitted = false;
+  let audioReservationMode: "new" | "replay" | null = null;
 
   try {
     const { audioPath, mimeType, prompt, evolutionId, audioKey } = req.body || {};
@@ -2311,17 +2313,7 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
       });
     }
 
-    const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(req.user.id, usageMonth);
-    if (
-      currentUsageSeconds >= TRANSCRIPTION_MONTHLY_LIMIT_SECONDS ||
-      currentUsageSeconds + authoritativeAudioDurationSeconds > TRANSCRIPTION_MONTHLY_LIMIT_SECONDS
-    ) {
-      return res.status(403).json({
-        code: "AUDIO_MONTHLY_QUOTA_LIMIT",
-        error: "Limite mensal de transcrição de áudio atingido. Adquira um pacote de horas adicionais."
-      });
-    }
-
+    const authoritativeAudioKey = buildAuthoritativeAudioKey(evolutionId, audioKey, audioBuffer);
     const requestedReservationId = randomUUID();
     const { data: reservation, error: reservationError } = await supabaseAdmin.rpc("reserve_evolution_audio_seconds", {
       p_evolution_id: evolutionId,
@@ -2329,22 +2321,37 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
       p_duration_seconds: authoritativeAudioDurationSeconds,
       p_limit_seconds: audioPolicy.maxDurationSeconds,
       p_reservation_id: requestedReservationId,
-      p_audio_key: audioKey.trim(),
+      p_audio_key: authoritativeAudioKey,
     });
     if (reservationError) throw new Error(reservationError.message || "Não foi possível validar o limite de áudio da evolução.");
     if (reservation === "existing_completed") {
-      return res.status(409).json({ code: "AUDIO_ALREADY_PROCESSED", error: "Este áudio já foi processado para esta evolução." });
+      audioReservationMode = "replay";
     }
     if (reservation === "existing_pending") {
       return res.status(409).json({ code: "AUDIO_PROCESSING_IN_PROGRESS", error: "Este áudio já está sendo processado." });
     }
-    if (reservation !== "reserved") {
+    if (reservation === "reserved") {
+      audioReservationMode = "new";
+      audioReservationId = requestedReservationId;
+    } else if (reservation !== "existing_completed") {
       return res.status(403).json({
         code: "AUDIO_EVOLUTION_DURATION_LIMIT",
         error: `Esta evolução pode ter até ${audioPolicy.maxDurationSeconds / 60} minutos de áudio.`
       });
     }
-    audioReservationId = requestedReservationId;
+
+    if (audioReservationMode === "new") {
+      const currentUsageSeconds = await getMonthlyTranscriptionUsageSeconds(req.user.id, usageMonth);
+      if (
+        currentUsageSeconds >= TRANSCRIPTION_MONTHLY_LIMIT_SECONDS ||
+        currentUsageSeconds + authoritativeAudioDurationSeconds > TRANSCRIPTION_MONTHLY_LIMIT_SECONDS
+      ) {
+        return res.status(403).json({
+          code: "AUDIO_MONTHLY_QUOTA_LIMIT",
+          error: "Limite mensal de transcrição de áudio atingido. Adquira um pacote de horas adicionais."
+        });
+      }
+    }
 
     const { apiKey, modelName } = await getGeminiSettings();
     if (!apiKey) return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
@@ -2361,50 +2368,53 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     }, (event) => console.log("[AI-Backend] Transporte Gemini", event));
     const { transcription } = transportResult;
 
-    const { error: completeReservationError } = await supabaseAdmin.rpc("complete_evolution_audio_reservation", {
-      p_reservation_id: audioReservationId,
-      p_professional_id: req.user.id,
-    });
-    if (completeReservationError) throw new Error(completeReservationError.message || "Não foi possível concluir a reserva de áudio.");
-    audioReservationCommitted = true;
-
-    try {
-      const updatedUsageSeconds = await incrementMonthlyTranscriptionUsageSeconds(
-        req.user.id,
-        usageMonth,
-        authoritativeAudioDurationSeconds
-      );
-      console.log(`[AI-Backend] Consumo mensal atualizado: ${updatedUsageSeconds}s no mês ${usageMonth}.`);
-    } catch (usageTrackingError) {
-      console.error("[AI-Backend] Erro ao atualizar usage_tracking:", usageTrackingError);
-    }
-
-    // 3. Registrar o log de consumo diretamente no banco
-    const usageMetadata = transportResult.usageMetadata;
-    if (usageMetadata) {
-      const promptTokens = usageMetadata.promptTokenCount || 0;
-      const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
-      const totalTokens = usageMetadata.totalTokenCount || 0;
-      const costUsd = estimateGeminiTranscriptionCostUsd({
-        model: transcriptionModel,
-        promptTokens,
-        candidatesTokens,
+    if (audioReservationMode === "new") {
+      const { error: completeReservationError } = await supabaseAdmin.rpc("complete_evolution_audio_reservation", {
+        p_reservation_id: audioReservationId,
+        p_professional_id: req.user.id,
       });
+      if (completeReservationError) throw new Error(completeReservationError.message || "Não foi possível concluir a reserva de áudio.");
+      audioReservationCommitted = true;
 
       try {
-        await supabaseAdmin.from('usage_logs').insert({
-          professional_id: req.user.id,
+        const updatedUsageSeconds = await incrementMonthlyTranscriptionUsageSeconds(
+          req.user.id,
+          usageMonth,
+          authoritativeAudioDurationSeconds
+        );
+        console.log(`[AI-Backend] Consumo mensal atualizado: ${updatedUsageSeconds}s no mês ${usageMonth}.`);
+      } catch (usageTrackingError) {
+        console.error("[AI-Backend] Erro ao atualizar usage_tracking:", usageTrackingError);
+      }
+
+      // Registra consumo faturável apenas para reservas novas; replay técnico
+      // não duplica quota nem usage_logs.
+      const usageMetadata = transportResult.usageMetadata;
+      if (usageMetadata) {
+        const promptTokens = usageMetadata.promptTokenCount || 0;
+        const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
+        const totalTokens = usageMetadata.totalTokenCount || 0;
+        const costUsd = estimateGeminiTranscriptionCostUsd({
           model: transcriptionModel,
-          prompt_tokens: promptTokens,
-          candidates_tokens: candidatesTokens,
-          total_tokens: totalTokens,
-          cost_usd: costUsd,
-          audio_duration_seconds: authoritativeAudioDurationSeconds,
-          created_at: new Date().toISOString()
+          promptTokens,
+          candidatesTokens,
         });
-        console.log("[AI-Backend] Log de consumo gravado com sucesso.");
-      } catch (dbError) {
-        console.error("[AI-Backend] Erro ao gravar log de consumo:", dbError);
+
+        try {
+          await supabaseAdmin.from('usage_logs').insert({
+            professional_id: req.user.id,
+            model: transcriptionModel,
+            prompt_tokens: promptTokens,
+            candidates_tokens: candidatesTokens,
+            total_tokens: totalTokens,
+            cost_usd: costUsd,
+            audio_duration_seconds: authoritativeAudioDurationSeconds,
+            created_at: new Date().toISOString()
+          });
+          console.log("[AI-Backend] Log de consumo gravado com sucesso.");
+        } catch (dbError) {
+          console.error("[AI-Backend] Erro ao gravar log de consumo:", dbError);
+        }
       }
     }
 
