@@ -1,6 +1,7 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
-Data: 2026-09-16. Branch: `feat/clinicas`. Referência: `2c5de70`.
+Data inicial: 2026-09-16. Retomada: 2026-09-17. Branch: `feat/clinicas`.
+Referência inicial: `2c5de70`; referência desta configuração: `df25ae6`.
 Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
@@ -10,10 +11,12 @@ com transporte mock concluídos; nenhum e-mail externo enviado.
 
 Bloqueios confirmados, não hipóteses:
 
-1. O projeto Vercel `evolucao-clinica-staging` não possui credenciais staging
-   de SMTP/Brevo. O baseline staging não contém a tabela genérica `settings`.
-   O transporte dedicado recusa envio sem configuração e sem confirmação de
-   tracking/reescrita desabilitados. Não foram copiadas credenciais de produção.
+1. As seis variáveis SMTP dedicadas foram configuradas no projeto Vercel
+   staging na retomada de 2026-09-17, sem copiar credenciais de produção.
+   DNS/conexão/TLS/certificado PASS, mas `verify()` falhou na autenticação:
+   `EAUTH`, resposta SMTP `535`. Tracking/reescrita ainda não comprovados OFF.
+   O sender permanece fechado, com delivery OFF. O baseline staging não
+   contém a tabela genérica `settings`; o sender dedicado não depende dela.
 2. A Management API de Auth retorna `external_google_enabled=false` no staging.
    A UI existente possui login/cadastro Google, não cadastro por senha.
    O fluxo OAuth recebido por e-mail não pode ser declarado validado assim.
@@ -223,6 +226,92 @@ foram mantidas; apenas os dois gates false explícitos adicionados (total31).
 Sem credenciais do transporte dedicado ou cópia de secrets de produção.
 
 ## Cleanup e próximo passo
+
+### Configuração SMTP dedicada — retomada após `df25ae6`
+
+Antes da configuração, `git check-ignore .env.local` PASS e
+`git ls-files -- .env.local` vazio. Arquivo permanece ignorado/unversioned;
+nenhum valor sensível foi exibido, documentado ou adicionado ao Git.
+
+Provider Brevo: **configured**, com chave SMTP dedicada fornecida pelo usuário
+no `.env.local`. Presença/formato PASS para HOST, PORT, USER, PASS, FROM e
+TRACKING_DISABLED. Host esperado, porta admitida, remetente em formato válido,
+boolean explícito e ausência do prefixo de API key PASS. Isso não comprova
+validade/ativação da SMTP key nem autorização do remetente.
+
+Configuração via API oficial Vercel, valores lidos somente em memória e
+reenviados sem stdout: seis variáveis `CLINIC_INVITATION_SMTP_*` adicionadas
+somente a `evolucao-clinica-staging`. Total **37 env vars**, preservadas as 31
+anteriores. Nenhuma variável SMTP com prefixo VITE_. Escopo Vercel `production`
+é o ambiente de deployment da branch `feat/clinicas` **deste projeto staging**,
+não o projeto de produção. Project ID/team/repositório/branch revalidados.
+Relitura individual confirmou correspondência exata dos valores sem revelá-los.
+Delivery/billing false; valor de tracking fornecido foi preservado false.
+
+Redeploy oficial do commit funcional `8df73a9` após propagar as env vars:
+`dpl_DmucegUoeySREd2MqMAucXRnKd6A`, **READY**, mesmo Project ID staging e
+branch `feat/clinicas`, sem alteração de código. `vercel curl` atravessou
+Deployment Protection tanto na URL do deployment quanto no domínio customizado:
+HTTP200, corpo exato `{"status":"ok"}`, não HTML de autenticação.
+APP_ENV/VITE_APP_ENV staging, URL pública staging e Supabase ref staging
+revalidados. Varredura da build frontend confirma usuário/senha SMTP ausentes.
+Gates delivery/billing também false no `.env.local`.
+
+Sender aprovado permanece inalterado. Executado `Nodemailer transporter.verify()`
+com opções equivalentes às do sender: requireTLS, validação normal do
+certificado, TLS mínimo 1.2, sem debug/logging/fallback. Resultado:
+
+- DNS: PASS.
+- SMTP connection: PASS.
+- TLS/certificado: PASS; handshake separado sem AUTH confirmou TLS 1.3.
+- Authentication / SMTP verify: **FAIL — EAUTH, SMTP 535**.
+- Sender: **not verified**; somente formato PASS.
+- Tracking: **pending**, flag false preservada.
+- Link rewriting: **pending**.
+- E-mails enviados: **0**; `sendMail` não executado, AUTH não repetido.
+
+A resposta não identifica de forma inequívoca a causa do 535. Revisar manualmente
+o login SMTP e a nova SMTP key válida/ativa da conta Brevo no `.env.local`;
+não substituir por API key, não alterar a key de produção, não flexibilizar TLS.
+O [Nodemailer](https://nodemailer.com/smtp) documenta que verify testa conexão,
+TLS e autenticação, mas não comprova aceitação de um remetente específico.
+
+**BREVO TRACKING REQUER DECISÃO MANUAL.** Não foi encontrada, nas referências
+oficiais consultadas, garantia de tracking/rewrite OFF isolada por SMTP key.
+Não declarar inexistente um mecanismo que não foi confirmado. Não inspecionada
+a configuração autenticada da conta, nem alteradas configurações globais.
+A [documentação Brevo de Anonymous Tracking](https://help.brevo.com/hc/en-us/articles/11643306229906-Can-I-anonymize-the-tracking-of-opens-and-clicks-for-my-emails)
+informa que cliques/aberturas continuam rastreados e que a opção transacional
+alcança os futuros e-mails transacionais. Não atende ao requisito OFF e sua
+alteração na conta compartilhada afetaria também produção.
+Solicitar confirmação oficial à Brevo de mecanismo específico por mensagem/
+integração que desative clicks/opens/rewrite sem mudar produção. Não foi
+adicionado header não documentado ao sender; nova chave não comprova tracking.
+
+**AÇÃO MANUAL NECESSÁRIA — GOOGLE OAUTH STAGING.** Auth staging permanece
+Google OFF; não há campos locais de Client ID/Secret Google staging.
+Criar OAuth Web Client dedicado, com origin
+`https://staging.evolucaoclinica.app.br` e redirect provider
+`https://hwkdwinfckmjoriqxbjk.supabase.co/auth/v1/callback`.
+Inserir Client ID/Secret com segurança em Supabase staging → Authentication
+→ Sign In / Providers → Google. Não enviar secrets no chat nem copiar o client
+de produção. Preservar mailer_autoconfirm false. OAuth browser smoke: PENDING,
+incluindo retorno ao staging e `/painel/convite-clinica`.
+
+Gates locais reexecutados: environment-isolation PASS, clinic-invitations PASS,
+`npm test` completo PASS (incluindo analytics e regressões empresariais), lint
+PASS, build PASS. Warning preexistente de chunks >500kB, sem falha. Nenhuma
+mudança funcional; build web/Android e migrations inalteradas.
+`git diff --check` PASS; publicação apenas documental em `feat/clinicas`.
+
+Cleanup relido via consulta somente leitura: users/professionals/organizations/
+memberships/invitations/deliveries/handoffs/audit todos zero, runtime staging,
+global clinic gate false. Delivery/billing OFF; nenhum fixture criado.
+Supabase produção, Vercel produção, Brevo SMTP key produção, Google OAuth
+produção, Stripe, DNS e main: **NÃO ALTERADOS** nesta execução.
+Não declarar pronta para smoke externo; primeiro corrigir autenticação SMTP,
+comprovar tracking/rewrite OFF e validar Google/browser. Depois parar para
+autorização explícita de envio. Fase 3 não iniciada.
 
 ### Revalidação da retomada — 2026-09-17
 
