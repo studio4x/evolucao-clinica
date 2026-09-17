@@ -121,9 +121,16 @@ Nenhum smoke real foi repetido. Os gates permanecem OFF:
 `CLINIC_INVITATION_DELIVERY_ENABLED=false`,
 `CLINIC_BILLING_ENABLED=false` e global clinic gate `false`.
 
-O próximo passo autorizado é publicar somente no staging, confirmar deployment
-`READY` e `/api/health`, e então executar um novo smoke real da Fase 2C. Não
-iniciar Fase 3 nem alterar produção.
+Publicação do patch no staging concluída no commit `ad46392`:
+
+- deployment `dpl_5kiep7xp4aJDHvnt74Wi3qo5n1v6`: `READY`;
+- `/api/health` oficial no deployment: HTTP 200, `{"status":"ok"}`;
+- `/api/health` oficial em `staging.evolucaoclinica.app.br`: HTTP 200,
+  `{"status":"ok"}`.
+
+Os gates permaneceram OFF e nenhum smoke real foi executado nesta etapa. O
+próximo passo autorizado é um novo smoke real da Fase 2C, exclusivamente no
+staging. Não iniciar Fase 3 nem alterar produção.
 
 O deployment de restauração `dpl_7ALNQTDj1xxYTm6dwu3Ac34v5UU5` correspondeu
 ao estado funcional anterior. O push documental posterior gerou
