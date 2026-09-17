@@ -224,6 +224,32 @@ Sem credenciais do transporte dedicado ou cópia de secrets de produção.
 
 ## Cleanup e próximo passo
 
+### Revalidação da retomada — 2026-09-17
+
+O deployment do commit `8df73a9`,
+`dpl_5szqDdXa9H81RR2ewL8FtT7ummjR`, está READY. A API oficial confirma
+o Project ID staging existente, o team TARGET, o repositório
+`studio4x/evolucao-clinica` e a branch `feat/clinicas`.
+No domínio customizado, `vercel curl` atravessou Deployment Protection:
+`/api/health` HTTP200 com corpo exato `{"status":"ok"}`. A landing
+`/convite-clinica` permanece HTTP503 pelo gate OFF, com os headers restritivos
+no-store/no-referrer/noindex,nofollow/nosniff/DENY/CSP efetivos.
+
+As 31 env vars permanecem presentes; APP_ENV/VITE_APP_ENV e URL pública são
+staging, com Supabase `hwkdwinfckmjoriqxbjk`. Feature frontend/backend,
+entrega, e-mail e billing continuam false. Não há campos SMTP dedicados
+configurados na Vercel nem no `.env.local`; tracking ainda não foi confirmado.
+Auth retorna Google OFF e mailer_autoconfirm false. Esses pré-requisitos
+continuam bloqueando o smoke externo; não foi solicitada autorização de envio.
+
+Consulta somente leitura confirma zero auth.users, professionals,
+organizations, invitations, deliveries, handoffs e eventos de audit;
+runtime staging e gate global false. Nenhum fixture recriado, nenhum e-mail
+externo enviado, nenhuma alteração em produção, Stripe, Auth ou schema.
+Os testes locais PASS registrados acima correspondem à implementação
+publicada; esta retomada apenas revalidou o runtime e atualizou documentação.
+Estado permanece **FASE 2C BLOQUEADA**.
+
 Git: implementação `5988a01`, publicada somente em `feat/clinicas`. O primeiro
 deployment staging foi recusado por schema de `vercel.json`: headers da landing
 haviam sido inseridos em rewrites. Corrigido na seção headers, com teste
