@@ -28,12 +28,12 @@ assert.match(launcherSource, /Type\.systemBars\(\)[\s\S]*Type\.displayCutout\(\)
 assert.match(launcherSource, /setInsets\(handledTypes, Insets\.NONE\)/, 'tipos nativos tratados devem ser zerados antes do WebView');
 assert.doesNotMatch(launcherSource, /Type\.ime\(\)/, 'IME não deve virar padding permanente');
 
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.870"/);
-assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.88"/);
-assert.match(gradleSource, /versionCode 88/);
-assert.match(gradleSource, /versionName "88"/);
-assert.match(twaManifestSource, /"appVersionCode": 88/);
-assert.match(twaManifestSource, /"appVersionName": "88"/);
-assert.match(twaManifestSource, /"appVersion": "88"/);
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.871"/);
+assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.89"/);
+assert.match(gradleSource, /versionCode 89/);
+assert.match(gradleSource, /versionName "89"/);
+assert.match(twaManifestSource, /"appVersionCode": 89/);
+assert.match(twaManifestSource, /"appVersionName": "89"/);
+assert.match(twaManifestSource, /"appVersion": "89"/);
 
 console.log('Mobile bottom navigation safe-area tests passed');
