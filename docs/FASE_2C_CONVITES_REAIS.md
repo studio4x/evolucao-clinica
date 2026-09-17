@@ -1091,3 +1091,151 @@ FALHA**. Para nova tentativa, selecionar manualmente uma conta Google de teste
 controlada cujo perfil individual já esteja aprovado, sem alterar o usuário
 preexistente usado neste run. O gate Brevo tracking/link rewriting continua
 pendente e separado.
+
+### Investigação somente leitura do bloqueio atual — 2026-09-17 — `f90f732`
+
+Nenhum código, migration, fixture, gate, usuário, deployment ou configuração
+foi alterado nesta investigação. Produção, Stripe, Brevo, DNS, Drive e `main`
+permaneceram intactos.
+
+#### CAUSA RAIZ:
+
+O aceite server-side conclui corretamente, mas a hidratação do contexto que
+ocorre depois pode reutilizar uma leitura iniciada antes do aceite. O store
+atual deduplica `revalidateForUser` por usuário e aguarda `inFlight`; ele não
+marca a leitura como anterior à mutação nem invalida a resposta anterior para
+forçar uma leitura pós-aceite. Se essa resposta ainda contém `organizations=[]`,
+o aceite termina no `catch` com `context_unavailable` antes de
+`selectContext` e `navigate`.
+
+Isso é compatível com a evidência do smoke: invitation/membership/seat foram
+persistidos, não houve novo `42501`, a interface exibiu o erro genérico e a
+navegação clínica não foi concluída.
+
+#### REDIRECT ORIGIN:
+
+No fluxo de aceite, `src/pages/ClinicInvitationAccept.tsx` executa:
+
+`POST /api/clinic/invitations/accept` →
+`revalidateForUser` → validação de `result.organizationId` em
+`refreshed.organizations` → `selectContext` → `navigate('/painel/clinica')`.
+
+Quando a organização não está presente, o componente lança
+`context_unavailable` e permanece em `/painel/convite-clinica` com o alerta
+genérico. Quando `/painel/clinica` é então avaliado, o redirect para
+`/pending` vem de `ProtectedRoute` em `src/App.tsx`, na condição:
+
+`profileStatus === 'pending' && !invitedClinicAccess`.
+
+`Login.tsx` também possui um redirect para `/pending`, mas o ramo
+`invitationNext` retorna antes dele no fluxo de convite. `ClinicRoute` não é a
+origem do redirect para `/pending`; seus bloqueios direcionam para
+`/painel/dashboard`.
+
+#### ESTADO ESPERADO APÓS ACCEPT:
+
+- `contextStatus`: `ready`;
+- `contextUserId`: `user.id`;
+- `organizations`: contém a organização retornada pelo aceite;
+- `activeContext`: `{ type: "organization", organizationId: result.organizationId }`;
+- `featureEnabled`: `true` no bundle do smoke;
+- `invitedClinicAccess`: `true`.
+
+#### ESTADO QUE OCORRE / PODE OCORRER:
+
+- `profileStatus`: `pending` — confirmado no usuário Google preexistente;
+- `contextStatus`: pode terminar `ready` com resposta stale vazia, ou `error`
+  se a consulta falhar;
+- `contextUserId`: deveria permanecer igual ao usuário, mas não basta para
+  autorizar o acesso;
+- `organizations`: pode permanecer vazio por reutilização da leitura
+  pré-aceite;
+- `activeContext`: permanece `personal` porque `selectContext` não é alcançado;
+- `featureEnabled`: não foi o bloqueio do smoke. O bundle histórico do
+  deployment usado continha `VITE_CLINIC_FEATURE_ENABLED=true` e
+  `VITE_GOOGLE_INTEGRATIONS_ENABLED=true`;
+- `invitedClinicAccess`: `false`, pois exige simultaneamente contexto `ready`,
+  usuário igual, contexto organizacional e organização presente.
+
+#### NOVO PROFISSIONAL PENDING CONSEGUE ENTRAR NA CLÍNICA HOJE:
+
+**NÃO**, de forma confiável. A intenção arquitetural permite o acesso
+organizacional sem aprovação individual, mas o caminho atual falha quando a
+leitura de contexto pós-aceite é stale ou não chega a `selectContext`.
+
+#### REGRA ARQUITETURAL CORRETA:
+
+`professional.status = 'pending'` não deve bloquear uma membership clínica
+ativa e autorizada. O acesso deve depender de contexto organizacional
+resolvido pelo servidor, membership ativa, entitlement válido, feature clínica
+ativa e RLS correto. O contexto pessoal, pacientes pessoais e demais rotas
+pessoais continuam bloqueados para o perfil pending.
+
+#### CORREÇÃO MÍNIMA RECOMENDADA:
+
+Garantir que o aceite invalide qualquer hidratação/revalidação anterior e
+aguarde uma leitura nova de `/api/clinic/contexts` depois da confirmação da
+membership. A seleção organizacional deve ser aplicada somente após essa
+resposta fresca, e nenhuma hidratação concorrente deve poder restaurar o
+contexto pessoal depois de `selectContext`. Não implementar nesta execução.
+
+#### ARQUIVOS QUE PRECISARIAM MUDAR:
+
+- `src/pages/ClinicInvitationAccept.tsx`;
+- `src/store/clinicContextStore.ts`;
+- testes de contexto/aceite e, se necessário, um teste de integração do
+  `ProtectedRoute`.
+
+#### NECESSITA FRONTEND:
+
+sim
+
+#### NECESSITA BACKEND:
+
+não há evidência de necessidade para a causa atual; o endpoint server-side
+deve ser mantido como fonte autoritativa.
+
+#### NECESSITA RLS:
+
+não. A ACL atual permanece: `authenticated=true`, `anon=false`,
+`service_role=false`, `postgres=true`; as policies continuam usando o helper
+correto.
+
+#### NECESSITA MIGRATION:
+
+não.
+
+#### TESTES A ADICIONAR:
+
+- novo usuário `pending` com convite aceito e contexto organizacional ativo;
+- aceite enquanto `hydrateForUser` pré-aceite está pendente;
+- resposta stale vazia seguida de leitura pós-aceite fresca;
+- garantia de que `selectContext` ocorre antes de `navigate` e não é sobrescrito;
+- `ProtectedRoute` com `profileStatus=pending` e contexto organizacional válido;
+- bloqueio de contexto pessoal e de outra organização.
+
+#### NECESSITA NOVO SMOKE:
+
+sim, somente após a correção mínima e seus testes. Não usar uma conta
+`approved` como substituto do cenário de novo profissional pending.
+
+#### Verificações somente leitura adicionais
+
+- O deployment histórico do smoke foi consultado pela API oficial de
+  deployments/arquivos da Vercel; o bundle efetivo continha as duas flags
+  temporárias como `true`.
+- O staging atual permanece com global clinic gate `false`, organizações,
+  memberships, invitations e subscriptions empresariais em `0`, e ACL do
+  helper restaurada para `authenticated=true`, `anon=false`,
+  `service_role=false`, `postgres=true`.
+- Foi detectado um usuário Auth sintético antigo remanescente, sem
+  professional associado a organização ou membership clínica. Ele não foi
+  removido porque esta execução foi estritamente somente leitura.
+- As variáveis Vercel continuam presentes no projeto, mas seus valores
+  protegidos não são expostos pela API; o bundle atualmente servido confirma
+  as flags Vite restauradas como `false`. Delivery e billing não foram
+  alterados.
+
+**Conclusão:** o bloqueio atual é funcional e está no caminho frontend de
+hidratação/seleção pós-aceite, não na aprovação individual, na flag build-time
+do smoke ou na ACL/RLS já corrigida. Nenhuma correção foi aplicada.
