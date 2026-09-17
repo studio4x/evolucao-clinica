@@ -9,6 +9,9 @@ declare global {
   interface Window {
     NativeAppInfoBridge?: {
       getAppInfo?: () => string;
+      setPullToRefreshEnabled?: (enabled: boolean) => void;
+      checkForUpdate?: () => void;
+      openPlayStore?: () => void;
     };
   }
 }
@@ -41,7 +44,7 @@ const readStoredLaunchVersionCode = (): number | null => {
   }
 };
 
-const formatPlayStoreVersion = (versionCode: number | null, versionName?: string | null) => {
+export const formatPlayStoreVersion = (versionCode: number | null, versionName?: string | null) => {
   const normalizedName = String(versionName ?? '').trim();
   const cleanName = normalizedName.replace(/^v/i, '');
 

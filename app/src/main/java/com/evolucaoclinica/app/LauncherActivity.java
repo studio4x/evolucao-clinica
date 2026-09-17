@@ -62,6 +62,10 @@ import com.android.billingclient.api.ProductDetails;
 import com.android.billingclient.api.Purchase;
 import com.android.billingclient.api.QueryProductDetailsParams;
 import com.android.billingclient.api.QueryPurchasesParams;
+import com.google.android.play.core.appupdate.AppUpdateInfo;
+import com.google.android.play.core.appupdate.AppUpdateManager;
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
+import com.google.android.play.core.install.model.UpdateAvailability;
 import com.stripe.android.PaymentConfiguration;
 import com.stripe.android.paymentsheet.PaymentSheet;
 import com.stripe.android.paymentsheet.PaymentSheetResult;
@@ -130,6 +134,8 @@ public class LauncherActivity extends ComponentActivity {
     private String pendingBillingPlanId;
     private String pendingBillingAccountId;
     private String pendingGooglePlayOfferId;
+    private AppUpdateManager appUpdateManager;
+    private boolean updateCheckInFlight;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -1275,6 +1281,102 @@ public class LauncherActivity extends ComponentActivity {
                 swipeRefreshLayout.setEnabled(enabled);
                 if (!enabled) swipeRefreshLayout.setRefreshing(false);
             });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void checkForUpdate() {
+            synchronized (LauncherActivity.this) {
+                if (updateCheckInFlight) return;
+                updateCheckInFlight = true;
+            }
+
+            runOnUiThread(() -> {
+                try {
+                    if (appUpdateManager == null) {
+                        appUpdateManager = AppUpdateManagerFactory.create(LauncherActivity.this);
+                    }
+
+                    appUpdateManager.getAppUpdateInfo()
+                            .addOnSuccessListener(this::handleAppUpdateInfo)
+                            .addOnFailureListener(error -> {
+                                Log.w(LOG_TAG, "Não foi possível consultar a disponibilidade de atualização", error);
+                                emitAppUpdateStatus("unavailable", null);
+                            });
+                } catch (Exception exception) {
+                    Log.w(LOG_TAG, "Falha ao iniciar a consulta de atualização", exception);
+                    emitAppUpdateStatus("unavailable", null);
+                }
+            });
+        }
+
+        @android.webkit.JavascriptInterface
+        public void openPlayStore() {
+            runOnUiThread(() -> {
+                Uri marketUri = Uri.parse("market://details?id=" + getPackageName());
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW, marketUri));
+                } catch (ActivityNotFoundException exception) {
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(
+                                "https://play.google.com/store/apps/details?id=" + getPackageName())));
+                    } catch (Exception fallbackException) {
+                        Log.w(LOG_TAG, "Não foi possível abrir a Google Play", fallbackException);
+                    }
+                }
+            });
+        }
+
+        private void handleAppUpdateInfo(AppUpdateInfo appUpdateInfo) {
+            try {
+                if (appUpdateInfo == null) {
+                    emitAppUpdateStatus("unavailable", null);
+                    return;
+                }
+
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE) {
+                    int availableVersionCode = appUpdateInfo.availableVersionCode();
+                    if (availableVersionCode <= 0) {
+                        emitAppUpdateStatus("unavailable", null);
+                        return;
+                    }
+                    emitAppUpdateStatus("update_available", availableVersionCode);
+                    return;
+                }
+
+                if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_NOT_AVAILABLE) {
+                    emitAppUpdateStatus("up_to_date", null);
+                    return;
+                }
+
+                emitAppUpdateStatus("unavailable", null);
+            } catch (Exception exception) {
+                Log.w(LOG_TAG, "Resposta inválida da consulta de atualização", exception);
+                emitAppUpdateStatus("unavailable", null);
+            }
+        }
+
+        private void emitAppUpdateStatus(String status, Integer availableVersionCode) {
+            synchronized (LauncherActivity.this) {
+                updateCheckInFlight = false;
+            }
+            if (webView == null) return;
+
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("status", status);
+                payload.put("installedVersionCode", getInstalledVersionCode());
+                payload.put("installedVersionName", getInstalledVersionName());
+                if (availableVersionCode == null) {
+                    payload.put("availableVersionCode", JSONObject.NULL);
+                } else {
+                    payload.put("availableVersionCode", availableVersionCode);
+                }
+                String script = "window.dispatchEvent(new CustomEvent('native-app-update-status',{detail:"
+                        + payload + "}));";
+                webView.evaluateJavascript(script, null);
+            } catch (Exception exception) {
+                Log.w(LOG_TAG, "Não foi possível enviar o status de atualização ao WebView", exception);
+            }
         }
     }
 
