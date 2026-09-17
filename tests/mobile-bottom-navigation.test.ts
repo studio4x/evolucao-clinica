@@ -6,6 +6,8 @@ const cssSource = readFileSync('src/index.css', 'utf8');
 const launcherSource = readFileSync('app/src/main/java/com/evolucaoclinica/app/LauncherActivity.java', 'utf8');
 const appVersionSource = readFileSync('src/components/layout/AppVersion.tsx', 'utf8');
 const gradleSource = readFileSync('app/build.gradle', 'utf8');
+const gradlePropertiesSource = readFileSync('gradle.properties', 'utf8');
+const proguardSource = readFileSync('app/proguard-rules.pro', 'utf8');
 const twaManifestSource = readFileSync('twa-manifest.json', 'utf8');
 
 assert.match(layoutSource, /app-mobile-bottom-nav[^\"]*fixed/, 'a navegação mobile deve continuar fixed');
@@ -28,12 +30,21 @@ assert.match(launcherSource, /Type\.systemBars\(\)[\s\S]*Type\.displayCutout\(\)
 assert.match(launcherSource, /setInsets\(handledTypes, Insets\.NONE\)/, 'tipos nativos tratados devem ser zerados antes do WebView');
 assert.doesNotMatch(launcherSource, /Type\.ime\(\)/, 'IME não deve virar padding permanente');
 
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.871"/);
-assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.89"/);
-assert.match(gradleSource, /versionCode 89/);
-assert.match(gradleSource, /versionName "89"/);
-assert.match(twaManifestSource, /"appVersionCode": 89/);
-assert.match(twaManifestSource, /"appVersionName": "89"/);
-assert.match(twaManifestSource, /"appVersion": "89"/);
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.872"/);
+assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.90"/);
+assert.match(gradleSource, /versionCode 90/);
+assert.match(gradleSource, /versionName "90"/);
+assert.match(twaManifestSource, /"appVersionCode": 90/);
+assert.match(twaManifestSource, /"appVersionName": "90"/);
+assert.match(twaManifestSource, /"appVersion": "90"/);
 
-console.log('Mobile bottom navigation safe-area tests passed');
+// A release Android deve permanecer compatível com os requisitos de otimização do Google Play.
+assert.match(gradleSource, /minifyEnabled true/, 'R8 deve permanecer habilitado no release');
+assert.match(gradleSource, /shrinkResources true/, 'resource shrinking deve permanecer habilitado no release');
+assert.match(gradleSource, /getDefaultProguardFile\('proguard-android-optimize\.txt'\)/, 'release deve usar as regras otimizadas padrão do Android');
+assert.match(gradleSource, /'proguard-rules\.pro'/, 'release deve incluir as regras específicas do app');
+assert.match(gradlePropertiesSource, /android\.r8\.optimizedResourceShrinking=true/, 'resource shrinking otimizado deve permanecer habilitado no AGP 8.13');
+assert.match(proguardSource, /@android\.webkit\.JavascriptInterface <methods>;/, 'métodos expostos ao WebView devem ser preservados pelo R8');
+assert.doesNotMatch(proguardSource, /-keep\s+class\s+com\.evolucaoclinica\.app\.\*\*/, 'não usar keep amplo que anule a otimização do app');
+
+console.log('Mobile bottom navigation and Android release optimization tests passed');
