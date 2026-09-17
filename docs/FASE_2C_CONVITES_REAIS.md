@@ -1,8 +1,8 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data inicial: 2026-09-16. Retomada: 2026-09-17. Branch: `feat/clinicas`.
-Referência inicial: `2c5de70`; referência do estado funcional desta tentativa: `53014bf`.
-Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
+Referência inicial: `2c5de70`; referência do diagnóstico: `b369ebc`.
+Build web: `v1.10.879`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
@@ -87,17 +87,43 @@ aceite server-side, concorrência do aceite e isolamento. Nenhum cobre a
 interseção accept → revalidate enquanto uma hidratação anterior está pendente,
 nem a resolução autenticada real de contextos imediatamente após o aceite.
 
-**Correção mínima proposta, não implementada:** tornar a revalidação
-pós-aceite uma leitura nova/forçada após a conclusão da consulta anterior, ou
-invalidar explicitamente a promessa em voo antes de refazer a consulta; depois
-selecionar o `organizationId` retornado somente contra a resposta fresca. O
-aceite server-side e as verificações RLS/entitlement devem permanecer
-autoritativos.
+**Correção mínima implementada:** `revalidateForUser` agora aguarda uma
+hidratação anterior do mesmo usuário e executa obrigatoriamente uma nova leitura
+de contextos. Revalidações concorrentes do mesmo usuário compartilham essa
+leitura fresca; proteções de troca de usuário e a seleção somente após resposta
+autorizada foram preservadas. Não foram usados timeout, sleep ou retry temporal.
 
-Classificação proposta para o próximo patch: migration **não necessária**;
-alteração de RLS **não indicada**; contrato de API **não precisa mudar**;
-alteração de frontend/store **necessária**; novo smoke real **necessário após
-o patch**. Não foram feitas alterações nesta investigação.
+Migration **não necessária**; alteração de RLS **não necessária**; contrato de
+API **inalterado**; alteração de frontend/store **aplicada**. Novo smoke real
+continua necessário após o patch.
+
+### Patch de contexto pós-aceite — 2026-09-17
+
+Arquivos alterados:
+
+- `src/store/clinicContextStore.ts`: revalidação pós-mutação com espera da
+  hidratação anterior, refetch fresco e compartilhamento seguro entre chamadas
+  concorrentes;
+- `tests/clinic-context.test.ts`: regressão determinística da corrida, duas
+  revalidações concorrentes e troca de usuário com resposta tardia;
+- `src/components/layout/AppVersion.tsx`: build web incrementada para
+  `v1.10.879`; `PLAY_STORE_VERSION` permaneceu `1.0.87`, sem AAB;
+- este relatório.
+
+Validações locais: `test:clinic-context`, `test:clinic-invitations`,
+`test:environment-isolation`, `npm test`, `npm run lint`, `npm run build` e
+`git diff --check` passaram. O build manteve apenas o warning já conhecido de
+chunks maiores que 500 kB.
+
+Nenhum smoke real foi repetido. Os gates permanecem OFF:
+`CLINIC_FEATURE_ENABLED=false`, `VITE_GOOGLE_INTEGRATIONS_ENABLED=false`,
+`GOOGLE_INTEGRATIONS_ENABLED=false`,
+`CLINIC_INVITATION_DELIVERY_ENABLED=false`,
+`CLINIC_BILLING_ENABLED=false` e global clinic gate `false`.
+
+O próximo passo autorizado é publicar somente no staging, confirmar deployment
+`READY` e `/api/health`, e então executar um novo smoke real da Fase 2C. Não
+iniciar Fase 3 nem alterar produção.
 
 O deployment de restauração `dpl_7ALNQTDj1xxYTm6dwu3Ac34v5UU5` correspondeu
 ao estado funcional anterior. O push documental posterior gerou

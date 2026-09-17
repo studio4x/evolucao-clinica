@@ -121,6 +121,60 @@ assert.equal(state.userId, "user-b");
 assert.deepEqual(state.activeContext, { type: "personal" });
 assert.equal(storage.has(clinicContextStorageKey("user-a")), false);
 
+let fetchCount = 0;
+let releaseInitialContexts!: (response: Response) => void;
+const initialContextsPending = new Promise<Response>((resolve) => { releaseInitialContexts = resolve; });
+(globalThis as any).fetch = async () => {
+  fetchCount += 1;
+  if (fetchCount === 1) return initialContextsPending;
+  return new Response(JSON.stringify({ personal: { available: true }, organizations: [{
+    id: "org-new", name: "Clínica Nova", tradeName: null, operationalStatus: "active",
+    membershipRole: "professional", clinicalAccessEnabled: true,
+  }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+};
+
+useClinicContextStore.getState().reset();
+const initialHydration = useClinicContextStore.getState().hydrateForUser("user-a", "token-a");
+assert.equal(fetchCount, 1);
+const firstRevalidation = useClinicContextStore.getState().revalidateForUser("user-a", "token-a");
+const secondRevalidation = useClinicContextStore.getState().revalidateForUser("user-a", "token-a");
+await Promise.resolve();
+assert.equal(fetchCount, 1);
+releaseInitialContexts(new Response(JSON.stringify({ personal: { available: true }, organizations: [{
+  id: "org-old", name: "Clínica Antiga", tradeName: null, operationalStatus: "active",
+  membershipRole: "professional", clinicalAccessEnabled: true,
+}] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+await Promise.all([initialHydration, firstRevalidation, secondRevalidation]);
+assert.equal(fetchCount, 2);
+state = useClinicContextStore.getState();
+assert.deepEqual(state.organizations.map(({ id }) => id), ["org-new"]);
+state.selectContext({ type: "organization", organizationId: "org-new" });
+assert.deepEqual(useClinicContextStore.getState().activeContext, { type: "organization", organizationId: "org-new" });
+
+let releaseUserA!: (response: Response) => void;
+const userAPending = new Promise<Response>((resolve) => { releaseUserA = resolve; });
+(globalThis as any).fetch = async (_input: unknown, init?: RequestInit) => {
+  if (init?.headers && String(new Headers(init.headers).get("Authorization")) === "Bearer token-a") return userAPending;
+  return new Response(JSON.stringify({ personal: { available: true }, organizations: [{
+    id: "org-b", name: "Clínica B", tradeName: null, operationalStatus: "active",
+    membershipRole: "manager", clinicalAccessEnabled: false,
+  }] }), { status: 200, headers: { "Content-Type": "application/json" } });
+};
+
+useClinicContextStore.getState().reset();
+const pendingUserAHydration = useClinicContextStore.getState().hydrateForUser("user-a", "token-a");
+const userBHydration = useClinicContextStore.getState().hydrateForUser("user-b", "token-b");
+await userBHydration;
+assert.equal(useClinicContextStore.getState().userId, "user-b");
+assert.deepEqual(useClinicContextStore.getState().organizations.map(({ id }) => id), ["org-b"]);
+releaseUserA(new Response(JSON.stringify({ personal: { available: true }, organizations: [{
+  id: "org-a", name: "Clínica A", tradeName: null, operationalStatus: "active",
+  membershipRole: "professional", clinicalAccessEnabled: true,
+}] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+await pendingUserAHydration;
+assert.equal(useClinicContextStore.getState().userId, "user-b");
+assert.deepEqual(useClinicContextStore.getState().organizations.map(({ id }) => id), ["org-b"]);
+
 useClinicContextStore.getState().reset();
 assert.equal(useClinicContextStore.getState().userId, null);
 assert.equal(useClinicContextStore.getState().organizations.length, 0);

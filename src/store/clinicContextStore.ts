@@ -23,6 +23,7 @@ type ClinicContextState = {
 const storagePrefix = "evolucao-clinica:context:";
 let inFlight: Promise<void> | null = null;
 let inFlightUserId: string | null = null;
+const revalidationInFlight = new Map<string, Promise<void>>();
 
 function storageKey(userId: string) {
   return `${storagePrefix}${userId}`;
@@ -120,7 +121,23 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
   },
 
   revalidateForUser: async (userId, accessToken) => {
-    await get().hydrateForUser(userId, accessToken);
+    const existingRevalidation = revalidationInFlight.get(userId);
+    if (existingRevalidation) return existingRevalidation;
+    if (get().userId !== userId) return;
+
+    const pendingHydration = inFlight && inFlightUserId === userId ? inFlight : null;
+    const revalidation = (async () => {
+      if (pendingHydration) await pendingHydration;
+      if (get().userId !== userId) return;
+      await get().hydrateForUser(userId, accessToken);
+    })();
+
+    revalidationInFlight.set(userId, revalidation);
+    try {
+      await revalidation;
+    } finally {
+      if (revalidationInFlight.get(userId) === revalidation) revalidationInFlight.delete(userId);
+    }
   },
 
   selectContext: (context) => {
