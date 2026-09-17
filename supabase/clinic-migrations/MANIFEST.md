@@ -24,6 +24,8 @@ push` nem incluídos em um bootstrap automático.
 | `20260916_20_harden_clinic_billing_recovery_authorization.sql` | autorização do current active owner antes de recovery e lookup privado de checkout por organização após ownership transfer | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_21_secure_clinic_invitation_delivery.sql` | emissão/entrega privadas, revogação dos RPCs raw, handoff hash/45 min, aceite autenticado, rotação, rate limits e audit sem conteúdo sensível | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_22_restore_workspace_rls_execute.sql` | restaura somente `EXECUTE` para `authenticated` no helper privado usado diretamente pelas policies RLS de workspace | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260916_23_shared_clinic_patients.sql` | pacientes compartilhados por organização, atribuições Primary/Secondary/Consultor, RPCs autorizados, invariantes e isolamento dos pacientes pessoais | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260916_24_harden_shared_clinic_patient_read_authorization.sql` | exige acesso clínico também na listagem de profissionais atribuídos, preservando leitura administrativa owner/manager | `hwkdwinfckmjoriqxbjk` (staging) |
 
 Fora do escopo desta série: pacientes compartilhados, `org_id` em tabelas
 individuais, envio externo de convites sem confirmação específica, integrações não autorizadas, Stripe Live e

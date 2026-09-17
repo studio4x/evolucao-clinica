@@ -211,6 +211,7 @@ export default function Layout() {
     : null;
   const clinicNavItems: PanelNavItem[] = [
     { name: 'Visão da clínica', path: '/painel/clinica', icon: Building2 },
+    { name: 'Pacientes', path: '/painel/clinica/pacientes', icon: Users },
     ...(['owner', 'manager'].includes(activeOrganization?.membershipRole || '')
       ? [{ name: 'Equipe', path: '/painel/clinica/equipe', icon: Users }]
       : []),
@@ -230,6 +231,7 @@ export default function Layout() {
   ];
   const clinicBottomNavItems: PanelNavItem[] = [
     { name: 'Clínica', path: '/painel/clinica', icon: Building2 },
+    { name: 'Pacientes', path: '/painel/clinica/pacientes', icon: Users },
     { name: 'Perfil', path: '/painel/profile', icon: User },
     { name: 'Mais', path: '#menu', icon: Menu },
   ];

@@ -45,6 +45,9 @@ const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedbac
 const TrialExtensionRedeem = lazyWithRetry(() => import('./pages/TrialExtensionRedeem'), 'TrialExtensionRedeem');
 const ClinicShell = lazyWithRetry(() => import('./pages/ClinicShell'), 'ClinicShell');
 const ClinicTeam = lazyWithRetry(() => import('./pages/ClinicTeam'), 'ClinicTeam');
+const ClinicPatients = lazyWithRetry(() => import('./pages/ClinicPatients'), 'ClinicPatients');
+const ClinicPatientForm = lazyWithRetry(() => import('./pages/ClinicPatientForm'), 'ClinicPatientForm');
+const ClinicPatientDetail = lazyWithRetry(() => import('./pages/ClinicPatientDetail'), 'ClinicPatientDetail');
 const ClinicInvitationAccept = lazyWithRetry(() => import('./pages/ClinicInvitationAccept'), 'ClinicInvitationAccept');
 const ClinicBilling = lazyWithRetry(() => import('./pages/ClinicBilling'), 'ClinicBilling');
 const ClinicBillingSuccess = lazyWithRetry(() => import('./pages/ClinicBilling').then((module) => ({ default: module.ClinicBillingSuccess })), 'ClinicBillingSuccess');
@@ -892,6 +895,9 @@ export default function App() {
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="clinica" element={<ClinicRoute><ClinicShell /></ClinicRoute>} />
             <Route path="clinica/equipe" element={<ClinicRoute><ClinicTeam /></ClinicRoute>} />
+            <Route path="clinica/pacientes" element={<ClinicRoute><ClinicPatients /></ClinicRoute>} />
+            <Route path="clinica/pacientes/new" element={<ClinicRoute><ClinicPatientForm /></ClinicRoute>} />
+            <Route path="clinica/pacientes/:organizationPatientId" element={<ClinicRoute><ClinicPatientDetail /></ClinicRoute>} />
             <Route path="clinica/contratar" element={<ClinicRoute><ClinicBilling /></ClinicRoute>} />
             <Route path="clinica/contratacao/sucesso" element={<ClinicRoute><ClinicBillingSuccess /></ClinicRoute>} />
             <Route path="dashboard" element={<PersonalContextRoute><Dashboard /></PersonalContextRoute>} />

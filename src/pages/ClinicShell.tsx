@@ -33,7 +33,7 @@ export default function ClinicShell() {
         <dl className="mt-6 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Status operacional</dt><dd className="mt-1 font-semibold text-brand-text">{organization.operationalStatus}</dd></div>
           <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Acesso clínico</dt><dd className="mt-1 font-semibold text-brand-text">{organization.clinicalAccessEnabled ? "Habilitado" : "Não habilitado"}</dd></div>
-          <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Dados clínicos compartilhados</dt><dd className="mt-1 font-semibold text-brand-text">Não disponíveis nesta fase</dd></div>
+          <div className="rounded-xl bg-brand-bg p-4"><dt className="text-xs text-brand-text-muted">Pacientes compartilhados</dt><dd className="mt-1 font-semibold text-brand-text"><Link className="text-brand-primary" to="/painel/clinica/pacientes">Abrir pacientes</Link></dd></div>
         </dl>
       </section>
 
@@ -47,7 +47,7 @@ export default function ClinicShell() {
 
       <section className="rounded-2xl border border-dashed border-brand-border bg-white p-5" aria-labelledby="clinic-members-heading">
         <h2 id="clinic-members-heading" className="text-lg font-semibold text-brand-text">Membros</h2>
-        <p className="mt-2 text-sm text-brand-text-muted">A lista de membros será disponibilizada somente após uma revisão específica de exposição segura. Nenhum paciente, evolução ou documento clínico é carregado neste shell.</p>
+        <p className="mt-2 text-sm text-brand-text-muted">A equipe permanece separada dos pacientes compartilhados. Evoluções e documentos clínicos não são carregados neste shell.</p>
       </section>
     </div>
   );
