@@ -1629,3 +1629,19 @@ O Edge foi reaberto na rota de login e o fluxo chegou ao seletor de contas
 Google, com retorno configurado para o Supabase staging. Nenhuma conta foi
 selecionada automaticamente e nenhuma permissão foi aceita. As flags devem ser
 restauradas para `false` após a validação autenticada controlada.
+
+### Pós-login com convite indisponível — 2026-09-17
+
+Após a autenticação Google controlada, a rota
+`/painel/convite-clinica` deixou de retornar `feature_unavailable` depois da
+habilitação temporária de `CLINIC_FEATURE_ENABLED` e
+`VITE_CLINIC_FEATURE_ENABLED`. A resposta visível passou a ser
+`Convite inválido, expirado ou indisponível`, evidência compatível com ausência,
+expiração ou consumo do handoff temporário do convite. Não houve erro de
+autenticação Google nem evidência de divergência de e-mail nesta etapa.
+
+A próxima repetição deve começar por um novo link de convite; não é necessário
+alterar RLS, migration, resolver, dados clínicos ou produção para esta
+observação. As quatro flags temporárias de Google/Clínica continuam habilitadas
+somente no staging até a validação controlada e devem ser restauradas para
+`false` ao final.
