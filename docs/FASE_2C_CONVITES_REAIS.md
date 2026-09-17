@@ -1282,4 +1282,6 @@ terceira request.
 Após a validação visual do fluxo, a tela de aceite passou a oferecer o botão
 `Sair e acessar com outra conta`. Ele usa `supabase.auth.signOut()` e retorna ao
 login preservando o destino `/painel/convite-clinica`, sem aceitar o convite e
-sem alterar o `professional.status`. A versão web desta correção é `v1.10.883`.
+sem alterar o `professional.status`. O botão também permanece disponível quando
+o convite não está carregado, permitindo trocar de conta sem aceitar nada. A
+versão web desta correção é `v1.10.884`.
