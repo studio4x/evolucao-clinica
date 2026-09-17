@@ -35,12 +35,24 @@ export default function ClinicInvitationAccept() {
     } catch (cause) { setError(invitationErrorMessage(cause)); }
     finally { setBusy(false); }
   };
+  const logout = async () => {
+    if (busy) return;
+    setBusy(true); setError("");
+    try {
+      await supabase.auth.signOut();
+      navigate("/login?next=%2Fpainel%2Fconvite-clinica", { replace: true });
+    } catch (cause) {
+      setError(invitationErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
   return <main className="mx-auto max-w-lg p-6 text-[#105576]">
     <h1 className="text-2xl font-semibold">Convite para a clínica</h1>
     {error && <p role="alert" className="mt-4">{error}</p>}
     {!info && !error && <p className="mt-4">Carregando convite…</p>}
     {info && <><h2 className="mt-4 text-xl">{info.organizationName}</h2><p>{info.role === "manager" ? "Gestor(a)" : "Profissional"} · {info.clinical ? "Com acesso clínico" : "Somente acesso administrativo"}</p><p>Válido até {new Date(info.expiresAt).toLocaleString("pt-BR")}</p>
-      {isAuthReady && !user ? <><p className="mt-4">Entre ou crie sua conta para continuar.</p><p>Use o mesmo e-mail que recebeu o convite. O acesso ou cadastro utiliza sua conta Google.</p><div className="mt-4 flex gap-4"><Link to="/login?next=%2Fpainel%2Fconvite-clinica">Entrar</Link><Link to="/login?next=%2Fpainel%2Fconvite-clinica">Criar conta</Link></div></> : user && <><p className="mt-4">Confirme para aceitar o convite com o e-mail da sua conta atual.</p><button className="mt-4 rounded bg-[#105576] p-3 text-white disabled:opacity-50" disabled={busy} onClick={() => void accept()}>Aceitar convite</button></>}
+      {isAuthReady && !user ? <><p className="mt-4">Entre ou crie sua conta para continuar.</p><p>Use o mesmo e-mail que recebeu o convite. O acesso ou cadastro utiliza sua conta Google.</p><div className="mt-4 flex gap-4"><Link to="/login?next=%2Fpainel%2Fconvite-clinica">Entrar</Link><Link to="/login?next=%2Fpainel%2Fconvite-clinica">Criar conta</Link></div></> : user && <><p className="mt-4">Confirme para aceitar o convite com o e-mail da sua conta atual.</p><div className="mt-4 flex flex-col gap-3"><button className="rounded bg-[#105576] p-3 text-white disabled:opacity-50" disabled={busy} onClick={() => void accept()}>Aceitar convite</button><button type="button" className="rounded border border-[#105576] p-3 text-[#105576] transition hover:bg-white disabled:opacity-50" disabled={busy} onClick={() => void logout()}>Sair e acessar com outra conta</button></div></>}
     </>}
   </main>;
 }

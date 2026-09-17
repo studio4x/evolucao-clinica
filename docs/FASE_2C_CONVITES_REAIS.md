@@ -1276,3 +1276,10 @@ terceira request.
   alterados;
 - o usuário Auth sintético antigo previamente detectado foi preservado, sem
   remoção nesta execução.
+
+### Acesso com outra conta
+
+Após a validação visual do fluxo, a tela de aceite passou a oferecer o botão
+`Sair e acessar com outra conta`. Ele usa `supabase.auth.signOut()` e retorna ao
+login preservando o destino `/painel/convite-clinica`, sem aceitar o convite e
+sem alterar o `professional.status`. A versão web desta correção é `v1.10.883`.

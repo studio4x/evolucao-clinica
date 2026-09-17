@@ -35,6 +35,8 @@ assert.match(storeSource, /currentGeneration\(userId\) !== generation/);
 assert.ok(acceptSource.indexOf('invitationRequest("/accept"') < acceptSource.indexOf("refreshAfterMutation"));
 assert.ok(acceptSource.indexOf("refreshAfterMutation") < acceptSource.indexOf("selectAcceptedClinicContext(refreshed"));
 assert.ok(acceptSource.indexOf("selectAcceptedClinicContext(refreshed") < acceptSource.indexOf('navigate("/painel/clinica"'));
+assert.match(acceptSource, /supabase\.auth\.signOut\(\)/);
+assert.match(acceptSource, /Sair e acessar com outra conta/);
 
 const mixedMembershipRows = [
   { status: "active", membership_role: "owner", clinical_access_enabled: false, organizations: { id: "org-owner", name: "Clínica Owner", trade_name: null, operational_status: "active" } },
