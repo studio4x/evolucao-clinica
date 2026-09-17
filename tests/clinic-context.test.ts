@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { registerClinicContextRoutes, resolveClinicOrganizations } from "../server/clinic/clinicContextRoutes.js";
 import { clinicContextStorageKey, useClinicContextStore } from "../src/store/clinicContextStore";
+import { selectAcceptedClinicContext } from "../src/utils/clinicInvitationAccess";
 
 const routeSource = readFileSync("server/clinic/clinicContextRoutes.ts", "utf8");
 const selectorSource = readFileSync("src/components/clinic/ClinicContextSelector.tsx", "utf8");
@@ -9,6 +10,7 @@ const publicFlagsSource = readFileSync("src/config/publicFlags.ts", "utf8");
 const appSource = readFileSync("src/App.tsx", "utf8");
 const layoutSource = readFileSync("src/components/Layout.tsx", "utf8");
 const storeSource = readFileSync("src/store/clinicContextStore.ts", "utf8");
+const acceptSource = readFileSync("src/pages/ClinicInvitationAccept.tsx", "utf8");
 
 assert.match(routeSource, /app\.get\("\/api\/clinic\/contexts"/);
 assert.match(routeSource, /organization_memberships/);
@@ -28,6 +30,11 @@ assert.match(appSource, /ClinicRoute/);
 assert.match(appSource, /PersonalContextRoute/);
 assert.match(layoutSource, /md:hidden/);
 assert.match(selectorSource, /aria-label="Selecionar contexto"/);
+assert.match(storeSource, /refreshAfterMutation/);
+assert.match(storeSource, /currentGeneration\(userId\) !== generation/);
+assert.ok(acceptSource.indexOf('invitationRequest("/accept"') < acceptSource.indexOf("refreshAfterMutation"));
+assert.ok(acceptSource.indexOf("refreshAfterMutation") < acceptSource.indexOf("selectAcceptedClinicContext(refreshed"));
+assert.ok(acceptSource.indexOf("selectAcceptedClinicContext(refreshed") < acceptSource.indexOf('navigate("/painel/clinica"'));
 
 const mixedMembershipRows = [
   { status: "active", membership_role: "owner", clinical_access_enabled: false, organizations: { id: "org-owner", name: "Clínica Owner", trade_name: null, operational_status: "active" } },
@@ -150,6 +157,89 @@ state = useClinicContextStore.getState();
 assert.deepEqual(state.organizations.map(({ id }) => id), ["org-new"]);
 state.selectContext({ type: "organization", organizationId: "org-new" });
 assert.deepEqual(useClinicContextStore.getState().activeContext, { type: "organization", organizationId: "org-new" });
+
+// A post-accept refresh must not reuse the pre-accept revalidation. The stale
+// response is released first here, proving that the second network request is
+// still required before the accepted organization can be selected.
+useClinicContextStore.getState().reset();
+(globalThis as any).fetch = async () => new Response(JSON.stringify({ personal: { available: true }, organizations: [] }), {
+  status: 200, headers: { "Content-Type": "application/json" },
+});
+await useClinicContextStore.getState().hydrateForUser("user-a", "token-a");
+let mutationFetchCount = 0;
+let releasePreAccept!: (response: Response) => void;
+let releasePostAccept!: (response: Response) => void;
+const preAcceptPending = new Promise<Response>((resolve) => { releasePreAccept = resolve; });
+const postAcceptPending = new Promise<Response>((resolve) => { releasePostAccept = resolve; });
+(globalThis as any).fetch = async () => {
+  mutationFetchCount += 1;
+  return mutationFetchCount === 1 ? preAcceptPending : postAcceptPending;
+};
+const preAcceptRevalidation = useClinicContextStore.getState().revalidateForUser("user-a", "token-a");
+await Promise.resolve();
+assert.equal(mutationFetchCount, 1);
+const postAcceptRefresh = useClinicContextStore.getState().refreshAfterMutation("user-a", "token-a");
+await Promise.resolve();
+assert.equal(mutationFetchCount, 2);
+releasePreAccept(new Response(JSON.stringify({ personal: { available: true }, organizations: [] }), {
+  status: 200, headers: { "Content-Type": "application/json" },
+}));
+await Promise.resolve();
+assert.equal(useClinicContextStore.getState().organizations.length, 0);
+releasePostAccept(new Response(JSON.stringify({ personal: { available: true }, organizations: [{
+  id: "org-accepted", name: "Clínica Aceita", tradeName: null, operationalStatus: "active",
+  membershipRole: "professional", clinicalAccessEnabled: true,
+}] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+await Promise.all([preAcceptRevalidation, postAcceptRefresh]);
+state = useClinicContextStore.getState();
+assert.deepEqual(state.organizations.map(({ id }) => id), ["org-accepted"]);
+selectAcceptedClinicContext(state, "org-accepted");
+assert.deepEqual(useClinicContextStore.getState().activeContext, { type: "organization", organizationId: "org-accepted" });
+
+// If the fresh request wins the race, the old pre-mutation response must not
+// revert the organization or start a third request.
+useClinicContextStore.getState().reset();
+(globalThis as any).fetch = async () => new Response(JSON.stringify({ personal: { available: true }, organizations: [] }), {
+  status: 200, headers: { "Content-Type": "application/json" },
+});
+await useClinicContextStore.getState().hydrateForUser("user-a", "token-a");
+let staleFetchCount = 0;
+let releaseStale!: (response: Response) => void;
+let releaseFresh!: (response: Response) => void;
+const stalePending = new Promise<Response>((resolve) => { releaseStale = resolve; });
+const freshPending = new Promise<Response>((resolve) => { releaseFresh = resolve; });
+(globalThis as any).fetch = async () => {
+  staleFetchCount += 1;
+  return staleFetchCount === 1 ? stalePending : freshPending;
+};
+const staleRevalidation = useClinicContextStore.getState().revalidateForUser("user-a", "token-a");
+const freshRefresh = useClinicContextStore.getState().refreshAfterMutation("user-a", "token-a");
+await Promise.resolve();
+assert.equal(staleFetchCount, 2);
+releaseFresh(new Response(JSON.stringify({ personal: { available: true }, organizations: [{
+  id: "org-race", name: "Clínica Race", tradeName: null, operationalStatus: "active",
+  membershipRole: "professional", clinicalAccessEnabled: true,
+}] }), { status: 200, headers: { "Content-Type": "application/json" } }));
+await freshRefresh;
+assert.deepEqual(useClinicContextStore.getState().organizations.map(({ id }) => id), ["org-race"]);
+releaseStale(new Response(JSON.stringify({ personal: { available: true }, organizations: [] }), {
+  status: 200, headers: { "Content-Type": "application/json" },
+}));
+await staleRevalidation;
+assert.equal(staleFetchCount, 2);
+assert.deepEqual(useClinicContextStore.getState().organizations.map(({ id }) => id), ["org-race"]);
+
+const acceptedState: { organizations: { id: string }[]; activeContext: { type: "personal" } | { type: "organization"; organizationId: string }; selectContext: (context: { type: "organization"; organizationId: string }) => void } = {
+  organizations: [{ id: "org-pending" }], activeContext: { type: "personal" }, selectContext(context) {
+    this.activeContext = context;
+  },
+};
+selectAcceptedClinicContext(acceptedState, "org-pending");
+assert.deepEqual(acceptedState.activeContext, { type: "organization", organizationId: "org-pending" });
+assert.throws(() => selectAcceptedClinicContext({
+  organizations: [],
+  selectContext: acceptedState.selectContext,
+}, "org-pending"), /context_unavailable/);
 
 let releaseUserA!: (response: Response) => void;
 const userAPending = new Promise<Response>((resolve) => { releaseUserA = resolve; });

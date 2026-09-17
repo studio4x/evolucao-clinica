@@ -16,14 +16,26 @@ type ClinicContextState = {
   userId: string | null;
   hydrateForUser: (userId: string, accessToken: string) => Promise<void>;
   revalidateForUser: (userId: string, accessToken: string) => Promise<void>;
+  refreshAfterMutation: (userId: string, accessToken: string) => Promise<void>;
   selectContext: (context: ActiveClinicContext) => void;
   reset: () => void;
 };
 
 const storagePrefix = "evolucao-clinica:context:";
-let inFlight: Promise<void> | null = null;
-let inFlightUserId: string | null = null;
+type HydrationRequest = { userId: string; generation: number; promise: Promise<void> };
+let inFlight: HydrationRequest | null = null;
 const revalidationInFlight = new Map<string, Promise<void>>();
+const generationByUser = new Map<string, number>();
+
+function currentGeneration(userId: string) {
+  return generationByUser.get(userId) ?? 0;
+}
+
+function advanceGeneration(userId: string) {
+  const next = currentGeneration(userId) + 1;
+  generationByUser.set(userId, next);
+  return next;
+}
 
 function storageKey(userId: string) {
   return `${storagePrefix}${userId}`;
@@ -78,16 +90,19 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
   ...personalState(),
 
   hydrateForUser: async (userId, accessToken) => {
-    if (inFlight && inFlightUserId === userId) return inFlight;
+    const previousUserId = get().userId;
+    if (previousUserId && previousUserId !== userId) advanceGeneration(previousUserId);
+    const generation = currentGeneration(userId);
+    if (inFlight && inFlight.userId === userId && inFlight.generation === generation) return inFlight.promise;
 
-    clearStoredContext(get().userId && get().userId !== userId ? get().userId : null);
+    clearStoredContext(previousUserId && previousUserId !== userId ? previousUserId : null);
     set({ organizations: [], userId, status: "loading", error: null, activeContext: { type: "personal" } });
 
-    inFlightUserId = userId;
-    inFlight = (async () => {
+    let request!: Promise<void>;
+    request = (async () => {
       try {
         const payload = await fetchClinicContexts(accessToken);
-        if (get().userId !== userId) return;
+        if (get().userId !== userId || currentGeneration(userId) !== generation) return;
 
         const organizations = payload.organizations.filter(
           (organization) => Boolean(organization.id) && organization.operationalStatus !== "archived",
@@ -101,7 +116,7 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
         if (!restoredOrganization && storedOrganizationId) writeStoredContext(userId, { type: "personal" });
         set({ organizations, activeContext, status: "ready", error: null, hydratedAt: Date.now() });
       } catch (error) {
-        if (get().userId !== userId) return;
+        if (get().userId !== userId || currentGeneration(userId) !== generation) return;
         const code = error instanceof ClinicContextApiError ? error.code : "context_resolution_failed";
         // A disabled backend flag is an expected personal-only state, not an app error.
         if (error instanceof ClinicContextApiError && error.code === "feature_unavailable") {
@@ -110,25 +125,24 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
         }
         set({ ...personalState(userId), status: "error", error: code, hydratedAt: Date.now() });
       } finally {
-        if (inFlightUserId === userId) {
-          inFlight = null;
-          inFlightUserId = null;
-        }
+        if (inFlight?.promise === request) inFlight = null;
       }
     })();
 
-    return inFlight;
+    inFlight = { userId, generation, promise: request };
+    return request;
   },
 
   revalidateForUser: async (userId, accessToken) => {
+    if (get().userId !== userId) return;
     const existingRevalidation = revalidationInFlight.get(userId);
     if (existingRevalidation) return existingRevalidation;
-    if (get().userId !== userId) return;
+    const generation = currentGeneration(userId);
 
-    const pendingHydration = inFlight && inFlightUserId === userId ? inFlight : null;
+    const pendingHydration = inFlight?.userId === userId ? inFlight.promise : null;
     const revalidation = (async () => {
       if (pendingHydration) await pendingHydration;
-      if (get().userId !== userId) return;
+      if (get().userId !== userId || currentGeneration(userId) !== generation) return;
       await get().hydrateForUser(userId, accessToken);
     })();
 
@@ -138,6 +152,13 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
     } finally {
       if (revalidationInFlight.get(userId) === revalidation) revalidationInFlight.delete(userId);
     }
+  },
+
+  refreshAfterMutation: async (userId, accessToken) => {
+    if (get().userId !== userId) return;
+    advanceGeneration(userId);
+    revalidationInFlight.delete(userId);
+    await get().hydrateForUser(userId, accessToken);
   },
 
   selectContext: (context) => {
@@ -156,7 +177,10 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
   },
 
   reset: () => {
-    clearStoredContext(get().userId);
+    const userId = get().userId;
+    if (userId) advanceGeneration(userId);
+    revalidationInFlight.clear();
+    clearStoredContext(userId);
     set(personalState());
   },
 }));

@@ -1238,4 +1238,41 @@ sim, somente após a correção mínima e seus testes. Não usar uma conta
 
 **Conclusão:** o bloqueio atual é funcional e está no caminho frontend de
 hidratação/seleção pós-aceite, não na aprovação individual, na flag build-time
-do smoke ou na ACL/RLS já corrigida. Nenhuma correção foi aplicada.
+do smoke ou na ACL/RLS já corrigida. Naquele diagnóstico, nenhuma correção
+havia sido aplicada; a correção funcional está registrada abaixo.
+
+### Correção aplicada — contexto pós-aceite
+
+O patch funcional foi implementado na branch `feat/clinicas`, sem alteração de
+backend, RLS, ACL, migration, produção ou gates do staging.
+
+- Nova operação explícita do store: `refreshAfterMutation(userId, accessToken)`.
+- Cada hidratação captura uma geração monotônica por usuário.
+- O aceite avança a geração, invalida logicamente revalidações anteriores e
+  força uma nova chamada real a `GET /api/clinic/contexts`.
+- Respostas de geração antiga não podem aplicar `organizations`,
+  `activeContext`, `status`, `error` ou `hydratedAt`.
+- `reset()` e a troca de usuário também avançam a geração, evitando que uma
+  resposta tardia contamine logout/login subsequente.
+- `ClinicInvitationAccept` só seleciona a organização retornada pelo endpoint
+  autoritativo depois do refresh fresco e confirma o `activeContext` antes de
+  navegar para `/painel/clinica`.
+- A regra de acesso do `ProtectedRoute` não foi relaxada: perfil `pending`
+  continua restrito ao contexto organizacional clínico já resolvido; o contexto
+  pessoal e organizações diferentes permanecem bloqueados.
+
+O teste de regressão comprova `fetchCount = 2`: uma leitura pré-aceite pendente
+e uma nova leitura pós-aceite. Também cobre o caso em que a resposta fresca
+chega primeiro e a resposta stale chega depois, sem sobrescrita e sem uma
+terceira request.
+
+#### Estado desta entrega
+
+- versão web: `v1.10.882`;
+- `PLAY_STORE_VERSION` não foi alterado;
+- smoke real Google OAuth/convite permanece pendente e não foi executado nesta
+  entrega;
+- gates de staging, envio de e-mail, Brevo, Stripe e produção não foram
+  alterados;
+- o usuário Auth sintético antigo previamente detectado foi preservado, sem
+  remoção nesta execução.

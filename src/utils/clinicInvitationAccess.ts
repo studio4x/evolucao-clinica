@@ -9,3 +9,17 @@ export function canEnterInvitedClinic(input: {
     && input.contextUserId === input.userId && input.activeContext.type === "organization"
     && input.organizations.some((org) => org.id === input.activeContext.organizationId);
 }
+
+export function selectAcceptedClinicContext(
+  store: {
+    organizations: { id: string }[];
+    selectContext: (context: { type: "organization"; organizationId: string }) => void;
+  },
+  organizationId: string,
+) {
+  if (!store.organizations.some((organization) => organization.id === organizationId)) {
+    throw new Error("context_unavailable");
+  }
+
+  store.selectContext({ type: "organization", organizationId });
+}

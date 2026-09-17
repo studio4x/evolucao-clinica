@@ -98,6 +98,11 @@ async function request(path = "", actor?: string, body?: any, cookie?: string, r
 const createBody = (email = "recipient@example.invalid", clinical = true, role = "professional") => ({ organizationId: org, email, clinical, role, actor: stranger });
 try {
   const invitedAccess = { pathname: "/painel/clinica", featureEnabled: true, contextStatus: "ready", contextUserId: recipient, userId: recipient, activeContext: { type: "organization", organizationId: org }, organizations: [{ id: org }] };
+  // A pending professional may enter only through the resolved organization
+  // context; personal and unrelated contexts remain denied.
+  assert.equal(canEnterInvitedClinic(invitedAccess), true);
+  assert.equal(canEnterInvitedClinic({ ...invitedAccess, activeContext: { type: "personal" } }), false);
+  assert.equal(canEnterInvitedClinic({ ...invitedAccess, activeContext: { type: "organization", organizationId: otherOrg } }), false);
   assert.equal(canEnterInvitedClinic(invitedAccess), true);
   for (const overrides of [{ pathname: "/painel/patients" }, { pathname: "/painel/clinicas-falso" }, { contextStatus: "loading" }, { contextUserId: stranger }, { featureEnabled: false }, { organizations: [] }, { activeContext: { type: "personal" } }]) assert.equal(canEnterInvitedClinic({ ...invitedAccess, ...overrides }), false);
   assert.equal(createInvitationTransport({}).ready, false);

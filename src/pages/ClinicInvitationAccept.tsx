@@ -4,6 +4,7 @@ import { useAuthStore } from "../store/authStore";
 import { useClinicContextStore } from "../store/clinicContextStore";
 import { supabase } from "../supabaseClient";
 import { invitationRequest, invitationErrorMessage } from "../services/clinicInvitations";
+import { selectAcceptedClinicContext } from "../utils/clinicInvitationAccess";
 
 type Handoff = { organizationName: string; role: string; clinical: boolean; expiresAt: string };
 export default function ClinicInvitationAccept() {
@@ -25,10 +26,11 @@ export default function ClinicInvitationAccept() {
       if (!data.session || data.session.user.id !== user.id) throw new Error("authentication_required");
       const result = await invitationRequest("/accept", data.session.access_token, {});
       const store = useClinicContextStore.getState();
-      await store.revalidateForUser(user.id, data.session.access_token);
+      await store.refreshAfterMutation(user.id, data.session.access_token);
       const refreshed = useClinicContextStore.getState();
-      if (!refreshed.organizations.some((org) => org.id === result.organizationId)) throw new Error("context_unavailable");
-      refreshed.selectContext({ type: "organization", organizationId: result.organizationId });
+      selectAcceptedClinicContext(refreshed, result.organizationId);
+      const selected = useClinicContextStore.getState().activeContext;
+      if (selected.type !== "organization" || selected.organizationId !== result.organizationId) throw new Error("context_unavailable");
       navigate("/painel/clinica", { replace: true });
     } catch (cause) { setError(invitationErrorMessage(cause)); }
     finally { setBusy(false); }
