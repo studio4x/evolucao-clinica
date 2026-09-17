@@ -1458,3 +1458,80 @@ Restauração: gate global `false`; quatro flags temporárias de clínica/Google
 `dpl_8kimwJDao5FXaeTiyryyZvxhZ8xf` ficou `READY`, `/api/health` retornou
 `{"status":"ok"}` e `/convite-clinica` voltou a informar `Convites indisponíveis`.
 Produção, `main`, Stripe, Brevo, DNS e Drive permaneceram intactos.
+
+### Diagnóstico final focalizado do pós-aceite — 2026-09-17 — build diagnóstico temporário `v1.10.888`; baseline final `v1.10.887`
+
+Execução exclusivamente no staging `hwkdwinfckmjoriqxbjk`, usando provider
+`mock`, sem envio real de e-mail. Foi usado um commit temporário somente para
+serializar marcadores de diagnóstico no navegador; a instrumentação foi
+revertida integralmente ao final.
+
+Resultado dos checkpoints, em ordem:
+
+- `A1`: **PASS** — sessão presente.
+- `A2`: **PASS** — sessão coincide com o usuário do componente.
+- `A3`: **PASS** — aceite concluído.
+- `A4`: **PASS** — usuário do auth store coincide com o componente.
+- `O1`: **PASS** — usuário presente no componente.
+- `O2`: **PASS** — auth store coincide com o componente.
+- `O3`: **PASS** — clinic store `same` antes da atualização.
+- `O4`: **PASS** — status do clinic store `ready`.
+- `R1`: **PASS** — `refreshAfterMutation` entrou.
+- `R2`: **PASS** — usuário atual do clinic store `same`.
+- `R3`: **PASS** — guard de mismatch não bloqueou (`pass`).
+- `R4`: **PASS** — geração avançada.
+- `R5`: **PASS** — hydrate chamado.
+- `H1`: **PASS** — hydrate entrou; na hidratação inicial o store estava `null`;
+  na hidratação pós-aceite estava `same`.
+- `H2`: **PASS** — não houve troca indevida de usuário.
+- `H3`: **PASS** — não havia request concorrente (`none`).
+- `H4`: **PASS** — fetch foi iniciado.
+- `F1`: **PASS** — GET `/api/clinic/contexts` foi emitido.
+- `F2`: **PASS** — resposta HTTP `200`.
+- `F3`: **PASS** — erro retornado `null`.
+- `F4`: **FAIL** — `organizations_count=0`.
+- `F5`: **FAIL** — organização aceita não foi encontrada no payload.
+
+`PRIMEIRO_CHECKPOINT_DE_FALHA`: **F4**, confirmado no pós-aceite; `F5` é a
+consequência imediata. Não houve bloqueio em A, O, R ou H. O refresh não foi
+silenciado por mismatch de usuário, e a UI exibiu a mensagem de contexto
+indisponível porque o payload de contexts chegou vazio.
+
+Resumo objetivo:
+
+- auth store versus usuário do componente: **same**;
+- clinic store versus usuário do componente: **same**;
+- status do clinic store: **ready**;
+- refresh guard: **pass**;
+- hydrate: **sim**;
+- fetch: **sim**;
+- HTTP: **200**;
+- erro HTTP/`42501`/`503`: **não observado**;
+- organização no payload: **não**.
+
+Após o aceite, o banco confirmou invitation `accepted`, membership do
+profissional controlado `active`, `clinical_access_enabled=true` e perfil
+preservado como `pending`. Portanto, a causa confirmada é uma divergência na
+resolução/projeção server-side de `/api/clinic/contexts`: o aceite persiste a
+associação, mas a consulta autenticada do contexto devolve uma lista vazia.
+O diagnóstico exclui a hipótese de corrida entre auth store e clinic store;
+o ponto interno exato entre a consulta RLS e o join relacional ainda não foi
+alterado nem separado em uma nova instrumentação server-side.
+
+`PATCH_MÍNIMO_RECOMENDADO` (não aplicado): revisar o resolver de
+`/api/clinic/contexts` e sua consulta request-scoped, separando a leitura da
+membership ativa da projeção da organização e adicionando testes com um
+profissional `pending` que tenha membership ativa e acesso clínico. Manter a
+autorização vinculada ao JWT/RLS; não usar service role para mascarar a falha.
+
+Cleanup final: **PASS**. As duas fixtures sintéticas, owner Auth, invitations,
+memberships, handoffs, deliveries, subscriptions, flags, rollout e auditoria
+foram removidos; o profissional controlado permaneceu `pending`. O global
+clinic gate e as quatro flags temporárias retornaram a `false`; delivery e
+billing permaneceram `false`. A instrumentação e o incremento temporário de
+build foram revertidos. O deploy final sem instrumentação ficou `READY`, com
+`/api/health` HTTP `200` e `{"status":"ok"}`.
+
+Estado: **CHECKPOINT PÓS-ACEITE IDENTIFICADO — FASE 2C AINDA BLOQUEADA**.
+Nenhuma correção funcional foi aplicada. Produção, `main`, Stripe, Brevo,
+DNS, Google Drive, schema e RLS permaneceram intactos.
