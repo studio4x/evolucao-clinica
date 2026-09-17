@@ -1360,3 +1360,50 @@ Encerramento desta rodada de correções:
   e billing continuaram `false`. Nenhum envio ou cobrança real foi efetuado.
 - Os helpers `can_access_organization_workspace` e `is_clinic_feature_enabled`
   conservaram EXECUTE para authenticated/postgres, sem EXECUTE anon/service_role.
+
+### Smoke E2E fresco — falha na resolução de contexto — 2026-09-17
+
+Esta execução criou uma fixture nova, emitiu convite pelo RPC oficial com
+provider `mock` e não enviou e-mail. O token bruto ficou somente em memória.
+
+Resultado técnico:
+
+- OAuth: **PASS** — a conta controlada foi escolhida manualmente no seletor
+  Google e o fluxo retornou autenticado à tela de convite.
+- Handoff/landing: **PASS** — fragmento removido da URL, handoff criado e
+  convite exibido antes do aceite.
+- Aceite: **PASS** — convite `accepted`, destinatário esperado, membership
+  `active`, `clinical_access_enabled=true`, entitlement `full` e perfil
+  individual preservado como `pending`.
+- Seat/idempotência: **PASS** — `active_seats=1`, `reserved_seats=0` e um
+  único evento `invitation_accepted`.
+- Ordem `POST accept -> GET contexts`: **FAIL / não comprovada** — após o
+  aceite, a interface exibiu “Seu convite já foi aceito, mas não foi possível
+  carregar a clínica”. A captura de rede da aba não ficou disponível para
+  afirmar o status HTTP ou a ordem temporal da nova GET.
+- Contexto autoritativo: **FAIL** — a organização aceita não chegou ao shell
+  `/painel/clinica`; `selectContext` e `activeContext=organization` não foram
+  confirmados nesta execução.
+- `42501`: não observado na evidência disponível; o código HTTP da GET não foi
+  capturado.
+- `context_unavailable`: comportamento visual compatível com a falha de
+  resolução, mas o código interno não foi capturado.
+- Rotas de recarga, bloqueio pessoal e recuperação secundária do convite não
+  foram executadas depois da falha, conforme o critério de parada do smoke.
+
+Estado da execução: **FASE 2C BLOQUEADA — FRESH CONTEXT PÓS-ACEITE NÃO
+COMPROVADO**.
+
+Cleanup: **PASS**. A organização, owner Auth sintético, invitation,
+membership, handoff, delivery, subscription, rollout e auditoria sintética
+foram removidos; não restaram resíduos e o profissional controlado continuou
+`pending`.
+
+Gates: **PASS restaurado**. Gate global e quatro flags temporárias de clínica/
+Google voltaram para `false`; delivery e billing permaneceram `false`. O
+deployment final do staging usa o commit `c466adc` com as flags restauradas.
+
+Não houve alteração de código, schema, RLS, produção, Stripe, DNS, Brevo,
+Google Drive ou Android nesta tentativa. O próximo passo é investigar a
+captura da GET `/api/clinic/contexts` e somente então repetir um novo smoke;
+este resultado não autoriza envio real de e-mail.
