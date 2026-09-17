@@ -937,9 +937,10 @@ privilégios amplos a `PUBLIC`/`anon`.
 - produção, Stripe, Brevo, DNS, Google Drive e `main` permaneceram intactos;
 - nenhuma correção foi aplicada e nenhum novo smoke foi iniciado.
 
-**Conclusão:** a Fase 2C permanece bloqueada especificamente por uma
-inconsistência ACL/RLS no staging. Aguardando autorização separada para a
-correção e novo smoke.
+**Conclusão histórica:** naquele ponto da investigação, a Fase 2C permanecia
+bloqueada especificamente por uma inconsistência ACL/RLS no staging. Esse
+registro não representa o estado atual; a validação funcional posterior
+superou esse bloqueio.
 
 ### Hardening corretivo ACL/RLS — staging — 2026-09-17
 
@@ -1236,10 +1237,10 @@ sim, somente após a correção mínima e seus testes. Não usar uma conta
   as flags Vite restauradas como `false`. Delivery e billing não foram
   alterados.
 
-**Conclusão:** o bloqueio atual é funcional e está no caminho frontend de
-hidratação/seleção pós-aceite, não na aprovação individual, na flag build-time
-do smoke ou na ACL/RLS já corrigida. Naquele diagnóstico, nenhuma correção
-havia sido aplicada; a correção funcional está registrada abaixo.
+**Conclusão histórica:** naquele diagnóstico, o bloqueio observado estava no
+caminho frontend de hidratação/seleção pós-aceite. A validação funcional
+posterior superou essa falha; o bloqueio do contexto pessoal `pending` continua
+sendo o comportamento esperado do produto.
 
 ### Correção aplicada — contexto pós-aceite
 
@@ -1645,3 +1646,47 @@ alterar RLS, migration, resolver, dados clínicos ou produção para esta
 observação. As quatro flags temporárias de Google/Clínica continuam habilitadas
 somente no staging até a validação controlada e devem ser restauradas para
 `false` ao final.
+
+### Encerramento operacional da Fase 2C — 2026-09-17
+
+Estado final desta rodada, exclusivamente no staging:
+
+- LOGIN GOOGLE STAGING: **PASS**;
+- CONVITE: **PASS**;
+- ACEITE: **PASS**;
+- MEMBERSHIP ATIVA: **PASS**;
+- `clinical_access_enabled`: **PASS**;
+- CONTEXTO ORGANIZACIONAL: **PASS**;
+- ENTRADA NA CLÍNICA (`/painel/clinica`): **PASS**;
+- `professional.status`: `pending` preservado;
+- PAINEL PESSOAL: bloqueado como esperado para o perfil `pending`;
+- CLEANUP: **PASS**;
+- FIXTURE REMOVIDA: **PASS**;
+- FLAGS RESTAURADAS: **PASS**;
+- PRODUÇÃO: intacta.
+
+O histórico de diagnósticos anteriores permanece preservado. As falhas
+intermediárias de contexto registradas acima foram superadas em validação
+posterior; elas não representam o estado atual da Fase 2C.
+
+O gate externo de e-mail permanece:
+
+**GATE EXTERNO PRÉ-PRODUÇÃO — PENDENTE**
+
+Ainda é necessário validar o remetente Brevo, tracking desabilitado, ausência
+de link rewriting, um envio real controlado e o aceite pelo link efetivamente
+recebido. Nenhum e-mail real foi enviado nesta rodada. Esse gate não bloqueia
+as próximas fases, mas é obrigatório antes da liberação empresarial em
+produção.
+
+Decisão de desenvolvimento para as próximas fases: implementar, ajustar
+testes automatizados, executar testes pertinentes, `npm test`, lint, build e
+`git diff --check`; evitar repetir OAuth manual, E2E completo de navegador,
+fixtures e gates a cada patch. Um smoke curto fica reservado ao final de cada
+fase, e o E2E empresarial integrado completo fica reservado para antes da
+produção. Mudanças em RLS, autenticação, autorização, billing, ownership,
+seats, isolamento entre clínicas ou dados clínicos continuam exigindo
+validação específica.
+
+**FASE 2C — FLUXO FUNCIONAL VALIDADO; GATE EXTERNO BREVO ADIADO PARA
+PRÉ-PRODUÇÃO**
