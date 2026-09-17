@@ -31,8 +31,9 @@ assert.doesNotMatch(launcherSource, /Type\.ime\(\)/, 'IME não deve virar paddin
 assert.match(appVersionSource, /APP_VERSION = "v1\.10\.869"/);
 assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.88"/);
 assert.match(gradleSource, /versionCode 88/);
-assert.match(gradleSource, /versionName "1\.0\.88"/);
+assert.match(gradleSource, /versionName "88"/);
 assert.match(twaManifestSource, /"appVersionCode": 88/);
-assert.match(twaManifestSource, /"appVersionName": "1\.0\.88"/);
+assert.match(twaManifestSource, /"appVersionName": "88"/);
+assert.match(twaManifestSource, /"appVersion": "88"/);
 
 console.log('Mobile bottom navigation safe-area tests passed');
