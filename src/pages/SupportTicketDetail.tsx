@@ -14,6 +14,7 @@ import {
 } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
+import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
 
 export default function SupportTicketDetail() {
   const { ticketId: routeTicketId } = useParams<{ ticketId: string }>();
@@ -305,7 +306,7 @@ export default function SupportTicketDetail() {
                       ? 'bg-brand-primary text-white border-brand-primary rounded-br-none'
                       : 'bg-white text-brand-text border-brand-border rounded-bl-none'
                   }`}>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap font-sans">{msg.message}</p>
+                    <RichTextPreview value={msg.message} className="text-sm leading-relaxed font-sans" />
 
                     {/* Message attachment */}
                     {msg.attachmentUrl && (
@@ -377,20 +378,33 @@ export default function SupportTicketDetail() {
                 <Paperclip size={18} />
               </button>
 
-              <textarea
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder={isAdmin ? "Escreva uma resposta de suporte..." : "Digite sua mensagem..."}
-                disabled={sending}
-                rows={1}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage(e);
-                  }
-                }}
-                className="flex-1 px-4 py-3 rounded-2xl border border-brand-border focus:border-brand-primary outline-none text-sm resize-none max-h-20"
-              />
+              {isAdmin ? (
+                <div className="min-w-0 flex-1">
+                  <RichTextEditor
+                    value={newMessage}
+                    onChange={setNewMessage}
+                    disabled={sending}
+                    label="Resposta"
+                    minHeight="11rem"
+                    resizable
+                  />
+                </div>
+              ) : (
+                <textarea
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  placeholder="Digite sua mensagem..."
+                  disabled={sending}
+                  rows={1}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage(e);
+                    }
+                  }}
+                  className="flex-1 px-4 py-3 rounded-2xl border border-brand-border focus:border-brand-primary outline-none text-sm resize-none max-h-20"
+                />
+              )}
 
               <button
                 type="submit"
