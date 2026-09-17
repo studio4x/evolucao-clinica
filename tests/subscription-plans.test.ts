@@ -7,6 +7,7 @@ import {
   isPaidSubscriberForMetrics,
   normalizeManagedSubscription
 } from '../src/utils/subscriptionPlans.js';
+import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../src/config/subscriptionPlans.js';
 
 const courtesy = normalizeManagedSubscription({
   subscriptionPlan: 'courtesy',
@@ -25,6 +26,11 @@ assert.equal(getSubscriptionPlanLabel('courtesy'), 'Plano Cortesia');
 assert.equal(hasActivePaidAccess({ subscriptionPlan: 'courtesy', subscriptionStatus: 'active' }), true);
 assert.equal(hasActiveYearlyAccess({ subscriptionPlan: 'courtesy', subscriptionStatus: 'active' }), true);
 assert.equal(hasActiveYearlyAccess({ subscriptionPlan: 'courtesy', subscriptionStatus: 'canceled' }), false);
+
+const yearlyAudioFeature = 'Até 60 minutos de áudio por evolução';
+assert.equal(YEARLY_PLAN_FEATURES[1], yearlyAudioFeature);
+assert.equal(YEARLY_PLAN_FEATURES.filter((feature) => feature === yearlyAudioFeature).length, 1);
+assert.equal(MONTHLY_PLAN_FEATURES.includes(yearlyAudioFeature), false);
 
 assert.equal(isPaidSubscriberForMetrics({
   subscription_plan: 'courtesy',
@@ -56,5 +62,19 @@ const constraintMigrationSource = readFileSync(
 );
 assert.match(constraintMigrationSource, /DROP CONSTRAINT IF EXISTS professionals_subscription_plan_check/);
 assert.match(constraintMigrationSource, /subscription_plan IN \('trial', 'monthly', 'yearly', 'courtesy', 'none'\)/);
+
+const yearlyFeatureMigrationSource = readFileSync(
+  resolve('supabase/migrations/20260917150000_add_yearly_audio_feature.sql'),
+  'utf8'
+);
+assert.match(yearlyFeatureMigrationSource, /WHERE id = 'yearly'/);
+assert.match(yearlyFeatureMigrationSource, /array_position\(features, 'Tudo do plano mensal'\)/);
+assert.match(yearlyFeatureMigrationSource, /Até 60 minutos de áudio por evolução/);
+assert.doesNotMatch(yearlyFeatureMigrationSource, /UPDATE public\.plans\s+SET\s+(price|original_price|equivalent_monthly_price|discount_text|tag_text)/);
+
+const landingSource = readFileSync(resolve('src/pages/LandingPage.tsx'), 'utf8');
+const subscriptionSource = readFileSync(resolve('src/pages/Subscription.tsx'), 'utf8');
+assert.match(landingSource, /plan\.features\?\.map/);
+assert.match(subscriptionSource, /plan\.features\.map/);
 
 console.log('Courtesy subscription plan tests passed.');
