@@ -230,6 +230,54 @@ Sem credenciais do transporte dedicado ou cópia de secrets de produção.
 
 ## Cleanup e próximo passo
 
+### Smoke OAuth com gates temporários — 2026-09-17 — referência `5fec404`
+
+Os gates `VITE_GOOGLE_INTEGRATIONS_ENABLED` e
+`GOOGLE_INTEGRATIONS_ENABLED` foram habilitados **somente** no projeto
+Vercel `evolucao-clinica-staging`, team TARGET, para o redeploy
+`dpl_72g1xJwa5Q1XDxUATshyznFT2sEz`. O deployment ficou READY; `/api/health`
+retornou HTTP200 com `{"status":"ok"}` na URL do deployment e no domínio
+customizado. Delivery e billing permaneceram false.
+
+No Edge, Deployment Protection não bloqueou a aplicação. A página real de
+login carregou, o modal de segurança foi concluído e o fluxo chegou ao
+seletor de contas Google. Como o perfil continha várias contas e nenhuma foi
+identificada inequivocamente como conta controlada de teste, o agente não
+selecionou nenhuma. Não solicitada nem registrada senha, OTP ou credencial;
+nenhuma conta pessoal/profissional foi usada por suposição. O seletor exibiu
+somente o escopo OAuth já previsto pelo contrato (`drive.file`); nenhuma API
+do Drive foi acessada, e nenhum arquivo foi criado, alterado ou removido.
+
+Por isso, OAuth callback, sessão Supabase, `auth.users.email`,
+`email_confirmed_at`, retorno `/painel/convite-clinica` e fluxo fragment /
+handoff não foram declarados PASS. Nenhum fixture, usuário sintético ou token
+de convite foi criado; consequentemente não houve alteração de storage,
+metadata, analytics, logs ou histórico por fixture. Não houve e-mail externo.
+
+### Restauração obrigatória concluída
+
+Independentemente do smoke incompleto, os dois gates foram restaurados para
+false no projeto staging e houve novo redeploy:
+`dpl_62gbkhLzTZxd1rwWUcGaAxXFGxQQ`, READY. O health retornou novamente
+HTTP200 e `{"status":"ok"}` no deployment e no domínio customizado.
+Releitura pela API oficial confirmou:
+
+- `VITE_GOOGLE_INTEGRATIONS_ENABLED=false`;
+- `GOOGLE_INTEGRATIONS_ENABLED=false`;
+- `CLINIC_INVITATION_DELIVERY_ENABLED=false`;
+- `CLINIC_BILLING_ENABLED=false`.
+
+Consulta somente leitura no Supabase staging confirmou users,
+professionals, organizations, memberships, invitations, deliveries,
+handoffs e audit em zero, com global clinic gate false. Produção, Stripe,
+Brevo, DNS, `main`, Drive e Fase 3 permaneceram intocados.
+
+Estado desta retomada: **FASE 2C BLOQUEADA — GOOGLE AUTH STAGING**. Para uma
+nova tentativa, é necessário selecionar manualmente uma conta Google
+controlada de teste no seletor já aberto, sem escolher contas pessoais ou de
+profissionais. Tracking/link rewriting Brevo continua gate separado e não foi
+alterado.
+
 ### Retomada OAuth após acesso Vercel manual — referência `be17fbb`
 
 Branch feat/clinicas, HEAD be17fbb e worktree limpo no início. A mesma aba
