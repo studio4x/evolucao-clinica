@@ -17,11 +17,6 @@ export default function ClinicInvitationAccept() {
   const [busy, setBusy] = useState(false);
   const [acceptedOrganizationId, setAcceptedOrganizationId] = useState<string | null>(null);
   const [handoffUnavailable, setHandoffUnavailable] = useState(false);
-  const diagnosticQuery = new URLSearchParams(window.location.search);
-  const diagnosticOrganizationId = diagnosticQuery.get("phase2cDiagnosticOrganization");
-  const diagnosticOwnerId = diagnosticQuery.get("phase2cDiagnosticOwner");
-  const diagnosticEnabled = window.location.hostname === "staging.evolucaoclinica.app.br" && Boolean(diagnosticOrganizationId && diagnosticOwnerId);
-  const [diagnosticResult, setDiagnosticResult] = useState("");
   useEffect(() => {
     let active = true;
     setInfo(null);
@@ -88,23 +83,6 @@ export default function ClinicInvitationAccept() {
       setBusy(false);
     }
   };
-  const runDiagnosticAcceptance = async () => {
-    if (busy || !diagnosticEnabled || !diagnosticOrganizationId || !diagnosticOwnerId) return;
-    setBusy(true); setDiagnosticResult("");
-    try {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session || data.session.user.id !== user?.id) throw new Error("authentication_required");
-      const response = await fetch("/api/clinic/contexts/diagnostic-accept", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json", "x-phase-2c-diagnostic": "phase2c-context-matrix-20260917" },
-        body: JSON.stringify({ organizationId: diagnosticOrganizationId, ownerId: diagnosticOwnerId }),
-      });
-      const result = await response.json();
-      setDiagnosticResult(response.ok && result.accepted ? "DIAGNOSTIC_ACCEPTED=true" : "DIAGNOSTIC_ACCEPTED=false");
-    } catch {
-      setDiagnosticResult("DIAGNOSTIC_ACCEPTED=false");
-    } finally { setBusy(false); }
-  };
   return <main className="mx-auto max-w-lg p-6 text-[#105576]">
     <h1 className="text-2xl font-semibold">Convite para a clínica</h1>
     {error && <p role="alert" className="mt-4">{handoffUnavailable && !info && !acceptedOrganizationId
@@ -118,6 +96,5 @@ export default function ClinicInvitationAccept() {
       {isAuthReady && !user ? <><p className="mt-4">Entre ou crie sua conta para continuar.</p><p>Use o mesmo e-mail que recebeu o convite. O acesso ou cadastro utiliza sua conta Google.</p><div className="mt-4 flex gap-4"><Link to="/login?next=%2Fpainel%2Fconvite-clinica">Entrar</Link><Link to="/login?next=%2Fpainel%2Fconvite-clinica">Criar conta</Link></div></> : user && <><p className="mt-4">Confirme para aceitar o convite com o e-mail da sua conta atual.</p><div className="mt-4 flex flex-col gap-3"><button className="rounded bg-[#105576] p-3 text-white disabled:opacity-50" disabled={busy} onClick={() => void accept()}>Aceitar convite</button><button type="button" className="rounded border border-[#105576] p-3 text-[#105576] transition hover:bg-white disabled:opacity-50" disabled={busy} onClick={() => void logout()}>Sair e acessar com outra conta</button></div></>}
     </>}
     {isAuthReady && (!info || acceptedOrganizationId) && <button type="button" className="mt-4 rounded border border-[#105576] p-3 text-[#105576] transition hover:bg-white disabled:opacity-50" disabled={busy} onClick={() => void logout()}>Sair e acessar com outra conta</button>}
-    {diagnosticEnabled && user && <div className="mt-6 border-t border-[#105576]/30 pt-4"><button type="button" className="rounded border border-[#105576] p-3 text-[#105576] disabled:opacity-50" disabled={busy} onClick={() => void runDiagnosticAcceptance()}>Executar diagnóstico temporário</button>{diagnosticResult && <p role="status" className="mt-2">{diagnosticResult}</p>}</div>}
   </main>;
 }
