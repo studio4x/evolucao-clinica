@@ -6,7 +6,7 @@ Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
-**FASE 2C BLOQUEADA — GOOGLE AUTH STAGING** para smoke browser/externo.
+**FASE 2C BLOQUEADA — GLOBAL CLINIC GATE** para smoke browser/externo.
 Implementação e smoke técnico
 com transporte mock concluídos; nenhum e-mail externo enviado.
 
@@ -24,11 +24,12 @@ Bloqueios confirmados, não hipóteses:
    retornou ao domínio staging, a rota protegida carregou sem a tela de login,
    e a consulta administrativa confirmou um único usuário recente com e-mail
    e `email_confirmed_at`. Nenhuma senha foi solicitada ou registrada.
-4. O handoff real permaneceu bloqueado pelo `CLINIC_FEATURE_ENABLED=false` do
-   deployment: `/convite-clinica` respondeu `Convites indisponíveis`, portanto
-   o script de fragment exchange não foi executado. Não habilitei esse gate
-   adicional, não enviei e-mail e não declarei PASS para token raw, OAuth state,
-   storage, metadata, logs, analytics ou histórico.
+4. `CLINIC_FEATURE_ENABLED=true` foi habilitado temporariamente conforme a
+   autorização desta retomada. O fragment exchange executou, removeu o raw
+   token da URL e então o handoff foi recusado pelo global clinic gate, que
+   permaneceu `false` durante toda a execução. Não houve contorno, e não foi
+   declarado PASS para cookie HttpOnly, OAuth state, storage, metadata, logs,
+   analytics ou histórico completo.
 5. Destinatário controlado e autorização específica para o primeiro envio
    ainda precisam ser fornecidos depois de resolver os gates técnicos.
 
@@ -598,8 +599,44 @@ TARGET, sem alteração de produção, Stripe, DNS, Brevo, Drive ou `main`.
   efetivo `false`, `CLINIC_INVITATION_DELIVERY_ENABLED=false` e
   `CLINIC_BILLING_ENABLED=false` preservados.
 
-Estado desta retomada: **FASE 2C BLOQUEADA — GOOGLE AUTH STAGING**. O OAuth
-básico chegou a completar o callback, mas o handoff seguro não pôde ser
-executado sem habilitar `CLINIC_FEATURE_ENABLED`, que não estava autorizado.
-Tracking/link rewriting Brevo continua um gate separado e nenhum envio foi
-realizado. Fase 3 não iniciada.
+Estado desta retomada: **FASE 2C BLOQUEADA — GLOBAL CLINIC GATE**. O OAuth
+básico já estava validado; com `CLINIC_FEATURE_ENABLED=true`, o bloqueio
+seguinte foi o global clinic gate obrigatório, mantido `false` conforme a
+autorização. Tracking/link rewriting Brevo continua um gate separado e nenhum
+envio foi realizado. Fase 3 não iniciada.
+
+### Retomada adicional — handoff com global gate desligado — 2026-09-17
+
+Partindo de `c4c99c2`, foram habilitados temporariamente somente no projeto
+staging `CLINIC_FEATURE_ENABLED=true`,
+`VITE_GOOGLE_INTEGRATIONS_ENABLED=true` e
+`GOOGLE_INTEGRATIONS_ENABLED=true`. O deployment
+`dpl_FSGZvwvVxVBopS2DNEiLJuppJiQB` ficou READY no commit `13240ec`, e
+`vercel curl` por Deployment Protection confirmou HTTP 200 com corpo exato
+`{"status":"ok"}`. Supabase runtime confirmado como staging
+`hwkdwinfckmjoriqxbjk`.
+
+Foi criada uma fixture mínima sem habilitar o global clinic gate: owner
+sintético, organização, entitlement full, feature flag e convite com raw token
+gerado somente em runtime. Nenhum delivery foi criado e nenhum e-mail foi
+enviado. Em `/convite-clinica#invite=<token-runtime>`, o landing script
+removeu o fragmento; a URL final não tinha query nem fragment e não continha
+o raw token. A chamada de handoff retornou indisponível porque
+`private.invitation_feature_enabled` exige o global clinic gate, que permaneceu
+`false`. Portanto não houve handoff persistido, cookie opaco ou avanço para
+OAuth/aceite; não foi habilitado outro gate.
+
+Cleanup limitado à fixture: `auth.users=0`, `professionals=0`,
+`organizations=0`, `organization_memberships=0`, `organization_invitations=0`,
+`organization_invitation_deliveries=0`, `organization_invitation_handoffs=0`
+e `organization_admin_events=0`. O global clinic gate permaneceu `false`.
+
+Restauração obrigatória concluída: os três gates temporários foram retornados
+a `false`; `CLINIC_INVITATION_DELIVERY_ENABLED=false` e
+`CLINIC_BILLING_ENABLED=false` permaneceram intactos. O redeploy final
+`dpl_3HhacevdV7Ut5fRRoSNFveHLV4tY` ficou READY, com `/api/health` HTTP 200 e
+`{"status":"ok"}`. Produção, Stripe, Brevo, DNS, Drive e `main` não foram
+alterados.
+
+Resultado: **FASE 2C BLOQUEADA — GLOBAL CLINIC GATE**. Tracking/link
+rewriting Brevo continua pendente. Fase 3 não iniciada.
