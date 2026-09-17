@@ -8,7 +8,7 @@ import { selectAcceptedClinicContext } from "../utils/clinicInvitationAccess";
 import { ClinicAccessOptions } from "../components/clinic/ClinicAccessOptions";
 
 type Handoff = { organizationName: string; role: string; clinical: boolean; expiresAt: string };
-const clinic2cDiag = (checkpoint: string, details: Record<string, unknown>) => console.info("[Clinic2CDiag]", checkpoint, details);
+const clinic2cDiag = (checkpoint: string, details: Record<string, unknown>) => console.info(`[Clinic2CDiag] ${checkpoint} ${JSON.stringify(details)}`);
 export default function ClinicInvitationAccept() {
   const { user, isAuthReady } = useAuthStore();
   const clinicContext = useClinicContextStore();
