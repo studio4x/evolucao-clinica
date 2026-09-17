@@ -34,6 +34,9 @@ assert.match(storeSource, /refreshAfterMutation/);
 assert.match(storeSource, /currentGeneration\(userId\) !== generation/);
 assert.match(acceptSource, /supabase\.auth\.signOut\(\)/);
 assert.match(acceptSource, /Sair e acessar com outra conta/);
+assert.match(acceptSource, /Não há convite pendente disponível nesta sessão/);
+assert.match(acceptSource, /cause instanceof ClinicInvitationError && cause.code === "invitation_unavailable"/);
+assert.match(acceptSource, /Seu convite já foi aceito, mas não foi possível carregar a clínica/);
 
 const mixedMembershipRows = [
   { status: "active", membership_role: "owner", clinical_access_enabled: false, organizations: { id: "org-owner", name: "Clínica Owner", trade_name: null, operational_status: "active" } },

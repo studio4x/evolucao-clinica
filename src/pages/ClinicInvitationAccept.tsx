@@ -3,24 +3,30 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useClinicContextStore } from "../store/clinicContextStore";
 import { supabase } from "../supabaseClient";
-import { invitationRequest, invitationErrorMessage } from "../services/clinicInvitations";
+import { invitationRequest, invitationErrorMessage, ClinicInvitationError } from "../services/clinicInvitations";
 import { selectAcceptedClinicContext } from "../utils/clinicInvitationAccess";
 import { ClinicAccessOptions } from "../components/clinic/ClinicAccessOptions";
 
 type Handoff = { organizationName: string; role: string; clinical: boolean; expiresAt: string };
 export default function ClinicInvitationAccept() {
   const { user, isAuthReady } = useAuthStore();
+  const clinicContext = useClinicContextStore();
   const navigate = useNavigate();
   const [info, setInfo] = useState<Handoff | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [acceptedOrganizationId, setAcceptedOrganizationId] = useState<string | null>(null);
+  const [handoffUnavailable, setHandoffUnavailable] = useState(false);
   useEffect(() => {
     let active = true;
     setInfo(null);
     setError("");
     setAcceptedOrganizationId(null);
-    invitationRequest("/handoff").then((data) => { if (active) setInfo(data); }).catch((cause) => { if (active) setError(invitationErrorMessage(cause)); });
+    setHandoffUnavailable(false);
+    invitationRequest("/handoff").then((data) => { if (active) setInfo(data); }).catch((cause) => { if (active) {
+      setHandoffUnavailable(cause instanceof ClinicInvitationError && cause.code === "invitation_unavailable");
+      setError(invitationErrorMessage(cause));
+    } });
     return () => { active = false; };
   }, [user?.id]);
   const openClinic = async (organizationId: string, accessToken: string) => {
@@ -55,6 +61,7 @@ export default function ClinicInvitationAccept() {
       if (!data.session || data.session.user.id !== user.id) throw new Error("authentication_required");
       const result = await invitationRequest("/accept", data.session.access_token, {});
       accepted = true;
+      if (useAuthStore.getState().user?.id !== user.id) return;
       setAcceptedOrganizationId(result.organizationId);
       await openClinic(result.organizationId, data.session.access_token);
     } catch (cause) {
@@ -78,7 +85,10 @@ export default function ClinicInvitationAccept() {
   };
   return <main className="mx-auto max-w-lg p-6 text-[#105576]">
     <h1 className="text-2xl font-semibold">Convite para a clínica</h1>
-    {error && <p role="alert" className="mt-4">{error}</p>}
+    {error && <p role="alert" className="mt-4">{handoffUnavailable && !info && !acceptedOrganizationId
+      && user && clinicContext.userId === user.id && clinicContext.status === "ready" && clinicContext.organizations.length > 0
+      ? "Não há convite pendente disponível nesta sessão. Se você já aceitou o convite, acesse sua clínica abaixo."
+      : error}</p>}
     {!info && !error && !acceptedOrganizationId && <p className="mt-4">Carregando convite…</p>}
     {acceptedOrganizationId && <><p role="status" className="mt-4">Convite aceito com sucesso.</p><button type="button" className="mt-4 rounded bg-[#105576] p-3 text-white disabled:opacity-50" disabled={busy} onClick={() => void retryClinic()}>Acessar clínica</button></>}
     {!info && !acceptedOrganizationId && <ClinicAccessOptions />}

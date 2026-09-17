@@ -1299,7 +1299,7 @@ recriada com owner sintético separado e zero memberships do destinatário antes
 do aceite; o convite clínico foi emitido pela RPC oficial com provider `mock`,
 sem envio de e-mail. A recusa HTTP 403 daquela fixture não era falha de OAuth.
 
-Correções frontend na versão web `v1.10.886`:
+Correções frontend nas versões web `v1.10.886` e `v1.10.887`:
 
 - `refreshAfterMutation` também inicia uma leitura fresca quando o store ainda
   não foi inicializado; mantém o bloqueio de refresh para outro usuário.
@@ -1317,3 +1317,27 @@ Os testes cobrem store não inicializado, troca de usuário, seleção forjada,
 novo login com seleção explícita e revogação do vínculo na leitura fresca,
 além das corridas pós-mutation já existentes. A validação runtime desta
 correção será registrada abaixo após deployment no staging.
+
+Validação de recuperação no staging, em 17/09/2026:
+
+- Commit funcional inicial `f7b4bbc`, deployment
+  `dpl_81MHAuWKXTntg5e62ZA165KSd7Bp`, `READY`.
+- Na sessão Google controlada já autenticada, o botão da clínica foi exibido
+  em `/pending`; o clique normal abriu `/painel/clinica`, com contexto
+  organizacional selecionado, vínculo profissional ativo e acesso clínico
+  habilitado. A recarga manteve esse contexto.
+- `/painel/dashboard` permaneceu bloqueado para a conta pending e retornou
+  a `/pending`. O status individual não foi alterado.
+- O convite continuou accepted pelo destinatário esperado: uma membership
+  ativa, um handoff consumido e zero convites reservados pendentes.
+- A tela sem handoff ofereceu acesso explícito à mesma clínica. A versão
+  `v1.10.887` também substitui a orientação para solicitar novo convite por
+  uma orientação de recuperação quando há memberships autoritativas.
+- `npm test` passou integralmente após normalização temporária LF no worktree
+  isolado: o teste antigo de lifecycle contém uma regex sensível a CRLF.
+  A normalização foi revertida e não faz parte do commit. `npm run lint`,
+  `npm run build` e `git diff --check` passaram.
+- Esta rodada comprovou a recuperação de um aceite já realizado. Não reproduziu
+  um novo OAuth nem capturou a ordem HTTP de um novo POST de aceite seguido de
+  GET contexts; portanto não declara PASS integral de um novo smoke E2E.
+- Sem alteração de schema, ACL/RLS, billing, aprovação pessoal ou Android.
