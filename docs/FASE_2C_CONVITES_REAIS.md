@@ -1,41 +1,27 @@
 # Fase 2C — convites reais, entrega transacional e aceite seguro
 
 Data inicial: 2026-09-16. Retomada: 2026-09-17. Branch: `feat/clinicas`.
-Referência inicial: `2c5de70`; referência da retomada atual: `13240ec`.
+Referência inicial: `2c5de70`; referência do estado funcional desta tentativa: `53014bf`.
 Build web: `v1.10.878`; Android/Play Store inalterado (`1.0.87`), sem AAB.
 
 ## Estado atual
 
-**FASE 2C BLOQUEADA — GLOBAL CLINIC GATE** para smoke browser/externo.
-Implementação e smoke técnico
-com transporte mock concluídos; nenhum e-mail externo enviado.
+**FASE 2C BLOQUEADA — RESOLUÇÃO DE CONTEXTO PÓS-ACEITE.**
 
-Bloqueios confirmados, não hipóteses:
+A última tentativa avançou além dos bloqueios anteriores. Google OAuth real,
+callback do Supabase staging, sessão, `email_confirmed_at`, fragment exchange,
+remoção do raw token da URL, handoff de uso único, aceite server-side,
+membership `active` e `clinical_access_enabled=true` foram confirmados.
 
-1. Deployment Protection foi atravessada pelo login Vercel manual autorizado;
-   a aplicação carregou no Edge e **You Need Access não apareceu mais**.
-   Os dois gates Google foram habilitados temporariamente somente no projeto
-   staging, para o smoke, e foram restaurados para `false` no redeploy final.
-2. Tracking/link rewriting da Brevo ainda não comprovados OFF. SMTP atual
-   PASS após revisão manual das credenciais; flag de tracking false preservada,
-   delivery OFF. Autorização do remetente não comprovada por verify.
-3. Google provider está **ON** na revalidação atual; `mailer_autoconfirm=false`.
-   A conta Google controlada foi selecionada manualmente no Edge; o callback
-   retornou ao domínio staging, a rota protegida carregou sem a tela de login,
-   e a consulta administrativa confirmou um único usuário recente com e-mail
-   e `email_confirmed_at`. Nenhuma senha foi solicitada ou registrada.
-4. `CLINIC_FEATURE_ENABLED=true` foi habilitado temporariamente conforme a
-   autorização desta retomada. O fragment exchange executou, removeu o raw
-   token da URL e então o handoff foi recusado pelo global clinic gate, que
-   permaneceu `false` durante toda a execução. Não houve contorno, e não foi
-   declarado PASS para cookie HttpOnly, OAuth state, storage, metadata, logs,
-   analytics ou histórico completo.
-5. Destinatário controlado e autorização específica para o primeiro envio
-   ainda precisam ser fornecidos depois de resolver os gates técnicos.
+O bloqueio restante ocorreu depois do aceite: a interface não concluiu a
+hidratação/resolução do contexto organizacional e exibiu erro genérico. O
+recarregamento posterior mostrou o convite indisponível, comportamento compatível
+com o handoff one-time já consumido. Não houve replay, novo convite ou alteração
+de código nesta execução.
 
-Não solicitar confirmação de envio como se estes pré-requisitos estivessem
-atendidos. Nenhum smoke externo, recebimento ou comportamento de tracking do provider
-é declarado PASS. Não iniciar Fase 3/pacientes compartilhados.
+Tracking/link rewriting da Brevo continua pendente. Nenhum e-mail externo foi
+enviado, nenhuma operação Google Drive ocorreu e produção, Stripe, DNS, Brevo
+global, `main` e Fase 3 permaneceram intocados.
 
 ## Isolamento e gates
 
@@ -235,6 +221,43 @@ foram mantidas; apenas os dois gates false explícitos adicionados (total31).
 Sem credenciais do transporte dedicado ou cópia de secrets de produção.
 
 ## Cleanup e próximo passo
+
+### Encerramento seguro da tentativa atual — 2026-09-17 — referência `53014bf`
+
+Esta tentativa foi encerrada sem investigação ou correção de código. O smoke
+real confirmou staging, Deployment Protection, Google OAuth, callback Supabase,
+sessão autenticada, `email_confirmed_at`, fragment exchange, remoção do raw
+token da URL, handoff one-time, aceite server-side, membership `active` e
+`clinical_access_enabled=true`.
+
+Após o aceite, a interface falhou ao concluir a hidratação/resolução do
+contexto organizacional. A aceitação no backend permaneceu confirmada; a
+conclusão visual/contextual ficou **PENDING**. O reload posterior do convite
+consumido exibiu indisponibilidade, comportamento esperado para um handoff de
+uso único. Não houve tentativa de replay, reutilização de cookie ou novo
+fixture.
+
+O cleanup foi concluído somente para os identificadores criados nesta
+tentativa. A verificação final confirmou zero `auth.users` de teste,
+`professionals`, `organizations`, `organization_memberships`,
+`organization_invitations`, `organization_invitation_handoffs`,
+`organization_invitation_deliveries`, subscriptions, feature flags e eventos
+de auditoria associados ao fixture. O global clinic gate foi restaurado para
+`false`.
+
+No projeto Vercel staging, as flags `CLINIC_FEATURE_ENABLED`,
+`VITE_GOOGLE_INTEGRATIONS_ENABLED` e `GOOGLE_INTEGRATIONS_ENABLED` foram
+restauradas para `false`; `CLINIC_INVITATION_DELIVERY_ENABLED` e
+`CLINIC_BILLING_ENABLED` permaneceram `false`. O redeploy final
+`dpl_7ALNQTDj1xxYTm6dwu3Ac34v5UU5` ficou `READY`. O `vercel curl` oficial
+retornou HTTP 200 com corpo exato `{"status":"ok"}` no deployment e no
+domínio staging.
+
+Nenhum e-mail foi enviado. Google Drive não foi acessado. Produção, Stripe,
+Brevo global, DNS, `main` e Fase 3 permaneceram inalterados. A próxima ação
+deve ser uma investigação separada de `/api/clinic/contexts`, hidratação,
+eventual race/staleness/cache, RLS e seleção explícita de organização; ela não
+foi iniciada nesta execução.
 
 ### Smoke OAuth com gates temporários — 2026-09-17 — referência `5fec404`
 
