@@ -4,12 +4,14 @@ type ClinicContextRouteDeps = {
   requireAuth: any;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  supabaseAdmin?: any;
   clinicFeatureEnabled: boolean;
   appEnv?: string;
 };
 
 type ClinicRequest = {
   headers: { authorization?: string };
+  body?: any;
   user?: { id?: string };
 };
 
@@ -50,6 +52,40 @@ export function resolveClinicOrganizations(rows: any[]) {
 export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDeps) {
   const isDiagnosticRequest = (req: ClinicRequest) =>
     deps.appEnv === "staging" && req.headers["x-phase-2c-diagnostic"] === "phase2c-context-matrix-20260917";
+
+  app.post("/api/clinic/contexts/diagnostic-accept", deps.requireAuth, async (req: ClinicRequest, res: ClinicResponse) => {
+    if (!isDiagnosticRequest(req) || !deps.supabaseAdmin) return res.status(404).json({ ok: false, error: "not_found" });
+
+    const token = readBearerToken(req);
+    const userId = req.user?.id;
+    const organizationId = typeof req.body?.organizationId === "string" ? req.body.organizationId : null;
+    const ownerId = typeof req.body?.ownerId === "string" ? req.body.ownerId : null;
+    if (!token || !userId || !organizationId || !ownerId) return res.status(400).json({ ok: false, error: "invalid_request" });
+
+    try {
+      const authUser = await deps.supabaseAdmin.auth.admin.getUserById(userId);
+      const email = authUser.data.user?.email;
+      if (authUser.error || !email) return res.status(409).json({ ok: false, error: "controlled_user_unavailable" });
+
+      const invitation = await deps.supabaseAdmin.rpc("issue_organization_invitation_server", {
+        p_organization_id: organizationId,
+        p_actor: ownerId,
+        p_email: email,
+        p_intended_role: "professional",
+        p_intended_clinical_access: true,
+        p_provider: "mock",
+      });
+      const rawToken = invitation.data?.token;
+      if (invitation.error || typeof rawToken !== "string") return res.status(503).json({ ok: false, error: "diagnostic_invitation_failed" });
+
+      const userScopedClient = createUserScopedClient({ supabaseUrl: deps.supabaseUrl, supabaseAnonKey: deps.supabaseAnonKey, accessToken: token });
+      const accepted = await userScopedClient.rpc("accept_organization_invitation", { p_raw_token: rawToken });
+      if (accepted.error) return res.status(503).json({ ok: false, error: "diagnostic_accept_failed" });
+      return res.json({ ok: true, accepted: accepted.data?.status === "accepted", clinical_access_enabled: accepted.data?.clinical_access_enabled === true });
+    } catch {
+      return res.status(503).json({ ok: false, error: "diagnostic_accept_failed" });
+    }
+  });
 
   app.post("/api/clinic/contexts/diagnostic-matrix", deps.requireAuth, async (req: ClinicRequest, res: ClinicResponse) => {
     if (!isDiagnosticRequest(req)) {
