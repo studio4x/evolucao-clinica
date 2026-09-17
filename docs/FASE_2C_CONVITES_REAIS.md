@@ -808,3 +808,135 @@ Resultado desta execução: **FASE 2C BLOQUEADA — CONTEXTO PÓS-ACEITE AINDA
 FALHA**. A pendência é a permissão da função usada pela política RLS de
 workspace; deve ser investigada separadamente antes de novo smoke. Tracking/
 link rewriting Brevo continua pendente. Fase 3 não iniciada.
+
+### Investigação somente leitura — `42501` em `can_access_organization_workspace` — 2026-09-17
+
+Nenhuma migration, função, grant, política RLS, fixture, gate ou smoke foi
+alterado/executado nesta investigação. O MCP não tinha permissão para consultar
+o banco; a verificação foi feita por consultas `SELECT` somente leitura pela
+Management API oficial do Supabase staging `hwkdwinfckmjoriqxbjk`.
+
+#### Resultado objetivo
+
+- **Causa raiz:** a política RLS chama uma função que não pode ser executada
+  pelo papel da sessão autenticada. O banco retorna `42501` durante a
+  avaliação da política, antes de a função conseguir produzir o booleano.
+- **Função:** `private.can_access_organization_workspace(uuid)`;
+  retorno `boolean`; linguagem SQL; `STABLE`; `SECURITY DEFINER`.
+- **Owner:** `postgres`.
+- **search_path:** `pg_catalog, private, public`.
+- **ACL real:** `postgres=X/postgres`. Não há `EXECUTE` para
+  `authenticated`, `anon` ou `service_role`.
+- **`has_function_privilege(..., 'execute')`:**
+  `authenticated=false`, `anon=false`, `service_role=false`,
+  `postgres=true`.
+- **`information_schema.routine_privileges`:** somente `postgres` aparece
+  com `EXECUTE`.
+- **Definição real:** exige `auth.uid()` não nulo, feature clínica da
+  organização habilitada, entitlement em `full`/`restricted` e membership
+  ativa cujo `professional_id` seja o usuário autenticado.
+- **Segurança observada:** o owner `postgres` e o `search_path` qualificado
+  estão coerentes com o uso de `SECURITY DEFINER`; o erro não é causado por
+  falta de privilégio do owner dentro do corpo, e sim pela falta de privilégio
+  do chamador para invocar a função.
+
+#### Políticas afetadas
+
+O estado real contém estas políticas `TO authenticated`:
+
+- `public.organizations` / `organizations_select_entitled_member`:
+  `USING (private.can_access_organization_workspace(id))`;
+- `public.organization_memberships` /
+  `memberships_select_entitled_member`:
+  `USING (private.can_access_organization_workspace(organization_id))`.
+
+Isso explica diretamente a falha observada em `/api/clinic/contexts`: a sessão
+autenticada precisa avaliar a expressão da política e não tem `EXECUTE` na
+função referenciada. A reprodução autenticada anterior já havia retornado
+`42501` com a mesma mensagem; não foi feita nova reprodução nem criado fixture
+nesta investigação.
+
+#### Origem no histórico e regressão de contrato
+
+- `20260915_03_clinic_feature_gates.sql`, commit `402bcce`, concedia
+  explicitamente `EXECUTE` a `authenticated` para helpers privados usados
+  diretamente pelas políticas, incluindo `is_clinic_feature_enabled` e
+  `has_organization_role`.
+- `20260916_11_organization_entitlements_and_seats.sql`, commit `60c9eef`,
+  introduziu `can_access_organization_workspace`, substituiu as políticas de
+  organizações/memberships para chamá-la e executou:
+  `REVOKE ALL ... FROM PUBLIC, anon, authenticated`.
+- `20260916_12_harden_entitlement_snapshots_and_invitation_expiry.sql`,
+  commit `733216d`, continua usando a mesma função em operações server-side.
+
+Portanto, há evidência objetiva de regressão de ACL/RLS no contrato da
+migração `20260916_11`: a função foi protegida como helper privado, mas também
+foi usada diretamente em expressões RLS que rodam no papel `authenticated`.
+
+#### `SECURITY DEFINER` não substitui `EXECUTE`
+
+`SECURITY DEFINER` define os privilégios usados **depois** que a chamada foi
+autorizada; não concede ao chamador o direito de invocar a função. A própria
+documentação do PostgreSQL exige que as funções referenciadas por uma política
+sejam acessíveis pelo usuário da política e recomenda revogar o `PUBLIC` apenas
+quando houver um `GRANT EXECUTE` seletivo. Referências oficiais:
+
+- [PostgreSQL CREATE POLICY](https://www.postgresql.org/docs/current/sql-createpolicy.html)
+- [PostgreSQL CREATE FUNCTION](https://www.postgresql.org/docs/current/sql-createfunction.html)
+
+#### Alternativas arquiteturais para decisão posterior
+
+**A — conceder `EXECUTE` diretamente a `authenticated`**
+
+É a correção mínima compatível com as políticas atuais: manter a função
+privada, `SECURITY DEFINER`, somente leitura, sem efeitos colaterais e limitada
+ao booleano derivado de `auth.uid()`; conceder o privilégio apenas ao papel
+necessário. O comentário da migration indica que `private` não é exposto pelo
+PostgREST, mas o banco deve continuar validando schema, assinatura, exposição e
+ACL. O risco residual é um oracle booleano para um usuário autenticado testar
+IDs arbitrários de organizações; por isso a função não deve retornar dados,
+aceitar identidade arbitrária nem ganhar efeitos de escrita.
+
+**B — manter helper privado e introduzir wrapper seguro**
+
+Pode reduzir a superfície da função interna e centralizar o contrato usado pela
+RLS, mas não elimina o requisito de privilégio: a função chamada diretamente
+pela política (o wrapper) também precisa de `EXECUTE` para `authenticated`.
+Se for publicada no schema `public`, deve ser tratada como RPC exposta; se
+permanecer em `private`, schema USAGE/ACL e exposição via PostgREST precisam ser
+verificados. O wrapper deve ser mínimo, sem side effects e sem permitir bypass
+de `auth.uid()`.
+
+Inline predicates nas políticas também são possíveis, mas duplicam a regra de
+entitlement/membership e aumentam o risco de divergência futura. Não foi
+escolhida nem implementada alternativa nesta execução.
+
+#### Correção recomendada — não aplicada
+
+1. Preparar uma migration corretiva que escolha explicitamente A ou B e alinhe
+   função, política e ACL na mesma transação.
+2. Revisar `SECURITY DEFINER`, owner, `search_path`, schema USAGE, assinatura,
+   retorno booleano e exposição PostgREST antes de aplicar.
+3. Revalidar as políticas de `organizations` e
+   `organization_memberships` com sessão normal autenticada.
+4. Reexecutar o smoke de contexto/aceite e os gates de RLS somente após
+   autorização explícita para a correção.
+
+Não é recomendável apenas remover o `REVOKE` sem revisar a superfície da função;
+da mesma forma, não é recomendável alterar RLS em produção ou conceder
+privilégios amplos a `PUBLIC`/`anon`.
+
+#### Estado final preservado
+
+- `private.clinic_runtime_config.enabled=false` no staging;
+- `CLINIC_FEATURE_ENABLED=false`, `VITE_CLINIC_FEATURE_ENABLED=false`,
+  `VITE_GOOGLE_INTEGRATIONS_ENABLED=false`, `GOOGLE_INTEGRATIONS_ENABLED=false`,
+  `CLINIC_INVITATION_DELIVERY_ENABLED=false` e `CLINIC_BILLING_ENABLED=false`;
+- nenhum fixture foi criado nesta investigação; o cleanup da execução anterior
+  permaneceu em zero e nenhum e-mail foi enviado;
+- produção, Stripe, Brevo, DNS, Google Drive e `main` permaneceram intactos;
+- nenhuma correção foi aplicada e nenhum novo smoke foi iniciado.
+
+**Conclusão:** a Fase 2C permanece bloqueada especificamente por uma
+inconsistência ACL/RLS no staging. Aguardando autorização separada para a
+correção e novo smoke.
