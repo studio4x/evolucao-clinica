@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
-import { renderInvitationMail } from "../server/clinic/clinicInvitationEmail.js";
+import { createInvitationTransport, renderInvitationMail } from "../server/clinic/clinicInvitationEmail.js";
 
 const token = "a".repeat(64);
 const input = { recipient: "never-sent@example.invalid", organizationName: "Clínica sintética", role: "professional" as const, clinical: true, expiresAt: "2026-09-21T12:00:00Z", token };
+const smtpEnv = { APP_ENV: "staging", CLINIC_INVITATION_SMTP_HOST: "smtp-relay.example.invalid", CLINIC_INVITATION_SMTP_PORT: "587", CLINIC_INVITATION_SMTP_USER: "staging-user", CLINIC_INVITATION_SMTP_PASS: "staging-pass", CLINIC_INVITATION_SMTP_FROM: "staging@example.invalid", CLINIC_INVITATION_SHARED_PROVIDER_ACCEPTED: "true", CLINIC_INVITATION_SMTP_TRACKING_DISABLED: "false" };
+assert.equal(createInvitationTransport(smtpEnv).ready, true);
+assert.equal(createInvitationTransport({ ...smtpEnv, CLINIC_INVITATION_SHARED_PROVIDER_ACCEPTED: "false" }).ready, false);
+assert.equal(createInvitationTransport({ ...smtpEnv, APP_ENV: "production" }).ready, false);
 
 const staging = renderInvitationMail(input, "staging");
 assert.equal(staging.fromName, "Evolução Clínica [STAGING]");

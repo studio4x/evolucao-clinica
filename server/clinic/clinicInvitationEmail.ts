@@ -49,8 +49,8 @@ export function createInvitationTransport(env: NodeJS.ProcessEnv): SensitiveTran
   const keys = ["CLINIC_INVITATION_SMTP_HOST", "CLINIC_INVITATION_SMTP_USER", "CLINIC_INVITATION_SMTP_PASS", "CLINIC_INVITATION_SMTP_FROM"];
   const port = Number(env.CLINIC_INVITATION_SMTP_PORT || 587);
   const invitationEnvironment = env.APP_ENV === "staging" ? "staging" : null;
-  const ready = invitationEnvironment === "staging" && keys.every((key) => Boolean(env[key]?.trim())) && [465, 587].includes(port)
-    && env.CLINIC_INVITATION_SMTP_TRACKING_DISABLED === "true";
+  const sharedProviderAccepted = env.CLINIC_INVITATION_SHARED_PROVIDER_ACCEPTED === "true";
+  const ready = invitationEnvironment === "staging" && sharedProviderAccepted && keys.every((key) => Boolean(env[key]?.trim())) && [465, 587].includes(port);
   return {
     provider: "smtp", ready,
     async send(mail) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { evaluateBrevoPreflight } from '../scripts/clinic-brevo-preflight.js';
-const input = { smtpAuthentication: true, senderConfigured: true, directFragment: true, localTrackingDeclaration: true, deliveryGate: 'OFF' };
+const input = { smtpAuthentication: true, smtpTransportReady: true, senderConfigured: true, directFragment: true, localTrackingDeclaration: true, deliveryGate: 'OFF' };
 assert.equal(evaluateBrevoPreflight(input).status, 'MANUAL_PROVIDER_GATE');
 assert.equal(evaluateBrevoPreflight(input).senderProviderVerified, 'MANUAL');
 const provider = { source: 'authenticated_provider_browser_read_only', configuredFromExactMatch: true, smtpLoginExactMatch: true, stagingKeyMaskedSuffixMatch: true, senderProviderVerified: true, providerScopeIsolated: true, providerScope: 'ISOLATED', strictTrackingDisable: 'VERIFIED', openTrackingDisabled: true, clickTrackingDisabled: true, linkRewritingDisabled: true, trackingPolicyKnown: true };

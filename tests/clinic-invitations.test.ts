@@ -97,6 +97,15 @@ async function request(path = "", actor?: string, body?: any, cookie?: string, r
 }
 const createBody = (email = "recipient@example.invalid", clinical = true, role = "professional") => ({ organizationId: org, email, clinical, role, actor: stranger });
 try {
+  let gatedSendAttempts = 0;
+  const deliveryGatedApp = express();
+  registerClinicInvitationRoutes(deliveryGatedApp, { ...deps, deliveryEnabled: false, transport: { ...deps.transport, send: async (...args: any[]) => { gatedSendAttempts++; return deps.transport.send(...args); } } });
+  const deliveryGatedServer = deliveryGatedApp.listen(0, "127.0.0.1"); await new Promise<void>((resolve) => deliveryGatedServer.once("listening", resolve));
+  try {
+    const gatedAddress = deliveryGatedServer.address(); assert.ok(gatedAddress && typeof gatedAddress !== "string");
+    const gatedResult = await fetch(`http://127.0.0.1:${gatedAddress.port}/api/clinic/invitations`, { method: "POST", headers: { Origin: origin, Authorization: "Bearer owner", "Content-Type": "application/json" }, body: JSON.stringify(createBody()) });
+    assert.equal(gatedResult.status, 503); assert.equal((await gatedResult.json()).error, "delivery_unavailable"); assert.equal(gatedSendAttempts, 0);
+  } finally { await new Promise<void>((resolve) => deliveryGatedServer.close(() => resolve())); }
   const invitedAccess = { pathname: "/painel/clinica", featureEnabled: true, contextStatus: "ready", contextUserId: recipient, userId: recipient, activeContext: { type: "organization", organizationId: org }, organizations: [{ id: org }] };
   // A pending professional may enter only through the resolved organization
   // context; personal and unrelated contexts remain denied.
