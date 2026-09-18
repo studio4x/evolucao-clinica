@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Send, Paperclip, X, Download, AlertCircle, FileText, CheckCircle2, Sparkles, RefreshCw, Bot, Pencil, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, X, Download, AlertCircle, FileText, CheckCircle2, Sparkles, RefreshCw, Bot, Pencil, Trash2, Check, Clock3 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { showConfirm } from '../store/modalStore';
 import {
@@ -351,6 +351,17 @@ export default function SupportTicketDetail() {
             <div className="inline-flex items-center gap-1.5 text-[11px] text-brand-text-muted bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-1.5">
               <CheckCircle2 size={12} className="text-emerald-600" />
               <span>Fechado automaticamente após 3 dias sem interação em {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(ticket.autoClosedAt))}.</span>
+            </div>
+          )}
+          {!isAdmin && ticket.status !== 'closed' && ticket.slaStatus === 'answered' && (
+            <div className="flex items-start gap-2.5 rounded-2xl border border-brand-primary/15 bg-brand-primary/[0.04] px-4 py-3 text-xs leading-relaxed text-brand-text">
+              <Clock3 size={16} className="mt-0.5 shrink-0 text-brand-primary" />
+              <div>
+                <p className="font-semibold text-brand-primary">Chamado respondido</p>
+                <p className="mt-0.5 text-brand-text-muted">
+                  Este chamado será encerrado automaticamente após 72 horas sem novas interações. Se precisar complementar alguma informação, envie uma nova mensagem por aqui.
+                </p>
+              </div>
             </div>
           )}
           <div className="text-sm bg-gray-50 border border-gray-100 p-4 rounded-2xl text-brand-text/90 italic font-sans leading-relaxed">{ticket.description}</div>
