@@ -16,6 +16,7 @@ const Patients = lazyWithRetry(() => import('./pages/Patients'), 'Patients');
 const PatientForm = lazyWithRetry(() => import('./pages/PatientForm'), 'PatientForm');
 const PatientDetail = lazyWithRetry(() => import('./pages/PatientDetail'), 'PatientDetail');
 const PatientAnamnesis = lazyWithRetry(() => import('./pages/PatientAnamnesis'), 'PatientAnamnesis');
+const PatientSessions = lazyWithRetry(() => import('./pages/PatientSessions'), 'PatientSessions');
 const NewEvolution = lazyWithRetry(() => import('./pages/NewEvolution'), 'NewEvolution');
 const History = lazyWithRetry(() => import('./pages/History'), 'History');
 const ShareTarget = lazyWithRetry(() => import('./pages/ShareTarget'), 'ShareTarget');
