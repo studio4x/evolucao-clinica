@@ -356,15 +356,20 @@ export default function PatientFilesCard({
           }
         }
 
-        if (isGoogleAuthError(error)) {
+        const authenticationExpired = isGoogleAuthError(error);
+        if (authenticationExpired) {
           setGoogleAccessToken(null);
         }
 
         setPending((current) => current.map((entry) => (
           entry.id === item.id
-            ? { ...entry, status: 'error', error: error?.message || 'Falha no envio.' }
-            : entry
+            ? { ...entry, status: 'error', error: authenticationExpired ? 'A conexão com o Google expirou. Reconecte e tente novamente.' : (error?.message || 'Falha no envio.') }
+            : authenticationExpired && entry.status === 'pending'
+              ? { ...entry, status: 'error', error: 'Reconecte o Google antes de continuar os envios.' }
+              : entry
         )));
+
+        if (authenticationExpired) break;
       }
     }
     setUploading(false);
