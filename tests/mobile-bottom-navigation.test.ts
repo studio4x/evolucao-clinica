@@ -6,6 +6,9 @@ const cssSource = readFileSync('src/index.css', 'utf8');
 const launcherSource = readFileSync('app/src/main/java/com/evolucaoclinica/app/LauncherActivity.java', 'utf8');
 const appVersionSource = readFileSync('src/components/layout/AppVersion.tsx', 'utf8');
 const gradleSource = readFileSync('app/build.gradle', 'utf8');
+const rootGradleSource = readFileSync('build.gradle', 'utf8');
+const gradleWrapperSource = readFileSync('gradle/wrapper/gradle-wrapper.properties', 'utf8');
+const androidManifestSource = readFileSync('app/src/main/AndroidManifest.xml', 'utf8');
 const gradlePropertiesSource = readFileSync('gradle.properties', 'utf8');
 const proguardSource = readFileSync('app/proguard-rules.pro', 'utf8');
 const twaManifestSource = readFileSync('twa-manifest.json', 'utf8');
@@ -30,20 +33,28 @@ assert.match(launcherSource, /Type\.systemBars\(\)[\s\S]*Type\.displayCutout\(\)
 assert.match(launcherSource, /setInsets\(handledTypes, Insets\.NONE\)/, 'tipos nativos tratados devem ser zerados antes do WebView');
 assert.doesNotMatch(launcherSource, /Type\.ime\(\)/, 'IME não deve virar padding permanente');
 
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.872"/);
-assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.90"/);
-assert.match(gradleSource, /versionCode 90/);
-assert.match(gradleSource, /versionName "90"/);
-assert.match(twaManifestSource, /"appVersionCode": 90/);
-assert.match(twaManifestSource, /"appVersionName": "90"/);
-assert.match(twaManifestSource, /"appVersion": "90"/);
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.873"/);
+assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.91"/);
+assert.match(gradleSource, /versionCode 91/);
+assert.match(gradleSource, /versionName "91"/);
+assert.match(twaManifestSource, /"appVersionCode": 91/);
+assert.match(twaManifestSource, /"appVersionName": "91"/);
+assert.match(twaManifestSource, /"appVersion": "91"/);
 
 // A release Android deve permanecer compatível com os requisitos de otimização do Google Play.
 assert.match(gradleSource, /minifyEnabled true/, 'R8 deve permanecer habilitado no release');
 assert.match(gradleSource, /shrinkResources true/, 'resource shrinking deve permanecer habilitado no release');
 assert.match(gradleSource, /getDefaultProguardFile\('proguard-android-optimize\.txt'\)/, 'release deve usar as regras otimizadas padrão do Android');
 assert.match(gradleSource, /'proguard-rules\.pro'/, 'release deve incluir as regras específicas do app');
-assert.match(gradlePropertiesSource, /android\.r8\.optimizedResourceShrinking=true/, 'resource shrinking otimizado deve permanecer habilitado no AGP 8.13');
+assert.match(rootGradleSource, /com\.android\.tools\.build:gradle:9\.0\.1/, 'AGP 9.0.1 deve permanecer configurado');
+assert.match(gradleWrapperSource, /gradle-9\.1\.0-bin\.zip/, 'Gradle 9.1.0 deve permanecer configurado para AGP 9.0');
+assert.match(gradlePropertiesSource, /android\.newDsl=false/, 'DSL legada deve permanecer habilitada durante a migração controlada para AGP 9');
+assert.doesNotMatch(gradlePropertiesSource, /android\.r8\.optimizedResourceShrinking=true/, 'AGP 9 não deve depender do opt-in legado de resource shrinking otimizado');
+assert.match(androidManifestSource, /com\.google\.android\.gms\.permission\.AD_ID/, 'manifesto deve declarar AD_ID para manter coerência com a declaração do Play Console');
+assert.match(launcherSource, /public void setConsent\(boolean analyticsEnabled, boolean marketingEnabled\)/, 'ponte nativa deve receber consentimentos separados');
+assert.match(launcherSource, /FirebaseAnalytics\.ConsentType\.AD_STORAGE/, 'Firebase deve aplicar consentimento de armazenamento de publicidade');
+assert.match(launcherSource, /FirebaseAnalytics\.ConsentType\.AD_USER_DATA/, 'Firebase deve aplicar consentimento de dados de publicidade');
+assert.match(launcherSource, /FirebaseAnalytics\.ConsentType\.AD_PERSONALIZATION/, 'Firebase deve aplicar consentimento de personalização de anúncios');
 assert.match(proguardSource, /@android\.webkit\.JavascriptInterface <methods>;/, 'métodos expostos ao WebView devem ser preservados pelo R8');
 assert.doesNotMatch(proguardSource, /-keep\s+class\s+com\.evolucaoclinica\.app\.\*\*/, 'não usar keep amplo que anule a otimização do app');
 
