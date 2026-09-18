@@ -3,7 +3,7 @@ import { Outlet, Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
-import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb, Info, Image, Cloud, Building2, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, Users, History as HistoryIcon, LogOut, Menu, X, Download, BookOpen, Share2, ShieldCheck, CreditCard, User, Bell, HelpCircle, ChevronLeft, ChevronRight, Database, Crown, Lightbulb, Info, Image, Cloud, Building2, FileClock, type LucideIcon } from 'lucide-react';
 import { UserAvatar } from './common/UserAvatar';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandIconUrl } from '../utils/brandAssets';
 import { OfflineQueueMonitor } from './layout/OfflineQueueMonitor';
@@ -213,7 +213,7 @@ export default function Layout() {
     { name: 'Visão da clínica', path: '/painel/clinica', icon: Building2 },
     { name: 'Pacientes', path: '/painel/clinica/pacientes', icon: Users },
     ...(['owner', 'manager'].includes(activeOrganization?.membershipRole || '')
-      ? [{ name: 'Equipe', path: '/painel/clinica/equipe', icon: Users }]
+      ? [{ name: 'Equipe', path: '/painel/clinica/equipe', icon: Users }, { name: 'Auditoria', path: '/painel/clinica/auditoria', icon: FileClock }]
       : []),
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
     { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },

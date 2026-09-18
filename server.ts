@@ -29,6 +29,7 @@ import { registerClinicInvitationRoutes } from "./server/clinic/clinicInvitation
 import { createInvitationTransport } from "./server/clinic/clinicInvitationEmail.js";
 import { registerClinicEntitlementRoutes } from "./server/clinic/clinicEntitlementRoutes.js";
 import { registerClinicEvolutionRoutes } from "./server/clinic/clinicEvolutionRoutes.js";
+import { registerClinicOperationalRoutes } from "./server/clinic/clinicOperationalRoutes.js";
 import { createPersonalPatientGuard } from "./server/clinic/personalPatientGuard.js";
 import { createUserScopedClient } from "./server/supabase/createUserScopedClient.js";
 import { registerClinicPatientRoutes } from "./server/clinic/clinicPatientRoutes.js";
@@ -7550,6 +7551,12 @@ registerClinicEntitlementRoutes(app, {
   clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
 });
 registerClinicEvolutionRoutes(app, {
+  requireAuth,
+  supabaseUrl,
+  supabaseAnonKey: serverEnvironment.supabaseAnonKey,
+  clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
+});
+registerClinicOperationalRoutes(app, {
   requireAuth,
   supabaseUrl,
   supabaseAnonKey: serverEnvironment.supabaseAnonKey,

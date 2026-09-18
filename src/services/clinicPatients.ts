@@ -87,7 +87,7 @@ export async function createClinicPatient(accessToken: string, input: {
   return body.patient as { organization_patient_id: string; patient_id: string };
 }
 
-export async function updateClinicPatient(accessToken: string, organizationPatientId: string, input: { fullName: string; birthDate: string | null; phone: string | null; status?: "active" | "archived" }) {
+export async function updateClinicPatient(accessToken: string, organizationPatientId: string, input: { fullName: string; birthDate: string | null; phone: string | null }) {
   const body = await readResponse(await fetch(`/api/clinic/patients/${encodeURIComponent(organizationPatientId)}`, { method: "PATCH", headers: authHeaders(accessToken, true), body: JSON.stringify(input) }));
   return body.patient as ClinicPatientDetail;
 }

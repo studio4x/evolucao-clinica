@@ -1144,6 +1144,15 @@ foram habilitados. Produção e main não foram alteradas; Fase 5 não iniciada.
 Os limites de evidência e as tentativas interrompidas por fixture estão em
 [FASE_4_EVOLUCOES_ISOLADAS.md](FASE_4_EVOLUCOES_ISOLADAS.md).
 
+Atualização 2026-09-18 — Fase 5: ecossistema empresarial implementado na
+branch `feat/clinicas` e isolado no staging. O dashboard passou a mostrar
+somente indicadores operacionais conforme o papel; a auditoria usa o ledger
+privado imutável com cursor e filtro; arquivamento/reativação foram separados
+do PATCH cadastral; e a troca de Primary é transacional, auditada e preserva
+as evoluções existentes. A validação final, advisors e cleanup estão registrados
+no relatório [FASE 5](FASE_5_ECOSSISTEMA_EMPRESARIAL.md). Produção, `main`,
+providers externos e Fase 6 permanecem fora do escopo.
+
 Ao final do roadmap, a Evolução Clínica terá dois modelos coexistindo com segurança:
 
 - **modelo individual:** o profissional mantém seus pacientes e evoluções no contexto pessoal atual;

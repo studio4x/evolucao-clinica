@@ -151,13 +151,13 @@ export function registerClinicPatientRoutes(app: any, deps: ClinicPatientRouteDe
     const organizationPatientId = readClinicPatientUuid(req.params?.organizationPatientId);
     const body = req.body;
     const client = getUserClient(req, deps);
-    if (!organizationPatientId || !client || !onlyAllowedKeys(body, ["fullName", "birthDate", "phone", "status"])) return res.status(400).json({ ok: false, error: "invalid_patient_request" });
+    if (!organizationPatientId || !client || !onlyAllowedKeys(body, ["fullName", "birthDate", "phone"])) return res.status(400).json({ ok: false, error: "invalid_patient_request" });
     const fullName = readOptionalText(body.fullName, 200);
     const birthDate = readOptionalDate(body.birthDate);
     const phone = readOptionalText(body.phone, 32);
-    if (fullName === undefined || birthDate === undefined || phone === undefined || (body.status !== undefined && !["active", "archived"].includes(body.status))) return res.status(400).json({ ok: false, error: "invalid_patient_request" });
+    if (fullName === undefined || birthDate === undefined || phone === undefined) return res.status(400).json({ ok: false, error: "invalid_patient_request" });
     try {
-      const { data, error } = await client.rpc("update_organization_patient", { p_organization_patient_id: organizationPatientId, p_full_name: fullName, p_birth_date: birthDate, p_phone: phone, p_status: body.status ?? null });
+      const { data, error } = await client.rpc("update_organization_patient", { p_organization_patient_id: organizationPatientId, p_full_name: fullName, p_birth_date: birthDate, p_phone: phone });
       if (error) return errorResponse(res, error);
       return res.json({ ok: true, patient: data });
     } catch (error) {

@@ -29,6 +29,8 @@ push` nem incluídos em um bootstrap automático.
 | `20260916_25_restore_personal_patient_policy_helper_execute.sql` | restaura somente EXECUTE do helper privado usado diretamente pela policy RLS pessoal de `patients`, sem conceder acesso às tabelas empresariais | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260917_26_isolated_organization_evolutions.sql` | contexto clínico imutável, FK composta, RLS por autor, RPC de criação, assinatura e reports pessoais | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260917_27_enable_clinic_evolution_assignments.sql` | ativa Primary/Secondary/Consultor e capacidades clínicas derivadas | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260918_28_clinic_ecosystem_operations.sql` | dashboard operacional, auditoria protegida, arquivamento/reativação, reatribuição transacional de Primary e separação do ciclo de vida | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260918_29_remove_patient_lifecycle_parameter.sql` | remove a assinatura legada com `p_status`; atualização cadastral fica restrita a quatro argumentos | `hwkdwinfckmjoriqxbjk` (staging) |
 
 Fora do escopo desta série: envio externo de convites sem confirmação específica, integrações não autorizadas, Stripe Live e
 produção.

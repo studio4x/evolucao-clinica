@@ -45,6 +45,7 @@ const Unsubscribe = lazyWithRetry(() => import('./pages/Unsubscribe'), 'Unsubscr
 const ContinuityFeedback = lazyWithRetry(() => import('./pages/ContinuityFeedback'), 'ContinuityFeedback');
 const TrialExtensionRedeem = lazyWithRetry(() => import('./pages/TrialExtensionRedeem'), 'TrialExtensionRedeem');
 const ClinicShell = lazyWithRetry(() => import('./pages/ClinicShell'), 'ClinicShell');
+const ClinicAudit = lazyWithRetry(() => import('./pages/ClinicAudit'), 'ClinicAudit');
 const ClinicTeam = lazyWithRetry(() => import('./pages/ClinicTeam'), 'ClinicTeam');
 const ClinicPatients = lazyWithRetry(() => import('./pages/ClinicPatients'), 'ClinicPatients');
 const ClinicPatientForm = lazyWithRetry(() => import('./pages/ClinicPatientForm'), 'ClinicPatientForm');
@@ -895,6 +896,7 @@ export default function App() {
           <Route path="/painel" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="clinica" element={<ClinicRoute><ClinicShell /></ClinicRoute>} />
+            <Route path="clinica/auditoria" element={<ClinicRoute><ClinicAudit /></ClinicRoute>} />
             <Route path="clinica/equipe" element={<ClinicRoute><ClinicTeam /></ClinicRoute>} />
             <Route path="clinica/pacientes" element={<ClinicRoute><ClinicPatients /></ClinicRoute>} />
             <Route path="clinica/pacientes/new" element={<ClinicRoute><ClinicPatientForm /></ClinicRoute>} />
