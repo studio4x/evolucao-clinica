@@ -17,7 +17,11 @@ import {
 import { downloadPatientSessionsPdf, generatePatientSessionsPdf, getPatientSessionsPdfFileName } from '../utils/patientSessionsPdf';
 
 type FormState = { date: string; time: string; status: PatientSessionStatus; notes: string };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const date = new Date();
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
+};
 const currentTime = () => new Date().toTimeString().slice(0, 5);
 
 const statusLabels: Record<PatientSessionStatus, string> = {
@@ -65,7 +69,7 @@ export default function PatientSessions() {
       setSessions(sessionData);
     } catch (error: any) {
       console.error('[PatientSessions] Falha ao carregar:', error);
-      void showAlert(error.message || 'Não foi possível carregar o controle de sessões.', { title: 'Controle de sessões', variant: 'error', icon: 'alert' });
+      void showAlert(error.message || 'Não foi possível carregar o controle de sessões.', { title: 'Controle de sessões', variant: 'error', icon: 'warning' });
     } finally {
       setLoading(false);
     }
@@ -110,7 +114,7 @@ export default function PatientSessions() {
       setFormSession(undefined);
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível salvar a sessão.', { title: 'Controle de sessões', variant: 'error', icon: 'alert' });
+      void showAlert(error.message || 'Não foi possível salvar a sessão.', { title: 'Controle de sessões', variant: 'error', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -123,7 +127,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await softDeletePatientSession(session); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível excluir.', { title: 'Erro', variant: 'error', icon: 'alert' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível excluir.', { title: 'Erro', variant: 'error', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -135,7 +139,7 @@ export default function PatientSessions() {
       setSignSession(null); setSignatureBlob(null); setSignerName(''); setSignerType('patient');
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível registrar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'alert' });
+      void showAlert(error.message || 'Não foi possível registrar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -147,7 +151,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await revokePatientSessionSignature(session, 'Revogada pelo profissional para correção do registro.'); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível revogar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'alert' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível revogar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -170,7 +174,7 @@ export default function PatientSessions() {
       });
       await downloadPatientSessionsPdf(doc, getPatientSessionsPdfFileName(patient.full_name, month));
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível gerar o PDF.', { title: 'Exportar PDF', variant: 'error', icon: 'alert' });
+      void showAlert(error.message || 'Não foi possível gerar o PDF.', { title: 'Exportar PDF', variant: 'error', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
