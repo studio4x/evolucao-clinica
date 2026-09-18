@@ -1,19 +1,13 @@
 ALTER TABLE public.support_ai_settings
   ADD COLUMN IF NOT EXISTS triage_enabled boolean NOT NULL DEFAULT false;
 
+-- Preserve the legacy triage state during rolling deployments: the old API
+-- continues to read enabled + mode, while the new API reads triage_enabled.
 UPDATE public.support_ai_settings
 SET
   triage_enabled = CASE
     WHEN mode = 'triage' THEN enabled
     ELSE triage_enabled
-  END,
-  enabled = CASE
-    WHEN mode = 'triage' THEN false
-    ELSE enabled
-  END,
-  mode = CASE
-    WHEN mode = 'triage' THEN 'draft'
-    ELSE mode
   END,
   intro_message = CASE
     WHEN mode = 'triage' THEN 'Olá! Recebemos sua solicitação e ela já está com nossa equipe.'
