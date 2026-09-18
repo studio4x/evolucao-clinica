@@ -50,6 +50,10 @@ android {
     compileSdk 36
     namespace "com.evolucaoclinica.app"
 
+    buildFeatures {
+        resValues true
+    }
+
     defaultConfig {
         applicationId "com.evolucaoclinica.app"
         minSdk 23
