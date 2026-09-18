@@ -633,6 +633,121 @@ export async function uploadFileToGoogleDrive(
   };
 }
 
+export async function uploadFileToGoogleDriveResumable(
+  googleAccessToken: string,
+  file: Blob,
+  fileName: string,
+  parentFolderId?: string,
+  onProgress?: (progress: number) => void
+): Promise<GoogleDriveUploadedFile> {
+  const mimeType = file.type || 'application/octet-stream';
+  const metadata = {
+    name: fileName,
+    mimeType,
+    parents: parentFolderId ? [parentFolderId] : undefined,
+  };
+
+  const initiationResponse = await googleApiFetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${googleAccessToken}`,
+        'Content-Type': 'application/json; charset=UTF-8',
+        'X-Upload-Content-Type': mimeType,
+        'X-Upload-Content-Length': String(file.size),
+      },
+      body: JSON.stringify(metadata),
+    },
+    'Patient resumable file upload initialization'
+  );
+
+  const sessionUrl = initiationResponse.headers.get('Location');
+  if (!sessionUrl) {
+    throw new Error('O Google Drive não iniciou a sessão de envio do vídeo.');
+  }
+
+  const chunkSize = 8 * 1024 * 1024;
+  let start = 0;
+  onProgress?.(0);
+
+  while (start < file.size) {
+    const endExclusive = Math.min(start + chunkSize, file.size);
+    const chunk = file.slice(start, endExclusive);
+    let uploaded = false;
+
+    for (let attempt = 1; attempt <= GOOGLE_API_MAX_ATTEMPTS; attempt++) {
+      assertPublicEffectEnabled('google');
+      const response = await fetch(sessionUrl, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${googleAccessToken}`,
+          'Content-Type': mimeType,
+          'Content-Range': `bytes ${start}-${endExclusive - 1}/${file.size}`,
+        },
+        body: chunk,
+      });
+
+      if (response.status === 308) {
+        const range = response.headers.get('Range');
+        const match = range?.match(/bytes=0-(\d+)/i);
+        start = match ? Number(match[1]) + 1 : endExclusive;
+        onProgress?.(Math.min(99, Math.round((start / file.size) * 100)));
+        uploaded = true;
+        break;
+      }
+
+      if (response.ok) {
+        const data = await response.json();
+        if (!data?.id) {
+          throw new Error('O Google Drive não retornou a identificação do vídeo enviado.');
+        }
+
+        onProgress?.(100);
+        return {
+          id: String(data.id),
+          name: String(data.name || fileName),
+          mimeType: String(data.mimeType || mimeType),
+          size: Number(data.size || file.size || 0),
+          webViewLink: String(data.webViewLink || `https://drive.google.com/file/d/${data.id}/view`),
+        };
+      }
+
+      const errorText = await response.text();
+      if (response.status === 401) {
+        throw new Error(`UNAUTHENTICATED: ${errorText}`);
+      }
+      if (
+        response.status === 403 &&
+        /ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions|Insufficient Permission/i.test(errorText)
+      ) {
+        throw new Error(`INSUFFICIENT_SCOPES: ${errorText}`);
+      }
+
+      const retryable = response.status === 429
+        || response.status === 500
+        || response.status === 502
+        || response.status === 503
+        || response.status === 504
+        || isRetryableGoogleError(response.status, errorText);
+
+      if (!retryable || attempt === GOOGLE_API_MAX_ATTEMPTS) {
+        throw new Error(`Google Drive API error (Patient resumable file upload): ${response.status} - ${errorText}`);
+      }
+
+      const delay = 1000 * attempt * attempt;
+      console.warn(`[GoogleDocs] Resumable upload retry in ${delay}ms (attempt ${attempt}/${GOOGLE_API_MAX_ATTEMPTS}).`);
+      await sleep(delay);
+    }
+
+    if (!uploaded && start < file.size) {
+      throw new Error('Não foi possível continuar o envio resumível do vídeo.');
+    }
+  }
+
+  throw new Error('O upload do vídeo terminou sem confirmação do Google Drive.');
+}
+
 export async function uploadPdfToGoogleDrive(
   googleAccessToken: string,
   pdfBlob: Blob,

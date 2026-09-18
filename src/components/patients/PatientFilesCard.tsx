@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
-import { deleteGoogleFile, uploadFileToGoogleDrive } from '../../services/googleDocs';
+import { deleteGoogleFile, uploadFileToGoogleDrive, uploadFileToGoogleDriveResumable } from '../../services/googleDocs';
 import {
   createPatientFile,
   deletePatientFileRecord,
@@ -39,6 +39,7 @@ import { isGoogleAccessTokenFresh } from '../../utils/googleAuthSession';
 import { showAlert, showConfirm } from '../../store/modalStore';
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 250 * 1024 * 1024;
 const DOCUMENT_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt'];
 const AUDIO_EXTENSIONS = ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'amr', 'wma', 'aif', 'aiff'];
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'mpg', 'mpeg', '3gp', '3g2', 'wmv'];
@@ -56,6 +57,7 @@ type PendingUpload = {
   customTypeLabel: string;
   status: 'pending' | 'uploading' | 'error';
   error?: string;
+  progress?: number;
 };
 
 type PatientFilesCardProps = {
@@ -99,6 +101,10 @@ const getExtension = (name: string) => {
 };
 
 const isAcceptedFile = (file: File) => ACCEPTED_EXTENSIONS.includes(getExtension(file.name));
+const isVideoFile = (file: File) =>
+  file.type.startsWith('video/') || VIDEO_EXTENSIONS.includes(getExtension(file.name));
+const getMaxFileSize = (file: File) =>
+  isVideoFile(file) ? MAX_VIDEO_FILE_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
 
 type TypeDropdownProps = {
   value: PatientFileTypeKey | '';
@@ -261,8 +267,9 @@ export default function PatientFilesCard({
         rejected.push(`${file.name}: formato não suportado`);
         return;
       }
-      if (file.size > MAX_FILE_SIZE_BYTES) {
-        rejected.push(`${file.name}: excede 25 MB`);
+      const maxFileSize = getMaxFileSize(file);
+      if (file.size > maxFileSize) {
+        rejected.push(`${file.name}: excede ${isVideoFile(file) ? '250 MB' : '25 MB'}`);
         return;
       }
 
@@ -321,17 +328,29 @@ export default function PatientFilesCard({
     setUploading(true);
     for (const item of [...pending]) {
       setPending((current) => current.map((entry) => (
-        entry.id === item.id ? { ...entry, status: 'uploading', error: undefined } : entry
+        entry.id === item.id ? { ...entry, status: 'uploading', error: undefined, progress: 0 } : entry
       )));
 
       let uploadedDriveId = '';
       try {
-        const uploaded = await uploadFileToGoogleDrive(
-          googleAccessToken,
-          item.file,
-          item.file.name,
-          targetFolderId
-        );
+        const uploaded = isVideoFile(item.file)
+          ? await uploadFileToGoogleDriveResumable(
+              googleAccessToken,
+              item.file,
+              item.file.name,
+              targetFolderId,
+              (progress) => {
+                setPending((current) => current.map((entry) => (
+                  entry.id === item.id ? { ...entry, progress } : entry
+                )));
+              }
+            )
+          : await uploadFileToGoogleDrive(
+              googleAccessToken,
+              item.file,
+              item.file.name,
+              targetFolderId
+            );
         uploadedDriveId = uploaded.id;
 
         const fileTypeKey = item.fileTypeKey as PatientFileTypeKey;
@@ -565,7 +584,7 @@ export default function PatientFilesCard({
             <UploadCloud size={28} className="mx-auto text-brand-primary" />
             <p className="mt-2 text-sm font-semibold text-brand-text">Adicionar arquivos</p>
             <p className="mt-1 text-[11px] text-brand-text-muted">
-              Clique ou arraste arquivos para cá · documentos, imagens, áudios ou vídeos · até 25 MB por arquivo
+              Clique ou arraste arquivos para cá · documentos, imagens e áudios até 25 MB · vídeos até 250 MB
             </p>
           </button>
         </>
@@ -644,7 +663,11 @@ export default function PatientFilesCard({
                     {item.status === 'uploading' && (
                       <div className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-primary">
                         <Loader2 size={13} className="animate-spin" />
-                        Enviando para o Google Drive...
+                        <span>
+                          {isVideoFile(item.file)
+                            ? `Enviando vídeo para o Google Drive... ${Math.max(0, Math.min(100, item.progress || 0))}%`
+                            : 'Enviando para o Google Drive...'}
+                        </span>
                       </div>
                     )}
                     {item.status === 'error' && (

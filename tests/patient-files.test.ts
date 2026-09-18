@@ -24,6 +24,10 @@ assert.match(patientDetailSource, /drive\.google\.com\/drive\/folders/);
 assert.match(patientDetailSource, /patient\.target_folder_id &&/);
 
 assert.match(patientFilesSource, /MAX_FILE_SIZE_BYTES = 25 \* 1024 \* 1024/);
+assert.match(patientFilesSource, /MAX_VIDEO_FILE_SIZE_BYTES = 250 \* 1024 \* 1024/);
+assert.match(patientFilesSource, /isVideoFile/);
+assert.match(patientFilesSource, /uploadFileToGoogleDriveResumable/);
+assert.match(patientFilesSource, /vídeos até 250 MB/);
 assert.match(patientFilesSource, /AUDIO_EXTENSIONS = \['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'amr', 'wma', 'aif', 'aiff'\]/);
 assert.match(patientFilesSource, /VIDEO_EXTENSIONS = \['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'mpg', 'mpeg', '3gp', '3g2', 'wmv'\]/);
 assert.match(patientFilesSource, /'audio\/\*'/);
@@ -45,6 +49,11 @@ assert.match(patientFilesSource, /absolute z-\\\[80\\\]/);
 
 assert.match(googleDocsSource, /export async function uploadFileToGoogleDrive/);
 assert.match(googleDocsSource, /uploadType=multipart&fields=id,name,mimeType,size,webViewLink/);
+assert.match(googleDocsSource, /export async function uploadFileToGoogleDriveResumable/);
+assert.match(googleDocsSource, /uploadType=resumable&fields=id,name,mimeType,size,webViewLink/);
+assert.match(googleDocsSource, /const chunkSize = 8 \* 1024 \* 1024/);
+assert.match(googleDocsSource, /Content-Range/);
+assert.match(googleDocsSource, /response\.status === 308/);
 
 assert.match(migrationSource, /create table if not exists public\.patient_files/);
 assert.match(migrationSource, /patient_id uuid not null references public\.patients\(id\) on delete cascade/);
