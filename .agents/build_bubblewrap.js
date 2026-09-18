@@ -48,6 +48,24 @@ function javaTool(name) {
   return fromJavaHome && fs.existsSync(fromJavaHome) ? fromJavaHome : name;
 }
 
+async function assertJava17OrNewer() {
+  const java = javaTool('java');
+  const output = await new Promise((resolve, reject) => {
+    const child = spawn(java, ['-version'], { cwd: projectDir, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    let text = '';
+    child.stdout.on('data', (chunk) => { text += chunk.toString(); });
+    child.stderr.on('data', (chunk) => { text += chunk.toString(); });
+    child.on('error', reject);
+    child.on('close', (code) => code === 0 ? resolve(text) : reject(new Error('Não foi possível consultar a versão do Java.')));
+  });
+  const match = String(output).match(/version\s+"(\d+)(?:\.(\d+))?/i);
+  const major = match ? Number(match[1]) : 0;
+  if (!Number.isInteger(major) || major < 17) {
+    throw new Error(`AGP 9.0.1 exige JDK 17 ou superior. Java detectado: ${String(output).trim() || 'desconhecido'}`);
+  }
+  console.log(`Java validado para AGP 9: JDK ${major}.`);
+}
+
 async function verifyAndPublishArtifact(source, destination) {
   if (!fs.existsSync(source)) throw new Error(`Artefato não encontrado: ${source}`);
   await run(javaTool('jarsigner'), ['-verify', source], false);
@@ -60,6 +78,7 @@ async function main() {
   requireEnvironment('ANDROID_KEYSTORE_PASSWORD');
   requireEnvironment('ANDROID_KEY_PASSWORD');
   const version = readReleaseVersion();
+  await assertJava17OrNewer();
   const gradle = process.platform === 'win32' ? '.\\gradlew.bat' : './gradlew';
   const gradleArgs = [
     ':app:bundleRelease',
