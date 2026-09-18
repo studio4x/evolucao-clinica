@@ -28,6 +28,7 @@ import SubscriptionCouponsAdmin from '../components/admin/SubscriptionCouponsAdm
 import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsModal';
 import ProfessionalFunnelKanban from '../components/admin/ProfessionalFunnelKanban';
 import NotificationRecipientSelector from '../components/admin/NotificationRecipientSelector';
+import ManualPushNotificationHistory from '../components/admin/ManualPushNotificationHistory';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 import {
@@ -5862,6 +5863,7 @@ export default function AdminPanel() {
                           funnelBoard={professionalFunnel}
                           funnelLoading={professionalFunnelLoading}
                           funnelError={professionalFunnelError}
+                          enableProfessionalSearch
                         />
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -5979,136 +5981,17 @@ export default function AdminPanel() {
                       </form>
                     </div>
 
-                    <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                        <h3 className="text-lg font-semibold text-brand-text flex items-center space-x-2">
-                          <Clock size={18} className="text-brand-primary" />
-                          <span>Notificações push enviadas manualmente</span>
-                        </h3>
-                        <button
-                          type="button"
-                          onClick={() => handleClearNotificationHistory(manualPushNotifications, 'manuais', 'manual')}
-                          disabled={manualPushNotifications.length === 0 || loadingPushNotifications}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <Trash2 size={14} />
-                          <span>Limpar histórico</span>
-                        </button>
-                      </div>
-
-                      {loadingPushNotifications ? (
-                        <div className="p-12 flex flex-col items-center justify-center text-brand-text-muted">
-                          <Loader2 className="w-8 h-8 text-brand-primary animate-spin mb-3" />
-                          <span className="text-sm">Carregando logs...</span>
-                        </div>
-                      ) : manualPushNotifications.length === 0 ? (
-                        <div className="p-12 text-center text-brand-text-muted text-sm italic">
-                          Nenhuma notificação manual cadastrada no sistema.
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-left text-sm border-collapse">
-                            <thead>
-                              <tr className="border-b border-brand-border/60 text-brand-text font-bold text-xs uppercase tracking-wider">
-                                <th className="py-2.5 px-3">Profissional</th>
-                                <th className="py-2.5 px-3">Segmentação utilizada</th>
-                                <th className="py-2.5 px-3">Título / Mensagem</th>
-                                <th className="py-2.5 px-3">Tipo</th>
-                                <th className="py-2.5 px-3">Lido em</th>
-                                <th className="py-2.5 px-3">Enviado em</th>
-                                <th className="py-2.5 px-3 text-right">Ação</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-brand-border/30 text-xs">
-                              {manualPushNotifications.map((n) => (
-                                <tr key={n.id} className="hover:bg-brand-bg/10 transition-colors">
-                                  <td className="py-2.5 px-3">
-                                    <p className="font-semibold text-brand-text">
-                                      {n.professionals?.full_name || 'Profissional'}
-                                    </p>
-                                    <p className="text-[10px] text-brand-text-muted">
-                                      {n.professionals?.google_email || ''}
-                                    </p>
-                                  </td>
-                                  <td className="py-2.5 px-3 min-w-[180px]">
-                                    <span className="inline-flex rounded-full border border-brand-primary/20 bg-brand-primary/5 px-2 py-1 text-[10px] font-semibold text-brand-primary">
-                                      {getNotificationAudienceLabel(n)}
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3 max-w-xs">
-                                    <div className="flex items-center gap-2">
-                                      {n.image_url && (
-                                        <img
-                                          src={n.image_url}
-                                          alt="Capa"
-                                          className="w-8 h-8 rounded object-cover flex-shrink-0 border border-brand-border/40"
-                                        />
-                                      )}
-                                      <div className="overflow-hidden">
-                                        <p className="font-medium text-brand-text truncate">{n.title}</p>
-                                        <p className="text-brand-text-muted truncate text-[10px]">{n.message}</p>
-                                      </div>
-                                    </div>
-                                  </td>
-                                  <td className="py-2.5 px-3">
-                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-bold uppercase ${
-                                      n.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-150' :
-                                      n.type === 'error' ? 'bg-red-50 text-red-700 border border-red-150' :
-                                      n.type === 'warning' ? 'bg-amber-50 text-amber-700 border border-amber-150' :
-                                      'bg-blue-50 text-blue-700 border border-blue-150'
-                                    }`}>
-                                      {n.type}
-                                    </span>
-                                  </td>
-                                  <td className="py-2.5 px-3 text-brand-text-muted">
-                                    {n.read_at ? new Date(n.read_at).toLocaleDateString('pt-BR', {
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : (
-                                      <span className="text-[10px] text-red-500 font-semibold uppercase">Não lido</span>
-                                    )}
-                                  </td>
-                                  <td className="py-2.5 px-3 text-brand-text-muted">
-                                    {n.created_at ? new Date(n.created_at).toLocaleDateString('pt-BR', {
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    }) : 'N/A'}
-                                  </td>
-                                  <td className="py-2.5 px-3 text-right">
-                                    <button
-                                      onClick={() => handleCopyNotification(n)}
-                                      className="p-1 text-brand-primary hover:bg-brand-bg rounded transition-colors mr-1 cursor-pointer"
-                                      title="Editar conteúdo e preparar novo envio"
-                                    >
-                                      <Pencil size={15} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleResendNotification(n)}
-                                      disabled={resendingNotifId === n.id}
-                                      className="p-1 text-emerald-600 hover:bg-emerald-50 rounded transition-colors mr-1 disabled:opacity-50 cursor-pointer"
-                                      title="Reenviar Notificação Imediatamente"
-                                    >
-                                      {resendingNotifId === n.id ? <Loader2 className="animate-spin" size={15} /> : <RefreshCw size={15} />}
-                                    </button>
-                                    <button
-                                      onClick={() => handleDeleteNotification(n.id)}
-                                      disabled={deletingNotifId === n.id}
-                                      className="p-1 text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50 cursor-pointer"
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
+                    <ManualPushNotificationHistory
+                      notifications={manualPushNotifications}
+                      loading={loadingPushNotifications}
+                      deletingNotificationId={deletingNotifId}
+                      resendingNotificationId={resendingNotifId}
+                      getAudienceLabel={getNotificationAudienceLabel}
+                      onClear={() => handleClearNotificationHistory(manualPushNotifications, 'manuais', 'manual')}
+                      onCopy={handleCopyNotification}
+                      onResend={handleResendNotification}
+                      onDelete={handleDeleteNotification}
+                    />
                   </div>
                 ) : pushNotificationsTab === 'platform' ? (
                     <div className="card p-6 bg-white shadow-sm border border-brand-border/60">
