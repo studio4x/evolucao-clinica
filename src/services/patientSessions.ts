@@ -18,6 +18,7 @@ export type PatientSession = {
   patientId: string;
   professionalId: string;
   evolutionId: string | null;
+  packageId: string | null;
   sessionDate: string;
   sessionTime: string | null;
   status: PatientSessionStatus;
@@ -33,6 +34,7 @@ type SessionRow = {
   patient_id: string;
   professional_id: string;
   evolution_id: string | null;
+  package_id: string | null;
   session_date: string;
   session_time: string | null;
   status: PatientSessionStatus;
@@ -69,6 +71,7 @@ const mapSession = (row: SessionRow, signature?: SignatureRow): PatientSession =
   patientId: row.patient_id,
   professionalId: row.professional_id,
   evolutionId: row.evolution_id,
+  packageId: row.package_id,
   sessionDate: row.session_date,
   sessionTime: row.session_time,
   status: row.status,
@@ -132,6 +135,8 @@ export async function createPatientSession(input: {
   sessionTime?: string | null;
   status?: PatientSessionStatus;
   notes?: string | null;
+  evolutionId?: string | null;
+  packageId?: string | null;
 }) {
   const { data, error } = await supabase
     .from('patient_sessions')
@@ -142,6 +147,8 @@ export async function createPatientSession(input: {
       session_time: input.sessionTime || null,
       status: input.status || 'completed',
       notes: input.notes?.trim() || null,
+      evolution_id: input.evolutionId || null,
+      package_id: input.packageId || null,
     })
     .select('*')
     .single();
@@ -155,7 +162,7 @@ export async function createPatientSession(input: {
 
 export async function updatePatientSession(
   session: PatientSession,
-  input: { sessionDate: string; sessionTime?: string | null; status: PatientSessionStatus; notes?: string | null }
+  input: { sessionDate: string; sessionTime?: string | null; status: PatientSessionStatus; notes?: string | null; evolutionId?: string | null; packageId?: string | null }
 ) {
   if (session.signature) {
     throw new Error('Revogue a assinatura antes de alterar os dados essenciais desta sessão.');
@@ -167,6 +174,8 @@ export async function updatePatientSession(
       session_time: input.sessionTime || null,
       status: input.status,
       notes: input.notes?.trim() || null,
+      evolution_id: input.evolutionId || null,
+      package_id: input.packageId || null,
     })
     .eq('id', session.id)
     .select('*')
@@ -282,4 +291,105 @@ export async function appendSessionAudit(
     details,
   });
   if (error) console.warn('[PatientSessions] Falha ao registrar auditoria:', error);
+}
+
+
+export type PatientSessionPackage = {
+  id: string;
+  patientId: string;
+  professionalId: string;
+  label: string;
+  targetSessions: number;
+  status: 'active' | 'completed' | 'cancelled';
+  startsOn: string;
+  completedAt: string | null;
+  createdAt: string;
+  completedSessions: number;
+};
+
+export async function fetchPatientSessionsRange(patientId: string, start: string, end: string) {
+  const { data: sessions, error } = await supabase
+    .from('patient_sessions')
+    .select('*')
+    .eq('patient_id', patientId)
+    .is('deleted_at', null)
+    .gte('session_date', start)
+    .lte('session_date', end)
+    .order('session_date', { ascending: true })
+    .order('session_time', { ascending: true, nullsFirst: false });
+  if (error) throw error;
+  const ids = (sessions || []).map((row) => row.id);
+  let signatures: SignatureRow[] = [];
+  if (ids.length > 0) {
+    const result = await supabase
+      .from('patient_session_signatures')
+      .select('*')
+      .in('session_id', ids)
+      .is('revoked_at', null);
+    if (result.error) throw result.error;
+    signatures = (result.data || []) as SignatureRow[];
+  }
+  const bySession = new Map(signatures.map((sig) => [sig.session_id, sig]));
+  return (sessions || []).map((row) => mapSession(row as SessionRow, bySession.get(row.id)));
+}
+
+export async function fetchPatientSessionPackages(patientId: string) {
+  const { data: packages, error } = await supabase
+    .from('patient_session_packages')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  if (!packages?.length) return [] as PatientSessionPackage[];
+
+  const packageIds = packages.map((item) => item.id);
+  const { data: packageSessions, error: sessionError } = await supabase
+    .from('patient_sessions')
+    .select('package_id, status, deleted_at')
+    .in('package_id', packageIds);
+  if (sessionError) throw sessionError;
+
+  return packages.map((item) => ({
+    id: item.id,
+    patientId: item.patient_id,
+    professionalId: item.professional_id,
+    label: item.label,
+    targetSessions: item.target_sessions,
+    status: item.status,
+    startsOn: item.starts_on,
+    completedAt: item.completed_at,
+    createdAt: item.created_at,
+    completedSessions: (packageSessions || []).filter(
+      (session) => session.package_id === item.id && session.status === 'completed' && !session.deleted_at
+    ).length,
+  })) as PatientSessionPackage[];
+}
+
+export async function createPatientSessionPackage(input: {
+  patientId: string;
+  professionalId: string;
+  targetSessions: number;
+  label?: string;
+}) {
+  const { data, error } = await supabase
+    .from('patient_session_packages')
+    .insert({
+      patient_id: input.patientId,
+      professional_id: input.professionalId,
+      target_sessions: input.targetSessions,
+      label: input.label?.trim() || 'Pacote de sessões',
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function cancelPatientSessionPackage(packageId: string) {
+  const { error } = await supabase
+    .from('patient_session_packages')
+    .update({ status: 'cancelled', cancelled_at: new Date().toISOString() })
+    .eq('id', packageId)
+    .eq('status', 'active');
+  if (error) throw error;
 }
