@@ -6852,7 +6852,7 @@ export default function AdminPanel() {
                         <div className="space-y-1">
                           <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Depois do primeiro contato</label>
                           <select
-                            value={!supportAiSettings?.enabled ? 'off' : supportAiSettings.mode === 'auto_reply' ? 'auto_reply' : 'draft'}
+                            value={!supportAiSettings?.enabled || supportAiSettings.mode === 'triage' ? 'off' : supportAiSettings.mode === 'auto_reply' ? 'auto_reply' : 'draft'}
                             onChange={(e) => void handleSupportResponseAutomationChange(e.target.value as 'off' | 'draft' | 'auto_reply')}
                             disabled={supportAiSettingsLoading || supportAiSettingsSaving || !supportAiSettings}
                             className="w-full min-w-[225px] rounded-xl border border-brand-border/80 bg-white px-3 py-2.5 text-xs font-semibold text-brand-text outline-none focus:border-brand-primary disabled:opacity-50"
