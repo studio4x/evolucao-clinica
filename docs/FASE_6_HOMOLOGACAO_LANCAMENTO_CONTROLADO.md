@@ -77,7 +77,7 @@ Quatro flags server-side de Vercel são do tipo sensitive: a API não devolve se
 
 ## Validação e próximos gates
 
-`npm test`, regressão runtime do dashboard, teste do handler de seats, `npm run lint`, `npm run build` com variáveis VITE de staging e `git diff --check`: PASS. Build mantém avisos históricos de chunks acima de 500 kB. Scan da alteração contra credenciais reais e padrões de secrets: PASS; arquivos temporários contendo credenciais e magic link permanecem fora do Git e são removidos ao terminar.
+`npm test`, regressão runtime do dashboard, teste do handler de seats, `npm run lint`, `npm run build` com variáveis VITE de staging e `git diff --check`: PASS. Build mantém avisos históricos de chunks acima de 500 kB. Scan da alteração contra credenciais reais e padrões de secrets: PASS; arquivos temporários contendo credenciais e magic link permaneceram fora do Git. Seus conteúdos sigilosos foram substituídos por marcador redacted ao terminar; os arquivos vazios de segredos não são evidência de runtime reutilizável.
 
 Plano de migrations: [READY para revisão](CLINIC_PRODUCTION_MIGRATION_PLAN.md), com classificação 01–30, dependências, guards staging e adaptações canônicas necessárias. Checklist e rollback: [READY para revisão](CLINIC_PRODUCTION_RELEASE_CHECKLIST.md). Nenhuma migration canônica de produção foi criada/aplicada. Rollback desliga gates e restaura deployment compatível preservando dados/audit/ledger; não apaga schema.
 
