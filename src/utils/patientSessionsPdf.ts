@@ -20,6 +20,7 @@ export function generatePatientSessionsPdf(input: {
   professionalName: string;
   professionalRegister?: string | null;
   month: Date;
+  periodLabel?: string;
   sessions: PatientSession[];
   signatureImages: SignatureImageMap;
 }) {
@@ -46,7 +47,7 @@ export function generatePatientSessionsPdf(input: {
   doc.text(`Profissional: ${input.professionalName}`, margin, y);
   if (input.professionalRegister) doc.text(`Registro: ${input.professionalRegister}`, width - margin, y, { align: 'right' });
   y += 5;
-  const period = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(input.month);
+  const period = input.periodLabel || new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(input.month);
   doc.text(`Período: ${period}`, margin, y);
   y += 7;
 
