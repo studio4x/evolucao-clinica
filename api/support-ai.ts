@@ -310,8 +310,11 @@ const processEvent = async (input: {
     return { processed: false, reason: 'not_professional_event' };
   }
 
-  if (eventType === 'create' && settings.triage_enabled === true) {
-    return processTriage({ supabaseAdmin, settings, ticket, requesterId });
+  if (eventType === 'create') {
+    if (settings.triage_enabled === true) {
+      return processTriage({ supabaseAdmin, settings, ticket, requesterId });
+    }
+    return { processed: false, reason: 'first_contact_disabled' };
   }
 
   if (!settings.enabled) return { processed: false, reason: 'responses_disabled' };
