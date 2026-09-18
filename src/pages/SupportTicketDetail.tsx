@@ -425,7 +425,9 @@ export default function SupportTicketDetail() {
               const isAiMessage = msg.origin === 'support_ai';
               const senderDisplayName = isAiMessage
                 ? (msg.senderLabel || 'Assistente de suporte')
-                : (msg.senderName || 'Suporte');
+                : (!isAdmin && msg.senderRole === 'admin')
+                  ? 'Suporte - Evolução Clínica'
+                  : (msg.senderName || (msg.senderRole === 'admin' ? 'Suporte - Evolução Clínica' : 'Profissional'));
               return (
                 <div key={msg.id} className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
                   <div className="flex items-center gap-1.5 px-1.5 mb-1">
