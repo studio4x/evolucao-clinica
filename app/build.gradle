@@ -54,8 +54,8 @@ android {
         applicationId "com.evolucaoclinica.app"
         minSdk 23
         targetSdk 36
-        versionCode 90
-        versionName "90"
+        versionCode 91
+        versionName "91"
 
         resValue "string", "appName", twaManifest.name
         resValue "string", "launcherName", twaManifest.launcherName
