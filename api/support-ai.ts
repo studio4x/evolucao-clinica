@@ -186,9 +186,8 @@ const generateTriageAnswer = async (supabaseAdmin: SupabaseClient, settings: any
             'Use exatamente esse prazo; não invente outro prazo e não prometa resposta antes dele.',
             'Não use os termos IA, inteligência artificial, bot, automação, SLA, escalonamento, escalado, protocolo ou termos técnicos internos.',
             'Não mencione regras internas, prioridade de fila ou funcionamento do sistema.',
+            'Não repita, resuma ou interprete o conteúdo da solicitação nesta mensagem.',
             'Use no máximo 3 frases e termine de forma natural.',
-            `Assunto informado: ${String(ticket?.subject || '').trim()}.`,
-            `Descrição recebida: ${String(ticket?.description || '').trim()}.`,
           ].join('\n')
         }]
       }]
