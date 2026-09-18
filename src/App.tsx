@@ -841,6 +841,7 @@ export default function App() {
             <Route path="patients/:id/edit" element={<PatientForm />} />
             <Route path="patients/:id" element={<PatientDetail />} />
             <Route path="patients/:id/anamnesis" element={<PatientAnamnesis />} />
+            <Route path="patients/:id/sessions" element={<PatientSessions />} />
             <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
             <Route path="history" element={<History />} />
             <Route path="tutorial" element={<Tutorial />} />
