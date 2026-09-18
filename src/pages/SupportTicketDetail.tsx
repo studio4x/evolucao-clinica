@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Send, Paperclip, X, Download, AlertCircle, FileText, CheckCircle2, Sparkles, RefreshCw, Bot, Power, Pencil, Trash2, Check } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, X, Download, AlertCircle, FileText, CheckCircle2, Sparkles, RefreshCw, Bot, Pencil, Trash2, Check } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { showConfirm } from '../store/modalStore';
 import {
@@ -20,26 +20,12 @@ import {
   processSupportAiEvent,
   regenerateSupportAiDraft,
   setSupportAiDraftStatus,
-  updateSupportAiSettings,
   SupportAiDraft,
-  SupportAiMode,
   SupportAiSettings,
 } from '../services/supportAi';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
-
-const AI_MODE_LABELS: Record<SupportAiMode, string> = {
-  auto_reply: 'Responder automaticamente',
-  triage: 'Primeiro atendimento + escalonamento',
-  draft: 'Elaborar resposta para revisão',
-};
-
-const AI_MODE_HELP: Record<SupportAiMode, string> = {
-  auto_reply: 'A IA analisa a solicitação e envia a resposta diretamente ao profissional.',
-  triage: 'Ao abrir o chamado, o profissional recebe uma mensagem introdutória informando que um atendente foi escalado.',
-  draft: 'A IA prepara uma resposta, mas somente um atendente pode revisar e enviar.',
-};
 
 export default function SupportTicketDetail() {
   const { ticketId: routeTicketId } = useParams<{ ticketId: string }>();
@@ -253,49 +239,6 @@ export default function SupportTicketDetail() {
     }
   };
 
-  const handleAiModeChange = async (mode: SupportAiMode) => {
-    if (!aiSettings || mode === aiSettings.mode) return;
-
-    if (mode === 'auto_reply') {
-      const confirmed = await showConfirm(
-        'No modo automático, as respostas geradas pela IA serão enviadas diretamente ao profissional, sem revisão humana prévia. Deseja ativar este modo?',
-        {
-          title: 'Ativar respostas automáticas',
-          confirmLabel: 'Ativar modo automático',
-          cancelLabel: 'Cancelar',
-          variant: 'warning',
-          icon: 'question',
-        }
-      );
-      if (!confirmed) return;
-    }
-
-    try {
-      setAiLoading(true);
-      setAiError('');
-      const updated = await updateSupportAiSettings({ mode });
-      setAiSettings(updated);
-    } catch (err: any) {
-      setAiError(err.message || 'Não foi possível alterar o modo da IA.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const handleAiEnabledChange = async () => {
-    if (!aiSettings) return;
-    try {
-      setAiLoading(true);
-      setAiError('');
-      const updated = await updateSupportAiSettings({ enabled: !aiSettings.enabled });
-      setAiSettings(updated);
-    } catch (err: any) {
-      setAiError(err.message || 'Não foi possível alterar o status da IA.');
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   const handleRegenerateDraft = async () => {
     if (!ticketId) return;
     try {
@@ -419,29 +362,19 @@ export default function SupportTicketDetail() {
         </div>
       </div>
 
-      {isAdmin && aiSettings && (
+      {isAdmin && aiSettings?.enabled && aiSettings.mode === 'draft' && (
         <div className="shrink-0 bg-white border border-brand-primary/20 rounded-3xl p-4 shadow-sm space-y-3">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            <div className="flex items-start gap-2.5">
-              <div className="p-2 rounded-xl bg-brand-primary/10 text-brand-primary"><Bot size={18} /></div>
-              <div>
-                <div className="flex items-center gap-2"><h3 className="text-sm font-bold text-brand-text">IA do atendimento</h3><span className="text-[10px] uppercase tracking-wide text-brand-text-muted">configuração global</span></div>
-                <p className="text-xs text-brand-text-muted mt-1">{AI_MODE_HELP[aiSettings.mode]}</p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={handleAiEnabledChange} disabled={aiLoading} className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all ${aiSettings.enabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-gray-50 border-gray-200 text-gray-500'}`}><Power size={13} />{aiSettings.enabled ? 'IA ativa' : 'IA pausada'}</button>
-              <select value={aiSettings.mode} onChange={(e) => handleAiModeChange(e.target.value as SupportAiMode)} disabled={aiLoading || !aiSettings.enabled} className="px-3 py-2 rounded-xl border border-brand-border bg-white text-xs font-semibold text-brand-text outline-none focus:border-brand-primary">
-                <option value="draft">Elaborar resposta para revisão</option>
-                <option value="triage">Primeiro atendimento + escalonamento</option>
-                <option value="auto_reply">Responder automaticamente</option>
-              </select>
+          <div className="flex items-start gap-2.5">
+            <div className="p-2 rounded-xl bg-brand-primary/10 text-brand-primary"><Bot size={18} /></div>
+            <div>
+              <h3 className="text-sm font-bold text-brand-text">Sugestão de resposta</h3>
+              <p className="text-xs text-brand-text-muted mt-1">A configuração geral do atendimento fica na página de Suporte / Tickets.</p>
             </div>
           </div>
 
           {aiError && <div className="text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{aiError}</div>}
 
-          {aiSettings.enabled && aiSettings.mode === 'draft' && aiDraft?.status === 'pending' && (
+          {aiDraft?.status === 'pending' ? (
             <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/[0.03] p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-brand-primary"><Sparkles size={15} /><span className="text-xs font-bold">Resposta sugerida pela IA</span>{aiDraft.model && <span className="text-[10px] text-brand-text-muted">{aiDraft.model}</span>}</div>
@@ -453,9 +386,7 @@ export default function SupportTicketDetail() {
                 <button type="button" onClick={handleDismissDraft} className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold">Descartar</button>
               </div>
             </div>
-          )}
-
-          {aiSettings.enabled && aiSettings.mode === 'draft' && (!aiDraft || aiDraft.status !== 'pending') && (
+          ) : (
             <button type="button" onClick={handleRegenerateDraft} disabled={aiLoading} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-brand-primary/20 text-brand-primary text-xs font-bold hover:bg-brand-primary/5"><Sparkles size={13} />{aiLoading ? 'Gerando resposta...' : 'Gerar sugestão para este ticket'}</button>
           )}
         </div>
