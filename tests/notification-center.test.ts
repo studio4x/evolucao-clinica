@@ -10,6 +10,8 @@ const adminSource = readFileSync("src/pages/AdminPanel.tsx", "utf8");
 const emailHistorySource = readFileSync("src/pages/EmailHistory.tsx", "utf8");
 const emailTemplatesSource = readFileSync("src/components/admin/EmailTransactionalTemplates.tsx", "utf8");
 const pushCasesSource = readFileSync("src/components/admin/PushNotificationCasesManager.tsx", "utf8");
+const recipientSelectorSource = readFileSync("src/components/admin/NotificationRecipientSelector.tsx", "utf8");
+const manualPushHistorySource = readFileSync("src/components/admin/ManualPushNotificationHistory.tsx", "utf8");
 const serverSource = readFileSync("server.ts", "utf8");
 const migrationSource = readFileSync(
   "supabase/migrations/20260806233000_classify_onboarding_notifications.sql",
@@ -68,6 +70,17 @@ assert.match(serverSource, /\/api\/admin\/email-templates\/:key\/test/);
 assert.match(serverSource, /EDITABLE_EMAIL_TEMPLATE_TEST_KEYS/);
 assert.match(pushCasesSource, /Casos de envio de notificações push/);
 assert.match(pushCasesSource, /role="switch"/);
+assert.match(pushCasesSource, /useState\(false\)/);
+assert.match(pushCasesSource, /aria-expanded=\{isOpen\}/);
+assert.match(recipientSelectorSource, /placeholder="Nome, e-mail ou telefone"/);
+assert.match(recipientSelectorSource, /whatsappNumber/);
+assert.match(adminSource, /enableProfessionalSearch/);
+assert.match(adminSource, /<ManualPushNotificationHistory/);
+assert.match(manualPushHistorySource, /GROUPS_PER_PAGE = 10/);
+assert.match(manualPushHistorySource, /notificationGroupKey/);
+assert.match(manualPushHistorySource, /aria-expanded=\{expanded\}/);
+assert.match(manualPushHistorySource, /setExpandedGroups\(new Set\(\)\)/);
+assert.match(manualPushHistorySource, /Página \{page\} de \{totalPages\}/);
 assert.match(serverSource, /\/api\/admin\/push-notification-cases/);
 assert.match(editableEmailTemplatesMigrationSource, /CREATE TABLE IF NOT EXISTS public\.email_templates/);
 assert.match(editableEmailTemplatesMigrationSource, /email_templates_admin_manage/);
