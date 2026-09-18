@@ -3,7 +3,7 @@ import { evaluateBrevoPreflight } from '../scripts/clinic-brevo-preflight.js';
 const input = { smtpAuthentication: true, senderConfigured: true, directFragment: true, localTrackingDeclaration: true, deliveryGate: 'OFF' };
 assert.equal(evaluateBrevoPreflight(input).status, 'MANUAL_PROVIDER_GATE');
 assert.equal(evaluateBrevoPreflight(input).senderProviderVerified, 'MANUAL');
-const provider = { source: 'authenticated_provider_browser_read_only', configuredFromExactMatch: true, smtpLoginExactMatch: true, stagingKeyMaskedSuffixMatch: true, senderProviderVerified: true, providerScopeIsolated: true, openTrackingDisabled: true, clickTrackingDisabled: true, linkRewritingDisabled: true, trackingPolicyKnown: true };
+const provider = { source: 'authenticated_provider_browser_read_only', configuredFromExactMatch: true, smtpLoginExactMatch: true, stagingKeyMaskedSuffixMatch: true, senderProviderVerified: true, providerScopeIsolated: true, providerScope: 'ISOLATED', strictTrackingDisable: 'VERIFIED', openTrackingDisabled: true, clickTrackingDisabled: true, linkRewritingDisabled: true, trackingPolicyKnown: true };
 assert.equal(evaluateBrevoPreflight({ ...input, provider }).status, 'PASS');
 for (const key of ['openTrackingDisabled', 'clickTrackingDisabled', 'linkRewritingDisabled', 'providerScopeIsolated']) assert.equal(evaluateBrevoPreflight({ ...input, provider: { ...provider, [key]: 'UNKNOWN' } }).status, 'MANUAL_PROVIDER_GATE');
 assert.equal(evaluateBrevoPreflight({ ...input, provider: { ...provider, anonymousTracking: true, clickTrackingDisabled: false } }).status, 'MANUAL_PROVIDER_GATE');
@@ -13,4 +13,8 @@ assert.equal(evaluateBrevoPreflight({ ...input, provider, deliveryGate: 'ON' }).
 assert.equal(evaluateBrevoPreflight({ ...input, provider, deliveryGate: 'SENSITIVE_UNREADABLE' }).status, 'MANUAL_PROVIDER_GATE');
 assert.equal(evaluateBrevoPreflight({ ...input, provider, smtpAuthentication: false }).status, 'FAIL');
 assert.equal(evaluateBrevoPreflight({ ...input, provider }).sendAttempted, false);
+const freeAccount = { ...provider, providerScopeIsolated: false, providerScope: 'SHARED', providerIsolationStatus: 'PLAN_CAPABILITY_GATE', plan: 'Free', planCapability: 'NOT_SUPPORTED', subaccountsSupported: false, strictTrackingDisable: 'UNPROVEN' };
+const gated = evaluateBrevoPreflight({ ...input, provider: freeAccount });
+assert.equal(gated.status, 'PLAN_CAPABILITY_GATE'); assert.equal(gated.providerScope, 'SHARED'); assert.equal(gated.smtpCredentialScope, 'UNKNOWN');
+assert.equal(gated.controlledDeliveryRequired, true); assert.equal(gated.dnsChanged, false); assert.equal(gated.billingPlanChanged, false);
 console.log('Brevo preflight evidence, unknown state, shared scope and no-send contracts PASS');

@@ -16,8 +16,10 @@ const rendered = renderInvitationMail({ recipient: 'never-sent@example.invalid',
 const directFragment = rendered.html.includes('https://staging.evolucaoclinica.app.br/convite-clinica#invite=');
 // No generic key/settings fallback; a dedicated API credential is not consumed here.
 // Evidence is produced through authorized read-only provider UI, never a SEND.
-const provider = process.env.F6B_BREVO_PROVIDER_FILE ? JSON.parse(readFileSync(process.env.F6B_BREVO_PROVIDER_FILE, 'utf8')) : undefined;
-const deliveryGate = env.CLINIC_INVITATION_DELIVERY_ENABLED === 'true' ? 'ON' : env.CLINIC_INVITATION_DELIVERY_ENABLED === 'false' ? 'OFF' : 'SENSITIVE_UNREADABLE';
+const providerFile = process.env.F6C_BREVO_PROVIDER_FILE || process.env.F6B_BREVO_PROVIDER_FILE;
+const provider = providerFile ? JSON.parse(readFileSync(providerFile, 'utf8')) : undefined;
+const gateReceipt = process.env.F6_GATE_RECEIPT_FILE ? JSON.parse(readFileSync(process.env.F6_GATE_RECEIPT_FILE, 'utf8')) : undefined;
+const deliveryGate = gateReceipt?.acceptedGateWrites?.CLINIC_INVITATION_DELIVERY_ENABLED === 'false' ? 'OFF' : env.CLINIC_INVITATION_DELIVERY_ENABLED === 'true' ? 'ON' : env.CLINIC_INVITATION_DELIVERY_ENABLED === 'false' ? 'OFF' : 'SENSITIVE_UNREADABLE';
 const report = evaluateBrevoPreflight({ smtpAuthentication: authentication, senderConfigured: !!env.CLINIC_INVITATION_SMTP_FROM, directFragment, localTrackingDeclaration: env.CLINIC_INVITATION_SMTP_TRACKING_DISABLED === 'true', deliveryGate, provider });
 assert.ok(process.env.F6_BREVO_FILE);
 writeFileSync(process.env.F6_BREVO_FILE!, JSON.stringify(report, null, 2) + '\n');

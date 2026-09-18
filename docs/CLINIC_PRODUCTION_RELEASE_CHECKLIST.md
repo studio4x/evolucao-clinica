@@ -35,4 +35,6 @@ Não apagar schema ou dados: preservar organizations, memberships, pacientes, ev
 
 Piloto permitido: somente interno sintético em staging. Piloto com dados reais: **BLOCKED_BY_LEGAL_GATE**.
 Entrega real Brevo: **PENDING_EXPLICIT_RECIPIENT_AUTHORIZATION**. Provider preflight: **MANUAL_PROVIDER_GATE** (escopo SHARED, tracking estrito UNKNOWN). Legal: **PENDING**. Release produção: **BLOCKED**.
+
+Fase 6C: a conta Brevo autenticada está no plano **Free**, com conta padrão e sem capacidade de subconta/suborganização disponível. O recurso de suborganizações é Enterprise; nenhum upgrade, cobrança, IP, DNS ou nova conta foi iniciado. Status de isolamento: **PLAN_CAPABILITY_GATE**. Próxima decisão manual: contratar/usar suborganização Enterprise, criar uma conta Brevo separada dedicada ao staging, ou escolher outro provider; nenhuma alternativa foi executada.
 Esta lista é a sequência futura a revisar, não uma autorização de merge/deploy/apply/rollout.
