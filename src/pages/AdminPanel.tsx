@@ -2886,12 +2886,12 @@ export default function AdminPanel() {
     }
   };
 
-  const handleSupportResponseAutomationChange = async (value: 'off' | 'draft' | 'auto_reply') => {
+  const handleSupportResponseAutomationChange = async (value: 'off' | 'auto_reply') => {
     if (!supportAiSettings || supportAiSettingsSaving) return;
 
     if (value === 'auto_reply') {
       const confirmed = await showConfirm(
-        'Neste modo, novas mensagens do profissional poderão receber uma resposta automática sem revisão prévia da equipe. Deseja ativar?',
+        'Neste modo, novas mensagens do profissional poderão receber uma resposta automática sem revisão prévia da equipe. A sugestão de resposta continuará disponível dentro do ticket. Deseja ativar?',
         {
           title: 'Ativar respostas automáticas',
           confirmLabel: 'Ativar',
@@ -2907,8 +2907,8 @@ export default function AdminPanel() {
       setSupportAiSettingsSaving(true);
       setSupportAiSettingsError('');
       const updated = value === 'off'
-        ? await updateSupportAiSettings({ enabled: false })
-        : await updateSupportAiSettings({ enabled: true, mode: value });
+        ? await updateSupportAiSettings({ enabled: false, mode: 'draft' })
+        : await updateSupportAiSettings({ enabled: true, mode: 'auto_reply' });
       setSupportAiSettings(updated);
     } catch (err: any) {
       console.error('Erro ao alterar modo de respostas do suporte:', err);
@@ -6735,15 +6735,15 @@ export default function AdminPanel() {
                         <div className="space-y-1">
                           <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Depois do primeiro contato</label>
                           <select
-                            value={!supportAiSettings?.enabled || supportAiSettings.mode === 'triage' ? 'off' : supportAiSettings.mode === 'auto_reply' ? 'auto_reply' : 'draft'}
-                            onChange={(e) => void handleSupportResponseAutomationChange(e.target.value as 'off' | 'draft' | 'auto_reply')}
+                            value={supportAiSettings?.enabled && supportAiSettings.mode === 'auto_reply' ? 'auto_reply' : 'off'}
+                            onChange={(e) => void handleSupportResponseAutomationChange(e.target.value as 'off' | 'auto_reply')}
                             disabled={supportAiSettingsLoading || supportAiSettingsSaving || !supportAiSettings}
                             className="w-full min-w-[225px] rounded-xl border border-brand-border/80 bg-white px-3 py-2.5 text-xs font-semibold text-brand-text outline-none focus:border-brand-primary disabled:opacity-50"
                           >
                             <option value="off">Atendimento pela equipe</option>
-                            <option value="draft">Preparar sugestão para revisão</option>
                             <option value="auto_reply">Responder automaticamente</option>
                           </select>
+                          <p className="mt-1 text-[10px] text-brand-text-muted">A sugestão de resposta via IA fica sempre disponível dentro de cada ticket.</p>
                         </div>
                       </div>
                     </div>
