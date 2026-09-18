@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { ArrowLeft, Send, Paperclip, X, Download, AlertCircle, FileText, CheckCircle2, Sparkles, RefreshCw, Bot, Power } from 'lucide-react';
+import { ArrowLeft, Send, Paperclip, X, Download, AlertCircle, FileText, CheckCircle2, Sparkles, RefreshCw, Bot, Power, Pencil, Trash2, Check } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { showConfirm } from '../store/modalStore';
 import {
   fetchSupportTicketDetail,
   sendSupportMessage,
+  updateSupportMessage,
+  deleteSupportMessage,
   updateSupportTicketStatus,
   setSupportTicketLastSeen,
   subscribeToSupportTicketDetail,
@@ -55,6 +57,9 @@ export default function SupportTicketDetail() {
   const [file, setFile] = useState<File | null>(null);
   const [sending, setSending] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingMessageText, setEditingMessageText] = useState('');
+  const [messageMutationLoading, setMessageMutationLoading] = useState(false);
   const [aiSettings, setAiSettings] = useState<SupportAiSettings | null>(null);
   const [aiDraft, setAiDraft] = useState<SupportAiDraft | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -160,6 +165,68 @@ export default function SupportTicketDetail() {
       setError(err.message || 'Não foi possível enviar a mensagem.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleStartEditMessage = (message: SupportMessage) => {
+    setEditingMessageId(message.id);
+    setEditingMessageText(message.message);
+    setError('');
+  };
+
+  const handleCancelEditMessage = () => {
+    setEditingMessageId(null);
+    setEditingMessageText('');
+  };
+
+  const handleSaveEditedMessage = async (messageId: string) => {
+    if (!editingMessageText.trim()) {
+      setError('A mensagem não pode ficar vazia.');
+      return;
+    }
+
+    try {
+      setMessageMutationLoading(true);
+      setError('');
+      await updateSupportMessage(messageId, editingMessageText);
+      setMessages((current) => current.map((message) => (
+        message.id === messageId ? { ...message, message: editingMessageText.trim() } : message
+      )));
+      handleCancelEditMessage();
+      await loadTicketDetail(true);
+    } catch (err: any) {
+      console.error('Error editing support message:', err);
+      setError(err.message || 'Não foi possível editar a mensagem.');
+    } finally {
+      setMessageMutationLoading(false);
+    }
+  };
+
+  const handleDeleteMessage = async (message: SupportMessage) => {
+    const confirmed = await showConfirm(
+      'Esta mensagem será removida da conversa e não ficará visível para o profissional. Deseja continuar?',
+      {
+        title: 'Excluir mensagem',
+        confirmLabel: 'Excluir',
+        cancelLabel: 'Cancelar',
+        variant: 'warning',
+        icon: 'question',
+      }
+    );
+    if (!confirmed) return;
+
+    try {
+      setMessageMutationLoading(true);
+      setError('');
+      await deleteSupportMessage(message.id);
+      setMessages((current) => current.filter((item) => item.id !== message.id));
+      if (editingMessageId === message.id) handleCancelEditMessage();
+      await loadTicketDetail(true);
+    } catch (err: any) {
+      console.error('Error deleting support message:', err);
+      setError(err.message || 'Não foi possível excluir a mensagem.');
+    } finally {
+      setMessageMutationLoading(false);
     }
   };
 
@@ -401,22 +468,40 @@ export default function SupportTicketDetail() {
                 : (msg.senderName || 'Suporte');
               return (
                 <div key={msg.id} className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-                  <span className="text-[10px] font-bold text-brand-text-muted px-1.5 mb-1 block">
-                    {senderDisplayName}{' '}
-                    {isAiMessage ? (
-                      <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">IA</span>
-                    ) : msg.senderRole === 'admin' ? (
-                      <span className="text-[9px] bg-brand-primary/10 text-brand-primary px-1 py-0.2 rounded border border-brand-primary/20 font-semibold">Equipe</span>
-                    ) : null}
-                  </span>
-                  <div className={`p-3.5 rounded-2xl max-w-[80%] md:max-w-[70%] border shadow-sm ${isSelf ? 'bg-brand-primary text-white border-brand-primary rounded-br-none' : 'bg-white text-brand-text border-brand-border rounded-bl-none'}`}>
-                    <RichTextPreview value={msg.message} className="text-sm leading-relaxed font-sans" />
-                    {msg.attachmentUrl && (
-                      <div className="mt-2.5">
-                        {isImage(msg.attachmentUrl) ? <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-black/10"><img src={msg.attachmentUrl} alt={msg.attachmentName || 'Anexo'} className="max-h-48 w-full object-cover" /></a> : <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className={`inline-flex items-center space-x-1.5 text-xs font-semibold px-3 py-2 rounded-xl border ${isSelf ? 'bg-white/10 text-white border-white/20' : 'bg-gray-50 text-brand-primary border-brand-border'}`}><FileText size={13} /><span className="truncate max-w-[120px] sm:max-w-[200px]">{msg.attachmentName || 'Anexo'}</span><Download size={12} /></a>}
+                  <div className="flex items-center gap-1.5 px-1.5 mb-1">
+                    <span className="text-[10px] font-bold text-brand-text-muted">
+                      {senderDisplayName}{' '}
+                      {isAiMessage ? (
+                        <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">IA</span>
+                      ) : msg.senderRole === 'admin' ? (
+                        <span className="text-[9px] bg-brand-primary/10 text-brand-primary px-1 py-0.2 rounded border border-brand-primary/20 font-semibold">Equipe</span>
+                      ) : null}
+                    </span>
+                    {isAdmin && msg.senderRole === 'admin' && editingMessageId !== msg.id && (
+                      <div className="flex items-center gap-0.5">
+                        <button type="button" onClick={() => handleStartEditMessage(msg)} disabled={messageMutationLoading} className="p-1 rounded-lg text-brand-text-muted hover:text-brand-primary hover:bg-brand-primary/5 transition-colors" title="Editar mensagem"><Pencil size={11} /></button>
+                        <button type="button" onClick={() => handleDeleteMessage(msg)} disabled={messageMutationLoading} className="p-1 rounded-lg text-brand-text-muted hover:text-rose-600 hover:bg-rose-50 transition-colors" title="Excluir mensagem"><Trash2 size={11} /></button>
                       </div>
                     )}
                   </div>
+                  {editingMessageId === msg.id ? (
+                    <div className="w-full max-w-[90%] md:max-w-[78%] rounded-2xl border border-brand-primary/20 bg-white p-3 shadow-sm space-y-2">
+                      <RichTextEditor value={editingMessageText} onChange={setEditingMessageText} disabled={messageMutationLoading} label="Editar mensagem" minHeight="8rem" resizable />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={handleCancelEditMessage} disabled={messageMutationLoading} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold"><X size={12} />Cancelar</button>
+                        <button type="button" onClick={() => handleSaveEditedMessage(msg.id)} disabled={messageMutationLoading || !editingMessageText.trim()} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-brand-primary text-white text-xs font-bold disabled:opacity-50"><Check size={12} />Salvar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={`p-3.5 rounded-2xl max-w-[80%] md:max-w-[70%] border shadow-sm ${isSelf ? 'bg-brand-primary text-white border-brand-primary rounded-br-none' : 'bg-white text-brand-text border-brand-border rounded-bl-none'}`}>
+                      <RichTextPreview value={msg.message} className="text-sm leading-relaxed font-sans" />
+                      {msg.attachmentUrl && (
+                        <div className="mt-2.5">
+                          {isImage(msg.attachmentUrl) ? <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className="block rounded-lg overflow-hidden border border-black/10"><img src={msg.attachmentUrl} alt={msg.attachmentName || 'Anexo'} className="max-h-48 w-full object-cover" /></a> : <a href={msg.attachmentUrl} target="_blank" rel="noreferrer" className={`inline-flex items-center space-x-1.5 text-xs font-semibold px-3 py-2 rounded-xl border ${isSelf ? 'bg-white/10 text-white border-white/20' : 'bg-gray-50 text-brand-primary border-brand-border'}`}><FileText size={13} /><span className="truncate max-w-[120px] sm:max-w-[200px]">{msg.attachmentName || 'Anexo'}</span><Download size={12} /></a>}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <span className="text-[9px] text-brand-text-muted px-1.5 mt-1 block">{new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(msg.createdAt))}</span>
                 </div>
               );
