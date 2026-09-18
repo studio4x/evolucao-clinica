@@ -2491,7 +2491,7 @@ export default function PatientDetail() {
           </p>
           <p className="text-sm text-red-700 leading-relaxed">
             Esta ação é irreversível. O cadastro do paciente e todas as <strong>{evolutions.length} evoluções</strong> registradas nesta plataforma serão removidas permanentemente.
-            O documento no Google Docs <strong>NÃO</strong> será afetado.
+            O documento no Google Docs e os arquivos armazenados na pasta do Google Drive <strong>NÃO</strong> serão excluídos.
           </p>
           <div className="flex space-x-3 pt-2">
             <button 
