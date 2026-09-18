@@ -104,6 +104,7 @@ async function attachLatestMessageInfo(tickets: SupportTicket[]): Promise<Suppor
     .from('support_messages')
     .select('ticket_id, sender_id, created_at')
     .in('ticket_id', ticketIds)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false });
 
   if (messagesError) throw messagesError;
@@ -342,6 +343,7 @@ export async function fetchSupportTicketDetail(ticketId: string): Promise<Suppor
     .from('support_messages')
     .select('*')
     .eq('ticket_id', ticketId)
+    .is('deleted_at', null)
     .order('created_at', { ascending: true });
 
   if (messagesError) throw messagesError;
@@ -558,6 +560,31 @@ export async function sendSupportMessage(
     ...mappedMessage,
     attachmentUrl: await resolveSupportAttachmentUrl(mappedMessage.attachmentUrl),
   };
+}
+
+// Edit a support team message (Admin only)
+export async function updateSupportMessage(messageId: string, message: string): Promise<void> {
+  const trimmedMessage = message.trim();
+  if (!trimmedMessage) {
+    throw new Error('A mensagem não pode ficar vazia.');
+  }
+
+  const { error } = await supabase
+    .from('support_messages')
+    .update({ message: trimmedMessage })
+    .eq('id', messageId);
+
+  if (error) throw error;
+}
+
+// Soft-delete a support team message (Admin only)
+export async function deleteSupportMessage(messageId: string): Promise<void> {
+  const { error } = await supabase
+    .from('support_messages')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', messageId);
+
+  if (error) throw error;
 }
 
 // Update support ticket status (Admin/User action to close)
