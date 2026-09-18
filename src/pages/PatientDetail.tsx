@@ -2539,6 +2539,18 @@ export default function PatientDetail() {
                   Sem documento Google Docs vinculado. <Link to={`/painel/patients/${id}/edit`} className="text-brand-primary hover:underline font-semibold">Vincular agora</Link>.
                 </div>
               )}
+
+              {patient.target_folder_id && (
+                <a
+                  href={`https://drive.google.com/drive/folders/${encodeURIComponent(patient.target_folder_id)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-2 border border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5 rounded-xl transition-colors text-sm font-medium"
+                >
+                  <Folder size={16} />
+                  <span>Abrir pasta no Google Drive</span>
+                </a>
+              )}
               
               <button
                 type="button"

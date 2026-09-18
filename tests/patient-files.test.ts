@@ -19,6 +19,9 @@ assert.match(patientDetailSource, /\{ id: 'files', label: 'Arquivos'/);
 assert.match(patientDetailSource, /grid-cols-5/);
 assert.match(patientDetailSource, /mobileTabVisibility\('files'\)/);
 assert.match(patientDetailSource, /<PatientFilesCard/);
+assert.match(patientDetailSource, /Abrir pasta no Google Drive/);
+assert.match(patientDetailSource, /drive\.google\.com\/drive\/folders/);
+assert.match(patientDetailSource, /patient\.target_folder_id &&/);
 
 assert.match(patientFilesSource, /MAX_FILE_SIZE_BYTES = 25 \* 1024 \* 1024/);
 assert.match(patientFilesSource, /type="file"[\s\S]*multiple/);
