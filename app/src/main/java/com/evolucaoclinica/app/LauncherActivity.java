@@ -129,6 +129,7 @@ public class LauncherActivity extends ComponentActivity {
     private volatile String installAttributionJson = "{\"status\":\"pending\"}";
     // The Web consent UI is the source of truth. Collection starts denied.
     private boolean analyticsConsentGranted = false;
+    private boolean marketingConsentGranted = false;
     private PaymentSheet paymentSheet;
     private final Map<String, ProductDetails> subscriptionProducts = new HashMap<>();
     private String pendingBillingPlanId;
@@ -1016,6 +1017,25 @@ public class LauncherActivity extends ComponentActivity {
         }
     }
 
+    private void applyFirebaseConsent() {
+        if (firebaseAnalytics == null) return;
+        java.util.EnumMap<FirebaseAnalytics.ConsentType, FirebaseAnalytics.ConsentStatus> consent =
+                new java.util.EnumMap<>(FirebaseAnalytics.ConsentType.class);
+        consent.put(
+                FirebaseAnalytics.ConsentType.ANALYTICS_STORAGE,
+                analyticsConsentGranted
+                        ? FirebaseAnalytics.ConsentStatus.GRANTED
+                        : FirebaseAnalytics.ConsentStatus.DENIED
+        );
+        FirebaseAnalytics.ConsentStatus marketingStatus = marketingConsentGranted
+                ? FirebaseAnalytics.ConsentStatus.GRANTED
+                : FirebaseAnalytics.ConsentStatus.DENIED;
+        consent.put(FirebaseAnalytics.ConsentType.AD_STORAGE, marketingStatus);
+        consent.put(FirebaseAnalytics.ConsentType.AD_USER_DATA, marketingStatus);
+        consent.put(FirebaseAnalytics.ConsentType.AD_PERSONALIZATION, marketingStatus);
+        firebaseAnalytics.setConsent(consent);
+    }
+
     private void initializeFirebaseAnalytics() {
         try {
             if (FirebaseApp.getApps(this).isEmpty()) {
@@ -1023,6 +1043,7 @@ public class LauncherActivity extends ComponentActivity {
             }
             if (!FirebaseApp.getApps(this).isEmpty()) {
                 firebaseAnalytics = FirebaseAnalytics.getInstance(this);
+                applyFirebaseConsent();
                 firebaseAnalytics.setAnalyticsCollectionEnabled(analyticsConsentGranted);
             }
         } catch (Exception exception) {
@@ -1244,12 +1265,14 @@ public class LauncherActivity extends ComponentActivity {
         }
 
         @android.webkit.JavascriptInterface
-        public void setAnalyticsCollectionEnabled(boolean enabled) {
-            analyticsConsentGranted = enabled;
+        public void setConsent(boolean analyticsEnabled, boolean marketingEnabled) {
+            analyticsConsentGranted = analyticsEnabled;
+            marketingConsentGranted = marketingEnabled;
             if (firebaseAnalytics == null) initializeFirebaseAnalytics();
             if (firebaseAnalytics != null) {
-                firebaseAnalytics.setAnalyticsCollectionEnabled(enabled);
-                if (!enabled) {
+                applyFirebaseConsent();
+                firebaseAnalytics.setAnalyticsCollectionEnabled(analyticsEnabled);
+                if (!analyticsEnabled) {
                     firebaseAnalytics.setUserId(null);
                     firebaseAnalytics.setUserProperty("professional_segment", null);
                     firebaseAnalytics.setUserProperty("work_context", null);
@@ -1257,6 +1280,13 @@ public class LauncherActivity extends ComponentActivity {
                     firebaseAnalytics.setUserProperty("app_environment", null);
                 }
             }
+        }
+
+        // Compatibilidade com versões web anteriores à v91. Sem informação
+        // explícita de Marketing, sinais de publicidade permanecem negados.
+        @android.webkit.JavascriptInterface
+        public void setAnalyticsCollectionEnabled(boolean enabled) {
+            setConsent(enabled, false);
         }
     }
 
