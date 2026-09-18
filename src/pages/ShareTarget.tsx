@@ -539,7 +539,8 @@ export default function ShareTarget() {
         transcription_text: modalText,
         template_id: modalTemplateId || null,
         updated_at: new Date().toISOString(),
-      }).eq('id', modalEvolutionId);
+      })
+        .is('organization_id', null).eq('id', modalEvolutionId);
       if (error) throw error;
       await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, modalEvolutionId, modalText);
       await showAlert("Evolução atualizada com sucesso na plataforma e no Google Docs!", {
@@ -691,6 +692,7 @@ export default function ShareTarget() {
           original_transcription_text: transcription,
           updated_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evolutionId);
       if (originalSaveError) throw originalSaveError;
 
@@ -727,6 +729,7 @@ export default function ShareTarget() {
           google_doc_append_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evolutionId);
       if (updateError) throw updateError;
 
@@ -805,6 +808,7 @@ export default function ShareTarget() {
             error_message: msg,
             updated_at: new Date().toISOString()
           })
+        .is('organization_id', null)
           .eq('id', evolutionId);
       } catch (f) {
         console.error("Falha ao salvar erro no Supabase:", f);

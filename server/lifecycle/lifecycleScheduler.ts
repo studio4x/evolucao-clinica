@@ -254,7 +254,7 @@ function sequenceDue(step: LifecycleStep | undefined, enrollment: any, now: Date
 async function findLongPendingEvolution(deps: LifecycleDependencies, userId: string, minimumAgeMinutes: number, now: Date) {
   const { data, error } = await deps.supabaseAdmin
     .from("evolutions")
-    .select("id, transcription_status, google_doc_append_status, created_at, updated_at")
+    .select("id, transcription_status, google_doc_append_status, created_at, updated_at").is("organization_id", null)
     .eq("professional_id", userId)
     .or("transcription_status.eq.processing,google_doc_append_status.eq.pending")
     .order("created_at", { ascending: true });
@@ -269,8 +269,8 @@ async function findLongPendingEvolution(deps: LifecycleDependencies, userId: str
 
 async function loadOperationalContext(deps: LifecycleDependencies, userId: string): Promise<LifecycleOperationalContext> {
   const [failedEvolution, notAddedEvolution, professional, failedPayment] = await Promise.all([
-    deps.supabaseAdmin.from("evolutions").select("id, updated_at").eq("professional_id", userId).eq("transcription_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
-    deps.supabaseAdmin.from("evolutions").select("id, updated_at").eq("professional_id", userId).eq("transcription_status", "completed").eq("google_doc_append_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    deps.supabaseAdmin.from("evolutions").select("id, updated_at").is("organization_id", null).eq("professional_id", userId).eq("transcription_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
+    deps.supabaseAdmin.from("evolutions").select("id, updated_at").is("organization_id", null).eq("professional_id", userId).eq("transcription_status", "completed").eq("google_doc_append_status", "failed").order("updated_at", { ascending: false }).limit(1).maybeSingle(),
     deps.supabaseAdmin.from("professionals").select("force_google_disconnect, updated_at").eq("id", userId).maybeSingle(),
     deps.supabaseAdmin.from("transactions").select("id, created_at").eq("professional_id", userId).eq("status", "failed").order("created_at", { ascending: false }).limit(1).maybeSingle()
   ]);

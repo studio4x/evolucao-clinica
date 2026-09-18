@@ -33,7 +33,7 @@ assert.match(listPage, /Novo paciente/);
 assert.match(detailPage, /Primary/);
 assert.match(detailPage, /Secondary/);
 assert.match(detailPage, /Consultor/);
-assert.match(detailPage, /não há histórico nem botão de evolução compartilhada/i);
+assert.match(detailPage, /patient.canReadEvolutions && <ClinicPatientEvolutions/);
 assert.match(app, /clinica\/pacientes/);
 assert.match(app, /clinica\/pacientes\/new/);
 assert.match(app, /organizationPatientId/);

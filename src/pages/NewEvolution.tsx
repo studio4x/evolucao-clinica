@@ -24,6 +24,7 @@ import { RichTextEditor } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { trackEvent } from '../services/analytics';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
+import { clinicEvolutionRequest, draftMatchesEvolutionContext, type EvolutionContext } from '../services/clinicEvolutions';
 
 type AudioEvolutionItem = {
   id: string;
@@ -199,8 +200,22 @@ const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
 
 const AUTH_REAUTH_RECOVERY_KEY = 'new-evolution:resume-after-auth';
 
-export default function NewEvolution() {
-  const { id } = useParams();
+export default function NewEvolution({ workflow }: { workflow?: { context: EvolutionContext; patient: any; canWrite: boolean } } = {}) {
+  const { id: routePatientId } = useParams();
+  const id = workflow?.context.patientId || routePatientId;
+  const context: EvolutionContext = workflow?.context || { type: 'personal', patientId: id || '' };
+  const isClinic = context.type === 'organization';
+  const organizationPatientId = context.type === 'organization' ? context.organizationPatientId : null;
+  const patientPath = isClinic ? `/painel/clinica/pacientes/${organizationPatientId}` : `/painel/patients/${id}`;
+  const saveEvolutionUpdate = async (evolutionId: string, update: Record<string, any>) => {
+    if (organizationPatientId) {
+      const fields: Record<string,string> = { transcription_text:'transcriptionText', original_transcription_text:'originalTranscriptionText', template_id:'templateId', transcription_status:'transcriptionStatus', status:'status', error_message:'errorMessage' };
+      const input = Object.fromEntries(Object.entries(update).filter(([key]) => key in fields).map(([key,value]) => [fields[key], value]));
+      await clinicEvolutionRequest(organizationPatientId, 'PATCH', input, evolutionId);
+      return { error: null };
+    }
+    return supabase.from('evolutions').update(update).is('organization_id', null).eq('id', evolutionId);
+  };
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { 
@@ -239,9 +254,10 @@ export default function NewEvolution() {
     })();
     return () => { cancelled = true; };
   }, [isAuthReady, user?.id]);
-  const hasClinicalAccess = hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const hasClinicalAccess = isClinic ? Boolean(workflow?.canWrite) : hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const isPlanActive = () => {
+    if (isClinic) return Boolean(workflow?.canWrite);
     if (profileRole === 'admin') return true;
     const now = new Date();
     const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
@@ -257,14 +273,14 @@ export default function NewEvolution() {
         variant: "warning",
         icon: "warning"
       });
-      navigate('/painel/subscription');
+      navigate(isClinic ? patientPath : '/painel/subscription');
       return false;
     }
     return true;
   };
-  const isOnboardingMode = searchParams.get('onboarding') === '1';
+  const isOnboardingMode = !isClinic && searchParams.get('onboarding') === '1';
   
-  const [patient, setPatient] = useState<any>(null);
+  const [patient, setPatient] = useState<any>(workflow?.patient || null);
   const dateParam = searchParams.get('date');
   const [sessionDate, setSessionDate] = useState(dateParam || new Date().toISOString().split('T')[0]);
   
@@ -581,7 +597,7 @@ export default function NewEvolution() {
         draftBlobs.push(currentRecordingBlob);
       }
 
-      if (draftBlobs.length === 0) {
+      if (draftBlobs.length === 0 && (!isClinic || !writtenEvolutionText.trim())) {
         return;
       }
 
@@ -590,13 +606,19 @@ export default function NewEvolution() {
       const draftItem: PendingEvolution = {
         id: draftId,
         patientId: patient.id,
+        contextKind: context.type,
+        organizationPatientId: organizationPatientId || undefined,
+        professionalId: user.id,
         patientName: patient.full_name,
         googleDocId: patient.google_doc_id,
         sessionDate,
         sessionTime,
         audioBlob: draftBlobs[0],
         audioBlobs: draftBlobs,
-        mimeType: draftBlobs[0].type || 'audio/webm',
+        writtenText: isClinic ? writtenEvolutionText : undefined,
+        inputMode: isClinic ? inputMode : undefined,
+        templateId: selectedTemplateId || undefined,
+        mimeType: draftBlobs[0]?.type || 'audio/webm',
         source: 'new',
         createdAt: new Date().toISOString(),
         status: 'draft',
@@ -605,10 +627,11 @@ export default function NewEvolution() {
           id: draftId,
           professional_id: user.id,
           patient_id: patient.id,
+          ...(context.type === 'organization' ? { organization_id: context.organizationId, organization_patient_id: context.organizationPatientId } : {}),
           session_date: sessionDate,
           session_time: sessionTime,
           transcription_status: 'processing',
-          google_doc_append_status: 'pending',
+          google_doc_append_status: isClinic ? 'not_applicable' : 'pending',
           audio_duration_seconds: duration,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -617,9 +640,15 @@ export default function NewEvolution() {
 
       await addPendingEvolution(draftItem);
     } catch (err) {
-      console.warn("Falha ao salvar rascunho de gravação:", err);
+      console.warn("[NewEvolution] Draft persistence failed", isClinic ? { status: 'failed' } : err);
     }
   };
+
+  useEffect(() => {
+    if (!isClinic || status !== 'idle' || !writtenEvolutionText.trim()) return;
+    const timer = window.setTimeout(() => { void persistDraft(audioItemsRef.current); }, 700);
+    return () => window.clearTimeout(timer);
+  }, [isClinic, writtenEvolutionText, inputMode, sessionDate, sessionTime, selectedTemplateId, status]);
 
   const updateAudioItems = (nextItems: AudioEvolutionItem[]) => {
     audioItemsRef.current = nextItems;
@@ -670,6 +699,7 @@ export default function NewEvolution() {
           setTemplates(templatesData);
         }
 
+        if (workflow) { setPatient(workflow.patient); return; }
         const { data: patientData, error: patientError } = await supabase
           .from('patients')
           .select('*')
@@ -684,7 +714,7 @@ export default function NewEvolution() {
       }
     };
     fetchTemplatesAndPatient();
-  }, [id]);
+  }, [id, organizationPatientId]);
 
   useEffect(() => {
     if (!isOnboardingMode || !patient?.id || hasGoogleSession || onboardingGateShownRef.current) {
@@ -696,7 +726,7 @@ export default function NewEvolution() {
   }, [hasGoogleSession, isOnboardingMode, patient?.id]);
 
   useEffect(() => {
-    if (!isAuthReady || isOnboardingMode || !patient?.id || hasClinicalAccess) return;
+    if (isClinic || !isAuthReady || isOnboardingMode || !patient?.id || hasClinicalAccess) return;
     setIsGoogleAccessNoticeOpen(true);
   }, [hasClinicalAccess, isAuthReady, isOnboardingMode, patient?.id]);
 
@@ -708,12 +738,12 @@ export default function NewEvolution() {
       try {
         if (draftId) {
           const draft = await getPendingEvolutionById(draftId);
-          if (draft && draft.status === 'draft') {
+          if (draft && draft.status === 'draft' && user && draftMatchesEvolutionContext(draft, context, user.id)) {
             setRecoveredDraft(draft);
           }
         } else {
           const drafts = await getDraftEvolutions();
-          const patientDraft = drafts.find(d => d.patientId === id);
+          const patientDraft = drafts.find(d => user && draftMatchesEvolutionContext(d, context, user.id));
           if (patientDraft) {
             setRecoveredDraft(patientDraft);
           }
@@ -723,7 +753,7 @@ export default function NewEvolution() {
       }
     };
     checkForDrafts();
-  }, [id, searchParams]);
+  }, [id, organizationPatientId, user?.id, searchParams]);
 
   useEffect(() => {
     return () => {
@@ -743,6 +773,7 @@ export default function NewEvolution() {
     if (!recoveredDraft) return;
     try {
       clearAuthRecoveryFlag();
+      if (isClinic) { setWrittenEvolutionText(recoveredDraft.writtenText || ''); setInputMode(recoveredDraft.inputMode || 'audio'); setSelectedTemplateId(recoveredDraft.templateId || ''); }
       const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
       const items = await hydrateAudioItems(blobs, 'draft', recoveredDraft.id);
       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
@@ -817,12 +848,15 @@ export default function NewEvolution() {
   };
 
   const handleReauthenticate = async () => {
+    if (isClinic) return;
     setIsReauthenticating(true);
     try {
       sessionStorage.setItem(
         AUTH_REAUTH_RECOVERY_KEY,
         JSON.stringify({
           patientId: id,
+          contextKind: context.type,
+          organizationPatientId,
           draftId: draftIdRef.current,
           sessionDate
         })
@@ -861,7 +895,7 @@ export default function NewEvolution() {
     const pendingRecovery = sessionStorage.getItem(AUTH_REAUTH_RECOVERY_KEY);
     if (!pendingRecovery) return;
 
-    let parsedRecovery: { patientId?: string; draftId?: string; sessionDate?: string } | null = null;
+    let parsedRecovery: { patientId?: string; draftId?: string; sessionDate?: string; contextKind?: string; organizationPatientId?: string } | null = null;
     try {
       parsedRecovery = JSON.parse(pendingRecovery);
     } catch (err) {
@@ -869,7 +903,7 @@ export default function NewEvolution() {
       return;
     }
 
-    if (parsedRecovery?.patientId && parsedRecovery.patientId !== id) {
+    if (parsedRecovery?.contextKind === 'organization' || isClinic || (parsedRecovery?.patientId && parsedRecovery.patientId !== id)) {
       clearAuthRecoveryFlag();
       return;
     }
@@ -894,28 +928,28 @@ export default function NewEvolution() {
   };
 
   const handleSaveModalText = async () => {
-    if (!patient || !patient.google_doc_id || !modalEvolutionId || !hasClinicalAccess || !googleAccessToken) {
+    if (!patient || !modalEvolutionId || !hasClinicalAccess || (!isClinic && (!patient.google_doc_id || !googleAccessToken))) {
       setModalError('Renove a conexão com o Google para salvar esta evolução de forma sincronizada.');
       return;
     }
     setModalSaving(true);
     setModalError('');
     try {
-      const { error } = await supabase.from('evolutions').update({
+      const { error } = await saveEvolutionUpdate(modalEvolutionId, {
         transcription_text: modalText,
         template_id: modalTemplateId || null,
         updated_at: new Date().toISOString(),
-      }).eq('id', modalEvolutionId);
+      });
       if (error) throw error;
-      await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, modalEvolutionId, modalText);
-      await showAlert("Evolução atualizada com sucesso na plataforma e no Google Docs!", {
+      if (!isClinic) await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, modalEvolutionId, modalText);
+      await showAlert(isClinic ? "Evolução atualizada com sucesso!" : "Evolução atualizada com sucesso na plataforma e no Google Docs!", {
         title: "Evolução Atualizada",
         variant: "success",
         icon: "success"
       });
       setIsModalOpen(false);
     } catch (err: any) {
-      console.error("Erro ao salvar prontuário:", err);
+      console.error("[NewEvolution] Save failed", isClinic ? { status: "failed" } : err);
       let msg = err.message || "Erro desconhecido ao salvar prontuário.";
       if (msg.includes("INSUFFICIENT_SCOPES")) {
         msg = "Sua conta Google está conectada, mas ainda não liberou as permissões clínicas completas. Renove a autenticação para aprovar o acesso ao Google Drive e Docs.";
@@ -1245,7 +1279,7 @@ export default function NewEvolution() {
       return;
     }
     
-    if (!patient.google_doc_id) {
+    if (!isClinic && !patient.google_doc_id) {
       await showAlert("Este paciente não possui um prontuário vinculado. Por favor, edite o paciente e vincule um documento do Google Docs primeiro.", {
         title: "Vincular Google Docs",
         variant: "warning",
@@ -1254,6 +1288,7 @@ export default function NewEvolution() {
       return;
     }
 
+    if (isClinic && !(await checkPlanActiveAndAlert('Nova evolução'))) return;
     if (!hasClinicalAccess) {
       await showAlert(hasGoogleSession
         ? "Sua autorização do Google precisa ser renovada antes de continuar."
@@ -1270,6 +1305,7 @@ export default function NewEvolution() {
     setProcessingMessage('');
 
     const evolutionId = draftIdRef.current || uuidv4();
+    if (isClinic) draftIdRef.current = evolutionId;
     const totalAudioDuration = getTotalAudioDuration(items);
     const audioBlobs = items.map(item => item.blob);
     const firstEvolutionStorageKey = `analytics:first-evolution:${user.id}`;
@@ -1282,7 +1318,7 @@ export default function NewEvolution() {
       session_date: sessionDate,
       session_time: sessionTime,
       transcription_status: 'processing',
-      google_doc_append_status: 'pending',
+      google_doc_append_status: isClinic ? 'not_applicable' : 'pending',
       audio_duration_seconds: totalAudioDuration,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1332,24 +1368,23 @@ export default function NewEvolution() {
         throw new Error("offline");
       }
       
-      const { error: insertError } = await supabase
-        .from('evolutions')
-        .upsert(evolutionData);
-      if (insertError) throw insertError;
-      trackEvent('evolution_started', {
+      if (organizationPatientId) {
+        await clinicEvolutionRequest(organizationPatientId, 'POST', { evolutionId, sessionDate, sessionTime, templateId: selectedTemplateId || null });
+      } else {
+        const { error: insertError } = await supabase.from('evolutions').upsert(evolutionData);
+        if (insertError) throw insertError;
+      }
+      if (!isClinic) trackEvent('evolution_started', {
         input_mode: inputMode,
         is_first_activation: isFirstActivation
       }, { dedupeKey: `evolution_started:${user.id}:${evolutionId}`, persistDedupe: true });
 
       const originalTranscription = await transcribeAllAudios();
 
-      const { error: originalSaveError } = await supabase
-        .from('evolutions')
-        .update({
+      const { error: originalSaveError } = await saveEvolutionUpdate(evolutionId, {
           original_transcription_text: originalTranscription,
           updated_at: new Date().toISOString()
-        })
-        .eq('id', evolutionId);
+        });
       if (originalSaveError) throw originalSaveError;
 
       let evolutionText = originalTranscription;
@@ -1358,9 +1393,9 @@ export default function NewEvolution() {
         evolutionText = await convertEvolutionToTemplate(originalTranscription, selectedTemplateId);
       }
 
-      console.log("Evolução concluída. Inserindo no Google Docs...");
+      if (!isClinic) console.log("Evolução concluída. Inserindo no Google Docs...");
 
-      await appendToGoogleDoc(
+      if (!isClinic) await appendToGoogleDoc(
         googleAccessToken,
         patient.google_doc_id,
         sessionDate,
@@ -1371,30 +1406,28 @@ export default function NewEvolution() {
         }
       );
 
-      const { error: updateError } = await supabase
-        .from('evolutions')
-        .update({
+      const { error: updateError } = await saveEvolutionUpdate(evolutionId, {
+          ...(isClinic ? { status: 'completed' } : {}),
           transcription_status: 'completed',
           transcription_text: evolutionText,
           original_transcription_text: originalTranscription,
-          google_doc_append_status: 'completed',
+          google_doc_append_status: isClinic ? 'not_applicable' : 'completed',
           google_doc_append_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
-        })
-        .eq('id', evolutionId);
+        });
       if (updateError) throw updateError;
 
-      trackEvent('evolution_completed', {
+      if (!isClinic) trackEvent('evolution_completed', {
         input_mode: inputMode,
         is_first_activation: isFirstActivation
       }, { dedupeKey: `evolution_completed:${user.id}:${evolutionId}`, persistDedupe: true });
-      if (items.length > 0) {
+      if (!isClinic && items.length > 0) {
         trackEvent('audio_evolution_completed', {
           input_mode: inputMode,
           is_first_activation: isFirstActivation
         }, { dedupeKey: `audio_evolution_completed:${user.id}:${evolutionId}`, persistDedupe: true });
       }
-      if (isFirstActivation && typeof window !== 'undefined') {
+      if (!isClinic && isFirstActivation && typeof window !== 'undefined') {
         window.localStorage.setItem(firstEvolutionStorageKey, '1');
       }
 
@@ -1425,14 +1458,14 @@ export default function NewEvolution() {
         });
       }
 
-      void sendNotification({
+      if (!isClinic) void sendNotification({
         title: "Evolução Criada com Sucesso 🎉",
         content: `A evolução clínica do paciente ${patient.full_name} foi processada e adicionada ao prontuário no Google Docs.`,
         type: "success",
         link: `/painel/patients/${patient.id}`
       });
     } catch (error: any) {
-      console.error("Processing error:", error);
+      console.error("[NewEvolution] Processing failed", isClinic ? { context: "organization", status: "failed" } : error);
       if (isOnboardingMode) {
         const errorCode = classifyOnboardingError(error, 'evolution_processing_failed');
         void trackLifecycleEvent('onboarding_step_error', {
@@ -1443,7 +1476,7 @@ export default function NewEvolution() {
       
       let msg = error.message || "Erro desconhecido";
       
-      if ((msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) && audioBlobs.length > 0) {
+      if (!isClinic && (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) && audioBlobs.length > 0) {
         try {
           await addPendingEvolution({
             id: evolutionId,
@@ -1493,6 +1526,7 @@ export default function NewEvolution() {
         setGoogleAccessToken(null);
       }
       
+      if (isClinic) { await persistDraft(items); msg = 'Não foi possível concluir a evolução. Seu conteúdo permanece nesta tela; tente novamente quando seu acesso e a conexão estiverem disponíveis.'; }
       setErrorMessage(msg);
       setStatus('error');
       setProcessingMessage('');
@@ -1505,15 +1539,12 @@ export default function NewEvolution() {
       });
       
       try {
-        await supabase
-          .from('evolutions')
-          .update({
+        await saveEvolutionUpdate(evolutionId, {
             transcription_status: 'failed',
             google_doc_append_status: 'failed',
             error_message: msg,
             updated_at: new Date().toISOString()
-          })
-          .eq('id', evolutionId);
+          });
       } catch (fError) {
         console.error("Failed to update supabase with error state (likely offline):", fError);
       }
@@ -1530,7 +1561,7 @@ export default function NewEvolution() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
-            to={isOnboardingMode ? `/painel/patients/${id}/edit?onboarding=1` : `/painel/patients/${id}`}
+            to={isOnboardingMode ? `/painel/patients/${id}/edit?onboarding=1` : patientPath}
             className="p-2 rounded-2xl hover:bg-white text-brand-text-muted hover:text-brand-text border border-transparent hover:border-brand-border bg-white/40 backdrop-blur-sm transition-all shadow-sm flex items-center justify-center"
             title="Voltar para o paciente"
           >
@@ -1938,7 +1969,7 @@ export default function NewEvolution() {
               <p className="text-sm text-brand-text-muted text-center">
                 {isOnboardingMode
                   ? 'O próximo passo do onboarding é sincronizar os atendimentos da agenda.'
-                  : 'A evolução foi adicionada ao final do documento Google Docs do paciente.'}
+                  : isClinic ? 'A evolução foi salva no seu histórico deste paciente da clínica.' : 'A evolução foi adicionada ao final do documento Google Docs do paciente.'}
               </p>
 
               {isOnboardingMode && (
@@ -1948,7 +1979,7 @@ export default function NewEvolution() {
               )}
               
               <div className="flex flex-col sm:flex-row gap-3 w-full justify-center mt-4">
-                <a
+                {!isClinic && <a
                   href={`https://docs.google.com/document/d/${patient.google_doc_id}/edit`}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -1956,7 +1987,7 @@ export default function NewEvolution() {
                 >
                   <ExternalLink className="w-4 h-4" />
                   <span>Acessar no Google Drive</span>
-                </a>
+                </a>}
                 <button
                   type="button"
                   onClick={handleOpenModal}
@@ -1969,7 +2000,7 @@ export default function NewEvolution() {
 
               <div className="flex flex-col sm:flex-row gap-3 mt-2 border-t border-brand-primary/10 pt-4 w-full justify-center">
                 <button
-                  onClick={() => navigate(isOnboardingMode ? '/onboarding?step=agenda' : `/painel/patients/${id}`)}
+                  onClick={() => navigate(isOnboardingMode ? '/onboarding?step=agenda' : patientPath)}
                   className="btn-primary px-5 py-2.5 text-sm"
                 >
                   {isOnboardingMode ? 'Continuar para a agenda' : 'Voltar ao Paciente'}
@@ -2069,7 +2100,7 @@ export default function NewEvolution() {
                 <div className="p-4 bg-red-50 rounded-xl border border-red-100 text-center space-y-3">
                   <AlertCircle className="w-8 h-8 text-red-600 mx-auto" />
                   <p className="text-sm text-red-700 font-medium">{modalError}</p>
-                  {!hasClinicalAccess && (
+                  {!isClinic && !hasClinicalAccess && (
                     <button
                       onClick={handleReauthenticate}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
@@ -2120,7 +2151,7 @@ export default function NewEvolution() {
                     disabled={modalSaving || modalConverting}
                   />
                   <p className="text-[11px] text-brand-text-muted">
-                    Nota: ao salvar, somente esta evolução e suas formatações serão atualizadas no Google Docs.
+                    {isClinic ? 'Ao salvar, somente a sua evolução será atualizada.' : 'Nota: ao salvar, somente esta evolução e suas formatações serão atualizadas no Google Docs.'}
                   </p>
                 </div>
               )}

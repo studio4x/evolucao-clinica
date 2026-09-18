@@ -15,6 +15,7 @@ const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'Dashboard');
 const Patients = lazyWithRetry(() => import('./pages/Patients'), 'Patients');
 const PatientForm = lazyWithRetry(() => import('./pages/PatientForm'), 'PatientForm');
 const PatientDetail = lazyWithRetry(() => import('./pages/PatientDetail'), 'PatientDetail');
+const ClinicNewEvolution = lazyWithRetry(() => import('./pages/ClinicNewEvolution'), 'ClinicNewEvolution');
 const NewEvolution = lazyWithRetry(() => import('./pages/NewEvolution'), 'NewEvolution');
 const History = lazyWithRetry(() => import('./pages/History'), 'History');
 const ShareTarget = lazyWithRetry(() => import('./pages/ShareTarget'), 'ShareTarget');
@@ -897,6 +898,7 @@ export default function App() {
             <Route path="clinica/equipe" element={<ClinicRoute><ClinicTeam /></ClinicRoute>} />
             <Route path="clinica/pacientes" element={<ClinicRoute><ClinicPatients /></ClinicRoute>} />
             <Route path="clinica/pacientes/new" element={<ClinicRoute><ClinicPatientForm /></ClinicRoute>} />
+            <Route path="clinica/pacientes/:organizationPatientId/evolucoes/nova" element={<ClinicRoute><ClinicNewEvolution /></ClinicRoute>} />
             <Route path="clinica/pacientes/:organizationPatientId" element={<ClinicRoute><ClinicPatientDetail /></ClinicRoute>} />
             <Route path="clinica/contratar" element={<ClinicRoute><ClinicBilling /></ClinicRoute>} />
             <Route path="clinica/contratacao/sucesso" element={<ClinicRoute><ClinicBillingSuccess /></ClinicRoute>} />

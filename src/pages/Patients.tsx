@@ -101,6 +101,7 @@ export default function Patients() {
           supabase
             .from('evolutions')
             .select('patient_id, session_date, session_time, created_at')
+        .is('organization_id', null)
             .eq('professional_id', user.id)
             .eq('transcription_status', 'completed')
         ]);

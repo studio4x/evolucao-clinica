@@ -1,10 +1,16 @@
 export interface PendingEvolution {
   id: string; // uuid da evolução pendente
   patientId: string;
+  contextKind?: "personal" | "organization";
+  organizationPatientId?: string;
+  professionalId?: string;
   patientName: string;
   googleDocId: string;
   sessionDate: string;
-  audioBlob: Blob;
+  audioBlob?: Blob;
+  writtenText?: string;
+  inputMode?: "audio" | "text" | "hybrid";
+  templateId?: string;
   audioBlobs?: Blob[];
   mimeType: string;
   source: 'new' | 'share';

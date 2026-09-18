@@ -83,7 +83,7 @@ export default function Dashboard() {
   const fetchDrafts = useCallback(async () => {
     try {
       const items = await getDraftEvolutions();
-      setDrafts(items);
+      setDrafts(items.filter(item => item.contextKind !== 'organization' && !item.organizationPatientId));
     } catch (err) {
       console.error("Erro ao carregar rascunhos de gravação:", err);
     }
@@ -223,6 +223,7 @@ export default function Dashboard() {
       const { data: evolutionsThisWeek, error: evolutionsError } = await supabase
         .from('evolutions')
         .select('id, patient_id, session_date')
+        .is('organization_id', null)
         .eq('professional_id', user.id)
         .gte('session_date', startOfWeekStr)
         .lte('session_date', localTomorrowStr);
@@ -383,6 +384,7 @@ export default function Dashboard() {
         const { count: evolutionsCount, error: evolutionsError } = await supabase
           .from('evolutions')
           .select('*', { count: 'exact', head: true })
+        .is('organization_id', null)
           .eq('professional_id', uid);
           
         if (evolutionsError) throw evolutionsError;
@@ -391,6 +393,7 @@ export default function Dashboard() {
         const { count: errorsCount, error: errorsError } = await supabase
           .from('evolutions')
           .select('*', { count: 'exact', head: true })
+        .is('organization_id', null)
           .eq('professional_id', uid)
           .eq('transcription_status', 'failed');
           

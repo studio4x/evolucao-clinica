@@ -396,6 +396,7 @@ export default function Onboarding() {
       const { data: evolutionsThisWeek, error: evolutionsError } = await supabase
         .from('evolutions')
         .select('id, patient_id, session_date')
+        .is('organization_id', null)
         .eq('professional_id', user.id)
         .gte('session_date', startOfWeekStr)
         .lte('session_date', localTomorrowStr);

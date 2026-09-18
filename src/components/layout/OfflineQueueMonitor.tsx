@@ -23,7 +23,7 @@ export function OfflineQueueMonitor() {
     if (isSyncing) return;
     try {
       const items = await getPendingEvolutions();
-      setQueue(items);
+      setQueue(items.filter(item => item.contextKind !== 'organization' && !item.organizationPatientId));
     } catch (e) {
       console.error(e);
     }

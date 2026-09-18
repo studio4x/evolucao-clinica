@@ -9,6 +9,7 @@ export type ClinicPatientAssignment = {
   status: "active" | "revoked";
   canEdit: boolean;
   canViewSharedSummary: boolean;
+  canCreateEvolution: boolean;
   assignedAt: string;
 };
 
@@ -40,6 +41,8 @@ export type ClinicPatientDetail = {
   updatedAt: string;
   currentAssignmentRole: ClinicPatientAssignmentRole | null;
   assignments: ClinicPatientAssignment[];
+  canReadEvolutions: boolean;
+  canCreateEvolution: boolean;
 };
 
 export class ClinicPatientsApiError extends Error {

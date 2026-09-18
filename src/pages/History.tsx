@@ -75,6 +75,7 @@ export default function History() {
       const { data: evos, error: evosError } = await supabase
         .from('evolutions')
         .select('*')
+        .is('organization_id', null)
         .eq('professional_id', user.id)
         .eq('transcription_status', 'completed')
         .order('session_date', { ascending: false, nullsFirst: false })
@@ -432,6 +433,7 @@ export default function History() {
             original_transcription_text: originalTranscription,
             updated_at: new Date().toISOString()
           })
+        .is('organization_id', null)
           .eq('id', evo.id);
         if (originalSaveError) throw originalSaveError;
 
@@ -465,6 +467,7 @@ export default function History() {
             error_message: null,
             updated_at: new Date().toISOString()
           })
+        .is('organization_id', null)
           .eq('id', evo.id);
         if (updateError) throw updateError;
 
@@ -497,6 +500,7 @@ export default function History() {
           google_doc_append_status: 'pending',
           updated_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evo.id);
       if (updateError) throw updateError;
 
@@ -520,6 +524,7 @@ export default function History() {
           error_message: msg,
           updated_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evo.id);
       if (updateError) throw updateError;
       
@@ -536,6 +541,7 @@ export default function History() {
       const { error } = await supabase
         .from('evolutions')
         .delete()
+        .is('organization_id', null)
         .eq('professional_id', user.id);
       if (error) throw error;
       setEvolutions([]);
@@ -589,6 +595,7 @@ export default function History() {
           google_doc_append_status: 'completed',
           google_doc_append_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evo.id);
 
       if (error) throw error;
@@ -801,6 +808,7 @@ export default function History() {
                                           google_doc_append_status: 'completed',
                                           google_doc_append_at: new Date().toISOString()
                                         })
+        .is('organization_id', null)
                                         .eq('id', evo.id);
                                       if (updateError) throw updateError;
 

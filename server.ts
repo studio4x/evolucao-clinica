@@ -28,6 +28,9 @@ import { registerClinicTeamRoutes } from "./server/clinic/clinicTeamRoutes.js";
 import { registerClinicInvitationRoutes } from "./server/clinic/clinicInvitationRoutes.js";
 import { createInvitationTransport } from "./server/clinic/clinicInvitationEmail.js";
 import { registerClinicEntitlementRoutes } from "./server/clinic/clinicEntitlementRoutes.js";
+import { registerClinicEvolutionRoutes } from "./server/clinic/clinicEvolutionRoutes.js";
+import { createPersonalPatientGuard } from "./server/clinic/personalPatientGuard.js";
+import { createUserScopedClient } from "./server/supabase/createUserScopedClient.js";
 import { registerClinicPatientRoutes } from "./server/clinic/clinicPatientRoutes.js";
 import {
   completeMetaRegistrationEvent,
@@ -2269,6 +2272,14 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
 
     if (typeof audioPath !== "string" || !audioPath.startsWith(`${req.user.id}/`)) {
       return res.status(403).json({ error: "Você não tem permissão para transcrever este arquivo de áudio." });
+    }
+
+    const processingClient = createUserScopedClient({ supabaseUrl, supabaseAnonKey: serverEnvironment.supabaseAnonKey, accessToken: String(req.headers.authorization || "").replace(/^Bearer\s+/i, "") });
+    const processingEvolution = await processingClient.from("evolutions").select("id, organization_patient_id, status").eq("id", evolutionId).eq("professional_id", req.user.id).maybeSingle();
+    if (processingEvolution.error || !processingEvolution.data || processingEvolution.data.status === "signed") return res.status(403).json({ error: "evolution_not_authorized" });
+    if (processingEvolution.data.organization_patient_id) {
+      const access = await processingClient.rpc("get_organization_evolution_access", { p_organization_patient_id: processingEvolution.data.organization_patient_id });
+      if (access.error || !access.data?.canCreate) return res.status(403).json({ error: "clinical_write_not_authorized" });
     }
 
     const rateLimit = consumeTranscriptionRateLimit(req.user.id);
@@ -6800,10 +6811,12 @@ app.post("/api/subscriptions/payment-email", requireAuth, async (req: any, res) 
   }
 });
 
+const requirePersonalPatient = createPersonalPatientGuard({ supabaseUrl, supabaseAnonKey: serverEnvironment.supabaseAnonKey });
+
 // --- API RELATÓRIOS E PDI POR IA ---
 
 // 1. Gerar Relatório ou PDI com Gemini IA
-app.post("/api/patients/:id/ai-report", requireAuth, requireActiveSubscription, async (req: any, res) => {
+app.post("/api/patients/:id/ai-report", requireAuth, requirePersonalPatient, requireActiveSubscription, async (req: any, res) => {
   try {
     serverEnvironment.assertEnabled("google");
     const patientId = req.params.id;
@@ -7105,7 +7118,7 @@ Escreva em português brasileiro de forma prática, detalhada e empática.`;
 });
 
 // 2. Enviar Relatório por E-mail
-app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscription, async (req: any, res) => {
+app.post("/api/patients/:id/send-report-email", requireAuth, requirePersonalPatient, requireActiveSubscription, async (req: any, res) => {
   try {
     const patientId = req.params.id;
     const { toEmail, subject, textContent, pdfBase64, filename, reportId, origin } = req.body;
@@ -7216,7 +7229,7 @@ app.post("/api/patients/:id/send-report-email", requireAuth, requireActiveSubscr
 // --- API BUSCA SEMÂNTICA (RAG CLÍNICO) ---
 
 // 1. Indexar evoluções pendentes de um paciente
-app.post("/api/patients/:id/semantic-index", requireAuth, requireActiveSubscription, async (req: any, res) => {
+app.post("/api/patients/:id/semantic-index", requireAuth, requirePersonalPatient, requireActiveSubscription, async (req: any, res) => {
   try {
     const patientId = req.params.id;
     
@@ -7237,6 +7250,7 @@ app.post("/api/patients/:id/semantic-index", requireAuth, requireActiveSubscript
       .from("evolutions")
       .select("id, transcription_text")
       .eq("patient_id", patientId)
+      .is("organization_id", null)
       .eq("professional_id", req.user.id)
       .eq("transcription_status", "completed")
       .is("embedding", null);
@@ -7275,7 +7289,9 @@ app.post("/api/patients/:id/semantic-index", requireAuth, requireActiveSubscript
           const { error: updateError } = await supabaseAdmin
             .from("evolutions")
             .update({ embedding: vectorString } as any)
-            .eq("id", evo.id);
+            .eq("id", evo.id)
+            .eq("professional_id", req.user.id)
+            .is("organization_id", null);
 
           if (updateError) {
             console.error(`Erro ao atualizar embedding da evolução ${evo.id}:`, updateError);
@@ -7302,7 +7318,7 @@ app.post("/api/patients/:id/semantic-index", requireAuth, requireActiveSubscript
 });
 
 // 2. Realizar busca semântica em evoluções (RAG Clínico)
-app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscription, async (req: any, res) => {
+app.post("/api/patients/:id/semantic-search", requireAuth, requirePersonalPatient, requireActiveSubscription, async (req: any, res) => {
   try {
     const patientId = req.params.id;
     const { query } = req.body;
@@ -7336,12 +7352,13 @@ app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscrip
       .from("evolutions")
       .select("id, transcription_text")
       .eq("patient_id", patientId)
+      .is("organization_id", null)
       .eq("professional_id", req.user.id)
       .eq("transcription_status", "completed")
       .is("embedding", null);
 
     if (!pendingError && pendingEvos && pendingEvos.length > 0) {
-      console.log(`[RAG-Index] Indexando ${pendingEvos.length} evoluções pendentes para o paciente ${patient.full_name}...`);
+      console.log("[RAG-Index] Indexação pessoal iniciada", { count: pendingEvos.length });
       for (const evo of pendingEvos) {
         if (!evo.transcription_text?.trim()) continue;
         try {
@@ -7357,7 +7374,9 @@ app.post("/api/patients/:id/semantic-search", requireAuth, requireActiveSubscrip
             await supabaseAdmin
               .from("evolutions")
               .update({ embedding: vectorString } as any)
-              .eq("id", evo.id);
+              .eq("id", evo.id)
+            .eq("professional_id", req.user.id)
+            .is("organization_id", null);
           }
         } catch (e) {
           console.error(`[RAG-Index] Erro ao indexar evolução ${evo.id}:`, e);
@@ -7530,6 +7549,13 @@ registerClinicEntitlementRoutes(app, {
   supabaseAnonKey: serverEnvironment.supabaseAnonKey,
   clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
 });
+registerClinicEvolutionRoutes(app, {
+  requireAuth,
+  supabaseUrl,
+  supabaseAnonKey: serverEnvironment.supabaseAnonKey,
+  clinicFeatureEnabled: serverEnvironment.clinicFeatureEnabled,
+});
+
 registerClinicPatientRoutes(app, {
   requireAuth,
   supabaseUrl,

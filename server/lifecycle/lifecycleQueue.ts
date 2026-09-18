@@ -266,7 +266,7 @@ async function validateProcessingAlert(
   const evolutionId = dispatch.metadata?.processing_evolution_id;
   const query = deps.supabaseAdmin
     .from("evolutions")
-    .select("id, transcription_status, google_doc_append_status, created_at, updated_at")
+    .select("id, transcription_status, google_doc_append_status, created_at, updated_at").is("organization_id", null)
     .eq("professional_id", dispatch.user_id);
   const { data: evolutions, error } = evolutionId
     ? await query.eq("id", evolutionId).limit(1)
@@ -303,7 +303,7 @@ async function validateOperationalMessage(deps: LifecycleDependencies, dispatch:
   const resourceId = dispatch.metadata?.resource_id;
   if (key === "evolution_processing_failed" || key === "evolution_not_added_to_record") {
     if (!resourceId) return "operational_resource_missing";
-    const { data, error } = await deps.supabaseAdmin.from("evolutions").select("transcription_status, google_doc_append_status").eq("id", resourceId).eq("professional_id", dispatch.user_id).maybeSingle();
+    const { data, error } = await deps.supabaseAdmin.from("evolutions").select("transcription_status, google_doc_append_status").is("organization_id", null).eq("id", resourceId).eq("professional_id", dispatch.user_id).maybeSingle();
     if (error) throw new Error(error.message || "Falha ao revalidar a evolução operacional.");
     if (!data) return "operational_evolution_missing";
     if (key === "evolution_processing_failed" && data.transcription_status !== "failed") return "processing_failure_resolved";
@@ -330,7 +330,7 @@ async function validateNoReturnAfterRegistration(deps: LifecycleDependencies, us
     deps.supabaseAdmin.from("onboarding_notifications").select("welcome_notified_at").eq("user_id", userId).maybeSingle(),
     deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId),
     deps.supabaseAdmin.from("patients").select("id", { count: "exact", head: true }).eq("professional_id", userId).not("google_doc_id", "is", null).neq("google_doc_id", ""),
-    deps.supabaseAdmin.from("evolutions").select("id", { count: "exact", head: true }).eq("professional_id", userId)
+    deps.supabaseAdmin.from("evolutions").select("id", { count: "exact", head: true }).is("organization_id", null).eq("professional_id", userId)
   ]);
   if (professionalError) throw new Error(professionalError.message || "Falha ao confirmar o status da conta.");
   if (stateError) throw new Error(stateError.message || "Falha ao confirmar o acesso do usuário.");

@@ -556,6 +556,7 @@ export default function PatientDetail() {
           template_id: evolutionTemplateId || null,
           updated_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evoId);
       if (error) throw error;
 
@@ -571,6 +572,7 @@ export default function PatientDetail() {
           const { error: rollbackError } = await supabase
             .from('evolutions')
             .update(rollbackPayload)
+        .is('organization_id', null)
             .eq('id', evoId);
 
           if (rollbackError) {
@@ -699,6 +701,7 @@ export default function PatientDetail() {
           google_doc_append_status: 'completed',
           google_doc_append_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evo.id);
 
       if (error) throw error;
@@ -738,6 +741,7 @@ export default function PatientDetail() {
         .update({
           status: 'signed'
         })
+        .is('organization_id', null)
         .eq('id', evoId);
 
       if (error) throw error;
@@ -1261,6 +1265,7 @@ export default function PatientDetail() {
       const { data: evosData, error: evosError } = await supabase
         .from('evolutions')
         .select('*')
+        .is('organization_id', null)
         .eq('patient_id', id)
         .eq('professional_id', user.id)
         .eq('transcription_status', 'completed')
@@ -1982,6 +1987,7 @@ export default function PatientDetail() {
             original_transcription_text: originalTranscription,
             updated_at: new Date().toISOString()
           })
+        .is('organization_id', null)
           .eq('id', evo.id);
         if (originalSaveError) throw originalSaveError;
 
@@ -2015,6 +2021,7 @@ export default function PatientDetail() {
             error_message: null,
             updated_at: new Date().toISOString()
           })
+        .is('organization_id', null)
           .eq('id', evo.id);
         if (updateError) throw updateError;
 
@@ -2047,6 +2054,7 @@ export default function PatientDetail() {
           google_doc_append_status: 'pending',
           updated_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evo.id);
       if (updateError) throw updateError;
 
@@ -2070,6 +2078,7 @@ export default function PatientDetail() {
           error_message: msg,
           updated_at: new Date().toISOString()
         })
+        .is('organization_id', null)
         .eq('id', evo.id);
       if (updateError) throw updateError;
       await fetchData();
@@ -2085,6 +2094,7 @@ export default function PatientDetail() {
       const { error } = await supabase
         .from('evolutions')
         .delete()
+        .is('organization_id', null)
         .eq('patient_id', id)
         .eq('professional_id', user!.id)
         .neq('status', 'signed');
@@ -2113,6 +2123,7 @@ export default function PatientDetail() {
       const { error: evolutionsError } = await supabase
         .from('evolutions')
         .delete()
+        .is('organization_id', null)
         .eq('patient_id', id);
       if (evolutionsError) throw evolutionsError;
 
@@ -2234,6 +2245,7 @@ export default function PatientDetail() {
             transcription_text: googleText,
             updated_at: syncedAt,
           })
+        .is('organization_id', null)
           .eq('id', evolution.id)
           .eq('professional_id', user.id)
           .neq('status', 'signed')
@@ -3094,6 +3106,7 @@ export default function PatientDetail() {
                                           google_doc_append_status: 'completed',
                                           google_doc_append_at: new Date().toISOString()
                                         })
+        .is('organization_id', null)
                                         .eq('id', evo.id);
                                       if (updateError) throw updateError;
 

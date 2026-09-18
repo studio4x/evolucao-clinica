@@ -920,6 +920,10 @@ O resultado é **FASE 1B2 REVISADA E ENDURECIDA — APTO PARA FASE 1B3**, não c
 
 ### Fase 4 — Evoluções isoladas
 
+**Validada exclusivamente no staging**, branch `feat/clinicas`, build
+`v1.10.890`; migrations 26–27 aplicadas, smoke completo final PASS,
+cleanup zero e gate OFF. Ver [evidências e limitações](FASE_4_EVOLUCOES_ISOLADAS.md).
+
 - revisar RLS de evoluções, relatórios, rascunhos e buscas;
 - manter autoria profissional obrigatória;
 - testar criação simultânea por dois profissionais;
@@ -1124,7 +1128,21 @@ server-side, isolamento dos pacientes pessoais, correção ACL do helper RLS e
 UI dedicada, sem alterar `evolutions`. O smoke sintético passou com isolamento
 cross-tenant, Secondary/Consultor somente leitura e regressão pessoal; a
 fixture foi limpa, o gate terminou OFF e profissionais controlados preexistentes
-foram preservados. A Fase 4 não foi iniciada.
+foram preservados. A evolução desse baseline para a Fase 4 está registrada abaixo.
+
+Atualização 2026-09-17 — Fase 4: evoluções clínicas com contexto completo e
+imutável, criação protegida derivando autoria de auth.uid(), RLS por autor,
+Primary/Secondary/Consultor autorizados independentemente no mesmo paciente
+e UI dedicada reutilizando NewEvolution. O smoke completo final confirmou
+isolamento cross-author/cross-tenant, deny administrativo/unassigned,
+assinatura/hash, restricted somente leitura e preservação do contexto pessoal
+(histórico, reports, endpoints semânticos e backup). A fixture final foi limpa
+com zero resíduos, gate global OFF e profissionais controlados preservados.
+Security/Performance Advisors sem novo P0/P1 ou WARN. Google Docs clínico,
+busca semântica clínica, reports/PDI compartilhados e backup empresarial não
+foram habilitados. Produção e main não foram alteradas; Fase 5 não iniciada.
+Os limites de evidência e as tentativas interrompidas por fixture estão em
+[FASE_4_EVOLUCOES_ISOLADAS.md](FASE_4_EVOLUCOES_ISOLADAS.md).
 
 Ao final do roadmap, a Evolução Clínica terá dois modelos coexistindo com segurança:
 
