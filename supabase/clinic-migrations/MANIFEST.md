@@ -11,6 +11,10 @@ push` nem incluídos em um bootstrap automático.
 | `20260915_03_clinic_feature_gates.sql` | gate global privado, flags por organização, RLS empresarial e proteção dos RPCs existentes | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260915_04_organization_invitations.sql` | convites, token hash, emissão, revogação, aceite transacional, expiração lógica e grants | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260915_05_harden_runtime_environment.sql` | identidade privada singleton do ambiente, binding explícito do gate global e deny-by-default | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260915_06_membership_lifecycle_and_audit.sql` | lifecycle de memberships, eventos administrativos imutáveis e cleanup exclusivo de staging | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260915_07_operational_audit_and_rollout.sql` | lineage de flags, rollout administrativo e auditoria de organização/ownership | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260915_08_invitation_rate_limits.sql` | limites de convites e aceite/revogação autorizados | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260915_09_harden_membership_lifecycle_selection.sql` | seleção da membership corrente nas operações de lifecycle | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_10_organization_team_directory.sql` | diretório mínimo via RPC controlada; memberships active/suspended e perfis mínimos, sem ampliar RLS de `professionals` | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_11_organization_entitlements_and_seats.sql` | catálogo Plano Clínica, contratos empresariais, entitlement full/restricted/none, seats derivados, reserva/aceite, lifecycle clínico, invariant concorrente e resumo controlado | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260916_12_harden_entitlement_snapshots_and_invitation_expiry.sql` | snapshots contratuais independentes do catálogo atual, FK/intervalo estrutural, elegibilidade financeira de rollout e expiração/audit idempotentes | `hwkdwinfckmjoriqxbjk` (staging) |
@@ -31,6 +35,7 @@ push` nem incluídos em um bootstrap automático.
 | `20260917_27_enable_clinic_evolution_assignments.sql` | ativa Primary/Secondary/Consultor e capacidades clínicas derivadas | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260918_28_clinic_ecosystem_operations.sql` | dashboard operacional, auditoria protegida, arquivamento/reativação, reatribuição transacional de Primary e separação do ciclo de vida | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260918_29_remove_patient_lifecycle_parameter.sql` | remove a assinatura legada com `p_status`; atualização cadastral fica restrita a quatro argumentos | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260918_30_qualify_dashboard_assignment_status.sql` | corrige ambiguidade de status na agregação administrativa de assignments, reproduzida na Fase 6 | `hwkdwinfckmjoriqxbjk` (staging) |
 
 Fora do escopo desta série: envio externo de convites sem confirmação específica, integrações não autorizadas, Stripe Live e
 produção.
