@@ -31,6 +31,9 @@ assert.match(patientFilesSource, /createPatientFile/);
 assert.match(patientFilesSource, /deleteGoogleFile/);
 assert.match(patientFilesSource, /googleDriveWebViewLink/);
 assert.match(patientFilesSource, /Vincular pasta/);
+assert.match(patientFilesSource, /card !overflow-visible/);
+assert.match(patientFilesSource, /open \? 'z-\\\[70\\\]' : 'z-0'/);
+assert.match(patientFilesSource, /absolute z-\\\[80\\\]/);
 
 assert.match(googleDocsSource, /export async function uploadFileToGoogleDrive/);
 assert.match(googleDocsSource, /uploadType=multipart&fields=id,name,mimeType,size,webViewLink/);

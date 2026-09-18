@@ -106,7 +106,7 @@ function TypeDropdown({ value, open, onToggle, onSelect, disabled }: TypeDropdow
   const SelectedIcon = selected?.icon;
 
   return (
-    <div className="relative">
+    <div className={`relative ${open ? 'z-[70]' : 'z-0'}`}>
       <button
         type="button"
         onClick={onToggle}
@@ -122,7 +122,7 @@ function TypeDropdown({ value, open, onToggle, onSelect, disabled }: TypeDropdow
       </button>
 
       {open && !disabled && (
-        <div className="absolute z-30 mt-1 max-h-72 w-full min-w-[240px] overflow-y-auto rounded-xl border border-brand-border bg-white p-1.5 shadow-xl">
+        <div className="absolute z-[80] mt-1 max-h-72 w-full min-w-[240px] overflow-y-auto rounded-xl border border-brand-border bg-white p-1.5 shadow-xl">
           {PATIENT_FILE_TYPES.map((option) => {
             const Icon = option.icon;
             const active = value === option.key;
@@ -469,7 +469,7 @@ export default function PatientFilesCard({
   );
 
   return (
-    <div className="card p-5 sm:p-6 space-y-5">
+    <div className="card !overflow-visible p-5 sm:p-6 space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
