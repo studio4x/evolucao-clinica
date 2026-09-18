@@ -186,15 +186,18 @@ export default function PatientSessions() {
     try {
       let exportSessions = sessions;
       let exportMonth = month;
+      let exportPeriodLabel = monthLabel;
       if (exportMode === 'year') {
         const start = `${month.getFullYear()}-01-01`;
         const end = `${month.getFullYear()}-12-31`;
         exportSessions = await fetchPatientSessionsRange(id, start, end);
         exportMonth = new Date(month.getFullYear(), 0, 1);
+        exportPeriodLabel = String(month.getFullYear());
       } else if (exportMode === 'custom') {
         if (!exportStart || !exportEnd || exportStart > exportEnd) throw new Error('Informe um intervalo de datas válido.');
         exportSessions = await fetchPatientSessionsRange(id, exportStart, exportEnd);
         exportMonth = new Date(`${exportStart}T12:00:00`);
+        exportPeriodLabel = `De ${exportStart.split('-').reverse().join('/')} até ${exportEnd.split('-').reverse().join('/')}`;
       }
       const signatureImages: Record<string, string> = {};
       for (const session of exportSessions) {
@@ -207,7 +210,7 @@ export default function PatientSessions() {
         patientName: patient.full_name,
         professionalName: professional.full_name,
         professionalRegister: professional.professional_register,
-        month: exportMonth, sessions: exportSessions, signatureImages,
+        month: exportMonth, periodLabel: exportPeriodLabel, sessions: exportSessions, signatureImages,
       });
       await downloadPatientSessionsPdf(doc, getPatientSessionsPdfFileName(patient.full_name, exportMonth));
     } catch (error: any) {
