@@ -91,3 +91,38 @@ Regra de versionamento: `PLAY_STORE_VERSION` deve ser sempre `1.0.<versionCode>`
 
 O repositório já inclui configuração compatível com ambientes de deploy baseados em Vercel.
 Se o seu fluxo de publicação for diferente, ajuste apenas as variáveis de ambiente equivalentes.
+
+### Política de commits e consumo de deployments
+
+Os projetos de produção e staging podem estar vinculados ao mesmo repositório. Nesse cenário, um único push para a branch monitorada pode gerar mais de uma tentativa de deployment na Vercel. Por isso, commits no `main` devem ser tratados como eventos de publicação, e não como checkpoints intermediários de desenvolvimento.
+
+Regras operacionais:
+
+1. **Não criar um commit para cada arquivo alterado ou para cada pequeno ajuste da mesma tarefa.** Agrupe todas as mudanças logicamente relacionadas e gere um único commit final sempre que possível.
+2. **Atualize `APP_VERSION` no mesmo commit final da implementação.** Não crie um commit separado apenas para incrementar a build.
+3. **Valide antes do push que dispara deploy.** Execute as checagens relevantes, como `npm run lint`, os testes específicos da funcionalidade e, quando aplicável, `npm run build`.
+4. **Prefira branch de trabalho para alterações intermediárias.** Durante desenvolvimento, acumule e valide as mudanças fora do `main`; envie ao `main` somente o estado que está pronto para ser publicado.
+5. **Evite commits vazios ou alterações artificiais apenas para forçar redeploy.** Se a Vercel estiver bloqueando builds por quota/rate limit, aguarde a liberação ou faça redeploy do commit existente quando a conta voltar a aceitar deployments.
+6. **Considere produção + staging no orçamento de deployments.** Se os dois projetos estiverem configurados para reagir ao mesmo push, uma única entrega pode consumir duas tentativas de deployment.
+7. **Durante uma mesma solicitação de implementação, faça um único push final sempre que tecnicamente possível.** Correções encontradas durante a validação devem ser incorporadas antes desse push, e não publicadas em sequência como vários commits de tentativa e erro.
+8. **Mudanças apenas de documentação não exigem incremento de `APP_VERSION`**, salvo quando fizerem parte de uma entrega de código que já demande nova build.
+
+Fluxo recomendado:
+
+```text
+alterações da tarefa
+        ↓
+validação local / testes
+        ↓
+ajustes encontrados na validação
+        ↓
+incremento único da APP_VERSION
+        ↓
+commit final agrupado
+        ↓
+push / merge para main
+        ↓
+Vercel: staging e/ou produção conforme configuração dos projetos
+```
+
+Se um deployment falhar por limite da Vercel, a falha não significa necessariamente erro de código. Antes de criar outro commit, confira o status do commit no GitHub/Vercel e identifique se a causa é build, configuração ou quota.
