@@ -5,6 +5,7 @@ export type SupportAiMode = 'auto_reply' | 'triage' | 'draft';
 export interface SupportAiSettings {
   id: 'default';
   enabled: boolean;
+  triageEnabled: boolean;
   mode: SupportAiMode;
   introMessage: string;
   systemPrompt: string;
@@ -28,6 +29,7 @@ function mapSettings(row: any): SupportAiSettings {
   return {
     id: 'default',
     enabled: row.enabled !== false,
+    triageEnabled: row.triage_enabled === true,
     mode: row.mode as SupportAiMode,
     introMessage: row.intro_message || '',
     systemPrompt: row.system_prompt || '',
@@ -100,6 +102,7 @@ export async function fetchSupportAiSettings(): Promise<SupportAiSettings> {
 
 export async function updateSupportAiSettings(input: {
   enabled?: boolean;
+  triageEnabled?: boolean;
   mode?: SupportAiMode;
   introMessage?: string;
   systemPrompt?: string;
@@ -111,6 +114,7 @@ export async function updateSupportAiSettings(input: {
 
   const changes: Record<string, unknown> = { updated_by: userId };
   if (typeof input.enabled === 'boolean') changes.enabled = input.enabled;
+  if (typeof input.triageEnabled === 'boolean') changes.triage_enabled = input.triageEnabled;
   if (input.mode) changes.mode = input.mode;
   if (typeof input.introMessage === 'string') changes.intro_message = input.introMessage.trim();
   if (typeof input.systemPrompt === 'string') changes.system_prompt = input.systemPrompt.trim();
