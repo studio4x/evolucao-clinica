@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   assertIntegrationEnabled,
   loadIntegrationFlags,
@@ -8,6 +9,16 @@ import { loadServerEnvironment } from "../server/config/environment.js";
 
 const productionRef = "abcdefghijklmnopqrst";
 const stagingRef = "uvwxyzabcdefghijklmn";
+const vercelConfig = JSON.parse(readFileSync("vercel.json", "utf8"));
+assert.equal(
+  typeof vercelConfig.ignoreCommand,
+  "string",
+  "vercel.json deve definir ignoreCommand para separar produção e staging",
+);
+assert.match(vercelConfig.ignoreCommand, /prj_Hmm2uRREtw4qOqPf3Lhg78702hlM/);
+assert.match(vercelConfig.ignoreCommand, /VERCEL_GIT_COMMIT_REF/);
+assert.match(vercelConfig.ignoreCommand, /main/);
+
 const baseServerEnv = {
   APP_ENV: "production",
   VITE_APP_ENV: "production",
