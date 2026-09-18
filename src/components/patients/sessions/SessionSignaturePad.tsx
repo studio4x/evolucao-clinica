@@ -6,6 +6,7 @@ type Props = { onChange: (blob: Blob | null) => void };
 export default function SessionSignaturePad({ onChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
+  const hasInkRef = useRef(false);
   const [hasInk, setHasInk] = useState(false);
 
   const resizeCanvas = () => {
@@ -13,7 +14,7 @@ export default function SessionSignaturePad({ onChange }: Props) {
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
-    const snapshot = hasInk ? canvas.toDataURL('image/png') : null;
+    const snapshot = hasInkRef.current ? canvas.toDataURL('image/png') : null;
     canvas.width = Math.max(1, Math.floor(rect.width * ratio));
     canvas.height = Math.max(1, Math.floor(rect.height * ratio));
     const ctx = canvas.getContext('2d');
@@ -59,13 +60,14 @@ export default function SessionSignaturePad({ onChange }: Props) {
     const p = point(event);
     ctx.lineTo(p.x, p.y);
     ctx.stroke();
+    hasInkRef.current = true;
     setHasInk(true);
   };
 
   const commit = () => {
     drawingRef.current = false;
     const canvas = canvasRef.current;
-    if (!canvas || !hasInk) return;
+    if (!canvas || !hasInkRef.current) return;
     canvas.toBlob((blob) => onChange(blob), 'image/png', 0.92);
   };
 
@@ -73,6 +75,7 @@ export default function SessionSignaturePad({ onChange }: Props) {
     const canvas = canvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (canvas && ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    hasInkRef.current = false;
     setHasInk(false);
     onChange(null);
   };
