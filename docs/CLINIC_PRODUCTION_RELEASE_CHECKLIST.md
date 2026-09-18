@@ -12,6 +12,7 @@ O relatório técnico está em `FASE_6_HOMOLOGACAO_LANCAMENTO_CONTROLADO.md`; o 
 - [x] Proveniência atual de 01–22 reconciliada com limitações, comparação de funções e ACL registrada por objeto. Histórico formal permanece NOT_PRESENT.
 - [ ] Limitações semânticas da reconciliação revisadas; equivalente canônico de produção implementado/revisado/autorizado em rodada separada. Desenho atual DESIGN_READY_FOR_HUMAN_REVIEW.
 - [ ] Backend/template de convites e billing compatíveis com production por contrato explícito; guards staging/Sandbox não podem ser retirados sem os checks equivalentes.
+- [ ] remover identificação visual [STAGING] pelo APP_ENV de produção, sem edição manual do template.
 
 ## Sequência futura, somente após aprovação humana
 
@@ -34,7 +35,7 @@ Não apagar schema ou dados: preservar organizations, memberships, pacientes, ev
 ## Estado desta rodada
 
 Piloto permitido: somente interno sintético em staging. Piloto com dados reais: **BLOCKED_BY_LEGAL_GATE**.
-Entrega real Brevo: **PENDING_EXPLICIT_RECIPIENT_AUTHORIZATION**. Provider preflight: **MANUAL_PROVIDER_GATE** (escopo SHARED, tracking estrito UNKNOWN). Legal: **PENDING**. Release produção: **BLOCKED**.
+Entrega real Brevo: **PENDING_EXPLICIT_RECIPIENT_AUTHORIZATION**. Provider preflight: **PLAN_CAPABILITY_GATE** (escopo SHARED, tracking estrito UNPROVEN, link UNKNOWN). Legal: **PENDING**. Release produção: **BLOCKED**.
 
 Fase 6C: a conta Brevo autenticada está no plano **Free**, com conta padrão e sem capacidade de subconta/suborganização disponível. O recurso de suborganizações é Enterprise; nenhum upgrade, cobrança, IP, DNS ou nova conta foi iniciado. Status de isolamento: **PLAN_CAPABILITY_GATE**. Próxima decisão manual: contratar/usar suborganização Enterprise, criar uma conta Brevo separada dedicada ao staging, ou escolher outro provider; nenhuma alternativa foi executada.
 Esta lista é a sequência futura a revisar, não uma autorização de merge/deploy/apply/rollout.

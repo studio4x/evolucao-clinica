@@ -10,6 +10,7 @@
   "providerIsolationStatus": "PLAN_CAPABILITY_GATE",
   "providerEntity": "parent Brevo account — sanitized",
   "providerScope": "SHARED",
+  "sharedProviderAccepted": true,
   "providerScopeIsolated": false,
   "smtpCredentialScope": "SHARED",
   "senderScope": "SHARED",

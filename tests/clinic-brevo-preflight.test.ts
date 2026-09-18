@@ -16,5 +16,8 @@ assert.equal(evaluateBrevoPreflight({ ...input, provider }).sendAttempted, false
 const freeAccount = { ...provider, providerScopeIsolated: false, providerScope: 'SHARED', providerIsolationStatus: 'PLAN_CAPABILITY_GATE', plan: 'Free', planCapability: 'NOT_SUPPORTED', subaccountsSupported: false, strictTrackingDisable: 'UNPROVEN' };
 const gated = evaluateBrevoPreflight({ ...input, provider: freeAccount });
 assert.equal(gated.status, 'PLAN_CAPABILITY_GATE'); assert.equal(gated.providerScope, 'SHARED'); assert.equal(gated.smtpCredentialScope, 'UNKNOWN');
+assert.equal(gated.sharedProviderAccepted, false); assert.equal(gated.environmentIdentification, 'PASS');
+const sharedAccepted = evaluateBrevoPreflight({ ...input, provider: { ...freeAccount, sharedProviderAccepted: true } });
+assert.equal(sharedAccepted.sharedProviderAccepted, true);
 assert.equal(gated.controlledDeliveryRequired, true); assert.equal(gated.dnsChanged, false); assert.equal(gated.billingPlanChanged, false);
 console.log('Brevo preflight evidence, unknown state, shared scope and no-send contracts PASS');

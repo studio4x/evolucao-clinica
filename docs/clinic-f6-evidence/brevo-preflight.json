@@ -7,6 +7,8 @@
   "subaccountsAvailable": "UNKNOWN",
   "existingSubaccounts": [],
   "providerIsolationStatus": "PLAN_CAPABILITY_GATE",
+  "sharedProviderAccepted": true,
+  "environmentIdentification": "PASS",
   "providerEntity": "parent Brevo account — sanitized",
   "smtpAuthentication": true,
   "senderConfigured": true,

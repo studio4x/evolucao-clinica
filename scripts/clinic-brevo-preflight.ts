@@ -5,6 +5,7 @@ export function evaluateBrevoPreflight(input: { smtpAuthentication: boolean; sen
   const strictBoolean = (key: string) => trusted && typeof evidence[key] === 'boolean' ? evidence[key] : 'UNKNOWN';
   const senderProviderVerified = trusted && typeof evidence.senderProviderVerified === 'boolean' ? evidence.senderProviderVerified : 'MANUAL';
   const providerScopeIsolated = strictBoolean('providerScopeIsolated');
+  const sharedProviderAccepted = trusted && evidence.providerScope === 'SHARED' && evidence.sharedProviderAccepted === true;
   const openTrackingDisabled = strictBoolean('openTrackingDisabled');
   const clickTrackingDisabled = strictBoolean('clickTrackingDisabled');
   const linkRewritingDisabled = strictBoolean('linkRewritingDisabled');
@@ -23,6 +24,8 @@ export function evaluateBrevoPreflight(input: { smtpAuthentication: boolean; sen
     subaccountsAvailable: trusted ? evidence.subaccountsAvailable ?? 'UNKNOWN' : 'UNKNOWN',
     existingSubaccounts: trusted ? evidence.existingSubaccounts || [] : [],
     providerIsolationStatus,
+    sharedProviderAccepted,
+    environmentIdentification: input.directFragment ? 'PASS' : 'FAIL',
     providerEntity: trusted ? evidence.providerEntity || 'UNKNOWN' : 'UNKNOWN',
     smtpAuthentication: input.smtpAuthentication, senderConfigured: input.senderConfigured,
     senderProviderVerified, sender: senderProviderVerified === true ? 'VERIFIED' : senderProviderVerified === false ? 'FAIL' : 'MANUAL_GATE',

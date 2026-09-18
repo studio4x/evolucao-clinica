@@ -12,7 +12,7 @@ assert.ok(env.CLINIC_INVITATION_DELIVERY_ENABLED !== 'true');
 const transport = nodemailer.createTransport({ host: env.CLINIC_INVITATION_SMTP_HOST, port: Number(env.CLINIC_INVITATION_SMTP_PORT || 587), secure: env.CLINIC_INVITATION_SMTP_PORT === '465', requireTLS: true, auth: { user: env.CLINIC_INVITATION_SMTP_USER, pass: env.CLINIC_INVITATION_SMTP_PASS }, tls: { rejectUnauthorized: true, minVersion: 'TLSv1.2' }, logger: false, debug: false, connectionTimeout: 10000, socketTimeout: 10000 });
 let authentication = false;
 try { authentication = await transport.verify(); } catch { /* No provider messages/credentials in artifacts. */ } finally { transport.close(); }
-const rendered = renderInvitationMail({ recipient: 'never-sent@example.invalid', organizationName: 'Clínica sintética F6', role: 'professional', clinical: true, expiresAt: '2026-09-21T12:00:00Z', token: '0'.repeat(64) });
+const rendered = renderInvitationMail({ recipient: 'never-sent@example.invalid', organizationName: 'Clínica sintética F6', role: 'professional', clinical: true, expiresAt: '2026-09-21T12:00:00Z', token: '0'.repeat(64) }, 'staging');
 const directFragment = rendered.html.includes('https://staging.evolucaoclinica.app.br/convite-clinica#invite=');
 // No generic key/settings fallback; a dedicated API credential is not consumed here.
 // Evidence is produced through authorized read-only provider UI, never a SEND.
