@@ -16,12 +16,10 @@ import {
 } from '../services/support';
 import {
   fetchSupportAiDraft,
-  fetchSupportAiSettings,
   processSupportAiEvent,
   regenerateSupportAiDraft,
   setSupportAiDraftStatus,
   SupportAiDraft,
-  SupportAiSettings,
 } from '../services/supportAi';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
@@ -46,7 +44,6 @@ export default function SupportTicketDetail() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingMessageText, setEditingMessageText] = useState('');
   const [messageMutationLoading, setMessageMutationLoading] = useState(false);
-  const [aiSettings, setAiSettings] = useState<SupportAiSettings | null>(null);
   const [aiDraft, setAiDraft] = useState<SupportAiDraft | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
@@ -60,11 +57,7 @@ export default function SupportTicketDetail() {
     try {
       if (!silent) setAiLoading(true);
       setAiError('');
-      const [settings, draft] = await Promise.all([
-        fetchSupportAiSettings(),
-        fetchSupportAiDraft(ticketId),
-      ]);
-      setAiSettings(settings);
+      const draft = await fetchSupportAiDraft(ticketId);
       setAiDraft(draft);
 
       if (!draft && aiInitialDraftRequestedRef.current !== ticketId) {
