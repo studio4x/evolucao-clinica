@@ -14,6 +14,7 @@ type NativeBridgeMock = {
   setUserId(userId: string | null): void;
   setUserProperty(name: string, value: string | null): void;
   setAnalyticsCollectionEnabled(enabled: boolean): void;
+  setConsent?(analyticsEnabled: boolean, marketingEnabled: boolean): void;
 };
 
 type MetaPixelMock = ((...args: unknown[]) => void) & {
@@ -329,12 +330,14 @@ windowMock.NativeAnalyticsBridge = {
   logStripeInAppPurchase: (...args) => { nativePurchases.push(args); return true; },
   setUserId: (id) => bridgeCalls.push(`user:${id}`),
   setUserProperty: (name, value) => bridgeCalls.push(`property:${name}:${value}`),
-  setAnalyticsCollectionEnabled: (enabled) => bridgeCalls.push(`collection:${enabled}`)
+  setAnalyticsCollectionEnabled: (enabled) => bridgeCalls.push(`collection:${enabled}`),
+  setConsent: (analyticsEnabled, marketingEnabled) => bridgeCalls.push(`consent:${analyticsEnabled}:${marketingEnabled}`)
 };
 analytics.initAnalytics();
 analytics.setAnalyticsUser('550e8400-e29b-41d4-a716-446655440000', { work_context: 'independent' });
 assert.equal(bridgeCalls.some((call) => call.startsWith('user:550e')), false, 'identidade nativa exige consentimento');
 analytics.setConsentPreferences({ analytics: true, marketing: false });
+assert.ok(bridgeCalls.includes('consent:true:false'), 'Firebase nativo deve negar sinais de publicidade sem Marketing');
 assert.ok(bridgeCalls.includes('user:550e8400-e29b-41d4-a716-446655440000'));
 assert.equal(analytics.trackEvent('login', { method: 'google' }), true);
 assert.deepEqual(nativeEvents, ['login'], 'Firebase recebe Analytics consentido');
@@ -345,6 +348,7 @@ analytics.resetAnalyticsForTests();
 assert.equal(analytics.trackSignUpOnce(signUpUserId, 'google'), false, 'recarregar a primeira sessão não pode duplicar sign_up persistido');
 assert.equal(analytics.trackSignUpOnce('identificador-invalido', 'google'), false, 'identificador inválido não pode criar chave de deduplicação');
 analytics.setConsentPreferences({ analytics: true, marketing: true });
+assert.ok(bridgeCalls.includes('consent:true:true'), 'Firebase nativo deve liberar sinais de publicidade somente com Marketing');
 assert.equal(analytics.trackBeginCheckout('monthly', 'Plano Mensal', 39, 'stripe', 'native-marketing'), true);
 const nativeMarketingEvent = trackedDataLayerEvents().find((entry) => entry.event === 'begin_checkout');
 assert.equal(nativeMarketingEvent?.analytics_destination, false, 'ponte nativa permanece o único destino de Analytics');
