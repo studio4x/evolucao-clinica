@@ -39,8 +39,15 @@ import { isGoogleAccessTokenFresh } from '../../utils/googleAuthSession';
 import { showAlert, showConfirm } from '../../store/modalStore';
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
-const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt'];
-const ACCEPT_ATTRIBUTE = '.pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx,.csv,.txt';
+const DOCUMENT_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt'];
+const AUDIO_EXTENSIONS = ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'amr', 'wma', 'aif', 'aiff'];
+const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'mpg', 'mpeg', '3gp', '3g2', 'wmv'];
+const ACCEPTED_EXTENSIONS = [...DOCUMENT_EXTENSIONS, ...AUDIO_EXTENSIONS, ...VIDEO_EXTENSIONS];
+const ACCEPT_ATTRIBUTE = [
+  ...ACCEPTED_EXTENSIONS.map((extension) => `.${extension}`),
+  'audio/*',
+  'video/*',
+].join(',');
 
 type PendingUpload = {
   id: string;
@@ -558,7 +565,7 @@ export default function PatientFilesCard({
             <UploadCloud size={28} className="mx-auto text-brand-primary" />
             <p className="mt-2 text-sm font-semibold text-brand-text">Adicionar arquivos</p>
             <p className="mt-1 text-[11px] text-brand-text-muted">
-              Clique ou arraste arquivos para cá · PDF, imagens, Word, Excel, CSV ou TXT · até 25 MB por arquivo
+              Clique ou arraste arquivos para cá · documentos, imagens, áudios ou vídeos · até 25 MB por arquivo
             </p>
           </button>
         </>

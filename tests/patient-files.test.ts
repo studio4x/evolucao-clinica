@@ -24,6 +24,11 @@ assert.match(patientDetailSource, /drive\.google\.com\/drive\/folders/);
 assert.match(patientDetailSource, /patient\.target_folder_id &&/);
 
 assert.match(patientFilesSource, /MAX_FILE_SIZE_BYTES = 25 \* 1024 \* 1024/);
+assert.match(patientFilesSource, /AUDIO_EXTENSIONS = \['mp3', 'wav', 'm4a', 'aac', 'ogg', 'oga', 'opus', 'flac', 'amr', 'wma', 'aif', 'aiff'\]/);
+assert.match(patientFilesSource, /VIDEO_EXTENSIONS = \['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'mpg', 'mpeg', '3gp', '3g2', 'wmv'\]/);
+assert.match(patientFilesSource, /'audio\/\*'/);
+assert.match(patientFilesSource, /'video\/\*'/);
+assert.match(patientFilesSource, /documentos, imagens, áudios ou vídeos/);
 assert.match(patientFilesSource, /type="file"[\s\S]*multiple/);
 assert.match(patientFilesSource, /onDrop=/);
 assert.match(patientFilesSource, /Selecionar tipo do arquivo/);
