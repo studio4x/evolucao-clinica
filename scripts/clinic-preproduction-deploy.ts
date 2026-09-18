@@ -2,9 +2,11 @@
 // default restores every external/application gate to OFF and redeploys.
 import assert from 'node:assert/strict';
 import { loadRuntime } from './clinic-preproduction-runtime.js';
+import { externalGatePlan } from './clinic-external-gates.js';
 
 const runtime = loadRuntime();
 const enabled = process.argv.includes('--enable');
+const gatePlan = externalGatePlan(enabled, process.argv.includes('--billing-test'));
 const sha = process.env.F6_COMMIT;
 assert.match(sha || '', /^[0-9a-f]{40}$/);
 async function api(path: string, method = 'GET', body?: unknown) {
@@ -24,10 +26,8 @@ const alias = await api('/v4/aliases/staging.evolucaoclinica.app.br');
 const baseline = await api(`/v13/deployments/${alias.deployment?.id || alias.deploymentId}`);
 assert.equal(baseline.projectId, runtime.projectId);
 const variables = await api(`/v10/projects/${runtime.projectId}/env`);
-const flags = ['CLINIC_FEATURE_ENABLED', 'VITE_CLINIC_FEATURE_ENABLED', 'CLINIC_INVITATION_DELIVERY_ENABLED', 'CLINIC_BILLING_ENABLED', 'GOOGLE_INTEGRATIONS_ENABLED', 'VITE_GOOGLE_INTEGRATIONS_ENABLED'];
 const acceptedGateWrites: Record<string, string> = {};
-for (const key of flags) {
-  const value = enabled && ['CLINIC_FEATURE_ENABLED', 'VITE_CLINIC_FEATURE_ENABLED'].includes(key) ? 'true' : 'false';
+for (const [key, value] of Object.entries(gatePlan)) {
   const existing = variables.envs.find((row: any) => row.key === key && row.target.includes('production'));
   if (existing) await api(`/v9/projects/${runtime.projectId}/env/${existing.id}`, 'PATCH', { value });
   else await api(`/v10/projects/${runtime.projectId}/env`, 'POST', { key, value, type: 'plain', target: ['production'] });
@@ -39,4 +39,4 @@ const deployment = await api('/v13/deployments', 'POST', {
   target: 'production', gitSource: { type: 'github', repoId: baseline.gitSource?.repoId || project.link?.repoId, ref: 'feat/clinicas', sha },
 });
 assert.equal(deployment.projectId, runtime.projectId);
-console.log(JSON.stringify({ staging: true, projectId: runtime.projectId, deploymentId: deployment.id, flags: enabled ? 'CLINIC_APP_TEMPORARILY_ON_EXTERNAL_OFF' : 'ALL_OFF', acceptedGateWrites, sha }));
+console.log(JSON.stringify({ staging: true, projectId: runtime.projectId, deploymentId: deployment.id, flags: enabled ? (gatePlan.CLINIC_BILLING_ENABLED === 'true' ? 'CLINIC_AND_TEST_BILLING_TEMPORARILY_ON' : 'CLINIC_APP_TEMPORARILY_ON_EXTERNAL_OFF') : 'ALL_OFF', acceptedGateWrites, sha }));

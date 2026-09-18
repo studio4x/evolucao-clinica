@@ -68,18 +68,23 @@ export function registerClinicContextRoutes(app: any, deps: ClinicContextRouteDe
         accessToken: token,
       });
 
-      const { data, error } = await userScopedClient
+      const [{ data, error }, pending] = await Promise.all([userScopedClient
         .from("organization_memberships")
         .select("organization_id,membership_role,status,clinical_access_enabled,organizations!inner(id,name,trade_name,operational_status)")
         .eq("professional_id", userId)
-        .eq("status", "active");
+        .eq("status", "active"),
+        userScopedClient.rpc("get_pending_organization_checkout_contexts"),
+      ]);
 
-      if (error) {
-        console.error("[ClinicContexts] Falha ao resolver contexto autorizado:", error.message);
+      if (error || pending.error) {
+        console.error("[ClinicContexts] Falha ao resolver contexto autorizado:", error?.code || pending.error?.code);
         return res.status(503).json({ ok: false, error: "context_resolution_failed" });
       }
 
-      const organizations = resolveClinicOrganizations(data || []);
+      const pendingOrganizations = resolveClinicOrganizations((pending.data || []).map((organization: any) => ({
+        status: "active", membership_role: "owner", clinical_access_enabled: false, organizations: organization,
+      })));
+      const organizations = [...new Map([...resolveClinicOrganizations(data || []), ...pendingOrganizations].map((organization) => [organization.id, organization])).values()];
 
       return res.json({
         ok: true,

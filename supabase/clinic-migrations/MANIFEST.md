@@ -37,5 +37,7 @@ push` nem incluídos em um bootstrap automático.
 | `20260918_29_remove_patient_lifecycle_parameter.sql` | remove a assinatura legada com `p_status`; atualização cadastral fica restrita a quatro argumentos | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260918_30_qualify_dashboard_assignment_status.sql` | corrige ambiguidade de status na agregação administrativa de assignments, reproduzida na Fase 6 | `hwkdwinfckmjoriqxbjk` (staging) |
 
+Migration adicional Fase 6B: `20260918_31_pending_owner_checkout_context.sql` expõe somente o contexto cadastral de checkout pending_setup ao owner ativo sob gate global AND flag por organização, sem liberar workspace clínico. Exclusivamente staging `hwkdwinfckmjoriqxbjk`.
+
 Fora do escopo desta série: envio externo de convites sem confirmação específica, integrações não autorizadas, Stripe Live e
 produção.

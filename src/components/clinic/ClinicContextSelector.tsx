@@ -21,7 +21,10 @@ export function ClinicContextSelector({ collapsed = false }: ClinicContextSelect
       ? { type: "personal" as const }
       : { type: "organization" as const, organizationId };
     selectContext(nextContext);
-    navigate(nextContext.type === "organization" ? "/painel/clinica" : "/painel/dashboard");
+    const selectedOrganization = organizations.find(({ id }) => id === organizationId);
+    navigate(nextContext.type === "organization"
+      ? selectedOrganization?.operationalStatus === "pending_setup" ? "/painel/clinica/contratar" : "/painel/clinica"
+      : "/painel/dashboard");
 
     setIsChanging(true);
     try {
