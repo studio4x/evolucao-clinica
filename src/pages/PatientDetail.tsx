@@ -24,6 +24,7 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { resolveHorizontalSwipe } from '../utils/horizontalSwipe';
+import PatientFilesCard from '../components/patients/PatientFilesCard';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -148,16 +149,17 @@ type ConfirmationDialogState = {
   resolve: (confirmed: boolean) => void;
 };
 
-type PatientMobileTab = 'overview' | 'history' | 'reminders' | 'reports';
+type PatientMobileTab = 'overview' | 'history' | 'files' | 'reminders' | 'reports';
 type SwipeDirection = 'next' | 'previous';
 
 const patientMobileTabs: { id: PatientMobileTab; label: string; icon: typeof FileText }[] = [
   { id: 'overview', label: 'Resumo', icon: LayoutDashboard },
   { id: 'history', label: 'Histórico', icon: Clock },
+  { id: 'files', label: 'Arquivos', icon: Folder },
   { id: 'reminders', label: 'Lembretes', icon: Bell },
   { id: 'reports', label: 'Relatórios', icon: FileText },
 ];
-const patientMobileTabOrder: PatientMobileTab[] = ['overview', 'history', 'reminders', 'reports'];
+const patientMobileTabOrder: PatientMobileTab[] = ['overview', 'history', 'files', 'reminders', 'reports'];
 
 
 
@@ -2457,7 +2459,7 @@ export default function PatientDetail() {
         />
 
         <nav className="xl:hidden w-full overflow-hidden" aria-label="Seções do paciente">
-          <div className="grid w-full grid-cols-4 items-stretch rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur">
+          <div className="grid w-full grid-cols-5 items-stretch rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur">
             {patientMobileTabs.map(({ id: tabId, label, icon: Icon }) => {
               const isActive = activeMobileTab === tabId;
               return (
@@ -2559,6 +2561,15 @@ export default function PatientDetail() {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className={`order-3 xl:order-none ${mobileTabVisibility('files')}`}>
+            <PatientFilesCard
+              patientId={patient.id}
+              targetFolderId={patient.target_folder_id}
+              targetFolderName={patient.target_folder_name}
+              editPatientHref={`/painel/patients/${id}/edit`}
+            />
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}
