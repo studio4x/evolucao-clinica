@@ -1,0 +1,10 @@
+{
+  "staging": true,
+  "projectId": "prj_Hmm2uRREtw4qOqPf3Lhg78702hlM",
+  "projectName": "evolucao-clinica-staging",
+  "key": "CLINIC_INVITATION_SHARED_PROVIDER_ACCEPTED",
+  "valueWritten": true,
+  "operation": "created",
+  "deliveryGateUntouched": true,
+  "productionUntouched": true
+}

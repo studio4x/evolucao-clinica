@@ -11,6 +11,7 @@
   "environmentIdentification": "PASS",
   "providerEntity": "parent Brevo account — sanitized",
   "smtpAuthentication": true,
+  "smtpTransportReady": true,
   "senderConfigured": true,
   "senderProviderVerified": true,
   "sender": "VERIFIED",
