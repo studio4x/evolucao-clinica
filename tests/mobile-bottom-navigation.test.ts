@@ -12,6 +12,7 @@ const androidManifestSource = readFileSync('app/src/main/AndroidManifest.xml', '
 const gradlePropertiesSource = readFileSync('gradle.properties', 'utf8');
 const proguardSource = readFileSync('app/proguard-rules.pro', 'utf8');
 const twaManifestSource = readFileSync('twa-manifest.json', 'utf8');
+const releaseScriptSource = readFileSync('.agents/build_bubblewrap.js', 'utf8');
 
 assert.match(layoutSource, /app-mobile-bottom-nav[^\"]*fixed/, 'a navegação mobile deve continuar fixed');
 assert.match(layoutSource, /app-mobile-bottom-nav[^\"]*md:hidden/, 'a navegação deve continuar exclusiva do mobile');
@@ -49,12 +50,14 @@ assert.match(gradleSource, /'proguard-rules\.pro'/, 'release deve incluir as reg
 assert.match(rootGradleSource, /com\.android\.tools\.build:gradle:9\.0\.1/, 'AGP 9.0.1 deve permanecer configurado');
 assert.match(gradleWrapperSource, /gradle-9\.1\.0-bin\.zip/, 'Gradle 9.1.0 deve permanecer configurado para AGP 9.0');
 assert.match(gradlePropertiesSource, /android\.newDsl=false/, 'DSL legada deve permanecer habilitada durante a migração controlada para AGP 9');
+assert.match(gradlePropertiesSource, /android\.builtInKotlin=false/, 'Kotlin integrado deve permanecer desabilitado enquanto o app Android for Java-only');
 assert.doesNotMatch(gradlePropertiesSource, /android\.r8\.optimizedResourceShrinking=true/, 'AGP 9 não deve depender do opt-in legado de resource shrinking otimizado');
 assert.match(androidManifestSource, /com\.google\.android\.gms\.permission\.AD_ID/, 'manifesto deve declarar AD_ID para manter coerência com a declaração do Play Console');
 assert.match(launcherSource, /public void setConsent\(boolean analyticsEnabled, boolean marketingEnabled\)/, 'ponte nativa deve receber consentimentos separados');
 assert.match(launcherSource, /FirebaseAnalytics\.ConsentType\.AD_STORAGE/, 'Firebase deve aplicar consentimento de armazenamento de publicidade');
 assert.match(launcherSource, /FirebaseAnalytics\.ConsentType\.AD_USER_DATA/, 'Firebase deve aplicar consentimento de dados de publicidade');
 assert.match(launcherSource, /FirebaseAnalytics\.ConsentType\.AD_PERSONALIZATION/, 'Firebase deve aplicar consentimento de personalização de anúncios');
+assert.match(releaseScriptSource, /major < 17/, 'script de release deve bloquear JDK abaixo da versão 17');
 assert.match(proguardSource, /@android\.webkit\.JavascriptInterface <methods>;/, 'métodos expostos ao WebView devem ser preservados pelo R8');
 assert.doesNotMatch(proguardSource, /-keep\s+class\s+com\.evolucaoclinica\.app\.\*\*/, 'não usar keep amplo que anule a otimização do app');
 
