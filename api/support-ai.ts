@@ -286,6 +286,104 @@ const updateRun = async (supabaseAdmin: SupabaseClient, runId: string, values: R
     .eq('id', runId);
 };
 
+const persistSupportSuggestion = async (input: {
+  supabaseAdmin: SupabaseClient;
+  settings: any;
+  ticket: any;
+  ticketId: string;
+  sourceMessageId?: string | null;
+  eventKey: string;
+  requestedBy: string;
+  autoReply: boolean;
+}) => {
+  const {
+    supabaseAdmin,
+    settings,
+    ticket,
+    ticketId,
+    sourceMessageId,
+    eventKey,
+    requestedBy,
+    autoReply,
+  } = input;
+  const mode: SupportAiMode = autoReply ? 'auto_reply' : 'draft';
+
+  const { data: previousRun } = await supabaseAdmin
+    .from('support_ai_runs')
+    .select('id, status, result_type')
+    .eq('event_key', eventKey)
+    .eq('mode', mode)
+    .maybeSingle();
+
+  if (previousRun) {
+    return { processed: false, reason: 'already_processed', run: previousRun };
+  }
+
+  const runId = randomUUID();
+  const { error: runError } = await supabaseAdmin.from('support_ai_runs').insert({
+    id: runId,
+    ticket_id: ticketId,
+    source_message_id: sourceMessageId || null,
+    event_key: eventKey,
+    mode,
+    status: 'processing',
+    requested_by: requestedBy
+  });
+  if (runError) {
+    if (runError.code === '23505') return { processed: false, reason: 'already_processing' };
+    throw runError;
+  }
+
+  try {
+    const generated = await generateAnswer(supabaseAdmin, settings, ticket);
+
+    const { error: draftError } = await supabaseAdmin.from('support_ai_drafts').upsert({
+      ticket_id: ticketId,
+      source_event_key: eventKey,
+      content: generated.content,
+      model: generated.model,
+      status: 'pending',
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'ticket_id' });
+    if (draftError) throw draftError;
+
+    if (autoReply) {
+      const senderId = await resolveSystemSender(supabaseAdmin, settings.updated_by);
+      const { error: replyError } = await supabaseAdmin.from('support_messages').insert({
+        ticket_id: ticketId,
+        sender_id: senderId,
+        message: generated.content,
+        origin: 'support_ai',
+        sender_label: 'Equipe Evolução Clínica',
+        ai_run_id: runId
+      });
+      if (replyError) throw replyError;
+
+      await updateRun(supabaseAdmin, runId, {
+        status: 'completed',
+        result_type: 'auto_reply',
+        response_content: generated.content,
+        model: generated.model
+      });
+      return { processed: true, mode, resultType: 'auto_reply', draftAvailable: true };
+    }
+
+    await updateRun(supabaseAdmin, runId, {
+      status: 'completed',
+      result_type: 'draft',
+      response_content: generated.content,
+      model: generated.model
+    });
+    return { processed: true, mode, resultType: 'draft', draftAvailable: true };
+  } catch (error: any) {
+    await updateRun(supabaseAdmin, runId, {
+      status: 'error',
+      error_message: String(error?.message || error || 'Erro desconhecido').slice(0, 2000)
+    });
+    throw error;
+  }
+};
+
 const processEvent = async (input: {
   supabaseAdmin: SupabaseClient;
   ticketId: string;
@@ -311,96 +409,57 @@ const processEvent = async (input: {
   }
 
   if (eventType === 'create') {
+    let triageResult: any = null;
     if (settings.triage_enabled === true) {
-      return processTriage({ supabaseAdmin, settings, ticket, requesterId });
+      triageResult = await processTriage({ supabaseAdmin, settings, ticket, requesterId });
     }
-    return { processed: false, reason: 'first_contact_disabled' };
-  }
 
-  if (!settings.enabled) return { processed: false, reason: 'responses_disabled' };
-
-  const mode = String(settings.mode || 'draft') as SupportAiMode;
-  if (mode === 'triage') {
-    return { processed: false, reason: 'legacy_triage_mode' };
-  }
-
-  if (eventType === 'message') {
-    if (!sourceMessageId) throw new Error('Mensagem de origem ausente.');
-    const { data: sourceMessage, error } = await supabaseAdmin
-      .from('support_messages')
-      .select('id, ticket_id, sender_id, origin')
-      .eq('id', sourceMessageId)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (error) throw error;
-    if (!sourceMessage || sourceMessage.ticket_id !== ticketId || sourceMessage.sender_id !== requesterId || sourceMessage.origin === 'support_ai') {
-      return { processed: false, reason: 'invalid_source_message' };
-    }
-  }
-
-  const eventKey = eventType === 'create' ? `ticket:${ticketId}:create` : `message:${sourceMessageId}`;
-  const { data: previousRun } = await supabaseAdmin
-    .from('support_ai_runs')
-    .select('id, status, result_type')
-    .eq('event_key', eventKey)
-    .eq('mode', mode)
-    .maybeSingle();
-  if (previousRun) return { processed: false, reason: 'already_processed', run: previousRun };
-
-  const runId = randomUUID();
-  const { error: runError } = await supabaseAdmin.from('support_ai_runs').insert({
-    id: runId,
-    ticket_id: ticketId,
-    source_message_id: sourceMessageId || null,
-    event_key: eventKey,
-    mode,
-    status: 'processing',
-    requested_by: requesterId
-  });
-  if (runError) {
-    if (runError.code === '23505') return { processed: false, reason: 'already_processing' };
-    throw runError;
-  }
-
-  try {
-    const generated = await generateAnswer(supabaseAdmin, settings, ticket);
-
-    if (mode === 'draft') {
-      const { error: draftError } = await supabaseAdmin.from('support_ai_drafts').upsert({
-        ticket_id: ticketId,
-        source_event_key: eventKey,
-        content: generated.content,
-        model: generated.model,
-        status: 'pending',
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'ticket_id' });
-      if (draftError) throw draftError;
-      await updateRun(supabaseAdmin, runId, {
-        status: 'completed', result_type: 'draft', response_content: generated.content, model: generated.model
+    let suggestionResult: any = null;
+    try {
+      suggestionResult = await persistSupportSuggestion({
+        supabaseAdmin,
+        settings,
+        ticket,
+        ticketId,
+        sourceMessageId: null,
+        eventKey: `ticket:${ticketId}:initial-suggestion`,
+        requestedBy: requesterId,
+        autoReply: false,
       });
-      return { processed: true, mode, resultType: 'draft' };
+    } catch (suggestionError) {
+      console.error('[SupportAI] Falha ao preparar sugestão inicial:', suggestionError);
     }
 
-    const senderId = await resolveSystemSender(supabaseAdmin, settings.updated_by);
-    const { error: replyError } = await supabaseAdmin.from('support_messages').insert({
-      ticket_id: ticketId,
-      sender_id: senderId,
-      message: generated.content,
-      origin: 'support_ai',
-      sender_label: 'Equipe Evolução Clínica',
-      ai_run_id: runId
-    });
-    if (replyError) throw replyError;
-    await updateRun(supabaseAdmin, runId, {
-      status: 'completed', result_type: 'auto_reply', response_content: generated.content, model: generated.model
-    });
-    return { processed: true, mode, resultType: 'auto_reply' };
-  } catch (error: any) {
-    await updateRun(supabaseAdmin, runId, {
-      status: 'error', error_message: String(error?.message || error || 'Erro desconhecido').slice(0, 2000)
-    });
-    throw error;
+    return {
+      processed: Boolean(triageResult?.processed || suggestionResult?.processed),
+      firstContact: triageResult,
+      suggestion: suggestionResult,
+    };
   }
+
+  if (!sourceMessageId) throw new Error('Mensagem de origem ausente.');
+  const { data: sourceMessage, error } = await supabaseAdmin
+    .from('support_messages')
+    .select('id, ticket_id, sender_id, origin')
+    .eq('id', sourceMessageId)
+    .is('deleted_at', null)
+    .maybeSingle();
+  if (error) throw error;
+  if (!sourceMessage || sourceMessage.ticket_id !== ticketId || sourceMessage.sender_id !== requesterId || sourceMessage.origin === 'support_ai') {
+    return { processed: false, reason: 'invalid_source_message' };
+  }
+
+  const autoReplyEnabled = settings.enabled === true && settings.mode === 'auto_reply';
+  return persistSupportSuggestion({
+    supabaseAdmin,
+    settings,
+    ticket,
+    ticketId,
+    sourceMessageId,
+    eventKey: `message:${sourceMessageId}`,
+    requestedBy: requesterId,
+    autoReply: autoReplyEnabled,
+  });
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
