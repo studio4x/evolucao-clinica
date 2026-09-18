@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import { evaluateBrevoPreflight } from '../scripts/clinic-brevo-preflight.js';
+const input = { smtpAuthentication: true, senderConfigured: true, directFragment: true, localTrackingDeclaration: true, deliveryGate: 'OFF' };
+assert.equal(evaluateBrevoPreflight(input).status, 'MANUAL_PROVIDER_GATE');
+assert.equal(evaluateBrevoPreflight(input).senderProviderVerified, 'MANUAL');
+const provider = { source: 'authenticated_provider_browser_read_only', configuredFromExactMatch: true, smtpLoginExactMatch: true, stagingKeyMaskedSuffixMatch: true, senderProviderVerified: true, providerScopeIsolated: true, openTrackingDisabled: true, clickTrackingDisabled: true, linkRewritingDisabled: true, trackingPolicyKnown: true };
+assert.equal(evaluateBrevoPreflight({ ...input, provider }).status, 'PASS');
+for (const key of ['openTrackingDisabled', 'clickTrackingDisabled', 'linkRewritingDisabled', 'providerScopeIsolated']) assert.equal(evaluateBrevoPreflight({ ...input, provider: { ...provider, [key]: 'UNKNOWN' } }).status, 'MANUAL_PROVIDER_GATE');
+assert.equal(evaluateBrevoPreflight({ ...input, provider: { ...provider, anonymousTracking: true, clickTrackingDisabled: false } }).status, 'MANUAL_PROVIDER_GATE');
+assert.equal(evaluateBrevoPreflight({ ...input, provider: { ...provider, smtpLoginExactMatch: false } }).senderProviderVerified, 'MANUAL');
+assert.equal(evaluateBrevoPreflight({ ...input, provider, localTrackingDeclaration: false }).status, 'MANUAL_PROVIDER_GATE');
+assert.equal(evaluateBrevoPreflight({ ...input, provider, deliveryGate: 'ON' }).status, 'FAIL');
+assert.equal(evaluateBrevoPreflight({ ...input, provider, deliveryGate: 'SENSITIVE_UNREADABLE' }).status, 'MANUAL_PROVIDER_GATE');
+assert.equal(evaluateBrevoPreflight({ ...input, provider, smtpAuthentication: false }).status, 'FAIL');
+assert.equal(evaluateBrevoPreflight({ ...input, provider }).sendAttempted, false);
+console.log('Brevo preflight evidence, unknown state, shared scope and no-send contracts PASS');

@@ -1,13 +1,26 @@
 {
-  "status": "FAIL",
+  "status": "MANUAL_PROVIDER_GATE",
   "smtpAuthentication": true,
   "senderConfigured": true,
-  "senderProviderVerification": "PENDING",
-  "trackingDisabledDeclaration": false,
-  "providerTrackingAndClickRewritingVerification": "PENDING",
+  "senderProviderVerified": true,
+  "domainAuthenticated": true,
+  "providerScopeIsolated": false,
+  "providerScope": "SHARED",
+  "trackingPolicyKnown": true,
+  "anonymousTracking": false,
+  "openTrackingDisabled": "UNKNOWN",
+  "clickTrackingDisabled": "UNKNOWN",
+  "linkRewritingDisabled": "UNKNOWN",
+  "smtpMessageOverrideVerified": false,
   "directFragment": true,
-  "intermediaryRedirectDesigned": false,
-  "gate": "OFF",
+  "localTrackingDeclaration": false,
+  "deliveryGate": "SENSITIVE_UNREADABLE",
   "sendAttempted": false,
-  "realControlledDelivery": "WAITING_FOR_EXPLICIT_AUTHORIZATION"
+  "realControlledDelivery": "PENDING_EXPLICIT_RECIPIENT_AUTHORIZATION",
+  "providerConfigurationChanged": false,
+  "limitations": [
+    "Tracking UI exposes anonymization, not strict disable controls.",
+    "Official policy defaults to open/click tracking; no strict per-message SMTP override has been verified.",
+    "No SEND or delivered-message inspection was performed."
+  ]
 }

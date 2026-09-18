@@ -1,0 +1,62 @@
+{
+  "phase": "6B",
+  "run": "6fc903ad-2d28-4c5a-90bf-ba8ab90adf4c",
+  "staging": "hwkdwinfckmjoriqxbjk",
+  "interactive": "PASS",
+  "stripeLivemode": false,
+  "webhookAfterInteractive": "PASS",
+  "checkout": {
+    "id": "cs_test_b1sVEeF9j4XngRFufgnfFXBb7yyj31gKIsOrjQs7Q9VW1ZXf1RmMcnFjDj",
+    "status": "complete",
+    "paymentStatus": "paid",
+    "livemode": false,
+    "currency": "brl",
+    "successOrigin": "https://staging.evolucaoclinica.app.br"
+  },
+  "subscription": {
+    "id": "sub_1UH31RPI1KSTkIQAC97ceA2N",
+    "status": "active",
+    "livemode": false,
+    "baseQuantity": 1,
+    "seatQuantity": 3
+  },
+  "persisted": {
+    "financial_status": "active",
+    "contracted_seats": 3,
+    "entitlement": "full",
+    "contracts": 1,
+    "completed_webhooks": 1
+  },
+  "browser": {
+    "returnedToStaging": true,
+    "persistedConfirmationVisible": true,
+    "successPath": "/painel/clinica/contratacao/sucesso",
+    "interaction": "Hosted Checkout UI with official Test card"
+  },
+  "pilotGateMatrix": {
+    "status": "PASS",
+    "probes": [
+      {
+        "global": true,
+        "orgAFlag": true,
+        "orgBFlag": false,
+        "orgARead": "ALLOWED_OWNER",
+        "orgBRead": "DENIED",
+        "publicDashboardAndRls": "PASS"
+      },
+      {
+        "global": false,
+        "orgAFlag": true,
+        "orgBFlag": false,
+        "orgARead": "DENIED",
+        "orgBRead": "DENIED",
+        "publicDashboardAndRls": "PASS"
+      }
+    ],
+    "financialFixtureB": "SYNTHETIC_DB_ONLY"
+  },
+  "cleanup": "PASS",
+  "stripeCleanup": "PASS",
+  "gateFinal": "OFF",
+  "preexistingIdsPreserved": true
+}

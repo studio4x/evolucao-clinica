@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { assertPilotGateMatrix } from '../scripts/clinic-pilot-gates.js';
+import {readFileSync} from 'node:fs';
+const probes = [true,false].map(global => ({global,orgAFlag:true,orgBFlag:false,orgARead:global?'ALLOWED_OWNER':'DENIED',orgBRead:'DENIED',publicDashboardAndRls:'PASS'}));
+assertPilotGateMatrix(probes);
+const runtimeEvidence=JSON.parse(readFileSync('docs/clinic-f6-evidence/pilot-gate-matrix.json','utf8').replace(/^\uFEFF/,''));
+assert.equal(runtimeEvidence.status,'PASS');assert.equal(runtimeEvidence.financialFixtureB,'SYNTHETIC_DB_ONLY');assertPilotGateMatrix(runtimeEvidence.probes);
+assert.throws(()=>assertPilotGateMatrix(probes.slice(0,1)));
+assert.throws(()=>assertPilotGateMatrix([probes[0], {...probes[1],orgARead:'ALLOWED_OWNER'}]));
+assert.throws(()=>assertPilotGateMatrix([{...probes[0],orgBRead:'ALLOWED_OWNER'},probes[1]]));
+assert.throws(()=>assertPilotGateMatrix([{...probes[0],publicDashboardAndRls:'UNKNOWN'},probes[1]]));
+console.log('Pilot evidence rejects missing states, tenant leakage and global kill-switch bypass PASS');

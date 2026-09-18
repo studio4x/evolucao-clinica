@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import { splitSql, migrationObjects, compareObject, sqlBodyHashInput } from '../scripts/clinic-migration-manifest.js';
+assert.equal(splitSql("select 'a;b'; DO $$ BEGIN perform 1; END $$; -- ignored;\n select 2;").length, 3);
+const manifest = migrationObjects("CREATE TABLE public.synthetic (id uuid PRIMARY KEY, created_by uuid NOT NULL, note text DEFAULT 'a,b', CONSTRAINT synthetic_name CHECK(note <> '')); ALTER TABLE public.synthetic ALTER COLUMN created_by DROP NOT NULL; CREATE OR REPLACE FUNCTION private.synthetic(p_id uuid, p_at timestamptz DEFAULT NULL) RETURNS boolean LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, public AS $$ SELECT true; $$; REVOKE ALL ON FUNCTION private.synthetic(uuid,timestamptz) FROM PUBLIC,anon;");
+assert.ok(manifest.objects.some(object => object.key === 'public.synthetic.note' && object.attributes.default === "'a,b'"));
+assert.ok(manifest.objects.some(object => object.key === 'public.synthetic.created_by' && object.attributes.nullable === true));
+const fn = manifest.objects.find(object => object.kind === 'function')!;
+assert.equal(fn.key, 'private.synthetic(uuid,timestamp with time zone)');
+const runtime = { function: [{ key: fn.key, body: fn.attributes.body, definer: true, searchPath: 'pg_catalog, public' }] };
+assert.equal(compareObject(fn, runtime).status, 'MATCHES_RUNTIME');
+assert.equal(compareObject(fn, { function: [{ ...runtime.function[0], body: 'SELECT false;' }] }).status, 'DRIFT');
+assert.equal(compareObject(fn, { function: [{ ...runtime.function[0], searchPath: 'pg_temp' }] }).status, 'DRIFT');
+assert.equal(compareObject(fn, {}).status, 'DRIFT');
+assert.notEqual(sqlBodyHashInput("select 'a  b--c';"), sqlBodyHashInput("select 'a b--c';"));
+assert.equal(compareObject(fn, {function:[{...runtime.function[0],searchPath:'pg_catalog, private'}]}).status,'DRIFT');
+assert.equal(migrationObjects('CREATE TABLE public.check_fixture(id boolean PRIMARY KEY CHECK(id));').objects.find(object=>object.name==='check_fixture_id_check')?.attributes.type,'c');
+assert.equal(migrationObjects('GRANT SELECT(id,name) ON public.fixture TO authenticated;').objects.length,2);
+const policy = migrationObjects('CREATE POLICY synthetic_read ON public.synthetic FOR SELECT TO authenticated USING (false);').objects[0];
+assert.equal(compareObject(policy, { policy: [{ key: policy.key, cmd: 'SELECT', roles: ['authenticated'] }] }).status, 'PARTIAL_MATCH');
+assert.equal(compareObject(policy, { policy: [{ key: policy.key, cmd: 'SELECT', roles: ['anon'] }] }).status, 'DRIFT');
+const evidence=JSON.parse(readFileSync('docs/clinic-f6-evidence/migration-provenance.json','utf8'));
+assert.equal(evidence.staging,'hwkdwinfckmjoriqxbjk');assert.equal(evidence.readOnly,true);assert.equal(evidence.provenance01to22,'RECONCILED_WITH_LIMITATIONS');
+for(const row of evidence.migrations){assert.equal(row.sha256,createHash('sha256').update(readFileSync(`supabase/clinic-migrations/${row.filename}`,'utf8').replace(/\r\n/g,'\n')).digest('hex'));assert.notEqual(row.status,'DRIFT');if(row.number<=22){assert.equal(row.formal_staging_history,'NOT_PRESENT');assert.deepEqual(row.history,[]);}else assert.equal(row.formal_staging_history,'RECONCILED');}
+console.log('migration SQL parsing, exact function drift, ACL and bounded semantic limitations PASS');

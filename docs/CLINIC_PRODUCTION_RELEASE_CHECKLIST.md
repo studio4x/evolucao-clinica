@@ -6,10 +6,11 @@ O relatório técnico está em `FASE_6_HOMOLOGACAO_LANCAMENTO_CONTROLADO.md`; o 
 ## Gates bloqueantes
 
 - [ ] **LEGAL / PRIVACY: BLOCKING FOR REAL DATA PILOT.** Validação apropriada de privacidade, base jurídica, responsabilidades clínicas, retenção/exclusão, compartilhamento entre profissionais, consentimento quando aplicável e termos do Plano Clínica. Status PENDING; sem conclusão jurídica inferida.
-- [ ] Brevo: remetente verificado no provider; tracking e click tracking OFF; sem rewriting. Autorização explícita para exatamente um destinatário controlado antes do SEND. Confirmar delivered, recebimento, raw link com `#invite`, aceite pelo link recebido e cleanup. Nenhum endereço pode ser inferido de configuração/histórico.
+- [ ] Brevo: remetente VERIFIED em leitura do provider. Conta SHARED; desligamento estrito de open/click tracking e rewriting UNKNOWN. Resolver escopo/tracking com prova suportada, sem alterar settings globais do app legado. Autorização explícita para exatamente um destinatário controlado antes do SEND. Confirmar delivered, recebimento, raw link com `#invite`, aceite pelo link recebido e cleanup. Nenhum endereço pode ser inferido de configuração/histórico.
 - [ ] Stripe Live: rodada separada autorizada, conta/keys/webhook/catalog price IDs/environment confirmados; sem reutilizar Test IDs. A homologação Test não aprova Live.
-- [ ] Checkout interativo Test concluído, pago e confirmado por webhook/banco, caso o relatório técnico ainda indique MANUAL_GATE.
-- [ ] Proveniência de aplicação das migrations 01–22 reconciliada e comparação dos corpos de funções registrada. Manifesto completo e equivalente canônico de produção revisado.
+- [x] Checkout interativo Test concluído pela UI, pago e confirmado por webhook/banco na Fase 6B; cleanup PASS. Não aprova Stripe Live.
+- [x] Proveniência atual de 01–22 reconciliada com limitações, comparação de funções e ACL registrada por objeto. Histórico formal permanece NOT_PRESENT.
+- [ ] Limitações semânticas da reconciliação revisadas; equivalente canônico de produção implementado/revisado/autorizado em rodada separada. Desenho atual DESIGN_READY_FOR_HUMAN_REVIEW.
 - [ ] Backend/template de convites e billing compatíveis com production por contrato explícito; guards staging/Sandbox não podem ser retirados sem os checks equivalentes.
 
 ## Sequência futura, somente após aprovação humana
@@ -33,5 +34,5 @@ Não apagar schema ou dados: preservar organizations, memberships, pacientes, ev
 ## Estado desta rodada
 
 Piloto permitido: somente interno sintético em staging. Piloto com dados reais: **BLOCKED_BY_LEGAL_GATE**.
-Entrega real Brevo: **PENDING_EXPLICIT_AUTHORIZATION**. Legal: **PENDING**. Release produção: **BLOCKED**.
+Entrega real Brevo: **PENDING_EXPLICIT_RECIPIENT_AUTHORIZATION**. Provider preflight: **MANUAL_PROVIDER_GATE** (escopo SHARED, tracking estrito UNKNOWN). Legal: **PENDING**. Release produção: **BLOCKED**.
 Esta lista é a sequência futura a revisar, não uma autorização de merge/deploy/apply/rollout.

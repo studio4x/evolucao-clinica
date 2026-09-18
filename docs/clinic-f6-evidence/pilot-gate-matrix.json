@@ -1,0 +1,22 @@
+{
+  "status": "PASS",
+  "probes": [
+    {
+      "global": true,
+      "orgAFlag": true,
+      "orgBFlag": false,
+      "orgARead": "ALLOWED_OWNER",
+      "orgBRead": "DENIED",
+      "publicDashboardAndRls": "PASS"
+    },
+    {
+      "global": false,
+      "orgAFlag": true,
+      "orgBFlag": false,
+      "orgARead": "DENIED",
+      "orgBRead": "DENIED",
+      "publicDashboardAndRls": "PASS"
+    }
+  ],
+  "financialFixtureB": "SYNTHETIC_DB_ONLY"
+}

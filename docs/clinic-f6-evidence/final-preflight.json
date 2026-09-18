@@ -1,16 +1,15 @@
 {
-  "ref": "hwkdwinfckmjoriqxbjk",
-  "projectId": "prj_Hmm2uRREtw4qOqPf3Lhg78702hlM",
-  "teamId": "evolucao-clinica",
+  "phase": "6B",
+  "staging": "hwkdwinfckmjoriqxbjk",
+  "origin": "https://staging.evolucaoclinica.app.br",
   "deployment": {
-    "id": "dpl_BikeGnXz8VSkwmqLcavfJpgzTFhj",
+    "id": "dpl_D1yAs63qvBreNw7ipLozFSjzoJy1",
     "state": "READY",
-    "sha": "c73d589d2b0d1910b48e808104acb80628243698",
+    "sha": "76e47cad99bea38472ce2584cb3e4b1b3842e581",
     "branch": "feat/clinicas"
   },
   "health": {
     "status": 200,
-    "redirected": false,
     "json": true,
     "body": {
       "status": "ok"
@@ -24,23 +23,91 @@
     "GOOGLE_INTEGRATIONS_ENABLED": "SENSITIVE_UNREADABLE",
     "VITE_GOOGLE_INTEGRATIONS_ENABLED": "false"
   },
-  "baseline": [
-    {
-      "environment": "staging",
+  "acceptedGateWrites": {
+    "CLINIC_FEATURE_ENABLED": "false",
+    "VITE_CLINIC_FEATURE_ENABLED": "false",
+    "CLINIC_INVITATION_DELIVERY_ENABLED": "false",
+    "CLINIC_BILLING_ENABLED": "false",
+    "GOOGLE_INTEGRATIONS_ENABLED": "false",
+    "VITE_GOOGLE_INTEGRATIONS_ENABLED": "false"
+  },
+  "serverSensitiveReadback": "SENSITIVE_UNREADABLE",
+  "sqlGate": "OFF",
+  "edgeBilling": "OFF",
+  "cleanup": {
+    "status": "PASS",
+    "counts": [
+      {
+        "relation": "public.organizations",
+        "remaining": 0
+      },
+      {
+        "relation": "public.organization_memberships",
+        "remaining": 0
+      },
+      {
+        "relation": "public.organization_feature_flags",
+        "remaining": 0
+      },
+      {
+        "relation": "public.organization_invitations",
+        "remaining": 0
+      },
+      {
+        "relation": "public.organization_patients",
+        "remaining": 0
+      },
+      {
+        "relation": "public.patient_professional_assignments",
+        "remaining": 0
+      },
+      {
+        "relation": "private.organization_admin_events",
+        "remaining": 0
+      },
+      {
+        "relation": "private.organization_subscriptions",
+        "remaining": 0
+      },
+      {
+        "relation": "private.organization_checkout_attempts",
+        "remaining": 0
+      },
+      {
+        "relation": "private.clinic_billing_operations",
+        "remaining": 0
+      },
+      {
+        "relation": "private.clinic_stripe_events",
+        "remaining": 0
+      },
+      {
+        "relation": "private.clinic_stripe_transactions",
+        "remaining": 0
+      },
+      {
+        "relation": "private.organization_invitation_handoffs",
+        "remaining": 0
+      },
+      {
+        "relation": "private.organization_invitation_deliveries",
+        "remaining": 0
+      }
+    ],
+    "baseline": {
       "gate": false,
       "organizations": 0,
-      "professionals": 3
-    }
-  ],
-  "stripe": {
-    "accountId": "acct_1TmBy9PI1KSTkIQA",
-    "keyMode": "test"
+      "professionals": 3,
+      "auth_users": 3,
+      "fixture_users": 0,
+      "fixture_evolutions": 0
+    },
+    "preexistingIdsPreserved": true,
+    "stripeSubscriptionsCanceled": true,
+    "stripeCustomersDeleted": true
   },
-  "brevo": {
-    "host": "smtp-relay.brevo.com",
-    "credentialConfigured": true,
-    "fromConfigured": true,
-    "trackingDisabled": "false",
-    "deliveryEnabled": "SENSITIVE_UNREADABLE"
-  }
+  "delivery": "PENDING_EXPLICIT_RECIPIENT_AUTHORIZATION",
+  "legal": "PENDING",
+  "production": "BLOCKED / UNTOUCHED",
+  "main": "UNTOUCHED"
 }
