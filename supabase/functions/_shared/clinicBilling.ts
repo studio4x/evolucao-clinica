@@ -17,7 +17,7 @@ export class ClinicBillingHttpError extends Error {
 export function clinicJsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...clinicCorsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+    headers: { ...clinicCorsHeaders, "Content-Type": "application/json", "Cache-Control": "private, no-store", "Vary": "Authorization" },
   });
 }
 

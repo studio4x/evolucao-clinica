@@ -42,12 +42,15 @@ export async function edgeSecrets(runtime: any, values?: Record<string, string>)
 }
 
 export async function stripe(runtime: any, path: string, method = 'GET', fields?: Record<string, string>) {
+  assert.ok(!runtime.livemodeDetected, 'ABORT: further Stripe operations blocked');
   const response = await fetch(`https://api.stripe.com/v1/${path}`, {
     method, headers: { Authorization: `Bearer ${runtime.stripeKey}`, 'Content-Type': 'application/x-www-form-urlencoded' },
     ...(fields ? { body: new URLSearchParams(fields) } : {}),
   });
   const data = await response.json();
-  assert.ok(data.livemode !== true && !data.data?.some((row: any) => row.livemode === true), 'ABORT: Stripe livemode detected');
+  const live = data.livemode === true || data.data?.object?.livemode === true || (Array.isArray(data.data) && data.data.some((row: any) => row.livemode === true));
+  if (live) runtime.livemodeDetected = true;
+  assert.ok(!live, 'ABORT: Stripe livemode detected');
   if (!response.ok) throw new Error(`stripe_test_${response.status}_${data.error?.code || data.error?.type || 'failed'}`);
   return data;
 }

@@ -12,6 +12,7 @@ import {
   requireClinicUser,
   requireJsonObject,
   requireUuid,
+  requireSeats,
   rpc,
   assertClinicBillingMutationStatus,
   recoverStaleClinicBillingOperation,
@@ -36,7 +37,7 @@ serve(async (req) => {
     const stripe = createClinicStripe(config.secretKey);
     await assertSandboxAccount(stripe);
     organizationIdForCleanup = organizationId;
-    const targetSeats = Number(body.contractedSeats);
+    const targetSeats = requireSeats(body.contractedSeats);
     const idempotencyKey = requireUuid(body.idempotencyKey, "idempotencyKey");
     let recovery = await recoverStaleClinicBillingOperation(admin, stripe, organizationId, user.id);
     if (recovery?.status === "pending_payment") {
