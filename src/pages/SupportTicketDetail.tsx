@@ -53,6 +53,7 @@ export default function SupportTicketDetail() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const aiInitialDraftRequestedRef = useRef<string | null>(null);
 
   const loadAiState = async (silent = false) => {
     if (!ticketId || !isAdmin) return;
@@ -65,6 +66,19 @@ export default function SupportTicketDetail() {
       ]);
       setAiSettings(settings);
       setAiDraft(draft);
+
+      if (!draft && aiInitialDraftRequestedRef.current !== ticketId) {
+        aiInitialDraftRequestedRef.current = ticketId;
+        try {
+          await regenerateSupportAiDraft(ticketId);
+          const generatedDraft = await fetchSupportAiDraft(ticketId);
+          setAiDraft(generatedDraft);
+        } catch (generationError: any) {
+          aiInitialDraftRequestedRef.current = null;
+          console.error('[SupportAI] Erro ao gerar sugestão inicial:', generationError);
+          setAiError(generationError.message || 'Não foi possível gerar a sugestão de resposta.');
+        }
+      }
     } catch (err: any) {
       console.error('[SupportAI] Erro ao carregar estado:', err);
       if (!silent) setAiError(err.message || 'Não foi possível carregar a IA do atendimento.');
@@ -317,7 +331,7 @@ export default function SupportTicketDetail() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] md:h-[calc(100vh-80px)] space-y-4 pb-4">
+    <div className="flex min-h-[calc(100vh-140px)] flex-col space-y-4 pb-4 md:min-h-[calc(100vh-80px)]">
       <div className="flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-3">
           <Link to={isAdmin ? '/admin/support' : '/painel/support'} className="p-2 rounded-2xl hover:bg-white text-brand-text-muted hover:text-brand-text border border-transparent hover:border-brand-border bg-white/40 backdrop-blur-sm transition-all"><ArrowLeft size={18} /></Link>
@@ -373,7 +387,7 @@ export default function SupportTicketDetail() {
         </div>
       </div>
 
-      {isAdmin && aiSettings?.enabled && aiSettings.mode === 'draft' && (
+      {isAdmin && (
         <div className="shrink-0 bg-white border border-brand-primary/20 rounded-3xl p-4 shadow-sm space-y-3">
           <div className="flex items-start gap-2.5">
             <div className="p-2 rounded-xl bg-brand-primary/10 text-brand-primary"><Bot size={18} /></div>
@@ -385,7 +399,7 @@ export default function SupportTicketDetail() {
 
           {aiError && <div className="text-xs text-rose-700 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">{aiError}</div>}
 
-          {aiDraft?.status === 'pending' ? (
+          {aiDraft ? (
             <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/[0.03] p-4 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-brand-primary"><Sparkles size={15} /><span className="text-xs font-bold">Resposta sugerida pela IA</span>{aiDraft.model && <span className="text-[10px] text-brand-text-muted">{aiDraft.model}</span>}</div>
@@ -394,16 +408,21 @@ export default function SupportTicketDetail() {
               <div className="text-sm text-brand-text leading-relaxed whitespace-pre-wrap">{aiDraft.content}</div>
               <div className="flex flex-wrap gap-2">
                 <button type="button" onClick={handleUseDraft} className="px-3 py-2 rounded-xl bg-brand-primary text-white text-xs font-bold">Usar no editor</button>
-                <button type="button" onClick={handleDismissDraft} className="px-3 py-2 rounded-xl border border-gray-200 text-gray-600 text-xs font-bold">Descartar</button>
               </div>
             </div>
           ) : (
-            <button type="button" onClick={handleRegenerateDraft} disabled={aiLoading} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-brand-primary/20 text-brand-primary text-xs font-bold hover:bg-brand-primary/5"><Sparkles size={13} />{aiLoading ? 'Gerando resposta...' : 'Gerar sugestão para este ticket'}</button>
+            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-brand-primary/15 bg-brand-primary/[0.03] text-brand-primary text-xs font-semibold">
+              {aiLoading ? <RefreshCw size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              <span>{aiLoading ? 'Gerando sugestão de resposta...' : 'Preparando sugestão de resposta...'}</span>
+              {!aiLoading && aiError && (
+                <button type="button" onClick={handleRegenerateDraft} className="ml-2 font-bold hover:underline">Tentar novamente</button>
+              )}
+            </div>
           )}
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto bg-brand-bg/40 border border-brand-border rounded-3xl p-5 space-y-4 min-h-0 flex flex-col shadow-inner">
+      <div className="h-[360px] shrink-0 overflow-y-auto bg-brand-bg/40 border border-brand-border rounded-3xl p-5 space-y-4 flex flex-col shadow-inner sm:h-[400px] lg:h-[440px]">
         {messages.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-center text-brand-text-muted text-xs p-8">Nenhuma mensagem registrada. Inicie a conversa digitando no campo abaixo.</div>
         ) : (
