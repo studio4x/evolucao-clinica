@@ -187,7 +187,22 @@ export default function SupportTicketDetail() {
   };
 
   const handleAiModeChange = async (mode: SupportAiMode) => {
-    if (!aiSettings) return;
+    if (!aiSettings || mode === aiSettings.mode) return;
+
+    if (mode === 'auto_reply') {
+      const confirmed = await showConfirm(
+        'No modo automático, as respostas geradas pela IA serão enviadas diretamente ao profissional, sem revisão humana prévia. Deseja ativar este modo?',
+        {
+          title: 'Ativar respostas automáticas',
+          confirmLabel: 'Ativar modo automático',
+          cancelLabel: 'Cancelar',
+          variant: 'warning',
+          icon: 'question',
+        }
+      );
+      if (!confirmed) return;
+    }
+
     try {
       setAiLoading(true);
       setAiError('');
