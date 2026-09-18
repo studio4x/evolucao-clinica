@@ -556,6 +556,83 @@ export async function getFolderHierarchy(
   return hierarchy.reverse();
 }
 
+export type GoogleDriveUploadedFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  webViewLink: string;
+};
+
+export async function uploadFileToGoogleDrive(
+  googleAccessToken: string,
+  file: Blob,
+  fileName: string,
+  parentFolderId?: string
+): Promise<GoogleDriveUploadedFile> {
+  const mimeType = file.type || 'application/octet-stream';
+  const metadata = {
+    name: fileName,
+    mimeType,
+    parents: parentFolderId ? [parentFolderId] : undefined,
+  };
+
+  const boundary = `evolucao_clinica_${Date.now().toString(16)}`;
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelimiter = `\r\n--${boundary}--`;
+
+  const reader = new FileReader();
+  const base64Data = await new Promise<string>((resolve, reject) => {
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      const [, base64 = ''] = dataUrl.split(',');
+      if (!base64) {
+        reject(new Error('Não foi possível preparar o arquivo para envio ao Google Drive.'));
+        return;
+      }
+      resolve(base64);
+    };
+    reader.onerror = () => reject(new Error('Não foi possível ler o arquivo selecionado.'));
+    reader.readAsDataURL(file);
+  });
+
+  const multipartRequestBody =
+    delimiter +
+    'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+    JSON.stringify(metadata) +
+    delimiter +
+    `Content-Type: ${mimeType}\r\n` +
+    'Content-Transfer-Encoding: base64\r\n\r\n' +
+    base64Data +
+    closeDelimiter;
+
+  const response = await googleApiFetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${googleAccessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body: multipartRequestBody,
+    },
+    'Patient file upload'
+  );
+
+  const data = await response.json();
+  if (!data?.id) {
+    throw new Error('O Google Drive não retornou a identificação do arquivo enviado.');
+  }
+
+  return {
+    id: String(data.id),
+    name: String(data.name || fileName),
+    mimeType: String(data.mimeType || mimeType),
+    size: Number(data.size || file.size || 0),
+    webViewLink: String(data.webViewLink || `https://drive.google.com/file/d/${data.id}/view`),
+  };
+}
+
 export async function uploadPdfToGoogleDrive(
   googleAccessToken: string,
   pdfBlob: Blob,
