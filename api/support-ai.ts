@@ -95,7 +95,7 @@ const buildConversationContext = async (supabaseAdmin: SupabaseClient, ticket: a
     .from('support_messages')
     .select('id, sender_id, message, origin, sender_label, created_at')
     .eq('ticket_id', ticket.id)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(40);
 
   if (error) throw error;
@@ -110,7 +110,7 @@ const buildConversationContext = async (supabaseAdmin: SupabaseClient, ticket: a
     roleById = new Map((profiles || []).map((profile: any) => [String(profile.id), String(profile.role)]));
   }
 
-  const history = (messages || []).map((message: any) => {
+  const history = [...(messages || [])].reverse().map((message: any) => {
     const isAi = message.origin === 'support_ai';
     const isAdmin = roleById.get(String(message.sender_id)) === 'admin';
     const speaker = isAi ? 'Assistente de suporte' : isAdmin ? 'Atendente' : 'Profissional';
