@@ -10,13 +10,14 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import SessionSignaturePad from '../components/patients/sessions/SessionSignaturePad';
 import { showAlert, showConfirm } from '../store/modalStore';
 import {
-  createPatientSession, createSignatureSignedUrl, fetchPatientSessions, revokePatientSessionSignature,
+  cancelPatientSessionPackage, createPatientSession, createPatientSessionPackage, createSignatureSignedUrl,
+  fetchPatientSessionPackages, fetchPatientSessions, fetchPatientSessionsRange, revokePatientSessionSignature,
   savePatientSessionSignature, softDeletePatientSession, updatePatientSession,
-  type PatientSession, type PatientSessionStatus
+  type PatientSession, type PatientSessionPackage, type PatientSessionStatus
 } from '../services/patientSessions';
 import { downloadPatientSessionsPdf, generatePatientSessionsPdf, getPatientSessionsPdfFileName } from '../utils/patientSessionsPdf';
 
-type FormState = { date: string; time: string; status: PatientSessionStatus; notes: string };
+type FormState = { date: string; time: string; status: PatientSessionStatus; notes: string; evolutionId: string; packageId: string };
 const today = () => {
   const date = new Date();
   const offset = date.getTimezoneOffset() * 60_000;
@@ -44,10 +45,20 @@ export default function PatientSessions() {
   const [professional, setProfessional] = useState<any>(null);
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [sessions, setSessions] = useState<PatientSession[]>([]);
+  const [packages, setPackages] = useState<PatientSessionPackage[]>([]);
+  const [evolutions, setEvolutions] = useState<any[]>([]);
+  const [statusFilter, setStatusFilter] = useState<'all' | PatientSessionStatus>('all');
+  const [signatureFilter, setSignatureFilter] = useState<'all' | 'signed' | 'unsigned'>('all');
+  const [exportMode, setExportMode] = useState<'month' | 'year' | 'custom'>('month');
+  const [exportStart, setExportStart] = useState(today());
+  const [exportEnd, setExportEnd] = useState(today());
+  const [showPackageForm, setShowPackageForm] = useState(false);
+  const [packageTarget, setPackageTarget] = useState(6);
+  const [packageLabel, setPackageLabel] = useState('Pacote de sessões');
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [formSession, setFormSession] = useState<PatientSession | null | undefined>(undefined);
-  const [form, setForm] = useState<FormState>({ date: today(), time: currentTime(), status: 'completed', notes: '' });
+  const [form, setForm] = useState<FormState>({ date: today(), time: currentTime(), status: 'completed', notes: '', evolutionId: '', packageId: '' });
   const [signSession, setSignSession] = useState<PatientSession | null>(null);
   const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null);
   const [signerType, setSignerType] = useState<'patient' | 'responsible'>('patient');
@@ -57,16 +68,21 @@ export default function PatientSessions() {
     if (!id || !user) return;
     setLoading(true);
     try {
-      const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData] = await Promise.all([
-        supabase.from('patients').select('id, full_name, professional_id').eq('id', id).single(),
+      const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, packageData, evolutionResult] = await Promise.all([
+        supabase.from('patients').select('id, full_name, professional_id, session_days, session_time').eq('id', id).single(),
         supabase.from('professionals').select('id, full_name, professional_register').eq('id', user.id).single(),
         fetchPatientSessions(id, month),
+        fetchPatientSessionPackages(id),
+        supabase.from('evolutions').select('id, session_date, session_time, created_at').eq('patient_id', id).eq('professional_id', user.id).eq('transcription_status', 'completed').order('session_date', { ascending: false, nullsFirst: false }),
       ]);
       if (patientError) throw patientError;
       if (profError) throw profError;
       setPatient(patientData);
       setProfessional(profData);
+      if (evolutionResult.error) throw evolutionResult.error;
       setSessions(sessionData);
+      setPackages(packageData);
+      setEvolutions(evolutionResult.data || []);
     } catch (error: any) {
       console.error('[PatientSessions] Falha ao carregar:', error);
       void showAlert(error.message || 'Não foi possível carregar o controle de sessões.', { title: 'Controle de sessões', variant: 'error', icon: 'warning' });
@@ -82,10 +98,19 @@ export default function PatientSessions() {
     [month]
   );
   const signedCount = sessions.filter((item) => item.signature).length;
+  const activePackage = packages.find((item) => item.status === 'active') || null;
+  const filteredSessions = sessions.filter((session) => {
+    if (statusFilter !== 'all' && session.status !== statusFilter) return false;
+    if (signatureFilter === 'signed' && !session.signature) return false;
+    if (signatureFilter === 'unsigned' && session.signature) return false;
+    return true;
+  });
+  const habitualToday = Boolean(patient?.session_days?.includes(new Date().getDay()));
+  const sameDayEvolutions = evolutions.filter((evolution) => evolution.session_date === form.date);
 
   const openCreate = (quick = false) => {
     setFormSession(null);
-    setForm({ date: today(), time: quick ? currentTime() : '', status: 'completed', notes: '' });
+    setForm({ date: today(), time: quick ? currentTime() : (patient?.session_time?.slice(0, 5) || ''), status: 'completed', notes: '', evolutionId: '', packageId: activePackage?.id || '' });
   };
 
   const openEdit = (session: PatientSession) => {
@@ -94,7 +119,7 @@ export default function PatientSessions() {
       return;
     }
     setFormSession(session);
-    setForm({ date: session.sessionDate, time: session.sessionTime?.slice(0, 5) || '', status: session.status, notes: session.notes || '' });
+    setForm({ date: session.sessionDate, time: session.sessionTime?.slice(0, 5) || '', status: session.status, notes: session.notes || '', evolutionId: session.evolutionId || '', packageId: session.packageId || '' });
   };
 
   const saveForm = async () => {
@@ -103,12 +128,12 @@ export default function PatientSessions() {
     try {
       if (formSession) {
         await updatePatientSession(formSession, {
-          sessionDate: form.date, sessionTime: form.time || null, status: form.status, notes: form.notes
+          sessionDate: form.date, sessionTime: form.time || null, status: form.status, notes: form.notes, evolutionId: form.evolutionId || null, packageId: form.packageId || null
         });
       } else {
         await createPatientSession({
           patientId: id, professionalId: user.id, sessionDate: form.date,
-          sessionTime: form.time || null, status: form.status, notes: form.notes
+          sessionTime: form.time || null, status: form.status, notes: form.notes, evolutionId: form.evolutionId || null, packageId: form.packageId || null
         });
       }
       setFormSession(undefined);
@@ -156,11 +181,23 @@ export default function PatientSessions() {
   };
 
   const exportPdf = async () => {
-    if (!patient || !professional) return;
+    if (!patient || !professional || !id) return;
     setWorking(true);
     try {
+      let exportSessions = sessions;
+      let exportMonth = month;
+      if (exportMode === 'year') {
+        const start = `${month.getFullYear()}-01-01`;
+        const end = `${month.getFullYear()}-12-31`;
+        exportSessions = await fetchPatientSessionsRange(id, start, end);
+        exportMonth = new Date(month.getFullYear(), 0, 1);
+      } else if (exportMode === 'custom') {
+        if (!exportStart || !exportEnd || exportStart > exportEnd) throw new Error('Informe um intervalo de datas válido.');
+        exportSessions = await fetchPatientSessionsRange(id, exportStart, exportEnd);
+        exportMonth = new Date(`${exportStart}T12:00:00`);
+      }
       const signatureImages: Record<string, string> = {};
-      for (const session of sessions) {
+      for (const session of exportSessions) {
         if (!session.signature) continue;
         const url = await createSignatureSignedUrl(session.signature.signaturePath, 120);
         const response = await fetch(url);
@@ -170,12 +207,34 @@ export default function PatientSessions() {
         patientName: patient.full_name,
         professionalName: professional.full_name,
         professionalRegister: professional.professional_register,
-        month, sessions, signatureImages,
+        month: exportMonth, sessions: exportSessions, signatureImages,
       });
-      await downloadPatientSessionsPdf(doc, getPatientSessionsPdfFileName(patient.full_name, month));
+      await downloadPatientSessionsPdf(doc, getPatientSessionsPdfFileName(patient.full_name, exportMonth));
     } catch (error: any) {
       void showAlert(error.message || 'Não foi possível gerar o PDF.', { title: 'Exportar PDF', variant: 'error', icon: 'warning' });
     } finally { setWorking(false); }
+  };
+
+  const createPackage = async () => {
+    if (!id || !user || packageTarget < 1) return;
+    setWorking(true);
+    try {
+      await createPatientSessionPackage({ patientId: id, professionalId: user.id, targetSessions: packageTarget, label: packageLabel });
+      setShowPackageForm(false);
+      await load();
+    } catch (error: any) {
+      void showAlert(error.message || 'Não foi possível iniciar o pacote.', { title: 'Pacote de sessões', variant: 'error', icon: 'warning' });
+    } finally { setWorking(false); }
+  };
+
+  const cancelPackage = async () => {
+    if (!activePackage) return;
+    const confirmed = await showConfirm('O acompanhamento deste pacote será encerrado. As sessões já registradas permanecem no histórico.', { title: 'Cancelar pacote?', confirmLabel: 'Cancelar pacote', variant: 'danger' });
+    if (!confirmed) return;
+    setWorking(true);
+    try { await cancelPatientSessionPackage(activePackage.id); await load(); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível cancelar o pacote.', { title: 'Pacote de sessões', variant: 'error', icon: 'warning' }); }
+    finally { setWorking(false); }
   };
 
   return (
@@ -209,6 +268,50 @@ export default function PatientSessions() {
         </div>
       </div>
 
+      {habitualToday && (
+        <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/5 p-4 text-sm text-brand-text">
+          <strong className="text-brand-primary">Atendimento habitual hoje.</strong>
+          <span className="ml-1">Este paciente tem {patient?.session_time ? `horário habitual às ${String(patient.session_time).slice(0,5)}` : 'sessão habitual configurada'}.</span>
+          <button type="button" onClick={() => openCreate(true)} className="ml-2 font-bold text-brand-primary hover:underline">Registrar sessão</button>
+        </div>
+      )}
+
+      <div className="card p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-semibold text-brand-text">Pacote de sessões</h3>
+            <p className="text-xs text-brand-text-muted">Opcional: acompanhe apenas a quantidade de sessões, sem registrar cobrança ou valores.</p>
+          </div>
+          {!activePackage && <button type="button" onClick={() => setShowPackageForm(true)} className="btn-outline"><Plus size={15} /><span>Iniciar pacote</span></button>}
+        </div>
+        {activePackage ? (
+          <div className="mt-4">
+            <div className="flex items-end justify-between gap-3">
+              <div><p className="text-sm font-semibold text-brand-text">{activePackage.label}</p><p className="text-xs text-brand-text-muted">{activePackage.completedSessions} de {activePackage.targetSessions} sessões realizadas</p></div>
+              <button type="button" onClick={() => void cancelPackage()} className="text-xs font-semibold text-red-600 hover:underline">Cancelar pacote</button>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-brand-bg"><div className="h-full rounded-full bg-brand-primary transition-all" style={{ width: `${Math.min(100, (activePackage.completedSessions / activePackage.targetSessions) * 100)}%` }} /></div>
+          </div>
+        ) : packages[0]?.status === 'completed' ? (
+          <p className="mt-3 text-xs font-semibold text-emerald-700">Último pacote concluído: {packages[0].completedSessions} de {packages[0].targetSessions} sessões.</p>
+        ) : (
+          <p className="mt-3 text-xs text-brand-text-muted">Nenhum pacote ativo.</p>
+        )}
+      </div>
+
+      <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
+        <label className="text-xs font-semibold text-brand-text">Situação<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | PatientSessionStatus)} className="input-field mt-1">
+          <option value="all">Todas</option><option value="completed">Realizadas</option><option value="scheduled">Agendadas</option><option value="cancelled">Canceladas</option><option value="missed">Faltas</option>
+        </select></label>
+        <label className="text-xs font-semibold text-brand-text">Assinatura<select value={signatureFilter} onChange={(e) => setSignatureFilter(e.target.value as 'all' | 'signed' | 'unsigned')} className="input-field mt-1">
+          <option value="all">Todas</option><option value="signed">Assinadas</option><option value="unsigned">Sem assinatura</option>
+        </select></label>
+        <label className="text-xs font-semibold text-brand-text">PDF<select value={exportMode} onChange={(e) => setExportMode(e.target.value as 'month' | 'year' | 'custom')} className="input-field mt-1">
+          <option value="month">Mês atual</option><option value="year">Ano inteiro</option><option value="custom">Período personalizado</option>
+        </select></label>
+        {exportMode === 'custom' && <><label className="text-xs font-semibold text-brand-text">De<input type="date" value={exportStart} onChange={(e) => setExportStart(e.target.value)} className="input-field mt-1" /></label><label className="text-xs font-semibold text-brand-text">Até<input type="date" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} className="input-field mt-1" /></label></>}
+      </div>
+
       {loading ? (
         <div className="card flex min-h-48 items-center justify-center gap-2 text-brand-text-muted"><Loader2 className="animate-spin" size={20} />Carregando sessões...</div>
       ) : sessions.length === 0 ? (
@@ -219,7 +322,7 @@ export default function PatientSessions() {
         </div>
       ) : (
         <div className="space-y-3">
-          {sessions.map((session) => (
+          {filteredSessions.map((session) => (
             <div key={session.id} className="card p-4 sm:p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
@@ -240,7 +343,7 @@ export default function PatientSessions() {
                     <button type="button" onClick={() => void revoke(session)} disabled={working} className="btn-outline border-amber-300 text-amber-700"><ShieldAlert size={15} /><span>Revogar assinatura</span></button>
                   ) : (
                     <>
-                      <button type="button" onClick={() => { setSignSession(session); setSignatureBlob(null); }} className="btn-primary"><PenLine size={15} /><span>Assinar</span></button>
+                      {session.status === 'completed' && <button type="button" onClick={() => { setSignSession(session); setSignatureBlob(null); }} className="btn-primary"><PenLine size={15} /><span>Assinar</span></button>}
                       <button type="button" onClick={() => openEdit(session)} className="btn-outline"><Edit3 size={15} /><span>Editar</span></button>
                       <button type="button" onClick={() => void remove(session)} className="btn-outline border-red-200 text-red-700"><Trash2 size={15} /><span>Excluir</span></button>
                     </>
@@ -266,8 +369,20 @@ export default function PatientSessions() {
                 <option value="completed">Realizada</option><option value="scheduled">Agendada</option><option value="cancelled">Cancelada</option><option value="missed">Falta</option>
               </select></label>
               <label className="text-xs font-semibold text-brand-text sm:col-span-2">Observação opcional<textarea value={form.notes} onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))} maxLength={2000} rows={3} className="input-field mt-1 w-full resize-y" /></label>
+              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Vincular à evolução (opcional)<select value={form.evolutionId} onChange={(e) => setForm((v) => ({ ...v, evolutionId: e.target.value }))} className="input-field mt-1 w-full"><option value="">Sem vínculo</option>{sameDayEvolutions.map((evolution) => <option key={evolution.id} value={evolution.id}>{evolution.session_time?.slice(0,5) || 'Sem horário'} • evolução deste dia</option>)}</select><span className="mt-1 block text-[10px] font-normal text-brand-text-muted">{sameDayEvolutions.length ? 'Foram encontradas evoluções na mesma data.' : 'Nenhuma evolução encontrada nesta data.'}</span></label>
+              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Pacote (opcional)<select value={form.packageId} onChange={(e) => setForm((v) => ({ ...v, packageId: e.target.value }))} className="input-field mt-1 w-full"><option value="">Sem pacote</option>{packages.filter((item) => item.status === 'active' || item.id === form.packageId).map((item) => <option key={item.id} value={item.id}>{item.label} • {item.completedSessions}/{item.targetSessions}</option>)}</select></label>
             </div>
             <div className="flex justify-end gap-2 border-t border-brand-border p-4"><button type="button" onClick={() => setFormSession(undefined)} className="btn-outline">Cancelar</button><button type="button" onClick={() => void saveForm()} disabled={working || !form.date} className="btn-primary">{working && <Loader2 size={15} className="animate-spin" />}<span>Salvar sessão</span></button></div>
+          </div>
+        </div>
+      )}
+
+      {showPackageForm && (
+        <div className="fixed inset-0 z-[105] flex items-end bg-black/55 p-0 sm:items-center sm:justify-center sm:p-4">
+          <div className="w-full max-w-md rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-brand-border p-5"><div><h3 className="font-semibold text-brand-text">Iniciar pacote</h3><p className="text-xs text-brand-text-muted">Apenas controle de quantidade de sessões.</p></div><button type="button" onClick={() => setShowPackageForm(false)} className="p-2 text-brand-text-muted"><X size={20} /></button></div>
+            <div className="space-y-4 p-5"><label className="text-xs font-semibold text-brand-text">Nome<input value={packageLabel} onChange={(e) => setPackageLabel(e.target.value)} maxLength={120} className="input-field mt-1 w-full" /></label><label className="text-xs font-semibold text-brand-text">Quantidade de sessões<input type="number" min={1} max={100} value={packageTarget} onChange={(e) => setPackageTarget(Number(e.target.value))} className="input-field mt-1 w-full" /></label></div>
+            <div className="flex justify-end gap-2 border-t border-brand-border p-4"><button type="button" onClick={() => setShowPackageForm(false)} className="btn-outline">Cancelar</button><button type="button" onClick={() => void createPackage()} disabled={working || packageTarget < 1 || packageTarget > 100} className="btn-primary">Iniciar pacote</button></div>
           </div>
         </div>
       )}
