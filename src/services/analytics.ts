@@ -23,6 +23,7 @@ declare global {
       setUserId(userId: string | null): void;
       setUserProperty(name: string, value: string | null): void;
       setAnalyticsCollectionEnabled(enabled: boolean): void;
+      setConsent?(analyticsEnabled: boolean, marketingEnabled: boolean): void;
     };
   }
 }
@@ -288,7 +289,11 @@ const loadDynamicIds = async (): Promise<boolean> => {
 const applyConsent = (preferences: ConsentPreferences, command: 'default' | 'update') => {
   sanitizeCurrentMarketingUrl();
   googleConsent(preferences, command);
-  try { nativeBridge()?.setAnalyticsCollectionEnabled(preferences.analytics); } catch { /* optional bridge */ }
+  try {
+    const bridge = nativeBridge();
+    if (bridge?.setConsent) bridge.setConsent(preferences.analytics, preferences.marketing);
+    else bridge?.setAnalyticsCollectionEnabled(preferences.analytics);
+  } catch { /* optional bridge */ }
   if (!preferences.analytics) clearNativeIdentity();
   if (preferences.analytics || effectiveMarketingConsent(preferences)) { initializeGtm(); void loadDynamicIds(); }
   if (preferences.analytics) { applyPendingUser(); initializeDirectGa4(); }
