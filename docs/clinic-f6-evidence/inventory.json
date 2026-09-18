@@ -1,0 +1,2556 @@
+{
+  "staging": "hwkdwinfckmjoriqxbjk",
+  "tables": [
+    {
+      "schema": "private",
+      "name": "clinic_billing_operations",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "clinic_invitation_rate_limits",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "clinic_plan_catalog",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "clinic_runtime_config",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "clinic_stripe_catalog",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "clinic_stripe_events",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "clinic_stripe_transactions",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "organization_admin_events",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "organization_checkout_attempts",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "organization_invitation_deliveries",
+      "rls": true,
+      "force_rls": false,
+      "policies": 0,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": false
+    },
+    {
+      "schema": "private",
+      "name": "organization_invitation_handoffs",
+      "rls": true,
+      "force_rls": false,
+      "policies": 0,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": false
+    },
+    {
+      "schema": "private",
+      "name": "organization_subscriptions",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "private",
+      "name": "runtime_environment",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "evolutions",
+      "rls": true,
+      "force_rls": false,
+      "policies": 4,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": true,
+      "authenticated_write": true,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "organization_feature_flags",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "organization_invitations",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "organization_memberships",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": true,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "organization_patients",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "organizations",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": true,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "patient_professional_assignments",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": false,
+      "authenticated_write": false,
+      "service_select": true
+    },
+    {
+      "schema": "public",
+      "name": "patient_reports",
+      "rls": true,
+      "force_rls": false,
+      "policies": 1,
+      "anon_select": false,
+      "anon_write": false,
+      "authenticated_select": true,
+      "authenticated_write": true,
+      "service_select": true
+    }
+  ],
+  "functions": [
+    {
+      "schema": "private",
+      "name": "accept_clinic_invitation",
+      "args": "p_invitation_id uuid, p_actor uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "assert_active_organization_patient_primary",
+      "args": "",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "assert_clinic_pending_seat_capacity",
+      "args": "",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "assert_one_active_owner_for_org",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "assert_one_active_owner_trigger",
+      "args": "",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "assert_organization_seat_capacity",
+      "args": "",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_access_organization_patient",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_access_organization_workspace",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_assign_clinical_professional",
+      "args": "p_organization_id uuid, p_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_create_organization_evolution",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_edit_organization_patient",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_expand_organization",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_manage_organization_patient_assignments",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_read_organization_evolution",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "can_write_organization_clinical",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "create_organization_evolution",
+      "args": "p_organization_patient_id uuid, p_session_date date, p_session_time text, p_template_id uuid, p_evolution_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "enforce_clinic_invitation_rate_limit",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid, p_normalized_email text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "get_organization_seat_usage",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "has_clinical_access",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "has_organization_role",
+      "args": "p_organization_id uuid, p_roles text[]",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "invitation_assert_admin",
+      "args": "p_org uuid, p_actor uuid, p_role text, p_expand boolean",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "invitation_expire",
+      "args": "p_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "invitation_feature_enabled",
+      "args": "p_org uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "invitation_lock",
+      "args": "p_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "is_clinic_feature_enabled",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "is_clinic_global_enabled",
+      "args": "",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "is_clinic_plan_sellable",
+      "args": "p_plan_code text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "is_organization_member",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "is_organization_patient",
+      "args": "p_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "is_organization_subscription_structurally_valid",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "issue_clinic_invitation",
+      "args": "p_organization_id uuid, p_actor uuid, p_email text, p_intended_role text, p_intended_clinical_access boolean",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "organization_entitlement_mode",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "organization_subscription_access_mode",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "protect_evolution_context_and_clinic_signature",
+      "args": "",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "purge_organization_admin_events_for_staging_cleanup",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "record_organization_admin_event",
+      "args": "p_event_type text, p_organization_id uuid, p_actor_type text, p_actor_professional_id uuid, p_subject_professional_id uuid, p_membership_id uuid, p_invitation_id uuid, p_old_role text, p_new_role text, p_old_status text, p_new_status text, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "private",
+      "name": "reject_organization_admin_event_mutation",
+      "args": "",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "accept_organization_invitation",
+      "args": "p_raw_token text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "add_organization_patient_assignment",
+      "args": "p_organization_patient_id uuid, p_professional_id uuid, p_assignment_role text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "archive_organization_patient",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "assert_clinic_billing_owner_authorized",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "change_organization_member_role",
+      "args": "p_organization_id uuid, p_target_professional_id uuid, p_new_role text, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "claim_clinic_stripe_event",
+      "args": "p_stripe_event_id text, p_event_type text, p_stripe_created_at timestamp with time zone, p_stripe_subscription_id text, p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "clear_clinic_pending_seat_change",
+      "args": "p_organization_id uuid, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "complete_clinic_billing_operations_for_subscription",
+      "args": "p_stripe_subscription_id text, p_seat_quantity integer, p_cancel_at_period_end boolean",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "create_organization_evolution",
+      "args": "p_organization_patient_id uuid, p_session_date date, p_session_time text, p_template_id uuid, p_evolution_id uuid",
+      "definer": false,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "create_organization_invitation",
+      "args": "p_organization_id uuid, p_email text, p_intended_role text, p_intended_clinical_access boolean",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "create_organization_invitation_handoff_server",
+      "args": "p_token_hash text, p_secret_hash text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "create_organization_patient",
+      "args": "p_organization_id uuid, p_full_name text, p_birth_date date, p_phone text, p_primary_professional_id uuid, p_secondary_professional_ids uuid[], p_consultant_professional_ids uuid[]",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "create_organization_with_owner",
+      "args": "p_name text, p_legal_name text, p_trade_name text, p_document_number text, p_contact_email text, p_contact_phone text, p_locale text, p_timezone text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "disable_organization_member_clinical_access",
+      "args": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "enable_organization_member_clinical_access",
+      "args": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "expire_clinic_checkout_attempt",
+      "args": "p_attempt_id uuid, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "expire_stale_clinic_billing_operation",
+      "args": "p_operation_id uuid, p_error_code text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "finish_clinic_billing_operation",
+      "args": "p_operation_id uuid, p_status text, p_error_code text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "finish_clinic_stripe_event",
+      "args": "p_stripe_event_id text, p_processing_status text, p_error_code text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "finish_organization_invitation_delivery_server",
+      "args": "p_delivery_id uuid, p_status text, p_message_id text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_clinic_billing_operation",
+      "args": "p_operation_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_clinic_billing_status",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_clinic_checkout_attempt",
+      "args": "p_attempt_id uuid, p_actor_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_clinic_stripe_catalog",
+      "args": "p_plan_code text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_open_clinic_checkout_attempt_for_organization",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_open_clinic_checkout_attempt_for_organization_admin",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_organization_dashboard",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_organization_evolution_access",
+      "args": "p_organization_patient_id uuid",
+      "definer": false,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_organization_patient",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_organization_seat_summary",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_organization_team",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "get_stale_clinic_billing_operation",
+      "args": "p_organization_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "hold_clinic_billing_operation_pending_payment",
+      "args": "p_operation_id uuid, p_error_code text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "issue_organization_invitation_server",
+      "args": "p_organization_id uuid, p_actor uuid, p_email text, p_intended_role text, p_intended_clinical_access boolean, p_provider text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "list_organization_admin_events",
+      "args": "p_organization_id uuid, p_limit integer, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_event_type text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "list_organization_invitations_server",
+      "args": "p_organization_id uuid, p_actor uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "list_organization_patients",
+      "args": "p_organization_id uuid, p_search text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "prepare_clinic_billing_operation",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid, p_operation_type text, p_target_seats integer, p_idempotency_key uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "prepare_clinic_cancellation",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "prepare_clinic_seat_change",
+      "args": "p_organization_id uuid, p_actor_professional_id uuid, p_target_seats integer",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "reactivate_organization_member",
+      "args": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "reactivate_organization_patient",
+      "args": "p_organization_patient_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "reassign_organization_patient_primary",
+      "args": "p_organization_patient_id uuid, p_new_primary_professional_id uuid, p_keep_previous_as_secondary boolean",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "reconcile_clinic_stripe_subscription",
+      "args": "p_organization_id uuid, p_stripe_subscription_id text, p_stripe_customer_id text, p_stripe_base_subscription_item_id text, p_stripe_seat_subscription_item_id text, p_stripe_base_price_id text, p_stripe_seat_price_id text, p_plan_code text, p_billing_interval text, p_stripe_status text, p_stripe_seat_quantity integer, p_current_period_start timestamp with time zone, p_current_period_end timestamp with time zone, p_cancel_at_period_end boolean",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "record_clinic_stripe_transaction",
+      "args": "p_organization_id uuid, p_stripe_invoice_id text, p_stripe_subscription_id text, p_amount_minor integer, p_currency text, p_status text, p_billing_reason text, p_invoice_url text, p_invoice_pdf_url text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "remove_organization_member",
+      "args": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "resend_organization_invitation_server",
+      "args": "p_organization_id uuid, p_actor uuid, p_invitation_id uuid, p_provider text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "resolve_organization_invitation_handoff_server",
+      "args": "p_secret_hash text, p_actor uuid, p_accept boolean",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "revoke_organization_invitation",
+      "args": "p_invitation_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": false,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "revoke_organization_invitation_server",
+      "args": "p_organization_id uuid, p_actor uuid, p_invitation_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "revoke_organization_patient_assignment",
+      "args": "p_assignment_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "set_organization_clinic_rollout_state",
+      "args": "p_organization_id uuid, p_enabled boolean, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "start_clinic_checkout_attempt",
+      "args": "p_organization_id uuid, p_attempt_id uuid, p_actor_professional_id uuid, p_plan_code text, p_requested_seats integer",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "suspend_organization_member",
+      "args": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "transfer_organization_owner",
+      "args": "p_organization_id uuid, p_target_professional_id uuid",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "update_clinic_checkout_attempt",
+      "args": "p_attempt_id uuid, p_status text, p_stripe_checkout_session_id text, p_stripe_customer_id text, p_stripe_subscription_id text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": false,
+      "service_execute": true,
+      "public_execute": false
+    },
+    {
+      "schema": "public",
+      "name": "update_organization_patient",
+      "args": "p_organization_patient_id uuid, p_full_name text, p_birth_date date, p_phone text",
+      "definer": true,
+      "config": [
+        "search_path=pg_catalog, private, public"
+      ],
+      "anon_execute": false,
+      "authenticated_execute": true,
+      "service_execute": false,
+      "public_execute": false
+    }
+  ],
+  "migrations": [
+    {
+      "file": "20260915_01_organizations_memberships.sql",
+      "sha256": "c165096a34bf21b9019a6a20b5fd14dfdc8d1b1c2e0e01a6c9c383412b5ff7b4",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_02_harden_owner_transfer.sql",
+      "sha256": "188cdc0cdebfad28c95d924851e2de05d006db347128b1b3f51f2ea39254c56e",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_03_clinic_feature_gates.sql",
+      "sha256": "597525d1016974276596f8aaf0d400d712c4cd2b96c5e2dd10bbf7c71f0daa7a",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_04_organization_invitations.sql",
+      "sha256": "d7e5a24bb9cfa01807ce212243f2d9ad71970e583fd5fb75530de694152c854a",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_05_harden_runtime_environment.sql",
+      "sha256": "10520c889f06d5942ed8254c59fd95b04b5716dcca5287d1eed660840e44909b",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_06_membership_lifecycle_and_audit.sql",
+      "sha256": "b25603a1575e56a4a7dd7a88927809de3bc69a239c32d2768b1b82a3aaa3d1ab",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_07_operational_audit_and_rollout.sql",
+      "sha256": "3518b7a5409ab2bf44a15e5b09921269e221d4e0749075f2300c43adfe11e402",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_08_invitation_rate_limits.sql",
+      "sha256": "2b2029363fa1e5ea8be0da9cb80d06154f931a47875eb850939c959843297f7b",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260915_09_harden_membership_lifecycle_selection.sql",
+      "sha256": "56e6f815f2523e72c95086dcb6f2f4fa39c1c5259530e0253168cf5eed54cc6f",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_10_organization_team_directory.sql",
+      "sha256": "20a177b370618aa3b32604749622e5074fdde177ce01ae96179fa6a8ad2c680a",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_11_organization_entitlements_and_seats.sql",
+      "sha256": "0bac0aa2537688fea60480281955720c9da4af1ccc5441d9a5296b66d5d48736",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_12_harden_entitlement_snapshots_and_invitation_expiry.sql",
+      "sha256": "612a832e6d5ee471b1bdb21dfe63e73eb482475da0d288383b8d7e9c94c397bf",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_13_harden_reserved_seat_conversion_and_operational_restriction.sql",
+      "sha256": "21db0c0c39e5db61a01a41eb8f04b9824cb123975e33406f2397606ccc5907ba",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_14_clinic_stripe_billing.sql",
+      "sha256": "4df7112de34a376be2437d5d5a577187ef54231b2200d034716c12e9a0ebd8cd",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_15_clinic_stripe_billing_server_wrappers.sql",
+      "sha256": "ef2d6d0478a274b3c133494b606e65a724d31af6024ad78450c3660b29b2ab9d",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_16_clinic_stripe_checkout_lookup.sql",
+      "sha256": "b696aa50848d0ed17246a3b2d8463643a272db39f3b64d6287686b63cba5c552",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_17_clinic_stripe_cancellation_wrapper.sql",
+      "sha256": "f74fe3e201467c00eed80ff00811a0cace43b3f6e87a6b18ceb3f979fa72c7eb",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_18_harden_clinic_billing_operations.sql",
+      "sha256": "d1011f164d03d32ac84a353933e9c79fc7392ce49c6ec051e361d62b75a47b46",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_19_harden_clinic_billing_recovery.sql",
+      "sha256": "4b122a422bff42a6c4bd6224b907c3100b2be120999cdd83d5bdf672dba7d9c2",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_20_harden_clinic_billing_recovery_authorization.sql",
+      "sha256": "22b39f910355a738ae84e5fff5e22a95069f7b06ac9a4165a983879eb80bf23b",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_21_secure_clinic_invitation_delivery.sql",
+      "sha256": "167a4235373d41feee0397487160efe88a530d8bf034d2c0d2a8d04e9aee70fc",
+      "stagingGuard": true
+    },
+    {
+      "file": "20260916_22_restore_workspace_rls_execute.sql",
+      "sha256": "c30869c53db8c85dd8ae55212485faf010d32b3b50126b6ef80b9741f30a67b2",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_23_shared_clinic_patients.sql",
+      "sha256": "c795a6f6ed6d3b596c4873eaeb063988b73858f4e01d3f926a5deff0cfe7220a",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_24_harden_shared_clinic_patient_read_authorization.sql",
+      "sha256": "0d52f5a3f56a7e7c0a2e0d30d44eec2eb8645c2652539e078128d42a3e16f307",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260916_25_restore_personal_patient_policy_helper_execute.sql",
+      "sha256": "17d0660fae4e4e1ce6e90f2f933e18c42c89475edf5df5eb784528df66c7a294",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260917_26_isolated_organization_evolutions.sql",
+      "sha256": "3aa35e210da2a98b889a9967e03ea4defad60ff1a3022b39df74504ef290ae60",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260917_27_enable_clinic_evolution_assignments.sql",
+      "sha256": "40721163ac17f3ffa6a37fa7a00ac47d84b12f8525691079829d10a8773c13ee",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260918_28_clinic_ecosystem_operations.sql",
+      "sha256": "6197bce58522fd2e1db1198780a120eba4dc60e47945918c638f97ca75c190b9",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260918_29_remove_patient_lifecycle_parameter.sql",
+      "sha256": "3ba64683207929330b2cf02d701e2db1ea3794d414f47cdcbce6cc22e6e2a382",
+      "stagingGuard": false
+    },
+    {
+      "file": "20260918_30_qualify_dashboard_assignment_status.sql",
+      "sha256": "3dec77f28428b13457a408edb73f2f3bad386fd41edd30054331ba4f3f501bc3",
+      "stagingGuard": false
+    }
+  ],
+  "history": [
+    {
+      "version": "20260917231245",
+      "name": "20260916_23_shared_clinic_patients"
+    },
+    {
+      "version": "20260917231845",
+      "name": "20260916_24_harden_shared_clinic_patient_read_authorization"
+    },
+    {
+      "version": "20260917232559",
+      "name": "20260916_25_restore_personal_patient_policy_helper_execute"
+    },
+    {
+      "version": "20260917235946",
+      "name": "clinic_26_isolated_organization_evolutions"
+    },
+    {
+      "version": "20260917235953",
+      "name": "clinic_27_enable_clinic_evolution_assignments"
+    },
+    {
+      "version": "20260918122937",
+      "name": "clinic_28_ecosystem_operations"
+    },
+    {
+      "version": "20260918125646",
+      "name": "clinic_29_remove_patient_lifecycle_parameter"
+    },
+    {
+      "version": "20260918134536",
+      "name": "clinic_30_qualify_dashboard_assignment_status"
+    }
+  ],
+  "catalog": [
+    {
+      "environment": "test",
+      "plan_code": "clinic_monthly",
+      "stripe_base_price_id": "price_1UGJTnPI1KSTkIQAuk7DIIIo",
+      "stripe_seat_price_id": "price_1UGJTnPI1KSTkIQAxsHEU1my"
+    },
+    {
+      "environment": "test",
+      "plan_code": "clinic_yearly",
+      "stripe_base_price_id": "price_1UGJToPI1KSTkIQArAZ41D5T",
+      "stripe_seat_price_id": "price_1UGJToPI1KSTkIQAgERhnW8u"
+    }
+  ],
+  "edgeGates": [
+    {
+      "name": "CLINIC_BILLING_ENABLED",
+      "falseDigest": true,
+      "stagingDigest": false
+    },
+    {
+      "name": "APP_ENV",
+      "falseDigest": false,
+      "stagingDigest": true
+    }
+  ],
+  "webhookReplayCredentialAvailable": false,
+  "webhookEndpoints": [
+    {
+      "id": "we_1UGJaIPI1KSTkIQAS4lj7XUM",
+      "url": "https://hwkdwinfckmjoriqxbjk.supabase.co/functions/v1/clinic-stripe-webhook",
+      "status": "enabled",
+      "livemode": false
+    },
+    {
+      "id": "we_1TmDBuPI1KSTkIQA9u1MMQGw",
+      "url": "https://kvxboovgrrhhttaqinld.supabase.co/functions/v1/stripe-webhook",
+      "status": "enabled",
+      "livemode": false
+    }
+  ],
+  "functionDrift": [
+    {
+      "name": "private.assert_one_active_owner_for_org",
+      "matches": true,
+      "expectedLength": 525,
+      "actualLength": 525,
+      "firstDifference": 525,
+      "expectedExcerpt": "END IF; END;",
+      "actualExcerpt": "END IF; END;"
+    },
+    {
+      "name": "private.assert_one_active_owner_trigger",
+      "matches": true,
+      "expectedLength": 499,
+      "actualLength": 499,
+      "firstDifference": 499,
+      "expectedExcerpt": "N NULL; END;",
+      "actualExcerpt": "N NULL; END;"
+    },
+    {
+      "name": "private.is_organization_member",
+      "matches": true,
+      "expectedLength": 315,
+      "actualLength": 315,
+      "firstDifference": 315,
+      "expectedExcerpt": "archived' );",
+      "actualExcerpt": "archived' );"
+    },
+    {
+      "name": "private.has_organization_role",
+      "matches": true,
+      "expectedLength": 282,
+      "actualLength": 282,
+      "firstDifference": 282,
+      "expectedExcerpt": "(p_roles) );",
+      "actualExcerpt": "(p_roles) );"
+    },
+    {
+      "name": "private.has_clinical_access",
+      "matches": true,
+      "expectedLength": 364,
+      "actualLength": 364,
+      "firstDifference": 364,
+      "expectedExcerpt": "d IS TRUE );",
+      "actualExcerpt": "d IS TRUE );"
+    },
+    {
+      "name": "public.create_organization_with_owner",
+      "matches": true,
+      "expectedLength": 1691,
+      "actualLength": 1691,
+      "firstDifference": 1691,
+      "expectedExcerpt": "zation; END;",
+      "actualExcerpt": "zation; END;"
+    },
+    {
+      "name": "public.transfer_organization_owner",
+      "matches": true,
+      "expectedLength": 1524,
+      "actualLength": 1524,
+      "firstDifference": 1524,
+      "expectedExcerpt": "target; END;",
+      "actualExcerpt": "target; END;"
+    },
+    {
+      "name": "private.is_clinic_global_enabled",
+      "matches": true,
+      "expectedLength": 230,
+      "actualLength": 230,
+      "firstDifference": 230,
+      "expectedExcerpt": "E ), false);",
+      "actualExcerpt": "E ), false);"
+    },
+    {
+      "name": "private.is_clinic_feature_enabled",
+      "matches": true,
+      "expectedLength": 250,
+      "actualLength": 250,
+      "firstDifference": 250,
+      "expectedExcerpt": "d IS TRUE );",
+      "actualExcerpt": "d IS TRUE );"
+    },
+    {
+      "name": "public.create_organization_invitation",
+      "matches": true,
+      "expectedLength": 3906,
+      "actualLength": 3906,
+      "firstDifference": 3906,
+      "expectedExcerpt": "oken ); END;",
+      "actualExcerpt": "oken ); END;"
+    },
+    {
+      "name": "public.revoke_organization_invitation",
+      "matches": true,
+      "expectedLength": 2188,
+      "actualLength": 2188,
+      "firstDifference": 2188,
+      "expectedExcerpt": "d_at ); END;",
+      "actualExcerpt": "d_at ); END;"
+    },
+    {
+      "name": "public.accept_organization_invitation",
+      "matches": true,
+      "expectedLength": 4690,
+      "actualLength": 4690,
+      "firstDifference": 4690,
+      "expectedExcerpt": "bled ); END;",
+      "actualExcerpt": "bled ); END;"
+    },
+    {
+      "name": "private.reject_organization_admin_event_mutation",
+      "matches": true,
+      "expectedLength": 228,
+      "actualLength": 228,
+      "firstDifference": 228,
+      "expectedExcerpt": "42501'; END;",
+      "actualExcerpt": "42501'; END;"
+    },
+    {
+      "name": "private.record_organization_admin_event",
+      "matches": true,
+      "expectedLength": 553,
+      "actualLength": 553,
+      "firstDifference": 553,
+      "expectedExcerpt": "ent_id; END;",
+      "actualExcerpt": "ent_id; END;"
+    },
+    {
+      "name": "private.purge_organization_admin_events_for_staging_cleanup",
+      "matches": true,
+      "expectedLength": 298,
+      "actualLength": 298,
+      "firstDifference": 298,
+      "expectedExcerpt": "ion_id; END;",
+      "actualExcerpt": "ion_id; END;"
+    },
+    {
+      "name": "public.suspend_organization_member",
+      "matches": true,
+      "expectedLength": 1382,
+      "actualLength": 1382,
+      "firstDifference": 1382,
+      "expectedExcerpt": "target; END;",
+      "actualExcerpt": "target; END;"
+    },
+    {
+      "name": "public.reactivate_organization_member",
+      "matches": true,
+      "expectedLength": 2044,
+      "actualLength": 2044,
+      "firstDifference": 2044,
+      "expectedExcerpt": "target; END;",
+      "actualExcerpt": "target; END;"
+    },
+    {
+      "name": "public.remove_organization_member",
+      "matches": true,
+      "expectedLength": 1441,
+      "actualLength": 1441,
+      "firstDifference": 1441,
+      "expectedExcerpt": "target; END;",
+      "actualExcerpt": "target; END;"
+    },
+    {
+      "name": "public.change_organization_member_role",
+      "matches": true,
+      "expectedLength": 1421,
+      "actualLength": 1421,
+      "firstDifference": 1421,
+      "expectedExcerpt": "target; END;",
+      "actualExcerpt": "target; END;"
+    },
+    {
+      "name": "public.set_organization_clinic_rollout_state",
+      "matches": true,
+      "expectedLength": 2716,
+      "actualLength": 2716,
+      "firstDifference": 2716,
+      "expectedExcerpt": "_id) ); END;",
+      "actualExcerpt": "_id) ); END;"
+    },
+    {
+      "name": "private.enforce_clinic_invitation_rate_limit",
+      "matches": true,
+      "expectedLength": 1853,
+      "actualLength": 1853,
+      "firstDifference": 1853,
+      "expectedExcerpt": "END IF; END;",
+      "actualExcerpt": "END IF; END;"
+    },
+    {
+      "name": "public.get_organization_team",
+      "matches": true,
+      "expectedLength": 1088,
+      "actualLength": 1088,
+      "firstDifference": 1088,
+      "expectedExcerpt": ", m.id; END;",
+      "actualExcerpt": ", m.id; END;"
+    },
+    {
+      "name": "private.organization_entitlement_mode",
+      "matches": true,
+      "expectedLength": 364,
+      "actualLength": 364,
+      "firstDifference": 364,
+      "expectedExcerpt": " ), 'none');",
+      "actualExcerpt": " ), 'none');"
+    },
+    {
+      "name": "private.can_access_organization_workspace",
+      "matches": true,
+      "expectedLength": 379,
+      "actualLength": 379,
+      "firstDifference": 379,
+      "expectedExcerpt": " 'active' );",
+      "actualExcerpt": " 'active' );"
+    },
+    {
+      "name": "private.can_expand_organization",
+      "matches": true,
+      "expectedLength": 156,
+      "actualLength": 156,
+      "firstDifference": 156,
+      "expectedExcerpt": ")) = 'full';",
+      "actualExcerpt": ")) = 'full';"
+    },
+    {
+      "name": "private.get_organization_seat_usage",
+      "matches": true,
+      "expectedLength": 946,
+      "actualLength": 946,
+      "firstDifference": 946,
+      "expectedExcerpt": "on_id) AS s;",
+      "actualExcerpt": "on_id) AS s;"
+    },
+    {
+      "name": "private.assert_organization_seat_capacity",
+      "matches": true,
+      "expectedLength": 1159,
+      "actualLength": 1159,
+      "firstDifference": 1159,
+      "expectedExcerpt": "N NULL; END;",
+      "actualExcerpt": "N NULL; END;"
+    },
+    {
+      "name": "public.get_organization_seat_summary",
+      "matches": true,
+      "expectedLength": 1352,
+      "actualLength": 1352,
+      "firstDifference": 1352,
+      "expectedExcerpt": ") AS u; END;",
+      "actualExcerpt": ") AS u; END;"
+    },
+    {
+      "name": "public.enable_organization_member_clinical_access",
+      "matches": true,
+      "expectedLength": 1871,
+      "actualLength": 1871,
+      "firstDifference": 1871,
+      "expectedExcerpt": "target; END;",
+      "actualExcerpt": "target; END;"
+    },
+    {
+      "name": "public.disable_organization_member_clinical_access",
+      "matches": true,
+      "expectedLength": 1432,
+      "actualLength": 1432,
+      "firstDifference": 1432,
+      "expectedExcerpt": "target; END;",
+      "actualExcerpt": "target; END;"
+    },
+    {
+      "name": "private.is_clinic_plan_sellable",
+      "matches": true,
+      "expectedLength": 119,
+      "actualLength": 119,
+      "firstDifference": 119,
+      "expectedExcerpt": "d IS TRUE );",
+      "actualExcerpt": "d IS TRUE );"
+    },
+    {
+      "name": "private.is_organization_subscription_structurally_valid",
+      "matches": true,
+      "expectedLength": 981,
+      "actualLength": 981,
+      "firstDifference": 981,
+      "expectedExcerpt": "d_start ) );",
+      "actualExcerpt": "d_start ) );"
+    },
+    {
+      "name": "private.organization_subscription_access_mode",
+      "matches": true,
+      "expectedLength": 553,
+      "actualLength": 553,
+      "firstDifference": 553,
+      "expectedExcerpt": " ), 'none');",
+      "actualExcerpt": " ), 'none');"
+    },
+    {
+      "name": "private.assert_clinic_pending_seat_capacity",
+      "matches": true,
+      "expectedLength": 1044,
+      "actualLength": 1044,
+      "firstDifference": 1044,
+      "expectedExcerpt": "N NULL; END;",
+      "actualExcerpt": "N NULL; END;"
+    },
+    {
+      "name": "public.start_clinic_checkout_attempt",
+      "matches": true,
+      "expectedLength": 4456,
+      "actualLength": 4456,
+      "firstDifference": 4456,
+      "expectedExcerpt": "false); END;",
+      "actualExcerpt": "false); END;"
+    },
+    {
+      "name": "public.prepare_clinic_seat_change",
+      "matches": true,
+      "expectedLength": 2556,
+      "actualLength": 2556,
+      "firstDifference": 2556,
+      "expectedExcerpt": " END ); END;",
+      "actualExcerpt": " END ); END;"
+    },
+    {
+      "name": "public.clear_clinic_pending_seat_change",
+      "matches": true,
+      "expectedLength": 834,
+      "actualLength": 834,
+      "firstDifference": 834,
+      "expectedExcerpt": " 200)); END;",
+      "actualExcerpt": " 200)); END;"
+    },
+    {
+      "name": "public.reconcile_clinic_stripe_subscription",
+      "matches": true,
+      "expectedLength": 7042,
+      "actualLength": 7042,
+      "firstDifference": 7042,
+      "expectedExcerpt": "_id) ); END;",
+      "actualExcerpt": "_id) ); END;"
+    },
+    {
+      "name": "public.get_clinic_stripe_catalog",
+      "matches": true,
+      "expectedLength": 927,
+      "actualLength": 927,
+      "firstDifference": 927,
+      "expectedExcerpt": "talog); END;",
+      "actualExcerpt": "talog); END;"
+    },
+    {
+      "name": "public.update_clinic_checkout_attempt",
+      "matches": true,
+      "expectedLength": 1308,
+      "actualLength": 1308,
+      "firstDifference": 1308,
+      "expectedExcerpt": "on_id); END;",
+      "actualExcerpt": "on_id); END;"
+    },
+    {
+      "name": "public.claim_clinic_stripe_event",
+      "matches": true,
+      "expectedLength": 2238,
+      "actualLength": 2238,
+      "firstDifference": 2238,
+      "expectedExcerpt": "nt_id); END;",
+      "actualExcerpt": "nt_id); END;"
+    },
+    {
+      "name": "public.finish_clinic_stripe_event",
+      "matches": true,
+      "expectedLength": 1157,
+      "actualLength": 1157,
+      "firstDifference": 1157,
+      "expectedExcerpt": "ed_at); END;",
+      "actualExcerpt": "ed_at); END;"
+    },
+    {
+      "name": "public.record_clinic_stripe_transaction",
+      "matches": true,
+      "expectedLength": 1417,
+      "actualLength": 1417,
+      "firstDifference": 1417,
+      "expectedExcerpt": "tatus); END;",
+      "actualExcerpt": "tatus); END;"
+    },
+    {
+      "name": "public.get_clinic_billing_status",
+      "matches": true,
+      "expectedLength": 2476,
+      "actualLength": 2476,
+      "firstDifference": 2476,
+      "expectedExcerpt": "_id) ); END;",
+      "actualExcerpt": "_id) ); END;"
+    },
+    {
+      "name": "public.get_clinic_checkout_attempt",
+      "matches": true,
+      "expectedLength": 1097,
+      "actualLength": 1097,
+      "firstDifference": 1097,
+      "expectedExcerpt": "s_at ); END;",
+      "actualExcerpt": "s_at ); END;"
+    },
+    {
+      "name": "public.prepare_clinic_cancellation",
+      "matches": true,
+      "expectedLength": 1089,
+      "actualLength": 1089,
+      "firstDifference": 1089,
+      "expectedExcerpt": "d_end); END;",
+      "actualExcerpt": "d_end); END;"
+    },
+    {
+      "name": "public.prepare_clinic_billing_operation",
+      "matches": true,
+      "expectedLength": 6586,
+      "actualLength": 6586,
+      "firstDifference": 6586,
+      "expectedExcerpt": "seats); END;",
+      "actualExcerpt": "seats); END;"
+    },
+    {
+      "name": "public.finish_clinic_billing_operation",
+      "matches": true,
+      "expectedLength": 1259,
+      "actualLength": 1259,
+      "firstDifference": 1259,
+      "expectedExcerpt": "seats); END;",
+      "actualExcerpt": "seats); END;"
+    },
+    {
+      "name": "public.complete_clinic_billing_operations_for_subscription",
+      "matches": true,
+      "expectedLength": 878,
+      "actualLength": 878,
+      "firstDifference": 878,
+      "expectedExcerpt": "_count; END;",
+      "actualExcerpt": "_count; END;"
+    },
+    {
+      "name": "public.get_stale_clinic_billing_operation",
+      "matches": true,
+      "expectedLength": 1259,
+      "actualLength": 1259,
+      "firstDifference": 1259,
+      "expectedExcerpt": "s_at ); END;",
+      "actualExcerpt": "s_at ); END;"
+    },
+    {
+      "name": "public.get_clinic_billing_operation",
+      "matches": true,
+      "expectedLength": 1038,
+      "actualLength": 1038,
+      "firstDifference": 1038,
+      "expectedExcerpt": "code ); END;",
+      "actualExcerpt": "code ); END;"
+    },
+    {
+      "name": "public.hold_clinic_billing_operation_pending_payment",
+      "matches": true,
+      "expectedLength": 1283,
+      "actualLength": 1283,
+      "firstDifference": 1283,
+      "expectedExcerpt": "seats); END;",
+      "actualExcerpt": "seats); END;"
+    },
+    {
+      "name": "public.expire_stale_clinic_billing_operation",
+      "matches": true,
+      "expectedLength": 2013,
+      "actualLength": 2013,
+      "firstDifference": 2013,
+      "expectedExcerpt": "seats); END;",
+      "actualExcerpt": "seats); END;"
+    },
+    {
+      "name": "public.get_open_clinic_checkout_attempt_for_organization",
+      "matches": true,
+      "expectedLength": 1243,
+      "actualLength": 1243,
+      "firstDifference": 1243,
+      "expectedExcerpt": "es_at); END;",
+      "actualExcerpt": "es_at); END;"
+    },
+    {
+      "name": "public.expire_clinic_checkout_attempt",
+      "matches": true,
+      "expectedLength": 1216,
+      "actualLength": 1216,
+      "firstDifference": 1216,
+      "expectedExcerpt": " 120)); END;",
+      "actualExcerpt": " 120)); END;"
+    },
+    {
+      "name": "public.assert_clinic_billing_owner_authorized",
+      "matches": true,
+      "expectedLength": 951,
+      "actualLength": 951,
+      "firstDifference": 951,
+      "expectedExcerpt": "tatus); END;",
+      "actualExcerpt": "tatus); END;"
+    },
+    {
+      "name": "public.get_open_clinic_checkout_attempt_for_organization_admin",
+      "matches": true,
+      "expectedLength": 904,
+      "actualLength": 904,
+      "firstDifference": 904,
+      "expectedExcerpt": "es_at); END;",
+      "actualExcerpt": "es_at); END;"
+    },
+    {
+      "name": "private.invitation_feature_enabled",
+      "matches": true,
+      "expectedLength": 271,
+      "actualLength": 271,
+      "firstDifference": 271,
+      "expectedExcerpt": "abled=true);",
+      "actualExcerpt": "abled=true);"
+    },
+    {
+      "name": "private.invitation_assert_admin",
+      "matches": true,
+      "expectedLength": 933,
+      "actualLength": 933,
+      "firstDifference": 933,
+      "expectedExcerpt": "END IF; END;",
+      "actualExcerpt": "END IF; END;"
+    },
+    {
+      "name": "private.issue_clinic_invitation",
+      "matches": true,
+      "expectedLength": 3979,
+      "actualLength": 3979,
+      "firstDifference": 3979,
+      "expectedExcerpt": "oken ); END;",
+      "actualExcerpt": "oken ); END;"
+    },
+    {
+      "name": "private.accept_clinic_invitation",
+      "matches": true,
+      "expectedLength": 4625,
+      "actualLength": 4625,
+      "firstDifference": 4625,
+      "expectedExcerpt": "bled ); END;",
+      "actualExcerpt": "bled ); END;"
+    },
+    {
+      "name": "private.invitation_expire",
+      "matches": true,
+      "expectedLength": 406,
+      "actualLength": 406,
+      "firstDifference": 406,
+      "expectedExcerpt": "END IF; END;",
+      "actualExcerpt": "END IF; END;"
+    },
+    {
+      "name": "public.issue_organization_invitation_server",
+      "matches": true,
+      "expectedLength": 629,
+      "actualLength": 629,
+      "firstDifference": 629,
+      "expectedExcerpt": "n_id)); END;",
+      "actualExcerpt": "n_id)); END;"
+    },
+    {
+      "name": "public.resend_organization_invitation_server",
+      "matches": true,
+      "expectedLength": 2128,
+      "actualLength": 2128,
+      "firstDifference": 2128,
+      "expectedExcerpt": "tatus); END;",
+      "actualExcerpt": "tatus); END;"
+    },
+    {
+      "name": "public.finish_organization_invitation_delivery_server",
+      "matches": true,
+      "expectedLength": 1116,
+      "actualLength": 1116,
+      "firstDifference": 1116,
+      "expectedExcerpt": "END IF; END;",
+      "actualExcerpt": "END IF; END;"
+    },
+    {
+      "name": "public.list_organization_invitations_server",
+      "matches": true,
+      "expectedLength": 1257,
+      "actualLength": 1257,
+      "firstDifference": 1257,
+      "expectedExcerpt": "result; END;",
+      "actualExcerpt": "result; END;"
+    },
+    {
+      "name": "public.revoke_organization_invitation_server",
+      "matches": true,
+      "expectedLength": 1156,
+      "actualLength": 1156,
+      "firstDifference": 1156,
+      "expectedExcerpt": "oked'); END;",
+      "actualExcerpt": "oked'); END;"
+    },
+    {
+      "name": "private.invitation_lock",
+      "matches": true,
+      "expectedLength": 535,
+      "actualLength": 535,
+      "firstDifference": 535,
+      "expectedExcerpt": "TURN i; END;",
+      "actualExcerpt": "TURN i; END;"
+    },
+    {
+      "name": "public.create_organization_invitation_handoff_server",
+      "matches": true,
+      "expectedLength": 1305,
+      "actualLength": 1305,
+      "firstDifference": 1305,
+      "expectedExcerpt": "ding'); END;",
+      "actualExcerpt": "ding'); END;"
+    },
+    {
+      "name": "public.resolve_organization_invitation_handoff_server",
+      "matches": true,
+      "expectedLength": 1481,
+      "actualLength": 1481,
+      "firstDifference": 1481,
+      "expectedExcerpt": "es_at); END;",
+      "actualExcerpt": "es_at); END;"
+    },
+    {
+      "name": "private.is_organization_patient",
+      "matches": true,
+      "expectedLength": 99,
+      "actualLength": 99,
+      "firstDifference": 99,
+      "expectedExcerpt": "atient_id );",
+      "actualExcerpt": "atient_id );"
+    },
+    {
+      "name": "private.can_assign_clinical_professional",
+      "matches": true,
+      "expectedLength": 276,
+      "actualLength": 276,
+      "firstDifference": 276,
+      "expectedExcerpt": "ssional') );",
+      "actualExcerpt": "ssional') );"
+    },
+    {
+      "name": "private.can_access_organization_patient",
+      "matches": true,
+      "expectedLength": 617,
+      "actualLength": 617,
+      "firstDifference": 617,
+      "expectedExcerpt": " TRUE ) ) );",
+      "actualExcerpt": " TRUE ) ) );"
+    },
+    {
+      "name": "private.can_edit_organization_patient",
+      "matches": true,
+      "expectedLength": 651,
+      "actualLength": 651,
+      "firstDifference": 651,
+      "expectedExcerpt": " TRUE ) ) );",
+      "actualExcerpt": " TRUE ) ) );"
+    },
+    {
+      "name": "private.can_manage_organization_patient_assignments",
+      "matches": true,
+      "expectedLength": 249,
+      "actualLength": 249,
+      "firstDifference": 249,
+      "expectedExcerpt": "::text[]) );",
+      "actualExcerpt": "::text[]) );"
+    },
+    {
+      "name": "private.assert_active_organization_patient_primary",
+      "matches": true,
+      "expectedLength": 716,
+      "actualLength": 716,
+      "firstDifference": 716,
+      "expectedExcerpt": "N NULL; END;",
+      "actualExcerpt": "N NULL; END;"
+    },
+    {
+      "name": "public.create_organization_patient",
+      "matches": true,
+      "expectedLength": 3291,
+      "actualLength": 3291,
+      "firstDifference": 3291,
+      "expectedExcerpt": "nt.id); END;",
+      "actualExcerpt": "nt.id); END;"
+    },
+    {
+      "name": "public.list_organization_patients",
+      "matches": true,
+      "expectedLength": 1539,
+      "actualLength": 1539,
+      "firstDifference": 1539,
+      "expectedExcerpt": "t DESC; END;",
+      "actualExcerpt": "t DESC; END;"
+    },
+    {
+      "name": "public.get_organization_patient",
+      "matches": true,
+      "expectedLength": 2173,
+      "actualLength": 2173,
+      "firstDifference": 2173,
+      "expectedExcerpt": "T 1) ); END;",
+      "actualExcerpt": "T 1) ); END;"
+    },
+    {
+      "name": "public.update_organization_patient",
+      "matches": true,
+      "expectedLength": 1440,
+      "actualLength": 1440,
+      "firstDifference": 1440,
+      "expectedExcerpt": "phone); END;",
+      "actualExcerpt": "phone); END;"
+    },
+    {
+      "name": "public.add_organization_patient_assignment",
+      "matches": true,
+      "expectedLength": 1315,
+      "actualLength": 1315,
+      "firstDifference": 1315,
+      "expectedExcerpt": "tatus); END;",
+      "actualExcerpt": "tatus); END;"
+    },
+    {
+      "name": "public.revoke_organization_patient_assignment",
+      "matches": true,
+      "expectedLength": 1167,
+      "actualLength": 1167,
+      "firstDifference": 1167,
+      "expectedExcerpt": "tatus); END;",
+      "actualExcerpt": "tatus); END;"
+    },
+    {
+      "name": "private.can_write_organization_clinical",
+      "matches": true,
+      "expectedLength": 138,
+      "actualLength": 138,
+      "firstDifference": 138,
+      "expectedExcerpt": "d) = 'full';",
+      "actualExcerpt": "d) = 'full';"
+    },
+    {
+      "name": "private.can_read_organization_evolution",
+      "matches": true,
+      "expectedLength": 529,
+      "actualLength": 529,
+      "firstDifference": 529,
+      "expectedExcerpt": "ation_id) );",
+      "actualExcerpt": "ation_id) );"
+    },
+    {
+      "name": "private.can_create_organization_evolution",
+      "matches": true,
+      "expectedLength": 441,
+      "actualLength": 441,
+      "firstDifference": 441,
+      "expectedExcerpt": "ation_id) );",
+      "actualExcerpt": "ation_id) );"
+    },
+    {
+      "name": "private.create_organization_evolution",
+      "matches": true,
+      "expectedLength": 1582,
+      "actualLength": 1582,
+      "firstDifference": 1582,
+      "expectedExcerpt": " v_evo; END;",
+      "actualExcerpt": " v_evo; END;"
+    },
+    {
+      "name": "public.create_organization_evolution",
+      "matches": true,
+      "expectedLength": 135,
+      "actualLength": 135,
+      "firstDifference": 135,
+      "expectedExcerpt": "olution_id);",
+      "actualExcerpt": "olution_id);"
+    },
+    {
+      "name": "public.get_organization_evolution_access",
+      "matches": true,
+      "expectedLength": 188,
+      "actualLength": 188,
+      "firstDifference": 188,
+      "expectedExcerpt": "atient_id));",
+      "actualExcerpt": "atient_id));"
+    },
+    {
+      "name": "private.protect_evolution_context_and_clinic_signature",
+      "matches": true,
+      "expectedLength": 3021,
+      "actualLength": 3021,
+      "firstDifference": 3021,
+      "expectedExcerpt": "RN NEW; END;",
+      "actualExcerpt": "RN NEW; END;"
+    },
+    {
+      "name": "public.get_organization_dashboard",
+      "matches": true,
+      "expectedLength": 5545,
+      "actualLength": 5545,
+      "firstDifference": 5545,
+      "expectedExcerpt": "led) ); END;",
+      "actualExcerpt": "led) ); END;"
+    },
+    {
+      "name": "public.list_organization_admin_events",
+      "matches": true,
+      "expectedLength": 1678,
+      "actualLength": 1678,
+      "firstDifference": 1678,
+      "expectedExcerpt": "_limit; END;",
+      "actualExcerpt": "_limit; END;"
+    },
+    {
+      "name": "public.archive_organization_patient",
+      "matches": true,
+      "expectedLength": 1080,
+      "actualLength": 1080,
+      "firstDifference": 1080,
+      "expectedExcerpt": "tatus); END;",
+      "actualExcerpt": "tatus); END;"
+    },
+    {
+      "name": "public.reactivate_organization_patient",
+      "matches": true,
+      "expectedLength": 1331,
+      "actualLength": 1331,
+      "firstDifference": 1331,
+      "expectedExcerpt": "tatus); END;",
+      "actualExcerpt": "tatus); END;"
+    },
+    {
+      "name": "public.reassign_organization_patient_primary",
+      "matches": true,
+      "expectedLength": 3947,
+      "actualLength": 3947,
+      "firstDifference": 3947,
+      "expectedExcerpt": "et_id); END;",
+      "actualExcerpt": "et_id); END;"
+    }
+  ]
+}

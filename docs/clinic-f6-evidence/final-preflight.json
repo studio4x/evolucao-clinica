@@ -1,0 +1,46 @@
+{
+  "ref": "hwkdwinfckmjoriqxbjk",
+  "projectId": "prj_Hmm2uRREtw4qOqPf3Lhg78702hlM",
+  "teamId": "evolucao-clinica",
+  "deployment": {
+    "id": "dpl_BikeGnXz8VSkwmqLcavfJpgzTFhj",
+    "state": "READY",
+    "sha": "c73d589d2b0d1910b48e808104acb80628243698",
+    "branch": "feat/clinicas"
+  },
+  "health": {
+    "status": 200,
+    "redirected": false,
+    "json": true,
+    "body": {
+      "status": "ok"
+    }
+  },
+  "flags": {
+    "CLINIC_FEATURE_ENABLED": "SENSITIVE_UNREADABLE",
+    "VITE_CLINIC_FEATURE_ENABLED": "false",
+    "CLINIC_INVITATION_DELIVERY_ENABLED": "SENSITIVE_UNREADABLE",
+    "CLINIC_BILLING_ENABLED": "SENSITIVE_UNREADABLE",
+    "GOOGLE_INTEGRATIONS_ENABLED": "SENSITIVE_UNREADABLE",
+    "VITE_GOOGLE_INTEGRATIONS_ENABLED": "false"
+  },
+  "baseline": [
+    {
+      "environment": "staging",
+      "gate": false,
+      "organizations": 0,
+      "professionals": 3
+    }
+  ],
+  "stripe": {
+    "accountId": "acct_1TmBy9PI1KSTkIQA",
+    "keyMode": "test"
+  },
+  "brevo": {
+    "host": "smtp-relay.brevo.com",
+    "credentialConfigured": true,
+    "fromConfigured": true,
+    "trackingDisabled": "false",
+    "deliveryEnabled": "SENSITIVE_UNREADABLE"
+  }
+}

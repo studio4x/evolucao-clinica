@@ -25,11 +25,13 @@ const baseline = await api(`/v13/deployments/${alias.deployment?.id || alias.dep
 assert.equal(baseline.projectId, runtime.projectId);
 const variables = await api(`/v10/projects/${runtime.projectId}/env`);
 const flags = ['CLINIC_FEATURE_ENABLED', 'VITE_CLINIC_FEATURE_ENABLED', 'CLINIC_INVITATION_DELIVERY_ENABLED', 'CLINIC_BILLING_ENABLED', 'GOOGLE_INTEGRATIONS_ENABLED', 'VITE_GOOGLE_INTEGRATIONS_ENABLED'];
+const acceptedGateWrites: Record<string, string> = {};
 for (const key of flags) {
   const value = enabled && ['CLINIC_FEATURE_ENABLED', 'VITE_CLINIC_FEATURE_ENABLED'].includes(key) ? 'true' : 'false';
   const existing = variables.envs.find((row: any) => row.key === key && row.target.includes('production'));
   if (existing) await api(`/v9/projects/${runtime.projectId}/env/${existing.id}`, 'PATCH', { value });
   else await api(`/v10/projects/${runtime.projectId}/env`, 'POST', { key, value, type: 'plain', target: ['production'] });
+  acceptedGateWrites[key] = value;
 }
 const deployment = await api('/v13/deployments', 'POST', {
   name: project.name, project: runtime.projectId,
@@ -37,4 +39,4 @@ const deployment = await api('/v13/deployments', 'POST', {
   target: 'production', gitSource: { type: 'github', repoId: baseline.gitSource?.repoId || project.link?.repoId, ref: 'feat/clinicas', sha },
 });
 assert.equal(deployment.projectId, runtime.projectId);
-console.log(JSON.stringify({ staging: true, projectId: runtime.projectId, deploymentId: deployment.id, flags: enabled ? 'CLINIC_APP_TEMPORARILY_ON_EXTERNAL_OFF' : 'ALL_OFF', sha }));
+console.log(JSON.stringify({ staging: true, projectId: runtime.projectId, deploymentId: deployment.id, flags: enabled ? 'CLINIC_APP_TEMPORARILY_ON_EXTERNAL_OFF' : 'ALL_OFF', acceptedGateWrites, sha }));

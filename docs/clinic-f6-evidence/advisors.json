@@ -1,0 +1,617 @@
+{
+  "security": {
+    "result": {
+      "lints": [
+        {
+          "name": "rls_enabled_no_policy",
+          "title": "RLS Enabled No Policy",
+          "level": "INFO",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Detects cases where row level security (RLS) has been enabled on a table but no RLS policies have been created.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy",
+          "count": 2,
+          "findings": [
+            {
+              "detail": "Table \\`private.organization_invitation_deliveries\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "organization_invitation_deliveries",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Table \\`private.organization_invitation_handoffs\\` has RLS enabled, but no policies exist",
+              "metadata": {
+                "name": "organization_invitation_handoffs",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            }
+          ]
+        },
+        {
+          "name": "extension_in_public",
+          "title": "Extension in Public",
+          "level": "WARN",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Detects extensions installed in the \\`public\\` schema.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public",
+          "count": 1,
+          "findings": [
+            {
+              "detail": "Extension \\`vector\\` is installed in the public schema. Move it to another schema.",
+              "metadata": {
+                "name": "vector",
+                "type": "extension",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            }
+          ]
+        },
+        {
+          "name": "authenticated_security_definer_function_executable",
+          "title": "Signed-In Users Can Execute SECURITY DEFINER Function",
+          "level": "WARN",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Detects `SECURITY DEFINER` functions that are callable by signed-in users. Revoke `EXECUTE`, switch the function to `SECURITY INVOKER`, or move it out of your exposed API schema if signed-in users should not call it.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable",
+          "count": 21,
+          "findings": [
+            {
+              "detail": "Function `public.add_organization_patient_assignment(p_organization_patient_id uuid, p_professional_id uuid, p_assignment_role text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/add_organization_patient_assignment`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "add_organization_patient_assignment",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_patient_id uuid, p_professional_id uuid, p_assignment_role text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.archive_organization_patient(p_organization_patient_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/archive_organization_patient`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "archive_organization_patient",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_patient_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.change_organization_member_role(p_organization_id uuid, p_target_professional_id uuid, p_new_role text, p_reason text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/change_organization_member_role`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "change_organization_member_role",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_target_professional_id uuid, p_new_role text, p_reason text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.create_organization_patient(p_organization_id uuid, p_full_name text, p_birth_date date, p_phone text, p_primary_professional_id uuid, p_secondary_professional_ids uuid[], p_consultant_professional_ids uuid[])` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/create_organization_patient`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "create_organization_patient",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_full_name text, p_birth_date date, p_phone text, p_primary_professional_id uuid, p_secondary_professional_ids uuid[], p_consultant_professional_ids uuid[]",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.create_organization_with_owner(p_name text, p_legal_name text, p_trade_name text, p_document_number text, p_contact_email text, p_contact_phone text, p_locale text, p_timezone text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/create_organization_with_owner`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "create_organization_with_owner",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_name text, p_legal_name text, p_trade_name text, p_document_number text, p_contact_email text, p_contact_phone text, p_locale text, p_timezone text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.disable_organization_member_clinical_access(p_organization_id uuid, p_target_professional_id uuid, p_reason text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/disable_organization_member_clinical_access`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "disable_organization_member_clinical_access",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.enable_organization_member_clinical_access(p_organization_id uuid, p_target_professional_id uuid, p_reason text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/enable_organization_member_clinical_access`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "enable_organization_member_clinical_access",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.get_organization_dashboard(p_organization_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/get_organization_dashboard`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "get_organization_dashboard",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.get_organization_patient(p_organization_patient_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/get_organization_patient`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "get_organization_patient",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_patient_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.get_organization_seat_summary(p_organization_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/get_organization_seat_summary`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "get_organization_seat_summary",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.get_organization_team(p_organization_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/get_organization_team`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "get_organization_team",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.list_organization_admin_events(p_organization_id uuid, p_limit integer, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_event_type text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/list_organization_admin_events`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "list_organization_admin_events",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_limit integer, p_cursor_created_at timestamp with time zone, p_cursor_id uuid, p_event_type text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.list_organization_patients(p_organization_id uuid, p_search text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/list_organization_patients`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "list_organization_patients",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_search text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.reactivate_organization_member(p_organization_id uuid, p_target_professional_id uuid, p_reason text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/reactivate_organization_member`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "reactivate_organization_member",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.reactivate_organization_patient(p_organization_patient_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/reactivate_organization_patient`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "reactivate_organization_patient",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_patient_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.reassign_organization_patient_primary(p_organization_patient_id uuid, p_new_primary_professional_id uuid, p_keep_previous_as_secondary boolean)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/reassign_organization_patient_primary`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "reassign_organization_patient_primary",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_patient_id uuid, p_new_primary_professional_id uuid, p_keep_previous_as_secondary boolean",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.remove_organization_member(p_organization_id uuid, p_target_professional_id uuid, p_reason text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/remove_organization_member`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "remove_organization_member",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.revoke_organization_patient_assignment(p_assignment_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/revoke_organization_patient_assignment`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "revoke_organization_patient_assignment",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_assignment_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.suspend_organization_member(p_organization_id uuid, p_target_professional_id uuid, p_reason text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/suspend_organization_member`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "suspend_organization_member",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_target_professional_id uuid, p_reason text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.transfer_organization_owner(p_organization_id uuid, p_target_professional_id uuid)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/transfer_organization_owner`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "transfer_organization_owner",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_id uuid, p_target_professional_id uuid",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            },
+            {
+              "detail": "Function `public.update_organization_patient(p_organization_patient_id uuid, p_full_name text, p_birth_date date, p_phone text)` can be executed by the `authenticated` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/update_organization_patient`. Revoke `EXECUTE` or switch it to `SECURITY INVOKER` if that is not intentional.",
+              "metadata": {
+                "name": "update_organization_patient",
+                "schema": "public",
+                "language": "plpgsql",
+                "arguments": "p_organization_patient_id uuid, p_full_name text, p_birth_date date, p_phone text",
+                "security_definer": true
+              },
+              "observed_at": "2026-09-18T14:13:06.225Z"
+            }
+          ]
+        },
+        {
+          "name": "auth_leaked_password_protection",
+          "title": "Leaked Password Protection Disabled",
+          "level": "WARN",
+          "facing": "EXTERNAL",
+          "categories": [
+            "SECURITY"
+          ],
+          "description": "Leaked password protection is currently disabled.",
+          "remediation": "https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection",
+          "count": 1,
+          "findings": [
+            {
+              "detail": "Supabase Auth prevents the use of compromised passwords by checking against HaveIBeenPwned.org. Enable this feature to enhance security.",
+              "metadata": {
+                "type": "auth",
+                "entity": "Auth"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "performance": {
+    "result": {
+      "lints": [
+        {
+          "name": "unindexed_foreign_keys",
+          "title": "Unindexed foreign keys",
+          "level": "INFO",
+          "facing": "EXTERNAL",
+          "categories": [
+            "PERFORMANCE"
+          ],
+          "description": "Identifies foreign key constraints without a covering index, which can impact database performance.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0001_unindexed_foreign_keys",
+          "count": 14,
+          "findings": [
+            {
+              "detail": "Table \\`private.clinic_stripe_events\\` has a foreign key \\`clinic_stripe_events_organization_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "clinic_stripe_events",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "clinic_stripe_events_organization_id_fkey",
+                "fkey_columns": [
+                  5
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.clinic_stripe_transactions\\` has a foreign key \\`clinic_stripe_transactions_organization_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "clinic_stripe_transactions",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "clinic_stripe_transactions_organization_id_fkey",
+                "fkey_columns": [
+                  2
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.organization_admin_events\\` has a foreign key \\`organization_admin_events_actor_professional_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_admin_events",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "organization_admin_events_actor_professional_id_fkey",
+                "fkey_columns": [
+                  5
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.organization_admin_events\\` has a foreign key \\`organization_admin_events_new_primary_professional_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_admin_events",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "organization_admin_events_new_primary_professional_id_fkey",
+                "fkey_columns": [
+                  18
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.organization_admin_events\\` has a foreign key \\`organization_admin_events_old_primary_professional_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_admin_events",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "organization_admin_events_old_primary_professional_id_fkey",
+                "fkey_columns": [
+                  17
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.organization_admin_events\\` has a foreign key \\`organization_admin_events_subject_professional_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_admin_events",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "organization_admin_events_subject_professional_id_fkey",
+                "fkey_columns": [
+                  6
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.organization_checkout_attempts\\` has a foreign key \\`organization_checkout_attempts_actor_professional_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_checkout_attempts",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "organization_checkout_attempts_actor_professional_id_fkey",
+                "fkey_columns": [
+                  3
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.organization_checkout_attempts\\` has a foreign key \\`organization_checkout_attempts_plan_code_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_checkout_attempts",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "organization_checkout_attempts_plan_code_fkey",
+                "fkey_columns": [
+                  4
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`private.organization_subscriptions\\` has a foreign key \\`organization_subscriptions_plan_code_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_subscriptions",
+                "type": "table",
+                "schema": "private",
+                "fkey_name": "organization_subscriptions_plan_code_fkey",
+                "fkey_columns": [
+                  3
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`public.evolution_templates\\` has a foreign key \\`evolution_templates_professional_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "evolution_templates",
+                "type": "table",
+                "schema": "public",
+                "fkey_name": "evolution_templates_professional_id_fkey",
+                "fkey_columns": [
+                  5
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`public.evolutions\\` has a foreign key \\`evolutions_template_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "evolutions",
+                "type": "table",
+                "schema": "public",
+                "fkey_name": "evolutions_template_id_fkey",
+                "fkey_columns": [
+                  15
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`public.organization_patients\\` has a foreign key \\`organization_patients_created_by_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "organization_patients",
+                "type": "table",
+                "schema": "public",
+                "fkey_name": "organization_patients_created_by_fkey",
+                "fkey_columns": [
+                  5
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`public.patient_professional_assignments\\` has a foreign key \\`patient_professional_assignments_assigned_by_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "patient_professional_assignments",
+                "type": "table",
+                "schema": "public",
+                "fkey_name": "patient_professional_assignments_assigned_by_fkey",
+                "fkey_columns": [
+                  9
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Table \\`public.patients\\` has a foreign key \\`patients_default_template_id_fkey\\` without a covering index. This can lead to suboptimal query performance.",
+              "metadata": {
+                "name": "patients",
+                "type": "table",
+                "schema": "public",
+                "fkey_name": "patients_default_template_id_fkey",
+                "fkey_columns": [
+                  19
+                ]
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            }
+          ]
+        },
+        {
+          "name": "unused_index",
+          "title": "Unused Index",
+          "level": "INFO",
+          "facing": "EXTERNAL",
+          "categories": [
+            "PERFORMANCE"
+          ],
+          "description": "Detects if an index has never been used and may be a candidate for removal.",
+          "remediation": "https://supabase.com/docs/guides/database/database-linter?lint=0005_unused_index",
+          "count": 8,
+          "findings": [
+            {
+              "detail": "Index \\`organization_subscriptions_stripe_customer_idx\\` on table \\`private.organization_subscriptions\\` has not been used",
+              "metadata": {
+                "name": "organization_subscriptions",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Index \\`clinic_stripe_events_subscription_idx\\` on table \\`private.clinic_stripe_events\\` has not been used",
+              "metadata": {
+                "name": "clinic_stripe_events",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Index \\`clinic_stripe_events_status_idx\\` on table \\`private.clinic_stripe_events\\` has not been used",
+              "metadata": {
+                "name": "clinic_stripe_events",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Index \\`organization_invitations_by_email\\` on table \\`public.organization_invitations\\` has not been used",
+              "metadata": {
+                "name": "organization_invitations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Index \\`organization_invitations_by_invited_by\\` on table \\`public.organization_invitations\\` has not been used",
+              "metadata": {
+                "name": "organization_invitations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Index \\`organization_invitations_by_accepted_by\\` on table \\`public.organization_invitations\\` has not been used",
+              "metadata": {
+                "name": "organization_invitations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Index \\`organization_invitations_by_revoked_by\\` on table \\`public.organization_invitations\\` has not been used",
+              "metadata": {
+                "name": "organization_invitations",
+                "type": "table",
+                "schema": "public"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            },
+            {
+              "detail": "Index \\`organization_subscriptions_by_status\\` on table \\`private.organization_subscriptions\\` has not been used",
+              "metadata": {
+                "name": "organization_subscriptions",
+                "type": "table",
+                "schema": "private"
+              },
+              "observed_at": "2026-09-18T14:13:06.480Z"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

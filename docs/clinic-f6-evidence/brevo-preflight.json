@@ -1,0 +1,13 @@
+{
+  "status": "FAIL",
+  "smtpAuthentication": true,
+  "senderConfigured": true,
+  "senderProviderVerification": "PENDING",
+  "trackingDisabledDeclaration": false,
+  "providerTrackingAndClickRewritingVerification": "PENDING",
+  "directFragment": true,
+  "intermediaryRedirectDesigned": false,
+  "gate": "OFF",
+  "sendAttempted": false,
+  "realControlledDelivery": "WAITING_FOR_EXPLICIT_AUTHORIZATION"
+}
