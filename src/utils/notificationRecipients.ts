@@ -8,6 +8,11 @@ export type NotificationProfessionalOption = {
   google_email: string;
 };
 
+export type NotificationProfessionalContact = {
+  id: string;
+  whatsappNumber?: string | null;
+};
+
 export type ProfessionalFunnelStageOption = {
   key: ProfessionalFunnelStageKey;
   label: string;
@@ -17,6 +22,7 @@ export type ProfessionalFunnelStageOption = {
 export type ProfessionalFunnelRecipient = {
   id: string;
   stage: ProfessionalFunnelStageKey;
+  whatsappNumber?: string | null;
 };
 
 export type ProfessionalFunnelBoardForNotifications = {
