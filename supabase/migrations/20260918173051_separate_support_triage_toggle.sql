@@ -10,7 +10,7 @@ SET
     ELSE triage_enabled
   END,
   intro_message = CASE
-    WHEN mode = 'triage' THEN 'Olá! Recebemos sua solicitação e ela já está com nossa equipe.'
+    WHEN mode = 'triage' THEN 'Olá! Recebemos sua solicitação e ela já está com nossa equipe. Vamos analisar o que você enviou e responder por aqui dentro do prazo de atendimento previsto para o seu plano.'
     ELSE intro_message
   END,
   updated_at = now()
