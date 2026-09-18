@@ -151,6 +151,135 @@ const generateAnswer = async (supabaseAdmin: SupabaseClient, settings: any, tick
   return { content: content.slice(0, 12000), model };
 };
 
+const getFirstResponseWindow = (ticket: any) => {
+  if (ticket?.priority === 'high') return '2 horas úteis';
+  if (ticket?.priority === 'medium') {
+    return ticket?.category === 'payment' ? '12 horas úteis' : '24 horas úteis';
+  }
+  return '48 horas úteis';
+};
+
+const buildTriageFallback = (responseWindow: string) =>
+  `Olá! Recebemos sua solicitação e ela já está com nossa equipe. Vamos analisar o que você enviou e responder por aqui em até ${responseWindow}. Se quiser acrescentar alguma informação enquanto isso, pode enviar nesta conversa.`;
+
+const generateTriageAnswer = async (supabaseAdmin: SupabaseClient, settings: any, ticket: any) => {
+  const responseWindow = getFirstResponseWindow(ticket);
+  const fallback = buildTriageFallback(responseWindow);
+
+  try {
+    const configured = await getGeminiSettings(supabaseAdmin);
+    const apiKey = configured.apiKey;
+    const model = String(settings?.model_override || configured.modelName || DEFAULT_MODEL).trim();
+    if (!apiKey) return { content: fallback, model: null };
+
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{
+        role: 'user',
+        parts: [{
+          text: [
+            'Escreva uma mensagem curta de confirmação de recebimento para um profissional que acabou de abrir uma solicitação de suporte no Evolução Clínica.',
+            'A mensagem deve ser humana, acolhedora, simples e profissional.',
+            'Não tente resolver a dúvida agora. Apenas confirme o recebimento e informe que a equipe responderá em breve.',
+            `O prazo correto e obrigatório para a primeira resposta é: até ${responseWindow}.`,
+            'Use exatamente esse prazo; não invente outro prazo e não prometa resposta antes dele.',
+            'Não use os termos IA, inteligência artificial, bot, automação, SLA, escalonamento, escalado, protocolo ou termos técnicos internos.',
+            'Não mencione regras internas, prioridade de fila ou funcionamento do sistema.',
+            'Use no máximo 3 frases e termine de forma natural.',
+            `Assunto informado: ${String(ticket?.subject || '').trim()}.`,
+            `Descrição recebida: ${String(ticket?.description || '').trim()}.`,
+          ].join('\n')
+        }]
+      }]
+    });
+
+    const content = String(response.text || '').trim();
+    const hasRequiredWindow = content.toLowerCase().includes(responseWindow.toLowerCase());
+    const hasForbiddenTerm = /\b(sla|bot|automação|escalonamento|escalado|escalada|protocolo)\b|inteligência artificial|\bia\b/i.test(content);
+
+    if (!content || !hasRequiredWindow || hasForbiddenTerm) {
+      return { content: fallback, model };
+    }
+
+    return { content: content.slice(0, 1500), model };
+  } catch (error) {
+    console.warn('[SupportAI] Falha ao gerar primeiro atendimento; usando mensagem segura de apoio:', error);
+    return { content: fallback, model: null };
+  }
+};
+
+const processTriage = async (input: {
+  supabaseAdmin: SupabaseClient;
+  settings: any;
+  ticket: any;
+  requesterId: string;
+}) => {
+  const { supabaseAdmin, settings, ticket, requesterId } = input;
+  const eventKey = `ticket:${ticket.id}:create`;
+
+  const { data: previousRun } = await supabaseAdmin
+    .from('support_ai_runs')
+    .select('id, status, result_type')
+    .eq('event_key', eventKey)
+    .eq('mode', 'triage')
+    .maybeSingle();
+
+  if (previousRun) {
+    return { processed: false, reason: 'already_processed', run: previousRun };
+  }
+
+  const runId = randomUUID();
+  const { error: runError } = await supabaseAdmin.from('support_ai_runs').insert({
+    id: runId,
+    ticket_id: ticket.id,
+    source_message_id: null,
+    event_key: eventKey,
+    mode: 'triage',
+    status: 'processing',
+    result_type: 'intro',
+    requested_by: requesterId
+  });
+  if (runError) {
+    if (runError.code === '23505') return { processed: false, reason: 'already_processing' };
+    throw runError;
+  }
+
+  try {
+    const generated = await generateTriageAnswer(supabaseAdmin, settings, ticket);
+    const senderId = await resolveSystemSender(supabaseAdmin, settings.updated_by);
+    const { error: messageError } = await supabaseAdmin.from('support_messages').insert({
+      ticket_id: ticket.id,
+      sender_id: senderId,
+      message: generated.content,
+      origin: 'support_ai',
+      sender_label: 'Equipe Evolução Clínica',
+      ai_run_id: runId
+    });
+    if (messageError) throw messageError;
+
+    await updateRun(supabaseAdmin, runId, {
+      status: 'completed',
+      result_type: 'intro',
+      response_content: generated.content,
+      model: generated.model
+    });
+
+    return {
+      processed: true,
+      mode: 'triage' as const,
+      resultType: 'intro' as const,
+      responseWindow: getFirstResponseWindow(ticket)
+    };
+  } catch (error: any) {
+    await updateRun(supabaseAdmin, runId, {
+      status: 'error',
+      error_message: String(error?.message || error || 'Erro desconhecido').slice(0, 2000)
+    });
+    throw error;
+  }
+};
+
 const updateRun = async (supabaseAdmin: SupabaseClient, runId: string, values: Record<string, unknown>) => {
   await supabaseAdmin
     .from('support_ai_runs')
@@ -168,9 +297,8 @@ const processEvent = async (input: {
 }) => {
   const { supabaseAdmin, ticketId, eventType, sourceMessageId, requesterId, requesterRole } = input;
   const settings = await getSupportSettings(supabaseAdmin);
-  if (!settings?.enabled) return { processed: false, reason: 'disabled' };
+  if (!settings) return { processed: false, reason: 'not_configured' };
 
-  const mode = String(settings.mode || 'draft') as SupportAiMode;
   const { data: ticket, error: ticketError } = await supabaseAdmin
     .from('support_tickets')
     .select('*')
@@ -181,6 +309,17 @@ const processEvent = async (input: {
 
   if (requesterRole === 'admin' || ticket.user_id !== requesterId) {
     return { processed: false, reason: 'not_professional_event' };
+  }
+
+  if (eventType === 'create' && settings.triage_enabled === true) {
+    return processTriage({ supabaseAdmin, settings, ticket, requesterId });
+  }
+
+  if (!settings.enabled) return { processed: false, reason: 'responses_disabled' };
+
+  const mode = String(settings.mode || 'draft') as SupportAiMode;
+  if (mode === 'triage') {
+    return { processed: false, reason: 'legacy_triage_mode' };
   }
 
   if (eventType === 'message') {
@@ -195,10 +334,6 @@ const processEvent = async (input: {
     if (!sourceMessage || sourceMessage.ticket_id !== ticketId || sourceMessage.sender_id !== requesterId || sourceMessage.origin === 'support_ai') {
       return { processed: false, reason: 'invalid_source_message' };
     }
-  }
-
-  if (mode === 'triage' && eventType !== 'create') {
-    return { processed: false, reason: 'triage_only_on_create' };
   }
 
   const eventKey = eventType === 'create' ? `ticket:${ticketId}:create` : `message:${sourceMessageId}`;
@@ -226,25 +361,6 @@ const processEvent = async (input: {
   }
 
   try {
-    if (mode === 'triage') {
-      const intro = String(settings.intro_message || '').trim();
-      if (!intro) throw new Error('Mensagem introdutória não configurada.');
-      const senderId = await resolveSystemSender(supabaseAdmin, settings.updated_by);
-      const { error: messageError } = await supabaseAdmin.from('support_messages').insert({
-        ticket_id: ticketId,
-        sender_id: senderId,
-        message: intro,
-        origin: 'support_ai',
-        sender_label: 'Assistente de suporte',
-        ai_run_id: runId
-      });
-      if (messageError) throw messageError;
-      await updateRun(supabaseAdmin, runId, {
-        status: 'completed', result_type: 'intro', response_content: intro
-      });
-      return { processed: true, mode, resultType: 'intro' };
-    }
-
     const generated = await generateAnswer(supabaseAdmin, settings, ticket);
 
     if (mode === 'draft') {
@@ -269,7 +385,7 @@ const processEvent = async (input: {
       sender_id: senderId,
       message: generated.content,
       origin: 'support_ai',
-      sender_label: 'Assistente de suporte',
+      sender_label: 'Equipe Evolução Clínica',
       ai_run_id: runId
     });
     if (replyError) throw replyError;
