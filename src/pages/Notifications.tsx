@@ -617,7 +617,7 @@ export default function Notifications() {
                               alt="Capa da notificação"
                               referrerPolicy="no-referrer"
                               loading="eager"
-                              className="block aspect-[16/9] w-full max-h-64 object-cover md:max-h-72"
+                              className="block w-full h-auto object-contain"
                             />
                           </div>
                         )}
