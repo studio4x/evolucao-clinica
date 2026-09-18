@@ -12,6 +12,8 @@ const signaturePad = readFileSync('src/components/patients/sessions/SessionSigna
 assert.match(migration, /create table if not exists public\.patient_sessions/);
 assert.match(migration, /create table if not exists public\.patient_session_signatures/);
 assert.match(migration, /create table if not exists public\.patient_session_audit/);
+const packageMigration = readFileSync('supabase/migrations/20260918193400_add_patient_session_packages.sql', 'utf8');
+assert.match(packageMigration, /create table if not exists public\.patient_session_packages/);
 assert.match(migration, /alter table public\.patient_sessions enable row level security/);
 assert.match(migration, /session-signatures/);
 assert.match(hardening, /guard_signed_patient_session_changes/);
