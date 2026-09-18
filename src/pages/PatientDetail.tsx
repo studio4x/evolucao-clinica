@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download, CloudOff, MoreVertical, LayoutDashboard } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download, CloudOff, MoreVertical, LayoutDashboard, ClipboardList } from 'lucide-react';
 import { transcribeAudio } from '../services/aiTranscription';
 import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
@@ -25,6 +25,7 @@ import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEd
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { resolveHorizontalSwipe } from '../utils/horizontalSwipe';
 import PatientFilesCard from '../components/patients/PatientFilesCard';
+import PatientAnamnesisSummaryCard from '../components/patients/PatientAnamnesisSummaryCard';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -2540,6 +2541,14 @@ export default function PatientDetail() {
                 </div>
               )}
 
+              <Link
+                to={`/painel/patients/${id}/anamnesis`}
+                className="hidden xl:flex w-full items-center justify-center space-x-2 px-4 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors text-sm font-medium"
+              >
+                <ClipboardList size={16} />
+                <span>Abrir anamnese</span>
+              </Link>
+
               {patient.target_folder_id && (
                 <a
                   href={`https://drive.google.com/drive/folders/${encodeURIComponent(patient.target_folder_id)}`}
@@ -2575,6 +2584,13 @@ export default function PatientDetail() {
             </div>
           </div>
 
+          <div className={`order-3 xl:hidden ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
+            <PatientAnamnesisSummaryCard
+              patientId={patient.id}
+              href={`/painel/patients/${id}/anamnesis`}
+            />
+          </div>
+
           <div className={`order-3 xl:order-none ${mobileTabVisibility('files')}`}>
             <PatientFilesCard
               patientId={patient.id}
@@ -2585,7 +2601,7 @@ export default function PatientDetail() {
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}
-          <div className={`card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-3 xl:order-none ${mobileTabVisibility('overview')}`}>
+          <div className={`card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-4 xl:order-none ${mobileTabVisibility('overview')}`}>
             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/20 to-transparent pointer-events-none" />
             
             <div className="flex items-center justify-between mb-3">

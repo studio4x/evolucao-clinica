@@ -1,0 +1,216 @@
+import { supabase } from '../supabaseClient';
+
+export type AnamnesisFieldType =
+  | 'text'
+  | 'textarea'
+  | 'date'
+  | 'number'
+  | 'select'
+  | 'multiselect'
+  | 'yes_no'
+  | 'scale';
+
+export type AnamnesisField = {
+  key: string;
+  label: string;
+  type: AnamnesisFieldType;
+  placeholder?: string;
+  helpText?: string;
+  options?: string[];
+  min?: number;
+  max?: number;
+};
+
+export type AnamnesisSection = {
+  key: string;
+  title: string;
+  description?: string;
+  fields: AnamnesisField[];
+};
+
+export type AnamnesisTemplateSchema = {
+  sections: AnamnesisSection[];
+};
+
+export type AnamnesisTemplate = {
+  id: string;
+  templateKey: string;
+  name: string;
+  professionalGroup: string;
+  professionalTitles: string[];
+  version: number;
+  schema: AnamnesisTemplateSchema;
+};
+
+export type AnamnesisAnswers = Record<string, string | string[] | number | boolean | null>;
+
+export type PatientAnamnesis = {
+  id: string;
+  patientId: string;
+  professionalId: string;
+  templateId: string;
+  templateKey: string;
+  templateName: string;
+  templateVersion: number;
+  templateSnapshot: AnamnesisTemplateSchema;
+  answers: AnamnesisAnswers;
+  status: 'draft' | 'completed';
+  isCurrent: boolean;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type TemplateRow = {
+  id: string;
+  template_key: string;
+  name: string;
+  professional_group: string;
+  professional_titles: string[] | null;
+  version: number;
+  schema: AnamnesisTemplateSchema;
+};
+
+type AnamnesisRow = {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  template_id: string;
+  template_key: string;
+  template_name: string;
+  template_version: number;
+  template_snapshot: AnamnesisTemplateSchema;
+  answers: AnamnesisAnswers | null;
+  status: 'draft' | 'completed';
+  is_current: boolean;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const mapTemplate = (row: TemplateRow): AnamnesisTemplate => ({
+  id: row.id,
+  templateKey: row.template_key,
+  name: row.name,
+  professionalGroup: row.professional_group,
+  professionalTitles: row.professional_titles || [],
+  version: row.version,
+  schema: row.schema,
+});
+
+const mapAnamnesis = (row: AnamnesisRow): PatientAnamnesis => ({
+  id: row.id,
+  patientId: row.patient_id,
+  professionalId: row.professional_id,
+  templateId: row.template_id,
+  templateKey: row.template_key,
+  templateName: row.template_name,
+  templateVersion: row.template_version,
+  templateSnapshot: row.template_snapshot,
+  answers: row.answers || {},
+  status: row.status,
+  isCurrent: row.is_current,
+  completedAt: row.completed_at,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
+export function getRecommendedAnamnesisTemplate(
+  templates: AnamnesisTemplate[],
+  professionalTitle?: string | null
+) {
+  const normalized = String(professionalTitle || '').trim().toLocaleLowerCase('pt-BR');
+  if (normalized) {
+    const matched = templates.find((template) =>
+      template.professionalTitles.some(
+        (title) => title.trim().toLocaleLowerCase('pt-BR') === normalized
+      )
+    );
+    if (matched) return matched;
+  }
+  return templates.find((template) => template.templateKey === 'general') || templates[0] || null;
+}
+
+export function hasMeaningfulAnamnesisAnswers(answers: AnamnesisAnswers) {
+  return Object.values(answers || {}).some((value) => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim().length > 0;
+    return value !== null && value !== undefined && value !== false;
+  });
+}
+
+export async function fetchAnamnesisTemplates() {
+  const { data, error } = await supabase
+    .from('anamnesis_templates')
+    .select('id, template_key, name, professional_group, professional_titles, version, schema')
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((row) => mapTemplate(row as TemplateRow));
+}
+
+export async function fetchCurrentPatientAnamnesis(patientId: string) {
+  const { data, error } = await supabase
+    .from('patient_anamneses')
+    .select('*')
+    .eq('patient_id', patientId)
+    .eq('is_current', true)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapAnamnesis(data as AnamnesisRow) : null;
+}
+
+export async function fetchPatientAnamnesisHistory(patientId: string) {
+  const { data, error } = await supabase
+    .from('patient_anamneses')
+    .select('*')
+    .eq('patient_id', patientId)
+    .eq('is_current', false)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map((row) => mapAnamnesis(row as AnamnesisRow));
+}
+
+export async function startPatientAnamnesis(
+  patientId: string,
+  templateId: string,
+  archiveCurrent = false
+) {
+  const { data, error } = await supabase.rpc('start_patient_anamnesis', {
+    p_patient_id: patientId,
+    p_template_id: templateId,
+    p_archive_current: archiveCurrent,
+  });
+
+  if (error) throw error;
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) throw new Error('Não foi possível iniciar a anamnese.');
+  return mapAnamnesis(row as AnamnesisRow);
+}
+
+export async function savePatientAnamnesis(
+  id: string,
+  input: {
+    answers?: AnamnesisAnswers;
+    status?: 'draft' | 'completed';
+    completedAt?: string | null;
+  }
+) {
+  const changes: Record<string, unknown> = {};
+  if (input.answers) changes.answers = input.answers;
+  if (input.status) changes.status = input.status;
+  if (input.completedAt !== undefined) changes.completed_at = input.completedAt;
+
+  const { data, error } = await supabase
+    .from('patient_anamneses')
+    .update(changes)
+    .eq('id', id)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+  return mapAnamnesis(data as AnamnesisRow);
+}
