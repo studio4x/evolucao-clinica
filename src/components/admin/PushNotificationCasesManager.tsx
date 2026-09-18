@@ -40,8 +40,8 @@ export default function PushNotificationCasesManager() {
   }, []);
 
   useEffect(() => {
-    if (isOpen && !cases && !loading) void loadCases();
-  }, [cases, isOpen, loadCases, loading]);
+    if (isOpen && !cases) void loadCases();
+  }, [cases, isOpen, loadCases]);
 
   const toggleCase = async (key: PushNotificationCase) => {
     if (!cases) return;
