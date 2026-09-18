@@ -23,22 +23,36 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
+    const mediaQuery = window.matchMedia('(min-width: 1280px)');
 
-    fetchCurrentPatientAnamnesis(patientId)
-      .then((data) => {
-        if (active) setAnamnesis(data);
-      })
-      .catch((error) => {
-        console.warn('[Anamnesis] Não foi possível carregar o resumo:', error);
-        if (active) setAnamnesis(null);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const loadWhenVisible = () => {
+      if (!active) return;
+
+      if (mediaQuery.matches) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      fetchCurrentPatientAnamnesis(patientId)
+        .then((data) => {
+          if (active) setAnamnesis(data);
+        })
+        .catch((error) => {
+          console.warn('[Anamnesis] Não foi possível carregar o resumo:', error);
+          if (active) setAnamnesis(null);
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    };
+
+    loadWhenVisible();
+    mediaQuery.addEventListener('change', loadWhenVisible);
 
     return () => {
       active = false;
+      mediaQuery.removeEventListener('change', loadWhenVisible);
     };
   }, [patientId]);
 

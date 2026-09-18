@@ -61,6 +61,20 @@ export type PatientAnamnesis = {
   updatedAt: string;
 };
 
+export type PatientAnamnesisRevision = {
+  id: string;
+  anamnesisId: string;
+  patientId: string;
+  professionalId: string;
+  changedBy: string | null;
+  eventType: 'answers_updated' | 'completed' | 'reopened' | 'archived';
+  previousAnswers: AnamnesisAnswers;
+  newAnswers: AnamnesisAnswers;
+  previousStatus: 'draft' | 'completed';
+  newStatus: 'draft' | 'completed';
+  changedAt: string;
+};
+
 type TemplateRow = {
   id: string;
   template_key: string;
@@ -88,6 +102,20 @@ type AnamnesisRow = {
   updated_at: string;
 };
 
+type RevisionRow = {
+  id: string;
+  anamnesis_id: string;
+  patient_id: string;
+  professional_id: string;
+  changed_by: string | null;
+  event_type: PatientAnamnesisRevision['eventType'];
+  previous_answers: AnamnesisAnswers | null;
+  new_answers: AnamnesisAnswers | null;
+  previous_status: 'draft' | 'completed';
+  new_status: 'draft' | 'completed';
+  changed_at: string;
+};
+
 const mapTemplate = (row: TemplateRow): AnamnesisTemplate => ({
   id: row.id,
   templateKey: row.template_key,
@@ -113,6 +141,20 @@ const mapAnamnesis = (row: AnamnesisRow): PatientAnamnesis => ({
   completedAt: row.completed_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+});
+
+const mapRevision = (row: RevisionRow): PatientAnamnesisRevision => ({
+  id: row.id,
+  anamnesisId: row.anamnesis_id,
+  patientId: row.patient_id,
+  professionalId: row.professional_id,
+  changedBy: row.changed_by,
+  eventType: row.event_type,
+  previousAnswers: row.previous_answers || {},
+  newAnswers: row.new_answers || {},
+  previousStatus: row.previous_status,
+  newStatus: row.new_status,
+  changedAt: row.changed_at,
 });
 
 export function getRecommendedAnamnesisTemplate(
@@ -174,6 +216,18 @@ export async function fetchPatientAnamnesisHistory(patientId: string) {
   return (data || []).map((row) => mapAnamnesis(row as AnamnesisRow));
 }
 
+export async function fetchPatientAnamnesisRevisions(patientId: string, limit = 30) {
+  const { data, error } = await supabase
+    .from('patient_anamnesis_revisions')
+    .select('*')
+    .eq('patient_id', patientId)
+    .order('changed_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []).map((row) => mapRevision(row as RevisionRow));
+}
+
 export async function startPatientAnamnesis(
   patientId: string,
   templateId: string,
@@ -200,8 +254,8 @@ export async function savePatientAnamnesis(
   }
 ) {
   const changes: Record<string, unknown> = {};
-  if (input.answers) changes.answers = input.answers;
-  if (input.status) changes.status = input.status;
+  if (input.answers !== undefined) changes.answers = input.answers;
+  if (input.status !== undefined) changes.status = input.status;
   if (input.completedAt !== undefined) changes.completed_at = input.completedAt;
 
   const { data, error } = await supabase

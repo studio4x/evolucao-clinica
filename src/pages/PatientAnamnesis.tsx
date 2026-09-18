@@ -1,15 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useBeforeUnload,
+  useNavigate,
+  useParams,
+} from 'react-router-dom';
 import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
   ClipboardList,
   Clock3,
+  Eye,
   History as HistoryIcon,
   Loader2,
+  PlusCircle,
   RotateCcw,
   Save,
+  X,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
@@ -19,17 +26,23 @@ import {
   fetchAnamnesisTemplates,
   fetchCurrentPatientAnamnesis,
   fetchPatientAnamnesisHistory,
+  fetchPatientAnamnesisRevisions,
   getRecommendedAnamnesisTemplate,
   hasMeaningfulAnamnesisAnswers,
   savePatientAnamnesis,
   startPatientAnamnesis,
   type AnamnesisAnswers,
   type AnamnesisField,
+  type AnamnesisSection,
   type AnamnesisTemplate,
   type PatientAnamnesis,
+  type PatientAnamnesisRevision,
 } from '../services/anamnesis';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+const AUTOSAVE_DELAY_MS = 900;
+const AUTOSAVE_MAX_ATTEMPTS = 3;
 
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -46,15 +59,44 @@ const fieldHasValue = (value: unknown) => {
   return value !== null && value !== undefined && value !== false;
 };
 
+const answerSignature = (answers: AnamnesisAnswers) => JSON.stringify(answers || {});
+
+const orderSections = (sections: AnamnesisSection[] = []) => {
+  const goals = sections.filter((section) => section.key === 'goals');
+  const others = sections.filter((section) => section.key !== 'goals');
+  return [...others, ...goals];
+};
+
+const formatAnswer = (value: AnamnesisAnswers[string]) => {
+  if (Array.isArray(value)) return value.join(', ');
+  if (typeof value === 'boolean') return value ? 'Sim' : 'Não';
+  if (value === null || value === undefined || value === '') return 'Não informado';
+  return String(value);
+};
+
+const revisionLabel = (eventType: PatientAnamnesisRevision['eventType']) => {
+  switch (eventType) {
+    case 'completed':
+      return 'Anamnese concluída';
+    case 'reopened':
+      return 'Anamnese reaberta';
+    case 'archived':
+      return 'Versão arquivada';
+    default:
+      return 'Alteração salva';
+  }
+};
+
 type FieldProps = {
   field: AnamnesisField;
   value: AnamnesisAnswers[string];
+  disabled?: boolean;
   onChange: (value: AnamnesisAnswers[string]) => void;
 };
 
-function AnamnesisFieldInput({ field, value, onChange }: FieldProps) {
+function AnamnesisFieldInput({ field, value, disabled = false, onChange }: FieldProps) {
   const baseClass =
-    'w-full rounded-xl border border-brand-border bg-white px-3.5 py-3 text-sm text-brand-text outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10';
+    'w-full rounded-xl border border-brand-border bg-white px-3.5 py-3 text-sm text-brand-text outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10 disabled:cursor-not-allowed disabled:bg-brand-bg/60 disabled:text-brand-text-muted disabled:opacity-80';
 
   if (field.type === 'textarea') {
     return (
@@ -63,7 +105,8 @@ function AnamnesisFieldInput({ field, value, onChange }: FieldProps) {
         onChange={(event) => onChange(event.target.value)}
         placeholder={field.placeholder}
         rows={4}
-        className={`${baseClass} min-h-[110px] resize-y`}
+        disabled={disabled}
+        className={`${baseClass} min-h-[110px] resize-y disabled:resize-none`}
       />
     );
   }
@@ -73,6 +116,7 @@ function AnamnesisFieldInput({ field, value, onChange }: FieldProps) {
       <select
         value={typeof value === 'string' ? value : ''}
         onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
         className={baseClass}
       >
         <option value="">Selecione...</option>
@@ -92,15 +136,18 @@ function AnamnesisFieldInput({ field, value, onChange }: FieldProps) {
           return (
             <label
               key={option}
-              className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2.5 text-xs transition-colors ${
-                checked
-                  ? 'border-brand-primary/30 bg-brand-primary/5 text-brand-primary'
-                  : 'border-brand-border bg-white text-brand-text'
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs transition-colors ${
+                disabled
+                  ? 'cursor-not-allowed bg-brand-bg/60 text-brand-text-muted opacity-80'
+                  : checked
+                    ? 'cursor-pointer border-brand-primary/30 bg-brand-primary/5 text-brand-primary'
+                    : 'cursor-pointer border-brand-border bg-white text-brand-text'
               }`}
             >
               <input
                 type="checkbox"
                 checked={checked}
+                disabled={disabled}
                 onChange={(event) => {
                   const next = event.target.checked
                     ? [...selected, option]
@@ -128,8 +175,9 @@ function AnamnesisFieldInput({ field, value, onChange }: FieldProps) {
           <button
             key={option.label}
             type="button"
+            disabled={disabled}
             onClick={() => onChange(option.value)}
-            className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${
+            className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
               current === option.value
                 ? 'border-brand-primary bg-brand-primary/10 text-brand-primary'
                 : 'border-brand-border bg-white text-brand-text'
@@ -153,8 +201,9 @@ function AnamnesisFieldInput({ field, value, onChange }: FieldProps) {
           min={min}
           max={max}
           value={numeric}
+          disabled={disabled}
           onChange={(event) => onChange(Number(event.target.value))}
-          className="w-full accent-brand-primary"
+          className="w-full accent-brand-primary disabled:cursor-not-allowed disabled:opacity-60"
         />
         <div className="flex justify-between text-[10px] text-brand-text-muted">
           <span>{min}</span>
@@ -179,6 +228,7 @@ function AnamnesisFieldInput({ field, value, onChange }: FieldProps) {
       placeholder={field.placeholder}
       min={field.type === 'number' ? field.min : undefined}
       max={field.type === 'number' ? field.max : undefined}
+      disabled={disabled}
       className={baseClass}
     />
   );
@@ -195,16 +245,27 @@ export default function PatientAnamnesis() {
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [current, setCurrent] = useState<PatientAnamnesis | null>(null);
   const [history, setHistory] = useState<PatientAnamnesis[]>([]);
+  const [revisions, setRevisions] = useState<PatientAnamnesisRevision[]>([]);
+  const [historyPreview, setHistoryPreview] = useState<PatientAnamnesis | null>(null);
   const [answers, setAnswers] = useState<AnamnesisAnswers>({});
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [switchingTemplate, setSwitchingTemplate] = useState(false);
+  const [startingNew, setStartingNew] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [dirty, setDirty] = useState(false);
 
   const currentRef = useRef<PatientAnamnesis | null>(null);
   const answersRef = useRef<AnamnesisAnswers>({});
+  const dirtyRef = useRef(false);
+  const selectedTemplateIdRef = useRef('');
   const startPromiseRef = useRef<Promise<PatientAnamnesis> | null>(null);
+  const saveQueueRef = useRef<Promise<PatientAnamnesis | null>>(Promise.resolve(null));
+  const debounceTimerRef = useRef<number | null>(null);
+  const pendingSavesRef = useRef(0);
+  const lastPersistedSignatureRef = useRef(answerSignature({}));
+  const lastQueuedSignatureRef = useRef('');
+  const allowNavigationRef = useRef(false);
 
   useEffect(() => {
     currentRef.current = current;
@@ -214,31 +275,66 @@ export default function PatientAnamnesis() {
     answersRef.current = answers;
   }, [answers]);
 
+  useEffect(() => {
+    dirtyRef.current = dirty;
+  }, [dirty]);
+
+  useEffect(() => {
+    selectedTemplateIdRef.current = selectedTemplateId;
+  }, [selectedTemplateId]);
+
+  const templateOptions = useMemo(() => {
+    if (!current || templates.some((template) => template.id === current.templateId)) return templates;
+
+    return [
+      {
+        id: current.templateId,
+        templateKey: current.templateKey,
+        name: `${current.templateName} · versão utilizada`,
+        professionalGroup: current.templateName,
+        professionalTitles: [],
+        version: current.templateVersion,
+        schema: current.templateSnapshot,
+      },
+      ...templates,
+    ];
+  }, [current, templates]);
+
   const activeTemplate = useMemo(
-    () => templates.find((template) => template.id === selectedTemplateId) || null,
-    [selectedTemplateId, templates]
+    () => templateOptions.find((template) => template.id === selectedTemplateId) || null,
+    [selectedTemplateId, templateOptions]
   );
 
-  const activeSchema = current?.templateSnapshot || activeTemplate?.schema || { sections: [] };
+  const activeSections = useMemo(
+    () => orderSections(current?.templateSnapshot.sections || activeTemplate?.schema.sections || []),
+    [activeTemplate, current]
+  );
 
   const totalFields = useMemo(
-    () => activeSchema.sections.reduce((total, section) => total + section.fields.length, 0),
-    [activeSchema]
+    () => activeSections.reduce((total, section) => total + section.fields.length, 0),
+    [activeSections]
   );
 
   const filledFields = useMemo(
-    () => activeSchema.sections.reduce(
+    () => activeSections.reduce(
       (total, section) =>
         total + section.fields.filter((field) => fieldHasValue(answers[field.key])).length,
       0
     ),
-    [activeSchema, answers]
+    [activeSections, answers]
   );
 
-  const loadHistory = async () => {
+  const isCompleted = current?.status === 'completed';
+
+  const loadHistory = useCallback(async () => {
     if (!patientId) return;
     setHistory(await fetchPatientAnamnesisHistory(patientId));
-  };
+  }, [patientId]);
+
+  const loadRevisions = useCallback(async () => {
+    if (!patientId) return;
+    setRevisions(await fetchPatientAnamnesisRevisions(patientId));
+  }, [patientId]);
 
   useEffect(() => {
     let active = true;
@@ -248,12 +344,20 @@ export default function PatientAnamnesis() {
       setLoading(true);
 
       try {
-        const [patientResult, profileResult, availableTemplates, currentAnamnesis, previous] = await Promise.all([
+        const [
+          patientResult,
+          profileResult,
+          availableTemplates,
+          currentAnamnesis,
+          previous,
+          revisionHistory,
+        ] = await Promise.all([
           supabase.from('patients').select('id, full_name').eq('id', patientId).single(),
           supabase.from('professionals').select('professional_title').eq('id', user.id).single(),
           fetchAnamnesisTemplates(),
           fetchCurrentPatientAnamnesis(patientId),
           fetchPatientAnamnesisHistory(patientId),
+          fetchPatientAnamnesisRevisions(patientId),
         ]);
 
         if (patientResult.error) throw patientResult.error;
@@ -262,6 +366,7 @@ export default function PatientAnamnesis() {
 
         const title = profileResult.data?.professional_title || '';
         const recommended = getRecommendedAnamnesisTemplate(availableTemplates, title);
+        const initialAnswers = currentAnamnesis?.answers || {};
 
         setPatientName(patientResult.data?.full_name || 'Paciente');
         setProfessionalTitle(title);
@@ -269,18 +374,22 @@ export default function PatientAnamnesis() {
         setCurrent(currentAnamnesis);
         currentRef.current = currentAnamnesis;
         setHistory(previous);
+        setRevisions(revisionHistory);
+        setAnswers(initialAnswers);
+        answersRef.current = initialAnswers;
+        setDirty(false);
+        dirtyRef.current = false;
+        lastPersistedSignatureRef.current = answerSignature(initialAnswers);
 
         if (currentAnamnesis) {
           setSelectedTemplateId(currentAnamnesis.templateId);
-          setAnswers(currentAnamnesis.answers || {});
-          answersRef.current = currentAnamnesis.answers || {};
-          const first = currentAnamnesis.templateSnapshot.sections?.[0]?.key;
+          selectedTemplateIdRef.current = currentAnamnesis.templateId;
+          const first = orderSections(currentAnamnesis.templateSnapshot.sections)?.[0]?.key;
           setExpandedSections(new Set(first ? [first] : []));
         } else if (recommended) {
           setSelectedTemplateId(recommended.id);
-          setAnswers({});
-          answersRef.current = {};
-          const first = recommended.schema.sections?.[0]?.key;
+          selectedTemplateIdRef.current = recommended.id;
+          const first = orderSections(recommended.schema.sections)?.[0]?.key;
           setExpandedSections(new Set(first ? [first] : []));
         }
       } catch (error: any) {
@@ -299,15 +408,25 @@ export default function PatientAnamnesis() {
     void load();
     return () => {
       active = false;
+      if (debounceTimerRef.current !== null) {
+        window.clearTimeout(debounceTimerRef.current);
+      }
     };
   }, [navigate, patientId, user]);
 
-  const ensureCurrent = async () => {
-    if (!patientId || !selectedTemplateId) throw new Error('Selecione um modelo de anamnese.');
+  const ensureCurrent = useCallback(async () => {
+    if (!patientId || !selectedTemplateIdRef.current) {
+      throw new Error('Selecione um modelo de anamnese.');
+    }
     if (currentRef.current) return currentRef.current;
     if (startPromiseRef.current) return startPromiseRef.current;
 
-    startPromiseRef.current = startPatientAnamnesis(patientId, selectedTemplateId, false);
+    startPromiseRef.current = startPatientAnamnesis(
+      patientId,
+      selectedTemplateIdRef.current,
+      false
+    );
+
     try {
       const created = await startPromiseRef.current;
       currentRef.current = created;
@@ -316,47 +435,247 @@ export default function PatientAnamnesis() {
     } finally {
       startPromiseRef.current = null;
     }
-  };
+  }, [patientId]);
 
-  const persistAnswers = async (snapshot: AnamnesisAnswers) => {
-    setSaveState('saving');
-    try {
-      const record = await ensureCurrent();
-      const updated = await savePatientAnamnesis(record.id, { answers: snapshot });
-      currentRef.current = updated;
-      setCurrent(updated);
+  const queueSave = useCallback(async (snapshot: AnamnesisAnswers) => {
+    const signature = answerSignature(snapshot);
 
-      if (answersRef.current === snapshot) {
-        setDirty(false);
-        setSaveState('saved');
-      }
-      return updated;
-    } catch (error) {
-      console.error('[Anamnesis] Erro no autosave:', error);
-      setSaveState('error');
-      throw error;
+    if (currentRef.current?.status === 'completed') {
+      throw new Error('Reabra a anamnese antes de alterar um registro concluído.');
     }
-  };
+
+    if (!currentRef.current && !hasMeaningfulAnamnesisAnswers(snapshot)) {
+      lastPersistedSignatureRef.current = signature;
+      setDirty(false);
+      dirtyRef.current = false;
+      setSaveState('saved');
+      return null;
+    }
+
+    if (
+      signature === lastPersistedSignatureRef.current
+      && currentRef.current
+      && pendingSavesRef.current === 0
+    ) {
+      setDirty(false);
+      dirtyRef.current = false;
+      setSaveState('saved');
+      return currentRef.current;
+    }
+
+    if (
+      signature === lastQueuedSignatureRef.current
+      && pendingSavesRef.current > 0
+    ) {
+      return saveQueueRef.current;
+    }
+
+    lastQueuedSignatureRef.current = signature;
+    pendingSavesRef.current += 1;
+    setSaveState('saving');
+
+    const task = saveQueueRef.current
+      .catch(() => currentRef.current)
+      .then(async () => {
+        let lastError: unknown = null;
+
+        for (let attempt = 1; attempt <= AUTOSAVE_MAX_ATTEMPTS; attempt += 1) {
+          try {
+            const record = await ensureCurrent();
+            const updated = await savePatientAnamnesis(record.id, { answers: snapshot });
+            currentRef.current = updated;
+            setCurrent(updated);
+            lastPersistedSignatureRef.current = signature;
+
+            if (answerSignature(answersRef.current) === signature) {
+              setDirty(false);
+              dirtyRef.current = false;
+              setSaveState('saved');
+            }
+
+            return updated;
+          } catch (error) {
+            lastError = error;
+            if (attempt < AUTOSAVE_MAX_ATTEMPTS) {
+              await new Promise((resolve) => window.setTimeout(resolve, 400 * attempt));
+            }
+          }
+        }
+
+        if (answerSignature(answersRef.current) === signature) {
+          setDirty(true);
+          dirtyRef.current = true;
+          setSaveState('error');
+        }
+
+        throw lastError instanceof Error
+          ? lastError
+          : new Error('Não foi possível salvar a anamnese.');
+      })
+      .finally(() => {
+        pendingSavesRef.current = Math.max(0, pendingSavesRef.current - 1);
+      });
+
+    saveQueueRef.current = task.catch(() => currentRef.current);
+    return task;
+  }, [ensureCurrent]);
+
+  const flushPendingSave = useCallback(async () => {
+    if (debounceTimerRef.current !== null) {
+      window.clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
+    }
+
+    const snapshot = answersRef.current;
+    const signature = answerSignature(snapshot);
+
+    if (
+      dirtyRef.current
+      && currentRef.current?.status !== 'completed'
+      && signature !== lastPersistedSignatureRef.current
+    ) {
+      await queueSave(snapshot);
+    }
+
+    await saveQueueRef.current;
+
+    if (
+      hasMeaningfulAnamnesisAnswers(snapshot)
+      && signature !== lastPersistedSignatureRef.current
+    ) {
+      throw new Error('Ainda existem alterações que não foram salvas.');
+    }
+
+    return currentRef.current;
+  }, [queueSave]);
+
+  const handleSafeNavigate = useCallback(async (target: string) => {
+    try {
+      await flushPendingSave();
+      allowNavigationRef.current = true;
+      navigate(target);
+      window.setTimeout(() => {
+        allowNavigationRef.current = false;
+      }, 0);
+    } catch (error: any) {
+      console.error('[Anamnesis] Navegação bloqueada por falha de salvamento:', error);
+      await showAlert(
+        'Não foi possível salvar as últimas alterações. A página foi mantida aberta para evitar perda de dados. Tente novamente antes de sair.',
+        {
+          title: 'Alterações ainda não salvas',
+          variant: 'warning',
+          icon: 'warning',
+        }
+      );
+    }
+  }, [flushPendingSave, navigate]);
+
+  useBeforeUnload(
+    useCallback((event) => {
+      if (
+        dirtyRef.current
+        || pendingSavesRef.current > 0
+        || saveState === 'error'
+      ) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    }, [saveState])
+  );
 
   useEffect(() => {
-    if (loading || !dirty || !selectedTemplateId) return;
+    const flushBestEffort = () => {
+      if (!dirtyRef.current && pendingSavesRef.current === 0) return;
+      void flushPendingSave().catch((error) => {
+        console.error('[Anamnesis] Salvamento preventivo falhou:', error);
+      });
+    };
 
-    const snapshot = answers;
-    const timeout = window.setTimeout(() => {
-      void persistAnswers(snapshot).catch(() => undefined);
-    }, 900);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushBestEffort();
+    };
 
-    return () => window.clearTimeout(timeout);
-  }, [answers, dirty, loading, selectedTemplateId]);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', flushBestEffort);
+    window.addEventListener('popstate', flushBestEffort);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', flushBestEffort);
+      window.removeEventListener('popstate', flushBestEffort);
+    };
+  }, [flushPendingSave]);
+
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (
+        allowNavigationRef.current
+        || (!dirtyRef.current && pendingSavesRef.current === 0 && saveState !== 'error')
+        || event.defaultPrevented
+        || event.button !== 0
+        || event.metaKey
+        || event.ctrlKey
+        || event.shiftKey
+        || event.altKey
+      ) {
+        return;
+      }
+
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const anchor = target.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      void handleSafeNavigate(`${url.pathname}${url.search}${url.hash}`);
+    };
+
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => document.removeEventListener('click', handleDocumentClick, true);
+  }, [handleSafeNavigate, saveState]);
+
+  const setCurrentRecord = useCallback((record: PatientAnamnesis) => {
+    const nextAnswers = record.answers || {};
+    currentRef.current = record;
+    setCurrent(record);
+    setSelectedTemplateId(record.templateId);
+    selectedTemplateIdRef.current = record.templateId;
+    setAnswers(nextAnswers);
+    answersRef.current = nextAnswers;
+    setDirty(false);
+    dirtyRef.current = false;
+    lastPersistedSignatureRef.current = answerSignature(nextAnswers);
+    lastQueuedSignatureRef.current = '';
+    setSaveState('saved');
+    const first = orderSections(record.templateSnapshot.sections)?.[0]?.key;
+    setExpandedSections(new Set(first ? [first] : []));
+  }, []);
 
   const handleFieldChange = (key: string, value: AnamnesisAnswers[string]) => {
-    setAnswers((currentAnswers) => {
-      const next = { ...currentAnswers, [key]: value };
-      answersRef.current = next;
-      return next;
-    });
+    if (currentRef.current?.status === 'completed') return;
+
+    const next = { ...answersRef.current, [key]: value };
+    answersRef.current = next;
+    setAnswers(next);
     setDirty(true);
+    dirtyRef.current = true;
     setSaveState('idle');
+
+    if (debounceTimerRef.current !== null) {
+      window.clearTimeout(debounceTimerRef.current);
+    }
+
+    debounceTimerRef.current = window.setTimeout(() => {
+      debounceTimerRef.current = null;
+      void queueSave(next).catch((error) => {
+        console.error('[Anamnesis] Autosave falhou após tentativas:', error);
+      });
+    }, AUTOSAVE_DELAY_MS);
   };
 
   const handleTemplateChange = async (nextTemplateId: string) => {
@@ -365,48 +684,58 @@ export default function PatientAnamnesis() {
     const nextTemplate = templates.find((template) => template.id === nextTemplateId);
     if (!nextTemplate) return;
 
-    if (!currentRef.current) {
+    const hasCurrentOrContent =
+      Boolean(currentRef.current)
+      || hasMeaningfulAnamnesisAnswers(answersRef.current);
+
+    if (!hasCurrentOrContent) {
       setSelectedTemplateId(nextTemplateId);
+      selectedTemplateIdRef.current = nextTemplateId;
       setAnswers({});
       answersRef.current = {};
       setDirty(false);
-      const first = nextTemplate.schema.sections?.[0]?.key;
+      dirtyRef.current = false;
+      lastPersistedSignatureRef.current = answerSignature({});
+      const first = orderSections(nextTemplate.schema.sections)?.[0]?.key;
       setExpandedSections(new Set(first ? [first] : []));
       return;
     }
 
-    const shouldConfirm = hasMeaningfulAnamnesisAnswers(answersRef.current);
-    if (shouldConfirm) {
-      const confirmed = await showConfirm(
-        `Trocar para o modelo “${nextTemplate.name}” iniciará uma nova anamnese. A anamnese atual será preservada no histórico, sem apagar as respostas. Deseja continuar?`,
-        {
-          title: 'Trocar modelo de anamnese',
-          confirmLabel: 'Trocar modelo',
-          cancelLabel: 'Cancelar',
-          variant: 'warning',
-          icon: 'question',
-        }
-      );
-      if (!confirmed) return;
-    }
+    const confirmed = await showConfirm(
+      `Trocar para o modelo “${nextTemplate.name}” iniciará uma nova anamnese. A atual será preservada no histórico, sem apagar as respostas. Deseja continuar?`,
+      {
+        title: 'Trocar modelo de anamnese',
+        confirmLabel: 'Trocar modelo',
+        cancelLabel: 'Cancelar',
+        variant: 'warning',
+        icon: 'question',
+      }
+    );
+
+    if (!confirmed) return;
 
     setSwitchingTemplate(true);
     try {
-      if (dirty) {
-        await persistAnswers(answersRef.current);
+      if (dirtyRef.current) {
+        await flushPendingSave();
+      } else {
+        await saveQueueRef.current;
+      }
+
+      if (!currentRef.current) {
+        setSelectedTemplateId(nextTemplateId);
+        selectedTemplateIdRef.current = nextTemplateId;
+        setAnswers({});
+        answersRef.current = {};
+        lastPersistedSignatureRef.current = answerSignature({});
+        setDirty(false);
+        dirtyRef.current = false;
+        return;
       }
 
       const created = await startPatientAnamnesis(patientId, nextTemplateId, true);
-      currentRef.current = created;
-      setCurrent(created);
-      setSelectedTemplateId(nextTemplateId);
-      setAnswers(created.answers || {});
-      answersRef.current = created.answers || {};
-      setDirty(false);
-      setSaveState('saved');
-      const first = created.templateSnapshot.sections?.[0]?.key;
-      setExpandedSections(new Set(first ? [first] : []));
-      await loadHistory();
+      setCurrentRecord(created);
+      await Promise.all([loadHistory(), loadRevisions()]);
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao trocar modelo:', error);
       await showAlert(error?.message || 'Não foi possível trocar o modelo da anamnese.', {
@@ -416,6 +745,53 @@ export default function PatientAnamnesis() {
       });
     } finally {
       setSwitchingTemplate(false);
+    }
+  };
+
+  const handleStartNew = async () => {
+    if (!patientId || !currentRef.current || startingNew) return;
+
+    const latestTemplate =
+      templates.find((template) => template.templateKey === currentRef.current?.templateKey)
+      || templates.find((template) => template.id === selectedTemplateId);
+
+    if (!latestTemplate) {
+      await showAlert('O modelo desta anamnese não está mais disponível para novos registros.', {
+        title: 'Modelo indisponível',
+        variant: 'warning',
+        icon: 'warning',
+      });
+      return;
+    }
+
+    const confirmed = await showConfirm(
+      `Uma nova anamnese “${latestTemplate.name}” será iniciada. A atual será preservada integralmente no histórico. Deseja continuar?`,
+      {
+        title: 'Iniciar nova anamnese',
+        confirmLabel: 'Iniciar nova',
+        cancelLabel: 'Cancelar',
+        variant: 'warning',
+        icon: 'question',
+      }
+    );
+
+    if (!confirmed) return;
+
+    setStartingNew(true);
+    try {
+      await flushPendingSave();
+      const created = await startPatientAnamnesis(patientId, latestTemplate.id, true);
+      setCurrentRecord(created);
+      await Promise.all([loadHistory(), loadRevisions()]);
+    } catch (error: any) {
+      console.error('[Anamnesis] Erro ao iniciar nova anamnese:', error);
+      await showAlert(error?.message || 'Não foi possível iniciar uma nova anamnese.', {
+        title: 'Falha ao iniciar',
+        variant: 'danger',
+        icon: 'warning',
+      });
+    } finally {
+      setStartingNew(false);
     }
   };
 
@@ -431,19 +807,18 @@ export default function PatientAnamnesis() {
 
     setSaveState('saving');
     try {
-      const record = dirty
-        ? await persistAnswers(answersRef.current)
-        : await ensureCurrent();
+      const record = await flushPendingSave() || await ensureCurrent();
       const completedAt = new Date().toISOString();
       const updated = await savePatientAnamnesis(record.id, {
         status: 'completed',
         completedAt,
-        answers: answersRef.current,
       });
       currentRef.current = updated;
       setCurrent(updated);
       setDirty(false);
+      dirtyRef.current = false;
       setSaveState('saved');
+      await loadRevisions();
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao concluir:', error);
       setSaveState('error');
@@ -457,6 +832,20 @@ export default function PatientAnamnesis() {
 
   const handleReopen = async () => {
     if (!currentRef.current) return;
+
+    const confirmed = await showConfirm(
+      'A anamnese voltará ao estado de rascunho e os campos poderão ser editados novamente. Essa reabertura ficará registrada no histórico.',
+      {
+        title: 'Reabrir anamnese',
+        confirmLabel: 'Reabrir',
+        cancelLabel: 'Cancelar',
+        variant: 'warning',
+        icon: 'question',
+      }
+    );
+
+    if (!confirmed) return;
+
     setSaveState('saving');
     try {
       const updated = await savePatientAnamnesis(currentRef.current.id, {
@@ -466,9 +855,15 @@ export default function PatientAnamnesis() {
       currentRef.current = updated;
       setCurrent(updated);
       setSaveState('saved');
+      await loadRevisions();
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao reabrir:', error);
       setSaveState('error');
+      await showAlert(error?.message || 'Não foi possível reabrir a anamnese.', {
+        title: 'Falha ao reabrir',
+        variant: 'danger',
+        icon: 'warning',
+      });
     }
   };
 
@@ -495,13 +890,14 @@ export default function PatientAnamnesis() {
   return (
     <div className="w-full space-y-5 pb-8">
       <div className="flex items-center gap-2">
-        <Link
-          to={`/painel/patients/${patientId}`}
+        <button
+          type="button"
+          onClick={() => void handleSafeNavigate(`/painel/patients/${patientId}`)}
           className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline"
         >
           <ArrowLeft size={14} />
           Voltar para o paciente
-        </Link>
+        </button>
       </div>
 
       <PanelPageHeader
@@ -513,7 +909,8 @@ export default function PatientAnamnesis() {
             <button
               type="button"
               onClick={() => void handleReopen()}
-              className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"
+              disabled={saveState === 'saving'}
+              className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
             >
               <RotateCcw size={14} />
               Reabrir como rascunho
@@ -543,10 +940,10 @@ export default function PatientAnamnesis() {
                 <select
                   value={selectedTemplateId}
                   onChange={(event) => void handleTemplateChange(event.target.value)}
-                  disabled={switchingTemplate || templates.length === 0}
+                  disabled={switchingTemplate || startingNew || templates.length === 0}
                   className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-3 text-sm font-semibold text-brand-text outline-none focus:border-brand-primary disabled:opacity-50"
                 >
-                  {templates.map((template) => (
+                  {templateOptions.map((template) => (
                     <option key={template.id} value={template.id}>
                       {template.name}
                     </option>
@@ -576,7 +973,7 @@ export default function PatientAnamnesis() {
                       Salvando...
                     </>
                   ) : saveState === 'error' ? (
-                    'Falha ao salvar'
+                    'Falha ao salvar · tente editar novamente'
                   ) : dirty ? (
                     'Alterações pendentes'
                   ) : (
@@ -588,6 +985,23 @@ export default function PatientAnamnesis() {
                 </span>
               </div>
             </div>
+
+            {current && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-brand-border/50 pt-4">
+                <p className="text-[10px] leading-relaxed text-brand-text-muted">
+                  Precisa registrar uma nova avaliação usando este modelo? A versão atual será preservada no histórico.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleStartNew()}
+                  disabled={startingNew || switchingTemplate || saveState === 'saving'}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-brand-primary/30 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/5 disabled:opacity-50"
+                >
+                  {startingNew ? <Loader2 size={14} className="animate-spin" /> : <PlusCircle size={14} />}
+                  Iniciar nova anamnese
+                </button>
+              </div>
+            )}
 
             <div className="mt-4">
               <div className="mb-1 flex items-center justify-between text-[10px] font-semibold text-brand-text-muted">
@@ -603,7 +1017,13 @@ export default function PatientAnamnesis() {
             </div>
           </div>
 
-          {activeSchema.sections.map((section, sectionIndex) => {
+          {isCompleted && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs leading-relaxed text-emerald-800">
+              <strong>Anamnese concluída.</strong> Os campos estão bloqueados para preservar o registro. Use “Reabrir como rascunho” se precisar fazer alterações; a reabertura ficará registrada no histórico.
+            </div>
+          )}
+
+          {activeSections.map((section, sectionIndex) => {
             const expanded = expandedSections.has(section.key);
             const sectionFilled = section.fields.filter((field) => fieldHasValue(answers[field.key])).length;
 
@@ -648,6 +1068,7 @@ export default function PatientAnamnesis() {
                         <AnamnesisFieldInput
                           field={field}
                           value={answers[field.key]}
+                          disabled={isCompleted}
                           onChange={(value) => handleFieldChange(field.key, value)}
                         />
                       </div>
@@ -666,7 +1087,7 @@ export default function PatientAnamnesis() {
               Registro estruturado
             </h3>
             <p className="mt-2 text-xs leading-relaxed text-brand-text-muted">
-              As respostas são salvas automaticamente no prontuário do paciente. O profissional permanece responsável pela revisão e pelo conteúdo registrado.
+              As respostas são salvas automaticamente. O profissional permanece responsável pela revisão e pelo conteúdo registrado.
             </p>
           </div>
 
@@ -675,7 +1096,7 @@ export default function PatientAnamnesis() {
               <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-5 text-sm font-bold text-brand-text">
                 <span className="flex items-center gap-2">
                   <HistoryIcon size={16} className="text-brand-primary" />
-                  Modelos anteriores
+                  Anamneses anteriores
                 </span>
                 <span className="rounded-full bg-brand-bg px-2 py-0.5 text-[10px] text-brand-text-muted">{history.length}</span>
               </summary>
@@ -686,6 +1107,36 @@ export default function PatientAnamnesis() {
                     <p className="mt-1 text-[10px] text-brand-text-muted">
                       {item.status === 'completed' ? 'Concluída' : 'Rascunho preservado'} · {formatDateTime(item.updatedAt)}
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => setHistoryPreview(item)}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-brand-primary hover:underline"
+                    >
+                      <Eye size={12} />
+                      Visualizar registro
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {revisions.length > 0 && (
+            <details className="card overflow-hidden bg-white">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-5 text-sm font-bold text-brand-text">
+                <span className="flex items-center gap-2">
+                  <Clock3 size={16} className="text-brand-primary" />
+                  Histórico de alterações
+                </span>
+                <span className="rounded-full bg-brand-bg px-2 py-0.5 text-[10px] text-brand-text-muted">{revisions.length}</span>
+              </summary>
+              <div className="max-h-80 space-y-2 overflow-y-auto border-t border-brand-border/50 p-4">
+                {revisions.map((revision) => (
+                  <div key={revision.id} className="rounded-xl border border-brand-border/60 bg-brand-bg/20 p-3">
+                    <p className="text-[11px] font-semibold text-brand-text">{revisionLabel(revision.eventType)}</p>
+                    <p className="mt-1 text-[10px] text-brand-text-muted">
+                      {formatDateTime(revision.changedAt)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -693,6 +1144,56 @@ export default function PatientAnamnesis() {
           )}
         </aside>
       </div>
+
+      {historyPreview && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Visualização de anamnese anterior"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setHistoryPreview(null);
+          }}
+        >
+          <div className="max-h-[88vh] w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-brand-border px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">Anamnese anterior</p>
+                <h2 className="mt-1 text-lg font-bold text-brand-text">{historyPreview.templateName}</h2>
+                <p className="mt-1 text-[11px] text-brand-text-muted">
+                  Versão {historyPreview.templateVersion} · {historyPreview.status === 'completed' ? 'Concluída' : 'Rascunho preservado'} · atualizada em {formatDateTime(historyPreview.updatedAt)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHistoryPreview(null)}
+                className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg hover:text-brand-text"
+                aria-label="Fechar visualização"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="max-h-[calc(88vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
+              {orderSections(historyPreview.templateSnapshot.sections).map((section) => (
+                <section key={section.key}>
+                  <h3 className="text-sm font-bold text-brand-text">{section.title}</h3>
+                  <div className="mt-3 space-y-3">
+                    {section.fields.map((field) => (
+                      <div key={field.key} className="rounded-xl border border-brand-border/60 bg-brand-bg/20 p-3">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">{field.label}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-brand-text">
+                          {formatAnswer(historyPreview.answers[field.key])}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
