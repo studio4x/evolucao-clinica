@@ -95,6 +95,7 @@ const buildConversationContext = async (supabaseAdmin: SupabaseClient, ticket: a
     .from('support_messages')
     .select('id, sender_id, message, origin, sender_label, created_at')
     .eq('ticket_id', ticket.id)
+    .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(40);
 
@@ -188,6 +189,7 @@ const processEvent = async (input: {
       .from('support_messages')
       .select('id, ticket_id, sender_id, origin')
       .eq('id', sourceMessageId)
+      .is('deleted_at', null)
       .maybeSingle();
     if (error) throw error;
     if (!sourceMessage || sourceMessage.ticket_id !== ticketId || sourceMessage.sender_id !== requesterId || sourceMessage.origin === 'support_ai') {
