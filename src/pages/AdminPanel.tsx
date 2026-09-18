@@ -12,6 +12,7 @@ import EmailHistory from './EmailHistory';
 import EmailTransactionalTemplates from '../components/admin/EmailTransactionalTemplates';
 import SupportTicketDetail from './SupportTicketDetail';
 import { fetchAdminSupportTickets, updateSupportTicketStatus, subscribeToAllSupportTickets, subscribeToAllSupportMessages, isSupportTicketUnread } from '../services/support';
+import { fetchSupportAiSettings, updateSupportAiSettings, type SupportAiSettings } from '../services/supportAi';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import { completeOnboarding } from '../utils/onboarding';
@@ -2830,6 +2831,10 @@ export default function AdminPanel() {
   const [supportCategoryFilter, setSupportCategoryFilter] = useState('all');
   const [supportPlanFilter, setSupportPlanFilter] = useState('all');
   const [supportSearchQuery, setSupportSearchQuery] = useState('');
+  const [supportAiSettings, setSupportAiSettings] = useState<SupportAiSettings | null>(null);
+  const [supportAiSettingsLoading, setSupportAiSettingsLoading] = useState(false);
+  const [supportAiSettingsSaving, setSupportAiSettingsSaving] = useState(false);
+  const [supportAiSettingsError, setSupportAiSettingsError] = useState('');
 
   const fetchAdminTickets = async (showLoading = true) => {
     if (showLoading) setLoadingAdminTickets(true);
@@ -2849,9 +2854,73 @@ export default function AdminPanel() {
     (ticket) => ticket.latestMessageSenderRole === 'user' && isSupportTicketUnread(ticket, 'admin')
   ).length;
 
+  const fetchAdminSupportAiSettings = async () => {
+    setSupportAiSettingsLoading(true);
+    setSupportAiSettingsError('');
+    try {
+      const settings = await fetchSupportAiSettings();
+      setSupportAiSettings(settings);
+    } catch (err: any) {
+      console.error('Erro ao carregar configuração do atendimento automático:', err);
+      setSupportAiSettingsError('Não foi possível carregar a configuração do atendimento automático.');
+    } finally {
+      setSupportAiSettingsLoading(false);
+    }
+  };
+
+  const handleSupportTriageToggle = async () => {
+    if (!supportAiSettings || supportAiSettingsSaving) return;
+    try {
+      setSupportAiSettingsSaving(true);
+      setSupportAiSettingsError('');
+      const updated = await updateSupportAiSettings({
+        triageEnabled: !supportAiSettings.triageEnabled,
+      });
+      setSupportAiSettings(updated);
+    } catch (err: any) {
+      console.error('Erro ao alterar primeiro atendimento automático:', err);
+      setSupportAiSettingsError(err.message || 'Não foi possível alterar o primeiro atendimento automático.');
+    } finally {
+      setSupportAiSettingsSaving(false);
+    }
+  };
+
+  const handleSupportResponseAutomationChange = async (value: 'off' | 'draft' | 'auto_reply') => {
+    if (!supportAiSettings || supportAiSettingsSaving) return;
+
+    if (value === 'auto_reply') {
+      const confirmed = await showConfirm(
+        'Neste modo, novas mensagens do profissional poderão receber uma resposta automática sem revisão prévia da equipe. Deseja ativar?',
+        {
+          title: 'Ativar respostas automáticas',
+          confirmLabel: 'Ativar',
+          cancelLabel: 'Cancelar',
+          variant: 'warning',
+          icon: 'question',
+        }
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      setSupportAiSettingsSaving(true);
+      setSupportAiSettingsError('');
+      const updated = value === 'off'
+        ? await updateSupportAiSettings({ enabled: false })
+        : await updateSupportAiSettings({ enabled: true, mode: value });
+      setSupportAiSettings(updated);
+    } catch (err: any) {
+      console.error('Erro ao alterar modo de respostas do suporte:', err);
+      setSupportAiSettingsError(err.message || 'Não foi possível alterar o modo das respostas.');
+    } finally {
+      setSupportAiSettingsSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (user && profileRole === 'admin' && activeTab === 'support') {
       fetchAdminTickets(true);
+      void fetchAdminSupportAiSettings();
 
       const unsubscribeTickets = subscribeToAllSupportTickets(() => {
         fetchAdminTickets(false);
@@ -6716,7 +6785,7 @@ export default function AdminPanel() {
                           Atendimento ao Cliente (Tickets)
                         </h2>
                         <p className="text-xs text-brand-text-muted mt-0.5">
-                          Monitore e responda às solicitações. Priorize os clientes VIP (Anual) com SLA de 2 horas úteis.
+                          Monitore e responda às solicitações. Clientes VIP têm prazo de primeira resposta de até 2 horas úteis.
                         </p>
                       </div>
                     </div>
@@ -6739,6 +6808,70 @@ export default function AdminPanel() {
                     </div>
                   ) : (
                     <>
+                  <div className="mb-6 rounded-2xl border border-brand-primary/15 bg-gradient-to-r from-brand-primary/[0.05] to-white p-4 md:p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2.5 rounded-xl bg-brand-primary/10 text-brand-primary shrink-0">
+                          <Sparkles size={18} />
+                        </div>
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-sm font-bold text-brand-text">Primeiro atendimento automático</h3>
+                            <span className="text-[10px] font-bold uppercase tracking-wide rounded-full border border-brand-primary/15 bg-white px-2 py-0.5 text-brand-primary">com IA</span>
+                          </div>
+                          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-brand-text-muted">
+                            Quando um profissional abrir um novo chamado, ele recebe imediatamente uma confirmação de recebimento e o prazo de primeira resposta correspondente ao plano dele.
+                          </p>
+                          <p className="mt-1 text-[11px] text-brand-text-muted">
+                            A mensagem usa linguagem simples e não menciona termos internos como “SLA”, automação ou escalonamento.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:justify-end">
+                        <div className="flex items-center justify-between sm:justify-start gap-3 rounded-xl border border-brand-border/70 bg-white px-3 py-2.5">
+                          <div className="min-w-[115px]">
+                            <p className="text-xs font-bold text-brand-text">
+                              {supportAiSettings?.triageEnabled ? 'Ativado' : 'Desativado'}
+                            </p>
+                            <p className="text-[10px] text-brand-text-muted">Novos chamados</p>
+                          </div>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={supportAiSettings?.triageEnabled === true}
+                            aria-label="Ativar ou desativar primeiro atendimento automático"
+                            onClick={handleSupportTriageToggle}
+                            disabled={supportAiSettingsLoading || supportAiSettingsSaving || !supportAiSettings}
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${supportAiSettings?.triageEnabled ? 'bg-brand-primary' : 'bg-gray-300'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${supportAiSettings?.triageEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">Depois do primeiro contato</label>
+                          <select
+                            value={!supportAiSettings?.enabled ? 'off' : supportAiSettings.mode === 'auto_reply' ? 'auto_reply' : 'draft'}
+                            onChange={(e) => void handleSupportResponseAutomationChange(e.target.value as 'off' | 'draft' | 'auto_reply')}
+                            disabled={supportAiSettingsLoading || supportAiSettingsSaving || !supportAiSettings}
+                            className="w-full min-w-[225px] rounded-xl border border-brand-border/80 bg-white px-3 py-2.5 text-xs font-semibold text-brand-text outline-none focus:border-brand-primary disabled:opacity-50"
+                          >
+                            <option value="off">Atendimento pela equipe</option>
+                            <option value="draft">Preparar sugestão para revisão</option>
+                            <option value="auto_reply">Responder automaticamente</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    {supportAiSettingsError && (
+                      <div className="mt-3 rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                        {supportAiSettingsError}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Filtros */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mb-6 bg-brand-bg/20 p-4 rounded-2xl border border-brand-border/30">
                     <div className="space-y-1">
