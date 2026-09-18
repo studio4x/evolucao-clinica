@@ -38,6 +38,9 @@ export interface SupportMessage {
   createdAt: string;
   senderName?: string | null;
   senderRole?: 'admin' | 'user';
+  origin?: 'human' | 'support_ai';
+  senderLabel?: string | null;
+  aiRunId?: string | null;
 }
 
 export interface SupportTicketDetail {
@@ -149,6 +152,10 @@ async function attachLatestMessageInfo(tickets: SupportTicket[]): Promise<Suppor
 function mapSupportMessage(row: any, professionalsMap: Map<string, any>): SupportMessage {
   const sender = professionalsMap.get(row.sender_id);
   const senderRole = sender?.role === 'admin' ? 'admin' : 'user';
+  const origin: 'human' | 'support_ai' = row.origin === 'support_ai' ? 'support_ai' : 'human';
+  const senderLabel = typeof row.sender_label === 'string' && row.sender_label.trim()
+    ? row.sender_label.trim()
+    : null;
 
   return {
     id: row.id,
@@ -158,8 +165,11 @@ function mapSupportMessage(row: any, professionalsMap: Map<string, any>): Suppor
     attachmentUrl: row.attachment_url,
     attachmentName: row.attachment_name,
     createdAt: row.created_at,
-    senderName: sender?.full_name || 'Profissional',
+    senderName: origin === 'support_ai' ? (senderLabel || 'Assistente de suporte') : (sender?.full_name || 'Profissional'),
     senderRole,
+    origin,
+    senderLabel,
+    aiRunId: row.ai_run_id || null,
   };
 }
 
