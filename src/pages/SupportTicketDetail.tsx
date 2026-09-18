@@ -404,6 +404,12 @@ export default function SupportTicketDetail() {
             <strong>Cliente:</strong> {ticket.userFullName || 'Profissional'} ({ticket.userPlan === 'yearly' ? 'Anual' : ticket.userPlan === 'courtesy' ? 'Cortesia' : ticket.userPlan === 'monthly' ? 'Mensal' : 'Avaliação'})
             <span className="mx-2">•</span><strong>Criado em:</strong> {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(ticket.createdAt))}
           </div>
+          {isAdmin && ticket.autoClosedAt && ticket.autoCloseReason === 'inactivity_after_response' && (
+            <div className="inline-flex items-center gap-1.5 text-[11px] text-brand-text-muted bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-1.5">
+              <CheckCircle2 size={12} className="text-emerald-600" />
+              <span>Fechado automaticamente após 3 dias sem interação em {new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(ticket.autoClosedAt))}.</span>
+            </div>
+          )}
           <div className="text-sm bg-gray-50 border border-gray-100 p-4 rounded-2xl text-brand-text/90 italic font-sans leading-relaxed">{ticket.description}</div>
           {ticket.attachmentUrl && (
             <a href={ticket.attachmentUrl} target="_blank" rel="noreferrer" className="inline-flex items-center space-x-2 bg-brand-primary/5 hover:bg-brand-primary/10 text-brand-primary text-xs font-semibold px-3 py-1.5 rounded-xl border border-brand-primary/15 transition-all">
