@@ -380,9 +380,20 @@ export default function SupportTicketDetail() {
           <div className="space-y-4">
             {messages.map((msg) => {
               const isSelf = isAdmin ? msg.senderRole === 'admin' : msg.senderId === user?.id;
+              const isAiMessage = msg.origin === 'support_ai';
+              const senderDisplayName = isAiMessage
+                ? (msg.senderLabel || 'Assistente de suporte')
+                : (msg.senderName || 'Suporte');
               return (
                 <div key={msg.id} className={`flex flex-col ${isSelf ? 'items-end' : 'items-start'}`}>
-                  <span className="text-[10px] font-bold text-brand-text-muted px-1.5 mb-1 block">{msg.senderName || 'Suporte'} {msg.senderRole === 'admin' && <span className="text-[9px] bg-brand-primary/10 text-brand-primary px-1 py-0.2 rounded border border-brand-primary/20 font-semibold">Equipe</span>}</span>
+                  <span className="text-[10px] font-bold text-brand-text-muted px-1.5 mb-1 block">
+                    {senderDisplayName}{' '}
+                    {isAiMessage ? (
+                      <span className="text-[9px] bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200 font-semibold">IA</span>
+                    ) : msg.senderRole === 'admin' ? (
+                      <span className="text-[9px] bg-brand-primary/10 text-brand-primary px-1 py-0.2 rounded border border-brand-primary/20 font-semibold">Equipe</span>
+                    ) : null}
+                  </span>
                   <div className={`p-3.5 rounded-2xl max-w-[80%] md:max-w-[70%] border shadow-sm ${isSelf ? 'bg-brand-primary text-white border-brand-primary rounded-br-none' : 'bg-white text-brand-text border-brand-border rounded-bl-none'}`}>
                     <RichTextPreview value={msg.message} className="text-sm leading-relaxed font-sans" />
                     {msg.attachmentUrl && (
