@@ -65,6 +65,8 @@ O arquivo `credentials.clixml` só pode ser descriptografado pelo mesmo usuário
 
 ### Passo 4: Assinar e gerar os artefatos
 
+A partir da versão 1.0.91, o projeto usa Android Gradle Plugin 9.0.1 e Gradle 9.1.0. O ambiente de build deve usar JDK 17 ou superior; o script de release valida essa condição antes de iniciar o Gradle.
+
 Depois da configuração inicial, cada nova release é gerada com:
 
 ```powershell
