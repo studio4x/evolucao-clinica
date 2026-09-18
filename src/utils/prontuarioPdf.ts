@@ -139,16 +139,18 @@ export const generateProntuarioPDF = ({
       continue;
     }
 
+    const isMarkdownHeading = /^#{1,6}\s+/.test(trimmed);
+    const isStandaloneBold = /^\*\*[^*]+\*\*$/.test(trimmed);
     const text = trimmed
       .replace(/^#{1,6}\s+/, '')
       .replace(/\*\*([^*]+)\*\*/g, '$1');
     const isSessionHeading = /^DATA DA SESSÃO\s*:/i.test(text);
     const isSystemHeading = /^REGISTRO DE INSERÇÃO SISTÊMICA\b/i.test(text);
     const isSectionHeading = /^(EVOLUÇÃO(?: CLÍNICA)?\s*:|TRANSCRIÇÃO DO TRECHO\s*:|EVOLUÇÃO CLÍNICA\s*-)/i.test(text);
-    const isHeading = isSessionHeading || isSystemHeading || isSectionHeading;
+    const isHeading = isSessionHeading || isSystemHeading || isSectionHeading || isMarkdownHeading;
     const isSignedNotice = /^\[Documento Assinado|^\[Rascunho\]/i.test(text);
-    const fontStyle = isHeading ? 'bold' : isSignedNotice ? 'italic' : 'normal';
-    const fontSize = isSessionHeading ? 10.5 : isHeading ? 10 : 9.5;
+    const fontStyle = isHeading || isStandaloneBold ? 'bold' : isSignedNotice ? 'italic' : 'normal';
+    const fontSize = isSessionHeading ? 10.5 : isHeading ? 10 : isStandaloneBold ? 9.5 : 9.5;
     doc.setFont('Helvetica', fontStyle);
     doc.setFontSize(fontSize);
     doc.setTextColor(isHeading ? primary.r : 28, isHeading ? primary.g : 25, isHeading ? primary.b : 22);
@@ -159,7 +161,7 @@ export const generateProntuarioPDF = ({
       doc.text(wrappedLine, margin, y);
       y += isHeading ? 5.5 : 5;
     }
-    y += isHeading ? 2.5 : 1.5;
+    y += isHeading ? 2.5 : isStandaloneBold ? 0.5 : 1.5;
   }
 
   ensureSpace(28);

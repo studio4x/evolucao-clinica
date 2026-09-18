@@ -10,7 +10,11 @@ import {
   ChevronDown,
   ClipboardList,
   Clock3,
+  AlertTriangle,
+  Copy,
+  Download,
   Eye,
+  FilePlus2,
   History as HistoryIcon,
   Loader2,
   PlusCircle,
@@ -22,6 +26,14 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { showAlert, showConfirm } from '../store/modalStore';
+import { useSiteConfig } from '../hooks/useSiteConfig';
+import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { downloadPdfFile } from '../utils/prontuarioPdf';
+import {
+  filterAnamnesisAnswersForSchema,
+  generateAnamnesisPDF,
+  getAnamnesisPdfFileName,
+} from '../utils/anamnesisPdf';
 import {
   fetchAnamnesisTemplates,
   fetchCurrentPatientAnamnesis,
@@ -43,6 +55,19 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const AUTOSAVE_DELAY_MS = 900;
 const AUTOSAVE_MAX_ATTEMPTS = 3;
+
+const getBase64ImageFromUrl = async (url: string): Promise<string> => {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error('Não foi possível carregar o logotipo do PDF.');
+  const blob = await response.blob();
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Não foi possível preparar o logotipo.'));
+    reader.readAsDataURL(blob);
+  });
+};
 
 const formatDateTime = (value: string) =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -238,9 +263,11 @@ export default function PatientAnamnesis() {
   const { id: patientId } = useParams();
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
+  const siteConfig = useSiteConfig();
 
   const [patientName, setPatientName] = useState('');
   const [professionalTitle, setProfessionalTitle] = useState('');
+  const [professional, setProfessional] = useState<any>(null);
   const [templates, setTemplates] = useState<AnamnesisTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [current, setCurrent] = useState<PatientAnamnesis | null>(null);
@@ -252,6 +279,8 @@ export default function PatientAnamnesis() {
   const [loading, setLoading] = useState(true);
   const [switchingTemplate, setSwitchingTemplate] = useState(false);
   const [startingNew, setStartingNew] = useState(false);
+  const [newAnamnesisChoiceOpen, setNewAnamnesisChoiceOpen] = useState(false);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [dirty, setDirty] = useState(false);
 
@@ -353,7 +382,11 @@ export default function PatientAnamnesis() {
           revisionHistory,
         ] = await Promise.all([
           supabase.from('patients').select('id, full_name').eq('id', patientId).single(),
-          supabase.from('professionals').select('professional_title').eq('id', user.id).single(),
+          supabase
+            .from('professionals')
+            .select('full_name, professional_title, professional_register, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at')
+            .eq('id', user.id)
+            .single(),
           fetchAnamnesisTemplates(),
           fetchCurrentPatientAnamnesis(patientId),
           fetchPatientAnamnesisHistory(patientId),
@@ -370,6 +403,7 @@ export default function PatientAnamnesis() {
 
         setPatientName(patientResult.data?.full_name || 'Paciente');
         setProfessionalTitle(title);
+        setProfessional(profileResult.data || null);
         setTemplates(availableTemplates);
         setCurrent(currentAnamnesis);
         currentRef.current = currentAnamnesis;
@@ -748,7 +782,7 @@ export default function PatientAnamnesis() {
     }
   };
 
-  const handleStartNew = async () => {
+  const handleStartNew = async (mode: 'blank' | 'copy') => {
     if (!patientId || !currentRef.current || startingNew) return;
 
     const latestTemplate =
@@ -756,6 +790,7 @@ export default function PatientAnamnesis() {
       || templates.find((template) => template.id === selectedTemplateId);
 
     if (!latestTemplate) {
+      setNewAnamnesisChoiceOpen(false);
       await showAlert('O modelo desta anamnese não está mais disponível para novos registros.', {
         title: 'Modelo indisponível',
         variant: 'warning',
@@ -764,34 +799,132 @@ export default function PatientAnamnesis() {
       return;
     }
 
-    const confirmed = await showConfirm(
-      `Uma nova anamnese “${latestTemplate.name}” será iniciada. A atual será preservada integralmente no histórico. Deseja continuar?`,
-      {
-        title: 'Iniciar nova anamnese',
-        confirmLabel: 'Iniciar nova',
-        cancelLabel: 'Cancelar',
-        variant: 'warning',
-        icon: 'question',
-      }
-    );
-
-    if (!confirmed) return;
-
     setStartingNew(true);
     try {
       await flushPendingSave();
+      const sourceAnswers = { ...answersRef.current };
       const created = await startPatientAnamnesis(patientId, latestTemplate.id, true);
+
+      // A troca para o novo registro acontece imediatamente após a criação.
+      // Assim, se a cópia falhar depois, a interface nunca continua editando
+      // a anamnese anterior que já foi preservada no histórico.
       setCurrentRecord(created);
+
+      if (mode === 'copy') {
+        const copiedAnswers = filterAnamnesisAnswersForSchema(
+          sourceAnswers,
+          latestTemplate.schema.sections
+        );
+
+        if (Object.keys(copiedAnswers).length > 0) {
+          try {
+            const copiedRecord = await savePatientAnamnesis(created.id, {
+              answers: copiedAnswers,
+            });
+            setCurrentRecord(copiedRecord);
+          } catch (copyError) {
+            console.error('[Anamnesis] Nova anamnese criada, mas a cópia falhou:', copyError);
+            setNewAnamnesisChoiceOpen(false);
+            await Promise.allSettled([loadHistory(), loadRevisions()]);
+            await showAlert(
+              'A nova anamnese foi criada e a anterior está preservada no histórico, mas não foi possível copiar as respostas. A nova versão foi mantida em branco para evitar inconsistências.',
+              {
+                title: 'Não foi possível copiar as respostas',
+                variant: 'warning',
+                icon: 'warning',
+              }
+            );
+            return;
+          }
+        }
+      }
+
+      setNewAnamnesisChoiceOpen(false);
       await Promise.all([loadHistory(), loadRevisions()]);
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao iniciar nova anamnese:', error);
-      await showAlert(error?.message || 'Não foi possível iniciar uma nova anamnese.', {
-        title: 'Falha ao iniciar',
+      await showAlert(
+        error?.message || 'Não foi possível iniciar uma nova anamnese.',
+        {
+          title: 'Falha ao iniciar',
+          variant: 'danger',
+          icon: 'warning',
+        }
+      );
+    } finally {
+      setStartingNew(false);
+    }
+  };
+
+  const handleDownloadPdf = async (record: PatientAnamnesis) => {
+    if (downloadingPdfId) return;
+
+    setDownloadingPdfId(record.id);
+    try {
+      let pdfRecord = record;
+
+      if (currentRef.current?.id === record.id) {
+        await flushPendingSave();
+        const syncedRecord = currentRef.current || record;
+        pdfRecord = {
+          ...syncedRecord,
+          answers: { ...answersRef.current },
+        };
+      }
+
+      const hasCustomLogoAccess = hasActiveYearlyAccess({
+        profileRole: professional?.role,
+        subscriptionPlan: professional?.subscription_plan,
+        subscriptionStatus: professional?.subscription_status,
+        subscriptionEndsAt: professional?.subscription_ends_at,
+      });
+      const logoUrl =
+        hasCustomLogoAccess && professional?.custom_logo_url
+          ? professional.custom_logo_url
+          : siteConfig.logo_light_url;
+
+      let logoBase64: string | null = null;
+      if (logoUrl) {
+        try {
+          logoBase64 = await getBase64ImageFromUrl(logoUrl);
+        } catch (logoError) {
+          console.warn('[Anamnesis PDF] Logotipo indisponível; usando cabeçalho textual.', logoError);
+        }
+      }
+
+      const doc = generateAnamnesisPDF({
+        record: pdfRecord,
+        patient: { full_name: patientName },
+        professional,
+        siteConfig,
+        logoBase64,
+        customLogoSettings: professional?.custom_logo_settings,
+      });
+
+      const saved = await downloadPdfFile(
+        doc,
+        getAnamnesisPdfFileName(patientName, pdfRecord)
+      );
+
+      if (!saved) {
+        await showAlert(
+          'Não foi possível salvar o PDF neste dispositivo. Tente novamente pelo navegador ou verifique as permissões de download.',
+          {
+            title: 'Falha ao baixar PDF',
+            variant: 'warning',
+            icon: 'warning',
+          }
+        );
+      }
+    } catch (error: any) {
+      console.error('[Anamnesis PDF] Erro ao gerar PDF:', error);
+      await showAlert(error?.message || 'Não foi possível gerar o PDF da anamnese.', {
+        title: 'Falha ao gerar PDF',
         variant: 'danger',
         icon: 'warning',
       });
     } finally {
-      setStartingNew(false);
+      setDownloadingPdfId(null);
     }
   };
 
@@ -905,27 +1038,45 @@ export default function PatientAnamnesis() {
         title={`Anamnese — ${patientName}`}
         description="Organize informações iniciais e dados relevantes para o acompanhamento. Revise e atualize os registros sempre que necessário."
         actions={
-          current?.status === 'completed' ? (
-            <button
-              type="button"
-              onClick={() => void handleReopen()}
-              disabled={saveState === 'saving'}
-              className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
-            >
-              <RotateCcw size={14} />
-              Reabrir como rascunho
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void handleComplete()}
-              disabled={saveState === 'saving'}
-              className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
-            >
-              <CheckCircle2 size={14} />
-              Concluir anamnese
-            </button>
-          )
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {current && (
+              <button
+                type="button"
+                onClick={() => void handleDownloadPdf(current)}
+                disabled={Boolean(downloadingPdfId) || saveState === 'saving'}
+                className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
+              >
+                {downloadingPdfId === current.id ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <Download size={14} />
+                )}
+                Baixar PDF
+              </button>
+            )}
+
+            {current?.status === 'completed' ? (
+              <button
+                type="button"
+                onClick={() => void handleReopen()}
+                disabled={saveState === 'saving'}
+                className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
+              >
+                <RotateCcw size={14} />
+                Reabrir como rascunho
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void handleComplete()}
+                disabled={saveState === 'saving'}
+                className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50"
+              >
+                <CheckCircle2 size={14} />
+                Concluir anamnese
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -964,25 +1115,7 @@ export default function PatientAnamnesis() {
                   {current?.status === 'completed' ? 'Concluída' : 'Rascunho'}
                 </span>
 
-                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${
-                  saveState === 'error' ? 'text-red-600' : 'text-brand-text-muted'
-                }`}>
-                  {saveState === 'saving' ? (
-                    <>
-                      <Loader2 size={11} className="animate-spin" />
-                      Salvando...
-                    </>
-                  ) : saveState === 'error' ? (
-                    'Falha ao salvar · tente editar novamente'
-                  ) : dirty ? (
-                    'Alterações pendentes'
-                  ) : (
-                    <>
-                      <Save size={11} />
-                      Salvo automaticamente
-                    </>
-                  )}
-                </span>
+
               </div>
             </div>
 
@@ -993,7 +1126,7 @@ export default function PatientAnamnesis() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => void handleStartNew()}
+                  onClick={() => setNewAnamnesisChoiceOpen(true)}
                   disabled={startingNew || switchingTemplate || saveState === 'saving'}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-brand-primary/30 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/5 disabled:opacity-50"
                 >
@@ -1107,14 +1240,29 @@ export default function PatientAnamnesis() {
                     <p className="mt-1 text-[10px] text-brand-text-muted">
                       {item.status === 'completed' ? 'Concluída' : 'Rascunho preservado'} · {formatDateTime(item.updatedAt)}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => setHistoryPreview(item)}
-                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-brand-primary hover:underline"
-                    >
-                      <Eye size={12} />
-                      Visualizar registro
-                    </button>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setHistoryPreview(item)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-primary hover:underline"
+                      >
+                        <Eye size={12} />
+                        Visualizar registro
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleDownloadPdf(item)}
+                        disabled={Boolean(downloadingPdfId)}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-brand-primary hover:underline disabled:opacity-50"
+                      >
+                        {downloadingPdfId === item.id ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Download size={12} />
+                        )}
+                        Baixar PDF
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1145,6 +1293,129 @@ export default function PatientAnamnesis() {
         </aside>
       </div>
 
+      <div
+        className={`fixed bottom-20 right-4 z-[105] flex min-w-[220px] max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-xl md:bottom-6 ${
+          saveState === 'error'
+            ? 'border-red-200'
+            : saveState === 'saving' || dirty
+              ? 'border-amber-200'
+              : 'border-emerald-200'
+        }`}
+        aria-live="polite"
+        aria-label="Status do salvamento automático"
+      >
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+          saveState === 'error'
+            ? 'bg-red-50 text-red-600'
+            : saveState === 'saving' || dirty
+              ? 'bg-amber-50 text-amber-700'
+              : 'bg-emerald-50 text-emerald-700'
+        }`}>
+          {saveState === 'saving' ? (
+            <Loader2 size={17} className="animate-spin" />
+          ) : saveState === 'error' ? (
+            <AlertTriangle size={17} />
+          ) : dirty ? (
+            <Clock3 size={17} />
+          ) : (
+            <Save size={17} />
+          )}
+        </span>
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">
+            Salvamento automático
+          </p>
+          <p className={`mt-0.5 text-xs font-bold ${
+            saveState === 'error'
+              ? 'text-red-700'
+              : saveState === 'saving' || dirty
+                ? 'text-amber-800'
+                : 'text-emerald-700'
+          }`}>
+            {saveState === 'saving'
+              ? 'Salvando alterações...'
+              : saveState === 'error'
+                ? 'Falha ao salvar'
+                : dirty
+                  ? 'Alterações pendentes'
+                  : current
+                    ? 'Salvo automaticamente'
+                    : 'Salvamento ativo'}
+          </p>
+        </div>
+      </div>
+
+      {newAnamnesisChoiceOpen && current && (
+        <div
+          className="fixed inset-0 z-[125] flex items-center justify-center bg-slate-900/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Como iniciar a nova anamnese"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !startingNew) {
+              setNewAnamnesisChoiceOpen(false);
+            }
+          }}
+        >
+          <div className="w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-primary">
+                  Nova anamnese
+                </p>
+                <h2 className="mt-1 text-lg font-bold text-brand-text">
+                  Como deseja começar?
+                </h2>
+                <p className="mt-2 text-xs leading-relaxed text-brand-text-muted">
+                  A anamnese atual será preservada integralmente no histórico em qualquer uma das opções.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNewAnamnesisChoiceOpen(false)}
+                disabled={startingNew}
+                className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg disabled:opacity-50"
+                aria-label="Cancelar nova anamnese"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void handleStartNew('blank')}
+                disabled={startingNew}
+                className="rounded-2xl border border-brand-border p-4 text-left transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/5 disabled:opacity-50"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                  {startingNew ? <Loader2 size={17} className="animate-spin" /> : <FilePlus2 size={17} />}
+                </span>
+                <span className="mt-3 block text-sm font-bold text-brand-text">Começar do zero</span>
+                <span className="mt-1 block text-[11px] leading-relaxed text-brand-text-muted">
+                  Cria uma nova anamnese vazia usando a versão mais recente deste modelo.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleStartNew('copy')}
+                disabled={startingNew}
+                className="rounded-2xl border border-brand-border p-4 text-left transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/5 disabled:opacity-50"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                  {startingNew ? <Loader2 size={17} className="animate-spin" /> : <Copy size={17} />}
+                </span>
+                <span className="mt-3 block text-sm font-bold text-brand-text">Copiar última anamnese</span>
+                <span className="mt-1 block text-[11px] leading-relaxed text-brand-text-muted">
+                  Cria uma nova versão preenchida com as respostas da anamnese atual para você revisar.
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {historyPreview && (
         <div
           className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/45 p-4"
@@ -1164,14 +1435,29 @@ export default function PatientAnamnesis() {
                   Versão {historyPreview.templateVersion} · {historyPreview.status === 'completed' ? 'Concluída' : 'Rascunho preservado'} · atualizada em {formatDateTime(historyPreview.updatedAt)}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setHistoryPreview(null)}
-                className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg hover:text-brand-text"
-                aria-label="Fechar visualização"
-              >
-                <X size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadPdf(historyPreview)}
+                  disabled={Boolean(downloadingPdfId)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-2 text-xs font-bold text-brand-primary hover:bg-brand-bg disabled:opacity-50"
+                >
+                  {downloadingPdfId === historyPreview.id ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHistoryPreview(null)}
+                  className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg hover:text-brand-text"
+                  aria-label="Fechar visualização"
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="max-h-[calc(88vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
