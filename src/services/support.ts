@@ -26,6 +26,8 @@ export interface SupportTicket {
   latestMessageAt?: string | null;
   latestMessageSenderRole?: 'admin' | 'user' | null;
   latestMessageSenderId?: string | null;
+  autoClosedAt?: string | null;
+  autoCloseReason?: string | null;
 }
 
 export interface SupportMessage {
@@ -91,6 +93,8 @@ function mapSupportTicket(row: any): SupportTicket {
     slaStatus: row.sla_status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    autoClosedAt: row.auto_closed_at || null,
+    autoCloseReason: row.auto_close_reason || null,
   };
 }
 
