@@ -116,18 +116,23 @@ const emptyPatientFormValues = (): PatientFormValues => ({
   default_template_id: '',
 });
 
-const readPatientPhotoAsDataUrl = (value: Blob) => new Promise<string>((resolve, reject) => {
-  const reader = new FileReader();
-  reader.onload = () => {
-    if (typeof reader.result === 'string') {
-      resolve(reader.result);
-      return;
+const PATIENT_PHOTO_BASE64_CHUNK_BYTES = 0x8000;
+
+const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
+  try {
+    const bytes = new Uint8Array(await value.arrayBuffer());
+    if (bytes.byteLength === 0) throw new Error('empty image');
+
+    let binary = '';
+    for (let offset = 0; offset < bytes.byteLength; offset += PATIENT_PHOTO_BASE64_CHUNK_BYTES) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + PATIENT_PHOTO_BASE64_CHUNK_BYTES));
     }
-    reject(new Error('Não foi possível ler a imagem selecionada.'));
-  };
-  reader.onerror = () => reject(new Error('Não foi possível ler a imagem selecionada.'));
-  reader.readAsDataURL(value);
-});
+
+    return `data:${value.type || 'application/octet-stream'};base64,${window.btoa(binary)}`;
+  } catch {
+    throw new Error('Não foi possível ler a imagem selecionada.');
+  }
+};
 
 const getPatientFormDraftKey = (userId: string) => `${PATIENT_FORM_DRAFT_PREFIX}:${userId}:${window.location.pathname}`;
 
@@ -321,8 +326,8 @@ export default function PatientForm() {
   }, [id]);
 
   const handlePhotoSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
+    const input = event.currentTarget;
+    const file = input.files?.[0];
     if (!file) return;
 
     const validationError = validatePatientPhotoSource(file);
@@ -332,6 +337,7 @@ export default function PatientForm() {
         variant: 'warning',
         icon: 'warning',
       });
+      input.value = '';
       return;
     }
 
@@ -361,6 +367,7 @@ export default function PatientForm() {
         icon: 'warning',
       });
     } finally {
+      input.value = '';
       setPreparingPhoto(false);
     }
   };
