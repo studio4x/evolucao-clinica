@@ -116,6 +116,19 @@ const emptyPatientFormValues = (): PatientFormValues => ({
   default_template_id: '',
 });
 
+const readPatientPhotoAsDataUrl = (value: Blob) => new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => {
+    if (typeof reader.result === 'string') {
+      resolve(reader.result);
+      return;
+    }
+    reject(new Error('Não foi possível ler a imagem selecionada.'));
+  };
+  reader.onerror = () => reject(new Error('Não foi possível ler a imagem selecionada.'));
+  reader.readAsDataURL(value);
+});
+
 const getPatientFormDraftKey = (userId: string) => `${PATIENT_FORM_DRAFT_PREFIX}:${userId}:${window.location.pathname}`;
 
 const readPatientFormDraft = (key: string): PatientFormDraft | null => {
@@ -188,21 +201,9 @@ export default function PatientForm() {
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
-  const localPhotoUrlsRef = useRef<string[]>([]);
   const pendingPatientIdRef = useRef<string | null>(null);
 
   const getDraftPatientId = () => pendingPatientIdRef.current || id || undefined;
-
-  const createLocalPhotoUrl = (value: Blob) => {
-    const url = URL.createObjectURL(value);
-    localPhotoUrlsRef.current.push(url);
-    return url;
-  };
-
-  useEffect(() => () => {
-    localPhotoUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    localPhotoUrlsRef.current = [];
-  }, []);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -334,10 +335,10 @@ export default function PatientForm() {
       return;
     }
 
-    const sourceUrl = createLocalPhotoUrl(file);
     setPreparingPhoto(true);
 
     try {
+      const sourceUrl = await readPatientPhotoAsDataUrl(file);
       const initialCrop = await createCroppedImageBlob({
         imageUrl: sourceUrl,
         aspect: 1,
@@ -345,7 +346,7 @@ export default function PatientForm() {
         position: { x: 0, y: 0 },
         outputWidth: 600,
       });
-      const previewUrl = createLocalPhotoUrl(initialCrop);
+      const previewUrl = await readPatientPhotoAsDataUrl(initialCrop);
 
       setPendingPhotoBlob(initialCrop);
       setPhotoPreviewUrl(previewUrl);
@@ -365,7 +366,7 @@ export default function PatientForm() {
   };
 
   const handleApplyPatientPhotoCrop = async (croppedPhoto: Blob) => {
-    const previewUrl = createLocalPhotoUrl(croppedPhoto);
+    const previewUrl = await readPatientPhotoAsDataUrl(croppedPhoto);
     setPendingPhotoBlob(croppedPhoto);
     setPhotoPreviewUrl(previewUrl);
     setPhotoRemoved(false);

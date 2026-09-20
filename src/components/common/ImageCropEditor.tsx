@@ -49,7 +49,9 @@ export const createCroppedImageBlob = ({
   outputWidth,
 }: CreateCroppedImageBlobOptions) => new Promise<Blob>((resolve, reject) => {
   const image = new window.Image();
-  image.crossOrigin = 'anonymous';
+  if (/^https?:\/\//i.test(imageUrl)) {
+    image.crossOrigin = 'anonymous';
+  }
   image.onload = () => {
     const imageAspect = image.naturalWidth / image.naturalHeight;
     const baseWidth = imageAspect > aspect ? image.naturalHeight * aspect : image.naturalWidth;

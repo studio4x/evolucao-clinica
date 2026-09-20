@@ -18,12 +18,18 @@ assert.match(migrationSource, /patient_photos_insert_own[\s\S]*?to authenticated
 assert.match(migrationSource, /patient_photos_delete_own[\s\S]*?to authenticated[\s\S]*?auth\.uid\(\)/);
 
 assert.match(cropEditorSource, /createCroppedImageBlob/);
+assert.ok(
+  cropEditorSource.includes("if (/^https?:\\/\\//i.test(imageUrl))"),
+  'editor deve aplicar CORS somente a imagens HTTP(S)'
+);
 assert.match(cropEditorSource, /Arraste para mover/);
 assert.match(cropEditorSource, /Aproximação/);
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
-assert.match(formSource, /handlePhotoSelection[\s\S]*?createCroppedImageBlob\(\{[\s\S]*?imageUrl: sourceUrl[\s\S]*?setPendingPhotoBlob\(initialCrop\)[\s\S]*?setPhotoPreviewUrl\(previewUrl\)/);
+assert.match(formSource, /readPatientPhotoAsDataUrl[\s\S]*?readAsDataURL\(value\)/);
+assert.match(formSource, /handlePhotoSelection[\s\S]*?readPatientPhotoAsDataUrl\(file\)[\s\S]*?createCroppedImageBlob\(\{[\s\S]*?imageUrl: sourceUrl[\s\S]*?readPatientPhotoAsDataUrl\(initialCrop\)[\s\S]*?setPendingPhotoBlob\(initialCrop\)[\s\S]*?setPhotoPreviewUrl\(previewUrl\)/);
+assert.doesNotMatch(formSource, /URL\.createObjectURL\(value\)/);
 assert.match(formSource, /A prévia é criada automaticamente/);
 assert.match(formSource, /uploadPatientPhoto\(/);
 assert.match(formSource, /photo_path: nextPhotoPath \|\| null/);
