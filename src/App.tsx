@@ -60,8 +60,7 @@ import {
 } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
-import { canUseNativeGoogleOAuthCallback, clearPendingGoogleScopes, getCurrentGoogleOAuthRedirectUrl, readPendingGoogleScopes, requestGoogleOAuth } from './services/googleAuth';
-import { isGoogleAccessTokenFresh } from './utils/googleAuthSession';
+import { clearPendingGoogleScopes, readPendingGoogleScopes } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
@@ -71,8 +70,6 @@ import { isPublicAcquisitionPathname, sendAcquisitionTelemetry } from './service
 import { PushPermissionPrompt } from './components/notifications/PushPermissionPrompt';
 import { EnvironmentBanner } from './components/layout/EnvironmentBanner';
 import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
-
-const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
 function NativeBillingRestore() {
   const user = useAuthStore((state) => state.user);
@@ -385,24 +382,6 @@ export default function App() {
   const authSessionHandlingRef = useRef(false);
   const metaRegistrationTrackingRef = useRef<{ userId: string; promise: Promise<boolean> } | null>(null);
 
-  const clearSilentGoogleRefreshFlag = (userId?: string | null) => {
-    if (typeof window === 'undefined' || !userId) return;
-    const current = sessionStorage.getItem(GOOGLE_SILENT_REFRESH_KEY);
-    if (current === userId) {
-      sessionStorage.removeItem(GOOGLE_SILENT_REFRESH_KEY);
-    }
-  };
-
-  const markSilentGoogleRefreshFlag = (userId?: string | null) => {
-    if (typeof window === 'undefined' || !userId) return;
-    sessionStorage.setItem(GOOGLE_SILENT_REFRESH_KEY, userId);
-  };
-
-  const hasSilentGoogleRefreshFlag = (userId?: string | null) => {
-    if (typeof window === 'undefined' || !userId) return false;
-    return sessionStorage.getItem(GOOGLE_SILENT_REFRESH_KEY) === userId;
-  };
-
   const clearInvalidProfessionalSession = async () => {
     await clearProfessionalChannel();
     pendingOnboardingNoticeRef.current = null;
@@ -410,7 +389,6 @@ export default function App() {
     setGoogleAccessUserId(null);
     setGoogleAccessTokenIssuedAt(null);
     setGoogleGrantedScopes([]);
-    clearSilentGoogleRefreshFlag(useAuthStore.getState().googleAccessUserId);
     setUser(null);
     setProfileInfo(null, null, null, null, null, null);
     setAnalyticsUser(null);
@@ -484,7 +462,6 @@ export default function App() {
             setGoogleAccessUserId(null);
             setGoogleAccessTokenIssuedAt(null);
             setGoogleGrantedScopes([]);
-            clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
           }
 
           if (pendingScopes.length > 0) {
@@ -497,42 +474,9 @@ export default function App() {
             clearPendingGoogleScopes();
           }
 
-          const latestState = useAuthStore.getState();
-
-          const sameGoogleUser = latestState.googleAccessUserId === session.user.id;
-          const hasPersistedGoogleScopes = latestState.googleGrantedScopes.length > 0;
-          const hasNewProviderToken = Boolean(
-            session.provider_token && session.provider_token !== latestState.googleAccessToken
-          );
-          const shouldSilentlyRefreshGoogle =
-            sameGoogleUser &&
-            hasPersistedGoogleScopes &&
-            canUseNativeGoogleOAuthCallback() &&
-            !hasNewProviderToken &&
-            !isGoogleAccessTokenFresh(
-              latestState.googleAccessToken,
-              latestState.googleAccessTokenIssuedAt
-            ) &&
-            !hasSilentGoogleRefreshFlag(session.user.id);
-
-          if (shouldSilentlyRefreshGoogle) {
-            markSilentGoogleRefreshFlag(session.user.id);
-            const { error } = await requestGoogleOAuth({
-              requiredScopes: latestState.googleGrantedScopes,
-              currentGrantedScopes: latestState.googleGrantedScopes,
-              redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-              prompt: 'none',
-              loginHint: session.user.email || undefined
-            });
-
-            if (error) {
-              console.warn('Falha ao renovar silenciosamente o token do Google:', error);
-              clearSilentGoogleRefreshFlag(session.user.id);
-            } else {
-              return;
-            }
-          }
-
+          // A restauração da sessão principal nunca deve iniciar outro OAuth.
+          // Tokens expirados do Google Drive são renovados somente quando o
+          // profissional executa uma ação que depende dessa integração.
           const isSameUser = currentState.user?.id === session.user.id;
           const hasProfile = currentState.profileStatus !== null;
 
@@ -543,7 +487,6 @@ export default function App() {
                 setGoogleAccessToken(session.provider_token);
                 setGoogleAccessUserId(session.user.id);
               }
-              clearSilentGoogleRefreshFlag(session.user.id);
             }
             setAuthReady(true);
             return;
@@ -555,7 +498,6 @@ export default function App() {
           if (session.provider_token) {
             setGoogleAccessToken(session.provider_token);
             setGoogleAccessUserId(session.user.id);
-            clearSilentGoogleRefreshFlag(session.user.id);
           } else {
             // Opcional: em alguns fluxos do Supabase o token do provedor pode ser guardado no localStorage
             // se o redirecionamento limpar o provider_token após a primeira captura.
@@ -726,7 +668,6 @@ export default function App() {
           await clearProfessionalChannel();
           setAnalyticsUser(null);
           pendingOnboardingNoticeRef.current = null;
-          clearSilentGoogleRefreshFlag(currentState.googleAccessUserId);
           if (currentState.user !== null || currentState.profileStatus !== null) {
             setUser(null);
             setProfileInfo(null, null, null, null, null, null);

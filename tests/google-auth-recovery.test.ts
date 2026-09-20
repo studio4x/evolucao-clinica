@@ -45,15 +45,17 @@ assert.match(
 );
 
 const appSource = fs.readFileSync('src/App.tsx', 'utf8');
-assert.match(
+assert.doesNotMatch(
   appSource,
-  /const hasNewProviderToken = Boolean\(/,
-  'Um token recém-retornado pelo OAuth deve ser distinguido do token antigo persistido.'
+  /requestGoogleOAuth|prompt:\s*['"]none['"]|shouldSilentlyRefreshGoogle/,
+  'A restauração da sessão não pode abrir um novo fluxo OAuth do Google ao iniciar o app.'
 );
+
+const supabaseClientSource = fs.readFileSync('src/supabaseClient.ts', 'utf8');
 assert.match(
-  appSource,
-  /!hasNewProviderToken\s*&&\s*!isGoogleAccessTokenFresh/,
-  'A presença de um provider_token antigo não pode impedir a renovação silenciosa.'
+  supabaseClientSource,
+  /persistSession:\s*true[\s\S]*autoRefreshToken:\s*true/,
+  'A sessão principal deve continuar persistida e renovada entre aberturas do aplicativo.'
 );
 
 const patientDetailSource = fs.readFileSync('src/pages/PatientDetail.tsx', 'utf8');
