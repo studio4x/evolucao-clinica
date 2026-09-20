@@ -54,6 +54,11 @@ function readEbmlVint(buffer: Buffer, offset: number, maxLength: number, preserv
     unknown = unknown && byte === 0xff;
   }
 
+  // O Chrome/Android MediaRecorder usa com frequência o marcador de tamanho
+  // desconhecido em VINT de 8 bytes (01 ff ff ff ff ff ff ff). Esse marcador
+  // não representa um tamanho numérico e, portanto, não deve ser rejeitado por
+  // exceder Number.MAX_SAFE_INTEGER.
+  if (unknown) return { length, value: 0, unknown: true };
   if (value > BigInt(Number.MAX_SAFE_INTEGER)) return null;
   return { length, value: Number(value), unknown };
 }

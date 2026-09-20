@@ -35,6 +35,11 @@ for (const destination of [
 }
 
 assert.ok(contentSecurityPolicy.includes("worker-src 'self' blob:"), 'CSP deve declarar workers locais e blob explicitamente');
+assert.match(
+  contentSecurityPolicy,
+  /img-src[^;]*\bblob:/,
+  'CSP deve permitir URLs blob nas imagens usadas pelo editor de recorte'
+);
 assert.doesNotMatch(mainSource, /Service Worker registrado com escopo/, 'registro bem-sucedido do PWA não deve poluir o console');
 
 assert.match(

@@ -145,6 +145,7 @@ function webmFixture(): Buffer {
 }
 
 function streamingWebmFixture(): Buffer {
+  const unknownSize8 = Buffer.from([0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
   const info = ebmlElement([0x15, 0x49, 0xa9, 0x66],
     ebmlElement([0x2a, 0xd7, 0xb1], Buffer.from([0x00, 0x0f, 0x42, 0x40])));
   const simpleBlock = (relativeTimecode: number) => {
@@ -156,7 +157,8 @@ function streamingWebmFixture(): Buffer {
     return ebmlElement([0xa3], payload);
   };
   const cluster = Buffer.concat([
-    Buffer.from([0x1f, 0x43, 0xb6, 0x75, 0xff]),
+    Buffer.from([0x1f, 0x43, 0xb6, 0x75]),
+    unknownSize8,
     ebmlElement([0xe7], Buffer.from([0x00])),
     simpleBlock(0),
     simpleBlock(1960),
@@ -165,7 +167,8 @@ function streamingWebmFixture(): Buffer {
   const ebml = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x88, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04]);
   return Buffer.concat([
     ebml,
-    Buffer.from([0x18, 0x53, 0x80, 0x67, 0xff]),
+    Buffer.from([0x18, 0x53, 0x80, 0x67]),
+    unknownSize8,
     info,
     cluster,
   ]);
@@ -211,6 +214,11 @@ const streamingWebmDuration = await getAudioDurationSecondsFromBuffer(streamingW
 assert.ok(
   streamingWebmDuration >= 1.99 && streamingWebmDuration <= 2.05,
   `MediaRecorder WebM without Info/Duration should use block timecodes, got ${streamingWebmDuration}`,
+);
+assert.match(
+  (await readFile(new URL("../server/audioDuration.ts", import.meta.url), "utf8")),
+  /if \(unknown\) return \{ length, value: 0, unknown: true \}/,
+  "eight-byte unknown-size VINT markers must bypass numeric overflow validation",
 );
 
 const serverDurationSource = await readFile(new URL("../server/audioDuration.ts", import.meta.url), "utf8");
