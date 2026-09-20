@@ -144,6 +144,33 @@ function webmFixture(): Buffer {
   return Buffer.concat([ebml, Buffer.from([0x18, 0x53, 0x80, 0x67, 0xff]), info, tracks]);
 }
 
+function streamingWebmFixture(): Buffer {
+  const info = ebmlElement([0x15, 0x49, 0xa9, 0x66],
+    ebmlElement([0x2a, 0xd7, 0xb1], Buffer.from([0x00, 0x0f, 0x42, 0x40])));
+  const simpleBlock = (relativeTimecode: number) => {
+    const payload = Buffer.alloc(8);
+    payload[0] = 0x81;
+    payload.writeInt16BE(relativeTimecode, 1);
+    payload[3] = 0x80;
+    payload[4] = 0xf8;
+    return ebmlElement([0xa3], payload);
+  };
+  const cluster = Buffer.concat([
+    Buffer.from([0x1f, 0x43, 0xb6, 0x75, 0xff]),
+    ebmlElement([0xe7], Buffer.from([0x00])),
+    simpleBlock(0),
+    simpleBlock(1960),
+    simpleBlock(1980),
+  ]);
+  const ebml = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x88, 0x42, 0x86, 0x81, 0x01, 0x42, 0xf7, 0x81, 0x01, 0x42, 0xf2, 0x81, 0x04]);
+  return Buffer.concat([
+    ebml,
+    Buffer.from([0x18, 0x53, 0x80, 0x67, 0xff]),
+    info,
+    cluster,
+  ]);
+}
+
 function oggOpusFixture(): Buffer {
   const page = (headerType: number, granule: number, sequence: number, payload: Buffer): Buffer => {
     const header = Buffer.alloc(27);
@@ -180,6 +207,11 @@ for (const [label, bytes, mimeType, expectedMinimum] of fixtures) {
 
 assert.equal(await getAudioDurationSecondsFromBuffer(Buffer.from([0, 1, 2, 3, 4]), "audio/aac"), 0);
 assert.ok(await getAudioDurationSecondsFromBuffer(wavFixture(), "audio/aac") > 0, "bytes must remain authoritative over a misleading MIME");
+const streamingWebmDuration = await getAudioDurationSecondsFromBuffer(streamingWebmFixture(), "audio/webm");
+assert.ok(
+  streamingWebmDuration >= 1.99 && streamingWebmDuration <= 2.05,
+  `MediaRecorder WebM without Info/Duration should use block timecodes, got ${streamingWebmDuration}`,
+);
 
 const serverDurationSource = await readFile(new URL("../server/audioDuration.ts", import.meta.url), "utf8");
 assert.doesNotMatch(serverDurationSource, /document|window|createObjectURL|HTMLAudioElement|getAudioDurationFromBlob/);
@@ -196,6 +228,7 @@ assert.ok(parserIndex < reservationIndex, "duration parsing must precede reserva
 assert.ok(durationUnavailableIndex >= 0 && durationUnavailableIndex < reservationIndex, "malformed files must fail before reservation");
 assert.ok(durationUnavailableIndex < geminiIndex, "malformed files must fail before Gemini");
 assert.match(routeSource, /code: "AUDIO_DURATION_UNAVAILABLE"/);
+assert.match(routeSource, /Duração de áudio indisponível/);
 assert.match(routeSource, /code: "AUDIO_FILE_SIZE_LIMIT"/);
 assert.match(routeSource, /p_audio_key: authoritativeAudioKey/);
 assert.match(transcriptionServiceSource, /extension === 'aac'/);

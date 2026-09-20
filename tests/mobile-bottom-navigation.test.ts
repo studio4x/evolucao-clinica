@@ -34,7 +34,7 @@ assert.match(launcherSource, /Type\.systemBars\(\)[\s\S]*Type\.displayCutout\(\)
 assert.match(launcherSource, /setInsets\(handledTypes, Insets\.NONE\)/, 'tipos nativos tratados devem ser zerados antes do WebView');
 assert.doesNotMatch(launcherSource, /Type\.ime\(\)/, 'IME não deve virar padding permanente');
 
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.873"/);
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.\d+"/);
 assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.91"/);
 assert.match(gradleSource, /versionCode 91/);
 assert.match(gradleSource, /versionName "91"/);

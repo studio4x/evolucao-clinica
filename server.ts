@@ -2299,6 +2299,10 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     const normalizedMimeType = resolveAudioMimeTypeFromContent(requestedMimeType, audioBuffer);
     const authoritativeDuration = await getAudioDurationSecondsFromBuffer(audioBuffer, normalizedMimeType);
     if (!authoritativeDuration || !Number.isFinite(authoritativeDuration)) {
+      console.warn("[AI-Backend] Duração de áudio indisponível", {
+        bytes: audioBuffer.byteLength,
+        mimeType: normalizedMimeType,
+      });
       return res.status(400).json({
         code: "AUDIO_DURATION_UNAVAILABLE",
         error: "Não foi possível identificar a duração real do áudio no servidor."
