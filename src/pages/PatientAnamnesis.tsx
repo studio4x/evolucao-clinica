@@ -55,6 +55,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 const AUTOSAVE_DELAY_MS = 900;
 const AUTOSAVE_MAX_ATTEMPTS = 3;
+const SAVE_NOTICE_DISPLAY_MS = 1800;
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const response = await fetch(url);
@@ -282,6 +283,7 @@ export default function PatientAnamnesis() {
   const [newAnamnesisChoiceOpen, setNewAnamnesisChoiceOpen] = useState(false);
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveNoticeVisible, setSaveNoticeVisible] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   const currentRef = useRef<PatientAnamnesis | null>(null);
@@ -295,6 +297,7 @@ export default function PatientAnamnesis() {
   const lastPersistedSignatureRef = useRef(answerSignature({}));
   const lastQueuedSignatureRef = useRef('');
   const allowNavigationRef = useRef(false);
+  const saveNoticeTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     currentRef.current = current;
@@ -311,6 +314,36 @@ export default function PatientAnamnesis() {
   useEffect(() => {
     selectedTemplateIdRef.current = selectedTemplateId;
   }, [selectedTemplateId]);
+
+  useEffect(() => {
+    if (saveNoticeTimerRef.current !== null) {
+      window.clearTimeout(saveNoticeTimerRef.current);
+      saveNoticeTimerRef.current = null;
+    }
+
+    if (saveState === 'saving' || saveState === 'error') {
+      setSaveNoticeVisible(true);
+      return;
+    }
+
+    if (saveState === 'saved' && saveNoticeVisible) {
+      saveNoticeTimerRef.current = window.setTimeout(() => {
+        setSaveNoticeVisible(false);
+        saveNoticeTimerRef.current = null;
+      }, SAVE_NOTICE_DISPLAY_MS);
+      return;
+    }
+
+    if (saveState === 'idle') {
+      setSaveNoticeVisible(false);
+    }
+  }, [saveNoticeVisible, saveState]);
+
+  useEffect(() => () => {
+    if (saveNoticeTimerRef.current !== null) {
+      window.clearTimeout(saveNoticeTimerRef.current);
+    }
+  }, []);
 
   const templateOptions = useMemo(() => {
     if (!current || templates.some((template) => template.id === current.templateId)) return templates;
@@ -1294,7 +1327,9 @@ export default function PatientAnamnesis() {
       </div>
 
       <div
-        className={`fixed bottom-20 right-4 z-[105] flex min-w-[220px] max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-xl md:bottom-6 ${
+        className={`app-anamnesis-save-notice fixed right-4 z-40 flex min-w-[220px] max-w-[calc(100vw-2rem)] items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-xl md:z-[105] ${
+          saveNoticeVisible ? 'is-visible' : ''
+        } ${
           saveState === 'error'
             ? 'border-red-200'
             : saveState === 'saving' || dirty
@@ -1303,6 +1338,7 @@ export default function PatientAnamnesis() {
         }`}
         aria-live="polite"
         aria-label="Status do salvamento automático"
+        aria-hidden={!saveNoticeVisible}
       >
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
           saveState === 'error'

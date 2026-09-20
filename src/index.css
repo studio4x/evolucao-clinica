@@ -119,6 +119,22 @@
   bottom: calc(6rem + var(--app-safe-area-bottom));
 }
 
+/* O aviso da anamnese fica atrás da navegação móvel quando está ocioso e
+   sobe temporariamente para informar o salvamento sem disputar espaço com ela. */
+.app-anamnesis-save-notice {
+  bottom: var(--app-safe-area-bottom);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(calc(100% + 0.75rem));
+  transition: opacity 450ms ease, transform 450ms ease;
+}
+
+.app-anamnesis-save-notice.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(calc(-4rem - 0.75rem));
+}
+
 @media (min-width: 768px) {
   .app-install-bottom {
     bottom: 1.5rem;
@@ -128,6 +144,14 @@
 @media (min-width: 768px) {
   .app-main-content {
     padding-bottom: 0;
+  }
+
+  .app-anamnesis-save-notice {
+    bottom: 1.5rem;
+  }
+
+  .app-anamnesis-save-notice.is-visible {
+    transform: translateY(0);
   }
 }
 
