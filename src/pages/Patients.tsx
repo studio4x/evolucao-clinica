@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
 import { Activity, Bell, Calendar, FileText, MessageCircle, Plus, Search } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { PatientPhoto } from '../components/patients/PatientPhoto';
 
 type PatientEvolution = {
   patient_id: string;
@@ -171,20 +172,22 @@ export default function Patients() {
           <div className="divide-y divide-brand-border">
             {filteredPatients.map((patient) => (
               <div key={patient.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-brand-bg transition-colors gap-4">
-                <div>
-                  <h3 className="font-semibold text-brand-text text-lg">{patient.full_name}</h3>
-                  <div className="flex items-center space-x-2 mt-1">
-                    <span className={`px-2 py-1 text-xs rounded-full ${patient.status === 'active' ? 'bg-brand-accent/20 text-brand-primary' : 'bg-gray-100 text-gray-700'}`}>
-                      {patient.status === 'active' ? 'Ativo' : 'Inativo'}
-                    </span>
-                    {patient.google_doc_id && (
-                      <span className="flex items-center text-xs text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-full">
-                        <FileText size={12} className="mr-1" />
-                        Prontuário Vinculado
+                <div className="flex min-w-0 items-start gap-4">
+                  <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-14 w-14" />
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-brand-text text-lg">{patient.full_name}</h3>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className={`px-2 py-1 text-xs rounded-full ${patient.status === 'active' ? 'bg-brand-accent/20 text-brand-primary' : 'bg-gray-100 text-gray-700'}`}>
+                        {patient.status === 'active' ? 'Ativo' : 'Inativo'}
                       </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-xs text-brand-text-muted">
+                      {patient.google_doc_id && (
+                        <span className="flex items-center text-xs text-brand-primary bg-brand-primary/10 px-2 py-1 rounded-full">
+                          <FileText size={12} className="mr-1" />
+                          Prontuário Vinculado
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-xs text-brand-text-muted">
                     {calculateAge(patient.birth_date) !== null && (
                       <span className="inline-flex items-center gap-1 whitespace-nowrap">
                         <Calendar size={13} />
@@ -220,6 +223,7 @@ export default function Patients() {
                         WhatsApp
                       </a>
                     )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">

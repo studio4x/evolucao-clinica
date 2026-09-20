@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle, ShieldCheck, Lock } from 'lucide-react';
+import { Crop, FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle, ShieldCheck, Lock, Upload, UserRound } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { deferOnboarding, setOnboardingState, getOnboardingState } from '../utils/onboarding';
@@ -15,6 +15,13 @@ import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { trackEvent } from '../services/analytics';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
+import { ImageCropEditor } from '../components/common/ImageCropEditor';
+import {
+  createPatientPhotoSignedUrl,
+  removePatientPhoto,
+  uploadPatientPhoto,
+  validatePatientPhotoSource,
+} from '../services/patientPhoto';
 import {
   DEFAULT_WHATSAPP_COUNTRY,
   formatWhatsAppNationalNumber,
@@ -174,9 +181,27 @@ export default function PatientForm() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
   const [formData, setFormData] = useState<PatientFormValues>(emptyPatientFormValues);
+  const [photoPath, setPhotoPath] = useState('');
+  const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
+  const [photoEditorUrl, setPhotoEditorUrl] = useState('');
+  const [pendingPhotoBlob, setPendingPhotoBlob] = useState<Blob | null>(null);
+  const [photoRemoved, setPhotoRemoved] = useState(false);
+  const [showPhotoEditor, setShowPhotoEditor] = useState(false);
+  const localPhotoUrlsRef = useRef<string[]>([]);
   const pendingPatientIdRef = useRef<string | null>(null);
 
   const getDraftPatientId = () => pendingPatientIdRef.current || id || undefined;
+
+  const createLocalPhotoUrl = (value: Blob) => {
+    const url = URL.createObjectURL(value);
+    localPhotoUrlsRef.current.push(url);
+    return url;
+  };
+
+  useEffect(() => () => {
+    localPhotoUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    localPhotoUrlsRef.current = [];
+  }, []);
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -273,6 +298,17 @@ export default function PatientForm() {
               default_template_id: data.default_template_id || ''
             });
             setPhoneCountry(storedPhone.country);
+            const storedPhotoPath = String(data.photo_path || '');
+            setPhotoPath(storedPhotoPath);
+            setPhotoRemoved(false);
+            if (storedPhotoPath) {
+              try {
+                setPhotoPreviewUrl(await createPatientPhotoSignedUrl(storedPhotoPath));
+              } catch (photoError) {
+                console.warn('[PatientForm] Não foi possível carregar a foto privada:', photoError);
+                setPhotoPreviewUrl('');
+              }
+            }
           }
         } catch (error) {
           console.error("Error fetching patient:", error);
@@ -281,6 +317,43 @@ export default function PatientForm() {
       fetchPatient();
     }
   }, [id]);
+
+  const handlePhotoSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const validationError = validatePatientPhotoSource(file);
+    if (validationError) {
+      await showAlert(validationError, {
+        title: 'Foto inválida',
+        variant: 'warning',
+        icon: 'warning',
+      });
+      return;
+    }
+
+    const sourceUrl = createLocalPhotoUrl(file);
+    setPhotoEditorUrl(sourceUrl);
+    setShowPhotoEditor(true);
+  };
+
+  const handleApplyPatientPhotoCrop = async (croppedPhoto: Blob) => {
+    const previewUrl = createLocalPhotoUrl(croppedPhoto);
+    setPendingPhotoBlob(croppedPhoto);
+    setPhotoPreviewUrl(previewUrl);
+    setPhotoEditorUrl(previewUrl);
+    setPhotoRemoved(false);
+    setShowPhotoEditor(false);
+  };
+
+  const handleRemovePatientPhoto = () => {
+    setPendingPhotoBlob(null);
+    setPhotoPreviewUrl('');
+    setPhotoEditorUrl('');
+    setPhotoRemoved(Boolean(photoPath));
+    setShowPhotoEditor(false);
+  };
 
   useEffect(() => {
     if (isOnboardingMode && user?.id) {
@@ -666,11 +739,22 @@ export default function PatientForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    
+
+    let uploadedPhotoPath = '';
     setLoading(true);
     try {
       const patientId = id || pendingPatientIdRef.current || uuidv4();
       const existingPatientId = id || pendingPatientIdRef.current;
+      let nextPhotoPath = photoRemoved ? '' : photoPath;
+
+      if (pendingPhotoBlob) {
+        uploadedPhotoPath = await uploadPatientPhoto({
+          professionalId: user.id,
+          patientId,
+          photo: pendingPhotoBlob,
+        });
+        nextPhotoPath = uploadedPhotoPath;
+      }
       
       const patientData: any = {
         id: patientId,
@@ -686,7 +770,8 @@ export default function PatientForm() {
         evolution_reminder_active: formData.evolution_reminder_active,
         session_days: formData.evolution_reminder_active ? formData.session_days : [],
         session_time: (formData.evolution_reminder_active && formData.session_time) ? formData.session_time : null,
-        default_template_id: formData.default_template_id || null
+        default_template_id: formData.default_template_id || null,
+        photo_path: nextPhotoPath || null,
       };
 
       // Só inclui campos do Google Drive se eles tiverem valor (ou envia null de forma explícita)
@@ -722,6 +807,18 @@ export default function PatientForm() {
           link: `/painel/patients`
         });
       }
+
+      if (photoPath && photoPath !== nextPhotoPath) {
+        try {
+          await removePatientPhoto(photoPath);
+        } catch (cleanupError) {
+          console.warn('[PatientForm] Não foi possível remover a foto anterior:', cleanupError);
+        }
+      }
+      uploadedPhotoPath = '';
+      setPhotoPath(nextPhotoPath);
+      setPendingPhotoBlob(null);
+      setPhotoRemoved(false);
 
       if (isOnboardingMode) {
         pendingPatientIdRef.current = patientId;
@@ -790,6 +887,13 @@ export default function PatientForm() {
         navigate('/painel/patients');
       }
     } catch (error: any) {
+      if (uploadedPhotoPath) {
+        try {
+          await removePatientPhoto(uploadedPhotoPath);
+        } catch (cleanupError) {
+          console.warn('[PatientForm] Não foi possível limpar o upload sem cadastro:', cleanupError);
+        }
+      }
       console.error("Error saving patient:", error);
       if (isOnboardingMode) {
         const errorCode = classifyOnboardingError(error, 'patient_save_failed');
@@ -826,6 +930,79 @@ export default function PatientForm() {
             onChange={e => setFormData({...formData, full_name: e.target.value})}
             className="input-field p-2"
           />
+        </div>
+
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-brand-text">
+            Foto do Paciente <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
+          </label>
+          <div className="flex flex-col gap-4 rounded-2xl border border-brand-border/70 bg-brand-bg/30 p-4 sm:flex-row sm:items-center">
+            <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-brand-primary/10 text-brand-primary shadow-sm">
+              {photoPreviewUrl ? (
+                <img src={photoPreviewUrl} alt="Prévia da foto do paciente" className="h-full w-full object-cover" />
+              ) : (
+                <UserRound size={44} aria-hidden="true" />
+              )}
+            </div>
+
+            <div className="flex-1 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-brand-primary/95">
+                  <Upload size={14} />
+                  <span>{photoPreviewUrl ? 'Trocar foto' : 'Adicionar foto'}</span>
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    onChange={(event) => void handlePhotoSelection(event)}
+                    disabled={loading}
+                    className="hidden"
+                  />
+                </label>
+                {photoPreviewUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoEditorUrl(photoPreviewUrl);
+                      setShowPhotoEditor((visible) => !visible);
+                    }}
+                    disabled={loading}
+                    className="inline-flex items-center gap-2 rounded-xl border border-brand-primary/20 bg-white px-4 py-2.5 text-xs font-semibold text-brand-primary hover:bg-brand-primary/5 disabled:opacity-60"
+                  >
+                    <Crop size={14} /> {showPhotoEditor ? 'Fechar ajuste' : 'Ajustar foto'}
+                  </button>
+                )}
+                {(photoPreviewUrl || photoPath) && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePatientPhoto}
+                    disabled={loading}
+                    className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60"
+                  >
+                    <Trash2 size={14} /> Remover
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] leading-relaxed text-brand-text-muted">
+                Formatos PNG, JPG ou WEBP, até 10 MB. A foto será recortada em formato quadrado e armazenada de forma privada.
+              </p>
+            </div>
+          </div>
+
+          {showPhotoEditor && photoEditorUrl && (
+            <ImageCropEditor
+              imageUrl={photoEditorUrl}
+              title="Enquadramento da foto"
+              description="Arraste a imagem e ajuste a aproximação antes de aplicar o corte."
+              imageAlt="Editor de recorte da foto do paciente"
+              initialAspect={1}
+              aspectOptions={[{ value: 1, label: 'Quadrado 1:1' }]}
+              outputWidth={600}
+              maxPreviewClassName="max-w-md"
+              onApply={handleApplyPatientPhotoCrop}
+              onError={(error) => showAlert(`Erro ao ajustar a foto: ${error instanceof Error ? error.message : error}`, { title: 'Erro no Ajuste', variant: 'danger', icon: 'warning' })}
+              applying={loading}
+            />
+          )}
         </div>
 
         <div>

@@ -1747,6 +1747,33 @@ async function deleteProfessionalAccount(targetUserId: string) {
     console.warn("[DeleteUser] Falha inesperada ao limpar anexos de suporte:", storageError);
   }
 
+  try {
+    const { data: patientPhotos, error: patientPhotosError } = await supabaseAdmin
+      .from("patients")
+      .select("photo_path")
+      .eq("professional_id", targetUserId)
+      .not("photo_path", "is", null);
+
+    if (patientPhotosError) {
+      console.warn(`[DeleteUser] Falha ao listar fotos de pacientes: ${patientPhotosError.message}`);
+    } else {
+      const photoPaths = (patientPhotos || [])
+        .map((patient) => String(patient.photo_path || "").trim())
+        .filter(Boolean);
+      if (photoPaths.length > 0) {
+        const { error: patientPhotosRemoveError } = await supabaseAdmin
+          .storage
+          .from("patient-photos")
+          .remove(photoPaths);
+        if (patientPhotosRemoveError) {
+          console.warn(`[DeleteUser] Falha ao remover fotos de pacientes: ${patientPhotosRemoveError.message}`);
+        }
+      }
+    }
+  } catch (storageError) {
+    console.warn("[DeleteUser] Falha inesperada ao limpar fotos de pacientes:", storageError);
+  }
+
   // 2. Executa a limpeza pública no Banco de Dados
   // Primeiro tentamos chamar a RPC 'force_delete_professional' que deleta pulando triggers (permitindo excluir evoluções assinadas)
   const { error: rpcError } = await supabaseAdmin.rpc("force_delete_professional", {

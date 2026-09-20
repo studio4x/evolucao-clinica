@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, User, AlertTriangle, Shield, Download, CloudOff, MoreVertical, LayoutDashboard, ClipboardList } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, AlertTriangle, Shield, Download, CloudOff, MoreVertical, LayoutDashboard, ClipboardList } from 'lucide-react';
 import { transcribeAudio } from '../services/aiTranscription';
 import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
@@ -21,6 +21,8 @@ import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { showAlert } from '../store/modalStore';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { PatientPhoto } from '../components/patients/PatientPhoto';
+import { removePatientPhoto } from '../services/patientPhoto';
 import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { resolveHorizontalSwipe } from '../utils/horizontalSwipe';
@@ -2126,6 +2128,14 @@ export default function PatientDetail() {
         .eq('id', id);
       if (patientError) throw patientError;
 
+      if (patient?.photo_path) {
+        try {
+          await removePatientPhoto(patient.photo_path);
+        } catch (photoError) {
+          console.warn('[PatientDetail] Não foi possível remover a foto privada do paciente:', photoError);
+        }
+      }
+
       // Notifica
       void sendNotification({
         title: '🗑️ Paciente Excluído',
@@ -2423,8 +2433,12 @@ export default function PatientDetail() {
       <div className="xl:hidden h-40" aria-hidden="true" />
       <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,var(--app-safe-area-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <PanelPageHeader
-          icon={User}
-          title={patient.full_name}
+          title={(
+            <span className="flex min-w-0 items-center gap-3">
+              <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-11 w-11 sm:h-12 sm:w-12" />
+              <span className="truncate">{patient.full_name}</span>
+            </span>
+          )}
           description={patient.status === 'active' ? 'Paciente ativo' : 'Paciente inativo'}
           mobileActionsInline
           actions={<>
