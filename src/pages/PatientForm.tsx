@@ -15,6 +15,14 @@ import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { trackEvent } from '../services/analytics';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
+import {
+  DEFAULT_WHATSAPP_COUNTRY,
+  formatWhatsAppNationalNumber,
+  getWhatsAppCountryCallingCode,
+  getWhatsAppCountryOptions,
+  splitStoredWhatsAppNumber,
+  type CountryCode,
+} from '../utils/whatsappNumber';
 
 declare global {
   interface Window {
@@ -23,38 +31,7 @@ declare global {
   }
 }
 
-const COUNTRIES = [
-  { code: '+55', name: 'Brasil', flag: '🇧🇷' },
-  { code: '+351', name: 'Portugal', flag: '🇵🇹' },
-  { code: '+1', name: 'EUA/Canadá', flag: '🇺🇸' },
-  { code: '+54', name: 'Argentina', flag: '🇦🇷' },
-  { code: '+598', name: 'Uruguai', flag: '🇺🇾' },
-  { code: '+595', name: 'Paraguai', flag: '🇵🇾' },
-  { code: '+591', name: 'Bolívia', flag: '🇧🇴' },
-  { code: '+56', name: 'Chile', flag: '🇨🇱' },
-  { code: '+57', name: 'Colômbia', flag: '🇨🇴' },
-  { code: '+34', name: 'Espanha', flag: '🇪🇸' },
-  { code: '+39', name: 'Itália', flag: '🇮🇹' },
-  { code: '+44', name: 'Reino Unido', flag: '🇬🇧' },
-  { code: '+244', name: 'Angola', flag: '🇦🇴' },
-  { code: '+258', name: 'Moçambique', flag: '🇲🇿' },
-];
-
-const formatPhoneNumber = (value: string) => {
-  if (!value) return value;
-  const phoneNumber = value.replace(/\D/g, '');
-  const phoneNumberLength = phoneNumber.length;
-  if (phoneNumberLength <= 2) {
-    return phoneNumber;
-  }
-  if (phoneNumberLength <= 6) {
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
-  }
-  if (phoneNumberLength <= 10) {
-    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 6)}-${phoneNumber.slice(6)}`;
-  }
-  return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
-};
+const PATIENT_PHONE_COUNTRY_OPTIONS = getWhatsAppCountryOptions();
 
 type PatientFormValues = {
   full_name: string;
@@ -76,7 +53,8 @@ type PatientFormValues = {
 type PatientFormDraft = {
   patientId?: string;
   formData: PatientFormValues;
-  ddi: string;
+  ddi?: string;
+  phoneCountry?: CountryCode;
   savedAt: string;
 };
 
@@ -168,7 +146,8 @@ export default function PatientForm() {
   const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const restoredDraftUserRef = useRef<string | null>(null);
-  const [ddi, setDdi] = useState('+55');
+  const [phoneCountry, setPhoneCountry] = useState<CountryCode>(DEFAULT_WHATSAPP_COUNTRY);
+  const ddi = `+${getWhatsAppCountryCallingCode(phoneCountry)}`;
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
   const [isReauthenticating, setIsReauthenticating] = useState(false);
@@ -226,7 +205,11 @@ export default function PatientForm() {
     if (draft) {
       pendingPatientIdRef.current = draft.patientId || null;
       setFormData((prev) => ({ ...prev, ...draft.formData }));
-      setDdi(draft.ddi || '+55');
+      const restoredPhone = splitStoredWhatsAppNumber(
+        `${draft.ddi || ''}${draft.formData?.phone || ''}`,
+        DEFAULT_WHATSAPP_COUNTRY,
+      );
+      setPhoneCountry(draft.phoneCountry || restoredPhone.country);
       return;
     }
 
@@ -248,12 +231,13 @@ export default function PatientForm() {
         patientId: getDraftPatientId(),
         formData,
         ddi,
+        phoneCountry,
         savedAt: new Date().toISOString(),
       });
     }, 200);
 
     return () => window.clearTimeout(timer);
-  }, [ddi, formData, id, user?.id]);
+  }, [ddi, formData, id, phoneCountry, user?.id]);
 
   useEffect(() => {
     if (id) {
@@ -267,27 +251,15 @@ export default function PatientForm() {
           
           if (error) throw error;
           if (data) {
-            let rawPhone = data.phone || '';
-            let selectedDdi = '+55';
-            let formattedPhone = '';
-
-            if (rawPhone.startsWith('+')) {
-              const matchedCountry = COUNTRIES.sort((a, b) => b.code.length - a.code.length).find(c => rawPhone.startsWith(c.code));
-              if (matchedCountry) {
-                selectedDdi = matchedCountry.code;
-                rawPhone = rawPhone.substring(matchedCountry.code.length).trim();
-              }
-            } else if (rawPhone.startsWith('55') && rawPhone.length >= 10) {
-              selectedDdi = '+55';
-              rawPhone = rawPhone.substring(2).trim();
-            }
-
-            formattedPhone = formatPhoneNumber(rawPhone);
+            const storedPhone = splitStoredWhatsAppNumber(
+              data.phone || '',
+              DEFAULT_WHATSAPP_COUNTRY,
+            );
 
             setFormData({
               full_name: data.full_name || '',
               birth_date: data.birth_date || '',
-              phone: formattedPhone,
+              phone: storedPhone.nationalNumber,
               notes: data.notes || '',
               status: (data.status === 'inactive' ? 'inactive' : 'active'),
               google_doc_id: data.google_doc_id || '',
@@ -300,7 +272,7 @@ export default function PatientForm() {
               session_time: data.session_time ? data.session_time.substring(0, 5) : '',
               default_template_id: data.default_template_id || ''
             });
-            setDdi(selectedDdi);
+            setPhoneCountry(storedPhone.country);
           }
         } catch (error) {
           console.error("Error fetching patient:", error);
@@ -328,6 +300,7 @@ export default function PatientForm() {
           patientId: getDraftPatientId(),
           formData,
           ddi,
+          phoneCountry,
           savedAt: new Date().toISOString(),
         });
       }
@@ -514,6 +487,7 @@ export default function PatientForm() {
           patientId: getDraftPatientId(),
           formData,
           ddi,
+          phoneCountry,
           savedAt: new Date().toISOString(),
         });
       }
@@ -703,7 +677,9 @@ export default function PatientForm() {
         professional_id: user.id,
         full_name: formData.full_name,
         birth_date: formData.birth_date || null,
-        phone: formData.phone ? `${ddi} ${formData.phone}` : null,
+        phone: formData.phone
+          ? `${ddi} ${formatWhatsAppNationalNumber(formData.phone, phoneCountry)}`
+          : null,
         notes: formData.notes,
         status: formData.status,
         updated_at: new Date().toISOString(),
@@ -761,6 +737,7 @@ export default function PatientForm() {
               patientId,
               formData,
               ddi,
+              phoneCountry,
               savedAt: new Date().toISOString(),
             });
           }
@@ -779,6 +756,7 @@ export default function PatientForm() {
               patientId,
               formData,
               ddi,
+              phoneCountry,
               savedAt: new Date().toISOString(),
             });
           }
@@ -870,25 +848,39 @@ export default function PatientForm() {
           <label className="block text-sm font-medium text-brand-text mb-1">
             Telefone / WhatsApp <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <select
-              value={ddi}
-              onChange={e => setDdi(e.target.value)}
-              className="input-field p-2 w-36 bg-white border border-brand-border rounded-xl text-sm outline-none cursor-pointer"
+              value={phoneCountry}
+              onChange={e => {
+                const nextCountry = e.target.value as CountryCode;
+                setPhoneCountry(nextCountry);
+                setFormData((current) => ({
+                  ...current,
+                  phone: formatWhatsAppNationalNumber(current.phone, nextCountry),
+                }));
+              }}
+              aria-label="País e DDI do telefone do paciente"
+              title="Selecionar país e DDI"
+              className="input-field min-w-0 cursor-pointer border border-brand-border bg-white p-2 text-sm outline-none sm:w-64 sm:flex-none"
             >
-              {COUNTRIES.map(c => (
-                <option key={c.code} value={c.code}>
-                  {c.flag} {c.code} ({c.name})
+              {PATIENT_PHONE_COUNTRY_OPTIONS.map(country => (
+                <option key={country.code} value={country.code}>
+                  {country.flag} {country.name} (+{country.callingCode})
                 </option>
               ))}
             </select>
             <input
-              type="text"
-              placeholder="(99) 99999-9999"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
+              placeholder={phoneCountry === 'BR' ? '(99) 99999-9999' : 'Número do telefone'}
               value={formData.phone}
-              onChange={e => setFormData({...formData, phone: formatPhoneNumber(e.target.value)})}
-              className="input-field p-2 flex-grow"
-              maxLength={15}
+              onChange={e => setFormData({
+                ...formData,
+                phone: formatWhatsAppNationalNumber(e.target.value, phoneCountry),
+              })}
+              className="input-field min-w-0 flex-grow p-2"
+              maxLength={30}
             />
           </div>
           <p className="text-xs text-brand-text-muted mt-1">
