@@ -15,7 +15,7 @@ import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { trackEvent } from '../services/analytics';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
-import { ImageCropEditor } from '../components/common/ImageCropEditor';
+import { createCroppedImageBlob, ImageCropEditor } from '../components/common/ImageCropEditor';
 import {
   createPatientPhotoSignedUrl,
   removePatientPhoto,
@@ -187,6 +187,7 @@ export default function PatientForm() {
   const [pendingPhotoBlob, setPendingPhotoBlob] = useState<Blob | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
   const localPhotoUrlsRef = useRef<string[]>([]);
   const pendingPatientIdRef = useRef<string | null>(null);
 
@@ -334,15 +335,39 @@ export default function PatientForm() {
     }
 
     const sourceUrl = createLocalPhotoUrl(file);
-    setPhotoEditorUrl(sourceUrl);
-    setShowPhotoEditor(true);
+    setPreparingPhoto(true);
+
+    try {
+      const initialCrop = await createCroppedImageBlob({
+        imageUrl: sourceUrl,
+        aspect: 1,
+        zoom: 1,
+        position: { x: 0, y: 0 },
+        outputWidth: 600,
+      });
+      const previewUrl = createLocalPhotoUrl(initialCrop);
+
+      setPendingPhotoBlob(initialCrop);
+      setPhotoPreviewUrl(previewUrl);
+      setPhotoEditorUrl(sourceUrl);
+      setPhotoRemoved(false);
+      setShowPhotoEditor(true);
+    } catch (error) {
+      console.error('[PatientForm] Não foi possível preparar a foto selecionada:', error);
+      await showAlert(`Erro ao preparar a foto: ${error instanceof Error ? error.message : error}`, {
+        title: 'Erro na Foto',
+        variant: 'danger',
+        icon: 'warning',
+      });
+    } finally {
+      setPreparingPhoto(false);
+    }
   };
 
   const handleApplyPatientPhotoCrop = async (croppedPhoto: Blob) => {
     const previewUrl = createLocalPhotoUrl(croppedPhoto);
     setPendingPhotoBlob(croppedPhoto);
     setPhotoPreviewUrl(previewUrl);
-    setPhotoEditorUrl(previewUrl);
     setPhotoRemoved(false);
     setShowPhotoEditor(false);
   };
@@ -948,13 +973,13 @@ export default function PatientForm() {
             <div className="flex-1 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand-primary px-4 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-brand-primary/95">
-                  <Upload size={14} />
-                  <span>{photoPreviewUrl ? 'Trocar foto' : 'Adicionar foto'}</span>
+                  {preparingPhoto ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                  <span>{preparingPhoto ? 'Preparando foto...' : photoPreviewUrl ? 'Trocar foto' : 'Adicionar foto'}</span>
                   <input
                     type="file"
                     accept="image/png,image/jpeg,image/jpg,image/webp"
                     onChange={(event) => void handlePhotoSelection(event)}
-                    disabled={loading}
+                    disabled={loading || preparingPhoto}
                     className="hidden"
                   />
                 </label>
@@ -962,10 +987,10 @@ export default function PatientForm() {
                   <button
                     type="button"
                     onClick={() => {
-                      setPhotoEditorUrl(photoPreviewUrl);
+                      if (!photoEditorUrl) setPhotoEditorUrl(photoPreviewUrl);
                       setShowPhotoEditor((visible) => !visible);
                     }}
-                    disabled={loading}
+                    disabled={loading || preparingPhoto}
                     className="inline-flex items-center gap-2 rounded-xl border border-brand-primary/20 bg-white px-4 py-2.5 text-xs font-semibold text-brand-primary hover:bg-brand-primary/5 disabled:opacity-60"
                   >
                     <Crop size={14} /> {showPhotoEditor ? 'Fechar ajuste' : 'Ajustar foto'}
@@ -975,7 +1000,7 @@ export default function PatientForm() {
                   <button
                     type="button"
                     onClick={handleRemovePatientPhoto}
-                    disabled={loading}
+                    disabled={loading || preparingPhoto}
                     className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-100 disabled:opacity-60"
                   >
                     <Trash2 size={14} /> Remover
@@ -983,7 +1008,7 @@ export default function PatientForm() {
                 )}
               </div>
               <p className="text-[10px] leading-relaxed text-brand-text-muted">
-                Formatos PNG, JPG ou WEBP, até 10 MB. A foto será recortada em formato quadrado e armazenada de forma privada.
+                Formatos PNG, JPG ou WEBP, até 10 MB. A prévia é criada automaticamente; use “Ajustar foto” se quiser mudar o enquadramento.
               </p>
             </div>
           </div>
@@ -1000,7 +1025,7 @@ export default function PatientForm() {
               maxPreviewClassName="max-w-md"
               onApply={handleApplyPatientPhotoCrop}
               onError={(error) => showAlert(`Erro ao ajustar a foto: ${error instanceof Error ? error.message : error}`, { title: 'Erro no Ajuste', variant: 'danger', icon: 'warning' })}
-              applying={loading}
+              applying={loading || preparingPhoto}
             />
           )}
         </div>
@@ -1643,10 +1668,10 @@ export default function PatientForm() {
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || preparingPhoto}
               className="btn-primary"
             >
-              {loading ? 'Salvando...' : 'Salvar Paciente'}
+              {preparingPhoto ? 'Preparando foto...' : loading ? 'Salvando...' : 'Salvar Paciente'}
             </button>
           </div>
         </div>

@@ -23,6 +23,8 @@ assert.match(cropEditorSource, /Aproximação/);
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
+assert.match(formSource, /handlePhotoSelection[\s\S]*?createCroppedImageBlob\(\{[\s\S]*?imageUrl: sourceUrl[\s\S]*?setPendingPhotoBlob\(initialCrop\)[\s\S]*?setPhotoPreviewUrl\(previewUrl\)/);
+assert.match(formSource, /A prévia é criada automaticamente/);
 assert.match(formSource, /uploadPatientPhoto\(/);
 assert.match(formSource, /photo_path: nextPhotoPath \|\| null/);
 
