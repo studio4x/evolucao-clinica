@@ -43,6 +43,7 @@ const PATIENT_PHONE_COUNTRY_OPTIONS = getWhatsAppCountryOptions();
 type PatientFormValues = {
   full_name: string;
   birth_date: string;
+  cpf: string;
   phone: string;
   notes: string;
   status: 'active' | 'inactive';
@@ -102,6 +103,7 @@ const clearGoogleFolderPreference = (userId: string | undefined) => {
 const emptyPatientFormValues = (): PatientFormValues => ({
   full_name: '',
   birth_date: '',
+  cpf: '',
   phone: '',
   notes: '',
   status: 'active',
@@ -115,6 +117,14 @@ const emptyPatientFormValues = (): PatientFormValues => ({
   session_time: '',
   default_template_id: '',
 });
+
+const formatCpf = (value: string) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11);
+  return digits
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+};
 
 const PATIENT_PHOTO_BASE64_CHUNK_BYTES = 0x8000;
 
@@ -291,6 +301,7 @@ export default function PatientForm() {
             setFormData({
               full_name: data.full_name || '',
               birth_date: data.birth_date || '',
+              cpf: formatCpf(data.cpf || ''),
               phone: storedPhone.nationalNumber,
               notes: data.notes || '',
               status: (data.status === 'inactive' ? 'inactive' : 'active'),
@@ -794,6 +805,7 @@ export default function PatientForm() {
         professional_id: user.id,
         full_name: formData.full_name,
         birth_date: formData.birth_date || null,
+        cpf: formData.cpf || null,
         phone: formData.phone
           ? `${ddi} ${formatWhatsAppNationalNumber(formData.phone, phoneCountry)}`
           : null,
@@ -1052,6 +1064,22 @@ export default function PatientForm() {
           <p className="text-xs text-brand-text-muted mt-1">
             Usada para lembrar aniversários no painel principal.
           </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-brand-text mb-1">
+            CPF <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
+          </label>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="000.000.000-00"
+            value={formData.cpf}
+            onChange={e => setFormData({ ...formData, cpf: formatCpf(e.target.value) })}
+            className="input-field p-2"
+            maxLength={14}
+          />
         </div>
 
         <div>
