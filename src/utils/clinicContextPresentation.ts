@@ -7,5 +7,5 @@ export function getClinicContextSelectorMode(
   if (organizationCount === 0) return "hidden";
   if (accessMode === "clinic_only") return organizationCount === 1 ? "static_clinic" : "clinics_only";
   if (accessMode === "hybrid") return "personal_plus_clinics";
-  return "hidden";
+  return "personal_plus_clinics";
 }

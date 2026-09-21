@@ -16,6 +16,7 @@ assert.equal(getClinicContextSelectorMode("clinic_only", 1), "static_clinic");
 assert.equal(getClinicContextSelectorMode("clinic_only", 2), "clinics_only");
 assert.equal(getClinicContextSelectorMode("hybrid", 2), "personal_plus_clinics");
 assert.equal(getClinicContextSelectorMode("personal", 0), "hidden");
+assert.equal(getClinicContextSelectorMode("personal", 1), "personal_plus_clinics");
 
 const organizationExpiry = getAdminExpiryLines({
   professional_access_mode: "clinic_only",
