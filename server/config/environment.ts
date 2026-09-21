@@ -78,6 +78,9 @@ export function loadServerEnvironment(env: NodeJS.ProcessEnv = process.env) {
   }
 
   const integrations = loadIntegrationFlags(env);
+  // O staging precisa validar o fluxo real de Google Drive/Docs durante a homologação.
+  // Em produção e nos demais ambientes a integração continua controlada pela flag.
+  if (appEnv === "staging") integrations.google = true;
   if (integrations.cron && !String(env.CRON_SECRET || "").trim()) {
     throw new Error("CRON_SECRET é obrigatório quando CRON_JOBS_ENABLED=true.");
   }

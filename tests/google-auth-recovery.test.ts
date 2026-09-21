@@ -97,3 +97,11 @@ assert.match(
   /requiredScopes !== 'login'[\s\S]*assertPublicEffectEnabled\('google'\)/,
   'Login Google não deve depender da flag de integrações externas Google.'
 );
+
+
+const publicFlagsSource = fs.readFileSync('src/config/publicFlags.ts', 'utf8');
+assert.match(
+  publicFlagsSource,
+  /google:\s*isStaging\s*\|\|\s*enabled\("VITE_GOOGLE_INTEGRATIONS_ENABLED"\)/,
+  'Google Drive/Docs deve estar disponível no staging para homologação sem alterar a regra de produção.'
+);

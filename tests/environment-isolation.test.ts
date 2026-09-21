@@ -81,6 +81,8 @@ const stagingEnvironment = loadServerEnvironment({
   PUBLIC_APP_URL: "https://staging.example.com",
 });
 assert.equal(stagingEnvironment.appEnv, "staging");
+assert.equal(stagingEnvironment.integrations.google, true, "Google deve permanecer habilitado no staging para homologação de Drive/Docs.");
+assert.doesNotThrow(() => stagingEnvironment.assertEnabled("google"));
 assert.throws(() => stagingEnvironment.assertEnabled("billing"), /BILLING_ENABLED=false/);
 
 const encodedPayload = Buffer.from(JSON.stringify({ role: "service_role", ref: stagingRef })).toString("base64url");
