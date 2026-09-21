@@ -8,7 +8,7 @@ import { sendSubscriptionPaymentEmail } from '../services/subscriptionEmail';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { createStripeCustomerPortalSession, hasNativeBillingBridge } from '../services/billing';
-import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
+import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES, YEARLY_PLAN_RECENT_FEATURES } from '../config/subscriptionPlans';
 
 const DEFAULT_PLANS = [
   {
@@ -86,12 +86,23 @@ function getPlanDisplayName(plan: SubscriptionPlanLike | undefined, fallbackId: 
   return 'Plano de Assinatura';
 }
 
-function getPlanBenefitsCopy(plan: SubscriptionPlanLike | undefined, fallbackId: string) {
-  const benefits = Array.isArray(plan?.features) && plan.features.length > 0
+function getPlanFeatures(plan: SubscriptionPlanLike | undefined, fallbackId: string) {
+  const features = Array.isArray(plan?.features) && plan.features.length > 0
     ? plan.features.map((feature) => String(feature).trim()).filter(Boolean)
     : fallbackId === 'yearly'
       ? YEARLY_PLAN_FEATURES
       : MONTHLY_PLAN_FEATURES;
+
+  if (fallbackId !== 'yearly') return features;
+
+  return [
+    ...features,
+    ...YEARLY_PLAN_RECENT_FEATURES.filter((feature) => !features.includes(feature)),
+  ];
+}
+
+function getPlanBenefitsCopy(plan: SubscriptionPlanLike | undefined, fallbackId: string) {
+  const benefits = getPlanFeatures(plan, fallbackId);
 
   if (fallbackId === 'yearly') {
     return {
@@ -770,6 +781,7 @@ export default function Subscription() {
               ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(plan.original_price)
               : null;
             const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
+            const displayedFeatures = getPlanFeatures(plan, plan.id);
             
             return (
               <div key={plan.id} className={`card border bg-white rounded-3xl p-8 flex flex-col justify-between relative shadow-xl overflow-visible md:min-w-[calc(100%-3rem)] md:snap-center xl:min-w-0 ${
@@ -827,9 +839,9 @@ export default function Subscription() {
                     </p>
                   )}
 
-                  {plan.features && plan.features.length > 0 && (
+                  {displayedFeatures.length > 0 && (
                     <ul className="mt-8 space-y-4 text-sm text-brand-text">
-                      {plan.features.map((feature: string, idx: number) => (
+                      {displayedFeatures.map((feature: string, idx: number) => (
                         <li key={idx} className="flex items-center space-x-3">
                           <Check className="w-5 h-5 text-brand-primary flex-shrink-0" />
                           <span>

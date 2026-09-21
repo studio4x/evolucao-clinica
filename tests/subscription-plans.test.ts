@@ -78,6 +78,7 @@ const landingSource = readFileSync(resolve('src/pages/LandingPage.tsx'), 'utf8')
 const subscriptionSource = readFileSync(resolve('src/pages/Subscription.tsx'), 'utf8');
 assert.match(landingSource, /YEARLY_PLAN_RECENT_FEATURES\.filter/);
 assert.match(landingSource, /displayedFeatures\.map/);
-assert.match(subscriptionSource, /plan\.features\.map/);
+assert.match(subscriptionSource, /YEARLY_PLAN_RECENT_FEATURES\.filter/);
+assert.match(subscriptionSource, /displayedFeatures\.map/);
 
 console.log('Courtesy subscription plan tests passed.');
