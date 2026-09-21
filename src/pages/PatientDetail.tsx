@@ -1169,9 +1169,14 @@ export default function PatientDetail() {
       return;
     }
 
+    const normalizedSchedule = normalizePatientSessionSchedule(sessionSchedule);
+    if (reminderActive && normalizedSchedule.length === 0) {
+      alert('Configure pelo menos um dia e horário antes de ativar os lembretes de evolução.');
+      return;
+    }
+
     setSavingReminders(true);
     try {
-      const normalizedSchedule = normalizePatientSessionSchedule(sessionSchedule);
       const legacySchedule = sessionScheduleToLegacy(normalizedSchedule);
       const { error } = await supabase
         .from('patients')
@@ -2659,7 +2664,7 @@ export default function PatientDetail() {
 
             <div className="space-y-3">
               {sessionSchedule.map((slot, index) => (
-                <div key={index} className="grid grid-cols-[1fr_120px_auto] items-end gap-2">
+                <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px_auto] sm:items-end">
                   <label className="text-xs font-semibold text-brand-text">
                     Dia
                     <select

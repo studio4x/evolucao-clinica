@@ -806,6 +806,14 @@ export default function PatientForm() {
     }
 
     const normalizedSessionSchedule = normalizePatientSessionSchedule(formData.session_schedule);
+    if (formData.evolution_reminder_active && normalizedSessionSchedule.length === 0) {
+      await showAlert('Configure pelo menos um dia e horário antes de ativar os lembretes de evolução.', {
+        title: 'Agenda necessária',
+        variant: 'warning',
+        icon: 'warning'
+      });
+      return;
+    }
     const legacySchedule = sessionScheduleToLegacy(normalizedSessionSchedule);
 
     let uploadedPhotoPath = '';
@@ -1216,7 +1224,7 @@ export default function PatientForm() {
               </div>
             ) : (
               formData.session_schedule.map((slot, index) => (
-                <div key={index} className="grid grid-cols-[1fr_140px_auto] items-end gap-2 rounded-xl border border-brand-border/70 bg-white p-3">
+                <div key={index} className="grid grid-cols-1 gap-2 rounded-xl border border-brand-border/70 bg-white p-3 sm:grid-cols-[1fr_140px_auto] sm:items-end">
                   <label className="text-xs font-semibold text-brand-text">
                     Dia da semana
                     <select
