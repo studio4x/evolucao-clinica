@@ -459,24 +459,24 @@ export default function PatientSessions() {
         </div>
 
       <div className="card p-4 sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center justify-between gap-2 sm:justify-start">
-            <button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="rounded-xl border border-brand-border p-2.5 text-brand-primary hover:bg-brand-bg"><ChevronLeft size={18} /></button>
-            <div className="min-w-[190px] text-center">
+            <button type="button" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="rounded-xl border border-brand-border p-2 text-brand-primary hover:bg-brand-bg sm:p-2.5"><ChevronLeft size={18} /></button>
+            <div className="min-w-0 flex-1 text-center sm:min-w-[190px]">
               <p className="text-xs font-bold uppercase tracking-wider text-brand-text-muted">Período</p>
               <h2 className="capitalize font-semibold text-brand-text">{monthLabel}</h2>
             </div>
-            <button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="rounded-xl border border-brand-border p-2.5 text-brand-primary hover:bg-brand-bg"><ChevronRight size={18} /></button>
+            <button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="rounded-xl border border-brand-border p-2 text-brand-primary hover:bg-brand-bg sm:p-2.5"><ChevronRight size={18} /></button>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => void exportPdf()} disabled={working || sessions.length === 0} className="btn-outline"><Download size={16} /><span>{monthIsClosed && exportMode === 'month' ? 'Baixar PDF assinado' : 'Exportar PDF'}</span></button>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+            <button type="button" onClick={() => void exportPdf()} disabled={working || sessions.length === 0} className="btn-outline min-w-0 px-2.5 py-2 text-xs sm:px-4 sm:py-2 sm:text-sm"><Download size={16} /><span className="truncate">{monthIsClosed && exportMode === 'month' ? 'Baixar PDF assinado' : 'Exportar PDF'}</span></button>
             {monthIsClosed ? (
-              <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700"><ShieldCheck size={16} />Mês fechado</span>
+              <span className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 sm:text-sm"><ShieldCheck size={16} />Mês fechado</span>
             ) : (
               <>
-                <button type="button" onClick={() => void closeMonth()} disabled={working || !canCloseMonth} className="btn-outline border-emerald-300 text-emerald-700"><ShieldCheck size={16} /><span>Fechar e assinar mês</span></button>
-                <button type="button" onClick={() => openCreate(false)} className="btn-outline"><Plus size={16} /><span>Nova sessão</span></button>
-                <button type="button" onClick={() => openCreate(true)} className="btn-primary"><PenLine size={16} /><span>Registrar sessão de hoje</span></button>
+                <button type="button" onClick={() => void closeMonth()} disabled={working || !canCloseMonth} className="btn-outline min-w-0 px-2.5 py-2 text-xs border-emerald-300 text-emerald-700 sm:px-4 sm:py-2 sm:text-sm" aria-label="Fechar e assinar mês"><ShieldCheck size={16} /><span className="truncate sm:hidden">Fechar mês</span><span className="hidden truncate sm:inline">Fechar e assinar mês</span></button>
+                <button type="button" onClick={() => openCreate(false)} className="btn-outline min-w-0 px-2.5 py-2 text-xs sm:px-4 sm:py-2 sm:text-sm"><Plus size={16} /><span className="truncate">Nova sessão</span></button>
+                <button type="button" onClick={() => openCreate(true)} className="btn-primary min-w-0 px-2.5 py-2 text-xs sm:px-4 sm:py-2 sm:text-sm" aria-label="Registrar sessão de hoje"><PenLine size={16} /><span className="truncate sm:hidden">Registrar hoje</span><span className="hidden truncate sm:inline">Registrar sessão de hoje</span></button>
               </>
             )}
           </div>

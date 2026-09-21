@@ -45,6 +45,8 @@ assert.match(page, /title=\{`Controle de Sessões\$\{patient\?\.full_name/);
 assert.match(page, /description="Organize e acompanhe os atendimentos/);
 assert.match(page, /const sessionSelectClass = 'input-field mt-1 h-11 min-h-11 w-full px-3\.5 py-2\.5 text-sm leading-normal'/);
 assert.match(page, /min-w-\[160px\] flex-1 text-xs font-semibold text-brand-text/);
+assert.match(page, /grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap/);
+assert.match(page, /sm:hidden">Registrar hoje/);
 assert.match(newEvolution, /embedded\?: boolean/);
 assert.match(newEvolution, /onCreated\?: \(evolutionId: string\)/);
 assert.match(newEvolution, /onProcessingChange\?: \(processing: boolean\)/);
