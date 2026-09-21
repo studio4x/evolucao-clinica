@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User, Shield, Printer, Download, CloudOff, ExternalLink, MoreVertical } from 'lucide-react';
+import { Clock, CheckCircle, AlertCircle, RefreshCw, Loader2, Trash2, FileText, User, Shield, Printer, Download, CloudOff, ExternalLink, MoreVertical, HelpCircle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { transcribeAudio } from '../services/aiTranscription';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
@@ -12,8 +12,69 @@ import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogl
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
 import { downloadPdfFile } from '../utils/prontuarioPdf';
+
+const HISTORY_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Consulte suas evoluções concluídas',
+    description: 'O histórico reúne as evoluções com transcrição concluída, organizadas da mais recente para a mais antiga e identificadas pelo paciente e pela data do atendimento.',
+    icon: Clock,
+  },
+  {
+    title: 'Confira o status de cada registro',
+    description: 'Use os indicadores para saber se a evolução está assinada ou em rascunho e se o texto já foi enviado para o prontuário integrado do paciente no Google Docs.',
+    icon: Shield,
+  },
+  {
+    title: 'Exporte ou imprima o registro',
+    description: 'Em evoluções assinadas, “Baixar PDF” gera uma cópia do prontuário. Em “Mais opções”, você também pode imprimir ou gerar um PDF local do registro.',
+    icon: Download,
+  },
+  {
+    title: 'Use as integrações e atalhos',
+    description: 'Quando disponíveis, as ações permitem enviar o texto ao Google Docs, salvar o PDF assinado no Google Drive, abrir o prontuário integrado e acessar o perfil do paciente.',
+    icon: ExternalLink,
+  },
+  {
+    title: 'Limpe o histórico com atenção',
+    description: '“Limpar Histórico” remove os registros da plataforma para todos os pacientes. Antes de confirmar, revise a mensagem: o conteúdo que já foi inserido no Google Docs não é afetado.',
+    icon: Trash2,
+  },
+];
+
+const HISTORY_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre o Histórico de Evoluções',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a funcionalidade de Histórico de Evoluções.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type HistoryGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function HistoryGuideButton({ compact = false, expanded, onOpen }: HistoryGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona o Histórico de Evoluções"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -47,6 +108,7 @@ export default function History() {
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
@@ -623,14 +685,22 @@ export default function History() {
       <PanelPageHeader
         icon={Clock}
         title="Histórico de Evoluções"
-        actions={evolutions.length > 0 && (
-          <button 
-            onClick={() => setShowClearConfirm(true)}
-            className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
-          >
-            <Trash2 size={18} />
-            <span>Limpar Histórico</span>
-          </button>
+        titleActions={<HistoryGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
+        actions={(
+          <div className="flex items-center gap-2">
+            <span className="sm:hidden">
+              <HistoryGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+            </span>
+            {evolutions.length > 0 && (
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
+              >
+                <Trash2 size={18} />
+                <span>Limpar Histórico</span>
+              </button>
+            )}
+          </div>
         )}
       />
 
@@ -897,6 +967,17 @@ export default function History() {
         </div>
       </div>
     </div>
+
+    <FeatureGuideModal
+      open={guideOpen}
+      onClose={() => setGuideOpen(false)}
+      eyebrow="Histórico de evoluções"
+      title="Como funciona o Histórico de Evoluções"
+      description="Use esta página para revisar, exportar e encaminhar os registros clínicos concluídos para os prontuários dos pacientes."
+      steps={HISTORY_GUIDE_STEPS}
+      note="O histórico mostra apenas evoluções com transcrição concluída. As ações de limpeza removem os registros da plataforma, mas não apagam o que já foi inserido no Google Docs."
+      supportHref={HISTORY_SUPPORT_HREF}
+    />
 
     {/* Portal de Impressão de prontuário/relatório (fora do #root do App) */}
     {printMode && createPortal(
