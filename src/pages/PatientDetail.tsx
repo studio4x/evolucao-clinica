@@ -29,6 +29,12 @@ import { resolveHorizontalSwipe } from '../utils/horizontalSwipe';
 import PatientFilesCard from '../components/patients/PatientFilesCard';
 import PatientAnamnesisSummaryCard from '../components/patients/PatientAnamnesisSummaryCard';
 import PatientSessionsSummaryCard from '../components/patients/PatientSessionsSummaryCard';
+import {
+  PATIENT_SESSION_WEEKDAYS,
+  normalizePatientSessionSchedule,
+  sessionScheduleToLegacy,
+  type PatientSessionScheduleEntry,
+} from '../utils/patientSessionSchedule';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -235,8 +241,8 @@ export default function PatientDetail() {
 
   // Estados para as configurações de lembretes
   const [reminderActive, setReminderActive] = useState(false);
-  const [sessionDays, setSessionDays] = useState<number[]>([]);
-  const [sessionTime, setSessionTime] = useState('');
+  const [reminderDelayHours, setReminderDelayHours] = useState(1);
+  const [sessionSchedule, setSessionSchedule] = useState<PatientSessionScheduleEntry[]>([]);
   const [savingReminders, setSavingReminders] = useState(false);
   
   // Estados para Relatórios e PDI por IA
@@ -1108,8 +1114,8 @@ export default function PatientDetail() {
   useEffect(() => {
     if (patient) {
       setReminderActive(patient.evolution_reminder_active ?? false);
-      setSessionDays(patient.session_days || []);
-      setSessionTime(patient.session_time ? patient.session_time.substring(0, 5) : '');
+      setReminderDelayHours(Number(patient.evolution_reminder_delay_hours ?? 1));
+      setSessionSchedule(normalizePatientSessionSchedule(patient.session_schedule, patient.session_days, patient.session_time));
     }
   }, [patient]);
 
@@ -1157,14 +1163,24 @@ export default function PatientDetail() {
   }, [exportDestination, patient?.target_folder_id, googleAccessToken, hasClinicalAccess]);
 
   const handleSaveReminders = async () => {
+    const incompleteSchedule = sessionSchedule.some((item) => !/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time));
+    if (incompleteSchedule) {
+      alert('Preencha o horário de todas as sessões configuradas.');
+      return;
+    }
+
     setSavingReminders(true);
     try {
+      const normalizedSchedule = normalizePatientSessionSchedule(sessionSchedule);
+      const legacySchedule = sessionScheduleToLegacy(normalizedSchedule);
       const { error } = await supabase
         .from('patients')
         .update({
           evolution_reminder_active: reminderActive,
-          session_days: reminderActive ? sessionDays : [],
-          session_time: (reminderActive && sessionTime) ? sessionTime : null,
+          evolution_reminder_delay_hours: Math.max(0, Math.min(168, Number(reminderDelayHours || 0))),
+          session_schedule: normalizedSchedule,
+          session_days: legacySchedule.sessionDays,
+          session_time: legacySchedule.sessionTime,
           updated_at: new Date().toISOString()
         })
         .eq('id', id);
@@ -1174,22 +1190,23 @@ export default function PatientDetail() {
       setPatient((prev: any) => ({
         ...prev,
         evolution_reminder_active: reminderActive,
-        session_days: reminderActive ? sessionDays : [],
-        session_time: reminderActive ? sessionTime : null
+        evolution_reminder_delay_hours: reminderDelayHours,
+        session_schedule: normalizedSchedule,
+        session_days: legacySchedule.sessionDays,
+        session_time: legacySchedule.sessionTime
       }));
 
-      // Dispara uma notificação interna no frontend para avisar o usuário
       void sendNotification({
-        title: 'ℹ️ Configurações de Lembrete Salvas',
-        content: `As configurações de lembrete de evolução de ${patient?.full_name} foram atualizadas com sucesso.`,
+        title: 'ℹ️ Agenda e lembretes atualizados',
+        content: `A agenda de sessões e as configurações de lembrete de ${patient?.full_name} foram atualizadas com sucesso.`,
         type: 'info',
         link: `/painel/patients/${id}`
       });
 
-      alert("Configurações de lembrete atualizadas com sucesso!");
+      alert('Agenda e lembretes atualizados com sucesso!');
     } catch (err: any) {
-      console.error("Error saving reminders:", err);
-      alert("Erro ao salvar configurações de lembrete: " + (err.message || err));
+      console.error('Error saving reminders:', err);
+      alert('Erro ao salvar agenda e lembretes: ' + (err.message || err));
     } finally {
       setSavingReminders(false);
     }
@@ -1199,7 +1216,7 @@ export default function PatientDetail() {
     try {
       await sendNotification({
         title: `🔔 Lembrete de Evolução (Teste): ${patient?.full_name}`,
-        content: `Este é um lembrete de teste para o(a) paciente ${patient?.full_name}. Quando ativo, você receberá notificações semelhantes após o horário de atendimento configurado nos dias selecionados.`,
+        content: `Este é um lembrete de teste para o(a) paciente ${patient?.full_name}. Quando ativo, o lembrete será enviado ${reminderDelayHours} hora(s) após cada sessão configurada, caso ainda não exista evolução correspondente.`,
         type: 'warning',
         link: `/painel/patients/${id}`
       });
@@ -2633,14 +2650,63 @@ export default function PatientDetail() {
           <div className={`card p-6 space-y-4 order-6 xl:order-none ${mobileTabVisibility('reminders')}`}>
             <div className="flex items-center space-x-2 text-brand-primary">
               <Bell size={20} className="text-brand-primary" />
-              <h3 className="font-semibold text-brand-text mb-0">Lembretes de Evolução</h3>
+              <h3 className="font-semibold text-brand-text mb-0">Agenda de sessões e lembretes</h3>
             </div>
 
             <p className="text-xs text-brand-text-muted leading-relaxed">
-              Configure os dias e o horário das sessões deste paciente para receber notificações (no painel e por e-mail) assim que o atendimento terminar, ajudando você a manter o histórico clínico sempre em dia.
+              Configure um ou mais dias e horários recorrentes. Os mesmos horários aparecem como sugestões no Controle de Sessões.
             </p>
 
-            <div className="space-y-4">
+            <div className="space-y-3">
+              {sessionSchedule.map((slot, index) => (
+                <div key={index} className="grid grid-cols-[1fr_120px_auto] items-end gap-2">
+                  <label className="text-xs font-semibold text-brand-text">
+                    Dia
+                    <select
+                      value={slot.weekday}
+                      onChange={(event) => setSessionSchedule((current) => current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, weekday: Number(event.target.value) } : item
+                      ))}
+                      className="input-field mt-1 p-2"
+                    >
+                      {PATIENT_SESSION_WEEKDAYS.map((day) => (
+                        <option key={day.value} value={day.value}>{day.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-brand-text">
+                    Horário
+                    <input
+                      type="time"
+                      value={slot.time}
+                      onChange={(event) => setSessionSchedule((current) => current.map((item, itemIndex) =>
+                        itemIndex === index ? { ...item, time: event.target.value } : item
+                      ))}
+                      className="input-field mt-1 p-2"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    aria-label="Remover horário"
+                    onClick={() => setSessionSchedule((current) => current.filter((_, itemIndex) => itemIndex !== index))}
+                    className="mb-0.5 rounded-lg border border-red-200 p-2 text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setSessionSchedule((current) => [...current, { weekday: 1, time: '' }])}
+                className="w-full btn-outline py-2 text-xs"
+              >
+                <Plus size={14} />
+                <span>Adicionar dia e horário</span>
+              </button>
+            </div>
+
+            <div className="space-y-3 border-t border-brand-border/50 pt-3">
               <label className="flex items-center space-x-2 text-sm text-brand-text cursor-pointer">
                 <input
                   type="checkbox"
@@ -2648,83 +2714,43 @@ export default function PatientDetail() {
                   onChange={(e) => setReminderActive(e.target.checked)}
                   className="h-4 w-4 rounded border-brand-border text-brand-primary focus:ring-brand-primary"
                 />
-                <span className="font-medium">Ativar lembretes</span>
+                <span className="font-medium">Ativar lembretes de evolução</span>
               </label>
 
               {reminderActive && (
-                <div className="space-y-3 pt-2 border-t border-brand-border/50">
-                  <div>
-                    <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-2">
-                      Dias da Semana
-                    </label>
-                    <div className="flex flex-wrap gap-1">
-                      {[
-                        { val: 1, label: 'S' },
-                        { val: 2, label: 'T' },
-                        { val: 3, label: 'Q' },
-                        { val: 4, label: 'Q' },
-                        { val: 5, label: 'S' },
-                        { val: 6, label: 'S' },
-                        { val: 0, label: 'D' }
-                      ].map((day, idx) => {
-                        const isSelected = sessionDays.includes(day.val);
-                        const weekdayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            title={weekdayNames[day.val]}
-                            onClick={() => {
-                              setSessionDays(prev => 
-                                prev.includes(day.val) 
-                                  ? prev.filter(d => d !== day.val) 
-                                  : [...prev, day.val].sort()
-                              );
-                            }}
-                            className={`w-8 h-8 text-xs font-semibold rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
-                              isSelected
-                                ? 'bg-brand-primary text-white shadow-sm border border-brand-primary'
-                                : 'bg-brand-bg text-brand-text-muted hover:bg-brand-border border border-brand-border'
-                            }`}
-                          >
-                            {day.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-brand-text-muted uppercase tracking-wider mb-1">
-                      Horário do Atendimento
-                    </label>
-                    <input
-                      type="time"
-                      value={sessionTime}
-                      onChange={(e) => setSessionTime(e.target.value)}
-                      className="input-field p-2"
-                    />
-                  </div>
-                </div>
+                <label className="block text-xs font-semibold text-brand-text">
+                  Horas após a sessão
+                  <input
+                    type="number"
+                    min={0}
+                    max={168}
+                    step={1}
+                    value={reminderDelayHours}
+                    onChange={(event) => setReminderDelayHours(Math.max(0, Math.min(168, Number(event.target.value || 0))))}
+                    className="input-field mt-1 w-28 p-2"
+                  />
+                </label>
               )}
+            </div>
 
-              <div className="flex flex-col gap-2 pt-2 border-t border-brand-border/50">
-                <button
-                  type="button"
-                  onClick={handleSaveReminders}
-                  disabled={savingReminders}
-                  className="w-full btn-primary py-2 text-xs flex items-center justify-center space-x-1 cursor-pointer"
-                >
-                  {savingReminders ? (
-                    <>
-                      <Loader2 size={12} className="animate-spin" />
-                      <span>Salvando...</span>
-                    </>
-                  ) : (
-                    <span>Salvar Lembrete</span>
-                  )}
-                </button>
+            <div className="flex flex-col gap-2 pt-2 border-t border-brand-border/50">
+              <button
+                type="button"
+                onClick={handleSaveReminders}
+                disabled={savingReminders}
+                className="w-full btn-primary py-2 text-xs flex items-center justify-center space-x-1 cursor-pointer"
+              >
+                {savingReminders ? (
+                  <>
+                    <Loader2 size={12} className="animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <span>Salvar agenda e lembretes</span>
+                )}
+              </button>
 
+              {reminderActive && (
                 <button
                   type="button"
                   onClick={handleSendTestReminder}
@@ -2732,7 +2758,7 @@ export default function PatientDetail() {
                 >
                   <span>Enviar Lembrete de Teste</span>
                 </button>
-              </div>
+              )}
             </div>
           </div>
         </div>

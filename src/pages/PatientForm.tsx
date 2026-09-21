@@ -30,6 +30,12 @@ import {
   splitStoredWhatsAppNumber,
   type CountryCode,
 } from '../utils/whatsappNumber';
+import {
+  PATIENT_SESSION_WEEKDAYS,
+  normalizePatientSessionSchedule,
+  sessionScheduleToLegacy,
+  type PatientSessionScheduleEntry,
+} from '../utils/patientSessionSchedule';
 
 declare global {
   interface Window {
@@ -53,8 +59,8 @@ type PatientFormValues = {
   target_folder_id: string;
   target_folder_name: string;
   evolution_reminder_active: boolean;
-  session_days: number[];
-  session_time: string;
+  evolution_reminder_delay_hours: number;
+  session_schedule: PatientSessionScheduleEntry[];
   default_template_id: string;
 };
 
@@ -113,8 +119,8 @@ const emptyPatientFormValues = (): PatientFormValues => ({
   target_folder_id: '',
   target_folder_name: '',
   evolution_reminder_active: false,
-  session_days: [],
-  session_time: '',
+  evolution_reminder_delay_hours: 1,
+  session_schedule: [],
   default_template_id: '',
 });
 
@@ -311,8 +317,8 @@ export default function PatientForm() {
               target_folder_id: data.target_folder_id || '',
               target_folder_name: data.target_folder_name || '',
               evolution_reminder_active: data.evolution_reminder_active ?? false,
-              session_days: data.session_days || [],
-              session_time: data.session_time ? data.session_time.substring(0, 5) : '',
+              evolution_reminder_delay_hours: Number(data.evolution_reminder_delay_hours ?? 1),
+              session_schedule: normalizePatientSessionSchedule(data.session_schedule, data.session_days, data.session_time),
               default_template_id: data.default_template_id || ''
             });
             setPhoneCountry(storedPhone.country);
@@ -534,7 +540,7 @@ export default function PatientForm() {
     try {
       await sendNotification({
         title: `🔔 Lembrete de Evolução (Teste): ${formData.full_name}`,
-        content: `Este é um lembrete de teste para o(a) paciente ${formData.full_name}. Quando ativo, você receberá notificações semelhantes após o horário de atendimento configurado nos dias selecionados.`,
+        content: `Este é um lembrete de teste para o(a) paciente ${formData.full_name}. Quando ativo, o lembrete será enviado ${formData.evolution_reminder_delay_hours} hora(s) após cada sessão configurada, caso ainda não exista evolução correspondente.`,
         type: 'warning',
         link: id ? `/painel/patients/${id}` : '/painel/patients'
       });
@@ -784,6 +790,24 @@ export default function PatientForm() {
     e.preventDefault();
     if (!user) return;
 
+    const incompleteSchedule = formData.session_schedule.some((item) => (
+      !Number.isInteger(Number(item.weekday))
+      || Number(item.weekday) < 0
+      || Number(item.weekday) > 6
+      || !/^([01]\d|2[0-3]):[0-5]\d$/.test(String(item.time || ''))
+    ));
+    if (incompleteSchedule) {
+      await showAlert('Preencha o dia da semana e o horário de todas as sessões configuradas.', {
+        title: 'Agenda incompleta',
+        variant: 'warning',
+        icon: 'warning'
+      });
+      return;
+    }
+
+    const normalizedSessionSchedule = normalizePatientSessionSchedule(formData.session_schedule);
+    const legacySchedule = sessionScheduleToLegacy(normalizedSessionSchedule);
+
     let uploadedPhotoPath = '';
     setLoading(true);
     try {
@@ -813,8 +837,10 @@ export default function PatientForm() {
         status: formData.status,
         updated_at: new Date().toISOString(),
         evolution_reminder_active: formData.evolution_reminder_active,
-        session_days: formData.evolution_reminder_active ? formData.session_days : [],
-        session_time: (formData.evolution_reminder_active && formData.session_time) ? formData.session_time : null,
+        evolution_reminder_delay_hours: Math.max(0, Math.min(168, Number(formData.evolution_reminder_delay_hours || 0))),
+        session_schedule: normalizedSessionSchedule,
+        session_days: legacySchedule.sessionDays,
+        session_time: legacySchedule.sessionTime,
         default_template_id: formData.default_template_id || null,
         photo_path: nextPhotoPath || null,
       };
@@ -1176,9 +1202,89 @@ export default function PatientForm() {
         </div>
 
         <div className="border-t border-brand-border pt-6 space-y-4">
-          <h3 className="text-lg font-medium text-brand-text">Lembretes de Evolução</h3>
-          
-          <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-medium text-brand-text">Dia da semana e Horário da sessão ou das sessões</h3>
+            <p className="mt-1 text-xs text-brand-text-muted">
+              Configure a agenda recorrente deste paciente. Você pode adicionar vários dias e horários.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            {formData.session_schedule.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-brand-border bg-brand-bg/40 p-4 text-sm text-brand-text-muted">
+                Nenhum dia e horário configurado.
+              </div>
+            ) : (
+              formData.session_schedule.map((slot, index) => (
+                <div key={index} className="grid grid-cols-[1fr_140px_auto] items-end gap-2 rounded-xl border border-brand-border/70 bg-white p-3">
+                  <label className="text-xs font-semibold text-brand-text">
+                    Dia da semana
+                    <select
+                      value={slot.weekday}
+                      onChange={(event) => {
+                        const weekday = Number(event.target.value);
+                        setFormData((prev) => ({
+                          ...prev,
+                          session_schedule: prev.session_schedule.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, weekday } : item
+                          )
+                        }));
+                      }}
+                      className="input-field mt-1 p-2"
+                    >
+                      {PATIENT_SESSION_WEEKDAYS.map((day) => (
+                        <option key={day.value} value={day.value}>{day.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="text-xs font-semibold text-brand-text">
+                    Horário
+                    <input
+                      type="time"
+                      value={slot.time}
+                      onChange={(event) => {
+                        const time = event.target.value;
+                        setFormData((prev) => ({
+                          ...prev,
+                          session_schedule: prev.session_schedule.map((item, itemIndex) =>
+                            itemIndex === index ? { ...item, time } : item
+                          )
+                        }));
+                      }}
+                      className="input-field mt-1 p-2"
+                    />
+                  </label>
+
+                  <button
+                    type="button"
+                    aria-label="Remover dia e horário"
+                    onClick={() => setFormData((prev) => ({
+                      ...prev,
+                      session_schedule: prev.session_schedule.filter((_, itemIndex) => itemIndex !== index)
+                    }))}
+                    className="mb-0.5 rounded-xl border border-red-200 p-2.5 text-red-600 transition-colors hover:bg-red-50"
+                  >
+                    <Trash2 size={17} />
+                  </button>
+                </div>
+              ))
+            )}
+
+            <button
+              type="button"
+              onClick={() => setFormData((prev) => ({
+                ...prev,
+                session_schedule: [...prev.session_schedule, { weekday: 1, time: '' }]
+              }))}
+              className="btn-outline"
+            >
+              <Plus size={16} />
+              <span>Adicionar dia e horário</span>
+            </button>
+          </div>
+
+          <div className="border-t border-brand-border/60 pt-4 space-y-3">
             <label className="flex items-center space-x-2 text-sm text-brand-text cursor-pointer">
               <input
                 type="checkbox"
@@ -1186,74 +1292,43 @@ export default function PatientForm() {
                 onChange={e => setFormData({ ...formData, evolution_reminder_active: e.target.checked })}
                 className="h-4 w-4 rounded border-brand-border text-brand-primary focus:ring-brand-primary"
               />
-              <span className="font-medium">Ativar lembretes de evolução para este paciente</span>
+              <span className="font-medium">Ativar lembretes de evolução</span>
             </label>
 
             {formData.evolution_reminder_active && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                <div>
-                  <label className="block text-sm font-medium text-brand-text mb-2">Dias de Atendimento</label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      { val: 1, label: 'S' },
-                      { val: 2, label: 'T' },
-                      { val: 3, label: 'Q' },
-                      { val: 4, label: 'Q' },
-                      { val: 5, label: 'S' },
-                      { val: 6, label: 'S' },
-                      { val: 0, label: 'D' }
-                    ].map((day, idx) => {
-                      const isSelected = formData.session_days.includes(day.val);
-                      const weekdayNames = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          title={weekdayNames[day.val]}
-                          onClick={() => {
-                            const newDays = isSelected
-                              ? formData.session_days.filter((d: number) => d !== day.val)
-                              : [...formData.session_days, day.val].sort();
-                            setFormData({ ...formData, session_days: newDays });
-                          }}
-                          className={`w-9 h-9 text-sm font-semibold rounded-full flex items-center justify-center transition-all duration-200 cursor-pointer ${
-                            isSelected
-                              ? 'bg-brand-primary text-white shadow-sm border border-brand-primary'
-                              : 'bg-brand-bg text-brand-text-muted hover:bg-brand-border border border-brand-border'
-                          }`}
-                        >
-                          {day.label}
-                        </button>
-                      );
-                    })}
+              <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-4">
+                <label className="block text-sm font-medium text-brand-text">
+                  Lembrar quantas horas após a sessão?
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      max={168}
+                      step={1}
+                      value={formData.evolution_reminder_delay_hours}
+                      onChange={(event) => setFormData({
+                        ...formData,
+                        evolution_reminder_delay_hours: Math.max(0, Math.min(168, Number(event.target.value || 0)))
+                      })}
+                      className="input-field w-28 p-2"
+                    />
+                    <span className="text-sm text-brand-text-muted">hora(s) após o horário configurado</span>
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-brand-text mb-1">Horário do Atendimento</label>
-                  <input
-                    type="time"
-                    value={formData.session_time}
-                    onChange={e => setFormData({ ...formData, session_time: e.target.value })}
-                    className="input-field p-2"
-                  />
-                  <p className="text-xs text-brand-text-muted mt-1">
-                    Você receberá lembretes nos dias selecionados após este horário para registrar as evoluções clínicas.
-                  </p>
-                </div>
+                </label>
+                <p className="mt-2 text-xs text-brand-text-muted">
+                  O lembrete só será enviado se ainda não houver evolução correspondente à sessão.
+                </p>
               </div>
             )}
 
             {formData.evolution_reminder_active && (
-              <div className="pt-2 border-t border-brand-border/50">
-                <button
-                  type="button"
-                  onClick={handleSendTestReminder}
-                  className="inline-flex items-center justify-center px-4 py-2 border border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5 text-sm font-medium rounded-xl transition-all duration-200 cursor-pointer"
-                >
-                  <span>Enviar Lembrete de Teste</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleSendTestReminder}
+                className="inline-flex items-center justify-center px-4 py-2 border border-brand-primary/30 text-brand-primary bg-white hover:bg-brand-primary/5 text-sm font-medium rounded-xl transition-all duration-200 cursor-pointer"
+              >
+                <span>Enviar Lembrete de Teste</span>
+              </button>
             )}
           </div>
         </div>

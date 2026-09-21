@@ -9,6 +9,11 @@ import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import {
+  buildPatientSessionSuggestions,
+  getPatientSessionSlotsForDate,
+  normalizePatientSessionSchedule,
+} from '../utils/patientSessionSchedule';
 import SessionSignaturePad from '../components/patients/sessions/SessionSignaturePad';
 import { showAlert, showConfirm } from '../store/modalStore';
 import {
@@ -73,7 +78,7 @@ export default function PatientSessions() {
     setLoading(true);
     try {
       const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, closureData, packageData, evolutionResult] = await Promise.all([
-        supabase.from('patients').select('id, full_name, professional_id, session_days, session_time').eq('id', id).single(),
+        supabase.from('patients').select('id, full_name, professional_id, session_days, session_time, session_schedule').eq('id', id).single(),
         supabase.from('professionals').select('id, full_name, professional_register, professional_title, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at').eq('id', user.id).single(),
         fetchPatientSessions(id, month),
         fetchPatientSessionMonthClosure(id, month),
@@ -115,7 +120,18 @@ export default function PatientSessions() {
     if (signatureFilter === 'unsigned' && session.signature) return false;
     return true;
   });
-  const habitualToday = Boolean(patient?.session_days?.includes(new Date().getDay()));
+  const recurringSchedule = useMemo(
+    () => normalizePatientSessionSchedule(patient?.session_schedule, patient?.session_days, patient?.session_time),
+    [patient?.session_schedule, patient?.session_days, patient?.session_time]
+  );
+  const todaySlots = useMemo(
+    () => getPatientSessionSlotsForDate(recurringSchedule, new Date()),
+    [recurringSchedule]
+  );
+  const scheduleSuggestions = useMemo(
+    () => buildPatientSessionSuggestions(recurringSchedule, month, sessions),
+    [recurringSchedule, month.getFullYear(), month.getMonth(), sessions]
+  );
   const sameDayEvolutions = evolutions.filter((evolution) => evolution.session_date === form.date);
 
   const openCreate = (quick = false) => {
@@ -124,7 +140,25 @@ export default function PatientSessions() {
       return;
     }
     setFormSession(null);
-    setForm({ date: today(), time: quick ? currentTime() : (patient?.session_time?.slice(0, 5) || ''), status: 'completed', notes: '', evolutionId: '', packageId: activePackage?.id || '' });
+    const preferredTime = todaySlots[0]?.time || '';
+    setForm({ date: today(), time: quick ? currentTime() : preferredTime, status: 'completed', notes: '', evolutionId: '', packageId: activePackage?.id || '' });
+  };
+
+  const openSuggestion = (suggestion: { date: string; time: string }) => {
+    if (monthIsClosed) {
+      void showAlert('Este mês já foi fechado e assinado. Não é possível adicionar novas sessões.', { title: 'Mês fechado', variant: 'info', icon: 'info' });
+      return;
+    }
+    const isFuture = suggestion.date > today();
+    setFormSession(null);
+    setForm({
+      date: suggestion.date,
+      time: suggestion.time,
+      status: isFuture ? 'scheduled' : 'completed',
+      notes: '',
+      evolutionId: '',
+      packageId: activePackage?.id || ''
+    });
   };
 
   const openEdit = (session: PatientSession) => {
@@ -396,11 +430,56 @@ export default function PatientSessions() {
         ) : null}
       </div>
 
-      {habitualToday && (
-        <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/5 p-4 text-sm text-brand-text">
-          <strong className="text-brand-primary">Atendimento habitual hoje.</strong>
-          <span className="ml-1">Este paciente tem {patient?.session_time ? `horário habitual às ${String(patient.session_time).slice(0,5)}` : 'sessão habitual configurada'}.</span>
-          <button type="button" onClick={() => openCreate(true)} className="ml-2 font-bold text-brand-primary hover:underline">Registrar sessão</button>
+      {recurringSchedule.length > 0 && (
+        <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/5 p-4">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <strong className="text-sm text-brand-primary">Agenda configurada</strong>
+              <p className="mt-1 text-xs text-brand-text-muted">
+                Os dias e horários abaixo vêm da configuração do paciente.
+              </p>
+            </div>
+            {todaySlots.length > 0 && (
+              <button type="button" onClick={() => openSuggestion({ date: today(), time: todaySlots[0].time })} className="text-xs font-bold text-brand-primary hover:underline">
+                Registrar sessão de hoje
+              </button>
+            )}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {recurringSchedule.map((slot, index) => (
+              <span key={`${slot.weekday}-${slot.time}-${index}`} className="rounded-full border border-brand-primary/15 bg-white px-3 py-1.5 text-xs font-semibold text-brand-text">
+                {['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][slot.weekday]} • {slot.time}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!monthIsClosed && scheduleSuggestions.length > 0 && (
+        <div className="card p-4 sm:p-5">
+          <div>
+            <h3 className="font-semibold text-brand-text">Sugestões da agenda</h3>
+            <p className="text-xs text-brand-text-muted">Datas deste mês ainda não registradas no Controle de Sessões.</p>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {scheduleSuggestions.slice(0, 12).map((suggestion) => (
+              <button
+                key={`${suggestion.date}-${suggestion.time}`}
+                type="button"
+                onClick={() => openSuggestion(suggestion)}
+                className="flex items-center justify-between rounded-xl border border-brand-border bg-white px-3 py-2 text-left transition-colors hover:border-brand-primary/30 hover:bg-brand-primary/5"
+              >
+                <span>
+                  <strong className="block text-xs text-brand-text">{suggestion.weekdayLabel}</strong>
+                  <span className="text-xs text-brand-text-muted">{suggestion.date.split('-').reverse().join('/')} • {suggestion.time}</span>
+                </span>
+                <Plus size={15} className="text-brand-primary" />
+              </button>
+            ))}
+          </div>
+          {scheduleSuggestions.length > 12 && (
+            <p className="mt-2 text-[11px] text-brand-text-muted">Mostrando as próximas 12 sugestões deste mês.</p>
+          )}
         </div>
       )}
 

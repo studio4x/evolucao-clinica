@@ -6123,26 +6123,61 @@ app.post("/api/migrations/import-sessions", requireAuth, async (req: any, res) =
 
 
 // 4.1. Cron para Enviar Lembretes de Evoluções Clínicas Pendentes
+type PatientSessionScheduleSlot = { weekday: number; time: string };
+
+function normalizePatientSessionScheduleServer(patient: any): PatientSessionScheduleSlot[] {
+  const raw = Array.isArray(patient?.session_schedule) ? patient.session_schedule : [];
+  const valid = raw
+    .map((item: any) => ({ weekday: Number(item?.weekday), time: String(item?.time || '').slice(0, 5) }))
+    .filter((item: PatientSessionScheduleSlot) =>
+      Number.isInteger(item.weekday)
+      && item.weekday >= 0
+      && item.weekday <= 6
+      && /^([01]\d|2[0-3]):[0-5]\d$/.test(item.time)
+    );
+
+  if (valid.length > 0) return valid;
+
+  const legacyTime = patient?.session_time ? String(patient.session_time).slice(0, 5) : '';
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(legacyTime)) return [];
+  return (Array.isArray(patient?.session_days) ? patient.session_days : [])
+    .map(Number)
+    .filter((weekday: number) => Number.isInteger(weekday) && weekday >= 0 && weekday <= 6)
+    .map((weekday: number) => ({ weekday, time: legacyTime }));
+}
+
+function brazilDateParts(date: Date) {
+  const brazil = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  return {
+    year: brazil.getUTCFullYear(),
+    month: brazil.getUTCMonth(),
+    day: brazil.getUTCDate(),
+    weekday: brazil.getUTCDay(),
+    hour: brazil.getUTCHours(),
+    minute: brazil.getUTCMinutes(),
+  };
+}
+
+function brazilLocalDateKey(date: Date) {
+  const parts = brazilDateParts(date);
+  return `${parts.year}-${String(parts.month + 1).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
+function brazilLocalDateAt(date: Date, hour: number, minute: number) {
+  const parts = brazilDateParts(date);
+  return new Date(Date.UTC(parts.year, parts.month, parts.day, hour + 3, minute, 0, 0));
+}
+
 app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
   if (!(await verifySupabaseCronRequest(req))) {
     return res.status(401).json({ error: "Nao autorizado" });
   }
 
   try {
-    // 1. Obter data/hora atual no fuso horário do Brasil (America/Sao_Paulo: UTC-3)
-    const tzOffset = -3;
     const now = new Date();
-    const brazilTime = new Date(now.getTime() + (tzOffset * 60 * 60 * 1000));
-    
-    const currentDayOfWeek = brazilTime.getUTCDay(); // 0 = Domingo, 1 = Segunda, ...
-    const currentDateStr = brazilTime.toISOString().split('T')[0]; // YYYY-MM-DD
-    const currentHour = brazilTime.getUTCHours();
-    const currentMinute = brazilTime.getUTCMinutes();
-    const currentTimeStr = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+    const currentBrazilDate = brazilLocalDateKey(now);
+    console.log(`[Cron] Iniciando verificação de lembretes. Data Brasil: ${currentBrazilDate}`);
 
-    console.log(`[Cron] Iniciando verificação de lembretes. Horário Brasil: ${currentDateStr} ${currentTimeStr}, Dia da Semana: ${currentDayOfWeek}`);
-
-    // 2. Buscar todos os pacientes ativos com lembretes habilitados, incluindo a relação com o profissional
     const { data: patients, error: patientsError } = await supabaseAdmin
       .from("patients")
       .select("*, professionals:professional_id!inner(role, status, subscription_status, subscription_ends_at)")
@@ -6150,7 +6185,6 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
       .eq("evolution_reminder_active", true);
 
     if (patientsError) throw patientsError;
-
     if (!patients || patients.length === 0) {
       return res.json({ success: true, message: "Nenhum paciente com lembrete de evolucao ativo." });
     }
@@ -6158,109 +6192,97 @@ app.get("/api/cron/send-evolution-reminders", async (req: any, res) => {
     let notificationsSentCount = 0;
 
     for (const patient of patients) {
-      // Verifica se o profissional tem assinatura ativa
       const prof = (patient as any).professionals;
-      if (!prof) continue;
-
-      if (prof.status !== "active") {
-        continue; // Profissional inativo
-      }
+      if (!prof || prof.status !== "active") continue;
 
       if (prof.role !== "admin") {
         const endsAt = prof.subscription_ends_at ? new Date(prof.subscription_ends_at) : null;
         const isExpired = endsAt ? endsAt < now : false;
         const isActive = prof.subscription_status === "active" || prof.subscription_status === "trialing";
+        if (!isActive || isExpired) continue;
+      }
 
-        if (!isActive || isExpired) {
-          continue; // Sem plano ativo
+      const schedule = normalizePatientSessionScheduleServer(patient);
+      if (schedule.length === 0) continue;
+
+      const delayHours = Math.max(0, Math.min(168, Number(patient.evolution_reminder_delay_hours ?? 1)));
+      const lookbackDays = Math.max(1, Math.ceil(delayHours / 24) + 1);
+
+      for (let dayOffset = 0; dayOffset <= lookbackDays; dayOffset += 1) {
+        const candidateReference = new Date(now.getTime() - dayOffset * 24 * 60 * 60 * 1000);
+        const parts = brazilDateParts(candidateReference);
+        const candidateDate = brazilLocalDateKey(candidateReference);
+        const slots = schedule.filter((slot) => slot.weekday === parts.weekday);
+        if (slots.length === 0) continue;
+
+        const { data: evolutions, error: evolutionsError } = await supabaseAdmin
+          .from("evolutions")
+          .select("id, session_time")
+          .eq("patient_id", patient.id)
+          .eq("session_date", candidateDate);
+
+        if (evolutionsError) {
+          console.error(`[Cron] Erro ao buscar evoluções do paciente ${patient.id} em ${candidateDate}:`, evolutionsError.message);
+          continue;
         }
-      }
 
-      // Verifica se o dia da semana atual está nos dias cadastrados
-      const days = patient.session_days || [];
-      if (!days.includes(currentDayOfWeek)) {
-        continue;
-      }
+        for (const slot of slots) {
+          const [hour, minute] = slot.time.split(':').map(Number);
+          const scheduledAt = brazilLocalDateAt(candidateReference, hour, minute);
+          const reminderAt = new Date(scheduledAt.getTime() + delayHours * 60 * 60 * 1000);
+          const overdueMs = now.getTime() - reminderAt.getTime();
 
-      // Verifica se há horário configurado e se o horário atual já passou do horário da sessão
-      if (!patient.session_time) {
-        continue;
-      }
+          if (overdueMs < 0 || overdueMs > 24 * 60 * 60 * 1000) continue;
 
-      const sessionTimeStr = patient.session_time.substring(0, 5); // "HH:MM"
-      if (currentTimeStr < sessionTimeStr) {
-        continue; // Sessão ainda não ocorreu hoje
-      }
+          const hasExactEvolution = (evolutions || []).some((evolution: any) =>
+            evolution.session_time && String(evolution.session_time).slice(0, 5) === slot.time
+          );
+          const hasSingleSlotFallbackEvolution = slots.length === 1 && (evolutions || []).length > 0;
+          if (hasExactEvolution || hasSingleSlotFallbackEvolution) continue;
 
-      // Verifica se já existe evolução registrada para este paciente hoje
-      const { data: evolutions, error: evolutionsError } = await supabaseAdmin
-        .from("evolutions")
-        .select("id")
-        .eq("patient_id", patient.id)
-        .eq("session_date", currentDateStr)
-        .limit(1);
+          const displayDate = candidateDate.split('-').reverse().join('/');
+          const notificationTitle = `🔔 Lembrete de Evolução: ${patient.full_name} • ${displayDate} ${slot.time}`;
 
-      if (evolutionsError) {
-        console.error(`[Cron] Erro ao buscar evoluções do paciente ${patient.id}:`, evolutionsError.message);
-        continue;
-      }
+          const { data: sentNotifications, error: sentNotificationsError } = await supabaseAdmin
+            .from("notifications")
+            .select("id")
+            .eq("user_id", patient.professional_id)
+            .eq("title", notificationTitle)
+            .limit(1);
 
-      // Se já evoluiu hoje, não precisa enviar lembrete
-      if (evolutions && evolutions.length > 0) {
-        continue;
-      }
+          if (sentNotificationsError) {
+            console.error(`[Cron] Erro ao verificar lembrete ${patient.id} ${candidateDate} ${slot.time}:`, sentNotificationsError.message);
+            continue;
+          }
+          if (sentNotifications && sentNotifications.length > 0) continue;
 
-      // Verifica se o lembrete já foi enviado hoje para evitar duplicidade no mesmo dia
-      const startOfDay = new Date(brazilTime);
-      startOfDay.setUTCHours(0, 0, 0, 0);
-      const startOfDayUTC = new Date(startOfDay.getTime() - (tzOffset * 60 * 60 * 1000));
-
-      const { data: sentNotifications, error: sentNotificationsError } = await supabaseAdmin
-        .from("notifications")
-        .select("id")
-        .eq("user_id", patient.professional_id)
-        .eq("link", `/painel/patients/${patient.id}`)
-        .like("title", "%Lembrete de Evolução%")
-        .gte("created_at", startOfDayUTC.toISOString());
-
-      if (sentNotificationsError) {
-        console.error(`[Cron] Erro ao verificar lembretes enviados para o paciente ${patient.id}:`, sentNotificationsError.message);
-        continue;
-      }
-
-      if (sentNotifications && sentNotifications.length > 0) {
-        continue; // Lembrete já disparado hoje
-      }
-
-      // Dispara a notificação (In-App, Push e E-mail)
-      try {
-        console.log(`[Cron] Enviando lembrete de evolução para o profissional ${patient.professional_id} sobre o paciente ${patient.full_name}`);
-        
-        await sendNotificationInternal(
-          patient.professional_id,
-          `🔔 Lembrete de Evolução: ${patient.full_name}`,
-          `O atendimento do(a) paciente ${patient.full_name} foi agendado para hoje às ${sessionTimeStr}. Não se esqueça de preencher a evolução clínica correspondente.`,
-          "warning",
-          `/painel/patients/${patient.id}`,
-          undefined,
-          "platform",
-          {},
-          "session_reminder"
-        );
-        
-        notificationsSentCount++;
-      } catch (sendErr: any) {
-        console.error(`[Cron] Falha ao enviar lembrete do paciente ${patient.id}:`, sendErr.message);
+          try {
+            await sendNotificationInternal(
+              patient.professional_id,
+              notificationTitle,
+              `A sessão de ${patient.full_name} estava configurada para ${displayDate} às ${slot.time}. Já se passaram ${delayHours} hora(s) e ainda não há uma evolução correspondente registrada.`,
+              "warning",
+              `/painel/patients/${patient.id}`,
+              undefined,
+              "platform",
+              {},
+              "session_reminder"
+            );
+            notificationsSentCount++;
+          } catch (sendErr: any) {
+            console.error(`[Cron] Falha ao enviar lembrete ${patient.id} ${candidateDate} ${slot.time}:`, sendErr.message);
+          }
+        }
       }
     }
 
-    res.json({
+    return res.json({
       success: true,
-      message: `Verificação de lembretes concluída. Lembretes enviados hoje: ${notificationsSentCount}`
+      message: `Verificação de lembretes concluída. Lembretes enviados: ${notificationsSentCount}`
     });
   } catch (err: any) {
     console.error("[Cron] Erro no job de lembretes de evoluções:", err);
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
