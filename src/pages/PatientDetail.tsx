@@ -376,7 +376,6 @@ export default function PatientDetail() {
   const [semanticLoading, setSemanticLoading] = useState(false);
   const [semanticAnswer, setSemanticAnswer] = useState<string | null>(null);
   const [semanticSources, setSemanticSources] = useState<any[]>([]);
-  const [indexingPending, setIndexingPending] = useState(false);
   const [highlightedEvoId, setHighlightedEvoId] = useState<string | null>(null);
 
   const handleSemanticSearch = async (e: React.FormEvent) => {
@@ -431,53 +430,6 @@ export default function PatientDetail() {
       alert("Erro na busca: " + (error.message || error));
     } finally {
       setSemanticLoading(false);
-    }
-  };
-
-  const handleManualIndex = async () => {
-    if (!id) return;
-    
-    if (!checkPlanActiveAndAlert("Pesquisa Inteligente por IA")) {
-      return;
-    }
-
-    setIndexingPending(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-
-      if (!token) {
-        throw new Error("Sessão expirada. Faça login novamente.");
-      }
-
-      const response = await fetch(`/api/patients/${id}/semantic-index`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const result = await response.json();
-
-      if (response.status === 401) {
-        alert("Sua sessão de acesso expirou por razões de segurança. Você será redirecionado para a tela de login.");
-        await supabase.auth.signOut();
-        navigate('/login');
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao indexar evoluções.');
-      }
-
-      alert(result.message || 'Indexação concluída com sucesso!');
-      await fetchData();
-    } catch (error: any) {
-      console.error("Erro ao indexar evoluções:", error);
-      alert("Erro na indexação: " + (error.message || error));
-    } finally {
-      setIndexingPending(false);
     }
   };
 
@@ -2787,7 +2739,7 @@ export default function PatientDetail() {
                 <Sparkles size={22} className="text-brand-primary animate-pulse flex-shrink-0" />
                 <div className="min-w-0">
                   <h3 className="font-display font-semibold text-base sm:text-lg text-brand-text mb-0 truncate sm:whitespace-normal">Pesquisa Inteligente no Histórico</h3>
-                  <p className="text-xs text-brand-text-muted leading-normal">Faça perguntas para encontrar informações rapidamente nas anotações do paciente</p>
+                  <p className="text-xs text-brand-text-muted leading-normal">Faça perguntas e o histórico será preparado automaticamente antes da pesquisa</p>
                 </div>
               </div>
               
@@ -2802,33 +2754,11 @@ export default function PatientDetail() {
                         const indexedCount = evolutions.filter(e => e.transcription_status === 'completed' && e.embedding).length;
                         const pendingCount = totalCompleted - indexedCount;
                         return pendingCount === 0
-                          ? `Histórico totalmente pronto para busca`
-                          : `${indexedCount} de ${totalCompleted} anotações preparadas`;
+                          ? `Histórico pronto para busca`
+                          : `${indexedCount} de ${totalCompleted} anotações preparadas automaticamente`;
                       })()}
                     </span>
                   </span>
-                  {(() => {
-                    const totalCompleted = evolutions.filter(e => e.transcription_status === 'completed').length;
-                    const indexedCount = evolutions.filter(e => e.transcription_status === 'completed' && e.embedding).length;
-                    const pendingCount = totalCompleted - indexedCount;
-                    return pendingCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={handleManualIndex}
-                        disabled={indexingPending}
-                        className="text-[10px] text-brand-primary hover:underline font-medium mt-1 inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
-                      >
-                        {indexingPending ? (
-                          <>
-                            <Loader2 size={10} className="animate-spin" />
-                            <span>Preparando...</span>
-                          </>
-                        ) : (
-                          <span>Preparar {pendingCount} novas anotações agora</span>
-                        )}
-                      </button>
-                    ) : null;
-                  })()}
                 </div>
               )}
             </div>
@@ -2889,7 +2819,7 @@ export default function PatientDetail() {
               <div className="mt-4 p-5 bg-white/50 backdrop-blur-sm border border-brand-border rounded-xl space-y-3 animate-pulse">
                 <div className="flex items-center space-x-2 text-brand-text-muted text-xs font-medium">
                   <Loader2 size={14} className="animate-spin text-brand-primary" />
-                  <span>Analisando o histórico de anotações do paciente...</span>
+                  <span>Preparando o histórico e analisando as anotações do paciente...</span>
                 </div>
                 <div className="space-y-2">
                   <div className="h-4 bg-brand-bg rounded w-3/4" />
