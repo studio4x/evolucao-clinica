@@ -40,6 +40,9 @@ assert.match(patientPhotoServiceSource, /upsert: false/);
 assert.doesNotMatch(patientPhotoServiceSource, /getPublicUrl/);
 assert.match(patientPhotoSource, /createPatientPhotoSignedUrl\(photoPath\)/);
 assert.match(patientsSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);
+assert.match(patientsSource, /PATIENTS_GUIDE_STEPS/);
+assert.match(patientsSource, /PATIENTS_SUPPORT_HREF/);
+assert.match(patientsSource, /Como funciona a lista de pacientes/);
 assert.match(detailSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);
 assert.match(serverSource, /\.from\("patient-photos"\)[\s\S]*?\.remove\(photoPaths\)/);
 

@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { Link } from 'react-router-dom';
-import { Activity, Bell, Calendar, FileText, MessageCircle, Plus, Search } from 'lucide-react';
+import { Activity, Bell, Calendar, FileText, HelpCircle, MessageCircle, Plus, Search } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { PatientPhoto } from '../components/patients/PatientPhoto';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 
 type PatientEvolution = {
   patient_id: string;
@@ -83,11 +84,72 @@ const getReminderLabel = (patient: any): string | null => {
   return `Lembrete: ${days.join(', ')} · ${time}`;
 };
 
+const PATIENTS_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Encontre rapidamente um paciente',
+    description: 'Use o campo de busca para filtrar a lista pelo nome. O resultado é atualizado enquanto você digita.',
+    icon: Search,
+  },
+  {
+    title: 'Leia os principais indicadores',
+    description: 'Cada cartão mostra se o paciente está ativo, se já possui prontuário vinculado, idade, último atendimento, quantidade de evoluções, lembretes e acesso rápido ao WhatsApp quando disponível.',
+    icon: Activity,
+  },
+  {
+    title: 'Abra o prontuário completo',
+    description: 'Clique em “Ver Detalhes” para acessar o histórico e as demais funcionalidades do paciente, incluindo edição cadastral, sessões, anamnese, arquivos e relatórios.',
+    icon: FileText,
+  },
+  {
+    title: 'Registre uma nova evolução',
+    description: 'Use “Nova Evolução” para começar diretamente um novo registro clínico para o paciente selecionado.',
+    icon: Plus,
+  },
+  {
+    title: 'Cadastre novos pacientes',
+    description: 'Quando precisar iniciar um novo acompanhamento, use “Novo Paciente” e preencha os dados cadastrais, a agenda e as preferências do prontuário.',
+    icon: Calendar,
+  },
+];
+
+const PATIENTS_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre a Lista de Pacientes',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a lista de pacientes.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type PatientsGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function PatientsGuideButton({ compact = false, expanded, onOpen }: PatientsGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona a lista de pacientes"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
+
 export default function Patients() {
   const { user } = useAuthStore();
   const [patients, setPatients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [guideOpen, setGuideOpen] = useState(false);
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -141,13 +203,30 @@ export default function Patients() {
       <PanelPageHeader
         icon={Activity}
         title="Pacientes"
-        actions={<Link
-          to="/painel/patients/new" 
-          className="btn-primary"
-        >
-          <Plus size={20} className="mr-2" />
-          <span>Novo Paciente</span>
-        </Link>}
+        titleActions={
+          <PatientsGuideButton
+            expanded={guideOpen}
+            onOpen={() => setGuideOpen(true)}
+          />
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <span className="sm:hidden">
+              <PatientsGuideButton
+                compact
+                expanded={guideOpen}
+                onOpen={() => setGuideOpen(true)}
+              />
+            </span>
+            <Link
+              to="/painel/patients/new"
+              className="btn-primary"
+            >
+              <Plus size={20} className="mr-2" />
+              <span>Novo Paciente</span>
+            </Link>
+          </div>
+        }
       />
 
       <div className="card p-4">
@@ -245,6 +324,17 @@ export default function Patients() {
           </div>
         )}
       </div>
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Lista de pacientes"
+        title="Como funciona a lista de pacientes"
+        description="Use esta página para localizar pacientes e acessar rapidamente os próximos passos do acompanhamento."
+        steps={PATIENTS_GUIDE_STEPS}
+        note="Os indicadores da lista são atalhos de acompanhamento. Para editar dados ou consultar o histórico completo, abra os detalhes do paciente."
+        supportHref={PATIENTS_SUPPORT_HREF}
+      />
     </div>
   );
 }
