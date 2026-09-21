@@ -89,3 +89,11 @@ assert.doesNotMatch(
 );
 
 console.log('Google authentication recovery tests passed.');
+
+
+const googleAuthSource = fs.readFileSync('src/services/googleAuth.ts', 'utf8');
+assert.match(
+  googleAuthSource,
+  /requiredScopes !== 'login'[\s\S]*assertPublicEffectEnabled\('google'\)/,
+  'Login Google não deve depender da flag de integrações externas Google.'
+);
