@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { X, Paperclip, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { createSupportTicket, SupportTicketCategory } from '../../services/support';
@@ -9,9 +9,19 @@ interface SupportTicketModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  initialSubject?: string;
+  initialCategory?: SupportTicketCategory;
+  initialDescription?: string;
 }
 
-export default function SupportTicketModal({ isOpen, onClose, onSuccess }: SupportTicketModalProps) {
+export default function SupportTicketModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  initialSubject = '',
+  initialCategory = 'general',
+  initialDescription = '',
+}: SupportTicketModalProps) {
   const { profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
   const hasPaidAccess = hasActivePaidAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
   const hasYearlyAccess = hasActiveYearlyAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
@@ -23,6 +33,16 @@ export default function SupportTicketModal({ isOpen, onClose, onSuccess }: Suppo
   const [error, setError] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    setSubject(initialSubject);
+    setCategory(initialCategory);
+    setDescription(initialDescription);
+    setFile(null);
+    setError('');
+  }, [initialCategory, initialDescription, initialSubject, isOpen]);
 
   if (!isOpen) return null;
 

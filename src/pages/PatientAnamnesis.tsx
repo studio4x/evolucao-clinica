@@ -88,6 +88,13 @@ const ANAMNESIS_GUIDE_STEPS: FeatureGuideStep[] = [
   },
 ];
 
+const ANAMNESIS_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre a Anamnese',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a funcionalidade de Anamnese.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
 type AnamnesisGuideButtonProps = {
   compact?: boolean;
   expanded: boolean;
@@ -1647,6 +1654,7 @@ export default function PatientAnamnesis() {
         description="Siga este fluxo para registrar, revisar e manter o histórico das informações iniciais do paciente."
         steps={ANAMNESIS_GUIDE_STEPS}
         note="A anamnese é um apoio ao registro clínico. Revise o conteúdo antes de concluir e mantenha a responsabilidade profissional sobre as informações registradas."
+        supportHref={ANAMNESIS_SUPPORT_HREF}
       />
     </div>
   );

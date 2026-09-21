@@ -1,21 +1,64 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { LifeBuoy, PlusCircle, MessageSquare, ArrowRight, Clock, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { fetchMySupportTickets, SupportTicket, isSupportTicketUnread, setSupportTicketLastSeen, subscribeToMySupportTickets, subscribeToMySupportMessages } from '../services/support';
+import { fetchMySupportTickets, type SupportTicket, type SupportTicketCategory, isSupportTicketUnread, setSupportTicketLastSeen, subscribeToMySupportTickets, subscribeToMySupportMessages } from '../services/support';
 import TicketStatusBadge from '../components/support/TicketStatusBadge';
 import TicketSlaBadge from '../components/support/TicketSlaBadge';
 import SupportTicketModal from '../components/support/SupportTicketModal';
 import { hasActivePaidAccess, hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 
+type SupportTicketDraft = {
+  subject: string;
+  category: SupportTicketCategory;
+  description: string;
+};
+
+const SUPPORT_TICKET_CATEGORIES: SupportTicketCategory[] = ['general', 'technical', 'payment', 'account'];
+
 export default function SupportTickets() {
   const { user, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const hasPaidAccess = hasActivePaidAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
   const hasYearlyAccess = hasActiveYearlyAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [ticketDraft, setTicketDraft] = useState<SupportTicketDraft | null>(null);
+
+  useEffect(() => {
+    if (searchParams.get('new') !== '1') return;
+
+    const categoryParam = searchParams.get('category');
+    const category = SUPPORT_TICKET_CATEGORIES.includes(categoryParam as SupportTicketCategory)
+      ? categoryParam as SupportTicketCategory
+      : 'general';
+
+    setTicketDraft({
+      subject: searchParams.get('subject') || '',
+      category,
+      description: searchParams.get('description') || '',
+    });
+    setIsModalOpen(true);
+
+    const cleanedParams = new URLSearchParams(searchParams);
+    cleanedParams.delete('new');
+    cleanedParams.delete('subject');
+    cleanedParams.delete('category');
+    cleanedParams.delete('description');
+    setSearchParams(cleanedParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const openNewTicket = () => {
+    setTicketDraft(null);
+    setIsModalOpen(true);
+  };
+
+  const closeTicketModal = () => {
+    setTicketDraft(null);
+    setIsModalOpen(false);
+  };
 
   const loadTickets = async (showLoading = true) => {
     try {
@@ -168,7 +211,7 @@ export default function SupportTickets() {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={openNewTicket}
           className="bg-brand-primary hover:bg-brand-primary-hover text-white py-3 px-6 rounded-2xl font-bold transition-all shadow-md hover:shadow-lg flex items-center justify-center space-x-2 shrink-0 self-start sm:self-auto"
         >
           <PlusCircle size={18} />
@@ -344,8 +387,11 @@ export default function SupportTickets() {
 
       <SupportTicketModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={closeTicketModal}
         onSuccess={loadTickets}
+        initialSubject={ticketDraft?.subject}
+        initialCategory={ticketDraft?.category}
+        initialDescription={ticketDraft?.description}
       />
     </div>
   );

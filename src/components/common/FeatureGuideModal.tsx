@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
-import { ArrowRight, CheckCircle2, Info, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, CheckCircle2, Info, LifeBuoy, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export type FeatureGuideStep = {
@@ -16,6 +17,7 @@ type FeatureGuideModalProps = {
   description: string;
   steps: FeatureGuideStep[];
   note?: string;
+  supportHref?: string;
 };
 
 export function FeatureGuideModal({
@@ -26,6 +28,7 @@ export function FeatureGuideModal({
   description,
   steps,
   note,
+  supportHref,
 }: FeatureGuideModalProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -123,6 +126,29 @@ export function FeatureGuideModal({
             <div className="mt-4 flex gap-3 rounded-2xl border border-brand-primary/15 bg-brand-primary/5 p-3.5 text-xs leading-relaxed text-brand-text-muted sm:mt-5 sm:p-4 sm:text-sm">
               <CheckCircle2 className="mt-0.5 shrink-0 text-brand-primary" size={17} />
               <p>{note}</p>
+            </div>
+          )}
+
+          {supportHref && (
+            <div className="mt-4 flex flex-col gap-4 rounded-2xl border border-brand-primary/20 bg-gradient-to-br from-brand-primary/5 via-white to-brand-bg/70 p-4 sm:mt-5 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-primary/10 text-brand-primary">
+                  <LifeBuoy size={19} />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-brand-text">Ainda ficou com alguma dúvida?</p>
+                  <p className="mt-1 text-xs leading-relaxed text-brand-text-muted sm:max-w-md sm:text-sm">
+                    Abra um ticket e nossa equipe ajuda você. O assunto e uma mensagem inicial sobre esta funcionalidade já serão preenchidos.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to={supportHref}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-brand-primary/25 bg-white px-4 py-2.5 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary hover:text-white focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:ring-offset-2 sm:text-sm"
+              >
+                Abrir ticket
+                <ArrowRight size={15} />
+              </Link>
             </div>
           )}
         </div>
