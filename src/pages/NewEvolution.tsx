@@ -258,6 +258,22 @@ export default function NewEvolution({
   }, [isAuthReady, user?.id]);
   const hasClinicalAccess = hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
+  useEffect(() => {
+    if (!isAuthReady || !user?.id || googleAccessToken) return;
+    let cancelled = false;
+
+    void supabase.auth.getSession().then(({ data }) => {
+      const providerToken = data.session?.provider_token;
+      if (!cancelled && providerToken) {
+        setGoogleAccessToken(providerToken);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [googleAccessToken, isAuthReady, setGoogleAccessToken, user?.id]);
+
   const isPlanActive = () => {
     if (profileRole === 'admin') return true;
     const now = new Date();
@@ -714,9 +730,9 @@ export default function NewEvolution({
   }, [hasGoogleSession, isOnboardingMode, patient?.id]);
 
   useEffect(() => {
-    if (!isAuthReady || isOnboardingMode || !patient?.id || hasClinicalAccess) return;
+    if (!isAuthReady || embedded || isOnboardingMode || !patient?.id || hasClinicalAccess) return;
     setIsGoogleAccessNoticeOpen(true);
-  }, [hasClinicalAccess, isAuthReady, isOnboardingMode, patient?.id]);
+  }, [embedded, hasClinicalAccess, isAuthReady, isOnboardingMode, patient?.id]);
 
   // Efeito para verificar rascunhos não finalizados
   useEffect(() => {

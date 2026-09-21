@@ -59,6 +59,7 @@ assert.match(
 );
 
 const patientDetailSource = fs.readFileSync('src/pages/PatientDetail.tsx', 'utf8');
+const newEvolutionSource = fs.readFileSync('src/pages/NewEvolution.tsx', 'utf8');
 assert.match(
   patientDetailSource,
   /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*setGoogleAccessToken\(null\)[\s\S]*requestGoogleOAuth\(/,
@@ -88,6 +89,16 @@ assert.doesNotMatch(
   patientDetailSource,
   /alert\("Erro ao salvar alterações: " \+ \(error\.message \|\| error\)\);\s*}\s*finally/,
   'O erro de autenticação do Google não deve cair diretamente no alerta técnico bruto.'
+);
+assert.match(
+  newEvolutionSource,
+  /supabase\.auth\.getSession\(\)[\s\S]*providerToken = data\.session\?\.provider_token[\s\S]*setGoogleAccessToken/,
+  'A nova evolução deve reutilizar o provider token já disponível na sessão antes de pedir nova autorização.'
+);
+assert.match(
+  newEvolutionSource,
+  /if \(!isAuthReady \|\| embedded \|\| isOnboardingMode/,
+  'A evolução embutida no Controle de Sessões não deve abrir reconexão automaticamente ao ser acessada.'
 );
 
 console.log('Google authentication recovery tests passed.');

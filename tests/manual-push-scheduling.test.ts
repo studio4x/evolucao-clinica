@@ -29,6 +29,6 @@ assert.match(migrationSource, /CREATE TABLE IF NOT EXISTS public\.manual_push_sc
 assert.match(migrationSource, /recipient_ids JSONB NOT NULL/);
 assert.match(migrationSource, /ALTER TABLE public\.manual_push_schedules ENABLE ROW LEVEL SECURITY/);
 assert.match(migrationSource, /USING \(is_admin\(\)\)/);
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.913"/);
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.914"/);
 
 console.log('Manual push scheduling tests passed.');
