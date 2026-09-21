@@ -36,6 +36,7 @@
     "test:admin-professionals": "tsx tests/admin-professionals.test.ts",
     "test:admin-professionals-list": "tsx tests/admin-professionals-list.test.ts",
     "test:admin-clinics": "tsx tests/admin-clinics.test.ts",
+    "smoke:clinic-admin-directory:staging": "tsx scripts/clinic-admin-directory-staging-smoke.ts --confirm-staging-only",
     "test:subscription-plans": "tsx tests/subscription-plans.test.ts",
     "test:professional-communication-history": "tsx tests/professional-communication-history.test.ts",
     "test:professional-overview": "tsx tests/professional-overview.test.ts",

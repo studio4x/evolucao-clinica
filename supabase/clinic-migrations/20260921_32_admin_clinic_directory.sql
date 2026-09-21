@@ -53,7 +53,7 @@ BEGIN
         jsonb_build_object(
           'professionalId', owner.professional_id, 'name', owner.full_name, 'email', owner.google_email
         ) AS owner,
-        CASE coalesce(owner.owner_count, 0) WHEN 1 THEN 'OK' WHEN 0 THEN 'MISSING' ELSE 'MULTIPLE' END AS "ownerIntegrity"
+        CASE coalesce(owner_count.owner_count, 0) WHEN 1 THEN 'OK' WHEN 0 THEN 'MISSING' ELSE 'MULTIPLE' END AS "ownerIntegrity"
       FROM public.organizations o
       LEFT JOIN private.organization_subscriptions s ON s.organization_id = o.id
       LEFT JOIN LATERAL (
@@ -76,13 +76,21 @@ BEGIN
         FROM public.organization_invitations i WHERE i.organization_id = o.id
       ) invites ON true
       LEFT JOIN LATERAL (
-        SELECT count(*) FILTER (WHERE m.membership_role = 'owner' AND m.status = 'active') AS owner_count,
-               max(m.professional_id) FILTER (WHERE m.membership_role = 'owner' AND m.status = 'active') AS professional_id,
-               max(p.full_name) FILTER (WHERE m.membership_role = 'owner' AND m.status = 'active') AS full_name,
-               max(p.google_email) FILTER (WHERE m.membership_role = 'owner' AND m.status = 'active') AS google_email
+        SELECT count(*) AS owner_count
+        FROM public.organization_memberships m
+        WHERE m.organization_id = o.id
+          AND m.membership_role = 'owner'
+          AND m.status = 'active'
+      ) owner_count ON true
+      LEFT JOIN LATERAL (
+        SELECT m.professional_id, p.full_name, p.google_email
         FROM public.organization_memberships m
         LEFT JOIN public.professionals p ON p.id = m.professional_id
         WHERE m.organization_id = o.id
+          AND m.membership_role = 'owner'
+          AND m.status = 'active'
+        ORDER BY m.id
+        LIMIT 1
       ) owner ON true
     ) directory;
   RETURN result;

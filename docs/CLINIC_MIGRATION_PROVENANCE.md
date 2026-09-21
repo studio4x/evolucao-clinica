@@ -1,9 +1,9 @@
 # Proveniência das migrations Clínica — Fase 6B
 
-Reconciliação somente leitura do staging `hwkdwinfckmjoriqxbjk`. Checksums SHA-256 dos arquivos atuais; nenhuma reaplicação ou inserção retroativa no ledger. Produção e main intocados.
+Reconciliação do staging `hwkdwinfckmjoriqxbjk`. Checksums SHA-256 dos arquivos atuais; nenhuma inserção retroativa no ledger. Produção e main intocados.
 O campo sha256 usa o conteúdo versionado UTF-8 com LF, estável entre Windows e Linux. checkout_sha256 no JSON preserva também o hash dos bytes locais desta execução; 01–22 tinham CRLF no checkout. Nenhum arquivo SQL original foi renormalizado nesta rodada.
 
-01–22: **RECONCILED_WITH_LIMITATIONS**, histórico formal **NOT_PRESENT**. Não é possível reconstruir data/executor pelo catálogo atual. 23–30: histórico formal **RECONCILED**. 31: correção adicional de contexto pending do owner aplicada exclusivamente em staging nesta rodada.
+01–22: **RECONCILED_WITH_LIMITATIONS**, histórico formal **NOT_PRESENT**. Não é possível reconstruir data/executor pelo catálogo atual. 23–30: histórico formal **RECONCILED**. 31: correção adicional de contexto pending do owner aplicada exclusivamente em staging nesta rodada. A migration 32 foi inicialmente aplicada diretamente no runtime sem registro formal; nesta correção, o SQL foi ajustado para selecionar o owner deterministicamente sem `max(uuid)` e reaplicado somente no staging. O mecanismo formal `supabase.apply_migration` ficou indisponível por permissão/transporte nesta execução; nenhum registro foi inserido manualmente em `supabase_migrations.schema_migrations`.
 
 | number | filename | sha256 | formal_staging_history | runtime_objects_present | superseded_by | status | production_action |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -38,6 +38,7 @@ O campo sha256 usa o conteúdo versionado UTF-8 com LF, estável entre Windows e
 | 29 | 20260918_29_remove_patient_lifecycle_parameter.sql | 3ba64683207929330b2cf02d701e2db1ea3794d414f47cdcbce6cc22e6e2a382 | RECONCILED | 7/7 final declarations | — | MATCHES_RUNTIME | CANONICAL_FINAL_STATE_REVIEW_REQUIRED |
 | 30 | 20260918_30_qualify_dashboard_assignment_status.sql | 3dec77f28428b13457a408edb73f2f3bad386fd41edd30054331ba4f3f501bc3 | RECONCILED | 6/6 final declarations | — | MATCHES_RUNTIME | PRODUCTION_EQUIVALENT_REQUIRED |
 | 31 | 20260918_31_pending_owner_checkout_context.sql | 81c579221825aeba9918082b22eae35a0eecb7d2a9d887e42b5c673b004a2c02 | RECONCILED | 6/6 final declarations | — | MATCHES_RUNTIME | PRODUCTION_EQUIVALENT_REQUIRED |
+| 32 | 20260921_32_admin_clinic_directory.sql | 10e90e9be526aac9965d8f20b400ad88cabac19af28f727fa036c22227f92583 | RUNTIME_PRESENT_BUT_NOT_FORMALLY_RECORDED | 1/1 final declaration | — | RUNTIME_CORRECTED_FORMAL_HISTORY_UNAVAILABLE | PRODUCTION_EQUIVALENT_REQUIRED |
 
 ## Alcance verificável e limites
 
