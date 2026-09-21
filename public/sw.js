@@ -44,6 +44,7 @@ const isValidAssetResponse = (request, response, pathname) => {
 
 const isApiNoCachePath = (pathname) => {
   return pathname === "/api/payment-settings" ||
+         pathname.startsWith("/api/clinic/") ||
          pathname.startsWith("/api/communication/") ||
          pathname.startsWith("/api/notifications/") ||
          pathname.startsWith("/api/pwa-install-icon") ||
@@ -184,6 +185,13 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (isApiNoCachePath(url.pathname)) {
+    return;
+  }
+
+  // Requests explicitly marked no-store must never be served from or written
+  // to the service-worker caches, even when a future dynamic API is missed by
+  // the path allowlist above.
+  if (event.request.cache === "no-store") {
     return;
   }
 
