@@ -31,6 +31,8 @@ const yearlyAudioFeature = 'Até 60 minutos de áudio por evolução';
 assert.equal(YEARLY_PLAN_FEATURES[1], yearlyAudioFeature);
 assert.equal(YEARLY_PLAN_FEATURES.filter((feature) => feature === yearlyAudioFeature).length, 1);
 assert.equal(MONTHLY_PLAN_FEATURES.includes(yearlyAudioFeature), false);
+assert.equal(YEARLY_PLAN_FEATURES.includes('Arquivos do paciente no Google Drive'), true);
+assert.equal(YEARLY_PLAN_FEATURES.includes('Geração de anamnese estruturada'), true);
 
 assert.equal(isPaidSubscriberForMetrics({
   subscription_plan: 'courtesy',
@@ -74,7 +76,8 @@ assert.doesNotMatch(yearlyFeatureMigrationSource, /UPDATE public\.plans\s+SET\s+
 
 const landingSource = readFileSync(resolve('src/pages/LandingPage.tsx'), 'utf8');
 const subscriptionSource = readFileSync(resolve('src/pages/Subscription.tsx'), 'utf8');
-assert.match(landingSource, /plan\.features\?\.map/);
+assert.match(landingSource, /YEARLY_PLAN_RECENT_FEATURES\.filter/);
+assert.match(landingSource, /displayedFeatures\.map/);
 assert.match(subscriptionSource, /plan\.features\.map/);
 
 console.log('Courtesy subscription plan tests passed.');

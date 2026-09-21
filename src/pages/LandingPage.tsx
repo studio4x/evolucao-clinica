@@ -42,7 +42,7 @@ import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandA
 import { LEGAL_SUPPORT_EMAIL } from '../utils/legal';
 import { supabase } from '../supabaseClient';
 import { FeatureTooltip } from '../components/common/FeatureTooltip';
-import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES } from '../config/subscriptionPlans';
+import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES, YEARLY_PLAN_RECENT_FEATURES } from '../config/subscriptionPlans';
 import { getCurrentAcquisitionData } from '../utils/acquisitionTracking';
 
 const DEFAULT_PLANS = [
@@ -1223,6 +1223,13 @@ export default function LandingPage() {
                 ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.original_price)
                 : null;
               const periodLabel = plan.id === 'yearly' ? '/ano' : '/mês';
+              const planFeatures = Array.isArray(plan.features) ? plan.features : [];
+              const displayedFeatures = isYearly
+                ? [
+                    ...planFeatures,
+                    ...YEARLY_PLAN_RECENT_FEATURES.filter((feature) => !planFeatures.includes(feature)),
+                  ]
+                : planFeatures;
               
               return (
                 <div key={plan.id} className="flex flex-col items-center gap-3.5 w-full h-full">
@@ -1279,7 +1286,7 @@ export default function LandingPage() {
                       )}
 
                       <ul className="space-y-3 mb-8 text-sm text-brand-text">
-                        {plan.features?.map((feature: string, idx: number) => (
+                        {displayedFeatures.map((feature: string, idx: number) => (
                           <li key={idx} className={`flex items-center gap-2 ${isYearly && idx === 0 ? 'font-semibold text-brand-primary' : ''}`}>
                             <Check size={16} className="text-brand-primary flex-shrink-0" />
                             <span>

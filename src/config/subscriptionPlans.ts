@@ -12,11 +12,15 @@ export const MONTHLY_PLAN_FEATURES = [
   'Suporte via ticket em até 24 horas úteis (12 horas para pagamentos)'
 ];
 
+export const YEARLY_PLAN_RECENT_FEATURES = [
+  'Arquivos do paciente no Google Drive',
+  'Geração de anamnese estruturada',
+];
+
 export const YEARLY_PLAN_FEATURES = [
   'Tudo do plano mensal',
   'Até 60 minutos de áudio por evolução',
-  'Arquivos do paciente no Google Drive',
-  'Geração de anamnese estruturada',
+  ...YEARLY_PLAN_RECENT_FEATURES,
   'Economia de 57% em relação a 12 mensalidades',
   'Suporte VIP via ticket com primeira resposta em até 2 horas úteis',
   'Migração assistida de prontuários (PDF, Word e Excel)',
