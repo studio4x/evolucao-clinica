@@ -24,6 +24,7 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { resolveHorizontalSwipe } from '../utils/horizontalSwipe';
+import PatientSessionsSummaryCard from '../components/patients/PatientSessionsSummaryCard';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -2571,6 +2572,13 @@ export default function PatientDetail() {
                 </p>
               </div>
             </div>
+          </div>
+
+          <div className={`order-3 xl:order-none ${mobileTabVisibility('overview')}`}>
+            <PatientSessionsSummaryCard
+              patientId={patient.id}
+              href={`/painel/patients/${id}/sessions`}
+            />
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}

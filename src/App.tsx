@@ -15,6 +15,7 @@ const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'Dashboard');
 const Patients = lazyWithRetry(() => import('./pages/Patients'), 'Patients');
 const PatientForm = lazyWithRetry(() => import('./pages/PatientForm'), 'PatientForm');
 const PatientDetail = lazyWithRetry(() => import('./pages/PatientDetail'), 'PatientDetail');
+const PatientSessions = lazyWithRetry(() => import('./pages/PatientSessions'), 'PatientSessions');
 const ClinicNewEvolution = lazyWithRetry(() => import('./pages/ClinicNewEvolution'), 'ClinicNewEvolution');
 const NewEvolution = lazyWithRetry(() => import('./pages/NewEvolution'), 'NewEvolution');
 const History = lazyWithRetry(() => import('./pages/History'), 'History');
@@ -909,6 +910,7 @@ export default function App() {
             <Route path="patients/new" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />
             <Route path="patients/:id/edit" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />
             <Route path="patients/:id" element={<PersonalContextRoute><PatientDetail /></PersonalContextRoute>} />
+            <Route path="patients/:id/sessions" element={<PersonalContextRoute><PatientSessions /></PersonalContextRoute>} />
             <Route path="patients/:id/evolutions/new" element={<PersonalContextRoute><NewEvolution /></PersonalContextRoute>} />
             <Route path="history" element={<PersonalContextRoute><History /></PersonalContextRoute>} />
             <Route path="tutorial" element={<PersonalContextRoute><Tutorial /></PersonalContextRoute>} />
