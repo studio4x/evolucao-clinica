@@ -69,6 +69,9 @@ assert.match(anamnesisCardSource, /Acessar anamnese/);
 assert.match(anamnesisCardSource, /Rascunho/);
 assert.match(anamnesisCardSource, /Concluída/);
 assert.match(anamnesisCardSource, /matchMedia\('\(min-width: 1280px\)'\)/);
+assert.match(anamnesisCardSource, /Abrir anamnese/);
+assert.match(anamnesisCardSource, /flex w-full items-center justify-between rounded-xl/);
+assert.match(anamnesisCardSource, /ArrowRight/);
 
 assert.match(anamnesisPdfSource, /generateAnamnesisPDF/);
 assert.match(anamnesisPdfSource, /generateProntuarioPDF/);

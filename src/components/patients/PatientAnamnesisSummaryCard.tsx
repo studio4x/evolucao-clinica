@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ClipboardList, Clock3, Loader2, Lock } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ClipboardList, Clock3, Loader2, Lock } from 'lucide-react';
 import { fetchCurrentPatientAnamnesis, type PatientAnamnesis } from '../../services/anamnesis';
 import { useAuthStore } from '../../store/authStore';
 import { hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
@@ -72,7 +72,7 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
   }, [hasYearlyAccess, patientId]);
 
   return (
-    <div className="card p-5 border border-brand-primary/15 bg-gradient-to-br from-white to-brand-primary/[0.03]">
+    <div className="card group p-5 border border-brand-primary/15 bg-gradient-to-br from-white to-brand-primary/[0.03]">
       <div className="flex items-start gap-3">
         <div className="rounded-xl bg-brand-primary/10 p-2.5 text-brand-primary">
           <ClipboardList size={20} />
@@ -123,9 +123,10 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
 
           <Link
             to={href}
-            className="mt-3 inline-flex items-center text-xs font-bold text-brand-primary hover:underline"
+            className="mt-4 flex w-full items-center justify-between rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-3.5 py-2.5 text-sm font-semibold text-brand-primary transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
           >
-            {!hasYearlyAccess ? 'Acessar anamnese' : anamnesis ? 'Abrir anamnese' : 'Preencher anamnese'} →
+            <span>{!hasYearlyAccess ? 'Acessar anamnese' : anamnesis ? 'Abrir anamnese' : 'Preencher anamnese'}</span>
+            <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>
       </div>
