@@ -2,13 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3,
-  Download, Edit3, Loader2, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
+  Download, Edit3, Eye, FileText, Loader2, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
 import {
   buildPatientSessionSuggestions,
   getPatientSessionSlotsForDate,
@@ -56,6 +57,7 @@ export default function PatientSessions() {
   const [monthClosure, setMonthClosure] = useState<PatientSessionMonthClosure | null>(null);
   const [packages, setPackages] = useState<PatientSessionPackage[]>([]);
   const [evolutions, setEvolutions] = useState<any[]>([]);
+  const [evolutionTemplates, setEvolutionTemplates] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | PatientSessionStatus>('all');
   const [signatureFilter, setSignatureFilter] = useState<'all' | 'signed' | 'unsigned'>('all');
   const [exportMode, setExportMode] = useState<'month' | 'year' | 'custom'>('month');
@@ -72,18 +74,23 @@ export default function PatientSessions() {
   const [signatureBlob, setSignatureBlob] = useState<Blob | null>(null);
   const [signerType, setSignerType] = useState<'patient' | 'responsible'>('patient');
   const [signerName, setSignerName] = useState('');
+  const [evolutionModal, setEvolutionModal] = useState<{ mode: 'view' | 'create'; session: PatientSession; evolution?: any } | null>(null);
+  const [evolutionModalText, setEvolutionModalText] = useState('');
+  const [evolutionModalTemplateId, setEvolutionModalTemplateId] = useState('');
+  const [evolutionModalSaving, setEvolutionModalSaving] = useState(false);
 
   const load = async () => {
     if (!id || !user) return;
     setLoading(true);
     try {
-      const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, closureData, packageData, evolutionResult] = await Promise.all([
-        supabase.from('patients').select('id, full_name, professional_id, session_days, session_time, session_schedule').eq('id', id).single(),
+      const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, closureData, packageData, evolutionResult, templateResult] = await Promise.all([
+        supabase.from('patients').select('id, full_name, professional_id, session_days, session_time, session_schedule, default_template_id').eq('id', id).single(),
         supabase.from('professionals').select('id, full_name, professional_register, professional_title, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at').eq('id', user.id).single(),
         fetchPatientSessions(id, month),
         fetchPatientSessionMonthClosure(id, month),
         fetchPatientSessionPackages(id),
-        supabase.from('evolutions').select('id, session_date, session_time, created_at').eq('patient_id', id).eq('professional_id', user.id).eq('transcription_status', 'completed').order('session_date', { ascending: false, nullsFirst: false }),
+        supabase.from('evolutions').select('id, session_date, session_time, created_at, transcription_text, original_transcription_text, template_id, status, transcription_status').eq('patient_id', id).eq('professional_id', user.id).eq('transcription_status', 'completed').order('session_date', { ascending: false, nullsFirst: false }),
+        supabase.from('evolution_templates').select('id, name, description').order('name'),
       ]);
       if (patientError) throw patientError;
       if (profError) throw profError;
@@ -94,9 +101,10 @@ export default function PatientSessions() {
       setMonthClosure(closureData);
       setPackages(packageData);
       setEvolutions(evolutionResult.data || []);
+      setEvolutionTemplates(templateResult.error ? [] : (templateResult.data || []));
     } catch (error: any) {
       console.error('[PatientSessions] Falha ao carregar:', error);
-      void showAlert(error.message || 'Não foi possível carregar o controle de sessões.', { title: 'Controle de sessões', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível carregar o controle de sessões.', { title: 'Controle de sessões', variant: 'danger', icon: 'warning' });
     } finally {
       setLoading(false);
     }
@@ -133,6 +141,12 @@ export default function PatientSessions() {
     [recurringSchedule, month.getFullYear(), month.getMonth(), sessions]
   );
   const sameDayEvolutions = evolutions.filter((evolution) => evolution.session_date === form.date);
+  const findEvolutionForSession = (date: string, time?: string | null) => {
+    const normalizedTime = String(time || '').slice(0, 5);
+    return evolutions.find((evolution) => (
+      evolution.session_date === date && normalizedTime && String(evolution.session_time || '').slice(0, 5) === normalizedTime
+    )) || evolutions.find((evolution) => evolution.session_date === date);
+  };
 
   const openCreate = (quick = false) => {
     if (monthIsClosed) {
@@ -156,9 +170,88 @@ export default function PatientSessions() {
       time: suggestion.time,
       status: isFuture ? 'scheduled' : 'completed',
       notes: '',
-      evolutionId: '',
+      evolutionId: findEvolutionForSession(suggestion.date, suggestion.time)?.id || '',
       packageId: activePackage?.id || ''
     });
+  };
+
+  const openExistingEvolution = (session: PatientSession) => {
+    const evolution = evolutions.find((item) => item.id === session.evolutionId);
+    if (!evolution) {
+      void showAlert('A evolução vinculada não foi encontrada.', { title: 'Evolução', variant: 'warning', icon: 'warning' });
+      return;
+    }
+    setEvolutionModal({ mode: 'view', session, evolution });
+  };
+
+  const openCreateEvolution = (session: PatientSession) => {
+    if (monthIsClosed) {
+      void showAlert('Este mês já foi fechado e assinado. Não é possível criar uma evolução vinculada.', { title: 'Mês fechado', variant: 'info', icon: 'info' });
+      return;
+    }
+    if (session.signature) {
+      void showAlert('Revogue a assinatura antes de vincular uma nova evolução a esta sessão.', { title: 'Sessão assinada', variant: 'info', icon: 'info' });
+      return;
+    }
+    setEvolutionModal({ mode: 'create', session });
+    setEvolutionModalText('');
+    setEvolutionModalTemplateId(patient?.default_template_id || '');
+  };
+
+  const closeEvolutionModal = () => {
+    setEvolutionModal(null);
+    setEvolutionModalText('');
+    setEvolutionModalTemplateId('');
+  };
+
+  const saveCreatedEvolution = async () => {
+    if (!evolutionModal || evolutionModal.mode !== 'create' || !id || !user) return;
+    const text = evolutionModalText.trim();
+    if (!text) {
+      void showAlert('Descreva o conteúdo da evolução antes de salvar.', { title: 'Nova evolução', variant: 'warning', icon: 'warning' });
+      return;
+    }
+    setEvolutionModalSaving(true);
+    const evolutionId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    try {
+      const { error: evolutionError } = await supabase.from('evolutions').insert({
+        id: evolutionId,
+        professional_id: user.id,
+        patient_id: id,
+        session_date: evolutionModal.session.sessionDate,
+        session_time: evolutionModal.session.sessionTime || null,
+        transcription_status: 'completed',
+        transcription_text: text,
+        original_transcription_text: text,
+        template_id: evolutionModalTemplateId || null,
+        google_doc_append_status: 'pending',
+        created_at: now,
+        updated_at: now,
+      });
+      if (evolutionError) throw evolutionError;
+
+      try {
+        await updatePatientSession(evolutionModal.session, {
+          sessionDate: evolutionModal.session.sessionDate,
+          sessionTime: evolutionModal.session.sessionTime,
+          status: evolutionModal.session.status,
+          notes: evolutionModal.session.notes,
+          evolutionId,
+          packageId: evolutionModal.session.packageId,
+        });
+      } catch (sessionError) {
+        await supabase.from('evolutions').delete().eq('id', evolutionId);
+        throw sessionError;
+      }
+
+      closeEvolutionModal();
+      await load();
+    } catch (error: any) {
+      void showAlert(error.message || 'Não foi possível criar e vincular a evolução.', { title: 'Nova evolução', variant: 'warning', icon: 'warning' });
+    } finally {
+      setEvolutionModalSaving(false);
+    }
   };
 
   const openEdit = (session: PatientSession) => {
@@ -191,7 +284,7 @@ export default function PatientSessions() {
       setFormSession(undefined);
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível salvar a sessão.', { title: 'Controle de sessões', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível salvar a sessão.', { title: 'Controle de sessões', variant: 'danger', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -204,7 +297,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await softDeletePatientSession(session); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível excluir.', { title: 'Erro', variant: 'error', icon: 'warning' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível excluir.', { title: 'Erro', variant: 'danger', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -216,7 +309,7 @@ export default function PatientSessions() {
       setSignSession(null); setSignatureBlob(null); setSignerName(''); setSignerType('patient');
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível registrar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível registrar a assinatura.', { title: 'Assinatura', variant: 'danger', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -228,7 +321,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await revokePatientSessionSignature(session, 'Revogada pelo profissional para correção do registro.'); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível revogar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'warning' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível revogar a assinatura.', { title: 'Assinatura', variant: 'danger', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -368,7 +461,7 @@ export default function PatientSessions() {
       setShowPackageForm(false);
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível iniciar o pacote.', { title: 'Pacote de sessões', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível iniciar o pacote.', { title: 'Pacote de sessões', variant: 'danger', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -378,7 +471,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await cancelPatientSessionPackage(activePackage.id); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível cancelar o pacote.', { title: 'Pacote de sessões', variant: 'error', icon: 'warning' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível cancelar o pacote.', { title: 'Pacote de sessões', variant: 'danger', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -386,7 +479,7 @@ export default function PatientSessions() {
     <div className="space-y-6 pb-24">
       <PanelPageHeader
         title="Controle de Sessões"
-        subtitle={patient ? patient.full_name : 'Registro mensal de atendimentos e assinaturas'}
+        description={patient ? patient.full_name : 'Registro mensal de atendimentos e assinaturas'}
         actions={<Link to={id ? `/painel/patients/${id}` : '/painel/patients'} className="btn-outline"><ArrowLeft size={16} /><span>Voltar</span></Link>}
       />
 
@@ -463,18 +556,24 @@ export default function PatientSessions() {
           </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {scheduleSuggestions.slice(0, 12).map((suggestion) => (
-              <button
-                key={`${suggestion.date}-${suggestion.time}`}
-                type="button"
-                onClick={() => openSuggestion(suggestion)}
-                className="flex items-center justify-between rounded-xl border border-brand-border bg-white px-3 py-2 text-left transition-colors hover:border-brand-primary/30 hover:bg-brand-primary/5"
-              >
-                <span>
-                  <strong className="block text-xs text-brand-text">{suggestion.weekdayLabel}</strong>
-                  <span className="text-xs text-brand-text-muted">{suggestion.date.split('-').reverse().join('/')} • {suggestion.time}</span>
-                </span>
-                <Plus size={15} className="text-brand-primary" />
-              </button>
+              (() => {
+                const matchingEvolution = findEvolutionForSession(suggestion.date, suggestion.time);
+                return (
+                  <button
+                    key={`${suggestion.date}-${suggestion.time}`}
+                    type="button"
+                    onClick={() => openSuggestion(suggestion)}
+                    className="flex items-center justify-between rounded-xl border border-brand-border bg-white px-3 py-2 text-left transition-colors hover:border-brand-primary/30 hover:bg-brand-primary/5"
+                  >
+                    <span>
+                      <strong className="block text-xs text-brand-text">{suggestion.weekdayLabel}</strong>
+                      <span className="text-xs text-brand-text-muted">{suggestion.date.split('-').reverse().join('/')} • {suggestion.time}</span>
+                      {matchingEvolution && <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Evolução Existente</span>}
+                    </span>
+                    <Plus size={15} className="text-brand-primary" />
+                  </button>
+                );
+              })()
             ))}
           </div>
           {scheduleSuggestions.length > 12 && (
@@ -529,7 +628,9 @@ export default function PatientSessions() {
         </div>
       ) : (
         <div className="space-y-3">
-          {filteredSessions.map((session) => (
+          {filteredSessions.map((session) => {
+            const linkedEvolution = session.evolutionId ? evolutions.find((evolution) => evolution.id === session.evolutionId) : null;
+            return (
             <div key={session.id} className="card p-4 sm:p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0">
@@ -546,6 +647,15 @@ export default function PatientSessions() {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {linkedEvolution ? (
+                    <button type="button" onClick={() => openExistingEvolution(session)} className="btn-outline px-2.5" title="Abrir evolução vinculada" aria-label="Abrir evolução vinculada">
+                      <Eye size={15} /><span className="hidden sm:inline">Abrir evolução</span>
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => openCreateEvolution(session)} disabled={working || monthIsClosed || Boolean(session.signature)} className="btn-outline border-brand-primary/30 text-brand-primary disabled:cursor-not-allowed disabled:opacity-50" title={session.signature ? 'Revogue a assinatura para criar o vínculo' : 'Criar evolução vinculada'}>
+                      <Plus size={15} /><span>Criar evolução</span>
+                    </button>
+                  )}
                   {monthIsClosed ? (
                     <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><ShieldCheck size={14} />Mês fechado</span>
                   ) : session.signature ? (
@@ -560,7 +670,8 @@ export default function PatientSessions() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -611,6 +722,67 @@ export default function PatientSessions() {
               <SessionSignaturePad onChange={setSignatureBlob} />
             </div>
             <div className="flex justify-end gap-2 border-t border-brand-border p-4"><button type="button" onClick={() => setSignSession(null)} className="btn-outline">Cancelar</button><button type="button" disabled={!signatureBlob || working} onClick={() => void saveSignature()} className="btn-primary">{working && <Loader2 size={15} className="animate-spin" />}<span>Confirmar assinatura</span></button></div>
+          </div>
+        </div>
+      )}
+
+      {evolutionModal && (
+        <div className="fixed inset-0 z-[115] flex items-end bg-black/60 p-0 sm:items-center sm:justify-center sm:p-4">
+          <div className="flex max-h-[calc(100dvh-1rem)] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl">
+            <div className="flex items-center justify-between border-b border-brand-border p-5">
+              <div>
+                <h3 className="font-semibold text-brand-text">{evolutionModal.mode === 'create' ? 'Nova evolução' : 'Evolução vinculada'}</h3>
+                <p className="text-xs text-brand-text-muted">{patient?.full_name} • {evolutionModal.session.sessionDate.split('-').reverse().join('/')} {evolutionModal.session.sessionTime?.slice(0, 5) || ''}</p>
+              </div>
+              <button type="button" onClick={closeEvolutionModal} disabled={evolutionModalSaving} className="p-2 text-brand-text-muted hover:bg-brand-bg disabled:opacity-50" aria-label="Fechar modal de evolução"><X size={20} /></button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+              {evolutionModal.mode === 'view' && evolutionModal.evolution ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3 text-xs text-brand-text-muted">
+                    <FileText size={15} className="text-brand-primary" />
+                    <span>Data da sessão: <strong className="text-brand-text">{evolutionModal.evolution.session_date?.split('-').reverse().join('/') || 'Não informada'}</strong></span>
+                    {evolutionModal.evolution.session_time && <span>às <strong className="text-brand-text">{evolutionModal.evolution.session_time.slice(0, 5)}</strong></span>}
+                    {evolutionModal.evolution.created_at && <span className="text-[10px]">Criada em {new Date(evolutionModal.evolution.created_at).toLocaleString('pt-BR')}</span>}
+                  </div>
+                  <div className="rounded-xl border border-brand-border bg-brand-bg/40 p-4 text-sm text-brand-text-muted">
+                    {evolutionModal.evolution.transcription_text ? (
+                      <RichTextPreview value={evolutionModal.evolution.transcription_text} />
+                    ) : (
+                      <p className="italic text-brand-text-muted">Esta evolução não possui conteúdo textual disponível.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
+                    <p className="text-xs font-semibold text-brand-text">Conteúdo padrão de nova evolução</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-brand-text-muted">A data e o horário já foram preenchidos com os dados desta sessão. Registre abaixo o conteúdo clínico da evolução.</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs font-semibold text-brand-text">Data da sessão<input value={evolutionModal.session.sessionDate} readOnly className="input-field mt-1 w-full bg-brand-bg/50" /></label>
+                    <label className="text-xs font-semibold text-brand-text">Horário da sessão<input value={evolutionModal.session.sessionTime?.slice(0, 5) || ''} readOnly className="input-field mt-1 w-full bg-brand-bg/50" /></label>
+                  </div>
+                  <label className="block text-xs font-semibold text-brand-text">Template de evolução (opcional)
+                    <select value={evolutionModalTemplateId} onChange={(event) => setEvolutionModalTemplateId(event.target.value)} disabled={evolutionModalSaving} className="input-field mt-1 w-full">
+                      <option value="">Sem template (texto original)</option>
+                      {evolutionTemplates.map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
+                    </select>
+                  </label>
+                  <RichTextEditor value={evolutionModalText} onChange={setEvolutionModalText} disabled={evolutionModalSaving} label="Conteúdo da evolução" minHeight="10rem" resizable />
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 border-t border-brand-border bg-stone-50 p-4">
+              <button type="button" onClick={closeEvolutionModal} disabled={evolutionModalSaving} className="btn-outline">Fechar</button>
+              {evolutionModal.mode === 'create' && (
+                <button type="button" onClick={() => void saveCreatedEvolution()} disabled={evolutionModalSaving || !evolutionModalText.trim()} className="btn-primary disabled:opacity-50">
+                  {evolutionModalSaving && <Loader2 size={15} className="animate-spin" />}<span>{evolutionModalSaving ? 'Salvando...' : 'Criar e vincular evolução'}</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
