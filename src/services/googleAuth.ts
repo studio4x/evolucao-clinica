@@ -113,8 +113,7 @@ export const requestGoogleOAuth = async ({
   prompt,
   loginHint,
 }: RequestGoogleOAuthParams) => {
-  assertPublicEffectEnabled('google');
-  if (isNativeGoogleOAuthClient() && !canUseNativeGoogleOAuthCallback()) {
+  // Autenticação Google é parte do login e deve permanecer disponível mesmo\n  // quando integrações externas Google (Drive/Calendar) estão desabilitadas no ambiente.\n  if (requiredScopes !== 'login') {\n    assertPublicEffectEnabled('google');\n  }\n  if (isNativeGoogleOAuthClient() && !canUseNativeGoogleOAuthCallback()) {
     return {
       data: { provider: 'google', url: null },
       error: new Error('Atualize o aplicativo pela Play Store para concluir a conexão com o Google neste dispositivo.')
