@@ -103,6 +103,8 @@ type EvolutionEditAuthRecovery = {
   text: string;
   originalText: string;
   templateId: string;
+  sessionDate: string;
+  sessionTime: string;
   activeMobileTab: PatientMobileTab;
   savedAt: number;
 };
@@ -131,6 +133,8 @@ const readEvolutionEditAuthRecovery = (): EvolutionEditAuthRecovery | null => {
       text: parsed.text,
       originalText: parsed.originalText || '',
       templateId: parsed.templateId || '',
+      sessionDate: parsed.sessionDate || '',
+      sessionTime: parsed.sessionTime || '',
       activeMobileTab: parsed.activeMobileTab || 'history',
       savedAt: parsed.savedAt,
     };
@@ -331,6 +335,8 @@ export default function PatientDetail() {
   const [editingEvolutionText, setEditingEvolutionText] = useState('');
   const [editingEvolutionOriginalText, setEditingEvolutionOriginalText] = useState('');
   const [editingEvolutionTemplateId, setEditingEvolutionTemplateId] = useState<string>('');
+  const [editingEvolutionSessionDate, setEditingEvolutionSessionDate] = useState('');
+  const [editingEvolutionSessionTime, setEditingEvolutionSessionTime] = useState('');
   const [savingEvolutionId, setSavingEvolutionId] = useState<string | null>(null);
   const [convertingEvolutionId, setConvertingEvolutionId] = useState<string | null>(null);
   const [evolutionTemplates, setEvolutionTemplates] = useState<any[]>([]);
@@ -490,6 +496,8 @@ export default function PatientDetail() {
     const evolutionText = recoveryDraft?.text ?? editingEvolutionText;
     const evolutionOriginalText = recoveryDraft?.originalText ?? editingEvolutionOriginalText;
     const evolutionTemplateId = recoveryDraft?.templateId ?? editingEvolutionTemplateId;
+    const evolutionSessionDate = recoveryDraft?.sessionDate ?? editingEvolutionSessionDate;
+    const evolutionSessionTime = recoveryDraft?.sessionTime ?? editingEvolutionSessionTime;
 
     if (!evolutionText.trim()) {
       alert("O texto da evolução não pode ser vazio.");
@@ -501,6 +509,8 @@ export default function PatientDetail() {
       if (!currentEvolution) throw new Error('Evolução não encontrada.');
       const previousText = currentEvolution.transcription_text || '';
       const previousTemplateId = currentEvolution.template_id || null;
+      const previousSessionDate = currentEvolution.session_date || null;
+      const previousSessionTime = currentEvolution.session_time || null;
       const previousUpdatedAt = currentEvolution.updated_at || null;
       const requiresGoogleSync = currentEvolution.google_doc_append_status === 'completed' && Boolean(patient?.google_doc_id);
       const authRecovery: EvolutionEditAuthRecovery = recoveryDraft || {
@@ -510,6 +520,8 @@ export default function PatientDetail() {
         text: evolutionText,
         originalText: evolutionOriginalText,
         templateId: evolutionTemplateId,
+        sessionDate: evolutionSessionDate,
+        sessionTime: evolutionSessionTime,
         activeMobileTab,
         savedAt: Date.now(),
       };
@@ -524,6 +536,8 @@ export default function PatientDetail() {
         .update({
           transcription_text: evolutionText,
           template_id: evolutionTemplateId || null,
+          session_date: evolutionSessionDate || null,
+          session_time: evolutionSessionTime || null,
           updated_at: new Date().toISOString()
         })
         .eq('id', evoId);
@@ -531,11 +545,16 @@ export default function PatientDetail() {
 
       if (requiresGoogleSync && patient?.google_doc_id && googleAccessToken) {
         try {
-          await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, evoId, evolutionText);
+          await replaceEvolutionInGoogleDoc(googleAccessToken, patient.google_doc_id, evoId, evolutionText, {
+            sessionDate: evolutionSessionDate,
+            sessionTime: evolutionSessionTime,
+          });
         } catch (syncError) {
           const rollbackPayload: Record<string, string | null> = {
             transcription_text: previousText,
             template_id: previousTemplateId,
+            session_date: previousSessionDate,
+            session_time: previousSessionTime,
           };
           if (previousUpdatedAt) rollbackPayload.updated_at = previousUpdatedAt;
           const { error: rollbackError } = await supabase
@@ -565,6 +584,8 @@ export default function PatientDetail() {
       setEditingEvolutionText('');
       setEditingEvolutionOriginalText('');
       setEditingEvolutionTemplateId('');
+      setEditingEvolutionSessionDate('');
+      setEditingEvolutionSessionTime('');
       await fetchData();
       if (recoveryDraft) {
         setActiveMobileTab(recoveryDraft.activeMobileTab);
@@ -602,6 +623,8 @@ export default function PatientDetail() {
       setEditingEvolutionText(recovery.text);
       setEditingEvolutionOriginalText(recovery.originalText);
       setEditingEvolutionTemplateId(recovery.templateId);
+      setEditingEvolutionSessionDate(recovery.sessionDate);
+      setEditingEvolutionSessionTime(recovery.sessionTime);
     }
 
     const evolutionStillExists = evolutions.some((evolution) => evolution.id === recovery.evolutionId);
@@ -619,6 +642,8 @@ export default function PatientDetail() {
     setEditingEvolutionText('');
     setEditingEvolutionOriginalText('');
     setEditingEvolutionTemplateId('');
+    setEditingEvolutionSessionDate('');
+    setEditingEvolutionSessionTime('');
   };
 
   const handleConvertEditedEvolution = async (templateId: string) => {
@@ -2159,6 +2184,10 @@ export default function PatientDetail() {
     return formatDateTime(evo.created_at);
   };
 
+  const editingEvolution = editingEvolutionId
+    ? evolutions.find((evolution) => evolution.id === editingEvolutionId)
+    : null;
+
   const lastReportObj = reports.find(r => r.id === lastGeneratedReportId);
   const isLastReportSigned = lastReportObj?.status === 'signed';
   const mobileTabVisibility = (tab: PatientMobileTab) => activeMobileTab === tab
@@ -3243,6 +3272,8 @@ export default function PatientDetail() {
                                       evo.original_transcription_text || (!evo.template_id ? evo.transcription_text || '' : '')
                                     );
                                     setEditingEvolutionTemplateId(evo.template_id || '');
+                                    setEditingEvolutionSessionDate(evo.session_date || '');
+                                    setEditingEvolutionSessionTime(evo.session_time ? evo.session_time.substring(0, 5) : '');
                                   }}
                                   className="btn-outline py-1 px-2.5 text-[11px] flex items-center space-x-1 border-brand-primary/20 text-brand-primary hover:bg-brand-primary/5 cursor-pointer"
                                 >
@@ -3267,6 +3298,9 @@ export default function PatientDetail() {
                           </div>
                         )}
                     </>
+                    <p className="mt-3 text-right text-[10px] text-brand-text-muted">
+                      Criada em {formatDateTime(evo.created_at)}
+                    </p>
                   </div>
                 ))
               )}
@@ -4641,6 +4675,34 @@ export default function PatientDetail() {
               <button type="button" onClick={closeEvolutionEditor} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-bg"><X size={20} /></button>
             </div>
             <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+              <div className="rounded-xl border border-brand-border bg-brand-bg/40 p-3">
+                <div className="mb-2">
+                  <p className="text-xs font-semibold text-brand-text">Data e horário da sessão</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-brand-text-muted">Essas informações representam o atendimento clínico e podem ser ajustadas sem alterar a data de criação da evolução.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-medium text-brand-text">
+                    Data da sessão
+                    <input
+                      type="date"
+                      value={editingEvolutionSessionDate}
+                      onChange={(event) => setEditingEvolutionSessionDate(event.target.value)}
+                      disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId}
+                      className="input-field mt-1 w-full py-2 text-sm"
+                    />
+                  </label>
+                  <label className="text-xs font-medium text-brand-text">
+                    Horário da sessão
+                    <input
+                      type="time"
+                      value={editingEvolutionSessionTime}
+                      onChange={(event) => setEditingEvolutionSessionTime(event.target.value)}
+                      disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId}
+                      className="input-field mt-1 w-full py-2 text-sm"
+                    />
+                  </label>
+                </div>
+              </div>
               <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
                 <label className="mb-1 block text-xs font-semibold text-brand-text">Converter para outro modelo</label>
                 <div className="flex flex-col gap-2 sm:flex-row">
@@ -4656,6 +4718,12 @@ export default function PatientDetail() {
               </div>
               <RichTextEditor value={editingEvolutionText} onChange={setEditingEvolutionText} disabled={savingEvolutionId === editingEvolutionId || convertingEvolutionId === editingEvolutionId} label="Conteúdo da evolução" />
               <p className="text-[11px] text-brand-text-muted">Negrito, itálico, sublinhado, títulos e listas são mantidos ao salvar no Google Docs.</p>
+              {editingEvolution?.created_at && (
+                <div className="flex items-center justify-end gap-1.5 border-t border-brand-border/60 pt-3 text-[10px] text-brand-text-muted">
+                  <Clock size={12} />
+                  <span> Criada em {formatDateTime(editingEvolution.created_at)}</span>
+                </div>
+              )}
             </div>
             <div className="app-safe-bottom-padding flex flex-col-reverse gap-2 border-t border-brand-border bg-stone-50 p-4 sm:flex-row sm:justify-end">
               <button type="button" onClick={closeEvolutionEditor} disabled={savingEvolutionId === editingEvolutionId} className="btn-outline">Cancelar</button>

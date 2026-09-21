@@ -481,7 +481,11 @@ export async function replaceEvolutionInGoogleDoc(
   googleAccessToken: string,
   googleDocId: string,
   evolutionId: string,
-  newText: string
+  newText: string,
+  options?: {
+    sessionDate?: string;
+    sessionTime?: string;
+  }
 ) {
   const getUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}`;
   const response = await googleApiFetch(getUrl, { method: 'GET', headers: { Authorization: `Bearer ${googleAccessToken}` } }, 'Doc get for evolution replacement');
@@ -515,6 +519,24 @@ export async function replaceEvolutionInGoogleDoc(
     { insertText: { location: { index: startIndex }, text: formattedText.text } },
     ...buildTextStyleRequests(formattedText.styles, startIndex),
   ];
+
+  if (options) {
+    const headerStart = documentText.lastIndexOf(EVOLUTION_HEADER_LABEL, markerIndex);
+    const headerEnd = headerStart >= 0 ? documentText.indexOf('\n', headerStart) : -1;
+    if (headerStart >= 0 && headerEnd > headerStart) {
+      let formattedDate = options.sessionDate || '—';
+      if (formattedDate.includes('-')) {
+        const [year, month, day] = formattedDate.split('-');
+        formattedDate = `${day}/${month}/${year}`;
+      }
+      const formattedTime = options.sessionTime ? ` às ${options.sessionTime.substring(0, 5)}` : '';
+      const updatedHeader = `${EVOLUTION_HEADER_LABEL} ${formattedDate}${formattedTime}`;
+      requests.push(
+        { deleteContentRange: { range: { startIndex: indexAt(headerStart), endIndex: indexAt(headerEnd) } } },
+        { insertText: { location: { index: indexAt(headerStart) }, text: updatedHeader } },
+      );
+    }
+  }
   const updateUrl = `https://docs.googleapis.com/v1/documents/${googleDocId}:batchUpdate`;
   const updateResponse = await googleApiFetch(updateUrl, {
     method: 'POST', headers: { Authorization: `Bearer ${googleAccessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests })
