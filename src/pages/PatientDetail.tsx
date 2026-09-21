@@ -2395,17 +2395,17 @@ export default function PatientDetail() {
             <span className="flex min-w-0 items-center gap-3">
               <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-11 w-11 sm:h-12 sm:w-12" />
               <span className="truncate">{patient.full_name}</span>
-            </span>
-          )}
-          description={patient.status === 'active' ? (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-              <BadgeCheck size={14} aria-hidden="true" />
-              <span>Paciente ativo</span>
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
-              <CircleOff size={14} aria-hidden="true" />
-              <span>Paciente inativo</span>
+              {patient.status === 'active' ? (
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                  <BadgeCheck size={14} aria-hidden="true" />
+                  <span>Paciente ativo</span>
+                </span>
+              ) : (
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                  <CircleOff size={14} aria-hidden="true" />
+                  <span>Paciente inativo</span>
+                </span>
+              )}
             </span>
           )}
           mobileActionsInline
