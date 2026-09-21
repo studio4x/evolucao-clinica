@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3,
+  ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3,
   Download, Edit3, Eye, FileText, Loader2, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -64,6 +64,7 @@ export default function PatientSessions() {
   const [exportStart, setExportStart] = useState(today());
   const [exportEnd, setExportEnd] = useState(today());
   const [showPackageForm, setShowPackageForm] = useState(false);
+  const [isScheduleSuggestionsOpen, setIsScheduleSuggestionsOpen] = useState(false);
   const [packageTarget, setPackageTarget] = useState(6);
   const [packageLabel, setPackageLabel] = useState('Pacote de sessões');
   const [loading, setLoading] = useState(true);
@@ -442,6 +443,12 @@ export default function PatientSessions() {
         actions={<Link to={id ? `/painel/patients/${id}` : '/painel/patients'} className="btn-outline"><ArrowLeft size={16} /><span>Voltar</span></Link>}
       />
 
+      <section aria-labelledby="session-planning-heading" className="space-y-4 rounded-3xl border border-brand-primary/15 bg-brand-primary/[0.025] p-3 sm:p-4">
+        <div className="px-1">
+          <h2 id="session-planning-heading" className="text-sm font-bold text-brand-primary">Planejamento do mês</h2>
+          <p className="mt-1 text-xs text-brand-text-muted">Configure a agenda e organize o pacote antes de consultar os registros.</p>
+        </div>
+
       <div className="card p-4 sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center justify-between gap-2 sm:justify-start">
@@ -508,35 +515,48 @@ export default function PatientSessions() {
       )}
 
       {!monthIsClosed && scheduleSuggestions.length > 0 && (
-        <div className="card p-4 sm:p-5">
-          <div>
-            <h3 className="font-semibold text-brand-text">Sugestões da agenda</h3>
-            <p className="text-xs text-brand-text-muted">Datas deste mês ainda não registradas no Controle de Sessões.</p>
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {scheduleSuggestions.slice(0, 12).map((suggestion) => (
-              (() => {
-                const matchingEvolution = findEvolutionForSession(suggestion.date, suggestion.time);
-                return (
-                  <button
-                    key={`${suggestion.date}-${suggestion.time}`}
-                    type="button"
-                    onClick={() => openSuggestion(suggestion)}
-                    className="flex items-center justify-between rounded-xl border border-brand-border bg-white px-3 py-2 text-left transition-colors hover:border-brand-primary/30 hover:bg-brand-primary/5"
-                  >
-                    <span>
-                      <strong className="block text-xs text-brand-text">{suggestion.weekdayLabel}</strong>
-                      <span className="text-xs text-brand-text-muted">{suggestion.date.split('-').reverse().join('/')} • {suggestion.time}</span>
-                      {matchingEvolution && <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Evolução Existente</span>}
-                    </span>
-                    <Plus size={15} className="text-brand-primary" />
-                  </button>
-                );
-              })()
-            ))}
-          </div>
-          {scheduleSuggestions.length > 12 && (
-            <p className="mt-2 text-[11px] text-brand-text-muted">Mostrando as próximas 12 sugestões deste mês.</p>
+        <div className="card overflow-hidden p-0">
+          <button
+            type="button"
+            onClick={() => setIsScheduleSuggestionsOpen((value) => !value)}
+            aria-expanded={isScheduleSuggestionsOpen}
+            aria-controls="schedule-suggestions-content"
+            className="flex w-full items-center justify-between gap-4 p-4 text-left sm:p-5"
+          >
+            <span>
+              <strong className="block font-semibold text-brand-text">Sugestões da agenda</strong>
+              <span className="text-xs text-brand-text-muted">Datas deste mês ainda não registradas no Controle de Sessões.</span>
+            </span>
+            <ChevronDown size={18} className={`shrink-0 text-brand-primary transition-transform ${isScheduleSuggestionsOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {isScheduleSuggestionsOpen && (
+            <div id="schedule-suggestions-content" className="border-t border-brand-border/70 p-4 sm:p-5">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {scheduleSuggestions.slice(0, 12).map((suggestion) => (
+                  (() => {
+                    const matchingEvolution = findEvolutionForSession(suggestion.date, suggestion.time);
+                    return (
+                      <button
+                        key={`${suggestion.date}-${suggestion.time}`}
+                        type="button"
+                        onClick={() => openSuggestion(suggestion)}
+                        className="flex items-center justify-between rounded-xl border border-brand-border bg-white px-3 py-2 text-left transition-colors hover:border-brand-primary/30 hover:bg-brand-primary/5"
+                      >
+                        <span>
+                          <strong className="block text-xs text-brand-text">{suggestion.weekdayLabel}</strong>
+                          <span className="text-xs text-brand-text-muted">{suggestion.date.split('-').reverse().join('/')} • {suggestion.time}</span>
+                          {matchingEvolution && <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700">Evolução Existente</span>}
+                        </span>
+                        <Plus size={15} className="text-brand-primary" />
+                      </button>
+                    );
+                  })()
+                ))}
+              </div>
+              {scheduleSuggestions.length > 12 && (
+                <p className="mt-2 text-[11px] text-brand-text-muted">Mostrando as próximas 12 sugestões deste mês.</p>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -563,6 +583,14 @@ export default function PatientSessions() {
           <p className="mt-3 text-xs text-brand-text-muted">Nenhum pacote ativo.</p>
         )}
       </div>
+
+      </section>
+
+      <section aria-labelledby="session-records-heading" className="space-y-4 border-t border-brand-border/70 pt-6">
+        <div>
+          <h2 id="session-records-heading" className="text-sm font-bold text-brand-primary">Registro das sessões</h2>
+          <p className="mt-1 text-xs text-brand-text-muted">Filtre e acompanhe as sessões já criadas para este paciente.</p>
+        </div>
 
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
         <label className="text-xs font-semibold text-brand-text">Situação<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | PatientSessionStatus)} className="input-field mt-1">
@@ -633,6 +661,8 @@ export default function PatientSessions() {
           })}
         </div>
       )}
+
+      </section>
 
       {formSession !== undefined && (
         <div className="fixed inset-0 z-[100] flex items-end bg-black/55 p-0 sm:items-center sm:justify-center sm:p-4">
