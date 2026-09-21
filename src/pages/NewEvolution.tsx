@@ -216,6 +216,9 @@ export default function NewEvolution({
   onCreated,
   onProcessingChange,
 }: NewEvolutionProps = {}) {
+  const evolutionSelectClass = embedded
+    ? 'input-field h-11 min-h-11 w-full px-3.5 py-2.5 text-sm leading-normal'
+    : 'input-field p-2';
   const { id: routePatientId } = useParams();
   const id = patientIdOverride || routePatientId;
   const navigate = useNavigate();
@@ -1675,7 +1678,7 @@ export default function NewEvolution({
             <select
               value={selectedTemplateId}
               onChange={e => setSelectedTemplateId(e.target.value)}
-              className="input-field p-2"
+              className={evolutionSelectClass}
             >
               <option value="">Sem template (transcrição original)</option>
               {templates.map(t => (
@@ -1716,7 +1719,7 @@ export default function NewEvolution({
                   setErrorMessage('');
                 }
               }}
-              className="input-field p-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`${evolutionSelectClass} disabled:cursor-not-allowed disabled:opacity-50`}
             >
               <option value="audio">Áudio</option>
               <option value="text">Texto</option>

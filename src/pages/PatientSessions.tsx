@@ -38,6 +38,8 @@ const statusLabels: Record<PatientSessionStatus, string> = {
   scheduled: 'Agendada', completed: 'Realizada', cancelled: 'Cancelada', missed: 'Falta'
 };
 
+const sessionSelectClass = 'input-field mt-1 h-11 min-h-11 w-full px-3.5 py-2.5 text-sm leading-normal';
+
 const shiftMonth = (date: Date, delta: number) => new Date(date.getFullYear(), date.getMonth() + delta, 1);
 
 const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
@@ -600,13 +602,13 @@ export default function PatientSessions() {
         </div>
 
       <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-end">
-        <label className="text-xs font-semibold text-brand-text">Situação<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | PatientSessionStatus)} className="input-field mt-1">
+        <label className="min-w-[160px] flex-1 text-xs font-semibold text-brand-text">Situação<select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as 'all' | PatientSessionStatus)} className={sessionSelectClass}>
           <option value="all">Todas</option><option value="completed">Realizadas</option><option value="scheduled">Agendadas</option><option value="cancelled">Canceladas</option><option value="missed">Faltas</option>
         </select></label>
-        <label className="text-xs font-semibold text-brand-text">Assinatura<select value={signatureFilter} onChange={(e) => setSignatureFilter(e.target.value as 'all' | 'signed' | 'unsigned')} className="input-field mt-1">
+        <label className="min-w-[160px] flex-1 text-xs font-semibold text-brand-text">Assinatura<select value={signatureFilter} onChange={(e) => setSignatureFilter(e.target.value as 'all' | 'signed' | 'unsigned')} className={sessionSelectClass}>
           <option value="all">Todas</option><option value="signed">Assinadas</option><option value="unsigned">Sem assinatura</option>
         </select></label>
-        <label className="text-xs font-semibold text-brand-text">PDF<select value={exportMode} onChange={(e) => setExportMode(e.target.value as 'month' | 'year' | 'custom')} className="input-field mt-1">
+        <label className="min-w-[160px] flex-1 text-xs font-semibold text-brand-text">PDF<select value={exportMode} onChange={(e) => setExportMode(e.target.value as 'month' | 'year' | 'custom')} className={sessionSelectClass}>
           <option value="month">Mês atual</option><option value="year">Ano inteiro</option><option value="custom">Período personalizado</option>
         </select></label>
         {exportMode === 'custom' && <><label className="text-xs font-semibold text-brand-text">De<input type="date" value={exportStart} onChange={(e) => setExportStart(e.target.value)} className="input-field mt-1" /></label><label className="text-xs font-semibold text-brand-text">Até<input type="date" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} className="input-field mt-1" /></label></>}
@@ -681,12 +683,12 @@ export default function PatientSessions() {
             <div className="grid gap-4 p-5 sm:grid-cols-2">
               <label className="text-xs font-semibold text-brand-text">Data<input type="date" value={form.date} onChange={(e) => setForm((v) => ({ ...v, date: e.target.value }))} className="input-field mt-1 w-full" /></label>
               <label className="text-xs font-semibold text-brand-text">Horário<input type="time" value={form.time} onChange={(e) => setForm((v) => ({ ...v, time: e.target.value }))} className="input-field mt-1 w-full" /></label>
-              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Situação<select value={form.status} onChange={(e) => setForm((v) => ({ ...v, status: e.target.value as PatientSessionStatus }))} className="input-field mt-1 w-full">
+              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Situação<select value={form.status} onChange={(e) => setForm((v) => ({ ...v, status: e.target.value as PatientSessionStatus }))} className={sessionSelectClass}>
                 <option value="completed">Realizada</option><option value="scheduled">Agendada</option><option value="cancelled">Cancelada</option><option value="missed">Falta</option>
               </select></label>
               <label className="text-xs font-semibold text-brand-text sm:col-span-2">Observação opcional<textarea value={form.notes} onChange={(e) => setForm((v) => ({ ...v, notes: e.target.value }))} maxLength={2000} rows={3} className="input-field mt-1 w-full resize-y" /></label>
-              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Vincular à evolução (opcional)<select value={form.evolutionId} onChange={(e) => setForm((v) => ({ ...v, evolutionId: e.target.value }))} className="input-field mt-1 w-full"><option value="">Sem vínculo</option>{sameDayEvolutions.map((evolution) => <option key={evolution.id} value={evolution.id}>{evolution.session_time?.slice(0,5) || 'Sem horário'} • evolução deste dia</option>)}</select><span className="mt-1 block text-[10px] font-normal text-brand-text-muted">{sameDayEvolutions.length ? 'Foram encontradas evoluções na mesma data.' : 'Nenhuma evolução encontrada nesta data.'}</span></label>
-              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Pacote (opcional)<select value={form.packageId} onChange={(e) => setForm((v) => ({ ...v, packageId: e.target.value }))} className="input-field mt-1 w-full"><option value="">Sem pacote</option>{packages.filter((item) => item.status === 'active' || item.id === form.packageId).map((item) => <option key={item.id} value={item.id}>{item.label} • {item.completedSessions}/{item.targetSessions}</option>)}</select></label>
+              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Vincular à evolução (opcional)<select value={form.evolutionId} onChange={(e) => setForm((v) => ({ ...v, evolutionId: e.target.value }))} className={sessionSelectClass}><option value="">Sem vínculo</option>{sameDayEvolutions.map((evolution) => <option key={evolution.id} value={evolution.id}>{evolution.session_time?.slice(0,5) || 'Sem horário'} • evolução deste dia</option>)}</select><span className="mt-1 block text-[10px] font-normal text-brand-text-muted">{sameDayEvolutions.length ? 'Foram encontradas evoluções na mesma data.' : 'Nenhuma evolução encontrada nesta data.'}</span></label>
+              <label className="text-xs font-semibold text-brand-text sm:col-span-2">Pacote (opcional)<select value={form.packageId} onChange={(e) => setForm((v) => ({ ...v, packageId: e.target.value }))} className={sessionSelectClass}><option value="">Sem pacote</option>{packages.filter((item) => item.status === 'active' || item.id === form.packageId).map((item) => <option key={item.id} value={item.id}>{item.label} • {item.completedSessions}/{item.targetSessions}</option>)}</select></label>
             </div>
             <div className="flex justify-end gap-2 border-t border-brand-border p-4"><button type="button" onClick={() => setFormSession(undefined)} className="btn-outline">Cancelar</button><button type="button" onClick={() => void saveForm()} disabled={working || !form.date} className="btn-primary">{working && <Loader2 size={15} className="animate-spin" />}<span>Salvar sessão</span></button></div>
           </div>
@@ -712,7 +714,7 @@ export default function PatientSessions() {
             </div>
             <div className="space-y-4 p-5">
               <div className="grid gap-3 sm:grid-cols-2">
-                <label className="text-xs font-semibold text-brand-text">Quem está assinando?<select value={signerType} onChange={(e) => setSignerType(e.target.value as 'patient' | 'responsible')} className="input-field mt-1 w-full"><option value="patient">Paciente</option><option value="responsible">Responsável</option></select></label>
+                <label className="text-xs font-semibold text-brand-text">Quem está assinando?<select value={signerType} onChange={(e) => setSignerType(e.target.value as 'patient' | 'responsible')} className={sessionSelectClass}><option value="patient">Paciente</option><option value="responsible">Responsável</option></select></label>
                 <label className="text-xs font-semibold text-brand-text">Nome (opcional)<input value={signerName} onChange={(e) => setSignerName(e.target.value)} className="input-field mt-1 w-full" maxLength={160} /></label>
               </div>
               <SessionSignaturePad onChange={setSignatureBlob} />

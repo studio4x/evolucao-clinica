@@ -25,5 +25,7 @@ assert.match(
   'the evolution input mode is rendered as a dropdown with all supported options',
 );
 assert.doesNotMatch(source, /role="radiogroup" aria-label="Tipo de evolução"/);
+assert.match(source, /const evolutionSelectClass = embedded/);
+assert.match(source, /h-11 min-h-11 w-full px-3\.5 py-2\.5 text-sm leading-normal/);
 
 console.log('New evolution layout tests passed.');
