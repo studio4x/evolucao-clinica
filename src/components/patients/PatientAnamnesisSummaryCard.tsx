@@ -120,15 +120,15 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
               Registre informações iniciais e dados relevantes para o acompanhamento.
             </p>
           )}
-
-          <Link
-            to={href}
-            className="mt-4 flex w-full items-center justify-between rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-3.5 py-2.5 text-sm font-semibold text-brand-primary transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
-          >
-            <span>{!hasYearlyAccess ? 'Acessar anamnese' : anamnesis ? 'Abrir anamnese' : 'Preencher anamnese'}</span>
-            <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
-          </Link>
         </div>
+
+        <Link
+          to={href}
+          className="mt-4 flex w-full items-center justify-between rounded-xl border border-brand-primary/20 bg-brand-primary/5 px-3.5 py-2.5 text-sm font-semibold text-brand-primary transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+        >
+          <span>{!hasYearlyAccess ? 'Acessar anamnese' : anamnesis ? 'Abrir anamnese' : 'Preencher anamnese'}</span>
+          <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+        </Link>
       </div>
     </div>
   );
