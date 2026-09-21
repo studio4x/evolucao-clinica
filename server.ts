@@ -3728,6 +3728,195 @@ app.put("/api/admin/push-notification-cases", requireAuth, requireAdmin, async (
   }
 });
 
+type ManualPushScheduleStatus = "pending" | "processing" | "completed" | "failed" | "cancelled";
+
+function normalizeManualPushScheduleType(value: unknown) {
+  return value === "success" || value === "warning" || value === "error" ? value : "info";
+}
+
+function normalizeManualPushRecipientIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .filter((id): id is string => typeof id === "string")
+    .map((id) => id.trim())
+    .filter(Boolean))];
+}
+
+async function processDueManualPushSchedules() {
+  const now = new Date();
+  const { data: dueSchedules, error: dueError } = await supabaseAdmin
+    .from("manual_push_schedules")
+    .select("*")
+    .eq("status", "pending")
+    .lte("scheduled_at", now.toISOString())
+    .order("scheduled_at", { ascending: true })
+    .limit(20);
+
+  if (dueError) {
+    if (/manual_push_schedules.*does not exist/i.test(dueError.message || "")) {
+      console.warn("[Manual Push Schedule] Migração de agendamentos ainda não aplicada; processamento ignorado.");
+      return { claimedCount: 0, completedCount: 0, failedCount: 0 };
+    }
+    throw dueError;
+  }
+
+  let claimedCount = 0;
+  let completedCount = 0;
+  let failedCount = 0;
+
+  for (const schedule of dueSchedules || []) {
+    const { data: claimedSchedule, error: claimError } = await supabaseAdmin
+      .from("manual_push_schedules")
+      .update({
+        status: "processing" satisfies ManualPushScheduleStatus,
+        processing_started_at: now.toISOString(),
+        error_message: null
+      })
+      .eq("id", schedule.id)
+      .eq("status", "pending")
+      .select("id")
+      .maybeSingle();
+
+    if (claimError) throw claimError;
+    if (!claimedSchedule) continue;
+    claimedCount += 1;
+
+    const recipientIds = normalizeManualPushRecipientIds(schedule.recipient_ids);
+    let sentCount = 0;
+    let failedRecipients = 0;
+    let pushAcceptedCount = 0;
+    let lastError = "";
+
+    for (const targetUserId of recipientIds) {
+      try {
+        const result = await sendNotificationInternal(
+          targetUserId,
+          String(schedule.title),
+          String(schedule.message),
+          normalizeManualPushScheduleType(schedule.type),
+          schedule.link || undefined,
+          schedule.image_url || undefined,
+          "manual-push",
+          { inApp: true, push: true, email: false, whatsapp: false },
+          undefined,
+          normalizeNotificationAudience(schedule.audience_segment)
+        );
+        sentCount += 1;
+        if (result.pushSent) pushAcceptedCount += 1;
+      } catch (scheduleError: any) {
+        failedRecipients += 1;
+        lastError = scheduleError?.message || "Falha ao processar um destinatário.";
+        console.error(`[Manual Push Schedule] Falha no destinatário ${targetUserId}:`, scheduleError);
+      }
+    }
+
+    const finalStatus: ManualPushScheduleStatus = failedRecipients > 0 && sentCount === 0 ? "failed" : "completed";
+    const { error: finishError } = await supabaseAdmin
+      .from("manual_push_schedules")
+      .update({
+        status: finalStatus,
+        sent_count: sentCount,
+        failed_count: failedRecipients,
+        push_accepted_count: pushAcceptedCount,
+        error_message: failedRecipients > 0 ? lastError : null,
+        executed_at: new Date().toISOString()
+      })
+      .eq("id", schedule.id)
+      .eq("status", "processing");
+
+    if (finishError) throw finishError;
+    if (finalStatus === "completed") completedCount += 1;
+    else failedCount += 1;
+  }
+
+  return { claimedCount, completedCount, failedCount };
+}
+
+app.get("/api/admin/notifications/schedules", requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    const { data, error } = await supabaseAdmin
+      .from("manual_push_schedules")
+      .select("id, title, message, type, audience_segment, recipient_ids, scheduled_at, status, sent_count, failed_count, push_accepted_count, error_message, executed_at, cancelled_at, created_at")
+      .order("scheduled_at", { ascending: true })
+      .limit(100);
+    if (error) throw error;
+    return res.json({ schedules: data || [] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Não foi possível carregar os agendamentos." });
+  }
+});
+
+app.post("/api/admin/notifications/schedules", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const title = String(req.body?.title || "").trim();
+    const message = String(req.body?.content || "").trim();
+    const scheduledAt = new Date(String(req.body?.scheduledAt || ""));
+    const recipientIds = normalizeManualPushRecipientIds(req.body?.recipientIds);
+    const audienceSegment = normalizeNotificationAudience(req.body?.audience);
+
+    if (!title || title.length > 160) return res.status(400).json({ error: "O título deve ter entre 1 e 160 caracteres." });
+    if (!message || message.length > 4000) return res.status(400).json({ error: "A mensagem deve ter entre 1 e 4000 caracteres." });
+    if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+      return res.status(400).json({ error: "Escolha uma data e horário futuros para o envio." });
+    }
+    if (recipientIds.length === 0 || recipientIds.length > 1000) {
+      return res.status(400).json({ error: "Informe entre 1 e 1000 destinatários válidos." });
+    }
+    if (!audienceSegment) return res.status(400).json({ error: "A segmentação do agendamento é inválida." });
+
+    const { data: professionals, error: professionalsError } = await supabaseAdmin
+      .from("professionals")
+      .select("id")
+      .in("id", recipientIds);
+    if (professionalsError) throw professionalsError;
+    const validRecipientIds = new Set((professionals || []).map((professional) => professional.id));
+    if (validRecipientIds.size !== recipientIds.length) {
+      return res.status(400).json({ error: "Um ou mais destinatários não estão disponíveis para este agendamento." });
+    }
+
+    const persistentImageUrl = await persistNotificationImage(req.body?.imageUrl);
+    const { data, error } = await supabaseAdmin
+      .from("manual_push_schedules")
+      .insert({
+        created_by: req.user.id,
+        title,
+        message,
+        type: normalizeManualPushScheduleType(req.body?.type),
+        link: String(req.body?.link || "").trim() || null,
+        image_url: persistentImageUrl || null,
+        audience_segment: audienceSegment,
+        recipient_ids: recipientIds,
+        scheduled_at: scheduledAt.toISOString()
+      })
+      .select("*")
+      .single();
+    if (error) throw error;
+
+    return res.status(201).json({ success: true, schedule: data });
+  } catch (err: any) {
+    console.error("[Manual Push Schedule] Falha ao criar agendamento:", err);
+    return res.status(500).json({ error: err.message || "Não foi possível criar o agendamento." });
+  }
+});
+
+app.delete("/api/admin/notifications/schedules/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("manual_push_schedules")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .eq("id", String(req.params.id || ""))
+      .eq("status", "pending")
+      .select("id, status")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return res.status(409).json({ error: "Este agendamento já foi processado ou cancelado." });
+    return res.json({ success: true, schedule: data });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || "Não foi possível cancelar o agendamento." });
+  }
+});
+
 // 6. Testar push diário imediatamente no próprio dispositivo (Apenas Admin)
 app.post("/api/admin/daily-push-test", requireAuth, requireAdmin, async (req: any, res) => {
   try {
@@ -6178,6 +6367,8 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
   }
 
   try {
+    const manualScheduleResult = await processDueManualPushSchedules();
+
     // 1. Obter data/hora atual no fuso horário do Brasil (America/Sao_Paulo: UTC-3)
     const tzOffset = -3;
     const now = new Date();
@@ -6201,7 +6392,7 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
     if (configError) throw configError;
 
     if (!configData || !configData.api_key) {
-      return res.json({ success: true, message: "Configuração daily_push_config não encontrada ou vazia." });
+      return res.json({ success: true, manualScheduleResult, message: "Configuração daily_push_config não encontrada ou vazia." });
     }
 
     let config: any = {};
@@ -6212,27 +6403,27 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
     }
 
     if (!config.enabled) {
-      return res.json({ success: true, message: "Notificação diária desativada." });
+      return res.json({ success: true, manualScheduleResult, message: "Notificação diária desativada." });
     }
 
     // Verifica se o dia da semana atual está configurado
     const configuredDays = config.days || [];
     if (!configuredDays.includes(currentDayOfWeek)) {
-      return res.json({ success: true, message: `Hoje (dia ${currentDayOfWeek}) não está na lista de dias configurados.` });
+      return res.json({ success: true, manualScheduleResult, message: `Hoje (dia ${currentDayOfWeek}) não está na lista de dias configurados.` });
     }
 
     // Verifica se há horário configurado e se o horário atual já passou do configurado
     if (!config.time) {
-      return res.json({ success: true, message: "Horário de envio não configurado." });
+      return res.json({ success: true, manualScheduleResult, message: "Horário de envio não configurado." });
     }
 
     const configTimeStr = config.time.substring(0, 5); // "HH:MM"
     if (currentTimeStr < configTimeStr) {
-      return res.json({ success: true, message: `Horário configurado (${configTimeStr}) ainda não chegou hoje (${currentTimeStr}).` });
+      return res.json({ success: true, manualScheduleResult, message: `Horário configurado (${configTimeStr}) ainda não chegou hoje (${currentTimeStr}).` });
     }
 
     if (config.last_sent_date === currentDateStr && req.query.force !== "true") {
-      return res.json({ success: true, message: "Notificação diária já foi enviada hoje." });
+      return res.json({ success: true, manualScheduleResult, message: "Notificação diária já foi enviada hoje." });
     }
 
     // 3. Buscar inscrições de push de profissionais ativos
@@ -6243,7 +6434,7 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
     if (subsError) throw subsError;
 
     if (!allSubscriptions || allSubscriptions.length === 0) {
-      return res.json({ success: true, message: "Nenhuma inscrição push encontrada." });
+      return res.json({ success: true, manualScheduleResult, message: "Nenhuma inscrição push encontrada." });
     }
 
     const { data: professionals, error: profsError } = await supabaseAdmin
@@ -6268,7 +6459,7 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
     });
 
     if (activeSubs.length === 0) {
-      return res.json({ success: true, message: "Nenhum profissional com assinatura ativa inscrito para push." });
+      return res.json({ success: true, manualScheduleResult, message: "Nenhum profissional com assinatura ativa inscrito para push." });
     }
 
     // 4. Preparar payload de push
@@ -6341,6 +6532,7 @@ app.get("/api/cron/send-daily-push", async (req: any, res) => {
 
     res.json({
       success: true,
+      manualScheduleResult,
       message: `Envio concluído. Disparado para ${sentCount} de ${activeSubs.length} inscrições ativas.`
     });
   } catch (err: any) {

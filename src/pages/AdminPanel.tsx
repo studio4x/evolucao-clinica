@@ -29,6 +29,7 @@ import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsMod
 import ProfessionalFunnelKanban from '../components/admin/ProfessionalFunnelKanban';
 import NotificationRecipientSelector from '../components/admin/NotificationRecipientSelector';
 import ManualPushNotificationHistory from '../components/admin/ManualPushNotificationHistory';
+import ManualPushScheduleManager from '../components/admin/ManualPushScheduleManager';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 import {
@@ -66,6 +67,11 @@ const alert = (msg: string) => {
     variant: "info",
     icon: "info"
   });
+};
+
+const getLocalDateTimeInputValue = (date: Date) => {
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
 };
 
 type AcquisitionInfo = AcquisitionData;
@@ -1394,6 +1400,8 @@ export default function AdminPanel() {
   const [notifType, setNotifType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
   const [notifLink, setNotifLink] = useState('');
   const [notifImageUrl, setNotifImageUrl] = useState('');
+  const [notifScheduleAt, setNotifScheduleAt] = useState('');
+  const [manualScheduleRefreshKey, setManualScheduleRefreshKey] = useState(0);
   const [notifSendWhatsapp] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [pushNotificationsTab, setPushNotificationsTab] = useState<'manual' | 'platform' | 'daily_reminder'>('manual');
@@ -2233,13 +2241,17 @@ export default function AdminPanel() {
     if (broadcastTarget === 'specific') return true;
 
     const stageLabel = professionalFunnel?.stages.find((stage) => stage.key === selectedFunnelStage)?.label;
-    const message = broadcastTarget === 'funnel_stage'
-      ? `Enviar esta notificação para ${targetCount} profissional${targetCount === 1 ? '' : 'is'} da etapa '${stageLabel || selectedFunnelStage}'?`
-      : `Enviar esta notificação para todos os ${targetCount} profissionais selecionados?`;
+    const message = notifScheduleAt
+      ? broadcastTarget === 'funnel_stage'
+        ? `Programar esta notificação para ${targetCount} profissional${targetCount === 1 ? '' : 'is'} da etapa '${stageLabel || selectedFunnelStage}'?`
+        : `Programar esta notificação para todos os ${targetCount} profissionais selecionados?`
+      : broadcastTarget === 'funnel_stage'
+        ? `Enviar esta notificação para ${targetCount} profissional${targetCount === 1 ? '' : 'is'} da etapa '${stageLabel || selectedFunnelStage}'?`
+        : `Enviar esta notificação para todos os ${targetCount} profissionais selecionados?`;
 
     return showConfirm(message, {
-      title: 'Confirmar envio',
-      confirmLabel: 'Confirmar envio',
+      title: notifScheduleAt ? 'Confirmar agendamento' : 'Confirmar envio',
+      confirmLabel: notifScheduleAt ? 'Confirmar agendamento' : 'Confirmar envio',
       cancelLabel: 'Cancelar',
       variant: 'warning',
       icon: 'warning',
@@ -2267,6 +2279,43 @@ export default function AdminPanel() {
       const session = await supabase.auth.getSession();
       const token = session.data.session?.access_token;
       if (!token) throw new Error('Não autenticado.');
+
+      if (notifScheduleAt) {
+        const scheduledAt = new Date(notifScheduleAt);
+        if (Number.isNaN(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) {
+          throw new Error('Escolha uma data e horário futuros para o agendamento.');
+        }
+
+        const response = await fetch('/api/admin/notifications/schedules', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: notifTitle,
+            content: notifContent,
+            type: notifType,
+            link: notifLink || undefined,
+            imageUrl: notifImageUrl || undefined,
+            scheduledAt: scheduledAt.toISOString(),
+            recipientIds: targets,
+            audience: getManualNotificationAudience()
+          })
+        });
+        const responseData = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(responseData.error || 'Não foi possível programar a notificação.');
+
+        setNotifSendSuccess(true);
+        setNotifPushSummary(`Agendada para ${scheduledAt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} para ${targets.length} destinatário${targets.length === 1 ? '' : 's'}.`);
+        setNotifTitle('');
+        setNotifContent('');
+        setNotifLink('');
+        setNotifImageUrl('');
+        setNotifScheduleAt('');
+        setManualScheduleRefreshKey((current) => current + 1);
+        return;
+      }
 
       let successCount = 0;
       let errorMsg = '';
@@ -5838,7 +5887,7 @@ export default function AdminPanel() {
                           <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs flex gap-2">
                             <Check className="flex-shrink-0 text-emerald-600" size={16} />
                             <span>
-                              Notificação disparada pelos canais disponíveis.
+                              {notifPushSummary?.startsWith('Agendada') ? 'Notificação programada com sucesso.' : 'Notificação disparada pelos canais disponíveis.'}
                               {notifPushSummary && <span className="mt-1 block">{notifPushSummary}</span>}
                               {notifWhatsappSummary && <span className="mt-1 block">{notifWhatsappSummary}</span>}
                             </span>
@@ -5964,6 +6013,24 @@ export default function AdminPanel() {
                           )}
                         </div>
 
+                        <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                          <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-900" htmlFor="notif-schedule-at">
+                            <Calendar size={15} /> Programar envio (opcional)
+                          </label>
+                          <p className="mt-1 text-[11px] leading-relaxed text-blue-800/80">Deixe em branco para enviar agora. Ao programar, os destinatários atuais ficam registrados no agendamento.</p>
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <input
+                              id="notif-schedule-at"
+                              type="datetime-local"
+                              value={notifScheduleAt}
+                              onChange={(e) => setNotifScheduleAt(e.target.value)}
+                              min={getLocalDateTimeInputValue(new Date(Date.now() + 60_000))}
+                              className="rounded-xl border border-blue-200 bg-white px-3.5 py-2.5 text-sm font-medium outline-none focus:border-brand-primary"
+                            />
+                            {notifScheduleAt && <button type="button" onClick={() => setNotifScheduleAt('')} className="text-xs font-semibold text-blue-800 underline">Limpar horário</button>}
+                          </div>
+                        </div>
+
                         <div className="rounded-xl border border-amber-200 bg-amber-50/60 p-4 text-xs leading-relaxed text-amber-900">
                           <strong>WhatsApp não é usado em notificações manuais.</strong> Título, conteúdo livre, dados técnicos ou clínicos continuam somente nos canais in-app, push e e-mail. O WhatsApp exige um evento administrativo autorizado e um template específico aprovado.
                         </div>
@@ -5975,11 +6042,13 @@ export default function AdminPanel() {
                             className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 cursor-pointer"
                           >
                             {notifSending ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-                            <span>Disparar Notificação</span>
+                            <span>{notifScheduleAt ? 'Programar Notificação' : 'Disparar Notificação'}</span>
                           </button>
                         </div>
                       </form>
                     </div>
+
+                    <ManualPushScheduleManager refreshKey={manualScheduleRefreshKey} />
 
                     <ManualPushNotificationHistory
                       notifications={manualPushNotifications}
