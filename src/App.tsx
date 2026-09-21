@@ -11,6 +11,7 @@ import Layout from './components/Layout';
 
 // Componentes carregados de forma preguiçosa (Lazy Loading / Code Splitting)
 const Login = lazyWithRetry(() => import('./pages/Login'), 'Login');
+const ClinicLogin = lazyWithRetry(() => import('./pages/ClinicLogin'), 'ClinicLogin');
 const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'Dashboard');
 const Patients = lazyWithRetry(() => import('./pages/Patients'), 'Patients');
 const PatientForm = lazyWithRetry(() => import('./pages/PatientForm'), 'PatientForm');
@@ -21,7 +22,7 @@ const NewEvolution = lazyWithRetry(() => import('./pages/NewEvolution'), 'NewEvo
 const History = lazyWithRetry(() => import('./pages/History'), 'History');
 const ShareTarget = lazyWithRetry(() => import('./pages/ShareTarget'), 'ShareTarget');
 const Tutorial = lazyWithRetry(() => import('./pages/Tutorial'), 'Tutorial');
-const Subscription = lazyWithRetry(() => import('./pages/Subscription'), 'Subscription');
+const ContextSubscription = lazyWithRetry(() => import('./pages/ContextSubscription'), 'ContextSubscription');
 const Profile = lazyWithRetry(() => import('./pages/Profile'), 'Profile');
 const CustomLogo = lazyWithRetry(() => import('./pages/CustomLogo'), 'CustomLogo');
 const BackupExport = lazyWithRetry(() => import('./pages/BackupExport'), 'BackupExport');
@@ -84,6 +85,7 @@ import { ClinicRoute } from './components/clinic/ClinicRoute';
 import { PersonalContextRoute } from './components/clinic/PersonalContextRoute';
 import { useClinicContextStore } from './store/clinicContextStore';
 import { canEnterInvitedClinic } from './utils/clinicInvitationAccess';
+import { hasAuthorizedOrganizationAccess } from './utils/clinicAccess';
 import { resolveEffectiveEntitlement } from './utils/clinicEntitlement';
 import { publicEffectFlags } from './config/publicFlags';
 import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, sanitizeOAuthCallbackUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
@@ -188,6 +190,11 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const clinicContext = useClinicContextStore();
   const location = useLocation();
   const isClinicRoute = location.pathname === '/painel/clinica' || location.pathname.startsWith('/painel/clinica/');
+  const hasOrganizationAccess = Boolean(user && isClinicRoute && hasAuthorizedOrganizationAccess({
+    featureEnabled: publicEffectFlags.clinicFeature,
+    contextStatus: clinicContext.status, contextUserId: clinicContext.userId, userId: user.id,
+    activeContext: clinicContext.activeContext, organizations: clinicContext.organizations,
+  }));
   const invitedClinicAccess = Boolean(user && canEnterInvitedClinic({
     pathname: location.pathname, featureEnabled: publicEffectFlags.clinicFeature,
     contextStatus: clinicContext.status, contextUserId: clinicContext.userId, userId: user.id,
@@ -218,7 +225,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (profileStatus === 'pending' && isClinicRoute && ['idle', 'loading'].includes(clinicContext.status)) {
     return <SplashScreen message="Validando seu acesso à clínica..." />;
   }
-  if (profileStatus === 'pending' && !invitedClinicAccess) {
+  if (profileStatus === 'pending' && !hasOrganizationAccess && !invitedClinicAccess) {
     return <Navigate to="/pending" replace />;
   }
   
@@ -299,6 +306,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const { user, isAuthReady, profileRole } = useAuthStore();
+  const clinicContext = useClinicContextStore();
   
   if (!isAuthReady) {
     return <SplashScreen message="Carregando área administrativa..." />;
@@ -308,10 +316,14 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
     return <SplashScreen message="Carregando permissões administrativas..." />;
   }
   
-  if (user && profileRole !== 'admin' && profileRole !== 'therapist') {
-    return <Navigate to="/" replace />;
+  if (user && profileRole !== 'admin') {
+    if (publicEffectFlags.clinicFeature && ['idle', 'loading'].includes(clinicContext.status)) {
+      return <SplashScreen message="Validando seus contextos de acesso..." />;
+    }
+    const hasOrganization = publicEffectFlags.clinicFeature && clinicContext.organizations.length > 0;
+    return <Navigate to={hasOrganization ? "/painel/clinica" : "/painel/dashboard"} replace />;
   }
-  
+
   return <>{children}</>;
 }
 
@@ -895,6 +907,7 @@ export default function App() {
         <Suspense fallback={<SplashScreen message="Carregando..." />}>
           <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/login/clinica" element={<ClinicLogin />} />
           {/* Recipient handoff must precede personal subscription/onboarding guards. */}
           <Route path="/painel/convite-clinica" element={<ClinicInvitationAccept />} />
           <Route path="/checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
@@ -940,7 +953,7 @@ export default function App() {
             <Route path="history" element={<PersonalContextRoute><History /></PersonalContextRoute>} />
             <Route path="tutorial" element={<PersonalContextRoute><Tutorial /></PersonalContextRoute>} />
             <Route path="share-target" element={<PersonalContextRoute><ShareTarget /></PersonalContextRoute>} />
-            <Route path="subscription" element={<Subscription />} />
+            <Route path="subscription" element={<ContextSubscription />} />
             <Route path="migration" element={<PersonalContextRoute><Migration /></PersonalContextRoute>} />
             <Route path="profile" element={<Profile />} />
             <Route path="logotipo-personalizado" element={<CustomLogo />} />

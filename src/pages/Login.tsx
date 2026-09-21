@@ -2,7 +2,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { AppVersion } from '../components/layout/AppVersion';
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Mic, Lock, ArrowRight, CheckCircle2, User, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, Mic, Lock, ArrowRight, CheckCircle2, User, ArrowLeft, Building2 } from 'lucide-react';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
@@ -360,6 +360,14 @@ export default function Login() {
               </>
             )}
           </button>
+
+          <div className="mt-4 text-center">
+            <p className="text-xs text-slate-500">Faz parte de uma clínica?</p>
+            <Link to="/login/clinica" className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-[#0b5cad] hover:underline">
+              <Building2 size={14} aria-hidden="true" />
+              Acessar área da clínica
+            </Link>
+          </div>
 
           {/* Card de Esclarecimento de Permissões */}
           <div className="w-full bg-[#f4f8fb] border border-[#e1edf5] rounded-2xl p-3.5 flex items-start gap-3 mt-3.5">

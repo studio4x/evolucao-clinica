@@ -8,6 +8,9 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { appendBrandAssetVersion, getBrandAssetSignature } from '../utils/brandAssets';
 import { getOnboardingDestination, isOnboardingComplete } from '../utils/onboarding';
 import { ClinicAccessOptions } from '../components/clinic/ClinicAccessOptions';
+import { publicEffectFlags } from '../config/publicFlags';
+import { useClinicContextStore } from '../store/clinicContextStore';
+import { getClinicWorkspacePath } from '../utils/clinicAccess';
 
 export default function PendingApproval() {
   const { user, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, setUser, setProfileInfo } = useAuthStore();
@@ -16,11 +19,25 @@ export default function PendingApproval() {
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
   const isInactive = searchParams.get('status') === 'inactive' || profileStatus === 'inactive';
+  const clinicContext = useClinicContextStore();
+  const hasOrganizationAccess = Boolean(user && publicEffectFlags.clinicFeature
+    && clinicContext.status === 'ready'
+    && clinicContext.userId === user.id
+    && clinicContext.organizations.length > 0);
+  const openingClinic = hasOrganizationAccess && clinicContext.organizations.length === 1;
+  const choosingClinic = hasOrganizationAccess && clinicContext.organizations.length > 1;
 
   useEffect(() => {
     // Redireciona de volta se não estiver autenticado
     if (!user) {
       navigate('/login', { replace: true });
+    } else if (hasOrganizationAccess) {
+      if (clinicContext.organizations.length === 1) {
+        const organization = clinicContext.organizations[0];
+        clinicContext.selectContext({ type: 'organization', organizationId: organization.id });
+        navigate(getClinicWorkspacePath(organization), { replace: true });
+      }
+      return;
     } else if (profileStatus === 'active') {
       const isPendingCheckoutFlow = sessionStorage.getItem('pending_checkout_flow') === 'true';
       const now = new Date();
@@ -41,7 +58,7 @@ export default function PendingApproval() {
         navigate('/painel/dashboard', { replace: true });
       }
     }
-  }, [user, profileStatus, profileRole, subscriptionStatus, subscriptionEndsAt, navigate]);
+  }, [clinicContext, hasOrganizationAccess, navigate, profileRole, profileStatus, subscriptionEndsAt, subscriptionStatus, user]);
 
   useEffect(() => {
     if (!user || profileStatus === 'active') {
@@ -142,7 +159,24 @@ export default function PendingApproval() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="card shadow-2xl shadow-brand-primary/5 py-10 px-6 sm:px-10 bg-white/80 backdrop-blur-sm border-brand-primary/10 text-center">
           <div className="flex flex-col items-center">
-            {isInactive ? (
+            {openingClinic ? (
+              <>
+                <div className="w-16 h-16 bg-brand-accent/10 rounded-2xl flex items-center justify-center border border-brand-accent/20 mb-6">
+                  <Clock className="w-8 h-8 text-brand-primary animate-pulse" />
+                </div>
+                <h3 className="text-xl font-display font-bold text-brand-primary mb-3">Abrindo sua clínica</h3>
+                <p className="text-sm text-brand-text-muted leading-relaxed mb-8">Seu acesso organizacional foi confirmado. Aguarde enquanto abrimos o espaço correto.</p>
+              </>
+            ) : choosingClinic ? (
+              <>
+                <div className="w-16 h-16 bg-brand-accent/10 rounded-2xl flex items-center justify-center border border-brand-accent/20 mb-6">
+                  <Clock className="w-8 h-8 text-brand-primary" />
+                </div>
+                <h3 className="text-xl font-display font-bold text-brand-primary mb-3">Acessar uma clínica</h3>
+                <p className="text-sm text-brand-text-muted leading-relaxed mb-4">Escolha explicitamente a clínica que deseja acessar.</p>
+                <ClinicAccessOptions />
+              </>
+            ) : isInactive ? (
               <>
                 <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center border border-red-100 mb-6 animate-pulse">
                   <ShieldAlert className="w-8 h-8 text-red-600" />
@@ -175,7 +209,7 @@ export default function PendingApproval() {
               </div>
             </div>
 
-            {!isInactive && profileStatus === 'pending' && <ClinicAccessOptions />}
+            {!openingClinic && !choosingClinic && !isInactive && profileStatus === 'pending' && <ClinicAccessOptions />}
 
             <button
               onClick={handleLogout}

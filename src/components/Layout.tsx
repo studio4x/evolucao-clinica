@@ -108,7 +108,7 @@ export default function Layout() {
   }, [user]);
 
   useEffect(() => {
-    if (!user || !googleAccessToken || !hasYearlyAccess) return;
+    if (!user || activeContext.type !== 'personal' || !googleAccessToken || !hasYearlyAccess) return;
 
     const triggerBackup = async () => {
       try {
@@ -120,7 +120,7 @@ export default function Layout() {
 
     const timer = setTimeout(triggerBackup, 5000);
     return () => clearTimeout(timer);
-  }, [user, googleAccessToken, hasYearlyAccess]);
+  }, [activeContext.type, user, googleAccessToken, hasYearlyAccess]);
 
   useEffect(() => {
     if (!isMobileMenuOpen) return;
@@ -215,7 +215,7 @@ export default function Layout() {
       ? [{ name: 'Visão da clínica', path: '/painel/clinica', icon: Building2 }, { name: 'Equipe', path: '/painel/clinica/equipe', icon: Users }, { name: 'Auditoria', path: '/painel/clinica/auditoria', icon: FileClock }]
       : []),
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
-    { name: activeOrganization?.membershipRole === 'professional' ? 'Plano Clínica' : 'Assinatura', path: '/painel/subscription', icon: CreditCard },
+    { name: 'Plano Clínica', path: ['owner', 'manager'].includes(activeOrganization?.membershipRole || '') ? '/painel/clinica/contratar' : '/painel/subscription', icon: CreditCard },
     { name: 'Sobre o app', path: '/painel/about', icon: Info },
   ];
   const isClinicContext = publicEffectFlags.clinicFeature && activeContext.type === 'organization';
@@ -416,7 +416,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <div className="flex-1 overflow-x-hidden flex flex-col pb-16 md:pb-0">
-        <TrialBanner />
+        {activeContext.type === 'personal' && <TrialBanner />}
         <main className="w-full max-w-[1440px] p-4 md:p-8 mx-auto flex-1 [&>div]:w-full [&>div]:max-w-none">
           <Outlet />
         </main>
