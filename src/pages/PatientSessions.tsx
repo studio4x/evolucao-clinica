@@ -436,11 +436,18 @@ export default function PatientSessions() {
   };
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-5 pb-24">
+      <div className="flex items-center gap-2">
+        <Link to={id ? `/painel/patients/${id}` : '/painel/patients'} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline">
+          <ArrowLeft size={14} />
+          Voltar para o paciente
+        </Link>
+      </div>
+
       <PanelPageHeader
-        title="Controle de Sessões"
-        description={patient ? patient.full_name : 'Registro mensal de atendimentos e assinaturas'}
-        actions={<Link to={id ? `/painel/patients/${id}` : '/painel/patients'} className="btn-outline"><ArrowLeft size={16} /><span>Voltar</span></Link>}
+        icon={CalendarDays}
+        title={`Controle de Sessões${patient?.full_name ? ` — ${patient.full_name}` : ''}`}
+        description="Organize e acompanhe os atendimentos, assinaturas e registros clínicos deste paciente."
       />
 
       <section aria-labelledby="session-planning-heading" className="space-y-4 rounded-3xl border border-brand-primary/15 bg-brand-primary/[0.025] p-3 sm:p-4">
