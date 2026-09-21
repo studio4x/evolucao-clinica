@@ -199,8 +199,25 @@ const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
 
 const AUTH_REAUTH_RECOVERY_KEY = 'new-evolution:resume-after-auth';
 
-export default function NewEvolution() {
-  const { id } = useParams();
+type NewEvolutionProps = {
+  embedded?: boolean;
+  patientId?: string;
+  initialSessionDate?: string;
+  initialSessionTime?: string | null;
+  onCreated?: (evolutionId: string) => void | Promise<void>;
+  onProcessingChange?: (processing: boolean) => void;
+};
+
+export default function NewEvolution({
+  embedded = false,
+  patientId: patientIdOverride,
+  initialSessionDate,
+  initialSessionTime,
+  onCreated,
+  onProcessingChange,
+}: NewEvolutionProps = {}) {
+  const { id: routePatientId } = useParams();
+  const id = patientIdOverride || routePatientId;
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { 
@@ -262,13 +279,14 @@ export default function NewEvolution() {
     }
     return true;
   };
-  const isOnboardingMode = searchParams.get('onboarding') === '1';
+  const isOnboardingMode = !embedded && searchParams.get('onboarding') === '1';
   
   const [patient, setPatient] = useState<any>(null);
   const dateParam = searchParams.get('date');
-  const [sessionDate, setSessionDate] = useState(dateParam || new Date().toISOString().split('T')[0]);
+  const [sessionDate, setSessionDate] = useState(initialSessionDate || dateParam || new Date().toISOString().split('T')[0]);
   
   const [sessionTime, setSessionTime] = useState(() => {
+    if (initialSessionTime) return initialSessionTime.slice(0, 5);
     const saved = localStorage.getItem('evolucao-clinica:default-session-time');
     if (saved) return saved;
     const now = new Date();
@@ -1261,6 +1279,7 @@ export default function NewEvolution() {
       return;
     }
 
+    onProcessingChange?.(true);
     setStatus('processing');
     setErrorMessage('');
     setProcessingMessage('');
@@ -1323,6 +1342,9 @@ export default function NewEvolution() {
       return transcriptionParts.join('\n\n');
     };
 
+    let evolutionWasCompleted = false;
+    let evolutionWasLinked = !embedded || !onCreated;
+
     try {
       if (!navigator.onLine) {
         throw new Error("offline");
@@ -1379,6 +1401,7 @@ export default function NewEvolution() {
         })
         .eq('id', evolutionId);
       if (updateError) throw updateError;
+      evolutionWasCompleted = true;
 
       trackEvent('evolution_completed', {
         input_mode: inputMode,
@@ -1409,6 +1432,11 @@ export default function NewEvolution() {
       await clearAllAudioItems();
       setWrittenEvolutionText('');
 
+      if (embedded && onCreated) {
+        await onCreated(evolutionId);
+        evolutionWasLinked = true;
+      }
+
       if (isOnboardingMode && user?.id && patient?.id) {
         setOnboardingState(user.id, {
           step: 'agenda',
@@ -1438,6 +1466,24 @@ export default function NewEvolution() {
       }
       
       let msg = error.message || "Erro desconhecido";
+
+      if (evolutionWasCompleted) {
+        msg = evolutionWasLinked
+          ? `A evolução foi criada, mas a finalização do fluxo falhou: ${msg}`
+          : `A evolução foi criada, mas não foi vinculada à sessão: ${msg}`;
+        setErrorMessage(msg);
+        setStatus('error');
+        setProcessingMessage('');
+        await clearAllAudioItems();
+        setWrittenEvolutionText('');
+        void sendNotification({
+          title: "Evolução criada sem vínculo ⚠️",
+          content: `A evolução do paciente ${patient.full_name} foi criada, mas não foi vinculada à sessão: ${msg}`,
+          type: "error",
+          link: `/painel/patients/${patient.id}/sessions`
+        });
+        return;
+      }
       
       if ((msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) && audioBlobs.length > 0) {
         try {
@@ -1513,6 +1559,8 @@ export default function NewEvolution() {
       } catch (fError) {
         console.error("Failed to update supabase with error state (likely offline):", fError);
       }
+    } finally {
+      onProcessingChange?.(false);
     }
   };
 
@@ -1523,7 +1571,7 @@ export default function NewEvolution() {
 
   return (
     <div className="w-full space-y-6">
-      <div className="flex items-center justify-between">
+      {!embedded && <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <Link
             to={isOnboardingMode ? `/painel/patients/${id}/edit?onboarding=1` : `/painel/patients/${id}`}
@@ -1537,7 +1585,7 @@ export default function NewEvolution() {
         <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">
           {patient.full_name}
         </span>
-      </div>
+      </div>}
 
       {recoveredDraft && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-4 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
@@ -1573,7 +1621,16 @@ export default function NewEvolution() {
         </div>
       )}
 
-      <div className="card p-6 space-y-6">
+      {embedded && (
+        <div className="rounded-xl border border-brand-primary/15 bg-brand-primary/5 p-3">
+          <p className="text-xs font-semibold text-brand-text">Conteúdo padrão de nova evolução</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-brand-text-muted">
+            A data e o horário já foram preenchidos com os dados desta sessão. Registre abaixo o conteúdo clínico ou envie o áudio da evolução.
+          </p>
+        </div>
+      )}
+
+      <div className={embedded ? 'space-y-6' : 'card p-6 space-y-6'}>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4">
           <div className="min-w-0">
             <label className="block text-sm font-medium text-brand-text mb-1">Data da Sessão</label>
