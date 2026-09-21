@@ -9,6 +9,7 @@ import { sendNotification } from '../services/notificationHelper';
 import { deferOnboarding, setOnboardingState, getOnboardingState } from '../utils/onboarding';
 import { classifyOnboardingError } from '../utils/onboardingState';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
@@ -45,6 +46,66 @@ declare global {
 }
 
 const PATIENT_PHONE_COUNTRY_OPTIONS = getWhatsAppCountryOptions();
+
+const PATIENT_EDIT_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Revise os dados do paciente',
+    description: 'Atualize nome, nascimento, documento, telefone, observações e status. A foto pode ser adicionada, trocada, ajustada ou removida antes de salvar.',
+    icon: FileText,
+  },
+  {
+    title: 'Configure a agenda e os lembretes',
+    description: 'Defina os dias e horários das sessões. Se ativar os lembretes de evolução, mantenha pelo menos um horário válido configurado para o paciente.',
+    icon: ShieldCheck,
+  },
+  {
+    title: 'Organize o prontuário no Google Drive',
+    description: 'Conecte ou reautorize o Google quando necessário, crie um prontuário no Google Docs ou vincule uma pasta existente pelo link. A escolha da pasta fica associada ao paciente.',
+    icon: FolderOpen,
+  },
+  {
+    title: 'Confirme as alterações',
+    description: 'Clique em “Salvar Paciente” para atualizar o cadastro. Se houver uma foto nova, ela será enviada; a foto anterior será removida quando a troca for concluída.',
+    icon: Upload,
+  },
+  {
+    title: 'Continue pelo prontuário atualizado',
+    description: 'Depois de salvar, você volta à lista de pacientes e pode abrir o registro atualizado para acessar evoluções, sessões, anamnese, arquivos e relatórios.',
+    icon: Lock,
+  },
+];
+
+const PATIENT_EDIT_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre a Edição do Paciente',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a edição do paciente.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type PatientEditGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function PatientEditGuideButton({ compact = false, expanded, onOpen }: PatientEditGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona a edição do paciente"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 type PatientFormValues = {
   full_name: string;
@@ -214,6 +275,7 @@ export default function PatientForm() {
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [formData, setFormData] = useState<PatientFormValues>(emptyPatientFormValues);
   const [photoPath, setPhotoPath] = useState('');
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
@@ -997,6 +1059,21 @@ export default function PatientForm() {
         icon={FileText}
         title={id ? 'Editar Paciente' : 'Novo Paciente'}
         description={id ? 'Atualize os dados cadastrais e as preferências do paciente.' : 'Cadastre as informações necessárias para iniciar o acompanhamento.'}
+        titleActions={id ? (
+          <PatientEditGuideButton
+            expanded={guideOpen}
+            onOpen={() => setGuideOpen(true)}
+          />
+        ) : undefined}
+        actions={id ? (
+          <span className="sm:hidden">
+            <PatientEditGuideButton
+              compact
+              expanded={guideOpen}
+              onOpen={() => setGuideOpen(true)}
+            />
+          </span>
+        ) : undefined}
       />
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-6">
@@ -2010,6 +2087,19 @@ export default function PatientForm() {
             </div>
           </div>
         </div>
+      )}
+
+      {id && (
+        <FeatureGuideModal
+          open={guideOpen}
+          onClose={() => setGuideOpen(false)}
+          eyebrow="Edição do paciente"
+          title="Como funciona a edição do paciente"
+          description="Siga este fluxo para manter os dados cadastrais, a agenda e o prontuário do paciente organizados."
+          steps={PATIENT_EDIT_GUIDE_STEPS}
+          note="Revise os dados antes de salvar. A edição atualiza o cadastro do paciente, sem apagar o histórico clínico já registrado."
+          supportHref={PATIENT_EDIT_SUPPORT_HREF}
+        />
       )}
     </div>
 
