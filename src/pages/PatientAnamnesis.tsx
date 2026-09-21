@@ -16,6 +16,7 @@ import {
   Eye,
   FilePlus2,
   History as HistoryIcon,
+  HelpCircle,
   Loader2,
   Lock,
   PlusCircle,
@@ -26,6 +27,7 @@ import {
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
@@ -57,6 +59,34 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 const AUTOSAVE_DELAY_MS = 900;
 const AUTOSAVE_MAX_ATTEMPTS = 3;
 const SAVE_NOTICE_DISPLAY_MS = 1800;
+
+const ANAMNESIS_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Escolha o modelo mais adequado',
+    description: 'O formulário começa com uma sugestão baseada no seu perfil profissional. Se precisar, troque o modelo antes de preencher; a versão anterior será preservada quando já houver um registro.',
+    icon: ClipboardList,
+  },
+  {
+    title: 'Preencha as seções por etapas',
+    description: 'Abra cada seção para responder aos campos. O indicador de preenchimento ajuda a acompanhar o progresso e os tipos de campo mudam conforme a informação solicitada.',
+    icon: FilePlus2,
+  },
+  {
+    title: 'Continue com salvamento automático',
+    description: 'As respostas são salvas automaticamente enquanto você trabalha. O aviso no canto inferior informa se há alterações pendentes, se o registro está sendo salvo ou se já está sincronizado.',
+    icon: Save,
+  },
+  {
+    title: 'Crie novas versões sem perder o histórico',
+    description: 'Use “Iniciar nova anamnese” para começar do zero ou copiar a última versão. A avaliação atual permanece disponível em “Anamneses anteriores”.',
+    icon: HistoryIcon,
+  },
+  {
+    title: 'Conclua, revise e baixe o PDF',
+    description: 'Ao terminar, conclua o registro para bloquear as respostas e preservar a versão. Você pode visualizar versões anteriores, baixar o PDF e reabrir a anamnese quando precisar corrigir algo.',
+    icon: CheckCircle2,
+  },
+];
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const response = await fetch(url);
@@ -294,6 +324,7 @@ export default function PatientAnamnesis() {
   const [switchingTemplate, setSwitchingTemplate] = useState(false);
   const [startingNew, setStartingNew] = useState(false);
   const [newAnamnesisChoiceOpen, setNewAnamnesisChoiceOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [saveNoticeVisible, setSaveNoticeVisible] = useState(false);
@@ -1124,6 +1155,19 @@ export default function PatientAnamnesis() {
         description="Organize informações iniciais e dados relevantes para o acompanhamento. Revise e atualize os registros sempre que necessário."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setGuideOpen(true)}
+              aria-label="Abrir guia de como funciona a Anamnese"
+              aria-haspopup="dialog"
+              aria-expanded={guideOpen}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30 sm:h-auto sm:w-auto sm:gap-2 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:font-bold"
+              title="Como funciona"
+            >
+              <HelpCircle size={16} />
+              <span className="hidden sm:inline">Como funciona</span>
+            </button>
+
             {current && (
               <button
                 type="button"
@@ -1568,6 +1612,16 @@ export default function PatientAnamnesis() {
           </div>
         </div>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Anamnese estruturada"
+        title="Como funciona a Anamnese"
+        description="Siga este fluxo para registrar, revisar e manter o histórico das informações iniciais do paciente."
+        steps={ANAMNESIS_GUIDE_STEPS}
+        note="A anamnese é um apoio ao registro clínico. Revise o conteúdo antes de concluir e mantenha a responsabilidade profissional sobre as informações registradas."
+      />
     </div>
   );
 }
