@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import { drawDocumentLogo } from './documentLogo';
 import { downloadPdfFile } from './prontuarioPdf';
-import type { PatientSession } from '../services/patientSessions';
+import type { PatientSession, PatientSessionMonthClosure } from '../services/patientSessions';
 
 type SignatureImageMap = Record<string, string | undefined>;
 
@@ -17,6 +17,7 @@ type PatientSessionsPdfInput = {
   siteConfig?: any;
   logoBase64?: string | null;
   customLogoSettings?: unknown;
+  monthClosure?: PatientSessionMonthClosure | null;
 };
 
 const formatDate = (value: string) => value.split('-').reverse().join('/');
@@ -321,22 +322,50 @@ export function generatePatientSessionsPdf(input: PatientSessionsPdfInput) {
     y += 8;
   }
 
-  // Assinatura do profissional: mesma composição dos relatórios não assinados.
-  ensureSpace(30);
-  y += 8;
-  doc.setDrawColor(87, 83, 78);
-  doc.setLineWidth(0.3);
-  doc.line(pageWidth / 2 - 30, y, pageWidth / 2 + 30, y);
+  if (input.monthClosure) {
+    ensureSpace(50);
+    y += 6;
+    const closure = input.monthClosure;
 
-  doc.setFont('Helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(28, 25, 22);
-  doc.text(normalizePdfText(input.professionalName || 'Profissional de Saúde'), pageWidth / 2, y + 5, { align: 'center' });
-  doc.setFont('Helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(normalizePdfText(input.professionalRegister || input.professionalTitle || ''), pageWidth / 2, y + 9, { align: 'center' });
+    doc.setFillColor(240, 253, 244);
+    doc.setDrawColor(167, 243, 208);
+    doc.setLineWidth(0.3);
+    doc.rect(margin, y, contentWidth, 38, 'FD');
 
-  // Rodapé: mesma linha, tipografia e paginação dos relatórios.
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(4, 120, 87);
+    doc.text('DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO', margin + 5, y + 6);
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(55, 65, 81);
+    doc.text(
+      `Assinado por: ${normalizePdfText(closure.signedByName)} (${normalizePdfText(closure.signedByRegister)})`,
+      margin + 5,
+      y + 14
+    );
+    doc.text(`Data/Hora: ${new Date(closure.signatureDate).toLocaleString('pt-BR')}`, margin + 5, y + 20);
+    doc.text(`IP de Origem: ${closure.signatureIp}   |   Algoritmo: SHA-256`, margin + 5, y + 26);
+    doc.setFont('Courier', 'normal');
+    doc.setFontSize(7);
+    doc.text(`Hash: ${closure.signatureHash}`, margin + 5, y + 32);
+  } else {
+    ensureSpace(30);
+    y += 8;
+    doc.setDrawColor(87, 83, 78);
+    doc.setLineWidth(0.3);
+    doc.line(pageWidth / 2 - 30, y, pageWidth / 2 + 30, y);
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(28, 25, 22);
+    doc.text(normalizePdfText(input.professionalName || 'Profissional de Saúde'), pageWidth / 2, y + 5, { align: 'center' });
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(normalizePdfText(input.professionalRegister || input.professionalTitle || ''), pageWidth / 2, y + 9, { align: 'center' });
+  }
+
   const totalPages = doc.getNumberOfPages();
   for (let page = 1; page <= totalPages; page += 1) {
     doc.setPage(page);
@@ -347,8 +376,22 @@ export function generatePatientSessionsPdf(input: PatientSessionsPdfInput) {
     doc.setFont('Helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(120, 113, 108);
-    doc.text('Controle de Sessões - Emitido por evolucaoclinica.app.br', margin, 289);
-    doc.text(`Página ${page} de ${totalPages}`, pageWidth - margin, 289, { align: 'right' });
+
+    if (input.monthClosure) {
+      const closure = input.monthClosure;
+      const shortHash = `${closure.signatureHash.substring(0, 16)}...`;
+      const formattedDate = new Date(closure.signatureDate).toLocaleDateString('pt-BR');
+      doc.text(
+        `Assinado Digitalmente por: ${normalizePdfText(closure.signedByName)} (${normalizePdfText(closure.signedByRegister)})`,
+        margin,
+        285
+      );
+      doc.text(`Data: ${formattedDate} | Hash: ${shortHash}`, margin, 289);
+      doc.text(`Página ${page} de ${totalPages}`, pageWidth - margin, 289, { align: 'right' });
+    } else {
+      doc.text('Controle de Sessões - Emitido por evolucaoclinica.app.br', margin, 289);
+      doc.text(`Página ${page} de ${totalPages}`, pageWidth - margin, 289, { align: 'right' });
+    }
   }
 
   return doc;

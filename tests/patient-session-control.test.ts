@@ -44,3 +44,15 @@ assert.match(pdf, /renderSessionCard\(leftSession/);
 assert.match(pdf, /rightSession/);
 
 console.log('patient-session-control: ok');
+
+const monthClosureMigration = readFileSync('supabase/migrations/20260921190000_add_patient_session_month_closure_signing.sql', 'utf8');
+assert.match(monthClosureMigration, /create table if not exists public\.patient_session_month_closures/);
+assert.match(monthClosureMigration, /sign_patient_session_month/);
+assert.match(monthClosureMigration, /snapshot_hash/);
+assert.match(monthClosureMigration, /guard_closed_patient_session_month/);
+assert.match(service, /closePatientSessionMonth/);
+assert.match(service, /fetchPatientSessionMonthClosure/);
+assert.match(page, /Fechar e assinar mês/);
+assert.match(page, /Baixar PDF assinado/);
+assert.match(pdf, /DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO/);
+assert.match(pdf, /monthClosure/);
