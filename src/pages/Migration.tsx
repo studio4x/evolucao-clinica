@@ -4,6 +4,67 @@ import { Database, UploadCloud, CheckCircle2, Lock, Shield, FileText, ArrowRight
 import { useAuthStore } from '../store/authStore';
 import { createMigrationRequest, fetchMyMigrationRequests, getMigrationAttachmentUrl, MigrationRequest } from '../services/migration';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+
+const MIGRATION_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Faça uma solicitação por paciente',
+    description: 'Informe o nome do paciente e selecione de qual plataforma ou formato os dados serão migrados. Uma solicitação individual ajuda a manter cada prontuário organizado.',
+    icon: Database,
+  },
+  {
+    title: 'Envie os arquivos e orientações',
+    description: 'Anexe planilhas, documentos, PDFs, fotos ou um arquivo compactado de até 50 MB. Use as observações para explicar períodos, colunas ou detalhes importantes da importação.',
+    icon: UploadCloud,
+  },
+  {
+    title: 'Acompanhe o andamento',
+    description: 'Depois do envio, consulte nesta página o histórico das solicitações e veja se cada migração está pendente, em andamento, concluída ou cancelada.',
+    icon: RefreshCw,
+  },
+  {
+    title: 'Revise os registros importados',
+    description: 'Quando a equipe concluir o processamento, os dados ficam disponíveis na plataforma para conferência e revisão antes de você utilizá-los no acompanhamento clínico.',
+    icon: CheckCircle2,
+  },
+  {
+    title: 'Proteja os dados clínicos',
+    description: 'Envie os documentos somente pelo canal de migração da plataforma e evite compartilhar prontuários fora do fluxo autorizado. O serviço está disponível para assinantes do Plano Anual e administradores.',
+    icon: Shield,
+  },
+];
+
+const MIGRATION_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre a Migração de Prontuários',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a funcionalidade de Migração de Prontuários.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type MigrationGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function MigrationGuideButton({ compact = false, expanded, onOpen }: MigrationGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona a Migração de Prontuários"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 export default function Migration() {
   const navigate = useNavigate();
@@ -27,6 +88,7 @@ export default function Migration() {
   const [patientName, setPatientName] = useState('');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Load user's migration requests
   const loadRequests = async (showLoading = true) => {
@@ -161,19 +223,36 @@ export default function Migration() {
     }).format(new Date(dateStr));
   };
 
+  const migrationGuide = (
+    <FeatureGuideModal
+      open={guideOpen}
+      onClose={() => setGuideOpen(false)}
+      eyebrow="Migração de prontuários"
+      title="Como funciona a Migração de Prontuários"
+      description="Entenda como enviar seus dados anteriores e acompanhar o trabalho de organização dos prontuários pela equipe responsável."
+      steps={MIGRATION_GUIDE_STEPS}
+      note="A migração é feita por solicitação e os registros só devem ser utilizados depois da conferência dos dados importados."
+      supportHref={MIGRATION_SUPPORT_HREF}
+    />
+  );
+
   // ---------------- LOCKED STATE (PAYWALL) ----------------
   if (!isYearlyOrAdmin) {
     return (
       <div className="space-y-6 pb-12">
         {/* Header */}
-        <div>
-          <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
-            <Database className="text-brand-primary mr-3 shrink-0" size={32} />
-            <span>Migração de Prontuários</span>
-          </h2>
-          <p className="text-brand-text-muted text-sm mt-1">
-            Solicite a migração do histórico do seu consultório com apoio da nossa equipe.
-          </p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
+              <Database className="text-brand-primary mr-3 shrink-0" size={32} />
+              <span>Migração de Prontuários</span>
+              <span className="ml-3 hidden shrink-0 sm:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+            </h2>
+            <p className="text-brand-text-muted text-sm mt-1">
+              Solicite a migração do histórico do seu consultório com apoio da nossa equipe.
+            </p>
+          </div>
+          <span className="sm:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
         </div>
 
         {/* Promo and Upgrade Banner */}
@@ -271,7 +350,8 @@ export default function Migration() {
             </div>
           </div>
         </div>
-      </div>
+      {migrationGuide}
+    </div>
     );
   }
 
@@ -284,19 +364,23 @@ export default function Migration() {
           <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
             <Database className="text-brand-primary mr-3 shrink-0" size={32} />
             <span>Migração de Prontuários</span>
+            <span className="ml-3 hidden shrink-0 sm:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           </h2>
           <p className="text-brand-text-muted text-sm mt-1">
             Envie as informações do seu sistema anterior para importarmos seus prontuários sem custo adicional.
           </p>
         </div>
 
-        <button
-          onClick={() => loadRequests(true)}
-          className="p-3 bg-white hover:bg-brand-bg border border-brand-border text-brand-text-muted hover:text-brand-text rounded-2xl transition-all self-start sm:self-auto"
-          title="Atualizar Página"
-        >
-          <RefreshCw size={18} />
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="sm:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+          <button
+            onClick={() => loadRequests(true)}
+            className="p-3 bg-white hover:bg-brand-bg border border-brand-border text-brand-text-muted hover:text-brand-text rounded-2xl transition-all"
+            title="Atualizar Página"
+          >
+            <RefreshCw size={18} />
+          </button>
+        </div>
       </div>
 
       {success && (
@@ -536,6 +620,7 @@ export default function Migration() {
           )}
         </div>
       </div>
+      {migrationGuide}
     </div>
   );
 }

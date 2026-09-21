@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle, Cloud, Database, Download, Loader2, Lock, RefreshCcw, Shield, ShieldAlert } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowRight, CheckCircle, Cloud, Database, Download, Loader2, Lock, RefreshCcw, Shield, ShieldAlert, HelpCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { showAlert, showConfirm } from '../store/modalStore';
@@ -13,6 +13,7 @@ import {
   uploadBackupToGoogleDrive
 } from '../services/backupService';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 
 interface DriveBackup {
   id: string;
@@ -27,6 +28,66 @@ const formatBackupName = (name: string, snapshot = false) => {
   const [year, month, day] = datePart.split('-');
   return `${snapshot ? 'Snapshot' : 'Backup'} do dia ${day}/${month}/${year} às ${hour}:${minute}:${second}`;
 };
+
+const BACKUP_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Escolha como fazer a cópia de segurança',
+    description: 'Baixe um backup local ou conecte o Google Drive para salvar uma cópia completa dos dados da conta na nuvem.',
+    icon: Download,
+  },
+  {
+    title: 'Configure o backup automático',
+    description: 'Ative a automação e escolha uma frequência diária, semanal ou mensal para manter cópias periódicas no Google Drive.',
+    icon: RefreshCcw,
+  },
+  {
+    title: 'Acompanhe as versões disponíveis',
+    description: 'A plataforma mantém as três versões mais recentes salvas no Drive para facilitar a consulta e a restauração quando necessário.',
+    icon: Database,
+  },
+  {
+    title: 'Restaure com conferência',
+    description: 'Ao restaurar, os dados do backup são mesclados com a conta atual. Pacientes e evoluções criados depois do backup não são excluídos automaticamente.',
+    icon: Shield,
+  },
+  {
+    title: 'Mantenha o Google Drive conectado',
+    description: 'Para salvar, listar ou restaurar backups na nuvem, a conta Google precisa estar autorizada. Se a conexão cair, reconecte antes de realizar a operação.',
+    icon: Cloud,
+  },
+];
+
+const BACKUP_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre Backup e Exportação de Dados',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a funcionalidade de Backup e Exportação de Dados.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type BackupGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function BackupGuideButton({ compact = false, expanded, onOpen }: BackupGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona o Backup e Exportação de Dados"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 export default function BackupExport() {
   const navigate = useNavigate();
@@ -44,6 +105,7 @@ export default function BackupExport() {
   const [restoringBackupId, setRestoringBackupId] = useState<string | null>(null);
   const [backupToRestore, setBackupToRestore] = useState<DriveBackup | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const isYearly = hasActiveYearlyAccess({
     profileRole,
@@ -214,11 +276,12 @@ export default function BackupExport() {
 
   return (
     <div className="w-full space-y-6 pb-12">
-      <div>
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center text-3xl font-display font-bold text-brand-text"><Cloud className="mr-3 shrink-0 text-brand-primary" size={32} /><span>Backup e Exportação de Dados</span></h1>
+          <h1 className="flex items-center text-3xl font-display font-bold text-brand-text"><Cloud className="mr-3 shrink-0 text-brand-primary" size={32} /><span>Backup e Exportação de Dados</span><span className="ml-3 hidden shrink-0 sm:inline-flex"><BackupGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span></h1>
           <p className="mt-1 text-sm text-brand-text-muted">Proteja, exporte e restaure os dados da sua conta.</p>
         </div>
+        <span className="sm:hidden"><BackupGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
       </div>
 
       {successMessage && (
@@ -338,6 +401,17 @@ export default function BackupExport() {
           </div>
         </div>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Backup e exportação"
+        title="Como funciona o Backup e Exportação de Dados"
+        description="Entenda como proteger os dados da sua conta, manter versões no Google Drive e restaurar uma cópia anterior com segurança."
+        steps={BACKUP_GUIDE_STEPS}
+        note="Antes de restaurar, confira a data da versão escolhida. A restauração mescla os dados e não substitui automaticamente novos registros por exclusão."
+        supportHref={BACKUP_SUPPORT_HREF}
+      />
     </div>
   );
 }

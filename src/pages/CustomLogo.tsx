@@ -1,12 +1,73 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, CheckCircle, Crop, FileText, Image, Loader2, Lock, Shield, Trash2, Upload } from 'lucide-react';
+import { ArrowRight, CheckCircle, Crop, FileText, Image, Loader2, Lock, Shield, Trash2, Upload, HelpCircle } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { showAlert } from '../store/modalStore';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { getDocumentLogoPreviewStyle, normalizeCustomLogoSettings } from '../utils/documentLogo';
 import { ImageCropEditor } from '../components/common/ImageCropEditor';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+
+const CUSTOM_LOGO_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Envie o logotipo profissional',
+    description: 'Escolha uma imagem PNG, JPG ou WEBP de até 2 MB. O arquivo pode representar sua marca pessoal ou a identidade visual da clínica.',
+    icon: Upload,
+  },
+  {
+    title: 'Ajuste recorte e tamanho',
+    description: 'Use “Ajustar corte” para posicionar a imagem e o controle de escala para definir como ela aparecerá no cabeçalho dos documentos.',
+    icon: Crop,
+  },
+  {
+    title: 'Confira cada tipo de documento',
+    description: 'Alterne entre Prontuário, Relatório e PDI na prévia para confirmar se a marca está bem posicionada nos diferentes documentos clínicos.',
+    icon: FileText,
+  },
+  {
+    title: 'Salve as alterações',
+    description: 'Depois de ajustar a escala, clique em “Salvar ajuste”. O logotipo e as configurações serão usados nos próximos PDFs e documentos impressos.',
+    icon: CheckCircle,
+  },
+  {
+    title: 'Use a identidade visual com segurança',
+    description: 'A personalização do logotipo é exclusiva do Plano Anual. Remover a imagem restaura a marca padrão da plataforma nos novos documentos.',
+    icon: Shield,
+  },
+];
+
+const CUSTOM_LOGO_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre o Logotipo Personalizado',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a funcionalidade de Logotipo Personalizado.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type CustomLogoGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function CustomLogoGuideButton({ compact = false, expanded, onOpen }: CustomLogoGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona o Logotipo Personalizado"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 export default function CustomLogo() {
   const navigate = useNavigate();
@@ -19,6 +80,7 @@ export default function CustomLogo() {
   const [loading, setLoading] = useState(true);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const isYearly = hasActiveYearlyAccess({
     profileRole,
@@ -216,16 +278,18 @@ export default function CustomLogo() {
 
   return (
     <div className="w-full space-y-6 pb-12">
-      <div>
+      <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center text-3xl font-display font-bold text-brand-text">
             <Image className="mr-3 shrink-0 text-brand-primary" size={32} />
             <span>Logotipo Personalizado</span>
+            <span className="ml-3 hidden shrink-0 sm:inline-flex"><CustomLogoGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           </h1>
           <p className="mt-1 text-sm text-brand-text-muted">
             Personalize o timbre dos seus relatórios, PDIs e evoluções clínicas.
           </p>
         </div>
+        <span className="sm:hidden"><CustomLogoGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
       </div>
 
       {successMessage && (
@@ -407,6 +471,17 @@ export default function CustomLogo() {
           </section>
         </>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Logotipo personalizado"
+        title="Como funciona o Logotipo Personalizado"
+        description="Personalize os documentos clínicos com a identidade visual do seu consultório e confira o resultado antes de gerar novos arquivos."
+        steps={CUSTOM_LOGO_GUIDE_STEPS}
+        note="A prévia ajuda a validar o resultado, mas a aplicação do logotipo acontece nos próximos documentos gerados depois que você salvar os ajustes."
+        supportHref={CUSTOM_LOGO_SUPPORT_HREF}
+      />
     </div>
   );
 }

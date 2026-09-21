@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { UserAvatar } from '../components/common/UserAvatar';
-import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle, User } from 'lucide-react';
+import { Mail, ShieldAlert, Loader2, CheckCircle, AlertCircle, Key, Briefcase, Sparkles, RefreshCcw, Trash2, AlertTriangle, User, HelpCircle } from 'lucide-react';
 import { clearOnboardingState, isOnboardingComplete } from '../utils/onboarding';
 import { clearPendingGoogleScopes } from '../services/googleAuth';
 import { showConfirm } from '../store/modalStore';
@@ -11,6 +11,67 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { WORK_CONTEXT_OPTIONS, isValidWorkContext, type WorkContext } from '../constants/professionalProfile';
 import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
 import { WhatsAppVerificationField } from '../components/common/WhatsAppVerificationField';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+
+const PROFILE_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Mantenha seus dados profissionais atualizados',
+    description: 'Revise nome, sobrenome, rótulo profissional, contexto de atuação e número de registro. Essas informações aparecem no seu perfil e nos documentos clínicos gerados.',
+    icon: User,
+  },
+  {
+    title: 'Confirme o número do WhatsApp',
+    description: 'Quando o WhatsApp estiver habilitado, informe um número válido e conclua a verificação com o código recebido antes de salvar o perfil.',
+    icon: CheckCircle,
+  },
+  {
+    title: 'Entenda o acesso da conta',
+    description: 'O e-mail vinculado é a credencial de login e não pode ser alterado por este formulário. Quando a conta usa Google Login, a autenticação é gerenciada pelo Google.',
+    icon: Key,
+  },
+  {
+    title: 'Revise o onboarding quando precisar',
+    description: 'A opção de reiniciar onboarding permite rever o fluxo inicial, refazer a criação do primeiro paciente, gerar uma evolução e repetir a sincronização da agenda.',
+    icon: RefreshCcw,
+  },
+  {
+    title: 'Salve ou exclua a conta com atenção',
+    description: 'Salve as alterações ao terminar. A exclusão definitiva remove o acesso e os dados associados ao cadastro, por isso exige uma confirmação final e não pode ser desfeita.',
+    icon: AlertTriangle,
+  },
+];
+
+const PROFILE_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre Meu Perfil',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a funcionalidade Meu Perfil.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type ProfileGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function ProfileGuideButton({ compact = false, expanded, onOpen }: ProfileGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona Meu Perfil"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -25,6 +86,7 @@ export default function Profile() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappVerifiedNumber, setWhatsappVerifiedNumber] = useState<string | null>(null);
   const [whatsappOptIn, setWhatsappOptIn] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const WHATSAPP_OPT_IN_TEXT = 'Quero receber pelo WhatsApp notificações operacionais relacionadas à minha conta e ao uso do Evolução Clínica. Posso cancelar essa autorização a qualquer momento.';
   const WHATSAPP_OPT_IN_TEXT_VERSION = 'v1';
@@ -487,6 +549,12 @@ export default function Profile() {
         icon={User}
         title="Meu Perfil"
         description="Gerencie suas informações pessoais e visualize seus detalhes de acesso."
+        titleActions={<ProfileGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
+        actions={(
+          <span className="sm:hidden">
+            <ProfileGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+          </span>
+        )}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
@@ -966,6 +1034,17 @@ export default function Profile() {
           </div>
         </div>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Meu perfil"
+        title="Como funciona Meu Perfil"
+        description="Use esta página para manter seus dados profissionais corretos e controlar informações importantes do acesso à plataforma."
+        steps={PROFILE_GUIDE_STEPS}
+        note="Dados profissionais atualizados ajudam a manter o perfil, os documentos clínicos e as comunicações da plataforma consistentes."
+        supportHref={PROFILE_SUPPORT_HREF}
+      />
     </div>
   );
 }

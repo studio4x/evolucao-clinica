@@ -1,11 +1,72 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Check, Loader2, Mail, Save, AlertTriangle } from 'lucide-react';
+import { Check, Loader2, Mail, Save, AlertTriangle, HelpCircle, Bell, MessageCircle, Clock3 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { WhatsAppVerificationField } from '../components/common/WhatsAppVerificationField';
 import { normalizeRequiredWhatsAppNumber } from '../utils/whatsappNumber';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+
+const COMMUNICATION_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Escolha quais novidades deseja receber',
+    description: 'Ative ou desative orientações de onboarding, conteúdo educativo e mensagens comerciais de acordo com o tipo de comunicação que é útil para você.',
+    icon: Mail,
+  },
+  {
+    title: 'Selecione seus canais de recebimento',
+    description: 'Você pode receber comunicações por e-mail, notificações push ou WhatsApp. Para usar o WhatsApp, o número precisa ser informado e verificado.',
+    icon: MessageCircle,
+  },
+  {
+    title: 'Mantenha o push ativado no celular',
+    description: 'A notificação push permite receber novidades da plataforma diretamente no celular. Ative também a permissão do navegador ou aplicativo para não perder avisos importantes.',
+    icon: Bell,
+  },
+  {
+    title: 'Defina horário e fuso horário',
+    description: 'Informe o horário preferido e o fuso usado por você para que as comunicações programadas respeitem melhor sua rotina.',
+    icon: Clock3,
+  },
+  {
+    title: 'Salve depois de revisar',
+    description: 'Confira os canais selecionados, conclua a verificação do WhatsApp quando necessário e clique em “Salvar preferências” para aplicar as alterações.',
+    icon: Check,
+  },
+];
+
+const COMMUNICATION_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre as Preferências de Comunicação',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre as Preferências de Comunicação.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type CommunicationGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function CommunicationGuideButton({ compact = false, expanded, onOpen }: CommunicationGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funcionam as Preferências de Comunicação"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 type Preferences = {
   product_education_enabled: boolean;
@@ -44,6 +105,7 @@ export default function CommunicationPreferences() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Push states
   const [isPushSupported, setIsPushSupported] = useState(false);
@@ -115,6 +177,12 @@ export default function CommunicationPreferences() {
           icon={Mail}
           title="Preferências de comunicação"
           description="Escolha quais mensagens de relacionamento deseja receber."
+          titleActions={<CommunicationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
+          actions={(
+            <span className="sm:hidden">
+              <CommunicationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+            </span>
+          )}
         />
         
         {/* Card 1: Preferências de comunicação */}
@@ -259,6 +327,17 @@ export default function CommunicationPreferences() {
             </div>
           </div>
         </div>
+
+        <FeatureGuideModal
+          open={guideOpen}
+          onClose={() => setGuideOpen(false)}
+          eyebrow="Preferências de comunicação"
+          title="Como funcionam as Preferências de Comunicação"
+          description="Escolha quais comunicações deseja receber e em quais canais, mantendo o controle sobre as novidades e orientações da plataforma."
+          steps={COMMUNICATION_GUIDE_STEPS}
+          note="Para receber as novidades diretamente no celular, deixe as notificações push habilitadas nesta página e permita as notificações nas configurações do dispositivo."
+          supportHref={COMMUNICATION_SUPPORT_HREF}
+        />
 
 
 
