@@ -88,6 +88,31 @@ const ANAMNESIS_GUIDE_STEPS: FeatureGuideStep[] = [
   },
 ];
 
+type AnamnesisGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function AnamnesisGuideButton({ compact = false, expanded, onOpen }: AnamnesisGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona a Anamnese"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
+
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const response = await fetch(url);
   if (!response.ok) throw new Error('Não foi possível carregar o logotipo do PDF.');
@@ -1153,20 +1178,21 @@ export default function PatientAnamnesis() {
         icon={ClipboardList}
         title={`Anamnese — ${patientName}`}
         description="Organize informações iniciais e dados relevantes para o acompanhamento. Revise e atualize os registros sempre que necessário."
+        titleActions={
+          <AnamnesisGuideButton
+            expanded={guideOpen}
+            onOpen={() => setGuideOpen(true)}
+          />
+        }
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setGuideOpen(true)}
-              aria-label="Abrir guia de como funciona a Anamnese"
-              aria-haspopup="dialog"
-              aria-expanded={guideOpen}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30 sm:h-auto sm:w-auto sm:gap-2 sm:rounded-xl sm:px-3 sm:py-2 sm:text-xs sm:font-bold"
-              title="Como funciona"
-            >
-              <HelpCircle size={16} />
-              <span className="hidden sm:inline">Como funciona</span>
-            </button>
+            <span className="sm:hidden">
+              <AnamnesisGuideButton
+                compact
+                expanded={guideOpen}
+                onOpen={() => setGuideOpen(true)}
+              />
+            </span>
 
             {current && (
               <button

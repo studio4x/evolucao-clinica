@@ -49,6 +49,8 @@ assert.match(anamnesisPageSource, /Salvo automaticamente/);
 assert.match(anamnesisPageSource, /Como funciona a Anamnese/);
 assert.match(anamnesisPageSource, /Abrir guia de como funciona a Anamnese/);
 assert.match(anamnesisPageSource, /ANAMNESIS_GUIDE_STEPS/);
+assert.match(anamnesisPageSource, /titleActions=/);
+assert.match(anamnesisPageSource, /className="sm:hidden"/);
 assert.match(anamnesisPageSource, /handleDownloadPdf/);
 assert.match(anamnesisPageSource, /handleStartNew\('copy'\)/);
 assert.match(anamnesisPageSource, /handleStartNew\('blank'\)/);
