@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
-import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, AlertTriangle, Shield, Download, CloudOff, MoreVertical, LayoutDashboard, ClipboardList } from 'lucide-react';
+import { FileText, Plus, ExternalLink, Clock, RefreshCw, Loader2, Trash2, Bell, Sparkles, Copy, Check, Mail, Send, X, Folder, Pin, Printer, Eye, Edit3, MessageCircle, AlertTriangle, Shield, Download, CloudOff, MoreVertical, LayoutDashboard, ClipboardList, BadgeCheck, CircleOff } from 'lucide-react';
 import { transcribeAudio } from '../services/aiTranscription';
 import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
@@ -2445,7 +2445,17 @@ export default function PatientDetail() {
               <span className="truncate">{patient.full_name}</span>
             </span>
           )}
-          description={patient.status === 'active' ? 'Paciente ativo' : 'Paciente inativo'}
+          description={patient.status === 'active' ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+              <BadgeCheck size={14} aria-hidden="true" />
+              <span>Paciente ativo</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              <CircleOff size={14} aria-hidden="true" />
+              <span>Paciente inativo</span>
+            </span>
+          )}
           mobileActionsInline
           actions={<>
             <button
