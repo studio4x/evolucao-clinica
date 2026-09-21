@@ -1,0 +1,70 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Building2, ChevronDown, Copy, RefreshCw, Search, Users } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
+
+type ClinicMember = { id: string; name: string | null; email: string | null; role: string; clinicalAccessEnabled: boolean; status: string };
+type Clinic = {
+  id: string; name: string; tradeName: string | null; operationalStatus: string; createdAt: string;
+  featureEnabled: boolean; ownerIntegrity: 'OK' | 'MISSING' | 'MULTIPLE';
+  subscription: { planCode?: string; billingCycle?: string; financialStatus?: string; entitlementMode?: string; currentPeriodEnd?: string | null; cancelAtPeriodEnd?: boolean; contractedSeats?: number } | null;
+  seatUsage: { activeSeats: number; reservedSeats: number; availableSeats: number; minimumSeats: number };
+  members: { total: number; clinical: number; administrative: number };
+  owner: { professionalId?: string; name?: string | null; email?: string | null } | null;
+  pendingInvitations: { total: number; clinicalReserved: number };
+  memberList?: ClinicMember[];
+};
+
+const statusLabel: Record<string, string> = { active: 'Ativa', pending_setup: 'Configuração pendente', restricted: 'Restrita', archived: 'Arquivada' };
+const financialLabel: Record<string, string> = { active: 'Ativo', past_due: 'Past due', canceled: 'Cancelado', unpaid: 'Não pago' };
+const badge = (tone: 'green' | 'amber' | 'slate' | 'red', text: string) => <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone === 'green' ? 'bg-emerald-50 text-emerald-700' : tone === 'amber' ? 'bg-amber-50 text-amber-700' : tone === 'red' ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'}`}>{text}</span>;
+
+export default function AdminClinics() {
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [financialFilter, setFinancialFilter] = useState('all');
+  const [selected, setSelected] = useState<Clinic | null>(null);
+
+  const refresh = async () => {
+    setLoading(true); setError('');
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session?.access_token) throw new Error('Não autenticado.');
+      const response = await fetch('/api/admin/clinics', { headers: { Authorization: `Bearer ${data.session.access_token}` }, cache: 'no-store' });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.error || 'Não foi possível carregar as clínicas.');
+      setClinics(Array.isArray(body.clinics) ? body.clinics : []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível carregar as clínicas.');
+    } finally { setLoading(false); }
+  };
+
+  useEffect(() => { void refresh(); }, []);
+
+  const filtered = useMemo(() => clinics.filter((clinic) => {
+    const haystack = [clinic.name, clinic.tradeName, clinic.owner?.name, clinic.owner?.email].filter(Boolean).join(' ').toLowerCase();
+    return (!query || haystack.includes(query.toLowerCase()))
+      && (statusFilter === 'all' || clinic.operationalStatus === statusFilter)
+      && (financialFilter === 'all' || clinic.subscription?.financialStatus === financialFilter);
+  }), [clinics, financialFilter, query, statusFilter]);
+
+  const summary = {
+    total: clinics.length,
+    active: clinics.filter((clinic) => clinic.operationalStatus === 'active').length,
+    pending: clinics.filter((clinic) => clinic.operationalStatus === 'pending_setup').length,
+    restricted: clinics.filter((clinic) => ['restricted', 'unpaid', 'past_due'].includes(clinic.operationalStatus) || ['unpaid', 'past_due'].includes(clinic.subscription?.financialStatus || '')).length,
+  };
+
+  return <div className="space-y-6">
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><div className="flex items-center gap-3"><div className="rounded-2xl bg-brand-primary/10 p-3 text-brand-primary"><Building2 size={24} /></div><div><h1 className="font-display text-2xl font-bold text-brand-primary">Clínicas</h1><p className="mt-1 text-sm text-brand-text-muted">Gerencie e acompanhe as organizações cadastradas na plataforma.</p></div></div></div><button type="button" onClick={() => void refresh()} disabled={loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-brand-border bg-white px-4 text-sm font-semibold text-brand-primary shadow-sm disabled:opacity-50"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Atualizar lista</button></div>
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{[['Total de clínicas', summary.total, 'bg-sky-50 text-sky-700'], ['Ativas', summary.active, 'bg-emerald-50 text-emerald-700'], ['Configuração pendente', summary.pending, 'bg-amber-50 text-amber-700'], ['Restritas / situação financeira', summary.restricted, 'bg-slate-100 text-slate-700']].map(([label, value, style]) => <div key={String(label)} className="rounded-2xl border border-brand-border/70 bg-white p-4 shadow-sm"><p className="text-xs text-brand-text-muted">{label}</p><p className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-xl font-bold ${style}`}>{value}</p></div>)}</div>
+    <div className="flex flex-col gap-3 rounded-2xl border border-brand-border/70 bg-white p-4 shadow-sm lg:flex-row"><label className="relative flex-1"><Search size={17} className="absolute left-3 top-3 text-brand-text-muted" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por clínica ou responsável" className="min-h-11 w-full rounded-xl border border-brand-border pl-10 pr-3 text-sm outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10" /></label><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="min-h-11 rounded-xl border border-brand-border px-3 text-sm"><option value="all">Todos os status</option><option value="active">Ativas</option><option value="pending_setup">Configuração pendente</option><option value="restricted">Restritas</option><option value="archived">Arquivadas</option></select><select value={financialFilter} onChange={(event) => setFinancialFilter(event.target.value)} className="min-h-11 rounded-xl border border-brand-border px-3 text-sm"><option value="all">Toda situação financeira</option><option value="active">Ativo</option><option value="past_due">Past due</option><option value="unpaid">Não pago</option><option value="canceled">Cancelado</option></select></div>
+    {error && <div role="alert" className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+    <div className="overflow-hidden rounded-2xl border border-brand-border/70 bg-white shadow-sm">{loading ? <div className="p-10 text-center text-sm text-brand-text-muted">Carregando clínicas…</div> : filtered.length === 0 ? <div className="p-10 text-center text-sm text-brand-text-muted">Nenhuma clínica encontrada.</div> : <div className="overflow-x-auto"><table className="min-w-[940px] w-full text-left text-sm"><thead className="bg-brand-bg/50 text-xs uppercase tracking-wide text-brand-text-muted"><tr><th className="px-5 py-4">Clínica</th><th className="px-5 py-4">Status</th><th className="px-5 py-4">Plano</th><th className="px-5 py-4">Responsável</th><th className="px-5 py-4">Membros</th><th className="px-5 py-4">Licenças</th><th className="px-5 py-4">Financeiro</th><th className="px-5 py-4">Ações</th></tr></thead><tbody className="divide-y divide-brand-border/60">{filtered.map((clinic) => <tr key={clinic.id} className="align-top hover:bg-brand-bg/30"><td className="px-5 py-4"><p className="font-semibold text-brand-primary">{clinic.name}</p>{clinic.tradeName && <p className="mt-0.5 text-xs text-brand-text-muted">{clinic.tradeName}</p>}<p className="mt-1 font-mono text-[10px] text-brand-text-muted">{clinic.id}</p></td><td className="px-5 py-4">{badge(clinic.operationalStatus === 'active' ? 'green' : clinic.operationalStatus === 'pending_setup' ? 'amber' : 'slate', statusLabel[clinic.operationalStatus] || clinic.operationalStatus)}<p className="mt-2 text-[11px]">{clinic.featureEnabled ? badge('green', 'Piloto habilitado') : badge('slate', 'Desabilitado')}</p></td><td className="px-5 py-4"><p className="font-medium">{clinic.subscription?.planCode || '—'}</p><p className="text-xs text-brand-text-muted">{clinic.subscription?.billingCycle || '—'}</p></td><td className="px-5 py-4"><p>{clinic.owner?.name || 'Sem owner'}</p><p className="text-xs text-brand-text-muted">{clinic.owner?.email || '—'}</p>{clinic.ownerIntegrity !== 'OK' && <p className="mt-1 text-[11px] font-semibold text-amber-700">Owner: {clinic.ownerIntegrity}</p>}</td><td className="px-5 py-4"><span className="inline-flex items-center gap-1"><Users size={14} /> {clinic.members.total}</span><p className="text-xs text-brand-text-muted">{clinic.members.clinical} clínicos · {clinic.members.administrative} admin.</p></td><td className="px-5 py-4"><p>{clinic.seatUsage.activeSeats}/{clinic.subscription?.contractedSeats || 0} ativas</p><p className="text-xs text-brand-text-muted">{clinic.seatUsage.reservedSeats} reservadas · {clinic.seatUsage.availableSeats} disponíveis</p></td><td className="px-5 py-4">{badge(clinic.subscription?.financialStatus === 'active' ? 'green' : clinic.subscription?.financialStatus === 'past_due' ? 'amber' : 'slate', financialLabel[clinic.subscription?.financialStatus || ''] || 'Sem contrato')}</td><td className="px-5 py-4"><button type="button" onClick={() => setSelected(clinic)} className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-brand-border px-3 font-semibold text-brand-primary">Ver detalhes <ChevronDown size={15} /></button></td></tr>)}</tbody></table></div>}</div>
+    {selected && <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/35 p-0 sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`Detalhes de ${selected.name}`} onClick={(event) => { if (event.target === event.currentTarget) setSelected(null); }}><div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-primary">Detalhes da clínica</p><h2 className="mt-2 font-display text-2xl font-bold text-brand-primary">{selected.name}</h2><p className="mt-1 text-sm text-brand-text-muted">{selected.tradeName || 'Sem nome fantasia'}</p></div><button type="button" className="rounded-lg border border-brand-border p-2 text-brand-text-muted" onClick={() => setSelected(null)} aria-label="Fechar detalhes">×</button></div><div className="mt-6 grid gap-3 sm:grid-cols-2"><Info label="Status" value={statusLabel[selected.operationalStatus] || selected.operationalStatus} /><Info label="Owner" value={selected.owner?.name || 'Não identificado'} /><Info label="Contrato" value={`${selected.subscription?.planCode || '—'} · ${financialLabel[selected.subscription?.financialStatus || ''] || 'Sem situação'}`} /><Info label="Entitlement" value={selected.subscription?.entitlementMode || 'none'} /><Info label="Licenças" value={`${selected.seatUsage.activeSeats} ativas · ${selected.seatUsage.reservedSeats} reservadas · ${selected.seatUsage.availableSeats} disponíveis`} /><Info label="Feature" value={selected.featureEnabled ? 'Piloto habilitado' : 'Desabilitado'} /></div><div className="mt-6 rounded-2xl border border-brand-border/70 p-4"><div className="flex items-center justify-between"><h3 className="font-semibold text-brand-primary">Membros administrativos</h3><span className="text-xs text-brand-text-muted">{selected.members.total} ativos</span></div>{selected.memberList?.length ? <div className="mt-3 divide-y divide-brand-border/60">{selected.memberList.map((member) => <div key={member.id} className="flex items-center justify-between gap-3 py-3 text-sm"><div><p className="font-medium">{member.name || 'Sem nome'}</p><p className="text-xs text-brand-text-muted">{member.email || '—'}</p></div><div className="text-right text-xs"><p>{member.role}</p><p className={member.clinicalAccessEnabled ? 'text-emerald-700' : 'text-brand-text-muted'}>{member.clinicalAccessEnabled ? 'Acesso clínico' : 'Acesso administrativo'}</p></div></div>)}</div> : <p className="mt-3 text-sm text-brand-text-muted">Nenhum membro ativo retornado.</p>}</div><div className="mt-6 flex flex-wrap gap-3"><button type="button" className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-brand-border px-4 text-sm font-semibold text-brand-primary" onClick={() => void navigator.clipboard?.writeText(selected.id)}><Copy size={15} /> Copiar ID</button><button type="button" className="min-h-10 rounded-xl bg-brand-primary px-4 text-sm font-semibold text-white" onClick={() => setSelected(null)}>Fechar</button></div></div></div>}
+  </div>;
+}
+
+function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl bg-brand-bg/50 p-3"><p className="text-[11px] font-semibold uppercase tracking-wide text-brand-text-muted">{label}</p><p className="mt-1 text-sm font-semibold text-brand-primary">{value}</p></div>; }

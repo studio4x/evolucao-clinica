@@ -130,7 +130,7 @@ try {
   assert.equal(landing.headers.get("referrer-policy"), "no-referrer"); assert.match(landing.headers.get("content-security-policy")!, /default-src 'none'/);
   assert.doesNotMatch(html, /analytics|googletagmanager|facebook|stripe|index\.html|src\/App/i);
   let replaced = "", navigated = "", posted = "";
-  await vm.runInNewContext(INVITATION_LANDING_SCRIPT, { location: { hash: `#invite=${sentinel}`, replace: (path: string) => { navigated = path; } }, history: { replaceState: (_state: any, _title: string, path: string) => { replaced = path; } }, URLSearchParams, fetch: async (_path: string, options: any) => { assert.equal(replaced, "/convite-clinica"); posted = JSON.parse(options.body).token; return { ok: true }; }, document: { getElementById: () => ({ textContent: "" }) } });
+  await vm.runInNewContext(INVITATION_LANDING_SCRIPT, { location: { hash: `#invite=${sentinel}`, replace: (path: string) => { navigated = path; } }, history: { replaceState: (_state: any, _title: string, path: string) => { replaced = path; } }, URLSearchParams, fetch: async (_path: string, options: any) => { assert.equal(replaced, "/convite-clinica"); posted = JSON.parse(options.body).token; return { ok: true }; }, document: { getElementById: () => ({ textContent: "" }), querySelector: () => ({ remove: () => undefined }) } });
   assert.equal(posted, sentinel); assert.equal(navigated, "/painel/convite-clinica"); assert.equal(memberships.length, 0);
   const handoff = await request("/handoff", undefined, { token: sentinel });
   assert.equal(handoff.status, 200); assert.match(handoff.cookie, /HttpOnly; Secure; SameSite=Lax/); assert.match(handoff.cookie, /Max-Age=2700/); assert.ok(!handoff.cookie.includes(sentinel));

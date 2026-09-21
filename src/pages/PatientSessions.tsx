@@ -91,7 +91,7 @@ export default function PatientSessions() {
       setEvolutions(evolutionResult.data || []);
     } catch (error: any) {
       console.error('[PatientSessions] Falha ao carregar:', error);
-      void showAlert(error.message || 'Não foi possível carregar o controle de sessões.', { title: 'Controle de sessões', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível carregar o controle de sessões.', { title: 'Controle de sessões', variant: 'danger', icon: 'warning' });
     } finally {
       setLoading(false);
     }
@@ -157,7 +157,7 @@ export default function PatientSessions() {
       setFormSession(undefined);
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível salvar a sessão.', { title: 'Controle de sessões', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível salvar a sessão.', { title: 'Controle de sessões', variant: 'danger', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -170,7 +170,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await softDeletePatientSession(session); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível excluir.', { title: 'Erro', variant: 'error', icon: 'warning' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível excluir.', { title: 'Erro', variant: 'danger', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -182,7 +182,7 @@ export default function PatientSessions() {
       setSignSession(null); setSignatureBlob(null); setSignerName(''); setSignerType('patient');
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível registrar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível registrar a assinatura.', { title: 'Assinatura', variant: 'danger', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -194,7 +194,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await revokePatientSessionSignature(session, 'Revogada pelo profissional para correção do registro.'); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível revogar a assinatura.', { title: 'Assinatura', variant: 'error', icon: 'warning' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível revogar a assinatura.', { title: 'Assinatura', variant: 'danger', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -334,7 +334,7 @@ export default function PatientSessions() {
       setShowPackageForm(false);
       await load();
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível iniciar o pacote.', { title: 'Pacote de sessões', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível iniciar o pacote.', { title: 'Pacote de sessões', variant: 'danger', icon: 'warning' });
     } finally { setWorking(false); }
   };
 
@@ -344,7 +344,7 @@ export default function PatientSessions() {
     if (!confirmed) return;
     setWorking(true);
     try { await cancelPatientSessionPackage(activePackage.id); await load(); }
-    catch (error: any) { void showAlert(error.message || 'Não foi possível cancelar o pacote.', { title: 'Pacote de sessões', variant: 'error', icon: 'warning' }); }
+    catch (error: any) { void showAlert(error.message || 'Não foi possível cancelar o pacote.', { title: 'Pacote de sessões', variant: 'danger', icon: 'warning' }); }
     finally { setWorking(false); }
   };
 
@@ -352,7 +352,7 @@ export default function PatientSessions() {
     <div className="space-y-6 pb-24">
       <PanelPageHeader
         title="Controle de Sessões"
-        subtitle={patient ? patient.full_name : 'Registro mensal de atendimentos e assinaturas'}
+        description={patient ? patient.full_name : 'Registro mensal de atendimentos e assinaturas'}
         actions={<Link to={id ? `/painel/patients/${id}` : '/painel/patients'} className="btn-outline"><ArrowLeft size={16} /><span>Voltar</span></Link>}
       />
 

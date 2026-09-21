@@ -85,7 +85,7 @@ import { PersonalContextRoute } from './components/clinic/PersonalContextRoute';
 import { useClinicContextStore } from './store/clinicContextStore';
 import { canEnterInvitedClinic } from './utils/clinicInvitationAccess';
 import { publicEffectFlags } from './config/publicFlags';
-import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
+import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, sanitizeOAuthCallbackUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
 const GOOGLE_SILENT_REFRESH_KEY = 'evolucao-clinica:google-silent-refresh';
 
@@ -149,6 +149,8 @@ function AnalyticsRouteObserver() {
 
   useEffect(() => {
     const sendPageView = () => {
+      sanitizeOAuthCallbackUrl();
+      sanitizeCurrentMarketingUrl();
       captureAcquisitionData();
       if (isPublicAcquisitionPathname(location.pathname)) {
         const acquisition = getCurrentAcquisitionData();
@@ -161,7 +163,6 @@ function AnalyticsRouteObserver() {
           dedupeKey: `acquisition_arrival:${location.pathname}`
         });
       }
-      sanitizeCurrentMarketingUrl();
       refreshMarketingAnalyticsForCurrentRoute();
       if (getAnalyticsConsent() !== 'granted') {
         lastPageRef.current = null;
@@ -513,6 +514,7 @@ export default function App() {
 
       try {
         if (session) {
+          sanitizeOAuthCallbackUrl();
           const pendingScopes = readPendingGoogleScopes();
 
           if (currentState.googleAccessUserId && currentState.googleAccessUserId !== session.user.id) {
@@ -785,6 +787,7 @@ export default function App() {
       try {
         const result = await supabase.auth.getSession();
         if (result.data.session) {
+          sanitizeOAuthCallbackUrl();
           await trackMetaRegistrationBeforeAppAccess(result.data.session);
         }
         await handleAuthSession(result.data.session);
@@ -802,6 +805,7 @@ export default function App() {
       // executadas fora do lock interno do cliente Supabase.
       window.setTimeout(() => {
         void (async () => {
+          if (session) sanitizeOAuthCallbackUrl();
           if (session && _event === 'SIGNED_IN') {
             const method = typeof session.user.app_metadata?.provider === 'string'
               ? session.user.app_metadata.provider

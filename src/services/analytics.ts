@@ -336,6 +336,32 @@ export const sanitizeCurrentMarketingUrl = () => {
   window.history.replaceState(window.history.state, document.title, `${url.pathname}${url.search}${url.hash}`);
   return true;
 };
+
+// Supabase captures OAuth callback tokens before the application mounts. Once
+// that session is available, remove every credential-like parameter from the
+// address bar while preserving the route and functional `next` query.
+export const sanitizeOAuthCallbackUrl = () => {
+  if (!isBrowser()) return false;
+  const url = new URL(`${window.location.pathname}${window.location.search}${window.location.hash}`, 'https://evolucaoclinica.app.br');
+  const sensitive = new Set(['access_token', 'refresh_token', 'provider_token', 'provider_refresh_token', 'id_token', 'expires_at', 'expires_in', 'token_type', 'code', 'state']);
+  let changed = false;
+  for (const key of Array.from(url.searchParams.keys())) {
+    if (sensitive.has(key.toLowerCase())) { url.searchParams.delete(key); changed = true; }
+  }
+  if (url.hash.startsWith('#')) {
+    const kept = new URLSearchParams();
+    for (const [key, value] of new URLSearchParams(url.hash.slice(1)).entries()) {
+      if (sensitive.has(key.toLowerCase())) changed = true;
+      else kept.append(key, value);
+    }
+    const nextHash = kept.toString();
+    if (nextHash !== url.hash.slice(1)) changed = true;
+    url.hash = nextHash ? `#${nextHash}` : '';
+  }
+  if (!changed) return false;
+  window.history.replaceState(window.history.state, document.title, `${url.pathname}${url.search}${url.hash}`);
+  return true;
+};
 export const setConsentPreferences = (preferences: Omit<ConsentPreferences, 'necessary'>) => {
   if (!isBrowser()) return;
   const next: ConsentPreferences = { necessary: true, analytics: preferences.analytics === true, marketing: preferences.marketing === true };

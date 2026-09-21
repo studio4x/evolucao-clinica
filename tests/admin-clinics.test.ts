@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const server = readFileSync('server.ts', 'utf8');
+const migration = readFileSync('supabase/clinic-migrations/20260921_32_admin_clinic_directory.sql', 'utf8');
+const panel = readFileSync('src/pages/AdminPanel.tsx', 'utf8');
+const component = readFileSync('src/components/admin/AdminClinics.tsx', 'utf8');
+assert.match(server, /app\.get\("\/api\/admin\/clinics", requireAuth, requireAdmin/);
+assert.match(server, /list_admin_clinic_directory/);
+assert.match(server, /memberList/);
+assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.list_admin_clinic_directory\(\) TO service_role/);
+assert.match(migration, /organization_entitlement_mode/);
+assert.match(migration, /reserved_seats/);
+assert.doesNotMatch(migration, /evolutions|anamnese|patient_reports|organization_patients/i);
+assert.match(panel, /key: 'clinics', label: 'Clínicas', icon: Building2/);
+assert.match(panel, /navigate\('\/admin\/clinics'\)/);
+assert.match(component, /GET|\/api\/admin\/clinics/);
+assert.match(component, /Total de clínicas/);
+assert.match(component, /Owner/);
+console.log('admin clinics endpoint, navigation, privacy and seat contract: PASS');

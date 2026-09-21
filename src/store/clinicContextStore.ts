@@ -17,6 +17,7 @@ type ClinicContextState = {
   hydrateForUser: (userId: string, accessToken: string) => Promise<void>;
   revalidateForUser: (userId: string, accessToken: string) => Promise<void>;
   refreshAfterMutation: (userId: string, accessToken: string) => Promise<void>;
+  hydrateAcceptedClinicContext: (userId: string, accessToken: string, organizationId: string) => Promise<void>;
   selectContext: (context: ActiveClinicContext) => void;
   reset: () => void;
 };
@@ -160,6 +161,42 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
     advanceGeneration(userId);
     revalidationInFlight.delete(userId);
     await get().hydrateForUser(userId, accessToken);
+  },
+
+  hydrateAcceptedClinicContext: async (userId, accessToken, organizationId) => {
+    // Acceptance is a deliberate account transition. Invalidate any context
+    // request that started before the mutation, including a stale account's
+    // response, without weakening the normal race guard used elsewhere.
+    const currentUserId = get().userId;
+    if (currentUserId && currentUserId !== userId) {
+      advanceGeneration(currentUserId);
+      clearStoredContext(currentUserId);
+      set(personalState(userId));
+    }
+    advanceGeneration(userId);
+    revalidationInFlight.delete(userId);
+    await get().hydrateForUser(userId, accessToken);
+
+    const hasOrganization = () => {
+      const state = get();
+      return state.userId === userId && state.status === "ready"
+        && state.organizations.some((organization) => organization.id === organizationId);
+    };
+
+    // The invitation transaction and the authenticated context read can cross
+    // a replica boundary. Allow one bounded retry, never a polling loop.
+    if (!hasOrganization()) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      advanceGeneration(userId);
+      await get().hydrateForUser(userId, accessToken);
+    }
+
+    if (!hasOrganization()) throw new Error("context_unavailable");
+    get().selectContext({ type: "organization", organizationId });
+    const selected = get().activeContext;
+    if (selected.type !== "organization" || selected.organizationId !== organizationId) {
+      throw new Error("context_unavailable");
+    }
   },
 
   selectContext: (context) => {

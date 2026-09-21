@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { publicSupabaseEnvironment } from '../config/publicEnvironment';
-import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil, Tag, ArrowUpDown, ArrowUp, ArrowDown, Columns3 } from 'lucide-react';
+import { ShieldCheck, UserCheck, UserX, UserPlus, Search, Users, Clock, ShieldAlert, Check, Ban, Lock, Mail, Sparkles, LogOut, Loader2, Key, Settings, Eye, EyeOff, BarChart3, Coins, DollarSign, Activity, CreditCard, Calendar, User, Save, Globe, Bell, BellOff, CheckCheck, Send, Shield, Trash2, Upload, XCircle, Copy, RefreshCw, LifeBuoy, MessageSquare, AlertTriangle, Info, CheckCircle2, Link2Off, HelpCircle, Code, Database, MessageCircle, Menu, X, Compass, Target, ExternalLink, History, Pencil, Tag, ArrowUpDown, ArrowUp, ArrowDown, Columns3, Building2 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router-dom';
 import { AppVersion } from '../components/layout/AppVersion';
@@ -26,6 +26,7 @@ import { AdminConversionFunnel } from '../components/admin/AdminConversionFunnel
 import SubscriptionCouponsAdmin from '../components/admin/SubscriptionCouponsAdmin';
 import ProfessionalDetailsModal from '../components/admin/ProfessionalDetailsModal';
 import ProfessionalFunnelKanban from '../components/admin/ProfessionalFunnelKanban';
+import AdminClinics from '../components/admin/AdminClinics';
 import NotificationRecipientSelector from '../components/admin/NotificationRecipientSelector';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
@@ -162,7 +163,7 @@ function ProfessionalAvatar({ professional }: { professional: Professional }) {
   );
 }
 
-type AdminTab = 'professionals' | 'professional_funnel' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'coupons' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'seo' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
+type AdminTab = 'professionals' | 'clinics' | 'professional_funnel' | 'gemini_config' | 'google_pay_config' | 'token_usage' | 'plans' | 'coupons' | 'profile' | 'transactions' | 'migrations' | 'push_notifications' | 'email_notifications' | 'vapid_keys' | 'support' | 'brand' | 'seo' | 'tracking' | 'faq' | 'feedback' | 'jornada' | 'lifecycle' | 'whatsapp_config' | 'whatsapp_widget';
 type AdminNavItem = { key: AdminTab; label: string; icon: typeof Users };
 type AdminNavGroup = { title: string; items: AdminNavItem[] };
 type NotificationCenterChannel = 'email' | 'whatsapp' | 'push';
@@ -400,6 +401,7 @@ export default function AdminPanel() {
 
   const getActiveTab = (): AdminTab => {
     if (normalizedPath.endsWith('/professional-funnel')) return 'professional_funnel';
+    if (normalizedPath.endsWith('/clinics')) return 'clinics';
     if (normalizedPath.endsWith('/gemini-config')) return 'token_usage';
     if (normalizedPath.endsWith('/google-pay-config')) return 'google_pay_config';
     if (isTokenUsagePath) return 'token_usage';
@@ -432,6 +434,7 @@ export default function AdminPanel() {
       title: 'Atendimento & Usuários',
       items: [
         { key: 'professionals', label: 'Profissionais', icon: Users },
+        { key: 'clinics', label: 'Clínicas', icon: Building2 },
         { key: 'professional_funnel', label: 'Funil dos Profissionais', icon: Columns3 },
         { key: 'migrations', label: 'Migrações VIP', icon: Database },
         { key: 'support', label: 'Suporte / Tickets', icon: LifeBuoy },
@@ -472,6 +475,7 @@ export default function AdminPanel() {
 
   const setActiveTab = (tab: AdminTab) => {
     if (tab === 'professionals') navigate('/admin/professionals');
+    else if (tab === 'clinics') navigate('/admin/clinics');
     else if (tab === 'professional_funnel') navigate('/admin/professional-funnel');
     else if (tab === 'gemini_config') navigate(tokenUsageGeneralPath);
     else if (tab === 'google_pay_config') navigate('/admin/google-pay-config');
@@ -3360,17 +3364,15 @@ export default function AdminPanel() {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('professionals')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error("Erro ao carregar profissionais:", error);
-        return;
-      }
-
-      setProfessionals(data || []);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Não autenticado.');
+      const response = await fetch('/api/admin/professionals', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os profissionais.');
+      setProfessionals(Array.isArray(data.professionals) ? data.professionals : []);
+    } catch (error) {
+      console.error("Erro ao carregar profissionais:", error);
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -4593,6 +4595,8 @@ export default function AdminPanel() {
                   )}
                 </div>
               </div>
+            ) : activeTab === 'clinics' ? (
+              <AdminClinics />
             ) : activeTab === 'professional_funnel' ? (
               <ProfessionalFunnelKanban />
             ) : activeTab === 'google_pay_config' ? (

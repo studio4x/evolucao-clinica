@@ -3978,6 +3978,65 @@ app.post("/api/account/delete", requireAuth, async (req: any, res) => {
   }
 });
 
+app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any, res: any) => {
+  res.set({ "Cache-Control": "private, no-store", Vary: "Authorization" });
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("professionals")
+      .select("id, google_email, full_name, photo_url, role, status, created_at, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, acquisition_info, signup_acquisition_info")
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    if (error) throw error;
+    const professionals = (data || []).map((row: any) => ({
+      id: row.id,
+      google_email: row.google_email,
+      full_name: row.full_name,
+      photo_url: row.photo_url,
+      role: row.role,
+      status: row.status,
+      created_at: row.created_at,
+      subscription_plan: row.subscription_plan,
+      subscription_status: row.subscription_status,
+      subscription_ends_at: row.subscription_ends_at,
+      trial_ends_at: row.trial_ends_at,
+      acquisition_info: row.acquisition_info,
+      signup_acquisition_info: row.signup_acquisition_info,
+    }));
+    return res.json({ professionals });
+  } catch (error: any) {
+    console.error("[AdminProfessionals] Falha ao carregar profissionais:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar os profissionais." });
+  }
+});
+
+app.get("/api/admin/clinics", requireAuth, requireAdmin, async (_req: any, res: any) => {
+  res.set({ "Cache-Control": "private, no-store", Vary: "Authorization" });
+  try {
+    const { data, error } = await supabaseAdmin.rpc("list_admin_clinic_directory");
+    if (error) throw error;
+    const rows = Array.isArray(data) ? data : [];
+    const clinics = rows.map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      tradeName: row.tradeName ?? null,
+      operationalStatus: row.operationalStatus,
+      createdAt: row.createdAt,
+      featureEnabled: row.featureEnabled === true,
+      ownerIntegrity: row.ownerIntegrity,
+      subscription: row.subscription || null,
+      seatUsage: row.seatUsage || { activeSeats: 0, reservedSeats: 0, availableSeats: 0, minimumSeats: 3 },
+      members: row.members || { total: 0, clinical: 0, administrative: 0 },
+      memberList: Array.isArray(row.memberList) ? row.memberList : [],
+      owner: row.owner || null,
+      pendingInvitations: row.pendingInvitations || { total: 0, clinicalReserved: 0 },
+    }));
+    return res.json({ clinics });
+  } catch (error: any) {
+    console.error("[AdminClinics] Falha ao carregar clínicas:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar as clínicas." });
+  }
+});
+
 app.post("/api/admin/professionals", requireAuth, requireAdmin, async (req: any, res) => {
   const { firstName, lastName, email, password } = req.body || {};
 
