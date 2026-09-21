@@ -786,6 +786,7 @@ export default function App() {
             <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
             <Route path="history" element={<History />} />
             <Route path="tutorial" element={<Tutorial />} />
+            <Route path="tutorial/perguntas-frequentes" element={<Tutorial />} />
             <Route path="share-target" element={<ShareTarget />} />
             <Route path="subscription" element={<Subscription />} />
             <Route path="migration" element={<Migration />} />

@@ -16,12 +16,14 @@ import {
   Loader2,
   LifeBuoy
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 
 export default function Tutorial() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const activeTab = location.pathname.endsWith('/tutorial/perguntas-frequentes') ? 'faq' : 'workflow';
   
   // Estados para FAQ
   const [categories, setCategories] = useState<any[]>([]);
@@ -30,7 +32,6 @@ export default function Tutorial() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'workflow' | 'faq'>('workflow');
 
   const steps = [
     {
@@ -133,7 +134,7 @@ export default function Tutorial() {
           type="button"
           role="tab"
           aria-selected={activeTab === 'workflow'}
-          onClick={() => setActiveTab('workflow')}
+          onClick={() => navigate('/painel/tutorial', { replace: true })}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all sm:flex-none ${
             activeTab === 'workflow'
               ? 'bg-brand-primary text-white shadow-sm'
@@ -147,7 +148,7 @@ export default function Tutorial() {
           type="button"
           role="tab"
           aria-selected={activeTab === 'faq'}
-          onClick={() => setActiveTab('faq')}
+          onClick={() => navigate('/painel/tutorial/perguntas-frequentes', { replace: true })}
           className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all sm:flex-none ${
             activeTab === 'faq'
               ? 'bg-brand-primary text-white shadow-sm'
