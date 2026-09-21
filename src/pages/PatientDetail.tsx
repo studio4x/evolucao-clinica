@@ -28,6 +28,7 @@ import { convertEvolutionToTemplate } from '../services/evolutionTemplateConvers
 import { resolveHorizontalSwipe } from '../utils/horizontalSwipe';
 import PatientFilesCard from '../components/patients/PatientFilesCard';
 import PatientAnamnesisSummaryCard from '../components/patients/PatientAnamnesisSummaryCard';
+import PatientSessionsSummaryCard from '../components/patients/PatientSessionsSummaryCard';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -2580,6 +2581,13 @@ export default function PatientDetail() {
             <PatientAnamnesisSummaryCard
               patientId={patient.id}
               href={`/painel/patients/${id}/anamnesis`}
+            />
+          </div>
+
+          <div className={`order-3 xl:order-none ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'} xl:block`}>
+            <PatientSessionsSummaryCard
+              patientId={patient.id}
+              href={`/painel/patients/${id}/sessions`}
             />
           </div>
 

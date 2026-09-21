@@ -16,6 +16,7 @@ const Patients = lazyWithRetry(() => import('./pages/Patients'), 'Patients');
 const PatientForm = lazyWithRetry(() => import('./pages/PatientForm'), 'PatientForm');
 const PatientDetail = lazyWithRetry(() => import('./pages/PatientDetail'), 'PatientDetail');
 const PatientAnamnesis = lazyWithRetry(() => import('./pages/PatientAnamnesis'), 'PatientAnamnesis');
+const PatientSessions = lazyWithRetry(() => import('./pages/PatientSessions'), 'PatientSessions');
 const NewEvolution = lazyWithRetry(() => import('./pages/NewEvolution'), 'NewEvolution');
 const History = lazyWithRetry(() => import('./pages/History'), 'History');
 const ShareTarget = lazyWithRetry(() => import('./pages/ShareTarget'), 'ShareTarget');
@@ -781,6 +782,7 @@ export default function App() {
             <Route path="patients/:id/edit" element={<PatientForm />} />
             <Route path="patients/:id" element={<PatientDetail />} />
             <Route path="patients/:id/anamnesis" element={<PatientAnamnesis />} />
+            <Route path="patients/:id/sessions" element={<PatientSessions />} />
             <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
             <Route path="history" element={<History />} />
             <Route path="tutorial" element={<Tutorial />} />

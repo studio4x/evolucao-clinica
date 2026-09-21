@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const migration = readFileSync('supabase/migrations/20260918193000_add_patient_session_control.sql', 'utf8');
+const hardening = readFileSync('supabase/migrations/20260918193100_harden_patient_session_control.sql', 'utf8');
+const app = readFileSync('src/App.tsx', 'utf8');
+const detail = readFileSync('src/pages/PatientDetail.tsx', 'utf8');
+const page = readFileSync('src/pages/PatientSessions.tsx', 'utf8');
+const service = readFileSync('src/services/patientSessions.ts', 'utf8');
+const signaturePad = readFileSync('src/components/patients/sessions/SessionSignaturePad.tsx', 'utf8');
+const pdf = readFileSync('src/utils/patientSessionsPdf.ts', 'utf8');
+
+assert.match(migration, /create table if not exists public\.patient_sessions/);
+assert.match(migration, /create table if not exists public\.patient_session_signatures/);
+assert.match(migration, /create table if not exists public\.patient_session_audit/);
+const packageMigration = readFileSync('supabase/migrations/20260918193400_add_patient_session_packages.sql', 'utf8');
+assert.match(packageMigration, /create table if not exists public\.patient_session_packages/);
+assert.match(migration, /alter table public\.patient_sessions enable row level security/);
+assert.match(migration, /session-signatures/);
+assert.match(hardening, /guard_signed_patient_session_changes/);
+assert.match(hardening, /validate_patient_session_signature/);
+assert.match(app, /patients\/:id\/sessions/);
+assert.match(detail, /PatientSessionsSummaryCard/);
+assert.match(page, /Registrar sessão de hoje/);
+assert.match(page, /Exportar PDF/);
+assert.match(page, /Revogar assinatura/);
+assert.match(service, /createSignedUrl/);
+assert.match(service, /SHA-256/);
+assert.match(service, /deleted_at/);
+assert.match(signaturePad, /touch-none/);
+assert.doesNotMatch(page, /validade jurídica/i);
+assert.match(pdf, /drawDocumentLogo/);
+assert.match(pdf, /Plataforma Inteligente de Acompanhamento Terapêutico/);
+assert.match(pdf, /Emitido por evolucaoclinica\.app\.br/);
+assert.match(pdf, /Registro Profissional:/);
+assert.match(pdf, /Controle de Sessões - Emitido por evolucaoclinica\.app\.br/);
+assert.match(page, /useSiteConfig/);
+assert.match(page, /custom_logo_url/);
+assert.match(page, /hasActiveYearlyAccess/);
+assert.match(pdf, /const columnGap = 8/);
+assert.match(pdf, /const columnWidth = \(contentWidth - columnGap\) \/ 2/);
+assert.match(pdf, /for \(let index = 0; index < input\.sessions\.length; index \+= 2\)/);
+assert.match(pdf, /renderSessionCard\(leftSession/);
+assert.match(pdf, /rightSession/);
+
+console.log('patient-session-control: ok');
+
+const monthClosureMigration = readFileSync('supabase/migrations/20260921190000_add_patient_session_month_closure_signing.sql', 'utf8');
+assert.match(monthClosureMigration, /create table if not exists public\.patient_session_month_closures/);
+assert.match(monthClosureMigration, /sign_patient_session_month/);
+assert.match(monthClosureMigration, /snapshot_hash/);
+assert.match(monthClosureMigration, /guard_closed_patient_session_month/);
+assert.match(service, /closePatientSessionMonth/);
+assert.match(service, /fetchPatientSessionMonthClosure/);
+assert.match(page, /Fechar e assinar mês/);
+assert.match(page, /Baixar PDF assinado/);
+assert.match(pdf, /DOCUMENTO ASSINADO DIGITALMENTE VIA CHAVE DO APLICATIVO/);
+assert.match(pdf, /monthClosure/);
