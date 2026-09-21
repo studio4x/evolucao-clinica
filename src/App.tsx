@@ -84,6 +84,7 @@ import { ClinicRoute } from './components/clinic/ClinicRoute';
 import { PersonalContextRoute } from './components/clinic/PersonalContextRoute';
 import { useClinicContextStore } from './store/clinicContextStore';
 import { canEnterInvitedClinic } from './utils/clinicInvitationAccess';
+import { resolveEffectiveEntitlement } from './utils/clinicEntitlement';
 import { publicEffectFlags } from './config/publicFlags';
 import { getAnalyticsConsent, getCheckoutAttributionWithRetry, getConsentPreferences, refreshMarketingAnalyticsForCurrentRoute, sanitizeCurrentMarketingUrl, sanitizeOAuthCallbackUrl, setAnalyticsUser, syncAnalyticsConsentForCurrentUser, trackConfirmedMetaRegistrationOnce, trackEvent, trackPageView, trackSignUpOnce } from './services/analytics';
 
@@ -193,6 +194,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     activeContext: clinicContext.activeContext, organizations: clinicContext.organizations,
   }));
   const isOnboardingRoute = location.pathname.startsWith('/onboarding') || location.pathname.startsWith('/checkout');
+  const effectiveEntitlement = resolveEffectiveEntitlement({
+    pathname: location.pathname,
+    personalAvailable: clinicContext.personalAvailable,
+    accessMode: clinicContext.accessMode,
+    activeContext: clinicContext.activeContext,
+    organizations: clinicContext.organizations,
+    profileRole,
+  });
   
   if (!isAuthReady) {
     return <SplashScreen message="Preparando seu ambiente clínico..." />;
@@ -219,6 +228,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (isOnboardingRoute) {
     return <>{children}</>;
+  }
+
+  if (effectiveEntitlement.shouldRedirectToClinic && location.pathname !== '/painel/clinica') {
+    return <Navigate to="/painel/clinica" replace />;
   }
 
   // Se o fluxo pendente de checkout do plano da home estiver ativo
@@ -270,7 +283,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   // Se não for admin, verifica se o usuário possui plano ativo e não expirado
-  if (profileRole !== 'admin') {
+  if (profileRole !== 'admin' && effectiveEntitlement.shouldPaywall) {
     const now = new Date();
     const endsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
     const isExpired = endsAt ? endsAt < now : false;
@@ -304,12 +317,16 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function RootRoute() {
   const { isAuthReady, user, profileRole } = useAuthStore();
+  const clinicContext = useClinicContextStore();
 
   if (!isAuthReady) {
     return <SplashScreen message="Iniciando Evolução Clínica..." />;
   }
 
   if (user) {
+    if (publicEffectFlags.clinicFeature && clinicContext.userId === user.id && clinicContext.status === 'loading') {
+      return <SplashScreen message="Validando seus contextos de acesso..." />;
+    }
     if (
       profileRole !== 'admin'
       && !isOnboardingComplete(user.id)
@@ -324,6 +341,10 @@ function RootRoute() {
       return <Navigate to={oauthRedirectPath} replace />;
     }
 
+    if (publicEffectFlags.clinicFeature && clinicContext.userId === user.id
+      && !clinicContext.personalAvailable && clinicContext.organizations.length > 0) {
+      return <Navigate to="/painel/clinica" replace />;
+    }
     return <Navigate to="/painel/dashboard" replace />;
   }
 

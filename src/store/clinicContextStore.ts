@@ -9,6 +9,8 @@ type ClinicContextStatus = "idle" | "loading" | "ready" | "error";
 
 type ClinicContextState = {
   organizations: ClinicOrganization[];
+  personalAvailable: boolean;
+  accessMode: "personal" | "hybrid" | "clinic_only";
   activeContext: ActiveClinicContext;
   status: ClinicContextStatus;
   error: string | null;
@@ -79,6 +81,8 @@ function clearStoredContext(userId: string | null) {
 function personalState(userId: string | null = null) {
   return {
     organizations: [],
+    personalAvailable: true,
+    accessMode: "personal" as const,
     activeContext: { type: "personal" as const },
     status: "idle" as const,
     error: null,
@@ -112,10 +116,13 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
         const restoredOrganization = organizations.find(({ id }) => id === storedOrganizationId);
         const activeContext: ActiveClinicContext = restoredOrganization
           ? { type: "organization", organizationId: restoredOrganization.id }
+          : !payload.personal.available && organizations.length === 1
+            ? { type: "organization", organizationId: organizations[0].id }
           : { type: "personal" };
 
         if (!restoredOrganization && storedOrganizationId) writeStoredContext(userId, { type: "personal" });
-        set({ organizations, activeContext, status: "ready", error: null, hydratedAt: Date.now() });
+        if (!restoredOrganization && activeContext.type === "organization") writeStoredContext(userId, activeContext);
+        set({ organizations, personalAvailable: payload.personal.available, accessMode: payload.accessMode, activeContext, status: "ready", error: null, hydratedAt: Date.now() });
       } catch (error) {
         if (get().userId !== userId || currentGeneration(userId) !== generation) return;
         const code = error instanceof ClinicContextApiError ? error.code : "context_resolution_failed";

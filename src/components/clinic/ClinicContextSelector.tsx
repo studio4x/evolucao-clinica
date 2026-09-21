@@ -9,7 +9,7 @@ type ClinicContextSelectorProps = { collapsed?: boolean };
 
 export function ClinicContextSelector({ collapsed = false }: ClinicContextSelectorProps) {
   const navigate = useNavigate();
-  const { organizations, activeContext, status, selectContext } = useClinicContextStore();
+  const { organizations, personalAvailable, activeContext, status, selectContext } = useClinicContextStore();
   const [isChanging, setIsChanging] = useState(false);
 
   if (!publicEffectFlags.clinicFeature || (status === "ready" && organizations.length === 0)) return null;
@@ -52,7 +52,7 @@ export function ClinicContextSelector({ collapsed = false }: ClinicContextSelect
           onChange={(event) => void handleChange(event.target.value)}
           className={`w-full appearance-none rounded-lg border border-brand-border bg-white text-sm text-brand-text outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20 disabled:cursor-wait disabled:opacity-60 ${collapsed ? "px-1 py-2 text-[0px]" : "px-3 py-2 pr-8"}`}
         >
-          <option value="personal">Minha conta</option>
+          <option value="personal" disabled={!personalAvailable}>Minha conta{personalAvailable ? "" : " (indisponível)"}</option>
           {organizations.map((organization) => (
             <option key={organization.id} value={organization.id}>{organization.tradeName || organization.name}</option>
           ))}

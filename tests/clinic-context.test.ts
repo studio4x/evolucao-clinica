@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { registerClinicContextRoutes, resolveClinicOrganizations } from "../server/clinic/clinicContextRoutes.js";
 import { clinicContextStorageKey, useClinicContextStore } from "../src/store/clinicContextStore";
 import { selectAcceptedClinicContext } from "../src/utils/clinicInvitationAccess";
+import { resolveEffectiveEntitlement } from "../src/utils/clinicEntitlement";
 
 const routeSource = readFileSync("server/clinic/clinicContextRoutes.ts", "utf8");
 const selectorSource = readFileSync("src/components/clinic/ClinicContextSelector.tsx", "utf8");
@@ -20,6 +21,9 @@ assert.doesNotMatch(routeSource, /serviceRoleKey|SUPABASE_SERVICE_ROLE_KEY/);
 assert.match(routeSource, /\.eq\("professional_id", userId\)/);
 assert.doesNotMatch(routeSource, /req\.(query|body|params).*professional_id/);
 assert.match(routeSource, /Cache-Control/);
+assert.match(routeSource, /get_clinic_contexts/);
+assert.match(routeSource, /accessMode/);
+assert.match(routeSource, /licenseActive/);
 assert.match(routeSource, /feature_unavailable/);
 assert.match(routeSource, /authentication_required/);
 assert.doesNotMatch(routeSource, /\.filter\(\(organization\) => organization\.operationalStatus !== "archived" && organization\.clinicalAccessEnabled/);
@@ -34,6 +38,8 @@ assert.match(storeSource, /refreshAfterMutation/);
 assert.match(storeSource, /hydrateAcceptedClinicContext/);
 assert.match(storeSource, /setTimeout\(resolve, 400\)/);
 assert.match(storeSource, /currentGeneration\(userId\) !== generation/);
+assert.match(storeSource, /personalAvailable/);
+assert.match(storeSource, /organizations.length === 1/);
 assert.match(acceptSource, /supabase\.auth\.signOut\(\)/);
 assert.match(acceptSource, /Sair e acessar com outra conta/);
 assert.match(acceptSource, /accepted_loading_context/);
@@ -60,6 +66,11 @@ assert.equal(resolvedOrganizations.find(({ id }) => id === "org-manager")?.clini
 assert.equal(resolvedOrganizations.find(({ id }) => id === "org-professional")?.clinicalAccessEnabled, false);
 assert.equal(resolvedOrganizations.find(({ id }) => id === "org-clinical")?.clinicalAccessEnabled, true);
 assert.equal(resolvedOrganizations.find(({ id }) => id === "org-history")?.clinicalAccessEnabled, false);
+
+const clinicOnlyOrganization = { id: "org-clinic", name: "Clínica", tradeName: null, operationalStatus: "active", membershipRole: "professional", clinicalAccessEnabled: true, planCode: "clinic_monthly", planLabel: "Plano Clínica", entitlementMode: "full", accessSource: "organization_seat", licenseActive: true };
+assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/dashboard", personalAvailable: false, accessMode: "clinic_only", activeContext: { type: "personal" }, organizations: [clinicOnlyOrganization], profileRole: "therapist" }).shouldRedirectToClinic, true);
+assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/patients", personalAvailable: false, accessMode: "hybrid", activeContext: { type: "organization", organizationId: "org-clinic" }, organizations: [clinicOnlyOrganization], profileRole: "therapist" }).source, "organization");
+assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/patients", personalAvailable: false, accessMode: "personal", activeContext: { type: "personal" }, organizations: [], profileRole: "therapist" }).shouldPaywall, true);
 
 let capturedHandler: ((request: any, response: any) => Promise<unknown>) | null = null;
 let capturedMiddleware: unknown;

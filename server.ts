@@ -3790,7 +3790,7 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
     }
     if (!professionalResult.data) return res.status(404).json({ error: "Profissional não encontrado." });
 
-    const [authResult, membershipsResult, preferencesResult] = await Promise.all([
+    const [authResult, membershipsResult, preferencesResult, clinicDirectoryResult] = await Promise.all([
       supabaseAdmin.auth.admin.getUserById(professionalId),
       supabaseAdmin.from("organization_memberships")
         .select("organization_id, membership_role, status, clinical_access_enabled, organizations!inner(id, name, trade_name)")
@@ -3799,20 +3799,32 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
       supabaseAdmin.from("communication_preferences")
         .select("whatsapp_number, whatsapp_verified_number, whatsapp_verified_at, whatsapp_enabled, whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_source, whatsapp_opt_in_text_version, whatsapp_opt_out_at, whatsapp_opt_out_source, whatsapp_opt_out_reason, email_enabled, push_enabled, lifecycle_enabled, product_education_enabled, commercial_enabled, created_at, updated_at")
         .eq("user_id", professionalId)
-        .maybeSingle()
+        .maybeSingle(),
+      supabaseAdmin.rpc("list_admin_clinic_directory")
     ]);
     if (authResult.error) { logAdminSupabaseFailure(endpoint, "core.auth", authResult.error); throw authResult.error; }
     if (membershipsResult.error) { logAdminSupabaseFailure(endpoint, "core.clinicMemberships", membershipsResult.error); throw membershipsResult.error; }
 
+    const clinicDirectory = Array.isArray(clinicDirectoryResult.data) ? clinicDirectoryResult.data : [];
     const clinicMemberships = (membershipsResult.data || []).map((row: any) => {
       const organization = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
+      const directory = clinicDirectory.find((item: any) => item.id === row.organization_id);
+      const entitlementMode = String(directory?.subscription?.entitlementMode || "none");
+      const administrativeRole = ["owner", "manager"].includes(String(row.membership_role));
+      const licenseActive = administrativeRole
+        ? ["full", "restricted"].includes(entitlementMode)
+        : row.clinical_access_enabled === true && ["full", "restricted"].includes(entitlementMode);
       return {
         organizationId: row.organization_id,
         organizationName: organization?.name || "Clínica sem nome",
         organizationTradeName: organization?.trade_name || null,
         role: row.membership_role,
         status: row.status,
-        clinicalAccessEnabled: row.clinical_access_enabled === true
+        clinicalAccessEnabled: row.clinical_access_enabled === true,
+        entitlementMode,
+        licenseActive,
+        planLabel: directory?.subscription?.planCode ? "Plano Clínica" : null,
+        planCode: directory?.subscription?.planCode || null
       };
     });
     const professional = professionalResult.data;
@@ -4040,6 +4052,8 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
       .limit(5000);
     if (error) { logAdminSupabaseFailure(endpoint, "core.professionals", error); throw error; }
     const rows = data || [];
+    const clinicDirectoryResult = await supabaseAdmin.rpc("list_admin_clinic_directory");
+    const clinicDirectory = Array.isArray(clinicDirectoryResult.data) ? clinicDirectoryResult.data : [];
     const professionalIds = rows.map((row: any) => row.id).filter(Boolean);
     let memberships: any[] = [];
     if (professionalIds.length) {
@@ -4054,13 +4068,20 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
     const membershipsByProfessional = new Map<string, any[]>();
     for (const row of memberships) {
       const organization = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
+      const directory = clinicDirectory.find((item: any) => item.id === row.organization_id);
+      const entitlementMode = String(directory?.subscription?.entitlementMode || "none");
+      const administrativeRole = ["owner", "manager"].includes(String(row.membership_role));
       const list = membershipsByProfessional.get(row.professional_id) || [];
       list.push({
         organizationId: row.organization_id,
         name: organization?.name || "Clínica sem nome",
         role: row.membership_role,
         status: row.status,
-        clinicalAccessEnabled: row.clinical_access_enabled === true
+        clinicalAccessEnabled: row.clinical_access_enabled === true,
+        entitlementMode,
+        licenseActive: administrativeRole ? ["full", "restricted"].includes(entitlementMode) : row.clinical_access_enabled === true && ["full", "restricted"].includes(entitlementMode),
+        planLabel: directory?.subscription?.planCode ? "Plano Clínica" : null,
+        planCode: directory?.subscription?.planCode || null
       });
       membershipsByProfessional.set(row.professional_id, list);
     }

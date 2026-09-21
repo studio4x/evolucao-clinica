@@ -5,10 +5,16 @@ export type ClinicOrganization = {
   operationalStatus: string;
   membershipRole: string;
   clinicalAccessEnabled: boolean;
+  planCode: string | null;
+  planLabel: string | null;
+  entitlementMode: string;
+  accessSource: string;
+  licenseActive: boolean;
 };
 
 export type ClinicContextsPayload = {
-  personal: { available: true };
+  personal: { available: boolean };
+  accessMode: "personal" | "hybrid" | "clinic_only";
   organizations: ClinicOrganization[];
 };
 
@@ -32,8 +38,21 @@ export async function fetchClinicContexts(accessToken: string): Promise<ClinicCo
   }
 
   return {
-    personal: { available: true },
-    organizations: Array.isArray(body?.organizations) ? body.organizations : [],
+    personal: { available: body?.personal?.available !== false },
+    accessMode: body?.accessMode === "clinic_only" || body?.accessMode === "hybrid" ? body.accessMode : "personal",
+    organizations: Array.isArray(body?.organizations) ? body.organizations.map((organization: any) => ({
+      id: String(organization.id),
+      name: String(organization.name || "Clínica"),
+      tradeName: organization.tradeName == null ? null : String(organization.tradeName),
+      operationalStatus: String(organization.operationalStatus || "active"),
+      membershipRole: String(organization.membershipRole || "professional"),
+      clinicalAccessEnabled: organization.clinicalAccessEnabled === true,
+      planCode: organization.planCode == null ? null : String(organization.planCode),
+      planLabel: organization.planLabel == null ? null : String(organization.planLabel),
+      entitlementMode: String(organization.entitlementMode || "none"),
+      accessSource: String(organization.accessSource || "organization_membership"),
+      licenseActive: organization.licenseActive === true,
+    })) : [],
   };
 }
 

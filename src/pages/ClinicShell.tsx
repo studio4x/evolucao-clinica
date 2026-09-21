@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Building2, CreditCard, FileClock, Loader2, ShieldCheck, Users } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { PanelPageHeader } from "../components/layout/PanelPageHeader";
 import { useAuthStore } from "../store/authStore";
 import { useClinicContextStore } from "../store/clinicContextStore";
@@ -30,6 +30,7 @@ export default function ClinicShell() {
   useEffect(() => { void load(); }, [load]);
 
   if (!organization) return null;
+  if (organization.membershipRole === "professional") return <Navigate to="/painel/clinica/pacientes" replace />;
   const admin = dashboard?.scope === "administrative";
   const org = dashboard?.organization || organization;
   const entitlement = org.entitlementMode === "full" ? "Operacional" : org.entitlementMode === "restricted" ? "Restrito" : "Indisponível";

@@ -210,13 +210,12 @@ export default function Layout() {
     ? organizations.find(({ id }) => id === activeContext.organizationId)
     : null;
   const clinicNavItems: PanelNavItem[] = [
-    { name: 'Visão da clínica', path: '/painel/clinica', icon: Building2 },
     { name: 'Pacientes', path: '/painel/clinica/pacientes', icon: Users },
     ...(['owner', 'manager'].includes(activeOrganization?.membershipRole || '')
-      ? [{ name: 'Equipe', path: '/painel/clinica/equipe', icon: Users }, { name: 'Auditoria', path: '/painel/clinica/auditoria', icon: FileClock }]
+      ? [{ name: 'Visão da clínica', path: '/painel/clinica', icon: Building2 }, { name: 'Equipe', path: '/painel/clinica/equipe', icon: Users }, { name: 'Auditoria', path: '/painel/clinica/auditoria', icon: FileClock }]
       : []),
     { name: 'Meu Perfil', path: '/painel/profile', icon: User },
-    { name: 'Assinatura', path: '/painel/subscription', icon: CreditCard },
+    { name: activeOrganization?.membershipRole === 'professional' ? 'Plano Clínica' : 'Assinatura', path: '/painel/subscription', icon: CreditCard },
     { name: 'Sobre o app', path: '/painel/about', icon: Info },
   ];
   const isClinicContext = publicEffectFlags.clinicFeature && activeContext.type === 'organization';
@@ -230,8 +229,8 @@ export default function Layout() {
     { name: 'Mais', path: '#menu', icon: Menu },
   ];
   const clinicBottomNavItems: PanelNavItem[] = [
-    { name: 'Clínica', path: '/painel/clinica', icon: Building2 },
     { name: 'Pacientes', path: '/painel/clinica/pacientes', icon: Users },
+    ...(['owner', 'manager'].includes(activeOrganization?.membershipRole || '') ? [{ name: 'Clínica', path: '/painel/clinica', icon: Building2 }] : []),
     { name: 'Perfil', path: '/painel/profile', icon: User },
     { name: 'Mais', path: '#menu', icon: Menu },
   ];

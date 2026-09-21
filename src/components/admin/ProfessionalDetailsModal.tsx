@@ -51,6 +51,10 @@ type ProfessionalDetails = {
     role: string;
     status: string;
     clinicalAccessEnabled: boolean;
+    entitlementMode?: string;
+    licenseActive?: boolean;
+    planLabel?: string | null;
+    planCode?: string | null;
   }>;
   modules: {
     communicationPreferences: { available: boolean; reason?: string };
@@ -504,6 +508,7 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                           <span>Função: {membership.role === 'owner' ? 'Proprietário' : membership.role === 'manager' ? 'Gestor' : 'Profissional'}</span>
                           <span>· {membership.clinicalAccessEnabled ? 'Acesso clínico' : 'Acesso administrativo'}</span>
                           <span>· {membership.status === 'suspended' ? 'Suspenso' : 'Ativo'}</span>
+                          {membership.planLabel && <span>· {membership.planLabel} · {membership.licenseActive ? 'Licença ativa' : 'Licença indisponível'}</span>}
                         </div>
                       </article>
                     ))}

@@ -107,6 +107,10 @@ interface Professional {
     role: 'owner' | 'manager' | 'professional' | string;
     status: string;
     clinicalAccessEnabled: boolean;
+    entitlementMode?: string;
+    licenseActive?: boolean;
+    planLabel?: string | null;
+    planCode?: string | null;
   }>;
 }
 
@@ -4332,7 +4336,7 @@ export default function AdminPanel() {
                                 {renderProfessionalSortIcon('created_at')}
                               </button>
                             </th>
-                            <th className="p-4">Assinatura / Plano</th>
+                            <th className="p-4">Acesso / Plano</th>
                             <th
                               className="p-4"
                               aria-sort={professionalSort.key === 'expiration' ? (professionalSort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -4446,8 +4450,9 @@ export default function AdminPanel() {
                                         ? 'bg-amber-50 text-amber-700 border border-amber-100'
                                         : 'bg-purple-50 text-purple-700 border border-purple-100'
                                     }`}>
-                                      {getSubscriptionPlanLabel(prof.subscription_plan)}
+                                      {prof.clinics?.some((clinic) => clinic.licenseActive && clinic.planLabel) ? 'Plano Clínica' : getSubscriptionPlanLabel(prof.subscription_plan)}
                                     </span>
+                                    {prof.clinics?.filter((clinic) => clinic.licenseActive && clinic.planLabel).map((clinic) => <span key={clinic.organizationId} className="text-[10px] text-emerald-700">{clinic.planLabel} · Licença ativa · {clinic.name}</span>)}
                                     {prof.subscription_status && prof.subscription_plan !== 'none' && (
                                       <span className="text-[10px] text-brand-text-muted capitalize">
                                         Status: {prof.subscription_plan === 'courtesy'

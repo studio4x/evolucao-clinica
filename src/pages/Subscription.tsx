@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { useClinicContextStore } from '../store/clinicContextStore';
 import { supabase } from '../supabaseClient';
 import { Check, ShieldCheck, Sparkles, CreditCard, HelpCircle, Code, Clock, AlertTriangle, Loader2, X, Mail, ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
 import { StripeSubscriptionButton, type ConfirmedBillingResult, type PendingBillingConfirmation } from '../components/payments/StripeSubscriptionButton';
@@ -165,6 +166,10 @@ export default function Subscription() {
   const [confirmPhrase, setConfirmPhrase] = useState('');
   const [loadingRefund, setLoadingRefund] = useState(false);
   const isRefundConfirmationValid = confirmPhrase.trim().toUpperCase() === 'REEMBOLSAR';
+  const { activeContext, organizations } = useClinicContextStore();
+  const activeOrganization = activeContext.type === 'organization'
+    ? organizations.find(({ id }) => id === activeContext.organizationId)
+    : null;
 
   const getPlanDetails = (planId: string): SubscriptionPlanLike => {
     return (plans.length > 0 ? plans : DEFAULT_PLANS).find((plan) => plan.id === planId) || DEFAULT_PLANS.find((plan) => plan.id === planId) || {
@@ -601,6 +606,21 @@ export default function Subscription() {
       return isoString;
     }
   };
+
+  if (activeOrganization?.membershipRole === 'professional') {
+    return (
+      <div className="space-y-6">
+        <PanelPageHeader title="Plano Clínica" description="Seu acesso é fornecido pela licença da clínica." icon={CreditCard} />
+        <section className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div><p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Clínica</p><h2 className="mt-1 text-2xl font-bold text-emerald-950">{activeOrganization.tradeName || activeOrganization.name}</h2><p className="mt-2 text-sm text-emerald-800">Plano Clínica · Licença ativa</p></div>
+            <span className="rounded-full bg-white px-3 py-1.5 text-sm font-bold text-emerald-700">Licença ativa</span>
+          </div>
+          <p className="mt-5 text-sm text-emerald-900">A licença empresarial da clínica cobre seu acesso clínico. Não é necessário contratar um plano pessoal para usar pacientes e evoluções da clínica.</p>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full space-y-8 pb-12">
