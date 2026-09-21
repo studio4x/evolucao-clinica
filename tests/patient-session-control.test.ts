@@ -6,6 +6,7 @@ const hardening = readFileSync('supabase/migrations/20260918193100_harden_patien
 const app = readFileSync('src/App.tsx', 'utf8');
 const detail = readFileSync('src/pages/PatientDetail.tsx', 'utf8');
 const page = readFileSync('src/pages/PatientSessions.tsx', 'utf8');
+const summaryCard = readFileSync('src/components/patients/PatientSessionsSummaryCard.tsx', 'utf8');
 const newEvolution = readFileSync('src/pages/NewEvolution.tsx', 'utf8');
 const service = readFileSync('src/services/patientSessions.ts', 'utf8');
 const signaturePad = readFileSync('src/components/patients/sessions/SessionSignaturePad.tsx', 'utf8');
@@ -22,6 +23,9 @@ assert.match(hardening, /guard_signed_patient_session_changes/);
 assert.match(hardening, /validate_patient_session_signature/);
 assert.match(app, /patients\/:id\/sessions/);
 assert.match(detail, /PatientSessionsSummaryCard/);
+assert.match(summaryCard, /Abrir controle de sessões/);
+assert.match(summaryCard, /summary\?\.total === 1/);
+assert.match(summaryCard, /ArrowRight/);
 assert.match(page, /Registrar sessão de hoje/);
 assert.match(page, /Exportar PDF/);
 assert.match(page, /Revogar assinatura/);
