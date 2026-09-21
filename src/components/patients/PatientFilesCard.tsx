@@ -526,20 +526,31 @@ export default function PatientFilesCard({
 
   if (!hasYearlyAccess) {
     return (
-      <div className="card !overflow-visible p-5 sm:p-6">
+      <div className="card !overflow-visible p-5 sm:p-6 space-y-5">
         <div className="flex items-start gap-3">
           <div className="rounded-xl bg-brand-primary/10 p-2.5 text-brand-primary">
-            <Lock size={19} />
+            <Paperclip size={19} />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="font-semibold text-brand-text">Arquivos do paciente</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-semibold text-brand-text">Arquivos do paciente</h3>
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-primary/10 px-2 py-0.5 text-[10px] font-bold text-brand-primary">
+                <Lock size={11} /> Plano Anual
+              </span>
+            </div>
             <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
-              A inserção e organização de arquivos no Google Drive são exclusivas do Plano Anual ativo.
+              Documentos e arquivos ficam salvos na pasta vinculada do Google Drive.
             </p>
-            <Link to="/painel/subscription" className="mt-3 inline-flex text-xs font-bold text-brand-primary hover:underline">
-              Conhecer o Plano Anual →
-            </Link>
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/[0.04] p-4">
+          <p className="text-xs leading-relaxed text-brand-text-muted">
+            Esta funcionalidade é somente para assinantes do Plano Anual.
+          </p>
+          <Link to="/painel/subscription" className="mt-3 inline-flex text-xs font-bold text-brand-primary hover:underline">
+            Conhecer o Plano Anual →
+          </Link>
         </div>
       </div>
     );

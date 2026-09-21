@@ -2575,23 +2575,22 @@ export default function PatientDetail() {
                 </div>
               )}
 
-              {hasYearlyAccess ? (
-                <Link
-                  to={`/painel/patients/${id}/anamnesis`}
-                  className="hidden xl:flex w-full items-center justify-center space-x-2 px-4 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors text-sm font-medium"
-                >
-                  <ClipboardList size={16} />
-                  <span>Abrir anamnese</span>
-                </Link>
-              ) : (
-                <Link
-                  to="/painel/subscription"
-                  className="hidden xl:flex w-full items-center justify-center space-x-2 px-4 py-2 rounded-xl border border-brand-primary/30 bg-brand-primary/5 text-brand-primary hover:bg-brand-primary/10 transition-colors text-sm font-medium"
-                >
-                  <ClipboardList size={16} />
-                  <span>Recurso do Plano Anual</span>
-                </Link>
-              )}
+              <Link
+                to={`/painel/patients/${id}/anamnesis`}
+                className={`hidden xl:flex w-full items-center justify-center space-x-2 rounded-xl px-4 py-2 transition-colors text-sm font-medium ${
+                  hasYearlyAccess
+                    ? 'bg-brand-primary text-white hover:bg-brand-primary/90'
+                    : 'border border-brand-primary/30 bg-brand-primary/5 text-brand-primary hover:bg-brand-primary/10'
+                }`}
+              >
+                <ClipboardList size={16} />
+                <span className="flex flex-col items-start leading-tight">
+                  <span>{hasYearlyAccess ? 'Abrir anamnese' : 'Acessar anamnese'}</span>
+                  {!hasYearlyAccess && (
+                    <span className="text-[10px] font-normal opacity-80">Somente para assinantes do Plano Anual</span>
+                  )}
+                </span>
+              </Link>
 
               {patient.target_folder_id && hasYearlyAccess && (
                 <a

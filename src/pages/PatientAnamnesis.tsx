@@ -1089,7 +1089,7 @@ export default function PatientAnamnesis() {
             <div>
               <h1 className="text-lg font-bold text-brand-text">Geração de anamnese</h1>
               <p className="mt-2 text-sm leading-relaxed text-brand-text-muted">
-                A geração de anamnese estruturada, o histórico e o PDF são recursos exclusivos do Plano Anual ativo.
+                Esta funcionalidade é somente para assinantes do Plano Anual. A geração estruturada, o histórico e o PDF ficam disponíveis após a assinatura.
               </p>
               <button
                 type="button"

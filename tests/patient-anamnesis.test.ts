@@ -16,6 +16,8 @@ assert.match(appSource, /PatientAnamnesis/);
 assert.match(appSource, /patients\/:id\/anamnesis/);
 
 assert.match(patientDetailSource, /Abrir anamnese/);
+assert.match(patientDetailSource, /Acessar anamnese/);
+assert.match(patientDetailSource, /Somente para assinantes do Plano Anual/);
 assert.match(patientDetailSource, /hidden xl:flex/);
 assert.match(patientDetailSource, /<PatientAnamnesisSummaryCard/);
 assert.match(patientDetailSource, /xl:hidden/);
@@ -62,6 +64,8 @@ assert.match(anamnesisServiceSource, /patient_anamnesis_revisions/);
 assert.match(anamnesisServiceSource, /is_current/);
 
 assert.match(anamnesisCardSource, /Preencher anamnese/);
+assert.match(anamnesisCardSource, /Esta funcionalidade é somente para assinantes do Plano Anual/);
+assert.match(anamnesisCardSource, /Acessar anamnese/);
 assert.match(anamnesisCardSource, /Rascunho/);
 assert.match(anamnesisCardSource, /Concluída/);
 assert.match(anamnesisCardSource, /matchMedia\('\(min-width: 1280px\)'\)/);

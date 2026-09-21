@@ -84,7 +84,7 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
             <div className="mt-2 space-y-2">
               <p className="flex items-center gap-1.5 text-xs leading-relaxed text-brand-text-muted">
                 <Lock size={13} className="shrink-0 text-brand-primary" />
-                A geração de anamnese é exclusiva do Plano Anual ativo.
+                Esta funcionalidade é somente para assinantes do Plano Anual.
               </p>
               <Link
                 to="/painel/subscription"
@@ -125,7 +125,7 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
             to={href}
             className="mt-3 inline-flex items-center text-xs font-bold text-brand-primary hover:underline"
           >
-            {anamnesis ? 'Abrir anamnese' : 'Preencher anamnese'} →
+            {!hasYearlyAccess ? 'Acessar anamnese' : anamnesis ? 'Abrir anamnese' : 'Preencher anamnese'} →
           </Link>
         </div>
       </div>
