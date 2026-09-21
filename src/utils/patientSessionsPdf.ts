@@ -144,42 +144,93 @@ export function generatePatientSessionsPdf(input: PatientSessionsPdfInput) {
     }
   };
 
-  input.sessions.forEach((session, index) => {
-    const noteLines = session.notes
-      ? doc.splitTextToSize(normalizePdfText(session.notes), contentWidth)
-      : [];
-    const hasSignatureImage = Boolean(session.signature && input.signatureImages[session.signature.id]);
-    const estimatedHeight = 18 + noteLines.length * 5 + (hasSignatureImage ? 25 : 8);
+  const columnGap = 8;
+  const columnWidth = (contentWidth - columnGap) / 2;
+  const cardPadding = 3.5;
+  const innerWidth = columnWidth - cardPadding * 2;
+  const rowGap = 6;
 
-    ensureSpace(Math.min(estimatedHeight, 55));
-
+  const getSessionLayout = (session: PatientSession) => {
     doc.setFont('Helvetica', 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(primary.r, primary.g, primary.b);
-    doc.text(
-      `SESSÃO ${String(index + 1).padStart(2, '0')} - ${formatDate(session.sessionDate)} - ${formatTime(session.sessionTime)}`,
-      margin,
-      y
+    doc.setFontSize(9.3);
+    const headingLines = doc.splitTextToSize(
+      `SESSÃO ${String(input.sessions.indexOf(session) + 1).padStart(2, '0')} - ${formatDate(session.sessionDate)} - ${formatTime(session.sessionTime)}`,
+      innerWidth
     );
-    y += 6;
 
     doc.setFont('Helvetica', 'normal');
-    doc.setFontSize(9.5);
+    doc.setFontSize(8.5);
+    const noteLines = session.notes
+      ? doc.splitTextToSize(normalizePdfText(session.notes), innerWidth)
+      : [];
+
+    const image = session.signature ? input.signatureImages[session.signature.id] : undefined;
+
+    let height = cardPadding;
+    height += headingLines.length * 4.6;
+    height += 5.2; // situação
+
+    if (session.notes) {
+      height += 4.6; // label
+      height += noteLines.length * 4.3;
+      height += 1.5;
+    }
+
+    if (session.signature) {
+      height += 4.7; // título da assinatura
+      height += 4.1; // assinante
+      height += 4.1; // data
+      height += image ? 22.5 : 4;
+    } else {
+      height += 6;
+    }
+
+    height += cardPadding;
+    return { headingLines, noteLines, image, height: Math.max(height, 39) };
+  };
+
+  const renderSessionCard = (
+    session: PatientSession,
+    sessionIndex: number,
+    x: number,
+    top: number,
+    cardHeight: number,
+    layout: ReturnType<typeof getSessionLayout>
+  ) => {
+    doc.setDrawColor(231, 229, 228);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, top, columnWidth, cardHeight, 1.5, 1.5);
+
+    const textX = x + cardPadding;
+    let cursorY = top + cardPadding + 3.2;
+
+    doc.setFont('Helvetica', 'bold');
+    doc.setFontSize(9.3);
+    doc.setTextColor(primary.r, primary.g, primary.b);
+    const heading = `SESSÃO ${String(sessionIndex + 1).padStart(2, '0')} - ${formatDate(session.sessionDate)} - ${formatTime(session.sessionTime)}`;
+    const headingLines = doc.splitTextToSize(heading, innerWidth);
+    headingLines.forEach((line: string) => {
+      doc.text(line, textX, cursorY);
+      cursorY += 4.6;
+    });
+
+    doc.setFont('Helvetica', 'normal');
+    doc.setFontSize(8.5);
     doc.setTextColor(28, 25, 22);
-    doc.text(`Situação: ${statusLabel(session.status)}`, margin, y);
-    y += 5;
+    doc.text(`Situação: ${statusLabel(session.status)}`, textX, cursorY);
+    cursorY += 5.2;
 
     if (session.notes) {
       doc.setFont('Helvetica', 'bold');
-      doc.text('Observação:', margin, y);
-      y += 5;
+      doc.text('Observação:', textX, cursorY);
+      cursorY += 4.6;
+
       doc.setFont('Helvetica', 'normal');
-      for (const line of noteLines) {
-        ensureSpace(6);
-        doc.text(line, margin, y);
-        y += 5;
-      }
-      y += 1;
+      layout.noteLines.forEach((line: string) => {
+        doc.text(line, textX, cursorY);
+        cursorY += 4.3;
+      });
+      cursorY += 1.5;
     }
 
     if (session.signature) {
@@ -188,62 +239,79 @@ export function generatePatientSessionsPdf(input: PatientSessionsPdfInput) {
         ? `${role}: ${normalizePdfText(session.signature.signerName)}`
         : role;
       const signedAt = new Date(session.signature.signedAt).toLocaleString('pt-BR');
-      const image = input.signatureImages[session.signature.id];
 
-      ensureSpace(image ? 31 : 13);
       doc.setFont('Helvetica', 'bold');
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setTextColor(28, 25, 22);
-      doc.text('Assinatura da sessão', margin, y);
-      y += 5;
+      doc.text('Assinatura da sessão', textX, cursorY);
+      cursorY += 4.7;
 
       doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(7.8);
       doc.setTextColor(87, 83, 78);
-      doc.text(`Assinante: ${signer}`, margin, y);
-      y += 4.5;
-      doc.text(`Registrada em: ${signedAt}`, margin, y);
+      const signerLines = doc.splitTextToSize(`Assinante: ${signer}`, innerWidth);
+      signerLines.slice(0, 2).forEach((line: string) => {
+        doc.text(line, textX, cursorY);
+        cursorY += 4.1;
+      });
+      doc.text(`Registrada em: ${signedAt}`, textX, cursorY);
+      cursorY += 3.4;
 
-      if (image) {
+      if (layout.image) {
         try {
-          const imageWidth = 58;
-          const imageHeight = 20;
-          const imageY = y + 3;
+          const imageWidth = Math.min(50, innerWidth);
+          const imageHeight = 18;
+          const imageY = cursorY + 2;
           doc.setDrawColor(231, 229, 228);
           doc.setLineWidth(0.2);
-          doc.rect(margin, imageY, imageWidth, imageHeight);
+          doc.rect(textX, imageY, imageWidth, imageHeight);
           doc.addImage(
-            image,
-            signatureImageFormat(image),
-            margin + 2,
-            imageY + 2,
-            imageWidth - 4,
-            imageHeight - 4,
+            layout.image,
+            signatureImageFormat(layout.image),
+            textX + 1.5,
+            imageY + 1.5,
+            imageWidth - 3,
+            imageHeight - 3,
             undefined,
             'FAST'
           );
-          y = imageY + imageHeight + 3;
         } catch (error) {
           console.warn('[PatientSessionsPDF] Não foi possível inserir a assinatura:', error);
-          y += 6;
         }
-      } else {
-        y += 6;
       }
     } else {
-      ensureSpace(8);
       doc.setFont('Helvetica', 'normal');
-      doc.setFontSize(8.5);
+      doc.setFontSize(7.8);
       doc.setTextColor(120, 113, 108);
-      doc.text('Assinatura da sessão: não registrada', margin, y);
-      y += 6;
+      doc.text('Assinatura da sessão: não registrada', textX, cursorY);
+    }
+  };
+
+  for (let index = 0; index < input.sessions.length; index += 2) {
+    const leftSession = input.sessions[index];
+    const rightSession = input.sessions[index + 1];
+
+    const leftLayout = getSessionLayout(leftSession);
+    const rightLayout = rightSession ? getSessionLayout(rightSession) : null;
+    const rowHeight = Math.max(leftLayout.height, rightLayout?.height || 0);
+
+    ensureSpace(rowHeight + rowGap);
+
+    renderSessionCard(leftSession, index, margin, y, rowHeight, leftLayout);
+
+    if (rightSession && rightLayout) {
+      renderSessionCard(
+        rightSession,
+        index + 1,
+        margin + columnWidth + columnGap,
+        y,
+        rowHeight,
+        rightLayout
+      );
     }
 
-    doc.setDrawColor(231, 229, 228);
-    doc.setLineWidth(0.2);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 8;
-  });
+    y += rowHeight + rowGap;
+  }
 
   if (input.sessions.length === 0) {
     doc.setFont('Helvetica', 'normal');

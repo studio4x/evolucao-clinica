@@ -37,5 +37,10 @@ assert.match(pdf, /Controle de Sessões - Emitido por evolucaoclinica\.app\.br/)
 assert.match(page, /useSiteConfig/);
 assert.match(page, /custom_logo_url/);
 assert.match(page, /hasActiveYearlyAccess/);
+assert.match(pdf, /const columnGap = 8/);
+assert.match(pdf, /const columnWidth = \(contentWidth - columnGap\) \/ 2/);
+assert.match(pdf, /for \(let index = 0; index < input\.sessions\.length; index \+= 2\)/);
+assert.match(pdf, /renderSessionCard\(leftSession/);
+assert.match(pdf, /rightSession/);
 
 console.log('patient-session-control: ok');
