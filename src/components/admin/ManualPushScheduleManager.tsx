@@ -20,7 +20,10 @@ type ManualPushSchedule = {
   cancelled_at?: string | null;
 };
 
-type Props = { refreshKey: number };
+type Props = {
+  refreshKey: number;
+  onCompleted?: () => void;
+};
 
 const statusLabels: Record<ManualPushSchedule['status'], string> = {
   pending: 'Programada',
@@ -46,7 +49,7 @@ const formatDateTime = (value: string | null | undefined) => {
   });
 };
 
-export default function ManualPushScheduleManager({ refreshKey }: Props) {
+export default function ManualPushScheduleManager({ refreshKey, onCompleted }: Props) {
   const [schedules, setSchedules] = useState<ManualPushSchedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,7 +65,10 @@ export default function ManualPushScheduleManager({ refreshKey }: Props) {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || 'Não foi possível carregar os agendamentos.');
-      setSchedules(Array.isArray(payload.schedules) ? payload.schedules : []);
+      const loadedSchedules = Array.isArray(payload.schedules) ? payload.schedules as ManualPushSchedule[] : [];
+      const completedScheduleExists = loadedSchedules.some((schedule) => schedule.status === 'completed');
+      setSchedules(loadedSchedules.filter((schedule) => schedule.status !== 'completed'));
+      if (completedScheduleExists) onCompleted?.();
     } catch (loadError: any) {
       setError(loadError.message || 'Não foi possível carregar os agendamentos.');
     } finally {

@@ -1567,8 +1567,9 @@ export default function AdminPanel() {
 
       const manualIdSet = new Set([...manualIds, ...readStoredManualPushNotificationIds()]);
       const records = (data || []).filter((notification: any) => notification.source !== 'onboarding');
-      setManualPushNotifications(records.filter((notification: any) => manualIdSet.has(notification.id)));
-      setPlatformPushNotifications(records.filter((notification: any) => !manualIdSet.has(notification.id)));
+      const isManualPush = (notification: any) => notification.source === 'manual-push' || manualIdSet.has(notification.id);
+      setManualPushNotifications(records.filter((notification: any) => isManualPush(notification)));
+      setPlatformPushNotifications(records.filter((notification: any) => !isManualPush(notification)));
     } catch (err) {
       console.error('Erro ao buscar logs de notificacoes:', err);
     } finally {
@@ -6048,7 +6049,10 @@ export default function AdminPanel() {
                       </form>
                     </div>
 
-                    <ManualPushScheduleManager refreshKey={manualScheduleRefreshKey} />
+                    <ManualPushScheduleManager
+                      refreshKey={manualScheduleRefreshKey}
+                      onCompleted={() => void refreshPushNotificationLogs()}
+                    />
 
                     <ManualPushNotificationHistory
                       notifications={manualPushNotifications}

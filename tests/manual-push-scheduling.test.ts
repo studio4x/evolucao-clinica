@@ -15,6 +15,10 @@ assert.match(adminSource, /<ManualPushScheduleManager/);
 assert.match(managerSource, /Cancelar/);
 assert.match(managerSource, /statusLabels/);
 assert.match(managerSource, /push_accepted_count/);
+assert.match(managerSource, /filter\(\(schedule\) => schedule\.status !== 'completed'\)/);
+assert.match(managerSource, /onCompleted\?\.\(\)/);
+assert.match(adminSource, /notification\.source === 'manual-push'/);
+assert.match(adminSource, /onCompleted=\{\(\) => void refreshPushNotificationLogs\(\)\}/);
 assert.match(serverSource, /app.post\("\/api\/admin\/notifications\/schedules"/);
 assert.match(serverSource, /app.delete\("\/api\/admin\/notifications\/schedules\/:id"/);
 assert.match(serverSource, /processDueManualPushSchedules/);
@@ -25,6 +29,6 @@ assert.match(migrationSource, /CREATE TABLE IF NOT EXISTS public\.manual_push_sc
 assert.match(migrationSource, /recipient_ids JSONB NOT NULL/);
 assert.match(migrationSource, /ALTER TABLE public\.manual_push_schedules ENABLE ROW LEVEL SECURITY/);
 assert.match(migrationSource, /USING \(is_admin\(\)\)/);
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.908"/);
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.909"/);
 
 console.log('Manual push scheduling tests passed.');
