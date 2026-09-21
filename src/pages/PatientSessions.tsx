@@ -2,11 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3,
-  Download, Edit3, Eye, FileText, Loader2, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
+  Download, Edit3, Eye, FileText, HelpCircle, Loader2, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { RichTextPreview } from '../components/common/RichTextEditor';
@@ -49,6 +50,66 @@ const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
   reader.readAsDataURL(blob);
 });
 
+const SESSION_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Escolha o período que deseja acompanhar',
+    description: 'Use as setas para navegar entre os meses. A agenda configurada do paciente e as sugestões de datas ajudam a organizar os atendimentos do período selecionado.',
+    icon: CalendarDays,
+  },
+  {
+    title: 'Registre ou agende cada sessão',
+    description: 'Use “Nova sessão”, “Registrar sessão de hoje” ou uma sugestão da agenda. Informe data, horário, situação, observações e, quando fizer sentido, vincule uma evolução clínica.',
+    icon: Plus,
+  },
+  {
+    title: 'Acompanhe pacotes e evoluções vinculadas',
+    description: 'Você pode iniciar um pacote apenas para controlar a quantidade de sessões e abrir ou criar uma evolução relacionada a cada atendimento.',
+    icon: FileText,
+  },
+  {
+    title: 'Assine os registros e feche o mês',
+    description: 'Assine as sessões realizadas para registrar a confirmação do atendimento. Quando não houver pendências, feche e assine o mês; depois disso, os registros ficam bloqueados para preservação.',
+    icon: ShieldCheck,
+  },
+  {
+    title: 'Filtre e exporte o acompanhamento',
+    description: 'Filtre por situação ou assinatura e escolha um período mensal, anual ou personalizado para gerar o PDF. Se o mês estiver fechado, o arquivo será identificado como PDF assinado.',
+    icon: Download,
+  },
+];
+
+const SESSION_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre o Controle de Sessões',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a funcionalidade de Controle de Sessões.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type SessionGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function SessionGuideButton({ compact = false, expanded, onOpen }: SessionGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona o Controle de Sessões"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
+
 export default function PatientSessions() {
   const siteConfig = useSiteConfig();
   const { id } = useParams();
@@ -79,6 +140,7 @@ export default function PatientSessions() {
   const [signerName, setSignerName] = useState('');
   const [evolutionModal, setEvolutionModal] = useState<{ mode: 'view' | 'create'; session: PatientSession; evolution?: any } | null>(null);
   const [evolutionModalSaving, setEvolutionModalSaving] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const load = async () => {
     if (!id || !user) return;
@@ -450,6 +512,21 @@ export default function PatientSessions() {
         icon={CalendarDays}
         title={`Controle de Sessões${patient?.full_name ? ` — ${patient.full_name}` : ''}`}
         description="Organize e acompanhe os atendimentos, assinaturas e registros clínicos deste paciente."
+        titleActions={
+          <SessionGuideButton
+            expanded={guideOpen}
+            onOpen={() => setGuideOpen(true)}
+          />
+        }
+        actions={
+          <span className="sm:hidden">
+            <SessionGuideButton
+              compact
+              expanded={guideOpen}
+              onOpen={() => setGuideOpen(true)}
+            />
+          </span>
+        }
       />
 
       <section aria-labelledby="session-planning-heading" className="space-y-4 rounded-3xl border border-brand-primary/15 bg-brand-primary/[0.025] p-3 sm:p-4">
@@ -775,6 +852,17 @@ export default function PatientSessions() {
           </div>
         </div>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Controle de Sessões"
+        title="Como funciona o Controle de Sessões"
+        description="Use este fluxo para planejar, registrar, assinar e acompanhar os atendimentos do paciente."
+        steps={SESSION_GUIDE_STEPS}
+        note="A assinatura e o fechamento do mês preservam os registros do período. Revise as informações antes de assinar e mantenha a responsabilidade profissional sobre o conteúdo registrado."
+        supportHref={SESSION_SUPPORT_HREF}
+      />
     </div>
   );
 }
