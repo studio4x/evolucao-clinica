@@ -31,6 +31,17 @@ const isBrandAssetPath = (pathname) => {
   ].some((assetPath) => pathname.startsWith(assetPath));
 };
 
+const isJavaScriptRequest = (request, pathname) =>
+  request.destination === "script" || /\.(?:m?js)(?:$|\?)/i.test(pathname);
+
+const isValidAssetResponse = (request, response, pathname) => {
+  if (!response.ok) return false;
+  if (!isJavaScriptRequest(request, pathname)) return true;
+
+  const contentType = response.headers.get("content-type") || "";
+  return /(?:javascript|ecmascript|wasm)/i.test(contentType);
+};
+
 const isApiNoCachePath = (pathname) => {
   return pathname === "/api/payment-settings" ||
          pathname.startsWith("/api/communication/") ||
@@ -224,13 +235,28 @@ self.addEventListener("fetch", (event) => {
         .then((response) => {
           const isSameOrigin = event.request.url.startsWith(self.location.origin);
           const isBrandAsset = event.request.url.includes("/storage/v1/object/public/brand");
-          if (response.ok && (isSameOrigin || isBrandAsset)) {
+          const validForCache = isValidAssetResponse(event.request, response, url.pathname);
+
+          if (validForCache && (isSameOrigin || isBrandAsset)) {
             const copy = response.clone();
             caches.open(RUNTIME_CACHE).then((cache) => cache.put(event.request, copy));
           }
+
+          // A Vercel pode aplicar o fallback SPA e devolver index.html para um
+          // chunk antigo que não existe mais. Não deixamos essa resposta HTML
+          // contaminar o runtime cache como se fosse JavaScript.
           return response;
         })
-        .catch(async () => offlineResponse());
+        .catch(async () => {
+          if (isJavaScriptRequest(event.request, url.pathname)) {
+            return new Response("", {
+              status: 503,
+              statusText: "Chunk unavailable",
+              headers: { "Content-Type": "application/javascript" }
+            });
+          }
+          return offlineResponse();
+        });
 
       return fetchPromise;
     })

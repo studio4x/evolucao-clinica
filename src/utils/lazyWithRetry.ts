@@ -33,6 +33,23 @@ const clearAppCaches = async () => {
   );
 };
 
+const unregisterAppServiceWorkers = async () => {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations
+      .filter((registration) => {
+        try {
+          return new URL(registration.scope).origin === window.location.origin;
+        } catch {
+          return false;
+        }
+      })
+      .map((registration) => registration.unregister())
+  );
+};
+
 const buildRetryUrl = () => {
   const url = new URL(window.location.href);
   url.searchParams.set(RETRY_QUERY_PARAM, Date.now().toString());
@@ -68,6 +85,16 @@ export const forceChunkRecovery = async () => {
     if (key?.startsWith(LAZY_RETRY_PREFIX)) {
       window.sessionStorage.removeItem(key);
     }
+  }
+
+  // Se a tentativa automática já falhou, o service worker antigo pode continuar
+  // controlando a aba e servindo um shell de build anterior. Nesta recuperação
+  // explícita removemos apenas os workers deste origin; o app registra a versão
+  // atual novamente assim que a página recarregar.
+  try {
+    await unregisterAppServiceWorkers();
+  } catch (error) {
+    console.warn('[ChunkRecovery] Não foi possível remover o service worker antigo.', error);
   }
 
   await reloadWithCurrentBuild();

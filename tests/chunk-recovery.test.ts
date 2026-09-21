@@ -18,3 +18,16 @@ assert.equal(isRetryableChunkError(new Error('Falha de autenticação')), false)
 assert.equal(isRetryableChunkError(null), false);
 
 console.log('Chunk recovery tests passed.');
+
+const lazySource = fs.readFileSync('src/utils/lazyWithRetry.ts', 'utf8');
+const swSource = fs.readFileSync('public/sw.js', 'utf8');
+
+assert.match(lazySource, /unregisterAppServiceWorkers/);
+assert.match(lazySource, /navigator\.serviceWorker\.getRegistrations\(\)/);
+assert.match(lazySource, /await unregisterAppServiceWorkers\(\)/);
+assert.match(swSource, /isJavaScriptRequest/);
+assert.match(swSource, /isValidAssetResponse/);
+assert.match(swSource, /Chunk unavailable/);
+assert.match(swSource, /application\/javascript/);
+
+console.log('Chunk recovery tests passed.');
