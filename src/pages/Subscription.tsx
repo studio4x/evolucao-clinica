@@ -9,6 +9,43 @@ import { FeatureTooltip } from '../components/common/FeatureTooltip';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { createStripeCustomerPortalSession, hasNativeBillingBridge } from '../services/billing';
 import { MONTHLY_PLAN_FEATURES, YEARLY_PLAN_FEATURES, YEARLY_PLAN_RECENT_FEATURES } from '../config/subscriptionPlans';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
+
+const SUBSCRIPTION_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Compare os planos disponíveis',
+    description: 'Confira os recursos, valores e condições dos planos mensal e anual. O plano escolhido define os limites e funcionalidades liberados para sua conta.',
+    icon: CreditCard,
+  },
+  {
+    title: 'Acompanhe o status do acesso',
+    description: 'O cartão da assinatura atual mostra seu plano, status do pagamento e datas relevantes, incluindo teste gratuito, acesso ativo, expiração ou cancelamento.',
+    icon: CheckCircle2,
+  },
+  {
+    title: 'Aplique um cupom antes do checkout',
+    description: 'Se você recebeu um cupom, informe o código e salve-o antes de escolher o plano. O código será considerado no fluxo de checkout quando elegível.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Finalize o pagamento com segurança',
+    description: 'Escolha o plano e siga o checkout disponível. Após concluir, aguarde a confirmação da transação e a atualização do status da assinatura na plataforma.',
+    icon: ShieldCheck,
+  },
+  {
+    title: 'Entenda cancelamento e reembolso',
+    description: 'O cancelamento ou pedido de reembolso abre etapas de confirmação e pode interromper o acesso aos recursos pagos. Leia os avisos antes de confirmar a operação.',
+    icon: AlertTriangle,
+  },
+];
+
+const SUBSCRIPTION_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre Planos e Assinatura',
+  category: 'payment',
+  description: 'Olá! Estou com uma dúvida sobre Planos e Assinatura.\n\nMinha dúvida:\n\n',
+}).toString()}`;
 
 const DEFAULT_PLANS = [
   {
@@ -172,6 +209,7 @@ export default function Subscription() {
   const [showPersuadeModal, setShowPersuadeModal] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedTxForRefund, setSelectedTxForRefund] = useState<any>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [refundReason, setRefundReason] = useState('');
   const [confirmPhrase, setConfirmPhrase] = useState('');
   const [loadingRefund, setLoadingRefund] = useState(false);
@@ -620,6 +658,12 @@ export default function Subscription() {
         icon={Sparkles}
         title="Planos e Assinatura"
         description="Escolha o plano ideal para automatizar seus prontuários e evoluções clínicas com inteligência artificial de ponta."
+        titleActions={<FeatureGuideButton label="Planos e Assinatura" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
+        actions={(
+          <span className="sm:hidden">
+            <FeatureGuideButton compact label="Planos e Assinatura" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+          </span>
+        )}
       />
 
       {/* Card de Notificação de Assinatura Cancelada */}
@@ -1238,6 +1282,17 @@ export default function Subscription() {
           </div>
         </div>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Planos e assinatura"
+        title="Como funcionam os Planos e a Assinatura"
+        description="Use esta página para comparar planos, acompanhar o status do acesso, aplicar cupons e gerenciar operações de pagamento."
+        steps={SUBSCRIPTION_GUIDE_STEPS}
+        note="A confirmação do pagamento e a liberação do acesso dependem do processamento do provedor. Confira o status atualizado antes de repetir uma tentativa."
+        supportHref={SUBSCRIPTION_SUPPORT_HREF}
+      />
 
       {/* Modal 1: Persuasão para Reembolso */}
       {showPersuadeModal && (

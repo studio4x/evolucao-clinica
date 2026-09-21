@@ -10,6 +10,43 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { OnboardingProgressCard } from '../components/onboarding/OnboardingProgressCard';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
+
+const DASHBOARD_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Acompanhe seu progresso inicial',
+    description: 'O cartão de onboarding mostra as etapas principais para começar: criar paciente, registrar evolução e conectar a agenda. Use-o como um roteiro para configurar o fluxo.',
+    icon: CheckCircle2,
+  },
+  {
+    title: 'Resolva gravações pendentes',
+    description: 'Se uma gravação for interrompida por falta de internet ou fechamento do aplicativo, ela aparece no dashboard para você recuperar, continuar ou descartar.',
+    icon: FileAudio,
+  },
+  {
+    title: 'Acesse pacientes e evoluções rapidamente',
+    description: 'Use os atalhos para cadastrar pacientes, iniciar novas evoluções e consultar o histórico sem precisar navegar por várias telas.',
+    icon: Users,
+  },
+  {
+    title: 'Conecte a agenda do Google',
+    description: 'Ao autorizar o Google Agenda, os atendimentos da semana podem aparecer no painel e servir de ponto de partida para novas evoluções clínicas.',
+    icon: Calendar,
+  },
+  {
+    title: 'Use os resumos para organizar o dia',
+    description: 'Confira aniversariantes, atendimentos, histórico e avisos de assinatura ou plano. O dashboard concentra os próximos passos mais importantes do acompanhamento.',
+    icon: Clock,
+  },
+];
+
+const DASHBOARD_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre o Dashboard',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre o Dashboard e os atalhos de acompanhamento.\n\nMinha dúvida:\n\n',
+}).toString()}`;
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -114,6 +151,7 @@ export default function Dashboard() {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [birthdays, setBirthdays] = useState<{ today: any[]; thisWeek: any[] }>({
     today: [],
     thisWeek: []
@@ -437,8 +475,12 @@ export default function Dashboard() {
           icon={Users}
           title={<>Olá, {user?.user_metadata?.full_name?.split(' ')[0] || 'Terapeuta'}!</>}
           description="Aqui está o resumo dos seus atendimentos clínicos."
+          titleActions={<FeatureGuideButton label="o Dashboard" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         />
         <div className="flex items-center gap-3">
+          <span className="sm:hidden">
+            <FeatureGuideButton compact label="o Dashboard" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+          </span>
           <Link 
             to="/painel/tutorial" 
             className="btn-outline flex items-center space-x-2 bg-white"
@@ -916,6 +958,17 @@ export default function Dashboard() {
         onConfirm={executeGoogleCalendarConnection}
         confirmLabel="Autorizar acesso"
         mode="calendar"
+      />
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Dashboard"
+        title="Como funciona o Dashboard"
+        description="Use esta página como ponto de partida para acompanhar o andamento do consultório e acessar rapidamente as principais ações da plataforma."
+        steps={DASHBOARD_GUIDE_STEPS}
+        note="O dashboard é um resumo operacional: para editar informações completas, abra o paciente ou a funcionalidade correspondente pelos atalhos."
+        supportHref={DASHBOARD_SUPPORT_HREF}
       />
     </div>
   );

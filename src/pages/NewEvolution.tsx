@@ -24,6 +24,43 @@ import { RichTextEditor } from '../components/common/RichTextEditor';
 import { convertEvolutionToTemplate } from '../services/evolutionTemplateConversion';
 import { trackEvent } from '../services/analytics';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
+
+const NEW_EVOLUTION_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Confirme a sessão e o paciente',
+    description: 'Confira o paciente, a data e o horário antes de registrar. Esses dados organizam a evolução no histórico e no prontuário integrado.',
+    icon: FileText,
+  },
+  {
+    title: 'Escolha como registrar',
+    description: 'Use áudio, texto ou o modo híbrido. No modo híbrido, informações escritas complementam a transcrição dos áudios enviados.',
+    icon: Mic,
+  },
+  {
+    title: 'Use um template quando necessário',
+    description: 'Selecione um modelo clínico para organizar a evolução. Você também pode comparar modelos e aplicar o formato escolhido sobre a transcrição original.',
+    icon: BookOpen,
+  },
+  {
+    title: 'Grave ou envie os áudios',
+    description: 'É possível gravar diretamente no aplicativo ou escolher arquivos do dispositivo. A tela mostra a duração utilizada e os limites aplicáveis à evolução.',
+    icon: Upload,
+  },
+  {
+    title: 'Revise, processe e sincronize',
+    description: 'Ao enviar, a plataforma transcreve o conteúdo, aplica o template e adiciona a evolução ao Google Docs do paciente. Em caso de queda de conexão, o rascunho pode ser recuperado pela fila offline.',
+    icon: CheckCircle,
+  },
+];
+
+const NEW_EVOLUTION_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre Nova Evolução',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre o fluxo de Nova Evolução.\n\nMinha dúvida:\n\n',
+}).toString()}`;
 
 type AudioEvolutionItem = {
   id: string;
@@ -327,6 +364,7 @@ export default function NewEvolution({
   const [errorMessage, setErrorMessage] = useState('');
   const [processingMessage, setProcessingMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
   const [isGoogleAccessNoticeOpen, setIsGoogleAccessNoticeOpen] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -1599,11 +1637,19 @@ export default function NewEvolution({
           >
             <ArrowLeft size={18} />
           </Link>
-          <PanelPageHeader title="Nova Evolução" />
+          <PanelPageHeader
+            title="Nova Evolução"
+            titleActions={<FeatureGuideButton label="a Nova Evolução" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
+          />
         </div>
-        <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">
-          {patient.full_name}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="sm:hidden">
+            <FeatureGuideButton compact label="a Nova Evolução" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+          </span>
+          <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">
+            {patient.full_name}
+          </span>
+        </div>
       </div>}
 
       {recoveredDraft && (
@@ -2258,6 +2304,17 @@ export default function NewEvolution({
       <TemplateExplanationModal
         isOpen={isTemplateHelpOpen}
         onClose={() => setIsTemplateHelpOpen(false)}
+      />
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Nova evolução"
+        title="Como funciona a Nova Evolução"
+        description="Siga estas etapas para registrar uma evolução por áudio, texto ou pelo modo híbrido e sincronizá-la com o prontuário do paciente."
+        steps={NEW_EVOLUTION_GUIDE_STEPS}
+        note="Revise o conteúdo antes de finalizar. Se o Google ou a internet estiverem indisponíveis, siga as orientações exibidas na tela para renovar o acesso ou recuperar o rascunho."
+        supportHref={NEW_EVOLUTION_SUPPORT_HREF}
       />
     </div>
   );

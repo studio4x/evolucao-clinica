@@ -11,10 +11,47 @@ import { appendToGoogleDoc, replaceEvolutionInGoogleDoc, validateGoogleDocAccess
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
 import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
-import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink, Play, Pause } from 'lucide-react';
+import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink, Play, Pause, FileText } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor } from '../components/common/RichTextEditor';
 import { showAlert } from '../store/modalStore';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
+
+const SHARE_TARGET_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Receba um áudio compartilhado',
+    description: 'Use o compartilhamento do celular ou do WhatsApp para enviar uma nota de voz ao Evolução Clínica. O áudio ficará disponível nesta página para revisão antes do processamento.',
+    icon: Mic,
+  },
+  {
+    title: 'Selecione o paciente e o modelo',
+    description: 'Escolha o paciente que receberá a evolução e, se desejar, selecione um template clínico. A data e o horário ajudam a organizar o registro no prontuário.',
+    icon: FileText,
+  },
+  {
+    title: 'Revise o áudio antes de processar',
+    description: 'Reproduza o arquivo, confirme se o conteúdo está correto e verifique se o paciente possui um Google Docs vinculado. Se necessário, você pode cancelar e voltar ao painel.',
+    icon: Play,
+  },
+  {
+    title: 'Transcreva e envie para o prontuário',
+    description: 'Ao processar, a plataforma transcreve o áudio, aplica o modelo escolhido e adiciona a evolução ao Google Docs do paciente. A conexão clínica com o Google pode ser solicitada nesse momento.',
+    icon: Upload,
+  },
+  {
+    title: 'Confira o resultado e continue',
+    description: 'Depois da conclusão, revise o texto processado, abra o documento no Google Drive ou volte ao paciente. Se algo falhar, use “Tentar Novamente” para repetir o processamento.',
+    icon: CheckCircle,
+  },
+];
+
+const SHARE_TARGET_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre o Áudio Recebido do WhatsApp',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre o processamento de áudio compartilhado do WhatsApp.\n\nMinha dúvida:\n\n',
+}).toString()}`;
 
 // Simple IndexedDB wrapper for the shared file
 const getSharedFile = (): Promise<File | null> => {
@@ -244,6 +281,7 @@ export default function ShareTarget() {
   const [status, setStatus] = useState<'loading' | 'idle' | 'processing' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [isReauthenticating, setIsReauthenticating] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Estados para edição da evolução recém-processada no modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -827,8 +865,14 @@ export default function ShareTarget() {
         icon={Mic}
         title="Áudio Recebido"
         description="Selecione o paciente para processar este áudio."
+        titleActions={<FeatureGuideButton label="o processamento do áudio compartilhado" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
+        actions={(
+          <span className="sm:hidden">
+            <FeatureGuideButton compact label="o processamento do áudio compartilhado" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+          </span>
+        )}
       />
-      <div className="card overflow-hidden">
+      <div className="card mt-6 overflow-hidden">
         <div className="mt-6 p-6 space-y-6">
           {status === 'success' ? (
             <div className="text-center py-8">
@@ -1218,6 +1262,17 @@ export default function ShareTarget() {
           </div>
         </div>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Áudio recebido"
+        title="Como funciona o processamento de áudio"
+        description="Entenda como transformar um áudio compartilhado do celular em uma evolução organizada no prontuário do paciente."
+        steps={SHARE_TARGET_GUIDE_STEPS}
+        note="Revise o paciente, a data e o áudio antes de processar. O resultado depende da conexão com o Google Docs vinculado ao prontuário."
+        supportHref={SHARE_TARGET_SUPPORT_HREF}
+      />
     </div>
   );
 }

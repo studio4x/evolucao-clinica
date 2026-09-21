@@ -29,12 +29,49 @@ import { resolveHorizontalSwipe } from '../utils/horizontalSwipe';
 import PatientFilesCard from '../components/patients/PatientFilesCard';
 import PatientAnamnesisSummaryCard from '../components/patients/PatientAnamnesisSummaryCard';
 import PatientSessionsSummaryCard from '../components/patients/PatientSessionsSummaryCard';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import {
   PATIENT_SESSION_WEEKDAYS,
   normalizePatientSessionSchedule,
   sessionScheduleToLegacy,
   type PatientSessionScheduleEntry,
 } from '../utils/patientSessionSchedule';
+
+const PATIENT_DETAIL_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Navegue pelas seções do paciente',
+    description: 'Use as abas para alternar entre visão geral, anamnese, sessões, arquivos, histórico de evoluções e relatórios ou PDI.',
+    icon: LayoutDashboard,
+  },
+  {
+    title: 'Registre e acompanhe evoluções',
+    description: 'Crie novas evoluções, revise transcrições e acompanhe o status de cada registro. Evoluções assinadas ficam protegidas contra alterações posteriores.',
+    icon: ClipboardList,
+  },
+  {
+    title: 'Organize sessões e lembretes',
+    description: 'Configure agenda, sessões e lembretes de evolução para manter o acompanhamento do paciente alinhado à sua rotina clínica.',
+    icon: Bell,
+  },
+  {
+    title: 'Gere relatórios e PDI com IA',
+    description: 'Selecione o período, escolha entre relatório de evolução e rascunho de PDI, revise o conteúdo gerado e decida onde salvar ou compartilhar o documento.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Use Google Drive, arquivos e assinatura',
+    description: 'O prontuário pode ser sincronizado com Google Docs, PDFs assinados podem ser salvos no Drive e arquivos do paciente ficam organizados nesta página.',
+    icon: ExternalLink,
+  },
+];
+
+const PATIENT_DETAIL_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre os Detalhes do Paciente',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a página de Detalhes do Paciente e seus recursos clínicos.\n\nMinha dúvida:\n\n',
+}).toString()}`;
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -291,6 +328,7 @@ export default function PatientDetail() {
     title: string;
     message: string;
   } | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
   const [showSignConfirmModal, setShowSignConfirmModal] = useState<{
     isOpen: boolean;
     reportId: string;
@@ -2460,8 +2498,12 @@ export default function PatientDetail() {
               )}
             </span>
           )}
+          titleActions={<FeatureGuideButton label="os Detalhes do Paciente" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
           mobileActionsInline
           actions={<>
+            <span className="sm:hidden">
+              <FeatureGuideButton compact label="os Detalhes do Paciente" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+            </span>
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
@@ -4733,6 +4775,17 @@ export default function PatientDetail() {
           </div>
         </div>
       )}
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Detalhes do paciente"
+        title="Como funcionam os Detalhes do Paciente"
+        description="Esta é a área central do acompanhamento clínico: aqui você reúne dados, sessões, evoluções, arquivos e documentos do paciente."
+        steps={PATIENT_DETAIL_GUIDE_STEPS}
+        note="A assinatura digital encerra e protege o documento. Antes de assinar ou compartilhar, revise o conteúdo e os dados do paciente."
+        supportHref={PATIENT_DETAIL_SUPPORT_HREF}
+      />
 
       {/* Área de Impressão Oculta na Tela, Visível na Impressão */}
       {createPortal(
