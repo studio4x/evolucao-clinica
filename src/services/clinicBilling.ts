@@ -1,4 +1,5 @@
 import { resolveSupabaseFunctionErrorMessage } from "../utils/supabaseFunctionErrors";
+import { getClinicBillingErrorLabel } from "../utils/clinicAdminPresentation";
 import { supabase } from "../supabaseClient";
 
 export type ClinicBillingCatalogItem = {
@@ -37,8 +38,14 @@ export type ClinicBillingStatus = {
 
 async function invoke<T>(name: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(name, { body });
-  if (error) throw new Error(await resolveSupabaseFunctionErrorMessage(error, "Não foi possível concluir a operação de cobrança."));
-  if (!data || data.error) throw new Error(data?.error || "Resposta inválida do serviço de cobrança.");
+  if (error) {
+    const message = await resolveSupabaseFunctionErrorMessage(error, "Não foi possível concluir a operação de cobrança.");
+    throw new Error(getClinicBillingErrorLabel(message) || message);
+  }
+  if (!data || data.error) {
+    const message = typeof data?.error === "string" ? data.error : "Resposta inválida do serviço de cobrança.";
+    throw new Error(getClinicBillingErrorLabel(message) || message);
+  }
   return data as T;
 }
 

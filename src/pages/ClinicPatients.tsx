@@ -6,9 +6,10 @@ import { useAuthStore } from "../store/authStore";
 import { useClinicContextStore } from "../store/clinicContextStore";
 import { supabase } from "../supabaseClient";
 import { ClinicPatientsApiError, fetchClinicPatients, type ClinicPatientSummary } from "../services/clinicPatients";
+import { getClinicAssignmentRoleLabel } from "../utils/clinicAdminPresentation";
 
 function roleLabel(role: ClinicPatientSummary["current_assignment_role"]) {
-  return role === "primary" ? "Primary" : role === "secondary" ? "Secondary" : role === "consultant" ? "Consultor" : "Clínica";
+  return role ? getClinicAssignmentRoleLabel(role) : "Clínica";
 }
 
 function formatDate(value: string | null) {
@@ -57,7 +58,7 @@ export default function ClinicPatients() {
         {isManager && <Link to="/painel/clinica/pacientes/new" className="inline-flex items-center gap-2 rounded-xl bg-brand-primary px-4 py-3 text-sm font-bold text-white"><UserPlus size={17} /> Novo paciente</Link>}
       </div>
       {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-      {loading ? <div className="flex items-center gap-2 text-sm text-brand-text-muted"><Loader2 className="animate-spin" size={18} /> Carregando pacientes...</div> : visiblePatients.length === 0 ? <div className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-sm text-brand-text-muted">Nenhum paciente neste filtro.</div> : <div className="grid gap-3">{visiblePatients.map((patient) => <Link key={patient.organization_patient_id} to={`/painel/clinica/pacientes/${patient.organization_patient_id}`} className="rounded-2xl border border-brand-border bg-white p-5 shadow-sm transition hover:border-brand-primary"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-brand-text">{patient.full_name}</h2><p className="mt-1 text-sm text-brand-text-muted">Nascimento: {formatDate(patient.birth_date)} · Primary: {patient.primary_professional_name || "Profissional"}</p></div><span className="rounded-full bg-brand-bg px-3 py-1 text-xs font-semibold text-brand-primary">{roleLabel(patient.current_assignment_role)}</span></div><p className="mt-3 text-xs text-brand-text-muted">{patient.assignment_count} profissional(is) atribuído(s) · {patient.status === "active" ? "Ativo" : "Arquivado"}</p></Link>)}</div>}
+      {loading ? <div className="flex items-center gap-2 text-sm text-brand-text-muted"><Loader2 className="animate-spin" size={18} /> Carregando pacientes...</div> : visiblePatients.length === 0 ? <div className="rounded-2xl border border-dashed border-brand-border bg-white p-8 text-center text-sm text-brand-text-muted">Nenhum paciente neste filtro.</div> : <div className="grid gap-3">{visiblePatients.map((patient) => <Link key={patient.organization_patient_id} to={`/painel/clinica/pacientes/${patient.organization_patient_id}`} className="rounded-2xl border border-brand-border bg-white p-5 shadow-sm transition hover:border-brand-primary"><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold text-brand-text">{patient.full_name}</h2><p className="mt-1 text-sm text-brand-text-muted">Nascimento: {formatDate(patient.birth_date)} · Principal: {patient.primary_professional_name || "Profissional"}</p></div><span className="rounded-full bg-brand-bg px-3 py-1 text-xs font-semibold text-brand-primary">{roleLabel(patient.current_assignment_role)}</span></div><p className="mt-3 text-xs text-brand-text-muted">{patient.assignment_count} profissional(is) atribuído(s) · {patient.status === "active" ? "Ativo" : "Arquivado"}</p></Link>)}</div>}
       <p className="text-xs text-brand-text-muted">Os registros clínicos e evoluções permanecem privados de cada profissional nesta fase.</p>
     </div>
   );

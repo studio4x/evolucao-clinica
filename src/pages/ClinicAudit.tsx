@@ -11,7 +11,7 @@ const EVENT_OPTIONS = [
   ["", "Todos os eventos"],
   ["organization_patient_archived", "Paciente arquivado"],
   ["organization_patient_reactivated", "Paciente reativado"],
-  ["patient_primary_reassigned", "Primary alterado"],
+  ["patient_primary_reassigned", "Profissional principal alterado"],
   ["patient_assignment_role_changed", "Papel clínico alterado"],
   ["patient_assignment_created", "Acesso clínico concedido"],
   ["patient_assignment_revoked", "Acesso clínico revogado"],
@@ -29,7 +29,7 @@ function eventLabel(event: ClinicAuditEvent) {
 
 function eventDescription(event: ClinicAuditEvent) {
   const subject = event.patient_display_name || event.subject_professional_name || event.professional_name;
-  if (event.event_type === "patient_primary_reassigned") return `${subject || "Paciente"}: Primary atualizado${event.keep_previous_as_secondary ? "; Primary anterior mantido como Secondary" : ""}.`;
+  if (event.event_type === "patient_primary_reassigned") return `${subject || "Paciente"}: profissional principal atualizado${event.keep_previous_as_secondary ? "; profissional anterior mantido como secundário" : ""}.`;
   if (event.event_type === "patient_assignment_role_changed") return `${subject || "Acesso clínico"}: papel atualizado.`;
   return subject ? `${subject}.` : "Alteração operacional registrada.";
 }

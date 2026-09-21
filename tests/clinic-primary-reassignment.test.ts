@@ -8,5 +8,5 @@ assert.match(migration, /reassign_organization_patient_primary/);
 assert.match(migration, /FOR UPDATE/);
 assert.match(migration, /keep_previous_as_secondary/);
 assert.match(route, /reassign-primary/);
-assert.match(page, /Manter o Primary anterior como Secondary/);
+assert.match(page, /Manter o profissional principal anterior como secundário/);
 console.log("clinic-primary-reassignment contract ok");

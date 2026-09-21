@@ -22,9 +22,46 @@ export const clinicPlanLabel: Record<string, string> = {
 };
 
 export const clinicBillingIntervalLabel: Record<string, string> = {
+  month: "Mensal",
+  year: "Anual",
   monthly: "Mensal",
   yearly: "Anual",
 };
+
+export const clinicAssignmentRoleLabel: Record<string, string> = {
+  primary: "Principal",
+  secondary: "Secundário",
+  consultant: "Consultor",
+};
+
+export const clinicMembershipRoleLabel: Record<string, string> = clinicRoleLabel;
+
+export const clinicBillingErrorLabel: Record<string, string> = {
+  clinic_billing_disabled: "Alterações de cobrança estão temporariamente indisponíveis.",
+  payment_action_required: "O pagamento da alteração precisa ser concluído.",
+  billing_operation_in_progress: "Já existe uma alteração de cobrança em andamento.",
+};
+
+export function getClinicPlanLabel(planCode: string | null | undefined) {
+  return (planCode && clinicPlanLabel[planCode]) || "Plano Clínica";
+}
+
+export function getClinicBillingIntervalLabel(interval: string | null | undefined) {
+  return (interval && clinicBillingIntervalLabel[interval]) || "Não informado";
+}
+
+export function getClinicAssignmentRoleLabel(role: string | null | undefined) {
+  return (role && clinicAssignmentRoleLabel[role]) || "Profissional";
+}
+
+export function getClinicMembershipRoleLabel(role: string | null | undefined) {
+  return (role && clinicMembershipRoleLabel[role]) || "Profissional";
+}
+
+export function getClinicBillingErrorLabel(code: string | null | undefined) {
+  if (!code) return null;
+  return clinicBillingErrorLabel[code] || null;
+}
 
 export const clinicFinancialStatusLabel: Record<string, string> = {
   active: "Ativo",

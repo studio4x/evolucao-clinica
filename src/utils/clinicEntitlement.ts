@@ -11,6 +11,7 @@ export type EffectiveEntitlement = {
 export function resolveEffectiveEntitlement(input: {
   pathname: string;
   personalAvailable: boolean;
+  personalEntitled?: boolean;
   accessMode: "personal" | "hybrid" | "clinic_only";
   activeContext: ActiveClinicContext;
   organizations: ClinicOrganization[];
@@ -35,7 +36,7 @@ export function resolveEffectiveEntitlement(input: {
   return {
     source: "personal",
     available: input.personalAvailable,
-    shouldPaywall: !input.personalAvailable && !shouldRedirectToClinic && input.profileRole !== "admin",
+    shouldPaywall: !(input.personalEntitled ?? input.personalAvailable) && !shouldRedirectToClinic && input.profileRole !== "admin",
     shouldRedirectToClinic,
   };
 }

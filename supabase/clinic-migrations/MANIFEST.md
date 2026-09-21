@@ -43,3 +43,4 @@ Migration adicional Fase 6B: `20260918_31_pending_owner_checkout_context.sql` ex
 Fora do escopo desta série: envio externo de convites sem confirmação específica, integrações não autorizadas, Stripe Live e
 produção.
 | `20260921_33_clinic_plan_context_entitlement.sql` | ownership explícito do Plano Clínica, modos `personal`/`hybrid`/`clinic_only`, contexto autorizado com entitlement organizacional e source de licença, sem exposição financeira | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260921_35_consultant_read_only_assignment.sql` | availability pessoal por status global, backfill e derivação server-side das capabilities de Primary/Secondary/Consultor | `hwkdwinfckmjoriqxbjk` (staging) |

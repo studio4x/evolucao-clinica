@@ -71,6 +71,8 @@ const clinicOnlyOrganization = { id: "org-clinic", name: "Clínica", tradeName: 
 assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/dashboard", personalAvailable: false, accessMode: "clinic_only", activeContext: { type: "personal" }, organizations: [clinicOnlyOrganization], profileRole: "therapist" }).shouldRedirectToClinic, true);
 assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/patients", personalAvailable: false, accessMode: "hybrid", activeContext: { type: "organization", organizationId: "org-clinic" }, organizations: [clinicOnlyOrganization], profileRole: "therapist" }).source, "organization");
 assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/patients", personalAvailable: false, accessMode: "personal", activeContext: { type: "personal" }, organizations: [], profileRole: "therapist" }).shouldPaywall, true);
+assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/dashboard", personalAvailable: true, personalEntitled: false, accessMode: "hybrid", activeContext: { type: "personal" }, organizations: [], profileRole: "therapist" }).shouldPaywall, true);
+assert.equal(resolveEffectiveEntitlement({ pathname: "/painel/dashboard", personalAvailable: true, personalEntitled: true, accessMode: "hybrid", activeContext: { type: "personal" }, organizations: [], profileRole: "therapist" }).shouldPaywall, false);
 
 let capturedHandler: ((request: any, response: any) => Promise<unknown>) | null = null;
 let capturedMiddleware: unknown;

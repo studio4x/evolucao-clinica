@@ -190,7 +190,8 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const clinicContext = useClinicContextStore();
   const location = useLocation();
   const isClinicRoute = location.pathname === '/painel/clinica' || location.pathname.startsWith('/painel/clinica/');
-  const hasOrganizationAccess = Boolean(user && isClinicRoute && hasAuthorizedOrganizationAccess({
+  const isProfileRoute = location.pathname === '/painel/profile';
+  const hasOrganizationAccess = Boolean(user && hasAuthorizedOrganizationAccess({
     featureEnabled: publicEffectFlags.clinicFeature,
     contextStatus: clinicContext.status, contextUserId: clinicContext.userId, userId: user.id,
     activeContext: clinicContext.activeContext, organizations: clinicContext.organizations,
@@ -201,9 +202,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     activeContext: clinicContext.activeContext, organizations: clinicContext.organizations,
   }));
   const isOnboardingRoute = location.pathname.startsWith('/onboarding') || location.pathname.startsWith('/checkout');
+  const personalSubscriptionEndsAt = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
+  const personalEntitled = profileStatus === 'active'
+    && (subscriptionStatus === 'active' || subscriptionStatus === 'trialing')
+    && (!personalSubscriptionEndsAt || personalSubscriptionEndsAt > new Date());
   const effectiveEntitlement = resolveEffectiveEntitlement({
     pathname: location.pathname,
     personalAvailable: clinicContext.personalAvailable,
+    personalEntitled,
     accessMode: clinicContext.accessMode,
     activeContext: clinicContext.activeContext,
     organizations: clinicContext.organizations,
@@ -237,7 +243,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  if (effectiveEntitlement.shouldRedirectToClinic && location.pathname !== '/painel/clinica') {
+  if (effectiveEntitlement.shouldRedirectToClinic && !isProfileRoute && location.pathname !== '/painel/clinica') {
     return <Navigate to="/painel/clinica" replace />;
   }
 
