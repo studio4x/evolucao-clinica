@@ -3,12 +3,73 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 import { 
   Bell, BellOff, CheckCheck, Trash2, Mail, Settings, Shield, 
-  Info, AlertTriangle, CheckCircle2, XCircle, Loader2 
+  Info, AlertTriangle, CheckCircle2, XCircle, Loader2, HelpCircle
 } from 'lucide-react';
+
+const NOTIFICATIONS_GUIDE_STEPS: FeatureGuideStep[] = [
+  {
+    title: 'Acompanhe as novidades da plataforma',
+    description: 'A Central de Notificações reúne avisos, atualizações e alertas importantes da plataforma em um só lugar. O contador ajuda a identificar o que ainda não foi lido.',
+    icon: Bell,
+  },
+  {
+    title: 'Ative as notificações push no celular',
+    description: 'Mantenha as notificações push ativadas para receber novidades da plataforma diretamente no celular, inclusive na tela de bloqueio. Assim, você não precisa abrir o sistema o tempo todo para saber quando há um novo aviso.',
+    icon: Shield,
+  },
+  {
+    title: 'Leia e organize seus avisos',
+    description: 'Clique em uma notificação para marcá-la como lida ou use “Ler todas” para atualizar a central de uma vez. Quando não precisar mais dos registros, “Limpar histórico” exclui as notificações da sua central.',
+    icon: CheckCheck,
+  },
+  {
+    title: 'Configure suas preferências',
+    description: 'Acesse “Gerenciar Preferências” para escolher como deseja receber comunicações por e-mail, alertas, WhatsApp e notificações push. As opções ajudam a manter apenas os canais relevantes para você.',
+    icon: Settings,
+  },
+  {
+    title: 'Confira o status do seu dispositivo',
+    description: 'A área de notificações push informa se o navegador ou aplicativo tem suporte, se a permissão está liberada e permite ativar ou desativar o recebimento quando necessário.',
+    icon: Bell,
+  },
+];
+
+const NOTIFICATIONS_SUPPORT_HREF = `/painel/support?${new URLSearchParams({
+  new: '1',
+  subject: 'Dúvida sobre a Central de Notificações e notificações push',
+  category: 'general',
+  description: 'Olá! Estou com uma dúvida sobre a Central de Notificações e as notificações push.\n\nMinha dúvida:\n\n',
+}).toString()}`;
+
+type NotificationsGuideButtonProps = {
+  compact?: boolean;
+  expanded: boolean;
+  onOpen: () => void;
+};
+
+function NotificationsGuideButton({ compact = false, expanded, onOpen }: NotificationsGuideButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir guia de como funciona a Central de Notificações"
+      aria-haspopup="dialog"
+      aria-expanded={expanded}
+      className={compact
+        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
+        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
+      title={compact ? 'Como funciona' : undefined}
+    >
+      <HelpCircle size={16} />
+      {!compact && <span>Como funciona</span>}
+    </button>
+  );
+}
 
 interface Notification {
   id: string;
@@ -41,6 +102,7 @@ export default function Notifications() {
   const { user, profileRole } = useAuthStore();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   // Push states
   const [isPushSupported, setIsPushSupported] = useState(false);
@@ -530,6 +592,12 @@ export default function Notifications() {
         icon={Bell}
         title="Central de Notificações"
         description="Gerencie seus alertas na plataforma, notificações push e configurações de e-mail."
+        titleActions={<NotificationsGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
+        actions={(
+          <span className="sm:hidden">
+            <NotificationsGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+          </span>
+        )}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -855,6 +923,17 @@ export default function Notifications() {
 
         </div>
       </div>
+
+      <FeatureGuideModal
+        open={guideOpen}
+        onClose={() => setGuideOpen(false)}
+        eyebrow="Central de notificações"
+        title="Como funciona a Central de Notificações"
+        description="Use esta página para acompanhar os avisos da plataforma e escolher como deseja recebê-los no navegador, no aplicativo e no celular."
+        steps={NOTIFICATIONS_GUIDE_STEPS}
+        note="Ative as notificações push para receber as novidades da plataforma diretamente no celular. Se a permissão estiver bloqueada, libere-a nas configurações do navegador ou do aplicativo."
+        supportHref={NOTIFICATIONS_SUPPORT_HREF}
+      />
     </div>
   );
 }
