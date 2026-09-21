@@ -8,6 +8,7 @@ const detail = readFileSync('src/pages/PatientDetail.tsx', 'utf8');
 const page = readFileSync('src/pages/PatientSessions.tsx', 'utf8');
 const service = readFileSync('src/services/patientSessions.ts', 'utf8');
 const signaturePad = readFileSync('src/components/patients/sessions/SessionSignaturePad.tsx', 'utf8');
+const pdf = readFileSync('src/utils/patientSessionsPdf.ts', 'utf8');
 
 assert.match(migration, /create table if not exists public\.patient_sessions/);
 assert.match(migration, /create table if not exists public\.patient_session_signatures/);
@@ -28,5 +29,13 @@ assert.match(service, /SHA-256/);
 assert.match(service, /deleted_at/);
 assert.match(signaturePad, /touch-none/);
 assert.doesNotMatch(page, /validade jurídica/i);
+assert.match(pdf, /drawDocumentLogo/);
+assert.match(pdf, /Plataforma Inteligente de Acompanhamento Terapêutico/);
+assert.match(pdf, /Emitido por evolucaoclinica\.app\.br/);
+assert.match(pdf, /Registro Profissional:/);
+assert.match(pdf, /Controle de Sessões - Emitido por evolucaoclinica\.app\.br/);
+assert.match(page, /useSiteConfig/);
+assert.match(page, /custom_logo_url/);
+assert.match(page, /hasActiveYearlyAccess/);
 
 console.log('patient-session-control: ok');

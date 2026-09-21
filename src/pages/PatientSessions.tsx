@@ -7,6 +7,8 @@ import {
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { useSiteConfig } from '../hooks/useSiteConfig';
+import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import SessionSignaturePad from '../components/patients/sessions/SessionSignaturePad';
 import { showAlert, showConfirm } from '../store/modalStore';
 import {
@@ -39,6 +41,7 @@ const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
 });
 
 export default function PatientSessions() {
+  const siteConfig = useSiteConfig();
   const { id } = useParams();
   const user = useAuthStore((state) => state.user);
   const [patient, setPatient] = useState<any>(null);
@@ -70,7 +73,7 @@ export default function PatientSessions() {
     try {
       const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, packageData, evolutionResult] = await Promise.all([
         supabase.from('patients').select('id, full_name, professional_id, session_days, session_time').eq('id', id).single(),
-        supabase.from('professionals').select('id, full_name, professional_register').eq('id', user.id).single(),
+        supabase.from('professionals').select('id, full_name, professional_register, professional_title, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at').eq('id', user.id).single(),
         fetchPatientSessions(id, month),
         fetchPatientSessionPackages(id),
         supabase.from('evolutions').select('id, session_date, session_time, created_at').eq('patient_id', id).eq('professional_id', user.id).eq('transcription_status', 'completed').order('session_date', { ascending: false, nullsFirst: false }),
@@ -206,11 +209,37 @@ export default function PatientSessions() {
         const response = await fetch(url);
         if (response.ok) signatureImages[session.signature.id] = await blobToDataUrl(await response.blob());
       }
+      const canUseCustomLogo = hasActiveYearlyAccess({
+        profileRole: professional.role,
+        subscriptionPlan: professional.subscription_plan,
+        subscriptionStatus: professional.subscription_status,
+        subscriptionEndsAt: professional.subscription_ends_at,
+      });
+      const logoUrl = canUseCustomLogo && professional.custom_logo_url
+        ? professional.custom_logo_url
+        : siteConfig.logo_light_url;
+      let logoBase64: string | null = null;
+      if (logoUrl) {
+        try {
+          const logoResponse = await fetch(logoUrl);
+          if (logoResponse.ok) logoBase64 = await blobToDataUrl(await logoResponse.blob());
+        } catch (logoError) {
+          console.warn('[PatientSessions] Continuando PDF sem logotipo:', logoError);
+        }
+      }
+
       const doc = generatePatientSessionsPdf({
         patientName: patient.full_name,
         professionalName: professional.full_name,
         professionalRegister: professional.professional_register,
-        month: exportMonth, periodLabel: exportPeriodLabel, sessions: exportSessions, signatureImages,
+        professionalTitle: professional.professional_title,
+        month: exportMonth,
+        periodLabel: exportPeriodLabel,
+        sessions: exportSessions,
+        signatureImages,
+        siteConfig,
+        logoBase64,
+        customLogoSettings: professional.custom_logo_settings,
       });
       await downloadPatientSessionsPdf(doc, getPatientSessionsPdfFileName(patient.full_name, exportMonth));
     } catch (error: any) {
