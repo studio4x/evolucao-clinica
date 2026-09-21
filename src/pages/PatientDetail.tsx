@@ -202,6 +202,12 @@ export default function PatientDetail() {
   } = useAuthStore();
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const hasFreshClinicalAccess = hasClinicalAccess && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
+  const hasYearlyAccess = hasActiveYearlyAccess({
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt,
+  });
 
   useEffect(() => {
     if (!patient?.id || !user?.id) return;
@@ -2555,15 +2561,25 @@ export default function PatientDetail() {
                 </div>
               )}
 
-              <Link
-                to={`/painel/patients/${id}/anamnesis`}
-                className="hidden xl:flex w-full items-center justify-center space-x-2 px-4 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors text-sm font-medium"
-              >
-                <ClipboardList size={16} />
-                <span>Abrir anamnese</span>
-              </Link>
+              {hasYearlyAccess ? (
+                <Link
+                  to={`/painel/patients/${id}/anamnesis`}
+                  className="hidden xl:flex w-full items-center justify-center space-x-2 px-4 py-2 bg-brand-primary text-white rounded-xl hover:bg-brand-primary/90 transition-colors text-sm font-medium"
+                >
+                  <ClipboardList size={16} />
+                  <span>Abrir anamnese</span>
+                </Link>
+              ) : (
+                <Link
+                  to="/painel/subscription"
+                  className="hidden xl:flex w-full items-center justify-center space-x-2 px-4 py-2 rounded-xl border border-brand-primary/30 bg-brand-primary/5 text-brand-primary hover:bg-brand-primary/10 transition-colors text-sm font-medium"
+                >
+                  <ClipboardList size={16} />
+                  <span>Recurso do Plano Anual</span>
+                </Link>
+              )}
 
-              {patient.target_folder_id && (
+              {patient.target_folder_id && hasYearlyAccess && (
                 <a
                   href={`https://drive.google.com/drive/folders/${encodeURIComponent(patient.target_folder_id)}`}
                   target="_blank"

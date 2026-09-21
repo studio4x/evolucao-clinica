@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, ClipboardList, Clock3, Loader2 } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Clock3, Loader2, Lock } from 'lucide-react';
 import { fetchCurrentPatientAnamnesis, type PatientAnamnesis } from '../../services/anamnesis';
+import { useAuthStore } from '../../store/authStore';
+import { hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
 
 type Props = {
   patientId: string;
@@ -18,6 +20,13 @@ const formatUpdatedAt = (value: string) =>
   }).format(new Date(value));
 
 export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) {
+  const { profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const hasYearlyAccess = hasActiveYearlyAccess({
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt,
+  });
   const [anamnesis, setAnamnesis] = useState<PatientAnamnesis | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,6 +36,12 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
 
     const loadWhenVisible = () => {
       if (!active) return;
+
+      if (!hasYearlyAccess) {
+        setAnamnesis(null);
+        setLoading(false);
+        return;
+      }
 
       if (mediaQuery.matches) {
         setLoading(false);
@@ -54,7 +69,7 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
       active = false;
       mediaQuery.removeEventListener('change', loadWhenVisible);
     };
-  }, [patientId]);
+  }, [hasYearlyAccess, patientId]);
 
   return (
     <div className="card p-5 border border-brand-primary/15 bg-gradient-to-br from-white to-brand-primary/[0.03]">
@@ -65,7 +80,20 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-brand-text">Anamnese</h3>
 
-          {loading ? (
+          {!hasYearlyAccess ? (
+            <div className="mt-2 space-y-2">
+              <p className="flex items-center gap-1.5 text-xs leading-relaxed text-brand-text-muted">
+                <Lock size={13} className="shrink-0 text-brand-primary" />
+                A geração de anamnese é exclusiva do Plano Anual ativo.
+              </p>
+              <Link
+                to="/painel/subscription"
+                className="inline-flex text-xs font-bold text-brand-primary hover:underline"
+              >
+                Conhecer o Plano Anual →
+              </Link>
+            </div>
+          ) : loading ? (
             <div className="mt-2 flex items-center gap-2 text-xs text-brand-text-muted">
               <Loader2 size={13} className="animate-spin" />
               Carregando...

@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FolderOpen,
   Loader2,
+  Lock,
   Paperclip,
   Pencil,
   RefreshCw,
@@ -36,6 +37,7 @@ import {
   requestGoogleOAuth,
 } from '../../services/googleAuth';
 import { isGoogleAccessTokenFresh } from '../../utils/googleAuthSession';
+import { hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
 import { showAlert, showConfirm } from '../../store/modalStore';
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024;
@@ -174,6 +176,10 @@ export default function PatientFilesCard({
     googleAccessTokenIssuedAt,
     googleGrantedScopes,
     setGoogleAccessToken,
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt,
   } = useAuthStore();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -194,10 +200,22 @@ export default function PatientFilesCard({
     && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const hasFreshClinicalAccess = hasClinicalAccess
     && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
+  const hasYearlyAccess = hasActiveYearlyAccess({
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt,
+  });
 
-  const canUpload = Boolean(targetFolderId) && hasFreshClinicalAccess;
+  const canUpload = hasYearlyAccess && Boolean(targetFolderId) && hasFreshClinicalAccess;
 
   const loadFiles = async () => {
+    if (!hasYearlyAccess) {
+      setFiles([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
       setFiles(await listPatientFiles(patientId));
@@ -215,7 +233,7 @@ export default function PatientFilesCard({
 
   useEffect(() => {
     void loadFiles();
-  }, [patientId]);
+  }, [patientId, hasYearlyAccess]);
 
   const startGoogleAuthorization = async () => {
     if (authLoading) return;
@@ -241,6 +259,15 @@ export default function PatientFilesCard({
   };
 
   const appendSelectedFiles = async (selected: File[]) => {
+    if (!hasYearlyAccess) {
+      await showAlert('A inserção de arquivos do paciente está disponível somente no Plano Anual ativo.', {
+        title: 'Recurso do Plano Anual',
+        variant: 'warning',
+        icon: 'warning',
+      });
+      return;
+    }
+
     if (!targetFolderId) {
       await showAlert('Vincule uma pasta do Google Drive ao paciente antes de adicionar arquivos.', {
         title: 'Pasta necessária',
@@ -313,7 +340,7 @@ export default function PatientFilesCard({
   };
 
   const handleUploadAll = async () => {
-    if (!targetFolderId || !googleAccessToken || uploading) return;
+    if (!hasYearlyAccess || !targetFolderId || !googleAccessToken || uploading) return;
 
     const firstInvalid = pending.find((item) => validatePendingFile(item));
     if (firstInvalid) {
@@ -409,6 +436,7 @@ export default function PatientFilesCard({
   };
 
   const saveEditedType = async (file: PatientFileRecord) => {
+    if (!hasYearlyAccess) return;
     if (!editTypeKey || savingType) return;
     const label = editTypeKey === 'other'
       ? editTypeLabel.trim()
@@ -442,6 +470,8 @@ export default function PatientFilesCard({
   };
 
   const handleDeleteFile = async (file: PatientFileRecord) => {
+    if (!hasYearlyAccess) return;
+
     const confirmed = await showConfirm(
       `Excluir “${file.originalFileName}”? O arquivo também será removido da pasta do paciente no Google Drive.`,
       {
@@ -493,6 +523,27 @@ export default function PatientFilesCard({
     () => pending.filter((item) => !validatePendingFile(item)).length,
     [pending]
   );
+
+  if (!hasYearlyAccess) {
+    return (
+      <div className="card !overflow-visible p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <div className="rounded-xl bg-brand-primary/10 p-2.5 text-brand-primary">
+            <Lock size={19} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-semibold text-brand-text">Arquivos do paciente</h3>
+            <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
+              A inserção e organização de arquivos no Google Drive são exclusivas do Plano Anual ativo.
+            </p>
+            <Link to="/painel/subscription" className="mt-3 inline-flex text-xs font-bold text-brand-primary hover:underline">
+              Conhecer o Plano Anual →
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card !overflow-visible p-5 sm:p-6 space-y-5">
@@ -584,7 +635,7 @@ export default function PatientFilesCard({
             <UploadCloud size={28} className="mx-auto text-brand-primary" />
             <p className="mt-2 text-sm font-semibold text-brand-text">Adicionar arquivos</p>
             <p className="mt-1 text-[11px] text-brand-text-muted">
-              Clique ou arraste arquivos para cá · documentos, imagens e áudios até 25 MB · vídeos até 250 MB
+              Clique ou arraste arquivos para cá · documentos, imagens, áudios ou vídeos · até 25 MB (vídeos até 250 MB)
             </p>
           </button>
         </>

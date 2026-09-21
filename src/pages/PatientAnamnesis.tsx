@@ -17,6 +17,7 @@ import {
   FilePlus2,
   History as HistoryIcon,
   Loader2,
+  Lock,
   PlusCircle,
   RotateCcw,
   Save,
@@ -263,7 +264,19 @@ function AnamnesisFieldInput({ field, value, disabled = false, onChange }: Field
 export default function PatientAnamnesis() {
   const { id: patientId } = useParams();
   const navigate = useNavigate();
-  const user = useAuthStore((state) => state.user);
+  const {
+    user,
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt,
+  } = useAuthStore();
+  const hasYearlyAccess = hasActiveYearlyAccess({
+    profileRole,
+    subscriptionPlan,
+    subscriptionStatus,
+    subscriptionEndsAt,
+  });
   const siteConfig = useSiteConfig();
 
   const [patientName, setPatientName] = useState('');
@@ -402,7 +415,10 @@ export default function PatientAnamnesis() {
     let active = true;
 
     const load = async () => {
-      if (!patientId || !user) return;
+      if (!patientId || !user || !hasYearlyAccess) {
+        if (!hasYearlyAccess) setLoading(false);
+        return;
+      }
       setLoading(true);
 
       try {
@@ -479,7 +495,7 @@ export default function PatientAnamnesis() {
         window.clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [navigate, patientId, user]);
+  }, [hasYearlyAccess, navigate, patientId, user]);
 
   const ensureCurrent = useCallback(async () => {
     if (!patientId || !selectedTemplateIdRef.current) {
@@ -1048,6 +1064,42 @@ export default function PatientAnamnesis() {
         <div className="flex items-center gap-2 text-sm text-brand-text-muted">
           <Loader2 size={20} className="animate-spin text-brand-primary" />
           Carregando anamnese...
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasYearlyAccess) {
+    return (
+      <div className="w-full space-y-5 pb-8">
+        <button
+          type="button"
+          onClick={() => navigate(`/painel/patients/${patientId}`)}
+          className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline"
+        >
+          <ArrowLeft size={14} />
+          Voltar para o paciente
+        </button>
+
+        <div className="card mx-auto max-w-2xl p-6 sm:p-8">
+          <div className="flex items-start gap-4">
+            <div className="rounded-2xl bg-brand-primary/10 p-3 text-brand-primary">
+              <Lock size={24} />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-brand-text">Geração de anamnese</h1>
+              <p className="mt-2 text-sm leading-relaxed text-brand-text-muted">
+                A geração de anamnese estruturada, o histórico e o PDF são recursos exclusivos do Plano Anual ativo.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/painel/subscription')}
+                className="btn-primary mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm"
+              >
+                Conhecer o Plano Anual
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -15,6 +15,8 @@ export const MONTHLY_PLAN_FEATURES = [
 export const YEARLY_PLAN_FEATURES = [
   'Tudo do plano mensal',
   'Até 60 minutos de áudio por evolução',
+  'Arquivos do paciente no Google Drive',
+  'Geração de anamnese estruturada',
   'Economia de 57% em relação a 12 mensalidades',
   'Suporte VIP via ticket com primeira resposta em até 2 horas úteis',
   'Migração assistida de prontuários (PDF, Word e Excel)',
