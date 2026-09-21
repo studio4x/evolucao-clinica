@@ -101,6 +101,13 @@ interface Professional {
   trial_ends_at?: string;
   acquisition_info?: AcquisitionInfo;
   signup_acquisition_info?: AcquisitionInfo;
+  clinics?: Array<{
+    organizationId: string;
+    name: string;
+    role: 'owner' | 'manager' | 'professional' | string;
+    status: string;
+    clinicalAccessEnabled: boolean;
+  }>;
 }
 
 type JourneyGroupCheckStatus = 'unknown' | 'checking' | 'member' | 'not_member' | 'missing_phone' | 'indeterminate';
@@ -3644,7 +3651,8 @@ export default function AdminPanel() {
   const filteredProfessionals = professionals.filter((p) => {
     const matchesSearch = 
       p.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.google_email.toLowerCase().includes(searchTerm.toLowerCase());
+      p.google_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.clinics || []).some(clinic => clinic.name.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
 
@@ -4308,6 +4316,7 @@ export default function AdminPanel() {
                               </button>
                             </th>
                             <th className="p-4">Contato</th>
+                            <th className="p-4">Clínica</th>
                             <th className="p-4">Grupo Jornada</th>
                             <th
                               className="p-4"
@@ -4373,6 +4382,18 @@ export default function AdminPanel() {
 
                                 <td className="p-4 text-brand-text-muted font-medium break-all">
                                   {prof.google_email}
+                                </td>
+
+                                <td className="p-4 align-top">
+                                  {(prof.clinics || []).length === 0 ? (
+                                    <span className="inline-flex rounded-full border border-brand-border bg-brand-bg/50 px-2.5 py-1 text-[11px] font-semibold text-brand-text-muted">Individual</span>
+                                  ) : (
+                                    <div className="flex max-w-[220px] flex-wrap items-center gap-1.5" title={(prof.clinics || []).map(clinic => clinic.name + ' · ' + clinic.role + ' · ' + (clinic.clinicalAccessEnabled ? 'Acesso clínico' : 'Administrativo')).join(' | ')}>
+                                      <span className="truncate text-xs font-semibold text-brand-text">{prof.clinics?.[0]?.name}</span>
+                                      <span className="text-[10px] text-brand-text-muted">{prof.clinics?.[0]?.role === 'owner' ? 'Proprietário' : prof.clinics?.[0]?.role === 'manager' ? 'Gestor' : 'Profissional'} · {prof.clinics?.[0]?.clinicalAccessEnabled ? 'Acesso clínico' : 'Administrativo'}</span>
+                                      {(prof.clinics || []).length > 1 && <span className="rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-bold text-sky-700">+{(prof.clinics || []).length - 1}</span>}
+                                    </div>
+                                  )}
                                 </td>
 
                                 <td className="p-4 whitespace-nowrap">

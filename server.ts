@@ -103,6 +103,10 @@ import {
   getProfessionalClinicalMetrics,
   getProfessionalOnboardingEligibility
 } from "./server/admin/professionalOverview.js";
+import {
+  isOptionalSupabaseResourceMissing,
+  logAdminSupabaseFailure
+} from "./server/admin/optionalSupabaseResource.js";
 import { getConversionFunnel } from "./server/admin/conversionFunnel.js";
 import { getProfessionalFunnelBoard, PROFESSIONAL_FUNNEL_STAGES } from "./server/admin/professionalFunnel.js";
 import { buildProfessionalFunnelMessage } from "./src/utils/professionalFunnelMessages.js";
@@ -3768,51 +3772,95 @@ app.get("/api/admin/daily-push-history", requireAuth, requireAdmin, async (req, 
 });
 
 
-app.get("/api/admin/professionals/:professionalId/details", requireAuth, requireAdmin, async (req: any, res) => {
+app.get("/api/admin/professionals/:professionalId/details", requireAuth, requireAdmin, async (req: any, res: any) => {
+  const endpoint = "/api/admin/professionals/:professionalId/details";
   const professionalId = String(req.params.professionalId || "").trim();
-  if (!professionalId) {
-    return res.status(400).json({ error: "ID do profissional ausente." });
-  }
+  if (!professionalId) return res.status(400).json({ error: "ID do profissional ausente." });
 
   try {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    const [professionalResult, preferencesResult, authResult] = await Promise.all([
-      supabaseAdmin
-        .from("professionals")
-        .select("id, google_email, full_name, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at, updated_at, professional_title, professional_register, force_google_disconnect, trial_expiration_email_sent_at, onboarding_completed, onboarding_status, onboarding_initial_mode, onboarding_mode, onboarding_current_step, onboarding_choice_at, onboarding_deferred_at, custom_logo_url, auto_backup_enabled, last_backup_at, backup_frequency, billing_provider, stripe_customer_id, acquisition_info, signup_acquisition_info, work_context")
-        .eq("id", professionalId)
-        .maybeSingle(),
-      supabaseAdmin
-        .from("communication_preferences")
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, proxy-revalidate");
+    const professionalResult = await supabaseAdmin
+      .from("professionals")
+      .select("id, google_email, full_name, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at, updated_at, professional_title, professional_register, force_google_disconnect, trial_expiration_email_sent_at, onboarding_completed, onboarding_status, onboarding_initial_mode, onboarding_mode, onboarding_current_step, onboarding_choice_at, onboarding_deferred_at, custom_logo_url, auto_backup_enabled, last_backup_at, backup_frequency, billing_provider, stripe_customer_id, acquisition_info, signup_acquisition_info, work_context")
+      .eq("id", professionalId)
+      .maybeSingle();
+    if (professionalResult.error) {
+      logAdminSupabaseFailure(endpoint, "core.professional", professionalResult.error);
+      throw professionalResult.error;
+    }
+    if (!professionalResult.data) return res.status(404).json({ error: "Profissional não encontrado." });
+
+    const [authResult, membershipsResult, preferencesResult] = await Promise.all([
+      supabaseAdmin.auth.admin.getUserById(professionalId),
+      supabaseAdmin.from("organization_memberships")
+        .select("organization_id, membership_role, status, clinical_access_enabled, organizations!inner(id, name, trade_name)")
+        .eq("professional_id", professionalId)
+        .in("status", ["active", "suspended"]),
+      supabaseAdmin.from("communication_preferences")
         .select("whatsapp_number, whatsapp_verified_number, whatsapp_verified_at, whatsapp_enabled, whatsapp_opt_in, whatsapp_opt_in_at, whatsapp_opt_in_source, whatsapp_opt_in_text_version, whatsapp_opt_out_at, whatsapp_opt_out_source, whatsapp_opt_out_reason, email_enabled, push_enabled, lifecycle_enabled, product_education_enabled, commercial_enabled, created_at, updated_at")
         .eq("user_id", professionalId)
-        .maybeSingle(),
-      supabaseAdmin.auth.admin.getUserById(professionalId)
+        .maybeSingle()
     ]);
+    if (authResult.error) { logAdminSupabaseFailure(endpoint, "core.auth", authResult.error); throw authResult.error; }
+    if (membershipsResult.error) { logAdminSupabaseFailure(endpoint, "core.clinicMemberships", membershipsResult.error); throw membershipsResult.error; }
 
-    if (professionalResult.error) throw professionalResult.error;
-    if (preferencesResult.error) throw preferencesResult.error;
-    if (!professionalResult.data) {
-      return res.status(404).json({ error: "Profissional não encontrado." });
+    const clinicMemberships = (membershipsResult.data || []).map((row: any) => {
+      const organization = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
+      return {
+        organizationId: row.organization_id,
+        organizationName: organization?.name || "Clínica sem nome",
+        organizationTradeName: organization?.trade_name || null,
+        role: row.membership_role,
+        status: row.status,
+        clinicalAccessEnabled: row.clinical_access_enabled === true
+      };
+    });
+    const professional = professionalResult.data;
+    const preferencesMissing = Boolean(preferencesResult.error && isOptionalSupabaseResourceMissing(preferencesResult.error));
+    if (preferencesResult.error && !preferencesMissing) {
+      logAdminSupabaseFailure(endpoint, "optional.communicationPreferences", preferencesResult.error);
+      throw preferencesResult.error;
     }
 
-    const professional = professionalResult.data;
-    const communicationPreferences = preferencesResult.data || null;
-    const [clinicalMetrics, onboardingEligibility] = await Promise.all([
-      getProfessionalClinicalMetrics(supabaseAdmin, professionalId),
-      getProfessionalOnboardingEligibility({
+    let clinicalMetrics;
+    try {
+      clinicalMetrics = await getProfessionalClinicalMetrics(supabaseAdmin, professionalId);
+    } catch (error) {
+      logAdminSupabaseFailure(endpoint, "optional.usageMetrics", error);
+      throw error;
+    }
+
+    let onboardingEligibility: any = null;
+    let lifecycleAvailable = true;
+    try {
+      onboardingEligibility = await getProfessionalOnboardingEligibility({
         supabaseAdmin,
         professionalId,
         professionalStatus: String(professional.status || ""),
-        preferences: communicationPreferences
-      })
-    ]);
+        preferences: preferencesMissing ? null : preferencesResult.data || null
+      });
+    } catch (error) {
+      if (isOptionalSupabaseResourceMissing(error)) {
+        lifecycleAvailable = false;
+      } else {
+        logAdminSupabaseFailure(endpoint, "optional.lifecycle", error);
+        throw error;
+      }
+    }
+
     const authUser = authResult.data?.user;
     return res.json({
       professional,
-      communicationPreferences,
+      communicationPreferences: preferencesMissing ? null : preferencesResult.data || null,
+      clinicMemberships,
       clinicalMetrics,
       onboardingEligibility,
+      modules: {
+        communicationPreferences: { available: !preferencesMissing, ...(preferencesMissing ? { reason: "not_available_in_environment" } : {}) },
+        lifecycle: { available: lifecycleAvailable, ...(lifecycleAvailable ? {} : { reason: "not_available_in_environment" }) },
+        usageMetrics: { available: clinicalMetrics.usageMetricsAvailable, ...(clinicalMetrics.usageMetricsAvailable ? {} : { reason: "degraded_from_evolutions" }) },
+        clinicMemberships: { available: true }
+      },
       auth: authUser ? {
         created_at: authUser.created_at || null,
         last_sign_in_at: authUser.last_sign_in_at || null,
@@ -3820,7 +3868,7 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
       } : null
     });
   } catch (error) {
-    console.error("[Admin professional details] Falha ao consultar dados do profissional.");
+    logAdminSupabaseFailure(endpoint, "request", error);
     return res.status(500).json({ error: "Não foi possível carregar os dados do profissional." });
   }
 });
@@ -3838,7 +3886,10 @@ app.get("/api/admin/professionals/:professionalId/communications", requireAuth, 
       .select("id")
       .eq("id", professionalId)
       .maybeSingle();
-    if (professionalError) throw professionalError;
+    if (professionalError) {
+      logAdminSupabaseFailure("/api/admin/professionals/:professionalId/communications", "core.professional", professionalError);
+      throw professionalError;
+    }
     if (!professional) {
       return res.status(404).json({ error: "Profissional não encontrado." });
     }
@@ -3850,7 +3901,7 @@ app.get("/api/admin/professionals/:professionalId/communications", requireAuth, 
     );
     return res.json(history);
   } catch (error) {
-    console.error("[Admin professional communications] Falha ao consultar histórico do profissional.");
+    logAdminSupabaseFailure("/api/admin/professionals/:professionalId/communications", "request", error);
     return res.status(500).json({ error: "Não foi possível carregar o histórico de comunicação." });
   }
 });
@@ -3979,6 +4030,7 @@ app.post("/api/account/delete", requireAuth, async (req: any, res) => {
 });
 
 app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any, res: any) => {
+  const endpoint = "/api/admin/professionals";
   res.set({ "Cache-Control": "private, no-store", Vary: "Authorization" });
   try {
     const { data, error } = await supabaseAdmin
@@ -3986,8 +4038,33 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
       .select("id, google_email, full_name, photo_url, role, status, created_at, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, acquisition_info, signup_acquisition_info")
       .order("created_at", { ascending: false })
       .limit(5000);
-    if (error) throw error;
-    const professionals = (data || []).map((row: any) => ({
+    if (error) { logAdminSupabaseFailure(endpoint, "core.professionals", error); throw error; }
+    const rows = data || [];
+    const professionalIds = rows.map((row: any) => row.id).filter(Boolean);
+    let memberships: any[] = [];
+    if (professionalIds.length) {
+      const membershipResult = await supabaseAdmin
+        .from("organization_memberships")
+        .select("professional_id, organization_id, membership_role, status, clinical_access_enabled, organizations!inner(id, name, trade_name)")
+        .in("professional_id", professionalIds)
+        .in("status", ["active", "suspended"]);
+      if (membershipResult.error) { logAdminSupabaseFailure(endpoint, "clinicMemberships", membershipResult.error); throw membershipResult.error; }
+      memberships = membershipResult.data || [];
+    }
+    const membershipsByProfessional = new Map<string, any[]>();
+    for (const row of memberships) {
+      const organization = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
+      const list = membershipsByProfessional.get(row.professional_id) || [];
+      list.push({
+        organizationId: row.organization_id,
+        name: organization?.name || "Clínica sem nome",
+        role: row.membership_role,
+        status: row.status,
+        clinicalAccessEnabled: row.clinical_access_enabled === true
+      });
+      membershipsByProfessional.set(row.professional_id, list);
+    }
+    const professionals = rows.map((row: any) => ({
       id: row.id,
       google_email: row.google_email,
       full_name: row.full_name,
@@ -4001,10 +4078,11 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
       trial_ends_at: row.trial_ends_at,
       acquisition_info: row.acquisition_info,
       signup_acquisition_info: row.signup_acquisition_info,
+      clinics: membershipsByProfessional.get(row.id) || []
     }));
     return res.json({ professionals });
   } catch (error: any) {
-    console.error("[AdminProfessionals] Falha ao carregar profissionais:", error?.message || error);
+    logAdminSupabaseFailure(endpoint, "request", error);
     return res.status(500).json({ error: "Não foi possível carregar os profissionais." });
   }
 });

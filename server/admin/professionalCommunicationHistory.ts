@@ -1,3 +1,4 @@
+import { isOptionalSupabaseResourceMissing } from "./optionalSupabaseResource.js";
 export type ProfessionalCommunicationChannel = "all" | "email" | "notification" | "whatsapp";
 
 export type ProfessionalCommunicationItem = {
@@ -28,6 +29,7 @@ type HistoryQuery = {
 };
 
 type ChannelResult = {
+  available: boolean;
   items: ProfessionalCommunicationItem[];
   count: number;
 };
@@ -145,7 +147,7 @@ async function loadEmailHistory(deps: any, professionalId: string, query: Histor
       .select("id", { count: "exact", head: true })
       .eq("user_id", professionalId);
     if (error) throw error;
-    return { items: [], count: count || 0 };
+    return { available: true, items: [], count: count || 0 };
   }
 
   const from = query.channel === "all" ? 0 : (query.page - 1) * query.pageSize;
@@ -157,7 +159,7 @@ async function loadEmailHistory(deps: any, professionalId: string, query: Histor
     .order("created_at", { ascending: false })
     .range(from, from + size - 1);
   if (error) throw error;
-  return { items: (data || []).map(normalizeEmailCommunication), count: count || 0 };
+  return { available: true, items: (data || []).map(normalizeEmailCommunication), count: count || 0 };
 }
 
 async function loadNotificationHistory(deps: any, professionalId: string, query: HistoryQuery): Promise<ChannelResult> {
@@ -168,7 +170,7 @@ async function loadNotificationHistory(deps: any, professionalId: string, query:
       .select("id", { count: "exact", head: true })
       .eq("user_id", professionalId);
     if (error) throw error;
-    return { items: [], count: count || 0 };
+    return { available: true, items: [], count: count || 0 };
   }
 
   const from = query.channel === "all" ? 0 : (query.page - 1) * query.pageSize;
@@ -180,7 +182,7 @@ async function loadNotificationHistory(deps: any, professionalId: string, query:
     .order("created_at", { ascending: false })
     .range(from, from + size - 1);
   if (error) throw error;
-  return { items: (data || []).map(normalizeNotificationCommunication), count: count || 0 };
+  return { available: true, items: (data || []).map(normalizeNotificationCommunication), count: count || 0 };
 }
 
 async function loadWhatsAppHistory(deps: any, professionalId: string, query: HistoryQuery): Promise<ChannelResult> {
@@ -191,7 +193,7 @@ async function loadWhatsAppHistory(deps: any, professionalId: string, query: His
       .select("id", { count: "exact", head: true })
       .eq("user_id", professionalId);
     if (error) throw error;
-    return { items: [], count: count || 0 };
+    return { available: true, items: [], count: count || 0 };
   }
 
   const from = query.channel === "all" ? 0 : (query.page - 1) * query.pageSize;
@@ -203,7 +205,16 @@ async function loadWhatsAppHistory(deps: any, professionalId: string, query: His
     .order("created_at", { ascending: false })
     .range(from, from + size - 1);
   if (error) throw error;
-  return { items: (data || []).map(normalizeWhatsAppCommunication), count: count || 0 };
+  return { available: true, items: (data || []).map(normalizeWhatsAppCommunication), count: count || 0 };
+}
+
+async function loadChannelSafely(loader: () => Promise<ChannelResult>) {
+  try {
+    return await loader();
+  } catch (error) {
+    if (isOptionalSupabaseResourceMissing(error)) return { available: false, items: [], count: 0 };
+    throw error;
+  }
 }
 
 export async function getProfessionalCommunicationHistory(
@@ -212,9 +223,9 @@ export async function getProfessionalCommunicationHistory(
   query: HistoryQuery
 ) {
   const [emails, notifications, whatsapp] = await Promise.all([
-    loadEmailHistory(deps, professionalId, query),
-    loadNotificationHistory(deps, professionalId, query),
-    loadWhatsAppHistory(deps, professionalId, query)
+    loadChannelSafely(() => loadEmailHistory(deps, professionalId, query)),
+    loadChannelSafely(() => loadNotificationHistory(deps, professionalId, query)),
+    loadChannelSafely(() => loadWhatsAppHistory(deps, professionalId, query))
   ]);
   const counts = {
     email: emails.count,
@@ -232,6 +243,11 @@ export async function getProfessionalCommunicationHistory(
   return {
     items,
     counts: { all: counts.email + counts.notification + counts.whatsapp, ...counts },
+    availability: {
+      email: emails.available,
+      notification: notifications.available,
+      whatsapp: whatsapp.available
+    },
     pagination: {
       page: query.page,
       pageSize: query.pageSize,

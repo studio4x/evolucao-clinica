@@ -6,7 +6,8 @@ import {
   normalizeNotificationCommunication,
   normalizeWhatsAppCommunication,
   paginateProfessionalCommunications,
-  parseProfessionalCommunicationHistoryQuery
+  parseProfessionalCommunicationHistoryQuery,
+  getProfessionalCommunicationHistory
 } from '../server/admin/professionalCommunicationHistory.js';
 
 assert.deepEqual(parseProfessionalCommunicationHistoryQuery({}), {
@@ -67,6 +68,28 @@ assert.deepEqual(
   paginateProfessionalCommunications([email, notification, whatsapp], 2, 2).map(item => item.id),
   ['email:email-id']
 );
+
+const makeBuilder = (table: string) => {
+  const response = table === 'notifications'
+    ? { data: [{ id: 'notification-1', title: 'Aviso', message: 'Mensagem', source: 'platform', read_at: null, created_at: '2026-08-20T12:00:00Z' }], count: 1, error: null }
+    : { data: null, count: null, error: { code: table === 'email_deliveries' ? '42P01' : 'PGRST205', message: 'relation does not exist' } };
+  const builder: any = {
+    select: () => builder,
+    eq: () => builder,
+    order: () => builder,
+    range: () => builder,
+    then: (resolve: (value: unknown) => unknown) => Promise.resolve(resolve(response))
+  };
+  return builder;
+};
+const degradedHistory = await getProfessionalCommunicationHistory(
+  { supabaseAdmin: { from: (table: string) => makeBuilder(table) } },
+  'professional-1',
+  parseProfessionalCommunicationHistoryQuery({ channel: 'all' })
+);
+assert.deepEqual(degradedHistory.availability, { email: false, notification: true, whatsapp: false });
+assert.equal(degradedHistory.items[0].channel, 'notification');
+assert.equal(degradedHistory.counts.notification, 1);
 
 const serverSource = readFileSync(resolve('server.ts'), 'utf8');
 const modalSource = readFileSync(resolve('src/components/admin/ProfessionalDetailsModal.tsx'), 'utf8');

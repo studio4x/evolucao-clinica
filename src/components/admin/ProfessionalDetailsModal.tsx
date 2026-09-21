@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Briefcase,
+  Building2,
   Bell,
   Calendar,
   CheckCircle2,
@@ -43,6 +44,20 @@ type ProfessionalSummary = {
 type ProfessionalDetails = {
   professional: Record<string, any>;
   communicationPreferences: Record<string, any> | null;
+  clinicMemberships: Array<{
+    organizationId: string;
+    organizationName: string;
+    organizationTradeName: string | null;
+    role: string;
+    status: string;
+    clinicalAccessEnabled: boolean;
+  }>;
+  modules: {
+    communicationPreferences: { available: boolean; reason?: string };
+    lifecycle: { available: boolean; reason?: string };
+    usageMetrics: { available: boolean; reason?: string };
+    clinicMemberships: { available: boolean; reason?: string };
+  };
   onboardingEligibility: {
     evaluatedAt: string;
     blockedReason: string | null;
@@ -56,11 +71,12 @@ type ProfessionalDetails = {
       scheduledFor: string | null;
       reason: string;
     }>;
-  };
+  } | null;
   clinicalMetrics: {
     patientCount: number;
     evolutionCount: number;
     transcribedSeconds: number;
+    usageMetricsAvailable: boolean;
     patients: Array<{
       id: string;
       name: string;
@@ -102,6 +118,7 @@ type CommunicationHistoryItem = {
 type CommunicationHistory = {
   items: CommunicationHistoryItem[];
   counts: Record<CommunicationChannel, number>;
+  availability: Record<Exclude<CommunicationChannel, 'all'>, boolean>;
   pagination: {
     page: number;
     pageSize: number;
@@ -303,6 +320,8 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
   if (!professional) return null;
   const p = details?.professional || {};
   const preferences = details?.communicationPreferences;
+  const modules = details?.modules;
+  const clinicMemberships = details?.clinicMemberships || [];
   const firstAcquisition = (p.acquisition_info || {}) as AcquisitionData;
   const signupAcquisition = (p.signup_acquisition_info || {}) as AcquisitionData;
 
@@ -378,7 +397,9 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                   <p className="mt-1 text-xs text-brand-text-muted">Modelos do onboarding que podem ser enviados conforme o estado atual do profissional.</p>
                 </div>
 
-                {details.onboardingEligibility.emails.length ? (
+                {!details.onboardingEligibility ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Este recurso não está disponível neste ambiente.</div>
+                ) : details.onboardingEligibility.emails.length ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {details.onboardingEligibility.emails.map(email => {
                       const presentation = eligibilityPresentation(email.status);
@@ -466,6 +487,28 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                   </div>
                 )}
                 <p className="text-[11px] text-brand-text-muted">O total usa os registros efetivos de transcrição; a distribuição por paciente considera os áudios vinculados às evoluções.</p>
+                {modules?.usageMetrics && !modules.usageMetrics.available && <p className="text-[11px] text-amber-700">Métrica de uso indisponível; o total foi derivado das evoluções concluídas.</p>}
+              </section>
+
+              <section className="space-y-3" data-testid="professional-clinic-memberships">
+                <div className="border-b border-brand-border/40 pb-2">
+                  <h4 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-brand-primary"><Building2 className="h-4 w-4" />Vínculos com clínicas</h4>
+                </div>
+                {clinicMemberships.length ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {clinicMemberships.map(membership => (
+                      <article key={membership.organizationId + ':' + membership.role} className="rounded-2xl border border-sky-200 bg-sky-50/60 p-4">
+                        <strong className="block text-sm text-sky-950">{membership.organizationName}</strong>
+                        {membership.organizationTradeName && <span className="mt-0.5 block text-xs text-sky-800">{membership.organizationTradeName}</span>}
+                        <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-semibold text-sky-800">
+                          <span>Função: {membership.role === 'owner' ? 'Proprietário' : membership.role === 'manager' ? 'Gestor' : 'Profissional'}</span>
+                          <span>· {membership.clinicalAccessEnabled ? 'Acesso clínico' : 'Acesso administrativo'}</span>
+                          <span>· {membership.status === 'suspended' ? 'Suspenso' : 'Ativo'}</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : <div className="rounded-2xl border border-dashed border-brand-border bg-brand-bg/20 p-4 text-sm text-brand-text-muted">Este profissional não possui vínculo com clínicas.</div>}
               </section>
 
               <section className="space-y-3" data-testid="professional-communication-history">
@@ -522,7 +565,7 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                         }`}
                       >
                         <Icon className="h-3.5 w-3.5" />
-                        {label} ({count})
+                        {label} ({count}){key !== 'all' && communicationHistory && !communicationHistory.availability[key] && <span className="ml-1 text-[10px]">· indisponível</span>}
                       </button>
                     );
                   })}
@@ -537,6 +580,8 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                   <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                     {communicationError}
                   </div>
+                ) : communicationHistory && communicationChannel !== 'all' && !communicationHistory.availability[communicationChannel] ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Histórico deste canal não está disponível neste ambiente.</div>
                 ) : communicationHistory?.items.length ? (
                   <div className={`space-y-3 ${communicationLoading ? 'opacity-60' : ''}`} aria-busy={communicationLoading}>
                     {communicationHistory.items.map(item => {
@@ -627,6 +672,7 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
               </section>
 
               <Section icon={MessageCircle} title="WhatsApp e comunicação">
+                {!modules?.communicationPreferences?.available && <div className="col-span-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Este recurso não está disponível neste ambiente.</div>}
                 <Detail label="Número do WhatsApp" value={preferences?.whatsapp_number} />
                 <Detail label="WhatsApp verificado" value={preferences?.whatsapp_verified_number ? 'Sim' : 'Não'} />
                 <Detail label="Verificado em" value={dateValue(preferences?.whatsapp_verified_at)} />
@@ -638,6 +684,7 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
               </Section>
 
               <Section icon={Bell} title="Preferências de comunicação">
+                {!modules?.communicationPreferences?.available && <div className="col-span-full rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">Este recurso não está disponível neste ambiente.</div>}
                 <Detail label="E-mail habilitado" value={preferences?.email_enabled} />
                 <Detail label="Push habilitado" value={preferences?.push_enabled} />
                 <Detail label="Jornada habilitada" value={preferences?.lifecycle_enabled} />

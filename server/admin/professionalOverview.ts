@@ -4,6 +4,7 @@ import {
 } from "../lifecycle/lifecycleConstants.js";
 import { evaluateKnownRule, shouldSkipSequenceStep } from "../lifecycle/lifecycleRules.js";
 import { getOrRecalculateLifecycleState } from "../lifecycle/lifecycleStateService.js";
+import { isOptionalSupabaseResourceMissing } from "./optionalSupabaseResource.js";
 import type {
   LifecycleOperationalContext,
   LifecycleRule,
@@ -59,6 +60,7 @@ export type ProfessionalClinicalMetrics = {
   patientCount: number;
   evolutionCount: number;
   transcribedSeconds: number;
+  usageMetricsAvailable: boolean;
   patients: Array<{
     id: string;
     name: string;
@@ -98,7 +100,8 @@ const timestamp = (value: unknown) => {
 export function buildProfessionalClinicalMetrics(
   patients: ProfessionalPatientRow[],
   evolutions: ProfessionalEvolutionRow[],
-  usageLogs: ProfessionalUsageRow[]
+  usageLogs: ProfessionalUsageRow[],
+  usageMetricsAvailable = true
 ): ProfessionalClinicalMetrics {
   const evolutionSummaries = new Map<string, { count: number; transcribedSeconds: number }>();
 
@@ -116,7 +119,10 @@ export function buildProfessionalClinicalMetrics(
   return {
     patientCount: patients.length,
     evolutionCount: evolutions.length,
-    transcribedSeconds: usageLogs.reduce((total, row) => total + seconds(row.audio_duration_seconds), 0),
+    transcribedSeconds: usageMetricsAvailable
+      ? usageLogs.reduce((total, row) => total + seconds(row.audio_duration_seconds), 0)
+      : evolutions.reduce((total, row) => total + (row.transcription_status === "completed" ? seconds(row.audio_duration_seconds) : 0), 0),
+    usageMetricsAvailable,
     patients: patients
       .map((patient) => {
         const summary = evolutionSummaries.get(patient.id) || { count: 0, transcribedSeconds: 0 };
@@ -272,9 +278,15 @@ export async function getProfessionalClinicalMetrics(supabaseAdmin: any, profess
     supabaseAdmin.from("evolutions").select("patient_id, transcription_status, audio_duration_seconds").eq("professional_id", professionalId),
     supabaseAdmin.from("usage_logs").select("audio_duration_seconds").eq("professional_id", professionalId)
   ]);
-  const error = patientsResult.error || evolutionsResult.error || usageResult.error;
-  if (error) throw error;
-  return buildProfessionalClinicalMetrics(patientsResult.data || [], evolutionsResult.data || [], usageResult.data || []);
+  if (patientsResult.error) throw patientsResult.error;
+  if (evolutionsResult.error) throw evolutionsResult.error;
+  if (usageResult.error && !isOptionalSupabaseResourceMissing(usageResult.error)) throw usageResult.error;
+  return buildProfessionalClinicalMetrics(
+    patientsResult.data || [],
+    evolutionsResult.data || [],
+    usageResult.error ? [] : usageResult.data || [],
+    !usageResult.error
+  );
 }
 
 export async function getProfessionalOnboardingEligibility(input: {
