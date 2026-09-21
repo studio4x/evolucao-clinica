@@ -3781,7 +3781,7 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
     res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, proxy-revalidate");
     const professionalResult = await supabaseAdmin
       .from("professionals")
-      .select("id, google_email, full_name, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, created_at, updated_at, professional_title, professional_register, force_google_disconnect, trial_expiration_email_sent_at, onboarding_completed, onboarding_status, onboarding_initial_mode, onboarding_mode, onboarding_current_step, onboarding_choice_at, onboarding_deferred_at, custom_logo_url, auto_backup_enabled, last_backup_at, backup_frequency, billing_provider, stripe_customer_id, acquisition_info, signup_acquisition_info, work_context")
+      .select("id, google_email, full_name, photo_url, role, status, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, professional_access_mode, created_at, updated_at, professional_title, professional_register, force_google_disconnect, trial_expiration_email_sent_at, onboarding_completed, onboarding_status, onboarding_initial_mode, onboarding_mode, onboarding_current_step, onboarding_choice_at, onboarding_deferred_at, custom_logo_url, auto_backup_enabled, last_backup_at, backup_frequency, billing_provider, stripe_customer_id, acquisition_info, signup_acquisition_info, work_context")
       .eq("id", professionalId)
       .maybeSingle();
     if (professionalResult.error) {
@@ -3810,10 +3810,7 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
       const organization = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
       const directory = clinicDirectory.find((item: any) => item.id === row.organization_id);
       const entitlementMode = String(directory?.subscription?.entitlementMode || "none");
-      const administrativeRole = ["owner", "manager"].includes(String(row.membership_role));
-      const licenseActive = administrativeRole
-        ? ["full", "restricted"].includes(entitlementMode)
-        : row.clinical_access_enabled === true && ["full", "restricted"].includes(entitlementMode);
+      const licenseActive = row.clinical_access_enabled === true && ["full", "restricted"].includes(entitlementMode);
       return {
         organizationId: row.organization_id,
         organizationName: organization?.name || "Clínica sem nome",
@@ -3824,7 +3821,8 @@ app.get("/api/admin/professionals/:professionalId/details", requireAuth, require
         entitlementMode,
         licenseActive,
         planLabel: directory?.subscription?.planCode ? "Plano Clínica" : null,
-        planCode: directory?.subscription?.planCode || null
+        planCode: directory?.subscription?.planCode || null,
+        currentPeriodEnd: directory?.subscription?.currentPeriodEnd || null
       };
     });
     const professional = professionalResult.data;
@@ -4047,7 +4045,7 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
   try {
     const { data, error } = await supabaseAdmin
       .from("professionals")
-      .select("id, google_email, full_name, photo_url, role, status, created_at, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, acquisition_info, signup_acquisition_info")
+      .select("id, google_email, full_name, photo_url, role, status, created_at, subscription_plan, subscription_status, subscription_ends_at, trial_ends_at, professional_access_mode, acquisition_info, signup_acquisition_info")
       .order("created_at", { ascending: false })
       .limit(5000);
     if (error) { logAdminSupabaseFailure(endpoint, "core.professionals", error); throw error; }
@@ -4070,7 +4068,6 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
       const organization = Array.isArray(row.organizations) ? row.organizations[0] : row.organizations;
       const directory = clinicDirectory.find((item: any) => item.id === row.organization_id);
       const entitlementMode = String(directory?.subscription?.entitlementMode || "none");
-      const administrativeRole = ["owner", "manager"].includes(String(row.membership_role));
       const list = membershipsByProfessional.get(row.professional_id) || [];
       list.push({
         organizationId: row.organization_id,
@@ -4079,9 +4076,10 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
         status: row.status,
         clinicalAccessEnabled: row.clinical_access_enabled === true,
         entitlementMode,
-        licenseActive: administrativeRole ? ["full", "restricted"].includes(entitlementMode) : row.clinical_access_enabled === true && ["full", "restricted"].includes(entitlementMode),
+        licenseActive: row.clinical_access_enabled === true && ["full", "restricted"].includes(entitlementMode),
         planLabel: directory?.subscription?.planCode ? "Plano Clínica" : null,
-        planCode: directory?.subscription?.planCode || null
+        planCode: directory?.subscription?.planCode || null,
+        currentPeriodEnd: directory?.subscription?.currentPeriodEnd || null
       });
       membershipsByProfessional.set(row.professional_id, list);
     }
@@ -4096,6 +4094,7 @@ app.get("/api/admin/professionals", requireAuth, requireAdmin, async (_req: any,
       subscription_plan: row.subscription_plan,
       subscription_status: row.subscription_status,
       subscription_ends_at: row.subscription_ends_at,
+      professional_access_mode: row.professional_access_mode,
       trial_ends_at: row.trial_ends_at,
       acquisition_info: row.acquisition_info,
       signup_acquisition_info: row.signup_acquisition_info,

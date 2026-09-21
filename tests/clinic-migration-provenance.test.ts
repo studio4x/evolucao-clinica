@@ -23,4 +23,22 @@ assert.equal(compareObject(policy, { policy: [{ key: policy.key, cmd: 'SELECT', 
 const evidence=JSON.parse(readFileSync('docs/clinic-f6-evidence/migration-provenance.json','utf8'));
 assert.equal(evidence.staging,'hwkdwinfckmjoriqxbjk');assert.equal(evidence.readOnly,true);assert.equal(evidence.provenance01to22,'RECONCILED_WITH_LIMITATIONS');
 for(const row of evidence.migrations){assert.equal(row.sha256,createHash('sha256').update(readFileSync(`supabase/clinic-migrations/${row.filename}`,'utf8').replace(/\r\n/g,'\n')).digest('hex'));assert.notEqual(row.status,'DRIFT');if(row.number<=22){assert.equal(row.formal_staging_history,'NOT_PRESENT');assert.deepEqual(row.history,[]);}else assert.equal(row.formal_staging_history,'RECONCILED');}
+const forward34 = readFileSync('supabase/migrations/20260921200743_clinic_34_reconcile_clinic_runtime_provenance.sql','utf8');
+const migration32 = readFileSync('supabase/clinic-migrations/20260921_32_admin_clinic_directory.sql','utf8');
+const migration33 = readFileSync('supabase/clinic-migrations/20260921_33_clinic_plan_context_entitlement.sql','utf8');
+const provenance = readFileSync('docs/CLINIC_MIGRATION_PROVENANCE.md','utf8');
+assert.match(forward34, /clinic_34 reconciliation requires staging/);
+assert.match(forward34, /list_admin_clinic_directory/);
+assert.match(forward34, /get_clinic_contexts/);
+assert.doesNotMatch(forward34, /INSERT\s+INTO\s+supabase_migrations|UPDATE\s+supabase_migrations|DELETE\s+FROM\s+supabase_migrations/i);
+assert.doesNotMatch(forward34, /organization_memberships\s*(?:\(|SET)|organization_invitations\s+SET/i);
+assert.match(migration32, /CREATE OR REPLACE FUNCTION public\.list_admin_clinic_directory/);
+assert.doesNotMatch(migration32, /INSERT\s+INTO\s+public\.organization_memberships|DELETE\s+FROM\s+public\.organization_memberships/i);
+assert.match(migration33, /ADD COLUMN IF NOT EXISTS professional_access_mode/);
+assert.match(migration33, /IF NOT EXISTS[\s\S]+professionals_access_mode_check/);
+assert.match(migration33, /DROP TRIGGER IF EXISTS organization_invitations_access_mode/);
+assert.match(migration33, /WHERE i\.intended_clinical_access IS TRUE\s+AND i\.status = 'pending'/);
+assert.doesNotMatch(migration33, /UPDATE\s+public\.organization_memberships|DELETE\s+FROM\s+public\.organization_memberships/i);
+assert.match(provenance, /RUNTIME_PRESENT \/ RECONCILED_BY_FORMAL_FORWARD_MIGRATION_34/);
+assert.match(provenance, /APPLIED AS 20260921200849/);
 console.log('migration SQL parsing, exact function drift, ACL and bounded semantic limitations PASS');

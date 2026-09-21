@@ -58,6 +58,7 @@ import {
   type ProfessionalFunnelBoardForNotifications,
 } from '../utils/notificationRecipients';
 import type { ProfessionalFunnelStageKey } from '../../server/admin/professionalFunnel';
+import { getAdminExpiryLines, getClinicAccessLabel } from '../utils/clinicAdminPresentation';
 
 const alert = (msg: string) => {
   void showAlert(msg, {
@@ -98,6 +99,7 @@ interface Professional {
   subscription_plan?: SubscriptionPlan;
   subscription_status?: 'trialing' | 'active' | 'past_due' | 'canceled' | 'unpaid';
   subscription_ends_at?: string;
+  professional_access_mode?: 'personal' | 'hybrid' | 'clinic_only';
   trial_ends_at?: string;
   acquisition_info?: AcquisitionInfo;
   signup_acquisition_info?: AcquisitionInfo;
@@ -111,6 +113,7 @@ interface Professional {
     licenseActive?: boolean;
     planLabel?: string | null;
     planCode?: string | null;
+    currentPeriodEnd?: string | null;
   }>;
 }
 
@@ -4450,10 +4453,10 @@ export default function AdminPanel() {
                                         ? 'bg-amber-50 text-amber-700 border border-amber-100'
                                         : 'bg-purple-50 text-purple-700 border border-purple-100'
                                     }`}>
-                                      {prof.clinics?.some((clinic) => clinic.licenseActive && clinic.planLabel) ? 'Plano Clínica' : getSubscriptionPlanLabel(prof.subscription_plan)}
+                                      {prof.professional_access_mode === 'clinic_only' && prof.clinics?.some((clinic) => clinic.planLabel) ? 'Plano Clínica' : getSubscriptionPlanLabel(prof.subscription_plan)}
                                     </span>
-                                    {prof.clinics?.filter((clinic) => clinic.licenseActive && clinic.planLabel).map((clinic) => <span key={clinic.organizationId} className="text-[10px] text-emerald-700">{clinic.planLabel} · Licença ativa · {clinic.name}</span>)}
-                                    {prof.subscription_status && prof.subscription_plan !== 'none' && (
+                                    {prof.clinics?.filter((clinic) => clinic.planLabel).map((clinic) => <span key={clinic.organizationId} className={clinic.licenseActive ? "text-[10px] text-emerald-700" : "text-[10px] text-sky-700"}>{clinic.planLabel} · {getClinicAccessLabel(clinic)} · {clinic.name}</span>)}
+                                    {prof.professional_access_mode !== 'clinic_only' && prof.subscription_status && prof.subscription_plan !== 'none' && (
                                       <span className="text-[10px] text-brand-text-muted capitalize">
                                         Status: {prof.subscription_plan === 'courtesy'
                                           ? 'Regular / Ativo'
@@ -4464,15 +4467,13 @@ export default function AdminPanel() {
                                 </td>
 
                                 <td className="p-4 text-brand-text-muted whitespace-nowrap text-xs">
-                                  {prof.subscription_plan === 'none' || prof.subscription_plan === 'courtesy' ? (
-                                    <span className={prof.subscription_plan === 'courtesy' ? 'text-sky-700 font-medium' : 'text-purple-600 font-medium'}>Sem Expiração</span>
-                                  ) : prof.subscription_ends_at ? (
-                                    <span className={new Date(prof.subscription_ends_at) < new Date() ? 'text-red-600 font-bold' : ''}>
-                                      {formatDate(prof.subscription_ends_at)}
-                                    </span>
-                                  ) : (
-                                    '-'
-                                  )}
+                                  <div className="flex flex-col gap-1">
+                                    {getAdminExpiryLines(prof).map((line) => (
+                                      <span key={line.key} className={line.expired ? 'font-bold text-red-600' : 'text-brand-text-muted'}>
+                                        {line.label && <span className="font-semibold text-brand-text">{line.label}: </span>}{line.value}
+                                      </span>
+                                    ))}
+                                  </div>
                                 </td>
 
                                 <td className="p-4">

@@ -26,6 +26,7 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { getClinicAccessLabel } from '../../utils/clinicAdminPresentation';
 import {
   getAcquisitionChannelLabel,
   getAcquisitionDistribution,
@@ -508,7 +509,7 @@ export default function ProfessionalDetailsModal({ professional, onClose }: Prop
                           <span>Função: {membership.role === 'owner' ? 'Proprietário' : membership.role === 'manager' ? 'Gestor' : 'Profissional'}</span>
                           <span>· {membership.clinicalAccessEnabled ? 'Acesso clínico' : 'Acesso administrativo'}</span>
                           <span>· {membership.status === 'suspended' ? 'Suspenso' : 'Ativo'}</span>
-                          {membership.planLabel && <span>· {membership.planLabel} · {membership.licenseActive ? 'Licença ativa' : 'Licença indisponível'}</span>}
+                          {membership.planLabel && <span>· {membership.planLabel} · {getClinicAccessLabel(membership)}</span>}
                         </div>
                       </article>
                     ))}

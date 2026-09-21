@@ -19,7 +19,7 @@ assert.match(panel, /key: 'clinics', label: 'Clínicas', icon: Building2/);
 assert.match(panel, /navigate\('\/admin\/clinics'\)/);
 assert.match(component, /GET|\/api\/admin\/clinics/);
 assert.match(component, /Total de clínicas/);
-assert.match(component, /Owner/);
+assert.match(component, /Proprietário/);
 assert.match(component, /Criada em/);
 assert.match(component, /featureFilter/);
 assert.match(component, /planFilter/);
