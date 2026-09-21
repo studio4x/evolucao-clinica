@@ -72,6 +72,7 @@ assert.match(anamnesisCardSource, /matchMedia\('\(min-width: 1280px\)'\)/);
 assert.match(anamnesisCardSource, /Abrir anamnese/);
 assert.match(anamnesisCardSource, /flex w-full items-center justify-between rounded-xl/);
 assert.match(anamnesisCardSource, /ArrowRight/);
+assert.match(anamnesisCardSource, /<\/div>\s*<\/div>\s*<Link\s+to=\{href\}/);
 
 assert.match(anamnesisPdfSource, /generateAnamnesisPDF/);
 assert.match(anamnesisPdfSource, /generateProntuarioPDF/);
