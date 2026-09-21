@@ -1215,7 +1215,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
             {(plans.length > 0 ? plans : DEFAULT_PLANS).map((plan) => {
               const isYearly = plan.id === 'yearly';
               const formattedPrice = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2 }).format(plan.price);
