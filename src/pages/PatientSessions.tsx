@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   ArrowLeft, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3,
-  Download, Edit3, Loader2, PenLine, Plus, Trash2, X, ShieldAlert
+  Download, Edit3, Loader2, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
@@ -12,10 +12,10 @@ import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import SessionSignaturePad from '../components/patients/sessions/SessionSignaturePad';
 import { showAlert, showConfirm } from '../store/modalStore';
 import {
-  cancelPatientSessionPackage, createPatientSession, createPatientSessionPackage, createSignatureSignedUrl,
-  fetchPatientSessionPackages, fetchPatientSessions, fetchPatientSessionsRange, revokePatientSessionSignature,
+  cancelPatientSessionPackage, closePatientSessionMonth, createPatientSession, createPatientSessionPackage, createSignatureSignedUrl,
+  fetchPatientSessionMonthClosure, fetchPatientSessionPackages, fetchPatientSessions, fetchPatientSessionsRange, revokePatientSessionSignature,
   savePatientSessionSignature, softDeletePatientSession, updatePatientSession,
-  type PatientSession, type PatientSessionPackage, type PatientSessionStatus
+  type PatientSession, type PatientSessionMonthClosure, type PatientSessionPackage, type PatientSessionStatus
 } from '../services/patientSessions';
 import { downloadPatientSessionsPdf, generatePatientSessionsPdf, getPatientSessionsPdfFileName } from '../utils/patientSessionsPdf';
 
@@ -48,6 +48,7 @@ export default function PatientSessions() {
   const [professional, setProfessional] = useState<any>(null);
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [sessions, setSessions] = useState<PatientSession[]>([]);
+  const [monthClosure, setMonthClosure] = useState<PatientSessionMonthClosure | null>(null);
   const [packages, setPackages] = useState<PatientSessionPackage[]>([]);
   const [evolutions, setEvolutions] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | PatientSessionStatus>('all');
@@ -71,10 +72,11 @@ export default function PatientSessions() {
     if (!id || !user) return;
     setLoading(true);
     try {
-      const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, packageData, evolutionResult] = await Promise.all([
+      const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, closureData, packageData, evolutionResult] = await Promise.all([
         supabase.from('patients').select('id, full_name, professional_id, session_days, session_time').eq('id', id).single(),
         supabase.from('professionals').select('id, full_name, professional_register, professional_title, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at').eq('id', user.id).single(),
         fetchPatientSessions(id, month),
+        fetchPatientSessionMonthClosure(id, month),
         fetchPatientSessionPackages(id),
         supabase.from('evolutions').select('id, session_date, session_time, created_at').eq('patient_id', id).eq('professional_id', user.id).eq('transcription_status', 'completed').order('session_date', { ascending: false, nullsFirst: false }),
       ]);
@@ -84,6 +86,7 @@ export default function PatientSessions() {
       setProfessional(profData);
       if (evolutionResult.error) throw evolutionResult.error;
       setSessions(sessionData);
+      setMonthClosure(closureData);
       setPackages(packageData);
       setEvolutions(evolutionResult.data || []);
     } catch (error: any) {
@@ -101,6 +104,10 @@ export default function PatientSessions() {
     [month]
   );
   const signedCount = sessions.filter((item) => item.signature).length;
+  const unsignedCompletedCount = sessions.filter((item) => item.status === 'completed' && !item.signature).length;
+  const scheduledCount = sessions.filter((item) => item.status === 'scheduled').length;
+  const monthIsClosed = Boolean(monthClosure);
+  const canCloseMonth = sessions.length > 0 && scheduledCount === 0 && unsignedCompletedCount === 0 && !monthIsClosed;
   const activePackage = packages.find((item) => item.status === 'active') || null;
   const filteredSessions = sessions.filter((session) => {
     if (statusFilter !== 'all' && session.status !== statusFilter) return false;
@@ -112,11 +119,19 @@ export default function PatientSessions() {
   const sameDayEvolutions = evolutions.filter((evolution) => evolution.session_date === form.date);
 
   const openCreate = (quick = false) => {
+    if (monthIsClosed) {
+      void showAlert('Este mês já foi fechado e assinado. Não é possível adicionar novas sessões.', { title: 'Mês fechado', variant: 'info', icon: 'info' });
+      return;
+    }
     setFormSession(null);
     setForm({ date: today(), time: quick ? currentTime() : (patient?.session_time?.slice(0, 5) || ''), status: 'completed', notes: '', evolutionId: '', packageId: activePackage?.id || '' });
   };
 
   const openEdit = (session: PatientSession) => {
+    if (monthIsClosed) {
+      void showAlert('Este mês já foi fechado e assinado e não pode mais ser alterado.', { title: 'Mês fechado', variant: 'info', icon: 'info' });
+      return;
+    }
     if (session.signature) {
       void showAlert('Revogue a assinatura antes de editar data, horário ou situação da sessão.', { title: 'Sessão assinada', variant: 'info', icon: 'info' });
       return;
@@ -183,6 +198,56 @@ export default function PatientSessions() {
     finally { setWorking(false); }
   };
 
+  const generateAndDownloadPdf = async (options: {
+    exportSessions: PatientSession[];
+    exportMonth: Date;
+    exportPeriodLabel: string;
+    closure?: PatientSessionMonthClosure | null;
+  }) => {
+    const signatureImages: Record<string, string> = {};
+    for (const session of options.exportSessions) {
+      if (!session.signature) continue;
+      const url = await createSignatureSignedUrl(session.signature.signaturePath, 120);
+      const response = await fetch(url);
+      if (response.ok) signatureImages[session.signature.id] = await blobToDataUrl(await response.blob());
+    }
+
+    const canUseCustomLogo = hasActiveYearlyAccess({
+      profileRole: professional.role,
+      subscriptionPlan: professional.subscription_plan,
+      subscriptionStatus: professional.subscription_status,
+      subscriptionEndsAt: professional.subscription_ends_at,
+    });
+    const logoUrl = canUseCustomLogo && professional.custom_logo_url
+      ? professional.custom_logo_url
+      : siteConfig.logo_light_url;
+    let logoBase64: string | null = null;
+    if (logoUrl) {
+      try {
+        const logoResponse = await fetch(logoUrl);
+        if (logoResponse.ok) logoBase64 = await blobToDataUrl(await logoResponse.blob());
+      } catch (logoError) {
+        console.warn('[PatientSessions] Continuando PDF sem logotipo:', logoError);
+      }
+    }
+
+    const doc = generatePatientSessionsPdf({
+      patientName: patient.full_name,
+      professionalName: professional.full_name,
+      professionalRegister: professional.professional_register,
+      professionalTitle: professional.professional_title,
+      month: options.exportMonth,
+      periodLabel: options.exportPeriodLabel,
+      sessions: options.exportSessions,
+      signatureImages,
+      siteConfig,
+      logoBase64,
+      customLogoSettings: professional.custom_logo_settings,
+      monthClosure: options.closure || null,
+    });
+    await downloadPatientSessionsPdf(doc, getPatientSessionsPdfFileName(patient.full_name, options.exportMonth));
+  };
+
   const exportPdf = async () => {
     if (!patient || !professional || !id) return;
     setWorking(true);
@@ -190,61 +255,75 @@ export default function PatientSessions() {
       let exportSessions = sessions;
       let exportMonth = month;
       let exportPeriodLabel = monthLabel;
+      let closure: PatientSessionMonthClosure | null = monthClosure;
+
       if (exportMode === 'year') {
         const start = `${month.getFullYear()}-01-01`;
         const end = `${month.getFullYear()}-12-31`;
         exportSessions = await fetchPatientSessionsRange(id, start, end);
         exportMonth = new Date(month.getFullYear(), 0, 1);
         exportPeriodLabel = String(month.getFullYear());
+        closure = null;
       } else if (exportMode === 'custom') {
         if (!exportStart || !exportEnd || exportStart > exportEnd) throw new Error('Informe um intervalo de datas válido.');
         exportSessions = await fetchPatientSessionsRange(id, exportStart, exportEnd);
         exportMonth = new Date(`${exportStart}T12:00:00`);
         exportPeriodLabel = `De ${exportStart.split('-').reverse().join('/')} até ${exportEnd.split('-').reverse().join('/')}`;
-      }
-      const signatureImages: Record<string, string> = {};
-      for (const session of exportSessions) {
-        if (!session.signature) continue;
-        const url = await createSignatureSignedUrl(session.signature.signaturePath, 120);
-        const response = await fetch(url);
-        if (response.ok) signatureImages[session.signature.id] = await blobToDataUrl(await response.blob());
-      }
-      const canUseCustomLogo = hasActiveYearlyAccess({
-        profileRole: professional.role,
-        subscriptionPlan: professional.subscription_plan,
-        subscriptionStatus: professional.subscription_status,
-        subscriptionEndsAt: professional.subscription_ends_at,
-      });
-      const logoUrl = canUseCustomLogo && professional.custom_logo_url
-        ? professional.custom_logo_url
-        : siteConfig.logo_light_url;
-      let logoBase64: string | null = null;
-      if (logoUrl) {
-        try {
-          const logoResponse = await fetch(logoUrl);
-          if (logoResponse.ok) logoBase64 = await blobToDataUrl(await logoResponse.blob());
-        } catch (logoError) {
-          console.warn('[PatientSessions] Continuando PDF sem logotipo:', logoError);
-        }
+        closure = null;
       }
 
-      const doc = generatePatientSessionsPdf({
-        patientName: patient.full_name,
-        professionalName: professional.full_name,
-        professionalRegister: professional.professional_register,
-        professionalTitle: professional.professional_title,
-        month: exportMonth,
-        periodLabel: exportPeriodLabel,
-        sessions: exportSessions,
-        signatureImages,
-        siteConfig,
-        logoBase64,
-        customLogoSettings: professional.custom_logo_settings,
-      });
-      await downloadPatientSessionsPdf(doc, getPatientSessionsPdfFileName(patient.full_name, exportMonth));
+      await generateAndDownloadPdf({ exportSessions, exportMonth, exportPeriodLabel, closure });
     } catch (error: any) {
-      void showAlert(error.message || 'Não foi possível gerar o PDF.', { title: 'Exportar PDF', variant: 'error', icon: 'warning' });
+      void showAlert(error.message || 'Não foi possível gerar o PDF.', { title: 'Exportar PDF', variant: 'danger', icon: 'warning' });
     } finally { setWorking(false); }
+  };
+
+  const closeMonth = async () => {
+    if (!patient || !professional || !id || !user) return;
+
+    if (!canCloseMonth) {
+      const reasons = [
+        scheduledCount > 0 ? `${scheduledCount} sessão(ões) ainda agendada(s)` : '',
+        unsignedCompletedCount > 0 ? `${unsignedCompletedCount} sessão(ões) realizada(s) sem assinatura` : '',
+      ].filter(Boolean).join(' e ');
+      void showAlert(
+        reasons ? `Antes de fechar o mês, resolva: ${reasons}.` : 'Este mês não pode ser fechado neste momento.',
+        { title: 'Fechar mês', variant: 'info', icon: 'info' }
+      );
+      return;
+    }
+
+    const confirmed = await showConfirm(
+      `O fechamento confirma todas as sessões de ${monthLabel}. Depois da assinatura, não será possível adicionar, editar, excluir sessões ou revogar assinaturas deste mês.`,
+      { title: 'Fechar e assinar mês?', confirmLabel: 'Fechar e assinar', variant: 'danger' }
+    );
+    if (!confirmed) return;
+
+    setWorking(true);
+    try {
+      const closure = await closePatientSessionMonth({
+        patientId: id,
+        professionalId: user.id,
+        month,
+      });
+      const finalSessions = await fetchPatientSessions(id, month);
+      setMonthClosure(closure);
+      setSessions(finalSessions);
+      await generateAndDownloadPdf({
+        exportSessions: finalSessions,
+        exportMonth: month,
+        exportPeriodLabel: monthLabel,
+        closure,
+      });
+      void showAlert(
+        'Mês fechado e assinado com sucesso. O PDF assinado foi gerado e os registros deste período agora estão bloqueados.',
+        { title: 'Mês assinado', variant: 'success', icon: 'success' }
+      );
+    } catch (error: any) {
+      void showAlert(error.message || 'Não foi possível fechar e assinar o mês.', { title: 'Fechar mês', variant: 'danger', icon: 'warning' });
+    } finally {
+      setWorking(false);
+    }
   };
 
   const createPackage = async () => {
@@ -288,9 +367,16 @@ export default function PatientSessions() {
             <button type="button" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="rounded-xl border border-brand-border p-2.5 text-brand-primary hover:bg-brand-bg"><ChevronRight size={18} /></button>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => void exportPdf()} disabled={working || sessions.length === 0} className="btn-outline"><Download size={16} /><span>Exportar PDF</span></button>
-            <button type="button" onClick={() => openCreate(false)} className="btn-outline"><Plus size={16} /><span>Nova sessão</span></button>
-            <button type="button" onClick={() => openCreate(true)} className="btn-primary"><PenLine size={16} /><span>Registrar sessão de hoje</span></button>
+            <button type="button" onClick={() => void exportPdf()} disabled={working || sessions.length === 0} className="btn-outline"><Download size={16} /><span>{monthIsClosed && exportMode === 'month' ? 'Baixar PDF assinado' : 'Exportar PDF'}</span></button>
+            {monthIsClosed ? (
+              <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700"><ShieldCheck size={16} />Mês fechado</span>
+            ) : (
+              <>
+                <button type="button" onClick={() => void closeMonth()} disabled={working || !canCloseMonth} className="btn-outline border-emerald-300 text-emerald-700"><ShieldCheck size={16} /><span>Fechar e assinar mês</span></button>
+                <button type="button" onClick={() => openCreate(false)} className="btn-outline"><Plus size={16} /><span>Nova sessão</span></button>
+                <button type="button" onClick={() => openCreate(true)} className="btn-primary"><PenLine size={16} /><span>Registrar sessão de hoje</span></button>
+              </>
+            )}
           </div>
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2 border-t border-brand-border/60 pt-4 text-center">
@@ -298,6 +384,16 @@ export default function PatientSessions() {
           <div><strong className="block text-lg text-emerald-700">{signedCount}</strong><span className="text-[10px] text-brand-text-muted">assinadas</span></div>
           <div><strong className="block text-lg text-brand-text">{sessions.length - signedCount}</strong><span className="text-[10px] text-brand-text-muted">sem assinatura</span></div>
         </div>
+        {monthClosure ? (
+          <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
+            <strong>Mês fechado e assinado em {new Date(monthClosure.signatureDate).toLocaleString('pt-BR')}.</strong>
+            <span className="mt-1 block">Hash: {monthClosure.signatureHash.slice(0, 20)}… • Os registros deste período estão bloqueados.</span>
+          </div>
+        ) : (scheduledCount > 0 || unsignedCompletedCount > 0) ? (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+            Para fechar o mês: {scheduledCount > 0 ? `${scheduledCount} agendada(s)` : ''}{scheduledCount > 0 && unsignedCompletedCount > 0 ? ' • ' : ''}{unsignedCompletedCount > 0 ? `${unsignedCompletedCount} realizada(s) sem assinatura` : ''}.
+          </div>
+        ) : null}
       </div>
 
       {habitualToday && (
@@ -371,7 +467,9 @@ export default function PatientSessions() {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {session.signature ? (
+                  {monthIsClosed ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700"><ShieldCheck size={14} />Mês fechado</span>
+                  ) : session.signature ? (
                     <button type="button" onClick={() => void revoke(session)} disabled={working} className="btn-outline border-amber-300 text-amber-700"><ShieldAlert size={15} /><span>Revogar assinatura</span></button>
                   ) : (
                     <>

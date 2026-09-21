@@ -13,6 +13,95 @@ export type PatientSessionSignature = {
   revokedAt: string | null;
 };
 
+export type PatientSessionMonthClosure = {
+  id: string;
+  patientId: string;
+  professionalId: string;
+  monthStart: string;
+  status: 'signed';
+  sessionsCount: number;
+  completedSessionsCount: number;
+  signedSessionsCount: number;
+  snapshotHash: string;
+  signatureMethod: string;
+  signatureDate: string;
+  signatureIp: string;
+  signatureHash: string;
+  signedByName: string;
+  signedByRegister: string;
+  createdAt: string;
+};
+
+type MonthClosureRow = {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  month_start: string;
+  status: 'signed';
+  sessions_count: number;
+  completed_sessions_count: number;
+  signed_sessions_count: number;
+  snapshot_hash: string;
+  signature_method: string;
+  signature_date: string;
+  signature_ip: string;
+  signature_hash: string;
+  signed_by_name: string;
+  signed_by_register: string;
+  created_at: string;
+};
+
+const mapMonthClosure = (row: MonthClosureRow): PatientSessionMonthClosure => ({
+  id: row.id,
+  patientId: row.patient_id,
+  professionalId: row.professional_id,
+  monthStart: row.month_start,
+  status: row.status,
+  sessionsCount: row.sessions_count,
+  completedSessionsCount: row.completed_sessions_count,
+  signedSessionsCount: row.signed_sessions_count,
+  snapshotHash: row.snapshot_hash,
+  signatureMethod: row.signature_method,
+  signatureDate: row.signature_date,
+  signatureIp: row.signature_ip,
+  signatureHash: row.signature_hash,
+  signedByName: row.signed_by_name,
+  signedByRegister: row.signed_by_register,
+  createdAt: row.created_at,
+});
+
+const getMonthStart = (month: Date) =>
+  `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-01`;
+
+export async function fetchPatientSessionMonthClosure(patientId: string, month: Date) {
+  const { data, error } = await supabase
+    .from('patient_session_month_closures')
+    .select('*')
+    .eq('patient_id', patientId)
+    .eq('month_start', getMonthStart(month))
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapMonthClosure(data as MonthClosureRow) : null;
+}
+
+export async function closePatientSessionMonth(input: {
+  patientId: string;
+  professionalId: string;
+  month: Date;
+}) {
+  const { data, error } = await supabase
+    .from('patient_session_month_closures')
+    .insert({
+      patient_id: input.patientId,
+      professional_id: input.professionalId,
+      month_start: getMonthStart(input.month),
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapMonthClosure(data as MonthClosureRow);
+}
+
 export type PatientSession = {
   id: string;
   patientId: string;
