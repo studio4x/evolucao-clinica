@@ -60,6 +60,12 @@ assert.match(
 
 const patientDetailSource = fs.readFileSync('src/pages/PatientDetail.tsx', 'utf8');
 const newEvolutionSource = fs.readFileSync('src/pages/NewEvolution.tsx', 'utf8');
+const patientFilesSource = fs.readFileSync('src/components/patients/PatientFilesCard.tsx', 'utf8');
+assert.match(
+  patientFilesSource,
+  /hasClinicalAccess[\s\S]*hasFreshClinicalAccess[\s\S]*prompt:\s*['"]none['"]/,
+  'O card de arquivos deve tentar renovar silenciosamente o acesso Google expirado.'
+);
 assert.match(
   patientDetailSource,
   /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*setGoogleAccessToken\(null\)[\s\S]*requestGoogleOAuth\(/,

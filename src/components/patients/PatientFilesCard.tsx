@@ -195,6 +195,7 @@ export default function PatientFilesCard({
   const [savingType, setSavingType] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const silentAuthorizationAttemptedRef = useRef(false);
 
   const hasClinicalAccess = Boolean(googleAccessToken)
     && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
@@ -208,6 +209,38 @@ export default function PatientFilesCard({
   });
 
   const canUpload = hasYearlyAccess && Boolean(targetFolderId) && hasFreshClinicalAccess;
+
+  useEffect(() => {
+    if (
+      !user
+      || !hasYearlyAccess
+      || !targetFolderId
+      || !hasClinicalAccess
+      || hasFreshClinicalAccess
+      || silentAuthorizationAttemptedRef.current
+    ) {
+      return;
+    }
+
+    silentAuthorizationAttemptedRef.current = true;
+    setAuthLoading(true);
+
+    void requestGoogleOAuth({
+      requiredScopes: 'clinicalDocs',
+      currentGrantedScopes: googleGrantedScopes,
+      redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+      prompt: 'none',
+      loginHint: user.email || undefined,
+    }).then(({ error }) => {
+      if (error) {
+        console.warn('[PatientFiles] Não foi possível renovar silenciosamente o Google Drive:', error);
+      }
+    }).catch((error) => {
+      console.warn('[PatientFiles] Falha ao iniciar a renovação silenciosa do Google Drive:', error);
+    }).finally(() => {
+      setAuthLoading(false);
+    });
+  }, [user, hasYearlyAccess, targetFolderId, hasClinicalAccess, hasFreshClinicalAccess, googleGrantedScopes]);
 
   const loadFiles = async () => {
     if (!hasYearlyAccess) {
