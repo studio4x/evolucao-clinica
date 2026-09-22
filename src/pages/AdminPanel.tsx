@@ -1312,7 +1312,15 @@ export default function AdminPanel() {
     ? buildProfessionalWhatsAppUrl(selectedTxForReason.professionals.whatsapp_number, selectedRefundWhatsAppMessage, 'desktop')
     : null;
   const [refundContactAction, setRefundContactAction] = useState<'whatsapp' | 'email' | null>(null);
+  const [refundEmailPreviewOpen, setRefundEmailPreviewOpen] = useState(false);
   const [refundContactError, setRefundContactError] = useState('');
+  const selectedRefundEmailSubject = 'Podemos entender melhor sua experiência na Evolução Clínica?';
+  const selectedRefundEmailMessage = selectedTxForReason
+    ? buildRefundWhatsAppMessage({
+      fullName: selectedTxForReason.professionals?.full_name,
+      reason: selectedTxForReason.refund_reason,
+    })
+    : '';
   const selectedRefundWhatsAppSentAt = selectedTxForReason?.refund_contact_whatsapp_sent_at || null;
   const selectedRefundEmailSentAt = selectedTxForReason?.refund_contact_email_sent_at || null;
 
@@ -9048,7 +9056,7 @@ export default function AdminPanel() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => void handleRefundContact('email')}
+                    onClick={() => setRefundEmailPreviewOpen(true)}
                     disabled={Boolean(selectedRefundEmailSentAt || refundContactAction || !selectedTxForReason.professionals?.google_email)}
                     className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-center text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
@@ -9072,10 +9080,94 @@ export default function AdminPanel() {
               <div className="pt-4 border-t border-brand-border/60">
                 <button
                   type="button"
-                  onClick={() => setSelectedTxForReason(null)}
+                  onClick={() => {
+                    setRefundEmailPreviewOpen(false);
+                    setSelectedTxForReason(null);
+                  }}
                   className="w-full py-3 bg-brand-primary text-white font-bold rounded-xl text-sm hover:bg-brand-primary-hover transition-colors shadow shadow-brand-primary/20 cursor-pointer text-center block"
                 >
                   Fechar Janela
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {refundEmailPreviewOpen && selectedTxForReason && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="refund-email-preview-title"
+            onClick={() => setRefundEmailPreviewOpen(false)}
+          >
+            <div
+              className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-brand-primary/10 bg-white shadow-2xl animate-in zoom-in-95 duration-200"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-brand-border/60 px-6 py-5 md:px-8">
+                <div>
+                  <h3 id="refund-email-preview-title" className="flex items-center gap-2 text-xl font-display font-bold text-brand-primary">
+                    <Mail className="h-5 w-5 text-sky-600" />
+                    <span>Revisar e-mail</span>
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
+                    Confira o conteúdo antes de enviar para {selectedTxForReason.professionals?.google_email}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRefundEmailPreviewOpen(false)}
+                  className="rounded-lg p-1.5 text-brand-text-muted transition-colors hover:bg-brand-bg hover:text-brand-text"
+                  aria-label="Fechar revisão do e-mail"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4 overflow-y-auto px-6 py-5 md:px-8">
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Destinatário</p>
+                  <div className="rounded-xl border border-brand-border/60 bg-brand-bg/50 px-3 py-2.5 text-sm text-brand-text">
+                    {selectedTxForReason.professionals?.google_email}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Assunto</p>
+                  <div className="rounded-xl border border-brand-border/60 bg-brand-bg/50 px-3 py-2.5 text-sm font-medium text-brand-text">
+                    {selectedRefundEmailSubject}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Mensagem</p>
+                  <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-xl border border-brand-border/60 bg-white px-4 py-3 text-sm leading-relaxed text-brand-text shadow-inner">
+                    {selectedRefundEmailMessage}
+                  </div>
+                </div>
+                <div className="rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-xs leading-relaxed text-sky-900">
+                  O envio só acontecerá depois que você confirmar abaixo.
+                </div>
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-brand-border/60 px-6 py-5 sm:flex-row sm:justify-end md:px-8">
+                <button
+                  type="button"
+                  onClick={() => setRefundEmailPreviewOpen(false)}
+                  className="rounded-xl border border-brand-border px-4 py-2.5 text-sm font-bold text-brand-text transition-colors hover:bg-brand-bg"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRefundEmailPreviewOpen(false);
+                    void handleRefundContact('email');
+                  }}
+                  disabled={Boolean(refundContactAction || selectedRefundEmailSentAt)}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {refundContactAction === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                  Confirmar e enviar e-mail
                 </button>
               </div>
             </div>
