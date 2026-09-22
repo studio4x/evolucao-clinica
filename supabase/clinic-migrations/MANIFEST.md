@@ -45,3 +45,4 @@ produção.
 | `20260921_33_clinic_plan_context_entitlement.sql` | ownership explícito do Plano Clínica, modos `personal`/`hybrid`/`clinic_only`, contexto autorizado com entitlement organizacional e source de licença, sem exposição financeira | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260921_35_consultant_read_only_assignment.sql` | availability pessoal por status global, backfill e derivação server-side das capabilities de Primary/Secondary/Consultor | `hwkdwinfckmjoriqxbjk` (staging) |
 | `20260921_36_admin_clinical_read_access.sql` | leitura institucional de evoluções organization-scoped por Owner/Manager, projeção segura de autor e auditoria sem conteúdo clínico | `hwkdwinfckmjoriqxbjk` (staging) |
+| `20260922_37_fix_admin_read_access_runtime.sql` | corrige o RPC de capacidades administrativas com boundary `SECURITY DEFINER`, sem grant direto de tabela e sem vazamento cross-tenant | `hwkdwinfckmjoriqxbjk` (staging) |
