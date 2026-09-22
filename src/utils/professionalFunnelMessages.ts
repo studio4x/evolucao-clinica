@@ -175,6 +175,49 @@ export function buildProfessionalFunnelMessage(input: {
   };
 }
 
+const normalizeRefundReason = (reason: string) => String(reason || '')
+  .trim()
+  .toLocaleLowerCase('pt-BR')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '');
+
+const firstNameFromRefundContact = (fullName: string) => {
+  const firstName = String(fullName || '').trim().split(/\s+/)[0];
+  return firstName || 'profissional';
+};
+
+export function buildRefundWhatsAppMessage(input: { fullName?: string; reason?: string }) {
+  const firstName = firstNameFromRefundContact(input.fullName || '');
+  const reason = String(input.reason || '').trim() || 'não informou um motivo específico';
+  const normalizedReason = normalizeRefundReason(reason);
+
+  let question = 'Qual parte da experiência não funcionou bem para você? Se puder, conte um pouco mais para nos ajudar a melhorar.';
+
+  if (/(dificil|complic|confus|usab|pratic|n[aã]o pratic)/.test(normalizedReason)) {
+    question = 'Você poderia me contar qual parte ficou mais difícil ou pouco prática? Foi o cadastro de pacientes, a criação das evoluções, a transcrição, a organização dos registros ou outra etapa?';
+  } else if (/(erro|bug|problema|falha|trav|carreg)/.test(normalizedReason)) {
+    question = 'Você poderia me dizer em qual tela o problema aconteceu e, se possível, o que apareceu? Assim conseguimos investigar e corrigir com mais precisão.';
+  } else if (/(preco|valor|caro|custo)/.test(normalizedReason)) {
+    question = 'O que pesou mais para você: o valor da assinatura ou a percepção de que os recursos não compensaram o investimento?';
+  } else if (/(recurso|funcional|faltou|falta)/.test(normalizedReason)) {
+    question = 'Qual recurso ou possibilidade você sentiu falta? Essa informação ajuda bastante a priorizar nossas melhorias.';
+  } else if (/(tempo|usei|utiliz|nao usei|desist)/.test(normalizedReason)) {
+    question = 'Você sentiu dificuldade para começar ou acabou não encontrando uma oportunidade de usar a plataforma na sua rotina?';
+  }
+
+  return [
+    `Olá, ${firstName}! Tudo bem?`,
+    '',
+    'Aqui é da equipe da Evolução Clínica. Vi que você solicitou o reembolso e informou o seguinte motivo:',
+    `"${reason}"`,
+    '',
+    'Antes de encerrarmos, gostaria muito de entender melhor a sua experiência.',
+    question,
+    '',
+    'Seu retorno é importante para que possamos tornar a plataforma mais simples e útil para profissionais como você. Obrigado!'
+  ].join('\n');
+}
+
 export function buildProfessionalWhatsAppUrl(phoneNumber: string, message: string, target: ProfessionalWhatsAppTarget = 'web') {
   const normalizedPhone = String(phoneNumber || '').replace(/\D/g, '');
   if (normalizedPhone.length < 8 || normalizedPhone.length > 15) return null;

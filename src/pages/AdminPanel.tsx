@@ -32,6 +32,7 @@ import ManualPushNotificationHistory from '../components/admin/ManualPushNotific
 import ManualPushScheduleManager from '../components/admin/ManualPushScheduleManager';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
+import { buildProfessionalWhatsAppUrl, buildRefundWhatsAppMessage } from '../utils/professionalFunnelMessages';
 import {
   addAvatarCacheBuster,
   getProfessionalInitials,
@@ -1301,6 +1302,15 @@ export default function AdminPanel() {
   const [adminTransactions, setAdminTransactions] = useState<any[]>([]);
   const [loadingAdminTransactions, setLoadingAdminTransactions] = useState(true);
   const [selectedTxForReason, setSelectedTxForReason] = useState<any | null>(null);
+  const selectedRefundWhatsAppMessage = selectedTxForReason
+    ? buildRefundWhatsAppMessage({
+      fullName: selectedTxForReason.professionals?.full_name,
+      reason: selectedTxForReason.refund_reason,
+    })
+    : '';
+  const selectedRefundWhatsAppUrl = selectedTxForReason?.professionals?.whatsapp_number
+    ? buildProfessionalWhatsAppUrl(selectedTxForReason.professionals.whatsapp_number, selectedRefundWhatsAppMessage, 'desktop')
+    : null;
 
   // Estados do Formulário de Login (Administrativo)
   const [email, setEmail] = useState('');
@@ -2861,7 +2871,38 @@ export default function AdminPanel() {
           .order('created_at', { ascending: false });
 
         if (error) throw error;
-        setAdminTransactions(data || []);
+
+        const refundProfessionalIds = [...new Set(
+          (data || [])
+            .filter((transaction: any) => transaction.refund_reason && transaction.professional_id)
+            .map((transaction: any) => transaction.professional_id)
+        )];
+        let whatsappByProfessionalId = new Map<string, string | null>();
+
+        if (refundProfessionalIds.length > 0) {
+          const { data: preferences, error: preferencesError } = await supabase
+            .from('communication_preferences')
+            .select('user_id, whatsapp_number')
+            .in('user_id', refundProfessionalIds);
+
+          if (preferencesError) {
+            console.warn('Não foi possível carregar os WhatsApps dos profissionais com reembolso:', preferencesError);
+          } else {
+            whatsappByProfessionalId = new Map(
+              (preferences || []).map((preference: any) => [preference.user_id, preference.whatsapp_number || null])
+            );
+          }
+        }
+
+        setAdminTransactions((data || []).map((transaction: any) => ({
+          ...transaction,
+          professionals: transaction.professionals
+            ? {
+              ...transaction.professionals,
+              whatsapp_number: whatsappByProfessionalId.get(transaction.professional_id) || null,
+            }
+            : transaction.professionals,
+        })));
       } catch (err) {
         console.error("Erro ao buscar transações no admin:", err);
       } finally {
@@ -8866,6 +8907,40 @@ export default function AdminPanel() {
                       }) : 'N/A'}
                     </span>
                   </div>
+                </div>
+
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl bg-emerald-600 p-2 text-white shadow-sm">
+                      <MessageCircle className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-emerald-950">Entender melhor a dificuldade</p>
+                      <p className="mt-1 text-xs leading-relaxed text-emerald-900/75">
+                        Abra uma conversa no WhatsApp Desktop com uma mensagem sugerida a partir do motivo informado.
+                      </p>
+                    </div>
+                  </div>
+
+                  {selectedRefundWhatsAppUrl ? (
+                    <a
+                      href={selectedRefundWhatsAppUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-center text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Conversar pelo WhatsApp
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-medium leading-relaxed text-amber-800">
+                      Este profissional não possui um número de WhatsApp cadastrado.
+                    </div>
+                  )}
+                  <p className="mt-2 text-[10px] leading-relaxed text-emerald-900/60">
+                    A ação apenas abre a conversa com o texto preenchido; o envio continua dependendo da confirmação manual no WhatsApp.
+                  </p>
                 </div>
               </div>
 
