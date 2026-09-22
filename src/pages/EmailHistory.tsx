@@ -16,6 +16,8 @@ import {
   Pencil,
   ChevronLeft,
   ChevronRight,
+  Eye,
+  X,
 } from 'lucide-react';
 import { showAlert, showConfirm } from '../store/modalStore';
 
@@ -63,6 +65,7 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
   const [clearingAll, setClearingAll] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [viewingNotification, setViewingNotification] = useState<NotificationRecord | null>(null);
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -434,6 +437,14 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
 
                     {/* Ação */}
                     <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => setViewingNotification(n)}
+                        title="Visualizar e-mail enviado"
+                        aria-label={`Visualizar e-mail enviado para ${n.recipient_email}`}
+                        className="p-1.5 text-sky-600 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <Eye size={15} />
+                      </button>
                       {onEdit && (
                         <button
                           onClick={() => onEdit(n)}
@@ -524,6 +535,110 @@ export default function EmailHistory({ embedded = false, onEdit }: EmailHistoryP
           <span>
             <strong>Atenção:</strong> Este histórico não inclui e-mails de onboarding ou da Jornada. A exclusão é permanente e não pode ser desfeita.
           </span>
+        </div>
+      )}
+
+      {viewingNotification && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="email-history-preview-title"
+          onClick={() => setViewingNotification(null)}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-brand-primary/10 bg-white shadow-2xl animate-in zoom-in-95 duration-200"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-brand-border/60 px-6 py-5 md:px-8">
+              <div>
+                <h3 id="email-history-preview-title" className="flex items-center gap-2 text-xl font-display font-bold text-brand-primary">
+                  <Eye className="h-5 w-5 text-sky-600" />
+                  <span>E-mail enviado</span>
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
+                  Visualização do conteúdo registrado no histórico de envios.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingNotification(null)}
+                className="rounded-lg p-1.5 text-brand-text-muted transition-colors hover:bg-brand-bg hover:text-brand-text"
+                aria-label="Fechar visualização do e-mail"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 overflow-y-auto px-6 py-5 md:px-8">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Destinatário</p>
+                  <div className="rounded-xl border border-brand-border/60 bg-brand-bg/50 px-3 py-2.5 text-sm text-brand-text break-words">
+                    {viewingNotification.recipient_name || 'Destinatário'}
+                    <span className="mt-0.5 block text-xs text-brand-text-muted">{viewingNotification.recipient_email || '—'}</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Enviado em</p>
+                  <div className="rounded-xl border border-brand-border/60 bg-brand-bg/50 px-3 py-2.5 text-sm text-brand-text">
+                    {viewingNotification.created_at ? formatDate(viewingNotification.created_at) : '—'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Status</p>
+                  <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold uppercase ${
+                    viewingNotification.status === 'sent'
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                      : 'border-red-200 bg-red-50 text-red-700'
+                  }`}>
+                    {viewingNotification.status === 'sent' ? 'Enviado' : 'Falha'}
+                  </span>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Provedor</p>
+                  <p className="text-sm font-medium text-brand-text">{viewingNotification.provider === 'brevo' ? 'Brevo' : 'SMTP'}</p>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Origem</p>
+                  <p className="break-words text-sm font-medium text-brand-text">{viewingNotification.source === 'legacy-notification' ? 'Legado' : viewingNotification.source}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Assunto</p>
+                <div className="rounded-xl border border-brand-border/60 bg-brand-bg/50 px-3 py-2.5 text-sm font-semibold text-brand-text break-words">
+                  {viewingNotification.subject || 'Sem assunto'}
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted">Mensagem enviada</p>
+                <div className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl border border-brand-border/60 bg-white px-4 py-3 text-sm leading-relaxed text-brand-text shadow-inner">
+                  {viewingNotification.message || 'Nenhuma mensagem registrada.'}
+                </div>
+              </div>
+
+              {viewingNotification.error_message && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-relaxed text-red-800">
+                  <strong>Detalhes da falha:</strong> {viewingNotification.error_message}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-brand-border/60 px-6 py-5 md:px-8">
+              <button
+                type="button"
+                onClick={() => setViewingNotification(null)}
+                className="w-full rounded-xl bg-brand-primary px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-brand-primary-hover"
+              >
+                Fechar visualização
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
