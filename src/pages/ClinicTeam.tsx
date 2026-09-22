@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { CheckCircle2, CircleSlash, Crown, Loader2, ShieldCheck, UserRound, UserRoundCog, Users, XCircle } from "lucide-react";
+import { CheckCircle2, CircleSlash, Crown, Loader2, UserRound, UserRoundCog, Users } from "lucide-react";
 import { PanelPageHeader } from "../components/layout/PanelPageHeader";
 import { showAlert, showConfirm, showPrompt } from "../store/modalStore";
 import { useAuthStore } from "../store/authStore";
@@ -8,6 +8,7 @@ import { useClinicContextStore } from "../store/clinicContextStore";
 import { publicEffectFlags } from "../config/publicFlags";
 import { supabase } from "../supabaseClient";
 import { ClinicInvitations } from "../components/clinic/ClinicInvitations";
+import { ClinicalAccessModal } from "../components/clinic/ClinicalAccessModal";
 import {
   changeClinicTeamRole,
   ClinicTeamApiError,
@@ -28,7 +29,7 @@ function memberLabel(member: ClinicTeamMember) {
 }
 
 function roleLabel(role: ClinicTeamMember["membership_role"]) {
-  return role === "owner" ? "Owner" : role === "manager" ? "Manager" : "Professional";
+  return role === "owner" ? "Proprietário" : role === "manager" ? "Gestor" : "Profissional";
 }
 
 function statusLabel(status: ClinicTeamMember["status"]) {
@@ -48,11 +49,13 @@ export default function ClinicTeam() {
   const [busyProfessionalId, setBusyProfessionalId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [seatSummary, setSeatSummary] = useState<ClinicSeatSummary | null>(null);
+  const [clinicalAccessMember, setClinicalAccessMember] = useState<ClinicTeamMember | null>(null);
 
   const organizationId = activeContext.type === "organization" ? activeContext.organizationId : null;
   const organization = organizationId ? organizations.find(({ id }) => id === organizationId) : null;
   const actorRole = organization?.membershipRole;
   const isAdmin = actorRole === "owner" || actorRole === "manager";
+  const availableSeats = seatSummary?.available_seats ?? 0;
 
   const loadTeam = useCallback(async () => {
     if (!user || !organizationId || !isAdmin) return;
@@ -178,8 +181,8 @@ export default function ClinicTeam() {
   const runOwnerTransfer = useCallback(async (member: ClinicTeamMember) => {
     if (!organizationId || !user || busyProfessionalId || actorRole !== "owner") return;
     const confirmed = await showConfirm(
-      `Novo owner: ${memberLabel(member)}. Você continuará como manager e o acesso clínico atual de ambos não será alterado. Confirmar transferência?`,
-      { title: "Transferir ownership", confirmLabel: "Transferir ownership", cancelLabel: "Cancelar", variant: "warning", icon: "shield" },
+      `Novo proprietário: ${memberLabel(member)}. Você continuará como gestor e o acesso clínico atual de ambos não será alterado. Confirmar transferência?`,
+      { title: "Transferir propriedade", confirmLabel: "Transferir propriedade", cancelLabel: "Cancelar", variant: "warning", icon: "shield" },
     );
     if (!confirmed) return;
     setBusyProfessionalId(member.professional_id);
@@ -189,31 +192,19 @@ export default function ClinicTeam() {
       await transferClinicOwner(session.access_token, organizationId, member.professional_id);
       await refreshAfterMutation();
     } catch {
-      await showAlert("A transferência não foi concluída. A equipe será atualizada.", { title: "Ownership não transferido", variant: "danger", icon: "warning" });
+      await showAlert("A transferência não foi concluída. A equipe será atualizada.", { title: "Propriedade não transferida", variant: "danger", icon: "warning" });
       await refreshAfterMutation();
     } finally {
       setBusyProfessionalId(null);
     }
   }, [actorRole, busyProfessionalId, organizationId, refreshAfterMutation, user]);
 
-  const runClinicalAccessChange = useCallback(async (member: ClinicTeamMember) => {
-    if (!organizationId || !user || actorRole !== "owner" || member.status !== "active" || busyProfessionalId) return;
-    const enabled = !member.clinical_access_enabled;
-    if (enabled && seatSummary && seatSummary.available_seats < 1) {
-      await showAlert("Não há licenças disponíveis para habilitar o acesso clínico. Gerenciamento de quantidade será disponibilizado em etapa posterior.", {
-        title: "Nenhuma licença disponível", variant: "warning", icon: "info",
-      });
-      return;
-    }
-    const confirmed = await showConfirm(
-      `${enabled ? "Habilitar" : "Desabilitar"} o acesso clínico de ${memberLabel(member)}?`,
-      { title: enabled ? "Habilitar acesso clínico" : "Desabilitar acesso clínico", confirmLabel: enabled ? "Habilitar" : "Desabilitar", cancelLabel: "Cancelar", variant: enabled ? "info" : "warning", icon: "question" },
-    );
-    if (!confirmed) return;
+  const applyClinicalAccessChange = useCallback(async (member: ClinicTeamMember, enabled: boolean, closeExplanation = false) => {
+    if (!organizationId || !user || busyProfessionalId) return;
+    setBusyProfessionalId(member.professional_id);
     const reason = await showPrompt("Motivo opcional para o registro administrativo:", {
       title: "Registrar motivo", confirmLabel: "Continuar", cancelLabel: "Pular", placeholder: "Motivo (opcional)", icon: "info",
     });
-    setBusyProfessionalId(member.professional_id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token || session.user.id !== user.id) throw new Error("authentication_required");
@@ -228,8 +219,30 @@ export default function ClinicTeam() {
       await refreshAfterMutation();
     } finally {
       setBusyProfessionalId(null);
+      if (closeExplanation) setClinicalAccessMember(null);
     }
-  }, [actorRole, busyProfessionalId, organizationId, refreshAfterMutation, seatSummary, user]);
+  }, [busyProfessionalId, organizationId, refreshAfterMutation, user]);
+
+  const confirmClinicalAccess = useCallback(async () => {
+    if (!clinicalAccessMember || availableSeats < 1) return;
+    await applyClinicalAccessChange(clinicalAccessMember, true, true);
+  }, [applyClinicalAccessChange, availableSeats, clinicalAccessMember]);
+
+  const closeClinicalAccessModal = useCallback(() => {
+    if (!busyProfessionalId) setClinicalAccessMember(null);
+  }, [busyProfessionalId]);
+
+  const runClinicalAccessChange = useCallback(async (member: ClinicTeamMember) => {
+    if (!organizationId || !user || actorRole !== "owner" || member.status !== "active" || busyProfessionalId) return;
+    const enabled = !member.clinical_access_enabled;
+    if (enabled) { setClinicalAccessMember(member); return; }
+    const confirmed = await showConfirm(
+      `Desabilitar o acesso clínico de ${memberLabel(member)} libera uma licença da clínica. O membro deixará de atuar clinicamente e de criar novas evoluções, mas os registros já produzidos permanecerão preservados.${member.membership_role === "owner" || member.membership_role === "manager" ? " Seu acesso administrativo à clínica permanece ativo." : ""}`,
+      { title: "Desabilitar acesso clínico", confirmLabel: "Desabilitar", cancelLabel: "Cancelar", variant: "warning", icon: "question" },
+    );
+    if (!confirmed) return;
+    await applyClinicalAccessChange(member, false);
+  }, [actorRole, applyClinicalAccessChange, busyProfessionalId, organizationId, user]);
 
   const visibleMembers = useMemo(() => members.filter((member) => member.status === "active" || member.status === "suspended"), [members]);
 
@@ -296,6 +309,7 @@ export default function ClinicTeam() {
         )}
       </section>
       {organizationId && isAdmin && <ClinicInvitations organizationId={organizationId} actorRole={actorRole as "owner" | "manager"} seats={seatSummary} onChanged={refreshAfterMutation} />}
+      {clinicalAccessMember && <ClinicalAccessModal memberName={memberLabel(clinicalAccessMember)} memberRole={clinicalAccessMember.membership_role} contractedSeats={seatSummary?.contracted_seats ?? 0} activeSeats={seatSummary?.active_seats ?? 0} availableSeats={availableSeats} busy={busyProfessionalId === clinicalAccessMember.professional_id} onClose={closeClinicalAccessModal} onConfirm={() => void confirmClinicalAccess()} />}
     </div>
   );
 }
@@ -327,14 +341,14 @@ function TeamActions({ member, actorRole, actorId, busy, onAction, onRoleChange,
     <div className="flex flex-wrap items-center gap-2">
       {actorRole === "owner" && member.status === "active" && (
         <select aria-label={`Alterar papel de ${memberLabel(member)}`} value={member.membership_role} disabled={busy} onChange={(event) => void onRoleChange(member, event.target.value as "manager" | "professional")} className="min-h-10 rounded-lg border border-brand-border bg-white px-2 text-xs text-brand-text focus:border-brand-primary focus:outline-none">
-          <option value="professional">Professional</option>
-          <option value="manager">Manager</option>
+          <option value="professional">Profissional</option>
+          <option value="manager">Gestor</option>
         </select>
       )}
       {member.status === "active" ? <button type="button" onClick={() => void onAction(member, "suspend")} disabled={busy} className="min-h-10 rounded-lg border border-amber-200 px-3 text-xs font-semibold text-amber-800 hover:bg-amber-50 disabled:opacity-60">Suspender</button> : <button type="button" onClick={() => void onAction(member, "reactivate")} disabled={busy} className="min-h-10 rounded-lg border border-emerald-200 px-3 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 disabled:opacity-60">Reativar</button>}
       <button type="button" onClick={() => void onAction(member, "remove")} disabled={busy} className="min-h-10 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">Remover da clínica</button>
-      {actorRole === "owner" && member.status === "active" && <button type="button" onClick={() => void onTransfer(member)} disabled={busy} className="min-h-10 rounded-lg border border-brand-border px-3 text-xs font-semibold text-brand-primary hover:bg-brand-bg disabled:opacity-60">Transferir ownership</button>}
-      {canManageClinical && (member.clinical_access_enabled || entitlementMode === "full") && <button type="button" onClick={() => void onClinicalAccess(member)} disabled={busy || (!member.clinical_access_enabled && availableSeats < 1)} title={!member.clinical_access_enabled && availableSeats < 1 ? "Não há licenças disponíveis para habilitar o acesso clínico." : undefined} className="min-h-10 rounded-lg border border-brand-primary/30 px-3 text-xs font-semibold text-brand-primary hover:bg-brand-bg disabled:cursor-not-allowed disabled:opacity-60">{member.clinical_access_enabled ? "Desabilitar acesso clínico" : "Habilitar acesso clínico"}</button>}
+      {actorRole === "owner" && member.status === "active" && <button type="button" onClick={() => void onTransfer(member)} disabled={busy} className="min-h-10 rounded-lg border border-brand-border px-3 text-xs font-semibold text-brand-primary hover:bg-brand-bg disabled:opacity-60">Transferir propriedade</button>}
+      {canManageClinical && (member.clinical_access_enabled || entitlementMode === "full") && <button type="button" onClick={() => void onClinicalAccess(member)} disabled={busy} title={!member.clinical_access_enabled && availableSeats < 1 ? "Não há licenças disponíveis no momento. Veja os detalhes antes de adicionar uma licença." : undefined} className="min-h-10 rounded-lg border border-brand-primary/30 px-3 text-xs font-semibold text-brand-primary hover:bg-brand-bg disabled:cursor-not-allowed disabled:opacity-60">{member.clinical_access_enabled ? "Desabilitar acesso clínico" : "Habilitar acesso clínico"}</button>}
     </div>
   );
 }
