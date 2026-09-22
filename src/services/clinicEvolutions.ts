@@ -6,10 +6,10 @@ export type ClinicEvolutionUpdate = Partial<ClinicEvolutionInput> & {
   transcriptionText?:string; originalTranscriptionText?:string; transcriptionStatus?:"processing"|"completed"|"failed";
   status?:"draft"|"completed"|"signed"; errorMessage?:string|null;
 };
-export async function clinicEvolutionRequest(organizationPatientId:string, method="GET", input?:ClinicEvolutionInput|ClinicEvolutionUpdate, evolutionId?:string) {
+export async function clinicEvolutionRequest(organizationPatientId:string, method="GET", input?:ClinicEvolutionInput|ClinicEvolutionUpdate, evolutionId?:string, purpose?:"view"|"export") {
   const { data:{ session } }=await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("Sua sessão expirou. Faça login novamente.");
-  const path=`/api/clinic/patients/${encodeURIComponent(organizationPatientId)}/evolutions${evolutionId ? `/${encodeURIComponent(evolutionId)}` : ""}`;
+  const path=`/api/clinic/patients/${encodeURIComponent(organizationPatientId)}/evolutions${evolutionId ? `/${encodeURIComponent(evolutionId)}` : ""}${method === "GET" && evolutionId && purpose === "export" ? "?purpose=export" : ""}`;
   const response=await fetch(path,{ method,cache:"no-store",headers:{ Authorization:`Bearer ${session.access_token}`,...(input ? { "Content-Type":"application/json" } : {}) },...(input ? { body:JSON.stringify(input) } : {}) });
   const body=await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(response.status === 403 || response.status === 404 ? "Você não possui acesso a esta evolução ou o workspace não permite escrita." : "Não foi possível salvar ou carregar a evolução.");

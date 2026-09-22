@@ -15,6 +15,9 @@ const EVENT_OPTIONS = [
   ["patient_assignment_role_changed", "Papel clínico alterado"],
   ["patient_assignment_created", "Acesso clínico concedido"],
   ["patient_assignment_revoked", "Acesso clínico revogado"],
+  ["organization_patient_clinical_records_viewed", "Prontuário clínico consultado"],
+  ["organization_evolution_viewed", "Evolução consultada"],
+  ["organization_evolution_exported", "Evolução exportada"],
   ["member_role_changed", "Papel da equipe alterado"],
   ["member_suspended", "Membro suspenso"],
   ["member_reactivated", "Membro reativado"],
@@ -31,6 +34,9 @@ function eventDescription(event: ClinicAuditEvent) {
   const subject = event.patient_display_name || event.subject_professional_name || event.professional_name;
   if (event.event_type === "patient_primary_reassigned") return `${subject || "Paciente"}: profissional principal atualizado${event.keep_previous_as_secondary ? "; profissional anterior mantido como secundário" : ""}.`;
   if (event.event_type === "patient_assignment_role_changed") return `${subject || "Acesso clínico"}: papel atualizado.`;
+  if (event.event_type === "organization_patient_clinical_records_viewed") return `${subject || "Paciente"}: registros clínicos consultados pela gestão da clínica.`;
+  if (event.event_type === "organization_evolution_viewed") return `${subject || "Profissional"}: evolução consultada pela gestão da clínica.`;
+  if (event.event_type === "organization_evolution_exported") return `${subject || "Profissional"}: evolução exportada pela gestão da clínica.`;
   return subject ? `${subject}.` : "Alteração operacional registrada.";
 }
 

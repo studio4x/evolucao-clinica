@@ -8,6 +8,7 @@ export type ClinicPatientRouteDeps = {
   supabaseUrl: string;
   supabaseAnonKey: string;
   clinicFeatureEnabled: boolean;
+  createUserScopedClient?: typeof createUserScopedClient;
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,7 +30,8 @@ function withCommonHeaders(res: ClinicResponse) {
 function getUserClient(req: ClinicRequest, deps: ClinicPatientRouteDeps) {
   const token = readBearerToken(req);
   if (!token || !req.user?.id) return null;
-  return createUserScopedClient({ supabaseUrl: deps.supabaseUrl, supabaseAnonKey: deps.supabaseAnonKey, accessToken: token });
+  const createClient = deps.createUserScopedClient || createUserScopedClient;
+  return createClient({ supabaseUrl: deps.supabaseUrl, supabaseAnonKey: deps.supabaseAnonKey, accessToken: token });
 }
 
 function errorStatus(error: any) {

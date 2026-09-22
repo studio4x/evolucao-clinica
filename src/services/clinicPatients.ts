@@ -43,6 +43,7 @@ export type ClinicPatientDetail = {
   assignments: ClinicPatientAssignment[];
   canReadEvolutions: boolean;
   canCreateEvolution: boolean;
+  evolutionReadScope?: "own" | "administrative";
 };
 
 export class ClinicPatientsApiError extends Error {
