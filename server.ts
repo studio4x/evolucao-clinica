@@ -4576,8 +4576,11 @@ app.post("/api/admin/refund-contact", requireAuth, requireAdmin, async (req: any
       return res.status(404).json({ error: "Transação com motivo de reembolso não encontrada." });
     }
 
-    const professionalName = String(transaction.professionals?.[0]?.full_name || "Profissional").trim();
-    const professionalEmail = String(transaction.professionals?.[0]?.google_email || "").trim();
+    const professional = Array.isArray(transaction.professionals)
+      ? transaction.professionals[0]
+      : transaction.professionals;
+    const professionalName = String(professional?.full_name || "Profissional").trim();
+    const professionalEmail = String(professional?.google_email || "").trim();
 
     if (channel === "whatsapp") {
       const markedAt = await recordRefundContactStatus({
