@@ -622,7 +622,16 @@ export default function App() {
               }
               clearSilentGoogleRefreshFlag(session.user.id);
             }
-            await hydrateClinicContexts(session);
+            const clinicContextState = useClinicContextStore.getState();
+            if (
+              clinicContextState.userId === session.user.id
+              && clinicContextState.status === 'ready'
+              && clinicContextState.hydratedAt !== null
+            ) {
+              await clinicContextState.revalidateForUser(session.user.id, session.access_token);
+            } else {
+              await hydrateClinicContexts(session);
+            }
             setAuthReady(true);
             return;
           }
@@ -877,13 +886,21 @@ export default function App() {
   }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleAccessTokenIssuedAt, setGoogleGrantedScopes]);
 
   useEffect(() => {
+    const FOREGROUND_REVALIDATION_TTL_MS = 60_000;
+    let lastForegroundRevalidationAt = 0;
+
     const revalidateOnForeground = () => {
       if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastForegroundRevalidationAt < FOREGROUND_REVALIDATION_TTL_MS) return;
       void (async () => {
         const user = useAuthStore.getState().user;
         if (!user) return;
+        const context = useClinicContextStore.getState();
+        if (context.userId !== user.id || context.status !== 'ready' || context.hydratedAt === null) return;
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user.id === user.id) {
+          lastForegroundRevalidationAt = now;
           await useClinicContextStore.getState().revalidateForUser(user.id, session.access_token);
         }
       })();

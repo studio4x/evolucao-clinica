@@ -10,7 +10,7 @@ import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { rememberMicrophonePermission } from '../utils/microphonePermission';
 
-import { resolveAudioMimeType, transcribeAudio } from '../services/aiTranscription';
+import { getTranscriptionUserMessage, resolveAudioMimeType, transcribeAudio } from '../services/aiTranscription';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
@@ -1474,7 +1474,8 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
         });
       }
       
-      let msg = error.message || "Erro desconhecido";
+      const transcriptionConfigurationMessage = getTranscriptionUserMessage(error);
+      let msg = transcriptionConfigurationMessage || error.message || "Erro desconhecido";
       
       if (!isClinic && (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) && audioBlobs.length > 0) {
         try {
@@ -1526,7 +1527,10 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
         setGoogleAccessToken(null);
       }
       
-      if (isClinic) { await persistDraft(items); msg = 'Não foi possível concluir a evolução. Seu conteúdo permanece nesta tela; tente novamente quando seu acesso e a conexão estiverem disponíveis.'; }
+      if (isClinic) {
+        await persistDraft(items);
+        msg = transcriptionConfigurationMessage || 'Não foi possível concluir a evolução. Seu conteúdo permanece nesta tela; tente novamente quando seu acesso e a conexão estiverem disponíveis.';
+      }
       setErrorMessage(msg);
       setStatus('error');
       setProcessingMessage('');

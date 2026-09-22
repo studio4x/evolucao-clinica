@@ -2322,7 +2322,9 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
     const { apiKey, modelName } = await getGeminiSettings();
 
     if (!apiKey) {
-      return res.status(500).json({ error: "Chave do Gemini não configurada no servidor." });
+      const missingKeyError = new Error("Chave do Gemini não configurada no servidor.") as Error & { code?: string };
+      missingKeyError.code = "missing_gemini_api_key";
+      throw missingKeyError;
     }
 
     const transcriptionModel = resolveTranscriptionModel(modelName);
@@ -2427,7 +2429,20 @@ app.post("/api/ai/transcribe", requireAuth, async (req: any, res) => {
   } catch (err: any) {
     const errorMessage = extractReadableErrorMessage(err);
     const quotaRelated = isQuotaRelatedError(err);
+    const normalizedError = String(errorMessage || "").toLowerCase();
+    const geminiDisabled = normalizedError.includes("gemini_enabled=false");
+    const environmentConfigurationError = err?.name === "EnvironmentConfigurationError" || geminiDisabled;
+    const missingGeminiKey = err?.code === "missing_gemini_api_key";
     console.error("[AI-Backend] Erro na transcrição via backend:", String(errorMessage || "erro").replace(/[\r\n]/g, " ").slice(0, 240));
+    if (environmentConfigurationError || missingGeminiKey) {
+      const stagingMessage = serverEnvironment.appEnv === "staging"
+        ? "O processamento por IA está temporariamente desabilitado neste ambiente."
+        : "Não foi possível processar o áudio agora. Tente novamente mais tarde.";
+      return res.status(geminiDisabled ? 503 : 500).json({
+        code: geminiDisabled ? "integration_disabled" : (missingGeminiKey ? "missing_gemini_api_key" : "environment_configuration_error"),
+        error: stagingMessage,
+      });
+    }
     res.status(quotaRelated ? 429 : 500).json({ error: errorMessage || "Erro interno ao processar a transcrição." });
   } finally {
     if (audioReservationId && !audioReservationCommitted) {

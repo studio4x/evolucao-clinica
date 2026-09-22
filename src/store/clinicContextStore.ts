@@ -78,6 +78,71 @@ function clearStoredContext(userId: string | null) {
   }
 }
 
+function visibleOrganizations(payload: { organizations: ClinicOrganization[] }) {
+  return payload.organizations.filter(
+    (organization) => Boolean(organization.id) && organization.operationalStatus !== "archived",
+  );
+}
+
+function resolveHydratedContext(
+  userId: string,
+  payload: { personal: { available: boolean }; organizations: ClinicOrganization[] },
+  organizations: ClinicOrganization[],
+  preferredContext?: ActiveClinicContext,
+): ActiveClinicContext {
+  const preferredOrganizationId = preferredContext?.type === "organization"
+    ? preferredContext.organizationId
+    : null;
+  const storedOrganizationId = readStoredOrganizationId(userId);
+  const organization = organizations.find(({ id }) => id === preferredOrganizationId)
+    || organizations.find(({ id }) => id === storedOrganizationId);
+
+  if (organization && (preferredOrganizationId || preferredContext?.type !== "personal")) {
+    const context = { type: "organization" as const, organizationId: organization.id };
+    writeStoredContext(userId, context);
+    return context;
+  }
+
+  if (!payload.personal.available && organizations.length === 1) {
+    const context = { type: "organization" as const, organizationId: organizations[0].id };
+    writeStoredContext(userId, context);
+    return context;
+  }
+
+  if (storedOrganizationId || preferredOrganizationId) writeStoredContext(userId, { type: "personal" });
+  return { type: "personal" };
+}
+
+function applyContextPayload(
+  set: (state: Partial<ClinicContextState>) => void,
+  userId: string,
+  payload: { personal: { available: boolean }; accessMode: "personal" | "hybrid" | "clinic_only"; organizations: ClinicOrganization[] },
+  preferredContext?: ActiveClinicContext,
+) {
+  const organizations = visibleOrganizations(payload);
+  const activeContext = resolveHydratedContext(userId, payload, organizations, preferredContext);
+  setContextState(set, userId, payload, organizations, activeContext);
+}
+
+function setContextState(
+  set: (state: Partial<ClinicContextState>) => void,
+  userId: string,
+  payload: { personal: { available: boolean }; accessMode: "personal" | "hybrid" | "clinic_only" },
+  organizations: ClinicOrganization[],
+  activeContext: ActiveClinicContext,
+) {
+  set({
+    organizations,
+    personalAvailable: payload.personal.available,
+    accessMode: payload.accessMode,
+    activeContext,
+    status: "ready",
+    error: null,
+    hydratedAt: Date.now(),
+    userId,
+  });
+}
+
 function personalState(userId: string | null = null) {
   return {
     organizations: [],
@@ -109,20 +174,7 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
         const payload = await fetchClinicContexts(accessToken);
         if (get().userId !== userId || currentGeneration(userId) !== generation) return;
 
-        const organizations = payload.organizations.filter(
-          (organization) => Boolean(organization.id) && organization.operationalStatus !== "archived",
-        );
-        const storedOrganizationId = readStoredOrganizationId(userId);
-        const restoredOrganization = organizations.find(({ id }) => id === storedOrganizationId);
-        const activeContext: ActiveClinicContext = restoredOrganization
-          ? { type: "organization", organizationId: restoredOrganization.id }
-          : !payload.personal.available && organizations.length === 1
-            ? { type: "organization", organizationId: organizations[0].id }
-          : { type: "personal" };
-
-        if (!restoredOrganization && storedOrganizationId) writeStoredContext(userId, { type: "personal" });
-        if (!restoredOrganization && activeContext.type === "organization") writeStoredContext(userId, activeContext);
-        set({ organizations, personalAvailable: payload.personal.available, accessMode: payload.accessMode, activeContext, status: "ready", error: null, hydratedAt: Date.now() });
+        applyContextPayload(set, userId, payload);
       } catch (error) {
         if (get().userId !== userId || currentGeneration(userId) !== generation) return;
         const code = error instanceof ClinicContextApiError ? error.code : "context_resolution_failed";
@@ -151,8 +203,16 @@ export const useClinicContextStore = create<ClinicContextState>((set, get) => ({
     const revalidation = (async () => {
       if (pendingHydration) await pendingHydration;
       if (get().userId !== userId || currentGeneration(userId) !== generation) return;
-      await get().hydrateForUser(userId, accessToken);
-    })();
+      const payload = await fetchClinicContexts(accessToken);
+      if (get().userId !== userId || currentGeneration(userId) !== generation) return;
+      applyContextPayload(set, userId, payload, get().activeContext);
+    })().catch((error) => {
+      // A foreground read is advisory when a usable context is already on
+      // screen. Preserve the mounted route and let a later foreground event
+      // retry instead of turning a transient network failure into a splash.
+      if (get().userId !== userId || currentGeneration(userId) !== generation) return;
+      if (get().status !== "ready") throw error;
+    });
 
     revalidationInFlight.set(userId, revalidation);
     try {

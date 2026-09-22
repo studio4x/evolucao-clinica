@@ -1,6 +1,9 @@
 import { supabase } from "../supabaseClient";
 import { getAudioDurationFromBlob } from "../utils/audioDuration";
 import { getAudioLimitPolicy, type AudioSubscriptionPlan } from "../utils/audioLimits";
+import { isTranscriptionErrorRetryable } from "../utils/aiTranscriptionPolicy";
+
+export { getTranscriptionUserMessage, isTranscriptionErrorRetryable } from "../utils/aiTranscriptionPolicy";
 
 export interface TranscriptionOptions {
   audioBlob: Blob;
@@ -215,6 +218,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
       if (!response.ok) {
         const serverError = new Error(`${data.error || 'Erro do servidor'} (HTTP ${response.status})`) as Error & { code?: string };
         serverError.code = typeof data.code === 'string' ? data.code : undefined;
+        (serverError as Error & { status?: number }).status = response.status;
         throw serverError;
       }
 
@@ -244,7 +248,7 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
 
       console.error("[AI-Service] Erro na transcrição:", errorContent);
       
-      if (!isBucketError && !isModelError && !isPolicyError && retryCount < maxRetries) {
+      if (!isBucketError && !isModelError && !isPolicyError && isTranscriptionErrorRetryable(error) && retryCount < maxRetries) {
         retryCount++;
         // Se for erro de cota, aumenta o delay (mínimo 15 segundos)
         const delay = isQuotaError ? 15000 * retryCount : 2000 * retryCount;
@@ -274,7 +278,10 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
         throw new Error(`${stageDescription} Verifique a conexão e tente novamente.`);
       }
 
-      throw new Error(`${errorContent} (Erro na comunicação com o backend de transcrição)`);
+      const finalError = new Error(`${errorContent} (Erro na comunicação com o backend de transcrição)`) as Error & { code?: string; status?: number };
+      finalError.code = error?.code;
+      finalError.status = error?.status;
+      throw finalError;
     }
   };
 
