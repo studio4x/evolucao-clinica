@@ -31,7 +31,7 @@ export function ClinicPatientEvolutions({ patient }: { patient:ClinicPatientDeta
     } catch { setError("Não foi possível carregar suas evoluções. Seu acesso pode ter mudado."); }
     finally { setLoading(false); }
   },[patient.organizationPatientId,patient.organizationId,patient.patientId,user?.id]);
-  useEffect(() => { void load(); window.addEventListener("focus",load); return () => window.removeEventListener("focus",load); },[load]);
+  useEffect(() => { void load(); },[load]);
   async function change(row:any,action:"save"|"sign"|"delete") {
     if (action !== "save" && !await showConfirm(action === "sign" ? "A assinatura confirma sua autoria e fecha esta evolução. Depois de assinar, o conteúdo não poderá ser alterado ou excluído." : "Deseja excluir esta evolução não assinada?",{ title:action === "sign" ? "Assinar e fechar evolução" : "Excluir evolução",confirmLabel:action === "sign" ? "Assinar e fechar" : "Excluir",cancelLabel:"Voltar",variant:"danger",icon:"question" })) return;
     setBusy(true); setError("");
