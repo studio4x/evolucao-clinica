@@ -23,7 +23,9 @@ const auditInsert = migration.slice(migration.indexOf("INSERT INTO private.organ
 assert.doesNotMatch(auditInsert, /transcription_text|original_transcription_text|content|payload|token/i);
 for (const notScoped of ["patient_reports", "patient_files", "anamnesis", "patient_sessions", "documents"]) assert.doesNotMatch(migration, new RegExp(`ALTER TABLE (?:public\\.)?${notScoped}`));
 assert.match(cacheSource, /pathname\.startsWith\("\/api\/clinic\/"\)/);
-assert.match(routeSource, /\.eq\("organization_id",access\.data\.organizationId\)\.eq\("organization_patient_id",scope\.patientId\)/);
+assert.match(routeSource, /hasAdminReadContract=Boolean\(access\.data\.organizationId\)/);
+assert.match(routeSource, /if \(hasAdminReadContract\) query=query\.eq\("organization_id",access\.data\.organizationId\)/);
+assert.match(routeSource, /else query=query\.eq\("professional_id",req\.user\.id\)/);
 assert.doesNotMatch(routeSource, /select\("\*"\)\.eq\("professional_id",req\.user\.id\)/);
 assert.match(routeSource, /\.eq\("professional_id",req\.user\.id\).*\.eq\("organization_patient_id",scope\.patientId\)/s);
 assert.match(pageSource, /row\.isOwn === true/);
@@ -52,7 +54,7 @@ const ids = {
 
 const actorIds: Record<string, string> = {
   owner: ids.owner, manager: ids.manager, primary: ids.primary, secondary: ids.secondary,
-  consultant: ids.consultant, ownerB: ids.ownerB,
+  consultant: ids.consultant, ownerB: ids.ownerB, legacyPrimary: ids.primary,
 };
 const adminActors = new Set(["owner", "manager"]);
 const authorProfiles: Record<string, Record<string, string>> = {
@@ -70,7 +72,8 @@ const rows = [
 ];
 const auditEvents: Array<Record<string, unknown>> = [];
 
-function accessFor(actor: string, patientId: string) {
+function accessFor(actor: string, patientId: string): any {
+  if (actor === "legacyPrimary") return { canRead: true, canCreate: true };
   if (patientId === ids.patientB) return actor === "ownerB"
     ? { organizationId: ids.organizationB, canRead: true, canCreate: true, canReadAll: true, readScope: "administrative" }
     : { organizationId: ids.organizationB, canRead: false, canCreate: false, canReadAll: false, readScope: "own" };
@@ -160,6 +163,10 @@ try {
   assert.deepEqual(primary.body.evolutions.map((row: any) => row.id), [ids.evolutionA, ids.evolutionSigned]);
   const secondary = await api("secondary", ids.patientA);
   assert.deepEqual(secondary.body.evolutions.map((row: any) => row.id), [ids.evolutionB]);
+  const legacyPrimary = await api("legacyPrimary", ids.patientA);
+  assert.equal(legacyPrimary.status, 200);
+  assert.deepEqual(legacyPrimary.body.evolutions.map((row: any) => row.id), [ids.evolutionA, ids.evolutionSigned]);
+  assert.equal(legacyPrimary.body.readScope, "own");
   const consultant = await api("consultant", ids.patientA);
   assert.equal(consultant.status, 200); assert.deepEqual(consultant.body.evolutions, []); assert.equal(consultant.body.canWrite, false);
 

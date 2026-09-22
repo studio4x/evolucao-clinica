@@ -45,19 +45,25 @@ export function registerClinicEvolutionRoutes(app: any, deps: ClinicPatientRoute
       const access=await scope.client.rpc("get_organization_evolution_access",{ p_organization_patient_id:scope.patientId });
       if (access.error) return fail(res,access.error);
       if (!access.data?.canRead) return res.status(403).json({ ok:false,error:"not_authorized" });
-      let query=scope.client.from("evolutions").select("*").eq("organization_id",access.data.organizationId).eq("organization_patient_id",scope.patientId);
+      const hasAdminReadContract=Boolean(access.data.organizationId);
+      let query=scope.client.from("evolutions").select("*");
+      if (hasAdminReadContract) query=query.eq("organization_id",access.data.organizationId);
+      else query=query.eq("professional_id",req.user.id); // Migration 36 rollout fallback: preserve the previous author-only read.
+      query=query.eq("organization_patient_id",scope.patientId);
       if (detail) query=query.eq("id",scope.evolutionId);
       const result=await query.order("session_date",{ ascending:false }).order("created_at",{ ascending:false });
       if (result.error) return fail(res,result.error);
       if (detail && !result.data?.length) return res.status(404).json({ ok:false,error:"evolution_not_found" });
-      const authors=await scope.client.rpc("get_organization_evolution_author_profiles",{ p_organization_patient_id:scope.patientId });
+      const authors=hasAdminReadContract
+        ? await scope.client.rpc("get_organization_evolution_author_profiles",{ p_organization_patient_id:scope.patientId })
+        : { data:[],error:null };
       if (authors.error) return fail(res,authors.error);
       const authorById=new Map((authors.data || []).map((author:any) => [author.professional_id,author]));
       const rows=(result.data || []).map((row:any) => {
         const author:any=authorById.get(row.professional_id);
         return { ...row,authorProfessionalId:row.professional_id,authorName:author?.full_name || row.signed_by_name || "Profissional",authorProfessionalTitle:author?.professional_title || null,authorProfessionalRegister:author?.professional_register || row.signed_by_register || null,isOwn:row.professional_id === req.user.id };
       });
-      if (access.data.canReadAll) {
+      if (hasAdminReadContract && access.data.canReadAll) {
         const action=detail ? (req.query?.purpose === "export" ? "organization_evolution_exported" : "organization_evolution_viewed") : "organization_patient_clinical_records_viewed";
         const audit=await scope.client.rpc("record_organization_clinical_read",{ p_organization_patient_id:scope.patientId,p_evolution_id:detail ? scope.evolutionId : null,p_action:action });
         if (audit.error) return fail(res,audit.error);
