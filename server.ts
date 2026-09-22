@@ -1278,7 +1278,7 @@ async function requireActiveSubscription(req: any, res: any, next: any) {
 }
 
 type EmailProvider = "smtp" | "brevo";
-type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend" | "funnel-stage";
+type EmailDeliverySource = "notification" | "test-email" | "trial-expiration" | "report" | "subscription-success" | "subscription-failure" | "welcome" | "lifecycle" | "lifecycle-conditional" | "lifecycle-test" | "lifecycle-alert" | "manual-resend" | "funnel-stage" | "refund-contact";
 type NotificationOrigin = "platform" | "manual-push" | "manual-email" | "onboarding";
 type NotificationChannels = { inApp?: boolean; push?: boolean; email?: boolean; whatsapp?: boolean };
 type NotificationAudienceSegment = {
@@ -4486,6 +4486,162 @@ app.post("/api/admin/professional-funnel/email", requireAuth, requireAdmin, asyn
   } catch (error: any) {
     console.error("[ProfessionalFunnelEmail] Falha no envio:", error?.message || error);
     return res.status(500).json({ error: error?.message || "Não foi possível enviar o e-mail." });
+  }
+});
+
+type RefundContactChannel = "whatsapp" | "email";
+
+async function recordRefundContactStatus(input: {
+  transactionId: string;
+  professionalId: string;
+  actorId: string;
+  channel: RefundContactChannel;
+  metadata?: Record<string, unknown>;
+}) {
+  const markedAt = new Date().toISOString();
+  const { error } = await supabaseAdmin.from("admin_audit_logs").insert({
+    event_type: "refund_contact_status",
+    actor_id: input.actorId,
+    target_type: "transaction",
+    target_id: input.transactionId,
+    reason: "manual_refund_contact_marked_sent",
+    metadata: {
+      channel: input.channel,
+      sent: true,
+      professional_id: input.professionalId,
+      ...input.metadata,
+    },
+    created_at: markedAt,
+  });
+  if (error) throw error;
+  return markedAt;
+}
+
+app.get("/api/admin/refund-contact-status", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const transactionIds = String(req.query?.transactionIds || "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => PROFESSIONAL_ID_PATTERN.test(value))
+      .slice(0, 100);
+
+    if (transactionIds.length === 0) return res.json({ statuses: {} });
+
+    const { data, error } = await supabaseAdmin
+      .from("admin_audit_logs")
+      .select("target_id, metadata, created_at")
+      .eq("event_type", "refund_contact_status")
+      .eq("target_type", "transaction")
+      .in("target_id", transactionIds)
+      .order("created_at", { ascending: false });
+    if (error) throw error;
+
+    const statuses: Record<string, { whatsappSentAt: string | null; emailSentAt: string | null }> = {};
+    for (const transactionId of transactionIds) {
+      statuses[transactionId] = { whatsappSentAt: null, emailSentAt: null };
+    }
+
+    for (const row of data || []) {
+      const transactionId = String(row.target_id || "");
+      const metadata = row.metadata && typeof row.metadata === "object" ? row.metadata as Record<string, unknown> : {};
+      const channel = metadata.channel;
+      if (!statuses[transactionId] || metadata.sent !== true) continue;
+      if (channel === "whatsapp" && !statuses[transactionId].whatsappSentAt) statuses[transactionId].whatsappSentAt = row.created_at;
+      if (channel === "email" && !statuses[transactionId].emailSentAt) statuses[transactionId].emailSentAt = row.created_at;
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ statuses });
+  } catch (error: any) {
+    console.error("[RefundContactStatus] Falha ao carregar marcações:", error?.message || error);
+    return res.status(500).json({ error: "Não foi possível carregar o controle de contatos." });
+  }
+});
+
+app.post("/api/admin/refund-contact", requireAuth, requireAdmin, async (req: any, res) => {
+  try {
+    const transactionId = String(req.body?.transactionId || "").trim();
+    const channel = String(req.body?.channel || "").trim() as RefundContactChannel;
+    if (!PROFESSIONAL_ID_PATTERN.test(transactionId) || !["whatsapp", "email"].includes(channel)) {
+      return res.status(400).json({ error: "Dados de contato do reembolso inválidos." });
+    }
+
+    const { data: transaction, error: transactionError } = await supabaseAdmin
+      .from("transactions")
+      .select("id, professional_id, refund_reason, professionals(full_name, google_email)")
+      .eq("id", transactionId)
+      .maybeSingle();
+    if (transactionError) throw transactionError;
+    if (!transaction || !transaction.professional_id || !transaction.refund_reason) {
+      return res.status(404).json({ error: "Transação com motivo de reembolso não encontrada." });
+    }
+
+    const professionalName = String(transaction.professionals?.[0]?.full_name || "Profissional").trim();
+    const professionalEmail = String(transaction.professionals?.[0]?.google_email || "").trim();
+
+    if (channel === "whatsapp") {
+      const markedAt = await recordRefundContactStatus({
+        transactionId,
+        professionalId: transaction.professional_id,
+        actorId: req.user.id,
+        channel,
+        metadata: { contact_status: "opened_prefilled_conversation" },
+      });
+      res.setHeader("Cache-Control", "no-store");
+      return res.json({ success: true, channel, sentAt: markedAt, confirmation: "opened" });
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(professionalEmail)) {
+      return res.status(422).json({ error: "O profissional não possui um e-mail válido cadastrado." });
+    }
+
+    const { buildRefundWhatsAppMessage } = await import("./src/utils/professionalFunnelMessages.js");
+    const message = buildRefundWhatsAppMessage({ fullName: professionalName, reason: transaction.refund_reason });
+    const subject = "Podemos entender melhor sua experiência na Evolução Clínica?";
+    const theme = await getEmailTheme();
+    const bodyHtml = message
+      .split(/\r?\n/)
+      .map((line) => line.trim() ? `<p style="margin:0 0 16px 0; font-size:15px; line-height:1.7; color:${theme.text};">${escapeHtml(line)}</p>` : "")
+      .join("");
+    const result = await sendTransactionalEmail(await getNotificationSettings(), {
+      userId: transaction.professional_id,
+      recipientEmail: professionalEmail,
+      recipientName: professionalName,
+      subject,
+      textContent: message,
+      htmlContent: buildEmailShell(theme, {
+        title: "Podemos melhorar sua experiência?",
+        secondaryTitle: "Seu feedback sobre a Evolução Clínica é importante",
+        headerEyebrow: "Evolução Clínica",
+        bodyHtml,
+        footerHtml: "Mensagem enviada manualmente pela equipe da Evolução Clínica.",
+      }),
+      source: "refund-contact",
+      allowFallback: true,
+    });
+
+    let sentAt: string | null = null;
+    try {
+      sentAt = await recordRefundContactStatus({
+        transactionId,
+        professionalId: transaction.professional_id,
+        actorId: req.user.id,
+        channel,
+        metadata: {
+          provider: result.provider,
+          email_delivery_id: result.emailDeliveryId,
+          contact_status: "provider_accepted",
+        },
+      });
+    } catch (markError: any) {
+      console.warn("[RefundContactEmail] E-mail enviado, mas não foi possível registrar a marcação:", markError?.message || markError);
+    }
+
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ success: true, channel, provider: result.provider, deliveryId: result.emailDeliveryId, sentAt });
+  } catch (error: any) {
+    console.error("[RefundContact] Falha no contato do reembolso:", error?.message || error);
+    return res.status(500).json({ error: error?.message || "Não foi possível concluir o contato." });
   }
 });
 

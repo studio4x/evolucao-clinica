@@ -1311,6 +1311,54 @@ export default function AdminPanel() {
   const selectedRefundWhatsAppUrl = selectedTxForReason?.professionals?.whatsapp_number
     ? buildProfessionalWhatsAppUrl(selectedTxForReason.professionals.whatsapp_number, selectedRefundWhatsAppMessage, 'desktop')
     : null;
+  const [refundContactAction, setRefundContactAction] = useState<'whatsapp' | 'email' | null>(null);
+  const [refundContactError, setRefundContactError] = useState('');
+  const selectedRefundWhatsAppSentAt = selectedTxForReason?.refund_contact_whatsapp_sent_at || null;
+  const selectedRefundEmailSentAt = selectedTxForReason?.refund_contact_email_sent_at || null;
+
+  const formatRefundContactDate = (value: string | null) => value
+    ? new Date(value).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+    : '';
+
+  const handleRefundContact = async (channel: 'whatsapp' | 'email') => {
+    if (!selectedTxForReason || refundContactAction) return;
+
+    setRefundContactAction(channel);
+    setRefundContactError('');
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error('Sessão administrativa não encontrada.');
+
+      const response = await fetch('/api/admin/refund-contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ transactionId: selectedTxForReason.id, channel }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.error || 'Não foi possível registrar o contato.');
+
+      const sentAt = payload.sentAt || null;
+      const statusPatch = channel === 'whatsapp'
+        ? { refund_contact_whatsapp_sent_at: sentAt }
+        : { refund_contact_email_sent_at: sentAt };
+      setSelectedTxForReason((current: any) => current ? { ...current, ...statusPatch } : current);
+      setAdminTransactions((current) => current.map((transaction) => (
+        transaction.id === selectedTxForReason.id ? { ...transaction, ...statusPatch } : transaction
+      )));
+
+      if (channel === 'email' && !sentAt) {
+        setRefundContactError('E-mail enviado, mas a marcação de controle não pôde ser registrada.');
+      }
+    } catch (error: any) {
+      setRefundContactError(error?.message || 'Não foi possível concluir o contato.');
+    } finally {
+      setRefundContactAction(null);
+    }
+  };
 
   // Estados do Formulário de Login (Administrativo)
   const [email, setEmail] = useState('');
@@ -2878,6 +2926,7 @@ export default function AdminPanel() {
             .map((transaction: any) => transaction.professional_id)
         )];
         let whatsappByProfessionalId = new Map<string, string | null>();
+        let refundContactStatusByTransactionId = new Map<string, { whatsappSentAt: string | null; emailSentAt: string | null }>();
 
         if (refundProfessionalIds.length > 0) {
           const { data: preferences, error: preferencesError } = await supabase
@@ -2894,8 +2943,34 @@ export default function AdminPanel() {
           }
         }
 
+        const refundTransactionIds = (data || [])
+          .filter((transaction: any) => transaction.refund_reason && transaction.id)
+          .map((transaction: any) => transaction.id);
+        if (refundTransactionIds.length > 0) {
+          try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (token) {
+              const statusResponse = await fetch(
+                `/api/admin/refund-contact-status?transactionIds=${encodeURIComponent(refundTransactionIds.join(','))}`,
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              const statusPayload = await statusResponse.json().catch(() => ({}));
+              if (statusResponse.ok) {
+                refundContactStatusByTransactionId = new Map(
+                  Object.entries(statusPayload.statuses || {}) as [string, { whatsappSentAt: string | null; emailSentAt: string | null }][]
+                );
+              }
+            }
+          } catch (statusError) {
+            console.warn('Não foi possível carregar as marcações de contato dos reembolsos:', statusError);
+          }
+        }
+
         setAdminTransactions((data || []).map((transaction: any) => ({
           ...transaction,
+          refund_contact_whatsapp_sent_at: refundContactStatusByTransactionId.get(transaction.id)?.whatsappSentAt || null,
+          refund_contact_email_sent_at: refundContactStatusByTransactionId.get(transaction.id)?.emailSentAt || null,
           professionals: transaction.professionals
             ? {
               ...transaction.professionals,
@@ -5852,7 +5927,11 @@ export default function AdminPanel() {
 
                                 {tx.refund_reason && (
                                   <button
-                                    onClick={() => setSelectedTxForReason(tx)}
+                                    onClick={() => {
+                                      setRefundContactError('');
+                                      setRefundContactAction(null);
+                                      setSelectedTxForReason(tx);
+                                    }}
                                     className="inline-flex items-center px-2.5 py-1.5 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg border border-amber-200 transition-colors font-semibold text-[10px] cursor-pointer"
                                   >
                                     Ver Motivo
@@ -8927,10 +9006,17 @@ export default function AdminPanel() {
                       href={selectedRefundWhatsAppUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-center text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                      onClick={(event) => {
+                        if (selectedRefundWhatsAppSentAt || refundContactAction) {
+                          if (refundContactAction) event.preventDefault();
+                          return;
+                        }
+                        void handleRefundContact('whatsapp');
+                      }}
+                      className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-center text-xs font-bold text-white shadow-sm transition-colors ${selectedRefundWhatsAppSentAt ? 'bg-emerald-700/80 hover:bg-emerald-700' : 'bg-emerald-600 hover:bg-emerald-700'}`}
                     >
-                      <MessageCircle className="h-4 w-4" />
-                      Conversar pelo WhatsApp
+                      {refundContactAction === 'whatsapp' ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                      {selectedRefundWhatsAppSentAt ? 'Abrir WhatsApp novamente' : 'Conversar pelo WhatsApp'}
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   ) : (
@@ -8938,10 +9024,49 @@ export default function AdminPanel() {
                       Este profissional não possui um número de WhatsApp cadastrado.
                     </div>
                   )}
+                  {selectedRefundWhatsAppSentAt && (
+                    <p className="mt-2 text-[10px] font-semibold text-emerald-800">
+                      WhatsApp marcado como enviado em {formatRefundContactDate(selectedRefundWhatsAppSentAt)}.
+                    </p>
+                  )}
                   <p className="mt-2 text-[10px] leading-relaxed text-emerald-900/60">
-                    A ação apenas abre a conversa com o texto preenchido; o envio continua dependendo da confirmação manual no WhatsApp.
+                    A marcação acontece ao abrir a conversa preenchida; o WhatsApp Desktop não retorna confirmação de entrega ao aplicativo.
                   </p>
                 </div>
+
+                <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="rounded-xl bg-sky-600 p-2 text-white shadow-sm">
+                      <Mail className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-sky-950">Enviar por e-mail</p>
+                      <p className="mt-1 text-xs leading-relaxed text-sky-900/75">
+                        Envie a mesma mensagem para {selectedTxForReason.professionals?.google_email || 'o e-mail cadastrado'}.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleRefundContact('email')}
+                    disabled={Boolean(selectedRefundEmailSentAt || refundContactAction || !selectedTxForReason.professionals?.google_email)}
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-4 py-2.5 text-center text-xs font-bold text-white shadow-sm transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {refundContactAction === 'email' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                    {selectedRefundEmailSentAt ? 'E-mail já enviado' : 'Enviar e-mail'}
+                  </button>
+                  {selectedRefundEmailSentAt && (
+                    <p className="mt-2 text-[10px] font-semibold text-sky-800">
+                      E-mail marcado como enviado em {formatRefundContactDate(selectedRefundEmailSentAt)}.
+                    </p>
+                  )}
+                </div>
+
+                {refundContactError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-xs font-medium leading-relaxed text-red-800">
+                    {refundContactError}
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 border-t border-brand-border/60">
