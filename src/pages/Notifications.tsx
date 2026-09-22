@@ -680,13 +680,30 @@ export default function Notifications() {
                       <div className="min-w-0 flex-1 space-y-3">
                         {item.image_url && (
                           <div className="w-full overflow-hidden rounded-xl border border-brand-border/40 shadow-sm bg-brand-bg/20">
-                            <img
-                              src={item.image_url}
-                              alt="Capa da notificação"
-                              referrerPolicy="no-referrer"
-                              loading="eager"
-                              className="block w-full h-auto object-contain"
-                            />
+                            {item.link ? (
+                              <a
+                                href={item.link}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Abrir detalhes: ${item.title}`}
+                                className="block cursor-pointer"
+                              >
+                                <img
+                                  src={item.image_url}
+                                  alt="Capa da notificação"
+                                  referrerPolicy="no-referrer"
+                                  loading="eager"
+                                  className="block w-full h-auto object-contain"
+                                />
+                              </a>
+                            ) : (
+                              <img
+                                src={item.image_url}
+                                alt="Capa da notificação"
+                                referrerPolicy="no-referrer"
+                                loading="eager"
+                                className="block w-full h-auto object-contain"
+                              />
+                            )}
                           </div>
                         )}
 
