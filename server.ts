@@ -1708,6 +1708,56 @@ async function revokeGoogleGrant(googleAccessToken?: string | null) {
   }
 }
 
+async function listStorageFilesRecursively(bucket: string, prefix: string): Promise<string[]> {
+  const pendingPrefixes = [prefix.replace(/\/+$/, "")];
+  const filePaths: string[] = [];
+
+  while (pendingPrefixes.length > 0) {
+    const currentPrefix = pendingPrefixes.shift() || "";
+    let offset = 0;
+
+    while (true) {
+      const { data, error } = await supabaseAdmin.storage.from(bucket).list(currentPrefix, {
+        limit: 1000,
+        offset,
+      });
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+
+      for (const entry of data) {
+        const path = currentPrefix ? `${currentPrefix}/${entry.name}` : entry.name;
+        const isFolder = !entry.id && !entry.metadata;
+        if (isFolder) {
+          pendingPrefixes.push(path);
+        } else {
+          filePaths.push(path);
+        }
+      }
+
+      if (data.length < 1000) break;
+      offset += data.length;
+    }
+  }
+
+  return filePaths;
+}
+
+async function removeProfessionalSessionSignatureFiles(targetUserId: string) {
+  try {
+    const paths = await listStorageFilesRecursively("session-signatures", targetUserId);
+    for (let index = 0; index < paths.length; index += 100) {
+      const { error } = await supabaseAdmin.storage
+        .from("session-signatures")
+        .remove(paths.slice(index, index + 100));
+      if (error) {
+        console.warn(`[DeleteUser] Falha ao remover assinaturas de sessões: ${error.message}`);
+      }
+    }
+  } catch (storageError) {
+    console.warn("[DeleteUser] Falha inesperada ao limpar assinaturas de sessões:", storageError);
+  }
+}
+
 async function deleteProfessionalAccount(targetUserId: string) {
   if (!targetUserId) {
     throw new Error("ID do usuário ausente");
@@ -1773,6 +1823,8 @@ async function deleteProfessionalAccount(targetUserId: string) {
   } catch (storageError) {
     console.warn("[DeleteUser] Falha inesperada ao limpar fotos de pacientes:", storageError);
   }
+
+  await removeProfessionalSessionSignatureFiles(targetUserId);
 
   // 2. Executa a limpeza pública no Banco de Dados
   // Primeiro tentamos chamar a RPC 'force_delete_professional' que deleta pulando triggers (permitindo excluir evoluções assinadas)
