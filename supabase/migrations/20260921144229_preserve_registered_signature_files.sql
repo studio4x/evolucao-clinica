@@ -1,0 +1,13 @@
+-- Historical production migration alias.
+--
+-- Production executed this migration under version:
+-- 20260921144229
+--
+-- The equivalent canonical migration in this repository is:
+-- 20260918193700_preserve_registered_signature_files.sql
+--
+-- The SQL effects are already represented by the canonical migration.
+-- This file intentionally performs no SQL so fresh databases do not
+-- execute the same migration twice.
+--
+-- DO NOT add executable SQL to this historical alias.

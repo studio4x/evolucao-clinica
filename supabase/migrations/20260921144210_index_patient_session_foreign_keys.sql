@@ -1,0 +1,13 @@
+-- Historical production migration alias.
+--
+-- Production executed this migration under version:
+-- 20260921144210
+--
+-- The equivalent canonical migration in this repository is:
+-- 20260918193200_index_patient_session_foreign_keys.sql
+--
+-- The SQL effects are already represented by the canonical migration.
+-- This file intentionally performs no SQL so fresh databases do not
+-- execute the same migration twice.
+--
+-- DO NOT add executable SQL to this historical alias.
