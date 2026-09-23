@@ -27,5 +27,9 @@ assert.match(
 assert.doesNotMatch(source, /role="radiogroup" aria-label="Tipo de evolução"/);
 assert.match(source, /const evolutionSelectClass = embedded/);
 assert.match(source, /h-11 min-h-11 w-full px-3\.5 py-2\.5 text-sm leading-normal/);
+assert.match(source, /connected_missing_permissions/, 'Google permission state is distinguished from a missing session');
+assert.match(source, /Google conectado, mas faltam permissões/, 'missing Google permissions show a clear user-facing message');
+assert.match(source, /Reconectar Google/, 'the user can reconnect Google after incomplete consent');
+assert.match(source, /Como funciona/, 'the Google flow exposes an instructional modal entry point');
 
 console.log('New evolution layout tests passed.');

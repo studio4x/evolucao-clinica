@@ -297,6 +297,12 @@ export default function NewEvolution({
     return () => { cancelled = true; };
   }, [isAuthReady, user?.id]);
   const hasClinicalAccess = hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const googleClinicalAccessState = hasClinicalAccess
+    ? 'ready'
+    : hasGoogleSession
+      ? 'connected_missing_permissions'
+      : 'not_connected';
+  const hasMissingGooglePermissions = googleClinicalAccessState === 'connected_missing_permissions';
 
   useEffect(() => {
     if (!isAuthReady || !user?.id || googleAccessToken) return;
@@ -1326,9 +1332,12 @@ export default function NewEvolution({
     }
 
     if (!hasClinicalAccess) {
-      await showAlert(hasGoogleSession
-        ? "Sua autorização do Google precisa ser renovada antes de continuar."
-        : "Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.", {
+      if (hasMissingGooglePermissions) {
+        setIsGoogleAccessNoticeOpen(true);
+        return;
+      }
+
+      await showAlert("Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.", {
         title: "Autenticação Necessária",
         variant: "warning",
         icon: "warning"
@@ -1989,30 +1998,45 @@ export default function NewEvolution({
         <div className="border-t border-brand-border pt-6">
           {!hasClinicalAccess ? (
             <div className="flex flex-col items-center justify-center p-6 bg-yellow-50 rounded-xl border border-yellow-100 space-y-3">
-          <AlertCircle className="w-8 h-8 text-yellow-600" />
-          <p className="text-yellow-900 font-medium text-center">
-            {hasGoogleSession
-              ? 'Sua autorização do Google precisa ser renovada para continuar.'
-              : 'Você ainda não autenticou o Google neste fluxo.'}
-          </p>
-          <button
-            onClick={() => {
-              if (!hasGoogleSession && isOnboardingMode) {
-                navigate(`/painel/patients/${id}/edit?onboarding=1`, { replace: true });
-                return;
-              }
-              handleReauthenticate();
-            }}
-            disabled={isReauthenticating}
-            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
-          >
-                {isReauthenticating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
+              <AlertCircle className="w-8 h-8 text-yellow-600" />
+              <div className="space-y-1 text-center">
+                <p className="text-yellow-900 font-medium">
+                  {hasMissingGooglePermissions
+                    ? 'Google conectado, mas faltam permissões para usar o prontuário.'
+                    : 'Você ainda não autenticou o Google neste fluxo.'}
+                </p>
+                <p className="text-sm text-yellow-800/90">
+                  {hasMissingGooglePermissions
+                    ? 'Reconecte sua conta e aceite as permissões do Google Drive solicitadas para continuar.'
+                    : 'Conecte sua conta Google para continuar com a evolução.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!hasGoogleSession && isOnboardingMode) {
+                      navigate(`/painel/patients/${id}/edit?onboarding=1`, { replace: true });
+                      return;
+                    }
+                    void handleReauthenticate();
+                  }}
+                  disabled={isReauthenticating}
+                  className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                >
+                  {isReauthenticating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  <span>{hasMissingGooglePermissions ? 'Reconectar Google' : (isOnboardingMode ? 'Voltar ao cadastro do paciente' : 'Conectar com Google')}</span>
+                </button>
+                {!isOnboardingMode && (
+                  <button
+                    type="button"
+                    onClick={() => setIsGoogleAccessNoticeOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-yellow-300 bg-white px-4 py-2 text-sm font-medium text-yellow-900 transition-colors hover:bg-yellow-100"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Como funciona
+                  </button>
                 )}
-                <span>{hasGoogleSession ? 'Renovar Autenticação' : (isOnboardingMode ? 'Voltar ao cadastro do paciente' : 'Conectar com Google')}</span>
-              </button>
+              </div>
             </div>
           ) : status === 'idle' && (
             <button
@@ -2192,7 +2216,7 @@ export default function NewEvolution({
                       onClick={handleReauthenticate}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
                     >
-                      Renovar Autenticação
+                      Reconectar Google
                     </button>
                   )}
                   {hasClinicalAccess && (
@@ -2296,7 +2320,7 @@ export default function NewEvolution({
           setIsGoogleAccessNoticeOpen(false);
           void handleReauthenticate();
         }}
-        confirmLabel={hasGoogleSession ? 'Renovar autenticação' : 'Conectar com Google'}
+        confirmLabel={hasMissingGooglePermissions ? 'Reconectar Google' : 'Conectar com Google'}
         mode="clinical"
         showCloseButton
       />
