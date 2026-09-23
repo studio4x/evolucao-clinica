@@ -21,6 +21,7 @@ import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js
 import { AUDIO_LIMITS, getAudioLimitPolicy } from "./src/utils/audioLimits.js";
 import { transcribeGeminiAudio } from "./server/audioTranscriptionTransport.js";
 import { registerAudioAssetRoutes } from "./server/audioAssetRoutes.js";
+import { registerAudioAssetProcessingRoutes } from "./server/audioAssetProcessingRoutes.js";
 import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
@@ -1884,6 +1885,42 @@ registerAudioAssetRoutes(app, {
   createUserScopedClient,
   requireAuth,
   resolveAudioPolicy: resolveServerAudioPolicy,
+});
+
+registerAudioAssetProcessingRoutes(app, {
+  supabaseAdmin,
+  supabaseUrl,
+  supabaseAnonKey: serverEnvironment.supabaseAnonKey,
+  createUserScopedClient,
+  requireAuth,
+  resolveAudioPolicy: resolveServerAudioPolicy,
+  consumeRateLimit: consumeTranscriptionRateLimit,
+  getCurrentUsageMonth,
+  getMonthlyUsageSeconds: (professionalId, usageMonth) => getMonthlyTranscriptionUsageSeconds(professionalId, usageMonth),
+  incrementMonthlyUsageSeconds: (professionalId, usageMonth, deltaSeconds) => incrementMonthlyTranscriptionUsageSeconds(professionalId, usageMonth, deltaSeconds),
+  monthlyLimitSeconds: TRANSCRIPTION_MONTHLY_LIMIT_SECONDS,
+  getGeminiSettings,
+  resolveTranscriptionModel,
+  isQuotaRelatedError,
+  recordUsage: async ({ professionalId, model, durationSeconds, usageMetadata }) => {
+    if (!usageMetadata) return;
+    const promptTokens = usageMetadata.promptTokenCount || 0;
+    const candidatesTokens = usageMetadata.candidatesTokenCount || 0;
+    const totalTokens = usageMetadata.totalTokenCount || 0;
+    const costUsd = estimateGeminiTranscriptionCostUsd({ model, promptTokens, candidatesTokens });
+    const { error } = await supabaseAdmin.from("usage_logs").insert({
+      professional_id: professionalId,
+      model,
+      prompt_tokens: promptTokens,
+      candidates_tokens: candidatesTokens,
+      total_tokens: totalTokens,
+      cost_usd: costUsd,
+      audio_duration_seconds: durationSeconds,
+      created_at: new Date().toISOString(),
+    });
+    if (error) throw error;
+    console.log("[AI-Backend] Log de consumo do asset gravado com sucesso.");
+  },
 });
 
 // API Routes

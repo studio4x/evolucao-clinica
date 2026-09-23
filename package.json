@@ -54,6 +54,8 @@
     "test:audio-assets-phase-ab": "tsx tests/audio-assets-phase-ab.test.ts",
     "test:audio-assets-phase-b1": "tsx tests/audio-assets-phase-b1.test.ts",
     "test:audio-assets-phase-c": "tsx tests/audio-assets-phase-c.test.ts",
+    "test:audio-assets-phase-d": "tsx tests/audio-assets-phase-d.test.ts",
+    "smoke:audio-assets-phase-d:staging": "tsx scripts/audio-assets-phase-d-staging-smoke.ts --confirm-staging-only",
     "smoke:audio-assets-phase-c:staging": "tsx scripts/audio-assets-phase-c-staging-smoke.ts --confirm-staging-only",
     "test:new-evolution-layout": "tsx tests/new-evolution-layout.test.ts",
     "test:pdf-download": "tsx tests/pdf-download-compatibility.test.ts",
