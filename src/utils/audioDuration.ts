@@ -209,7 +209,37 @@ const readUint64BE = (bytes: Uint8Array, offset: number): number => {
   return value;
 };
 
-const readWebmVint = (bytes: Uint8Array, offset: number, preserveMarker: boolean) => {
+type WebmVint = {
+  length: number;
+  value: number;
+  unknown: boolean;
+};
+
+type WebmElement = {
+  id: number;
+  dataOffset: number;
+  endOffset: number;
+  sizeUnknown: boolean;
+};
+
+type WebmTimestampRange = {
+  count: number;
+  maximumSeconds: number;
+  previousSeconds: number;
+};
+
+const WEBM_SEGMENT_ID = 0x18538067;
+const WEBM_INFO_ID = 0x1549a966;
+const WEBM_TIME_SCALE_ID = 0x2ad7b1;
+const WEBM_DURATION_ID = 0x4489;
+const WEBM_CLUSTER_ID = 0x1f43b675;
+const WEBM_CLUSTER_TIMECODE_ID = 0xe7;
+const WEBM_SIMPLE_BLOCK_ID = 0xa3;
+const WEBM_BLOCK_GROUP_ID = 0xa0;
+const WEBM_BLOCK_ID = 0xa1;
+const WEBM_DEFAULT_TIMECODE_SCALE_NS = 1_000_000;
+
+const readWebmVint = (bytes: Uint8Array, offset: number, preserveMarker: boolean): WebmVint | null => {
   if (offset >= bytes.length) return null;
   const first = bytes[offset];
   let mask = 0x80;
@@ -220,53 +250,252 @@ const readWebmVint = (bytes: Uint8Array, offset: number, preserveMarker: boolean
   }
   if (length > 8 || offset + length > bytes.length) return null;
 
-  let value = preserveMarker ? first : first & (mask - 1);
-  for (let index = 1; index < length; index += 1) value = value * 256 + bytes[offset + index];
-  const maxValue = 2 ** (7 * length) - 1;
-  return { value, length, unknown: !preserveMarker && value === maxValue };
+  const firstValue = preserveMarker ? first : first & (mask - 1);
+  let value = BigInt(firstValue);
+  let unknown = !preserveMarker && firstValue === mask - 1;
+
+  for (let index = 1; index < length; index += 1) {
+    const byte = bytes[offset + index];
+    value = (value << 8n) | BigInt(byte);
+    unknown = unknown && byte === 0xff;
+  }
+
+  // MediaRecorder usa frequentemente o marcador de tamanho desconhecido em
+  // VINT de 8 bytes. Ele não é um tamanho numérico e deve ser aceito antes
+  // da validação de Number.MAX_SAFE_INTEGER.
+  if (unknown) return { length, value: 0, unknown: true };
+  if (value > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return { length, value: Number(value), unknown: false };
+};
+
+const readWebmElement = (bytes: Uint8Array, offset: number): WebmElement | null => {
+  const id = readWebmVint(bytes, offset, true);
+  if (!id) return null;
+
+  const size = readWebmVint(bytes, offset + id.length, false);
+  if (!size) return null;
+
+  const dataOffset = offset + id.length + size.length;
+  if (dataOffset > bytes.length) return null;
+
+  const endOffset = size.unknown ? bytes.length : dataOffset + size.value;
+  if (endOffset > bytes.length) return null;
+
+  return { id: id.value, dataOffset, endOffset, sizeUnknown: size.unknown };
+};
+
+const readWebmUnsignedInteger = (bytes: Uint8Array, start: number, end: number): number | null => {
+  const length = end - start;
+  if (length <= 0 || length > 8 || end > bytes.length) return null;
+
+  let value = 0n;
+  for (let offset = start; offset < end; offset += 1) {
+    value = (value << 8n) | BigInt(bytes[offset]);
+  }
+
+  return value <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(value) : null;
+};
+
+const recordWebmTimestamp = (range: WebmTimestampRange, seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return;
+  range.count += 1;
+
+  if (seconds > range.maximumSeconds) {
+    range.previousSeconds = range.maximumSeconds;
+    range.maximumSeconds = seconds;
+  } else if (seconds < range.maximumSeconds && seconds > range.previousSeconds) {
+    range.previousSeconds = seconds;
+  }
+};
+
+const readWebmBlockTimestampSeconds = (
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  clusterTimecode: number,
+  timecodeScaleNs: number,
+): number | null => {
+  const trackNumber = readWebmVint(bytes, start, false);
+  if (!trackNumber) return null;
+
+  const timecodeOffset = start + trackNumber.length;
+  if (timecodeOffset + 3 > end) return null;
+
+  const relativeTimecode = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getInt16(timecodeOffset, false);
+  const timestampUnits = clusterTimecode + relativeTimecode;
+  return timestampUnits >= 0 ? timestampUnits * timecodeScaleNs / 1_000_000_000 : null;
+};
+
+const parseWebmBlockGroup = (
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  clusterTimecode: number,
+  timecodeScaleNs: number,
+  timestamps: WebmTimestampRange,
+) => {
+  let offset = start;
+  while (offset < end) {
+    const element = readWebmElement(bytes, offset);
+    if (!element || element.endOffset > end) return;
+
+    if (element.id === WEBM_BLOCK_ID) {
+      const seconds = readWebmBlockTimestampSeconds(
+        bytes,
+        element.dataOffset,
+        element.endOffset,
+        clusterTimecode,
+        timecodeScaleNs,
+      );
+      if (seconds !== null) recordWebmTimestamp(timestamps, seconds);
+    }
+
+    if (element.sizeUnknown || element.endOffset <= offset) return;
+    offset = element.endOffset;
+  }
+};
+
+const parseWebmCluster = (
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  timecodeScaleNs: number,
+  timestamps: WebmTimestampRange,
+) => {
+  let offset = start;
+  let clusterTimecode = 0;
+
+  while (offset < end) {
+    const element = readWebmElement(bytes, offset);
+    if (!element || element.endOffset > end) return;
+
+    if (element.id === WEBM_CLUSTER_ID) {
+      parseWebmCluster(bytes, element.dataOffset, element.endOffset, timecodeScaleNs, timestamps);
+      return;
+    }
+
+    if (element.id === WEBM_CLUSTER_TIMECODE_ID) {
+      clusterTimecode = readWebmUnsignedInteger(bytes, element.dataOffset, element.endOffset) ?? clusterTimecode;
+    } else if (element.id === WEBM_SIMPLE_BLOCK_ID || element.id === WEBM_BLOCK_ID) {
+      const seconds = readWebmBlockTimestampSeconds(
+        bytes,
+        element.dataOffset,
+        element.endOffset,
+        clusterTimecode,
+        timecodeScaleNs,
+      );
+      if (seconds !== null) recordWebmTimestamp(timestamps, seconds);
+    } else if (element.id === WEBM_BLOCK_GROUP_ID) {
+      parseWebmBlockGroup(
+        bytes,
+        element.dataOffset,
+        element.endOffset,
+        clusterTimecode,
+        timecodeScaleNs,
+        timestamps,
+      );
+    }
+
+    if (element.sizeUnknown || element.endOffset <= offset) return;
+    offset = element.endOffset;
+  }
+};
+
+const findWebmSegment = (bytes: Uint8Array): WebmElement | null => {
+  let offset = 0;
+  let hasEbmlHeader = false;
+
+  while (offset < bytes.length) {
+    const element = readWebmElement(bytes, offset);
+    if (!element) return null;
+
+    if (element.id === 0x1a45dfa3) hasEbmlHeader = true;
+    if (hasEbmlHeader && element.id === WEBM_SEGMENT_ID) return element;
+
+    if (element.sizeUnknown || element.endOffset <= offset) return null;
+    offset = element.endOffset;
+  }
+
+  return null;
+};
+
+const readWebmInfo = (bytes: Uint8Array, segment: WebmElement) => {
+  let timecodeScaleNs = WEBM_DEFAULT_TIMECODE_SCALE_NS;
+  let declaredDuration = 0;
+  let offset = segment.dataOffset;
+
+  while (offset < segment.endOffset) {
+    const element = readWebmElement(bytes, offset);
+    if (!element || element.endOffset > segment.endOffset) break;
+
+    if (element.id === WEBM_INFO_ID) {
+      let infoOffset = element.dataOffset;
+      while (infoOffset < element.endOffset) {
+        const infoElement = readWebmElement(bytes, infoOffset);
+        if (!infoElement || infoElement.endOffset > element.endOffset) break;
+
+        if (infoElement.id === WEBM_TIME_SCALE_ID) {
+          const scale = readWebmUnsignedInteger(bytes, infoElement.dataOffset, infoElement.endOffset);
+          if (scale && Number.isFinite(scale)) timecodeScaleNs = scale;
+        } else if (infoElement.id === WEBM_DURATION_ID) {
+          const length = infoElement.endOffset - infoElement.dataOffset;
+          if (length === 4 || length === 8) {
+            const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            declaredDuration = length === 4
+              ? view.getFloat32(infoElement.dataOffset, false)
+              : view.getFloat64(infoElement.dataOffset, false);
+          }
+        }
+
+        if (infoElement.sizeUnknown || infoElement.endOffset <= infoOffset) break;
+        infoOffset = infoElement.endOffset;
+      }
+    }
+
+    if (element.id === WEBM_CLUSTER_ID || element.sizeUnknown || element.endOffset <= offset) break;
+    offset = element.endOffset;
+  }
+
+  return { timecodeScaleNs, declaredDuration };
 };
 
 const readWebmDuration = (bytes: Uint8Array): number => {
-  const SEGMENT_ID = 0x18538067;
-  const INFO_ID = 0x1549a966;
-  const TIME_SCALE_ID = 0x2ad7b1;
-  const DURATION_ID = 0x4489;
-  let timecodeScale = 1000000;
-  let durationValue = 0;
+  const segment = findWebmSegment(bytes);
+  if (!segment) return 0;
 
-  const parseRange = (start: number, end: number, depth: number) => {
-    if (depth > 6) return;
-    let offset = start;
+  const { timecodeScaleNs, declaredDuration } = readWebmInfo(bytes, segment);
+  if (Number.isFinite(declaredDuration) && declaredDuration > 0) {
+    return declaredDuration * timecodeScaleNs / 1_000_000_000;
+  }
 
-    while (offset + 2 <= end) {
-      const id = readWebmVint(bytes, offset, true);
-      if (!id || offset + id.length >= end) return;
-      const size = readWebmVint(bytes, offset + id.length, false);
-      if (!size) return;
-      const contentStart = offset + id.length + size.length;
-      const contentEnd = size.unknown ? end : Math.min(end, contentStart + size.value);
-      if (contentEnd < contentStart) return;
-
-      if (id.value === TIME_SCALE_ID && contentEnd > contentStart) {
-        let value = 0;
-        for (let index = contentStart; index < contentEnd; index += 1) value = value * 256 + bytes[index];
-        if (value > 0) timecodeScale = value;
-      } else if (id.value === DURATION_ID && (contentEnd - contentStart === 4 || contentEnd - contentStart === 8)) {
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-        durationValue = contentEnd - contentStart === 4
-          ? view.getFloat32(contentStart, false)
-          : view.getFloat64(contentStart, false);
-      } else if (id.value === SEGMENT_ID || id.value === INFO_ID) {
-        parseRange(contentStart, contentEnd, depth + 1);
-      }
-
-      if (contentEnd <= offset) return;
-      offset = contentEnd;
-    }
+  // Gravações interrompidas podem não ter Info/Duration. O player ainda
+  // consegue reproduzi-las; nesses casos calculamos a duração pelos blocos.
+  const timestamps: WebmTimestampRange = {
+    count: 0,
+    maximumSeconds: -1,
+    previousSeconds: -1,
   };
+  let offset = segment.dataOffset;
 
-  parseRange(0, bytes.length, 0);
-  return durationValue > 0 && timecodeScale > 0 ? durationValue * timecodeScale / 1e9 : 0;
+  while (offset < segment.endOffset) {
+    const element = readWebmElement(bytes, offset);
+    if (!element || element.endOffset > segment.endOffset) break;
+
+    if (element.id === WEBM_CLUSTER_ID) {
+      parseWebmCluster(bytes, element.dataOffset, element.endOffset, timecodeScaleNs, timestamps);
+      if (element.sizeUnknown) break;
+    }
+
+    if (element.sizeUnknown || element.endOffset <= offset) break;
+    offset = element.endOffset;
+  }
+
+  if (timestamps.count === 0 || timestamps.maximumSeconds < 0) return 0;
+  const observedFrameSeconds = timestamps.previousSeconds >= 0
+    ? timestamps.maximumSeconds - timestamps.previousSeconds
+    : 0.02;
+  const finalFrameSeconds = Math.min(1, Math.max(0.001, observedFrameSeconds || 0.02));
+  return timestamps.maximumSeconds + finalFrameSeconds;
 };
 
 const getDurationFromBytes = (bytes: Uint8Array): number => {

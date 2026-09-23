@@ -142,15 +142,12 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
     ? audioDuration
     : await getAudioDurationFromBlob(audioBlob);
 
-  if (!detectedAudioDuration || !Number.isFinite(detectedAudioDuration)) {
-    throw new Error("Não foi possível identificar a duração do áudio. Reproduza o arquivo ou selecione-o novamente antes de processar.");
-  }
-
-  if (detectedAudioDuration > audioPolicy.maxDurationSeconds) {
+  // A leitura local melhora o feedback e antecipa o limite, mas não deve
+  // bloquear arquivos reproduzíveis cujo contêiner não expõe Duration. O
+  // backend baixa os bytes e valida a duração autoritativa antes do Gemini.
+  if (Number.isFinite(detectedAudioDuration) && detectedAudioDuration > audioPolicy.maxDurationSeconds) {
     throw new Error(`O áudio excede o limite máximo de ${audioPolicy.maxDurationSeconds / 60} minutos por evolução.`);
   }
-
-  const audioDurationSeconds = Math.max(1, Math.ceil(detectedAudioDuration));
 
   const attemptTranscription = async (): Promise<string> => {
     let requestStage: 'upload' | 'transcription' = 'upload';
@@ -196,7 +193,6 @@ export const transcribeAudio = async (options: TranscriptionOptions): Promise<st
           audioPath,
           mimeType: normalizedMimeType,
           prompt,
-          audioDuration: audioDurationSeconds,
           evolutionId,
           audioKey
         })
