@@ -51,6 +51,7 @@
     "test:required-whatsapp-profile": "tsx tests/required-whatsapp-profile.test.ts",
     "test:audio-webview": "tsx tests/audio-webview-compatibility.test.ts",
     "test:audio-limits": "tsx tests/audio-limits.test.ts && tsx tests/audio-budget-migration.test.ts",
+    "test:audio-assets-phase-ab": "tsx tests/audio-assets-phase-ab.test.ts",
     "test:new-evolution-layout": "tsx tests/new-evolution-layout.test.ts",
     "test:pdf-download": "tsx tests/pdf-download-compatibility.test.ts",
     "test:google-auth": "tsx tests/google-auth-recovery.test.ts",

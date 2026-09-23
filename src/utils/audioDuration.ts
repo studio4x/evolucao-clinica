@@ -112,6 +112,44 @@ const readMp3Duration = (bytes: Uint8Array): number => {
   return frameCount > 0 && sampleRate > 0 ? totalSamples / sampleRate : 0;
 };
 
+const isAacFrame = (bytes: Uint8Array): boolean => {
+  return bytes.length >= 7
+    && bytes[0] === 0xff
+    && (bytes[1] & 0xf6) === 0xf0;
+};
+
+const readAacDuration = (bytes: Uint8Array): number => {
+  const sampleRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
+  let offset = 0;
+  let totalSamples = 0;
+  let sampleRate = 0;
+  let frameCount = 0;
+
+  while (offset + 7 <= bytes.length && frameCount < 100000) {
+    if (!isAacFrame(bytes.subarray(offset))) {
+      offset += 1;
+      continue;
+    }
+
+    const sampleRateIndex = (bytes[offset + 2] >> 2) & 0x0f;
+    const currentSampleRate = sampleRates[sampleRateIndex];
+    const frameLength = ((bytes[offset + 3] & 0x03) << 11)
+      | (bytes[offset + 4] << 3)
+      | ((bytes[offset + 5] >> 5) & 0x07);
+    const headerLength = (bytes[offset + 1] & 0x01) === 0 ? 9 : 7;
+    const rawDataBlocks = bytes[offset + 6] & 0x03;
+
+    if (!currentSampleRate || frameLength < headerLength || offset + frameLength > bytes.length) break;
+
+    sampleRate = currentSampleRate;
+    totalSamples += 1024 * (rawDataBlocks + 1);
+    frameCount += 1;
+    offset += frameLength;
+  }
+
+  return frameCount > 0 && sampleRate > 0 ? totalSamples / sampleRate : 0;
+};
+
 const readOggDuration = (bytes: Uint8Array): number => {
   let offset = 0;
   let lastGranule = 0;
@@ -269,11 +307,12 @@ const readWebmDuration = (bytes: Uint8Array): number => {
   return durationValue > 0 && timecodeScale > 0 ? durationValue * timecodeScale / 1e9 : 0;
 };
 
-const getDurationFromBytes = (bytes: Uint8Array): number => {
+export const getAudioDurationFromBytes = (bytes: Uint8Array): number => {
   if (bytes.length >= 12 && readAscii(bytes, 0, 4) === 'RIFF') return readWavDuration(bytes);
   if (bytes.length >= 4 && readAscii(bytes, 0, 4) === 'OggS') return readOggDuration(bytes);
   if (bytes.length >= 12 && readAscii(bytes, 4, 4) === 'ftyp') return readMp4Duration(bytes);
   if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return readWebmDuration(bytes);
+  if (isAacFrame(bytes)) return readAacDuration(bytes);
   return readMp3Duration(bytes);
 };
 
@@ -340,7 +379,7 @@ export const getAudioDurationFromUrl = (url: string): Promise<number> => {
 
 export const getAudioDurationFromBlob = async (blob: Blob): Promise<number> => {
   const bytes = new Uint8Array(await blob.arrayBuffer());
-  const binaryDuration = getDurationFromBytes(bytes);
+  const binaryDuration = getAudioDurationFromBytes(bytes);
   if (binaryDuration > 0) return binaryDuration;
 
   const objectUrl = URL.createObjectURL(blob);

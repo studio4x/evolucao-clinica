@@ -20,6 +20,7 @@ import { getBrandAssetSignature } from "./src/utils/brandAssets.js";
 import { estimateGeminiTranscriptionCostUsd } from "./src/utils/geminiPricing.js";
 import { AUDIO_LIMITS, getAudioLimitPolicy } from "./src/utils/audioLimits.js";
 import { transcribeGeminiAudio } from "./server/audioTranscriptionTransport.js";
+import { registerAudioAssetRoutes } from "./server/audioAssetRoutes.js";
 import { stripStoredWhatsAppConfiguration } from "./src/utils/notificationSettings.js";
 import { ensureCommunicationToken } from "./server/lifecycle/lifecycleRepository.js";
 import { createLifecycleService } from "./server/lifecycle/lifecycleRoutes.js";
@@ -1875,6 +1876,15 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+registerAudioAssetRoutes(app, {
+  supabaseAdmin,
+  supabaseUrl,
+  supabaseAnonKey: serverEnvironment.supabaseAnonKey,
+  createUserScopedClient,
+  requireAuth,
+  resolveAudioPolicy: resolveServerAudioPolicy,
+});
 
 // API Routes
 app.get("/api/health", (req, res) => {
