@@ -64,48 +64,8 @@ const prepareUpload = async (file: File, evolutionId: string, idempotencyKey: st
   return await response.json() as PreparedResponse;
 };
 
-const uploadWithTus = async (file: File, upload: PreparedUpload, onProgress?: UploadProgress): Promise<void> => {
-  if (!upload.token) throw new Error("O token do upload resumível não foi emitido.");
-
-  await new Promise<void>((resolve, reject) => {
-    const resumable = new Upload(file, {
-      endpoint: upload.tusEndpoint,
-      headers: {
-        "x-signature": upload.token,
-      },
-      metadata: {
-        bucketName: upload.bucket,
-        objectName: upload.path,
-        contentType: upload.mimeType,
-        cacheControl: "31536000",
-      },
-      chunkSize: upload.tusChunkSize || AUDIO_ASSET_TUS_THRESHOLD_BYTES,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      onError: reject,
-      onProgress: (bytesUploaded, bytesTotal) => onProgress?.(bytesUploaded, bytesTotal),
-      onSuccess: () => resolve(),
-    });
-
-    void resumable.findPreviousUploads().then((previousUploads) => {
-      if (previousUploads.length > 0) resumable.resumeFromPreviousUpload(previousUploads[0]);
-      resumable.start();
-    }).catch(reject);
-  });
-};
-
-const uploadDirectly = async (file: File, upload: PreparedUpload, onProgress?: UploadProgress): Promise<void> => {
-  if (upload.alreadyUploaded) {
-    onProgress?.(file.size, file.size);
-    return;
-  }
+const uploadWithSignedUrl = async (file: File, upload: PreparedUpload, onProgress?: UploadProgress): Promise<void> => {
   if (!upload.token) throw new Error("O token do upload direto não foi emitido.");
-
-  if (file.size > AUDIO_ASSET_TUS_THRESHOLD_BYTES) {
-    await uploadWithTus(file, upload, onProgress);
-    return;
-  }
 
   const result = await supabase.storage.from(upload.bucket).uploadToSignedUrl(upload.path, upload.token, file, {
     cacheControl: "31536000",
@@ -113,6 +73,66 @@ const uploadDirectly = async (file: File, upload: PreparedUpload, onProgress?: U
   });
   if (result.error) throw new Error(String(result.error.message || "Falha no upload direto ao Storage.").slice(0, 240));
   onProgress?.(file.size, file.size);
+};
+
+const isTusSignedTokenRejected = (error: unknown): boolean => {
+  const candidate = error as any;
+  const responseBody = candidate?.originalResponse?.getBody?.() || candidate?.originalResponse?.body || "";
+  const message = `${candidate?.message || ""} ${responseBody}`;
+  return /Invalid Compact JWS|new row violates row-level security policy/i.test(message);
+};
+
+const uploadWithTus = async (file: File, upload: PreparedUpload, onProgress?: UploadProgress): Promise<"tus" | "standard"> => {
+  if (!upload.token) throw new Error("O token do upload resumível não foi emitido.");
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const resumable = new Upload(file, {
+        endpoint: upload.tusEndpoint,
+        headers: {
+          "x-signature": upload.token,
+        },
+        metadata: {
+          bucketName: upload.bucket,
+          objectName: upload.path,
+          contentType: upload.mimeType,
+          cacheControl: "31536000",
+        },
+        chunkSize: upload.tusChunkSize || AUDIO_ASSET_TUS_THRESHOLD_BYTES,
+        retryDelays: [0, 3000, 5000, 10000, 20000],
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        onError: reject,
+        onProgress: (bytesUploaded, bytesTotal) => onProgress?.(bytesUploaded, bytesTotal),
+        onSuccess: () => resolve(),
+      });
+
+      void resumable.findPreviousUploads().then((previousUploads) => {
+        if (previousUploads.length > 0) resumable.resumeFromPreviousUpload(previousUploads[0]);
+        resumable.start();
+      }).catch(reject);
+    });
+    return "tus";
+  } catch (error) {
+    if (!isTusSignedTokenRejected(error)) throw error;
+    await uploadWithSignedUrl(file, upload, onProgress);
+    return "standard";
+  }
+};
+
+const uploadDirectly = async (file: File, upload: PreparedUpload, onProgress?: UploadProgress): Promise<"standard" | "tus" | "already-uploaded"> => {
+  if (upload.alreadyUploaded) {
+    onProgress?.(file.size, file.size);
+    return "already-uploaded";
+  }
+  if (!upload.token) throw new Error("O token do upload direto não foi emitido.");
+
+  if (file.size > AUDIO_ASSET_TUS_THRESHOLD_BYTES) {
+    return await uploadWithTus(file, upload, onProgress);
+  }
+
+  await uploadWithSignedUrl(file, upload, onProgress);
+  return "standard";
 };
 
 const finalizeUpload = async (upload: PreparedUpload, token: string): Promise<Record<string, unknown>> => {
@@ -144,10 +164,10 @@ export async function uploadEvolutionAudioAsset(input: {
   }
 
   if (!prepared.upload) throw new Error("O servidor não retornou os dados do upload direto.");
-  await uploadDirectly(input.file, prepared.upload, input.onProgress);
+  const uploadMode = await uploadDirectly(input.file, prepared.upload, input.onProgress);
   const asset = await finalizeUpload(prepared.upload, token);
   return {
     asset,
-    uploadMode: prepared.upload.alreadyUploaded ? "already-uploaded" : input.file.size > AUDIO_ASSET_TUS_THRESHOLD_BYTES ? "tus" : "standard",
+    uploadMode,
   };
 }
