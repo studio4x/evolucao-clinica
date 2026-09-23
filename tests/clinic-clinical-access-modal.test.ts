@@ -43,7 +43,7 @@ assert.match(modal, /disabled=\{busy \|\| safeAvailableSeats < 1\}/);
 assert.match(modal, /onConfirm/);
 assert.doesNotMatch(modal, /showConfirm|setClinicMemberClinicalAccess/);
 
-assert.match(version, /APP_VERSION = "v1\.10\.911"/);
+assert.match(version, /APP_VERSION = "v1\.10\.913"/);
 assert.match(version, /PLAY_STORE_VERSION = "1\.0\.87"/);
 
 console.log("clinic clinical access explanation modal: PASS");

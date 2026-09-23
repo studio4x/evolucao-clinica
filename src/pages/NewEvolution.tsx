@@ -10,7 +10,8 @@ import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { rememberMicrophonePermission } from '../utils/microphonePermission';
 
-import { getTranscriptionUserMessage, resolveAudioMimeType, transcribeAudio } from '../services/aiTranscription';
+import { getTranscriptionUserMessage, resolveAudioMimeType } from '../services/aiTranscription';
+import { AudioAssetClientError, processEvolutionAudioAsset } from '../services/evolutionAudioAssetUpload';
 import { addPendingEvolution, getDraftEvolutions, getPendingEvolutionById, removePendingEvolution, PendingEvolution } from '../services/offlineQueue';
 import { getPendingEvolutionAudioBlobs } from '../services/evolutionAudio';
 import { sendNotification } from '../services/notificationHelper';
@@ -40,6 +41,26 @@ type AudioEvolutionItem = {
 type EvolutionInputMode = 'text' | 'audio' | 'hybrid';
 
 let activeAudioStopper: (() => void) | null = null;
+
+const getAudioAssetUserMessage = (error: unknown): string | null => {
+  if (!(error instanceof AudioAssetClientError)) return null;
+  switch (error.code) {
+    case 'AUDIO_MONTHLY_QUOTA_LIMIT':
+      return 'Limite mensal de transcrição de áudio atingido. Adquira um pacote de horas adicionais.';
+    case 'AUDIO_EVOLUTION_DURATION_LIMIT':
+      return 'O áudio excede o limite máximo permitido para esta evolução.';
+    case 'AUDIO_TRANSCRIPTION_RATE_LIMIT':
+      return 'Você atingiu o limite de 5 transcrições por minuto. Aguarde alguns segundos e tente novamente.';
+    case 'AUDIO_ASSET_PROCESSING_IN_PROGRESS':
+      return 'O áudio ainda está sendo processado. Tente novamente em instantes.';
+    case 'EVOLUTION_SIGNED_IMMUTABLE':
+      return 'Esta evolução está assinada e não pode receber novos áudios.';
+    case 'AUDIO_ASSET_LEGACY_EVOLUTION_UNSUPPORTED':
+      return 'Esta evolução usa o fluxo legado e não pode receber este áudio.';
+    default:
+      return error.message;
+  }
+};
 
 const AudioPlaybackButton = ({ item }: { item: AudioEvolutionItem }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -225,7 +246,6 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
     setGoogleAccessToken, 
     isAuthReady,
     subscriptionStatus,
-    subscriptionPlan,
     subscriptionEndsAt,
     profileRole
   } = useAuthStore();
@@ -255,6 +275,14 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
     return () => { cancelled = true; };
   }, [isAuthReady, user?.id]);
   const hasClinicalAccess = isClinic ? Boolean(workflow?.canWrite) : hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const googleClinicalAccessState = isClinic
+    ? 'not_applicable'
+    : hasClinicalAccess
+      ? 'ready'
+      : hasGoogleSession
+        ? 'connected_missing_permissions'
+        : 'not_connected';
+  const hasMissingGooglePermissions = googleClinicalAccessState === 'connected_missing_permissions';
 
   const isPlanActive = () => {
     if (isClinic) return Boolean(workflow?.canWrite);
@@ -602,6 +630,12 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
       }
 
       const duration = getTotalAudioDuration(items) + (currentRecordingBlob ? recordingTimeRef.current : 0);
+      const audioKeys = items.map(item => item.audioKey);
+      const audioNames = items.map(item => item.name);
+      if (currentRecordingBlob) {
+        audioKeys.push(`${draftId}:recording`);
+        audioNames.push(`Gravação ${audioNames.length + 1}`);
+      }
 
       const draftItem: PendingEvolution = {
         id: draftId,
@@ -615,10 +649,13 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
         sessionTime,
         audioBlob: draftBlobs[0],
         audioBlobs: draftBlobs,
-        writtenText: isClinic ? writtenEvolutionText : undefined,
-        inputMode: isClinic ? inputMode : undefined,
+        writtenText: writtenEvolutionText || undefined,
+        inputMode,
         templateId: selectedTemplateId || undefined,
         mimeType: draftBlobs[0]?.type || 'audio/webm',
+        audioKeys,
+        audioNames,
+        audioPipeline: draftBlobs.length > 0 ? 'asset' : undefined,
         source: 'new',
         createdAt: new Date().toISOString(),
         status: 'draft',
@@ -632,7 +669,7 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
           session_time: sessionTime,
           transcription_status: 'processing',
           google_doc_append_status: isClinic ? 'not_applicable' : 'pending',
-          audio_duration_seconds: duration,
+          audio_duration_seconds: draftBlobs.length > 0 ? 0 : duration,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
@@ -762,9 +799,21 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
     };
   }, []);
 
-  const hydrateAudioItems = async (blobs: Blob[], source: AudioEvolutionItem['source'], stablePrefix: string) => {
+  const hydrateAudioItems = async (
+    blobs: Blob[],
+    source: AudioEvolutionItem['source'],
+    stablePrefix: string,
+    persistedKeys?: string[],
+    persistedNames?: string[],
+  ) => {
     const items = await Promise.all(
-      blobs.map((blob, index) => createAudioItem(blob, source, `Áudio ${index + 1}`, 0, `${stablePrefix}:${index}`))
+      blobs.map((blob, index) => createAudioItem(
+        blob,
+        source,
+        persistedNames?.[index] || `Áudio ${index + 1}`,
+        0,
+        persistedKeys?.[index] || `${stablePrefix}:${index}`,
+      ))
     );
     return items;
   };
@@ -773,9 +822,11 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
     if (!recoveredDraft) return;
     try {
       clearAuthRecoveryFlag();
-      if (isClinic) { setWrittenEvolutionText(recoveredDraft.writtenText || ''); setInputMode(recoveredDraft.inputMode || 'audio'); setSelectedTemplateId(recoveredDraft.templateId || ''); }
+      setWrittenEvolutionText(recoveredDraft.writtenText || '');
+      setInputMode(recoveredDraft.inputMode || 'audio');
+      setSelectedTemplateId(recoveredDraft.templateId || '');
       const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
-      const items = await hydrateAudioItems(blobs, 'draft', recoveredDraft.id);
+      const items = await hydrateAudioItems(blobs, 'draft', recoveredDraft.id, recoveredDraft.audioKeys, recoveredDraft.audioNames);
       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
       updateAudioItems(items);
       setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
@@ -804,8 +855,11 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
     if (!recoveredDraft) return;
     try {
       clearAuthRecoveryFlag();
+      setWrittenEvolutionText(recoveredDraft.writtenText || '');
+      setInputMode(recoveredDraft.inputMode || 'audio');
+      setSelectedTemplateId(recoveredDraft.templateId || '');
       const blobs = getPendingEvolutionAudioBlobs(recoveredDraft);
-      const items = await hydrateAudioItems(blobs, 'draft', recoveredDraft.id);
+      const items = await hydrateAudioItems(blobs, 'draft', recoveredDraft.id, recoveredDraft.audioKeys, recoveredDraft.audioNames);
       audioItemsRef.current.forEach(item => URL.revokeObjectURL(item.url));
       updateAudioItems(items);
       setRecordingTime(recoveredDraft.recordingTime || getTotalAudioDuration(items));
@@ -1290,9 +1344,12 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
 
     if (isClinic && !(await checkPlanActiveAndAlert('Nova evolução'))) return;
     if (!hasClinicalAccess) {
-      await showAlert(hasGoogleSession
-        ? "Sua autorização do Google precisa ser renovada antes de continuar."
-        : "Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.", {
+      if (hasMissingGooglePermissions) {
+        setIsGoogleAccessNoticeOpen(true);
+        return;
+      }
+
+      await showAlert("Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.", {
         title: "Autenticação Necessária",
         variant: "warning",
         icon: "warning"
@@ -1306,7 +1363,6 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
 
     const evolutionId = draftIdRef.current || uuidv4();
     if (isClinic) draftIdRef.current = evolutionId;
-    const totalAudioDuration = getTotalAudioDuration(items);
     const audioBlobs = items.map(item => item.blob);
     const firstEvolutionStorageKey = `analytics:first-evolution:${user.id}`;
     const isFirstActivation = typeof window !== 'undefined' && !window.localStorage.getItem(firstEvolutionStorageKey);
@@ -1319,14 +1375,17 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
       session_time: sessionTime,
       transcription_status: 'processing',
       google_doc_append_status: isClinic ? 'not_applicable' : 'pending',
-      audio_duration_seconds: totalAudioDuration,
+      // For asset-based audio this is only a compatibility projection. It is
+      // filled after every asset returns its server-validated duration.
+      audio_duration_seconds: 0,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       template_id: selectedTemplateId || null
     };
 
-    const transcribeAllAudios = async () => {
+    const processAllAudioAssets = async () => {
       const transcriptionParts: string[] = typedText ? [typedText] : [];
+      let authoritativeTotalDuration = 0;
 
       if (typedText) {
         setProcessingMessage(items.length > 0 ? 'Preparando o texto e transcrevendo os áudios...' : 'Preparando a evolução escrita...');
@@ -1340,27 +1399,26 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
             : 'Transcrevendo áudio...'
         );
 
-        const transcription = await transcribeAudio({
-          audioBlob: item.blob,
-          mimeType: item.mimeType,
+        const processed = await processEvolutionAudioAsset({
+          file: item.blob,
           fileName: item.name,
-          audioDuration: item.duration,
-          subscriptionPlan,
+          mimeType: item.mimeType,
           evolutionId,
-          audioKey: item.audioKey,
-          onRetry: (attempt, delay, isFallback) => {
-            console.log(`[NewEvolution] Retry ${attempt} with delay ${delay}ms. Fallback: ${isFallback}`);
-          }
+          idempotencyKey: `new-evolution:${evolutionId}:${item.audioKey}`,
         });
 
-        if (!transcription) {
+        if (!processed.transcriptionText) {
           throw new Error(`A IA não retornou transcrição para o áudio ${index + 1}.`);
         }
 
-        transcriptionParts.push(transcription.trim());
+        authoritativeTotalDuration += processed.durationSeconds;
+        transcriptionParts.push(processed.transcriptionText.trim());
       }
 
-      return transcriptionParts.join('\n\n');
+      return {
+        originalTranscription: transcriptionParts.join('\n\n'),
+        authoritativeTotalDuration,
+      };
     };
 
     try {
@@ -1379,7 +1437,7 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
         is_first_activation: isFirstActivation
       }, { dedupeKey: `evolution_started:${user.id}:${evolutionId}`, persistDedupe: true });
 
-      const originalTranscription = await transcribeAllAudios();
+      const { originalTranscription, authoritativeTotalDuration } = await processAllAudioAssets();
 
       const { error: originalSaveError } = await saveEvolutionUpdate(evolutionId, {
           original_transcription_text: originalTranscription,
@@ -1411,6 +1469,7 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
           transcription_status: 'completed',
           transcription_text: evolutionText,
           original_transcription_text: originalTranscription,
+          ...(!isClinic ? { audio_duration_seconds: authoritativeTotalDuration } : {}),
           google_doc_append_status: isClinic ? 'not_applicable' : 'completed',
           google_doc_append_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -1474,20 +1533,33 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
         });
       }
       
-      const transcriptionConfigurationMessage = getTranscriptionUserMessage(error);
+      const transcriptionConfigurationMessage = getAudioAssetUserMessage(error) || getTranscriptionUserMessage(error);
       let msg = transcriptionConfigurationMessage || error.message || "Erro desconhecido";
+      const isNetworkFailure = /^(offline|failed to fetch)$/i.test(msg)
+        || /fetch failed|networkerror|network error|network interruption/i.test(msg);
       
-      if (!isClinic && (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) && audioBlobs.length > 0) {
+      if (isNetworkFailure && audioBlobs.length > 0) {
         try {
           await addPendingEvolution({
             id: evolutionId,
             patientId: patient.id,
+            contextKind: context.type,
+            organizationPatientId: organizationPatientId || undefined,
+            professionalId: user.id,
             patientName: patient.full_name,
-            googleDocId: patient.google_doc_id,
+            googleDocId: patient.google_doc_id || '',
             sessionDate,
+            sessionTime,
+            writtenText: writtenEvolutionText || undefined,
+            inputMode,
+            templateId: selectedTemplateId || undefined,
             audioBlob: audioBlobs[0],
             audioBlobs,
             mimeType: audioBlobs[0].type || 'audio/webm',
+            audioKeys: items.map(item => item.audioKey),
+            audioNames: items.map(item => item.name),
+            audioPipeline: 'asset',
+            isFirstActivation,
             source: 'new',
             createdAt: new Date().toISOString(),
             status: 'pending',
@@ -1510,7 +1582,7 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
           console.error("Erro ao salvar na fila offline:", queueErr);
           msg = "Você está sem internet e houve uma falha ao salvar no armazenamento local do navegador. Não feche o aplicativo e espere a conexão voltar.";
         }
-      } else if (msg === 'offline' || msg === 'Failed to fetch' || msg.includes('NetworkError')) {
+      } else if (isNetworkFailure) {
         msg = 'Você está sem internet. Conecte-se novamente para salvar a evolução escrita no prontuário.';
       } else if (msg.includes('Muitas solicitações de transcrição')) {
         msg = "Você atingiu o limite de 5 transcrições por minuto. Aguarde alguns segundos e tente novamente.";
@@ -1571,7 +1643,21 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
           >
             <ArrowLeft size={18} />
           </Link>
-          <PanelPageHeader title="Nova Evolução" />
+          <div className="flex items-center gap-2">
+            <PanelPageHeader title="Nova Evolução" />
+            {!isClinic && (
+              <button
+                type="button"
+                onClick={() => setIsGoogleAccessNoticeOpen(true)}
+                className="group inline-flex items-center gap-1.5 rounded-lg border border-brand-primary/20 bg-white px-2.5 py-1.5 text-xs font-medium text-brand-primary shadow-sm transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40"
+                aria-label="Como funciona a conexão com o Google"
+                title="Como funciona a conexão com o Google"
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Como funciona</span>
+              </button>
+            )}
+          </div>
         </div>
         <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">
           {patient.full_name}
@@ -1906,30 +1992,45 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
         <div className="border-t border-brand-border pt-6">
           {!hasClinicalAccess ? (
             <div className="flex flex-col items-center justify-center p-6 bg-yellow-50 rounded-xl border border-yellow-100 space-y-3">
-          <AlertCircle className="w-8 h-8 text-yellow-600" />
-          <p className="text-yellow-900 font-medium text-center">
-            {hasGoogleSession
-              ? 'Sua autorização do Google precisa ser renovada para continuar.'
-              : 'Você ainda não autenticou o Google neste fluxo.'}
-          </p>
-          <button
-            onClick={() => {
-              if (!hasGoogleSession && isOnboardingMode) {
-                navigate(`/painel/patients/${id}/edit?onboarding=1`, { replace: true });
-                return;
-              }
-              handleReauthenticate();
-            }}
-            disabled={isReauthenticating}
-            className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
-          >
-                {isReauthenticating ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
+              <AlertCircle className="w-8 h-8 text-yellow-600" />
+              <div className="space-y-1 text-center">
+                <p className="text-yellow-900 font-medium">
+                  {hasMissingGooglePermissions
+                    ? 'Google conectado, mas faltam permissões para usar o prontuário.'
+                    : 'Você ainda não autenticou o Google neste fluxo.'}
+                </p>
+                <p className="text-sm text-yellow-800/90">
+                  {hasMissingGooglePermissions
+                    ? 'Reconecte sua conta e aceite as permissões do Google Drive solicitadas para continuar.'
+                    : 'Conecte sua conta Google para continuar com a evolução.'}
+                </p>
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => {
+                    if (!hasGoogleSession && isOnboardingMode) {
+                      navigate(`/painel/patients/${id}/edit?onboarding=1`, { replace: true });
+                      return;
+                    }
+                    void handleReauthenticate();
+                  }}
+                  disabled={isReauthenticating}
+                  className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                >
+                  {isReauthenticating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  <span>{hasMissingGooglePermissions ? 'Reconectar Google' : (isOnboardingMode ? 'Voltar ao cadastro do paciente' : 'Conectar com Google')}</span>
+                </button>
+                {!isOnboardingMode && (
+                  <button
+                    type="button"
+                    onClick={() => setIsGoogleAccessNoticeOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-xl border border-yellow-300 bg-white px-4 py-2 text-sm font-medium text-yellow-900 transition-colors hover:bg-yellow-100"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                    Como funciona
+                  </button>
                 )}
-                <span>{hasGoogleSession ? 'Renovar Autenticação' : (isOnboardingMode ? 'Voltar ao cadastro do paciente' : 'Conectar com Google')}</span>
-              </button>
+              </div>
             </div>
           ) : status === 'idle' && (
             <button
@@ -2109,7 +2210,7 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
                       onClick={handleReauthenticate}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
                     >
-                      Renovar Autenticação
+                      Reconectar Google
                     </button>
                   )}
                   {hasClinicalAccess && (
@@ -2213,7 +2314,7 @@ export default function NewEvolution({ workflow }: { workflow?: { context: Evolu
           setIsGoogleAccessNoticeOpen(false);
           void handleReauthenticate();
         }}
-        confirmLabel={hasGoogleSession ? 'Renovar autenticação' : 'Conectar com Google'}
+        confirmLabel={hasMissingGooglePermissions ? 'Reconectar Google' : 'Conectar com Google'}
         mode="clinical"
         showCloseButton
       />

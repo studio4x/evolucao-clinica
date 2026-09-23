@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { getPendingEvolutions, removePendingEvolution, PendingEvolution } from '../../services/offlineQueue';
 import { transcribeAudio } from '../../services/aiTranscription';
+import { processEvolutionAudioAsset } from '../../services/evolutionAudioAssetUpload';
 import { convertEvolutionToTemplate } from '../../services/evolutionTemplateConversion';
 import { appendToGoogleDoc } from '../../services/googleDocs';
+import { clinicEvolutionRequest } from '../../services/clinicEvolutions';
+import { trackEvent } from '../../services/analytics';
 import { getPendingEvolutionAudioBlobs } from '../../services/evolutionAudio';
 import { supabase } from '../../supabaseClient';
 import { useAuthStore } from '../../store/authStore';
@@ -17,13 +20,13 @@ export function OfflineQueueMonitor() {
   const [hasError, setHasError] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const { googleAccessToken, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan } = useAuthStore();
-  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const hasGoogleClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const loadQueue = async () => {
     if (isSyncing) return;
     try {
       const items = await getPendingEvolutions();
-      setQueue(items.filter(item => item.contextKind !== 'organization' && !item.organizationPatientId));
+      setQueue(items.filter(item => item.audioPipeline === 'asset' || (item.contextKind !== 'organization' && !item.organizationPatientId)));
     } catch (e) {
       console.error(e);
     }
@@ -51,10 +54,140 @@ export function OfflineQueueMonitor() {
 
   useEffect(() => {
     // Sincronização automática
-    if (isOnline && queue.length > 0 && !isSyncing && !hasError && hasClinicalAccess) {
+    const requiresGoogle = queue.some(item => !(item.audioPipeline === 'asset' && item.contextKind === 'organization'));
+    if (isOnline && queue.length > 0 && !isSyncing && !hasError && (!requiresGoogle || hasGoogleClinicalAccess)) {
       handleSync();
     }
-  }, [isOnline, queue.length, isSyncing, hasError, hasClinicalAccess]);
+  }, [isOnline, queue.length, isSyncing, hasError, hasGoogleClinicalAccess]);
+
+  const syncAssetPendingEvolution = async (item: PendingEvolution) => {
+    const audioBlobs = getPendingEvolutionAudioBlobs(item);
+    if (audioBlobs.length === 0) throw new Error('Nenhum áudio encontrado para sincronizar.');
+
+    const isClinicAsset = item.audioPipeline === 'asset' && item.contextKind === 'organization' && Boolean(item.organizationPatientId);
+    const audioKeys = item.audioKeys?.length === audioBlobs.length
+      ? item.audioKeys
+      : audioBlobs.map((_, index) => `${item.id}:${index}`);
+    const audioNames = item.audioNames || [];
+    const initialEvolutionData = {
+      ...item.evolutionData,
+      id: item.id,
+      audio_duration_seconds: 0,
+      transcription_status: 'processing',
+      ...(isClinicAsset ? {} : { google_doc_append_status: 'pending' }),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (isClinicAsset) {
+      await clinicEvolutionRequest(item.organizationPatientId!, 'POST', {
+        evolutionId: item.id,
+        sessionDate: item.sessionDate,
+        sessionTime: item.sessionTime,
+        templateId: item.templateId || null,
+      });
+    } else {
+      const { error } = await supabase.from('evolutions').upsert(initialEvolutionData);
+      if (error) throw error;
+    }
+
+    if (!isClinicAsset) {
+      trackEvent('evolution_started', {
+        input_mode: item.inputMode || 'audio',
+        is_first_activation: item.isFirstActivation === true,
+      }, { dedupeKey: `evolution_started:${item.professionalId || 'unknown'}:${item.id}`, persistDedupe: true });
+    }
+
+    const transcriptions: string[] = [];
+    let authoritativeTotalDuration = 0;
+    for (let index = 0; index < audioBlobs.length; index += 1) {
+      const blob = audioBlobs[index];
+      setSyncStatus(
+        audioBlobs.length > 1
+          ? `Processando ${item.patientName}... (IA ${index + 1}/${audioBlobs.length})`
+          : `Processando ${item.patientName}... (IA)`,
+      );
+      const processed = await processEvolutionAudioAsset({
+        file: blob,
+        fileName: audioNames[index] || `Áudio ${index + 1}`,
+        mimeType: blob.type || item.mimeType || 'audio/webm',
+        evolutionId: item.id,
+        idempotencyKey: `new-evolution:${item.id}:${audioKeys[index]}`,
+      });
+      transcriptions.push(processed.transcriptionText.trim());
+      authoritativeTotalDuration += processed.durationSeconds;
+    }
+
+    const originalTranscription = [
+      item.inputMode !== 'audio' ? String(item.writtenText || '').trim() : '',
+      ...transcriptions,
+    ].filter(Boolean).join('\n\n');
+    if (!originalTranscription) throw new Error('A IA retornou um texto vazio.');
+
+    if (isClinicAsset) {
+      await clinicEvolutionRequest(item.organizationPatientId!, 'PATCH', {
+        originalTranscriptionText: originalTranscription,
+        transcriptionStatus: 'processing',
+      }, item.id);
+    } else {
+      const { error } = await supabase.from('evolutions').upsert({
+        ...initialEvolutionData,
+        original_transcription_text: originalTranscription,
+        transcription_text: '',
+        audio_duration_seconds: 0,
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    }
+
+    const templateId = item.templateId || (typeof item.evolutionData?.template_id === 'string' ? item.evolutionData.template_id : null);
+    const evolutionText = templateId
+      ? await convertEvolutionToTemplate(originalTranscription, templateId)
+      : originalTranscription;
+
+    if (!isClinicAsset) {
+      setSyncStatus(`Inserindo ${item.patientName} no Google Docs...`);
+      await appendToGoogleDoc(
+        googleAccessToken,
+        item.googleDocId,
+        item.sessionDate,
+        evolutionText,
+        { sessionTime: item.sessionTime || item.evolutionData?.session_time || undefined, evolutionId: item.id },
+      );
+    }
+
+    setSyncStatus(`Salvando ${item.patientName}...`);
+    if (isClinicAsset) {
+      await clinicEvolutionRequest(item.organizationPatientId!, 'PATCH', {
+        transcriptionText: evolutionText,
+        originalTranscriptionText: originalTranscription,
+        transcriptionStatus: 'completed',
+        status: 'completed',
+      }, item.id);
+    } else {
+      const { error } = await supabase.from('evolutions').upsert({
+        ...initialEvolutionData,
+        transcription_status: 'completed',
+        transcription_text: evolutionText,
+        original_transcription_text: originalTranscription,
+        audio_duration_seconds: authoritativeTotalDuration,
+        google_doc_append_status: 'completed',
+        google_doc_append_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    }
+
+    if (!isClinicAsset) {
+      trackEvent('evolution_completed', {
+        input_mode: item.inputMode || 'audio',
+        is_first_activation: item.isFirstActivation === true,
+      }, { dedupeKey: `evolution_completed:${item.professionalId || 'unknown'}:${item.id}`, persistDedupe: true });
+      trackEvent('audio_evolution_completed', {
+        input_mode: item.inputMode || 'audio',
+        is_first_activation: item.isFirstActivation === true,
+      }, { dedupeKey: `audio_evolution_completed:${item.professionalId || 'unknown'}:${item.id}`, persistDedupe: true });
+    }
+  };
 
   if (queue.length === 0) return null;
 
@@ -67,7 +200,8 @@ export function OfflineQueueMonitor() {
       });
       return;
     }
-    if (!hasClinicalAccess) {
+    const requiresGoogle = queue.some(item => !(item.audioPipeline === 'asset' && item.contextKind === 'organization'));
+    if (requiresGoogle && !hasGoogleClinicalAccess) {
       await showAlert("Seu Google Token expirou/não encontrado. Use o aplicativo estando logado para sincronizar.", {
         title: "Autenticação Necessária",
         variant: "warning",
@@ -84,6 +218,14 @@ export function OfflineQueueMonitor() {
 
     for (const item of queue) {
       try {
+        if (item.audioPipeline === 'asset') {
+          await syncAssetPendingEvolution(item);
+          await removePendingEvolution(item.id);
+          itemsLeft = itemsLeft.filter(q => q.id !== item.id);
+          setQueue(itemsLeft);
+          continue;
+        }
+
         const audioBlobs = getPendingEvolutionAudioBlobs(item);
         if (audioBlobs.length === 0) {
           throw new Error('Nenhum áudio encontrado para sincronizar.');

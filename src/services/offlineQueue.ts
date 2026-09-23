@@ -12,6 +12,10 @@ export interface PendingEvolution {
   inputMode?: "audio" | "text" | "hybrid";
   templateId?: string;
   audioBlobs?: Blob[];
+  audioKeys?: string[];
+  audioNames?: string[];
+  audioPipeline?: 'legacy' | 'asset';
+  isFirstActivation?: boolean;
   mimeType: string;
   source: 'new' | 'share';
   createdAt: string;

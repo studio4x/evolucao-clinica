@@ -25,5 +25,9 @@ assert.match(
   'the evolution input mode is rendered as a dropdown with all supported options',
 );
 assert.doesNotMatch(source, /role="radiogroup" aria-label="Tipo de evolução"/);
+assert.match(source, /connected_missing_permissions/, 'Google permission state is distinguished from a missing session');
+assert.match(source, /Google conectado, mas faltam permissões/, 'missing Google permissions show a clear user-facing message');
+assert.match(source, /Reconectar Google/, 'the user can reconnect Google after incomplete consent');
+assert.match(source, /Como funciona/, 'the Google flow exposes an instructional modal entry point');
 
 console.log('New evolution layout tests passed.');
