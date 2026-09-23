@@ -213,21 +213,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (
-    profileRole !== 'admin'
-    && user
-    && !isOnboardingComplete(user.id)
-    && !canAccessApplication(user.id)
-  ) {
-    const destination = getOnboardingDestination(user.id);
-    const cleanDestPath = destination.split('?')[0];
-    const isEditingPatientOnboarding = location.pathname.match(/^\/painel\/patients\/[^/]+\/edit$/) && location.search.includes('onboarding=1');
-
-    if (location.pathname !== cleanDestPath && !isEditingPatientOnboarding) {
-      return <Navigate to={destination} replace />;
-    }
-  }
-
   // Mantém acessíveis as páginas de conta e recursos premium mesmo sem plano ativo,
   // para que o usuário possa gerenciar a conta ou contratar novamente.
   if (

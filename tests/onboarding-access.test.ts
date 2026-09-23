@@ -101,6 +101,14 @@ assert.equal(hasCompletedEssentialOnboardingSteps({
 }), true);
 
 const appSource = readFileSync('src/App.tsx', 'utf8');
+const protectedRouteSource = appSource.slice(
+  appSource.indexOf('function ProtectedRoute'),
+  appSource.indexOf('function AdminRoute'),
+);
+const rootRouteSource = appSource.slice(
+  appSource.indexOf('function RootRoute'),
+  appSource.indexOf('export default function App'),
+);
 const onboardingSource = readFileSync('src/pages/Onboarding.tsx', 'utf8');
 const progressCardSource = readFileSync('src/components/onboarding/OnboardingProgressCard.tsx', 'utf8');
 const patientFormSource = readFileSync('src/pages/PatientForm.tsx', 'utf8');
@@ -108,6 +116,12 @@ const migrationSource = readFileSync('supabase/migrations/20260826150000_add_onb
 const initialChoiceMigrationSource = readFileSync('supabase/migrations/20260910150635_preserve_initial_onboarding_choice.sql', 'utf8');
 
 assert.match(appSource, /!canAccessApplication\(user\.id\)/);
+assert.doesNotMatch(protectedRouteSource, /getOnboardingDestination\(user\.id\)/);
+assert.match(protectedRouteSource, /profileStatus === 'pending'/);
+assert.match(protectedRouteSource, /profileStatus === 'inactive'/);
+assert.match(protectedRouteSource, /pending_checkout_flow/);
+assert.match(protectedRouteSource, /subscriptionStatus === 'active' \|\| subscriptionStatus === 'trialing'/);
+assert.match(rootRouteSource, /getOnboardingDestination\(user\.id\)/);
 assert.match(appSource, /hydrateOnboardingFromProfile\(session\.user\.id, profileData\)/);
 assert.match(onboardingSource, /Como você prefere começar\?/);
 assert.match(onboardingSource, /Iniciar configuração guiada/);
@@ -128,6 +142,10 @@ assert.match(progressCardSource, /Expandir configuração flexível/);
 assert.match(progressCardSource, /hasCompletedEssentialOnboardingSteps\(snapshot\)/);
 assert.doesNotMatch(progressCardSource, /handleDismiss|sessionStorage|Ocultar checklist/);
 assert.match(patientFormSource, /await deferOnboarding\(user\.id, 'patient'\)/);
+assert.match(patientFormSource, /const handleExitOnboarding = async \(\) =>/);
+assert.match(patientFormSource, /onClick=\{\(\) => void handleExitOnboarding\(\)\}/);
+assert.match(patientFormSource, /Sair do onboarding/);
+assert.doesNotMatch(patientFormSource, /Sair do onboarding e configurar depois/);
 assert.match(migrationSource, /'not_started', 'in_progress', 'deferred', 'completed'/);
 assert.match(migrationSource, /enforce_professional_onboarding_state_trigger/);
 assert.match(initialChoiceMigrationSource, /onboarding_initial_mode/);

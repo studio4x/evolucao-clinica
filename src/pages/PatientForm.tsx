@@ -272,6 +272,7 @@ export default function PatientForm() {
   const [isGlobalSearch, setIsGlobalSearch] = useState(false);
   
   const [loading, setLoading] = useState(false);
+  const [isExitingOnboarding, setIsExitingOnboarding] = useState(false);
   const [creatingDoc, setCreatingDoc] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
@@ -475,6 +476,37 @@ export default function PatientForm() {
 
   const handleReauthenticate = async () => {
     setIsSecurityModalOpen(true);
+  };
+
+  const handleExitOnboarding = async () => {
+    if (!isOnboardingMode || !user?.id || isExitingOnboarding) return;
+
+    const confirmed = await showConfirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.", {
+      title: "Sair do Assistente",
+      confirmLabel: "Sair",
+      cancelLabel: "Continuar",
+      variant: "warning",
+      icon: "question"
+    });
+    if (!confirmed) return;
+
+    setIsExitingOnboarding(true);
+    try {
+      await deferOnboarding(user.id, 'patient');
+      if (!id) {
+        clearPatientFormDraft(getPatientFormDraftKey(user.id));
+      }
+      navigate('/painel/dashboard');
+    } catch (error) {
+      console.error('[PatientForm] Não foi possível sair do onboarding:', error);
+      await showAlert('Não foi possível sair do onboarding agora. Verifique sua conexão e tente novamente.', {
+        title: 'Erro ao sair do onboarding',
+        variant: 'danger',
+        icon: 'warning',
+      });
+    } finally {
+      setIsExitingOnboarding(false);
+    }
   };
 
   const executeGoogleReauthentication = async () => {
@@ -1065,14 +1097,30 @@ export default function PatientForm() {
             onOpen={() => setGuideOpen(true)}
           />
         ) : undefined}
-        actions={id ? (
-          <span className="sm:hidden">
-            <PatientEditGuideButton
-              compact
-              expanded={guideOpen}
-              onOpen={() => setGuideOpen(true)}
-            />
-          </span>
+        actions={isOnboardingMode || id ? (
+          <div className="flex items-center gap-2">
+            {isOnboardingMode && (
+              <button
+                type="button"
+                onClick={() => void handleExitOnboarding()}
+                disabled={isExitingOnboarding}
+                aria-label="Sair do onboarding"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <X size={14} aria-hidden="true" />
+                <span>{isExitingOnboarding ? 'Saindo...' : 'Sair do onboarding'}</span>
+              </button>
+            )}
+            {id && (
+              <span className="sm:hidden">
+                <PatientEditGuideButton
+                  compact
+                  expanded={guideOpen}
+                  onOpen={() => setGuideOpen(true)}
+                />
+              </span>
+            )}
+          </div>
         ) : undefined}
       />
 
@@ -1828,32 +1876,7 @@ export default function PatientForm() {
         )}
 
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4 pt-6 border-t border-brand-border">
-          {isOnboardingMode ? (
-            <button
-              type="button"
-              onClick={async () => {
-                const confirmed = await showConfirm("Deseja mesmo sair do assistente de configuração e continuar depois? Você poderá criar pacientes e evoluções normalmente no painel.", {
-                  title: "Sair do Assistente",
-                  confirmLabel: "Sair",
-                  cancelLabel: "Continuar",
-                  variant: "warning",
-                  icon: "question"
-                });
-                if (confirmed) {
-                  if (user?.id) await deferOnboarding(user.id, 'patient');
-                  if (user?.id && !id) {
-                    clearPatientFormDraft(getPatientFormDraftKey(user.id));
-                  }
-                  navigate('/painel/dashboard');
-                }
-              }}
-              className="text-xs font-semibold text-brand-text-muted hover:text-red-500 transition-colors py-2 px-3 hover:bg-red-50 rounded-xl"
-            >
-              Sair do onboarding e configurar depois
-            </button>
-          ) : (
-            <div />
-          )}
+          <div />
           <div className="flex space-x-3 w-full sm:w-auto justify-end">
             <button
               type="button"
