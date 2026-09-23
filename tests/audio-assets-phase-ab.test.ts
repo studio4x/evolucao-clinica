@@ -23,7 +23,8 @@ wav.write("data", 36, "ascii");
 wav.writeUInt32LE(8000, 40);
 
 // 1. Unauthorized requests are protected by the existing auth middleware.
-assert.match(route, /deps\.requireAuth, parseUpload/);
+assert.match(route, /deps\.requireAuth/);
+assert.match(route, /AUDIO_ASSET_MULTIPART_DEPRECATED/);
 // 2. Unknown evolutions are rejected.
 assert.match(route, /EVOLUTION_NOT_FOUND/);
 // 3. Other professionals are rejected.
@@ -45,8 +46,8 @@ assert.doesNotMatch(route, /req\.body\??\.storagePath/);
 // 10. Unreadable duration is rejected.
 assert.equal(getAudioDurationFromBytes(new Uint8Array([1, 2, 3, 4])), 0);
 assert.match(route, /AUDIO_ASSET_DURATION_UNREADABLE/);
-// 11. Both multipart and subscription file limits are enforced.
-assert.match(route, /LIMIT_FILE_SIZE/);
+// 11. Prepare and subscription file limits are enforced before upload.
+assert.match(route, /parseDeclaredFileSize/);
 assert.match(route, /audioPolicy\.maxFileBytes/);
 // 12. Duplicate bytes in one evolution are unique.
 assert.match(migration, /UNIQUE \(evolution_id, content_hash\)/);
@@ -56,8 +57,8 @@ assert.match(migration, /UNIQUE \(evolution_id, creation_request_id\)/);
 // 14. Reusing one key for different bytes is rejected.
 assert.match(route, /AUDIO_ASSET_IDEMPOTENCY_CONFLICT/);
 // 15. Failed persistence removes the object.
-assert.match(route, /finally \{/);
-assert.match(route, /storage\.from\(AUDIO_ASSET_BUCKET\)\.remove\(\[storagePath\]\)/);
+assert.match(route, /invalidateUploadedSession/);
+assert.match(route, /storage\.from\(AUDIO_ASSET_BUCKET\)\.remove\(\[session\.storage_path\]\)/);
 // 16-18. Clinic owner/manager and consultant cannot bypass author/canCreate checks.
 assert.match(route, /get_organization_evolution_access/);
 assert.match(route, /!access\.data\?\.canCreate/);

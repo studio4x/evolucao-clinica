@@ -1,10 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
-import multer from "multer";
 import { getAudioDurationFromBytes } from "../src/utils/audioDuration.js";
 
 const AUDIO_ASSET_BUCKET = "evolution-audio";
 const MAX_UPLOAD_BYTES = 60 * 1024 * 1024;
+const SIGNED_UPLOAD_TTL_SECONDS = 2 * 60 * 60;
 const AUDIO_ASSET_SELECT = "id, evolution_id, duration_seconds, mime_type, transcription_status, created_at, updated_at, content_hash, creation_request_id, storage_path";
+const UPLOAD_SESSION_SELECT = "audio_asset_id, professional_id, evolution_id, storage_path, creation_request_id, file_name, declared_mime_type, declared_file_size, status, resolved_asset_id, expires_at, created_at, updated_at";
 const SUPPORTED_MIME_TYPES = new Set([
   "audio/webm",
   "audio/ogg",
@@ -21,6 +22,20 @@ const MIME_EXTENSIONS: Record<string, string> = {
   "audio/mp4": "m4a",
   "audio/aac": "aac",
 };
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+  webm: "audio/webm",
+  weba: "audio/webm",
+  ogg: "audio/ogg",
+  oga: "audio/ogg",
+  opus: "audio/ogg",
+  wav: "audio/wav",
+  mp3: "audio/mpeg",
+  m4a: "audio/mp4",
+  mp4: "audio/mp4",
+  aac: "audio/aac",
+};
+
+export const DIRECT_UPLOAD_TUS_THRESHOLD_BYTES = 6 * 1024 * 1024;
 
 type AudioPolicy = {
   maxDurationSeconds: number;
@@ -53,14 +68,36 @@ type AudioAssetRow = {
   storage_path: string;
 };
 
-const uploadMiddleware = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: MAX_UPLOAD_BYTES,
-    files: 1,
-    fields: 4,
-  },
-}).single("file");
+type UploadSessionRow = {
+  audio_asset_id: string;
+  professional_id: string;
+  evolution_id: string;
+  storage_path: string;
+  creation_request_id: string;
+  file_name: string;
+  declared_mime_type: string;
+  declared_file_size: number;
+  status: "prepared" | "finalized" | "reused";
+  resolved_asset_id: string | null;
+  expires_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type RouteError = Error & { code?: string; httpStatus?: number };
+
+const routeError = (message: string, code: string, httpStatus = 400): RouteError => {
+  const error = new Error(message) as RouteError;
+  error.code = code;
+  error.httpStatus = httpStatus;
+  return error;
+};
+
+const safeErrorMessage = (error: any): string => String(error?.message || "erro").replace(/[\r\n]/g, " ").slice(0, 240);
+
+const isUniqueViolation = (error: any): boolean => String(error?.code || "") === "23505";
+
+const isUuid = (value: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const normalizeDeclaredMimeType = (mimeType: unknown): string => {
   const normalized = String(mimeType || "").toLowerCase().split(";", 1)[0].trim();
@@ -68,6 +105,28 @@ const normalizeDeclaredMimeType = (mimeType: unknown): string => {
   if (normalized === "audio/mp3") return "audio/mpeg";
   if (normalized === "audio/x-m4a") return "audio/mp4";
   return normalized;
+};
+
+const sanitizeFileName = (value: unknown): string => {
+  const basename = String(value || "audio").trim().split(/[\\/]/).pop() || "audio";
+  return basename.replace(/[\u0000-\u001f\u007f]/g, "_").slice(0, 255) || "audio";
+};
+
+const inferMimeTypeFromFileName = (fileName: string): string | null => {
+  const extension = fileName.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1] || "";
+  return EXTENSION_MIME_TYPES[extension] || null;
+};
+
+export const resolveDeclaredAudioMimeType = (mimeType: unknown, fileName: unknown): string => {
+  const declared = normalizeDeclaredMimeType(mimeType);
+  const inferred = inferMimeTypeFromFileName(sanitizeFileName(fileName));
+  const resolved = !declared || declared === "application/octet-stream" ? inferred : declared;
+
+  if (!resolved || !SUPPORTED_MIME_TYPES.has(resolved)) {
+    throw routeError("O formato MIME declarado não é um áudio suportado.", "AUDIO_ASSET_MIME_INVALID");
+  }
+
+  return resolved;
 };
 
 const readAscii = (bytes: Buffer, offset: number, length: number): string => bytes.subarray(offset, offset + length).toString("ascii");
@@ -99,16 +158,12 @@ const detectAudioMimeType = (bytes: Buffer): string | null => {
 export const resolveAudioAssetMimeType = (declaredMimeType: unknown, bytes: Buffer): string => {
   const detectedMimeType = detectAudioMimeType(bytes);
   if (!detectedMimeType || !SUPPORTED_MIME_TYPES.has(detectedMimeType)) {
-    const error = new Error("O conteúdo do arquivo não corresponde a um formato de áudio suportado.") as Error & { code?: string };
-    error.code = "AUDIO_ASSET_MIME_UNSUPPORTED";
-    throw error;
+    throw routeError("O conteúdo do arquivo não corresponde a um formato de áudio suportado.", "AUDIO_ASSET_MIME_UNSUPPORTED");
   }
 
   const declared = normalizeDeclaredMimeType(declaredMimeType);
   if (declared && declared !== "application/octet-stream" && !declared.startsWith("audio/")) {
-    const error = new Error("O MIME declarado não é um formato de áudio válido.") as Error & { code?: string };
-    error.code = "AUDIO_ASSET_MIME_INVALID";
-    throw error;
+    throw routeError("O MIME declarado não é um formato de áudio válido.", "AUDIO_ASSET_MIME_INVALID");
   }
 
   return detectedMimeType;
@@ -123,18 +178,18 @@ export const buildAudioAssetStoragePath = (professionalId: string, evolutionId: 
 export const sanitizeCreationRequestId = (value: unknown): string => {
   const requestId = String(value || "").trim();
   if (!requestId || requestId.length > 200 || /[\r\n]/.test(requestId)) {
-    const error = new Error("O header Idempotency-Key é obrigatório e deve ser válido.") as Error & { code?: string };
-    error.code = "AUDIO_ASSET_IDEMPOTENCY_KEY_REQUIRED";
-    throw error;
+    throw routeError("O header Idempotency-Key é obrigatório e deve ser válido.", "AUDIO_ASSET_IDEMPOTENCY_KEY_REQUIRED");
   }
   return requestId;
 };
 
-const isUniqueViolation = (error: any): boolean => String(error?.code || "") === "23505";
-
-const safeErrorMessage = (error: any): string => String(error?.message || "erro").replace(/[\r\n]/g, " ").slice(0, 240);
-
-const isUuid = (value: string): boolean => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+const parseDeclaredFileSize = (value: unknown): number => {
+  const fileSize = Number(value);
+  if (!Number.isSafeInteger(fileSize) || fileSize <= 0 || fileSize > MAX_UPLOAD_BYTES) {
+    throw routeError("O tamanho declarado do arquivo é inválido ou excede o limite máximo.", "AUDIO_ASSET_FILE_SIZE_INVALID");
+  }
+  return fileSize;
+};
 
 const publicAsset = (asset: AudioAssetRow) => ({
   id: asset.id,
@@ -146,7 +201,13 @@ const publicAsset = (asset: AudioAssetRow) => ({
   updated_at: asset.updated_at,
 });
 
-const readExistingAsset = async (admin: any, evolutionId: string, field: "content_hash" | "creation_request_id", value: string) => {
+const getDirectStorageHost = (supabaseUrl: string): string => {
+  const host = new URL(supabaseUrl).hostname;
+  const projectRef = host.split(".")[0];
+  return `https://${projectRef}.storage.supabase.co`;
+};
+
+const readExistingAsset = async (admin: any, evolutionId: string, field: "id" | "content_hash" | "creation_request_id", value: string) => {
   const result = await admin
     .from("audio_assets")
     .select(AUDIO_ASSET_SELECT)
@@ -157,7 +218,80 @@ const readExistingAsset = async (admin: any, evolutionId: string, field: "conten
   return result.data as AudioAssetRow | null;
 };
 
-const authorizeEvolution = async (req: any, deps: AudioAssetRouteDependencies, evolutionId: string) => {
+const readUploadSession = async (admin: any, audioAssetId: string) => {
+  const result = await admin
+    .from("audio_asset_upload_sessions")
+    .select(UPLOAD_SESSION_SELECT)
+    .eq("audio_asset_id", audioAssetId)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  return result.data as UploadSessionRow | null;
+};
+
+const readUploadSessionByRequest = async (admin: any, evolutionId: string, creationRequestId: string) => {
+  const result = await admin
+    .from("audio_asset_upload_sessions")
+    .select(UPLOAD_SESSION_SELECT)
+    .eq("evolution_id", evolutionId)
+    .eq("creation_request_id", creationRequestId)
+    .maybeSingle();
+  if (result.error) throw result.error;
+  return result.data as UploadSessionRow | null;
+};
+
+const assertSessionContext = (session: UploadSessionRow, input: { professionalId: string; fileName: string; mimeType: string; fileSize: number }) => {
+  if (
+    session.professional_id !== input.professionalId
+    || session.file_name !== input.fileName
+    || session.declared_mime_type !== input.mimeType
+    || Number(session.declared_file_size) !== input.fileSize
+  ) {
+    throw routeError("A mesma solicitação de upload foi usada com outro contexto.", "AUDIO_ASSET_IDEMPOTENCY_CONFLICT", 409);
+  }
+};
+
+const updateUploadSession = async (admin: any, audioAssetId: string, values: Record<string, unknown>) => {
+  const result = await admin
+    .from("audio_asset_upload_sessions")
+    .update(values)
+    .eq("audio_asset_id", audioAssetId);
+  if (result.error) throw result.error;
+};
+
+const cleanupExpiredUploadSessions = async (admin: any) => {
+  const expired = await admin
+    .from("audio_asset_upload_sessions")
+    .select("audio_asset_id, storage_path")
+    .eq("status", "prepared")
+    .lt("expires_at", new Date().toISOString())
+    .limit(25);
+  if (expired.error) {
+    console.error("[AudioAsset] Falha ao localizar sessões expiradas:", safeErrorMessage(expired.error));
+    return;
+  }
+
+  for (const session of expired.data || []) {
+    const removed = await admin.storage.from(AUDIO_ASSET_BUCKET).remove([session.storage_path]);
+    if (removed.error) {
+      console.error("[AudioAsset] Falha ao remover upload expirado:", safeErrorMessage(removed.error));
+      continue;
+    }
+    const deleted = await admin.from("audio_asset_upload_sessions").delete().eq("audio_asset_id", session.audio_asset_id);
+    if (deleted.error) console.error("[AudioAsset] Falha ao remover sessão expirada:", safeErrorMessage(deleted.error));
+  }
+};
+
+const objectExists = async (admin: any, storagePath: string): Promise<boolean> => {
+  const parts = storagePath.split("/");
+  const name = parts.pop();
+  const folder = parts.join("/");
+  if (!name) return false;
+  const result = await admin.storage.from(AUDIO_ASSET_BUCKET).list(folder, { limit: 10, search: name });
+  if (result.error) throw result.error;
+  return Boolean(result.data?.some((item: any) => item.name === name));
+};
+
+const authorizeEvolution = async (req: any, deps: AudioAssetRouteDependencies, evolutionId: string, allowSigned = false) => {
   const evolutionResult = await deps.supabaseAdmin
     .from("evolutions")
     .select("id, professional_id, organization_patient_id, status")
@@ -166,26 +300,9 @@ const authorizeEvolution = async (req: any, deps: AudioAssetRouteDependencies, e
   if (evolutionResult.error) throw evolutionResult.error;
   const evolution = evolutionResult.data;
 
-  if (!evolution) {
-    const error = new Error("Evolução não encontrada.") as Error & { code?: string; httpStatus?: number };
-    error.code = "EVOLUTION_NOT_FOUND";
-    error.httpStatus = 404;
-    throw error;
-  }
-
-  if (evolution.status === "signed") {
-    const error = new Error("Esta evolução está assinada e não pode receber novos arquivos.") as Error & { code?: string; httpStatus?: number };
-    error.code = "EVOLUTION_SIGNED_IMMUTABLE";
-    error.httpStatus = 409;
-    throw error;
-  }
-
-  if (evolution.professional_id !== req.user.id) {
-    const error = new Error("Você não tem permissão para adicionar áudio nesta evolução.") as Error & { code?: string; httpStatus?: number };
-    error.code = "EVOLUTION_NOT_AUTHORIZED";
-    error.httpStatus = 403;
-    throw error;
-  }
+  if (!evolution) throw routeError("Evolução não encontrada.", "EVOLUTION_NOT_FOUND", 404);
+  if (!allowSigned && evolution.status === "signed") throw routeError("Esta evolução está assinada e não pode receber novos arquivos.", "EVOLUTION_SIGNED_IMMUTABLE", 409);
+  if (evolution.professional_id !== req.user.id) throw routeError("Você não tem permissão para adicionar áudio nesta evolução.", "EVOLUTION_NOT_AUTHORIZED", 403);
 
   if (evolution.organization_patient_id) {
     const token = String(req.headers.authorization || "").replace(/^Bearer\s+/i, "");
@@ -198,114 +315,229 @@ const authorizeEvolution = async (req: any, deps: AudioAssetRouteDependencies, e
       p_organization_patient_id: evolution.organization_patient_id,
     });
     if (access.error) throw access.error;
-    if (!access.data?.canCreate) {
-      const error = new Error("Seu acesso clínico não permite criar áudio nesta evolução.") as Error & { code?: string; httpStatus?: number };
-      error.code = "CLINICAL_WRITE_NOT_AUTHORIZED";
-      error.httpStatus = 403;
-      throw error;
-    }
+    if (!access.data?.canCreate) throw routeError("Seu acesso clínico não permite criar áudio nesta evolução.", "CLINICAL_WRITE_NOT_AUTHORIZED", 403);
   }
 
   return evolution;
 };
 
-const parseUpload = (req: any, res: any, next: any) => {
-  uploadMiddleware(req, res, (error: any) => {
-    if (!error) return next();
-    if (error.code === "LIMIT_FILE_SIZE") return res.status(400).json({ code: "AUDIO_ASSET_FILE_SIZE_LIMIT", error: "O arquivo de áudio excede o tamanho máximo permitido." });
-    return res.status(400).json({ code: "AUDIO_ASSET_MULTIPART_INVALID", error: "Não foi possível ler o arquivo de áudio enviado." });
+const createSignedUpload = async (admin: any, storagePath: string) => {
+  const result = await admin.storage.from(AUDIO_ASSET_BUCKET).createSignedUploadUrl(storagePath, { upsert: false });
+  if (result.error || !result.data?.token) {
+    const error = routeError("Não foi possível preparar o upload direto no Storage.", "AUDIO_ASSET_SIGNED_UPLOAD_FAILED", 502);
+    if (result.error) console.error("[AudioAsset] Signed upload falhou:", safeErrorMessage(result.error));
+    throw error;
+  }
+  return result.data;
+};
+
+const uploadDescriptor = (session: UploadSessionRow, signed: { token: string }, supabaseUrl: string, alreadyUploaded: boolean) => ({
+  audioAssetId: session.audio_asset_id,
+  bucket: AUDIO_ASSET_BUCKET,
+  path: session.storage_path,
+  mimeType: session.declared_mime_type,
+  fileSize: Number(session.declared_file_size),
+  token: alreadyUploaded ? null : signed.token,
+  alreadyUploaded,
+  expiresAt: session.expires_at,
+  tusEndpoint: getDirectStorageHost(supabaseUrl) + "/storage/v1/upload/resumable",
+  tusChunkSize: DIRECT_UPLOAD_TUS_THRESHOLD_BYTES,
+});
+
+const respondError = (res: any, error: any) => {
+  const status = Number(error?.httpStatus) || (String(error?.code || "").startsWith("AUDIO_ASSET_") ? 400 : 500);
+  if (status >= 500) console.error("[AudioAsset] Falha controlada:", safeErrorMessage(error));
+  return res.status(status).json({
+    code: error?.code || "AUDIO_ASSET_REQUEST_FAILED",
+    error: status >= 500 ? "Não foi possível processar o asset de áudio." : String(error?.message || "Não foi possível processar o asset de áudio.").slice(0, 240),
   });
 };
 
+const invalidateUploadedSession = async (admin: any, session: UploadSessionRow) => {
+  const removed = await admin.storage.from(AUDIO_ASSET_BUCKET).remove([session.storage_path]);
+  if (removed.error) {
+    console.error("[AudioAsset] Falha ao limpar objeto inválido:", safeErrorMessage(removed.error));
+    throw routeError("Não foi possível limpar o upload inválido.", "AUDIO_ASSET_CLEANUP_FAILED", 502);
+  }
+  const deleted = await admin.from("audio_asset_upload_sessions").delete().eq("audio_asset_id", session.audio_asset_id);
+  if (deleted.error) console.error("[AudioAsset] Falha ao limpar sessão inválida:", safeErrorMessage(deleted.error));
+};
+
 export function registerAudioAssetRoutes(app: any, deps: AudioAssetRouteDependencies) {
-  app.post("/api/ai/evolution-assets", deps.requireAuth, parseUpload, async (req: any, res: any) => {
-    let storagePath: string | null = null;
-    let assetPersisted = false;
+  app.post("/api/ai/evolution-assets", deps.requireAuth, (_req: any, res: any) => {
+    return res.status(410).json({
+      code: "AUDIO_ASSET_MULTIPART_DEPRECATED",
+      error: "O upload multipart foi desativado. Use prepare, upload direto ao Storage e finalize.",
+    });
+  });
 
+  app.post("/api/ai/evolution-assets/prepare", deps.requireAuth, async (req: any, res: any) => {
     try {
-      const evolutionId = typeof req.body?.evolutionId === "string" ? req.body.evolutionId.trim() : "";
-      if (!evolutionId) return res.status(400).json({ code: "AUDIO_ASSET_EVOLUTION_REQUIRED", error: "A evolução é obrigatória." });
-      if (!isUuid(evolutionId)) return res.status(400).json({ code: "AUDIO_ASSET_EVOLUTION_INVALID", error: "A evolução informada é inválida." });
-      const creationRequestId = sanitizeCreationRequestId(req.headers["idempotency-key"]);
-      if (!req.file?.buffer || !req.file.size) return res.status(400).json({ code: "AUDIO_ASSET_FILE_REQUIRED", error: "Selecione um arquivo de áudio." });
+      await cleanupExpiredUploadSessions(deps.supabaseAdmin);
 
+      const evolutionId = typeof req.body?.evolutionId === "string" ? req.body.evolutionId.trim() : "";
+      if (!evolutionId) throw routeError("A evolução é obrigatória.", "AUDIO_ASSET_EVOLUTION_REQUIRED");
+      if (!isUuid(evolutionId)) throw routeError("A evolução informada é inválida.", "AUDIO_ASSET_EVOLUTION_INVALID");
+
+      const creationRequestId = sanitizeCreationRequestId(req.headers["idempotency-key"]);
+      const fileName = sanitizeFileName(req.body?.fileName);
+      const mimeType = resolveDeclaredAudioMimeType(req.body?.mimeType, fileName);
+      const fileSize = parseDeclaredFileSize(req.body?.fileSize);
       const evolution = await authorizeEvolution(req, deps, evolutionId);
       const audioPolicy = await deps.resolveAudioPolicy(req.user.id);
-      if (req.file.size > audioPolicy.maxFileBytes) return res.status(400).json({ code: "AUDIO_ASSET_FILE_SIZE_LIMIT", error: "O arquivo de áudio excede o limite permitido para o plano atual." });
+      if (fileSize > audioPolicy.maxFileBytes) throw routeError("O arquivo de áudio excede o limite permitido para o plano atual.", "AUDIO_ASSET_FILE_SIZE_LIMIT");
 
-      const audioBuffer = req.file.buffer as Buffer;
-      const contentHash = createHash("sha256").update(audioBuffer).digest("hex");
-      const mimeType = resolveAudioAssetMimeType(req.file.mimetype, audioBuffer);
+      let session = await readUploadSessionByRequest(deps.supabaseAdmin, evolution.id, creationRequestId);
+      if (session) {
+        assertSessionContext(session, { professionalId: req.user.id, fileName, mimeType, fileSize });
+      } else {
+        const audioAssetId = randomUUID();
+        const storagePath = buildAudioAssetStoragePath(req.user.id, evolution.id, audioAssetId, mimeType);
+        const inserted = await deps.supabaseAdmin
+          .from("audio_asset_upload_sessions")
+          .insert({
+            audio_asset_id: audioAssetId,
+            professional_id: req.user.id,
+            evolution_id: evolution.id,
+            storage_path: storagePath,
+            creation_request_id: creationRequestId,
+            file_name: fileName,
+            declared_mime_type: mimeType,
+            declared_file_size: fileSize,
+            status: "prepared",
+            expires_at: new Date(Date.now() + SIGNED_UPLOAD_TTL_SECONDS * 1000).toISOString(),
+          })
+          .select(UPLOAD_SESSION_SELECT)
+          .single();
+
+        if (inserted.error && isUniqueViolation(inserted.error)) {
+          session = await readUploadSessionByRequest(deps.supabaseAdmin, evolution.id, creationRequestId);
+          if (!session) throw inserted.error;
+          assertSessionContext(session, { professionalId: req.user.id, fileName, mimeType, fileSize });
+        } else if (inserted.error) {
+          throw inserted.error;
+        } else {
+          session = inserted.data as UploadSessionRow;
+        }
+      }
+
+      if (session.status !== "prepared" && session.resolved_asset_id) {
+        const resolved = await readExistingAsset(deps.supabaseAdmin, session.evolution_id, "id", session.resolved_asset_id);
+        if (!resolved) throw routeError("O asset finalizado não foi encontrado.", "AUDIO_ASSET_FINALIZED_MISSING", 409);
+        return res.status(200).json({ success: true, reused: session.status === "reused", alreadyFinalized: true, asset: publicAsset(resolved) });
+      }
+
+      const alreadyUploaded = await objectExists(deps.supabaseAdmin, session.storage_path);
+      const signed = alreadyUploaded ? { token: "" } : await createSignedUpload(deps.supabaseAdmin, session.storage_path);
+      return res.status(200).json({
+        success: true,
+        reused: false,
+        alreadyFinalized: false,
+        upload: uploadDescriptor(session, signed, deps.supabaseUrl, alreadyUploaded),
+      });
+    } catch (error) {
+      return respondError(res, error);
+    }
+  });
+
+  app.post("/api/ai/evolution-assets/:audioAssetId/finalize", deps.requireAuth, async (req: any, res: any) => {
+    let session: UploadSessionRow | null = null;
+    try {
+      const audioAssetId = String(req.params.audioAssetId || "").trim();
+      if (!isUuid(audioAssetId)) throw routeError("O asset informado é inválido.", "AUDIO_ASSET_ID_INVALID");
+      session = await readUploadSession(deps.supabaseAdmin, audioAssetId);
+      if (!session) throw routeError("A sessão de upload não foi encontrada.", "AUDIO_ASSET_UPLOAD_SESSION_NOT_FOUND", 404);
+      if (session.professional_id !== req.user.id) throw routeError("Você não tem permissão para finalizar este asset.", "AUDIO_ASSET_NOT_AUTHORIZED", 403);
+
+      if (session.status !== "prepared" && session.resolved_asset_id) {
+        const resolved = await readExistingAsset(deps.supabaseAdmin, session.evolution_id, "id", session.resolved_asset_id);
+        if (!resolved) throw routeError("O asset finalizado não foi encontrado.", "AUDIO_ASSET_FINALIZED_MISSING", 409);
+        return res.status(200).json({ success: true, reused: session.status === "reused", asset: publicAsset(resolved) });
+      }
+
+      await authorizeEvolution(req, deps, session.evolution_id);
+      const audioPolicy = await deps.resolveAudioPolicy(req.user.id);
+      const object = await deps.supabaseAdmin.storage.from(AUDIO_ASSET_BUCKET).download(session.storage_path);
+      if (object.error || !object.data) throw routeError("O upload direto ainda não está disponível para finalização.", "AUDIO_ASSET_UPLOAD_NOT_FOUND", 404);
+
+      const audioBuffer = Buffer.from(await object.data.arrayBuffer());
+      if (!audioBuffer.length || audioBuffer.length > audioPolicy.maxFileBytes) {
+        await invalidateUploadedSession(deps.supabaseAdmin, session);
+        throw routeError("O tamanho real do áudio excede o limite permitido.", "AUDIO_ASSET_FILE_SIZE_LIMIT");
+      }
+
+      let mimeType: string;
+      try {
+        mimeType = resolveAudioAssetMimeType(session.declared_mime_type, audioBuffer);
+      } catch (error) {
+        await invalidateUploadedSession(deps.supabaseAdmin, session);
+        throw error;
+      }
+      if (mimeType !== session.declared_mime_type) {
+        await invalidateUploadedSession(deps.supabaseAdmin, session);
+        throw routeError("O conteúdo real não corresponde ao MIME declarado no preparo.", "AUDIO_ASSET_MIME_MISMATCH");
+      }
+
       const duration = getAudioDurationFromBytes(new Uint8Array(audioBuffer));
       if (!Number.isFinite(duration) || duration <= 0) {
-        const error = new Error("Não foi possível determinar a duração do áudio no servidor.") as Error & { code?: string };
-        error.code = "AUDIO_ASSET_DURATION_UNREADABLE";
-        throw error;
+        await invalidateUploadedSession(deps.supabaseAdmin, session);
+        throw routeError("Não foi possível determinar a duração do áudio no servidor.", "AUDIO_ASSET_DURATION_UNREADABLE");
       }
       const durationSeconds = Math.ceil(duration);
-      if (durationSeconds > audioPolicy.maxDurationSeconds) return res.status(400).json({ code: "AUDIO_ASSET_DURATION_LIMIT", error: "O áudio excede o limite máximo permitido para o plano atual." });
-
-      const existingByRequest = await readExistingAsset(deps.supabaseAdmin, evolution.id, "creation_request_id", creationRequestId);
-      if (existingByRequest) {
-        if (existingByRequest.content_hash !== contentHash) return res.status(409).json({ code: "AUDIO_ASSET_IDEMPOTENCY_CONFLICT", error: "A mesma solicitação de criação foi usada para outro conteúdo." });
-        return res.status(200).json({ success: true, reused: true, asset: publicAsset(existingByRequest) });
+      if (durationSeconds > audioPolicy.maxDurationSeconds) {
+        await invalidateUploadedSession(deps.supabaseAdmin, session);
+        throw routeError("O áudio excede o limite máximo permitido para o plano atual.", "AUDIO_ASSET_DURATION_LIMIT");
       }
 
-      const existingByContent = await readExistingAsset(deps.supabaseAdmin, evolution.id, "content_hash", contentHash);
-      if (existingByContent) return res.status(200).json({ success: true, reused: true, asset: publicAsset(existingByContent) });
-
-      const assetId = randomUUID();
-      storagePath = buildAudioAssetStoragePath(req.user.id, evolution.id, assetId, mimeType);
-      const upload = await deps.supabaseAdmin.storage.from(AUDIO_ASSET_BUCKET).upload(storagePath, audioBuffer, {
-        contentType: mimeType,
-        cacheControl: "31536000",
-        upsert: false,
-      });
-      if (upload.error) {
-        const error = new Error("Não foi possível persistir o áudio no Storage.") as Error & { code?: string; httpStatus?: number };
-        error.code = "AUDIO_ASSET_STORAGE_UPLOAD_FAILED";
-        error.httpStatus = 502;
-        throw error;
+      const contentHash = createHash("sha256").update(audioBuffer).digest("hex");
+      const duplicate = await readExistingAsset(deps.supabaseAdmin, session.evolution_id, "content_hash", contentHash);
+      if (duplicate) {
+        if (duplicate.id === session.audio_asset_id) {
+          await updateUploadSession(deps.supabaseAdmin, session.audio_asset_id, { status: "finalized", resolved_asset_id: session.audio_asset_id });
+          return res.status(200).json({ success: true, reused: true, asset: publicAsset(duplicate) });
+        }
+        const removed = await deps.supabaseAdmin.storage.from(AUDIO_ASSET_BUCKET).remove([session.storage_path]);
+        if (removed.error) throw routeError("Não foi possível limpar o upload duplicado.", "AUDIO_ASSET_CLEANUP_FAILED", 502);
+        await updateUploadSession(deps.supabaseAdmin, session.audio_asset_id, { status: "reused", resolved_asset_id: duplicate.id });
+        return res.status(200).json({ success: true, reused: true, asset: publicAsset(duplicate) });
       }
 
-      const insert = await deps.supabaseAdmin
+      const inserted = await deps.supabaseAdmin
         .from("audio_assets")
         .insert({
-          id: assetId,
-          evolution_id: evolution.id,
-          storage_path: storagePath,
+          id: session.audio_asset_id,
+          evolution_id: session.evolution_id,
+          storage_path: session.storage_path,
           duration_seconds: durationSeconds,
           content_hash: contentHash,
           mime_type: mimeType,
           transcription_status: "pending",
-          creation_request_id: creationRequestId,
+          creation_request_id: session.creation_request_id,
         })
         .select(AUDIO_ASSET_SELECT)
         .single();
 
-      if (insert.error) {
-        if (isUniqueViolation(insert.error)) {
-          const concurrent = await readExistingAsset(deps.supabaseAdmin, evolution.id, "content_hash", contentHash)
-            || await readExistingAsset(deps.supabaseAdmin, evolution.id, "creation_request_id", creationRequestId);
-          if (concurrent) {
-            if (concurrent.creation_request_id === creationRequestId && concurrent.content_hash !== contentHash) return res.status(409).json({ code: "AUDIO_ASSET_IDEMPOTENCY_CONFLICT", error: "A mesma solicitação de criação foi usada para outro conteúdo." });
-            return res.status(200).json({ success: true, reused: true, asset: publicAsset(concurrent) });
-          }
+      if (inserted.error) {
+        const existing = isUniqueViolation(inserted.error)
+          ? await readExistingAsset(deps.supabaseAdmin, session.evolution_id, "content_hash", contentHash)
+            || await readExistingAsset(deps.supabaseAdmin, session.evolution_id, "creation_request_id", session.creation_request_id)
+            || await readExistingAsset(deps.supabaseAdmin, session.evolution_id, "id", session.audio_asset_id)
+          : null;
+        if (!existing) throw inserted.error;
+        if (existing.id === session.audio_asset_id) {
+          await updateUploadSession(deps.supabaseAdmin, session.audio_asset_id, { status: "finalized", resolved_asset_id: session.audio_asset_id });
+          return res.status(200).json({ success: true, reused: true, asset: publicAsset(existing) });
         }
-        throw insert.error;
+        const removed = await deps.supabaseAdmin.storage.from(AUDIO_ASSET_BUCKET).remove([session.storage_path]);
+        if (removed.error) throw routeError("Não foi possível limpar o upload duplicado.", "AUDIO_ASSET_CLEANUP_FAILED", 502);
+        await updateUploadSession(deps.supabaseAdmin, session.audio_asset_id, { status: "reused", resolved_asset_id: existing.id });
+        return res.status(200).json({ success: true, reused: true, asset: publicAsset(existing) });
       }
 
-      assetPersisted = true;
-      return res.status(201).json({ success: true, reused: false, asset: publicAsset(insert.data as AudioAssetRow) });
-    } catch (error: any) {
-      const status = Number(error?.httpStatus) || (error?.code === "AUDIO_ASSET_DURATION_UNREADABLE" || error?.code?.startsWith("AUDIO_ASSET_") ? 400 : 500);
-      if (status >= 500) console.error("[AudioAsset] Falha controlada:", safeErrorMessage(error));
-      return res.status(status).json({ code: error?.code || "AUDIO_ASSET_CREATION_FAILED", error: status >= 500 ? "Não foi possível criar o asset de áudio." : error.message });
-    } finally {
-      if (storagePath && !assetPersisted) {
-        const cleanup = await deps.supabaseAdmin.storage.from(AUDIO_ASSET_BUCKET).remove([storagePath]);
-        if (cleanup.error) console.error("[AudioAsset] Falha ao limpar objeto órfão:", safeErrorMessage(cleanup.error));
-      }
+      await updateUploadSession(deps.supabaseAdmin, session.audio_asset_id, { status: "finalized", resolved_asset_id: session.audio_asset_id });
+      return res.status(201).json({ success: true, reused: false, asset: publicAsset(inserted.data as AudioAssetRow) });
+    } catch (error) {
+      return respondError(res, error);
     }
   });
 }
