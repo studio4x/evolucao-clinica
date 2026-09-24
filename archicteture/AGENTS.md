@@ -24,6 +24,7 @@ Both commands already include the build-version bump step and must not bypass it
 
 ## Mandatory Deploy Rule
 - After every completed code/content change that should go live, the agent must perform a deploy in the same turn instead of stopping at local edits.
+- Explicitly documentation-only or operational-instructions tasks are exempt when the task says not to deploy. They must still be committed and pushed when the repository workflow requires it.
 - Default target is production deploy for the linked Vercel project, unless the user explicitly asks for another environment.
 - Minimum flow: validate the change, run the appropriate build, then deploy.
 - If deploy cannot be completed because of missing credentials, missing CLI, remote outage, or another external blocker, the agent must state exactly what blocked the deploy and what command/step remains pending.
