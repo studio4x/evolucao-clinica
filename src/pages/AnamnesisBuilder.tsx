@@ -328,7 +328,7 @@ export default function AnamnesisBuilder() {
     if (saving) return;
     setSaveBeforeAddFieldOpen(false);
     setPendingAddFieldSectionId(null);
-    window.requestAnimationFrame(() => addFieldTriggerRef.current?.focus());
+    window.setTimeout(() => addFieldTriggerRef.current?.focus({ preventScroll: true }), 0);
   };
 
   const previewAnswers: AnamnesisAnswers = Object.fromEntries(schema.sections.flatMap((section) => section.fields.filter((field) => !field.patientReference).map((field) => [field.id || field.key, field.type === 'multiselect' ? [] : field.type === 'yes_no' ? null : field.type === 'scale' ? field.min ?? 0 : '']))) as AnamnesisAnswers;
