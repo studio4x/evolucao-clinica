@@ -24,10 +24,12 @@ assert.ok(
 );
 assert.match(cropEditorSource, /Arraste para mover/);
 assert.match(cropEditorSource, /Aproximação/);
-assert.match(cropEditorSource, /transformOrigin: 'center center'/, 'O zoom do recorte deve permanecer centralizado na pré-visualização.');
+assert.match(cropEditorSource, /transform: 'translate\(-50%, -50%\)'/, 'A imagem deve permanecer centralizada antes de aplicar o deslocamento do recorte.');
 assert.match(cropEditorSource, /const DEFAULT_CROP_ZOOM = 1\.15/, 'O editor deve manter margem para deslocamento horizontal mesmo em fotos quadradas.');
 assert.match(cropEditorSource, /min="1\.05"/, 'O zoom mínimo deve preservar espaço para movimentar o recorte.');
-assert.match(cropEditorSource, /translate\(calc\(-50% - \$\{cropPosition\.x/, 'A prévia deve traduzir horizontalmente o recorte aplicado.');
+assert.match(cropEditorSource, /imageWidthPercent|horizontalOverflowPercent/, 'A prévia deve calcular a área horizontal disponível pelo aspecto natural da imagem.');
+assert.match(cropEditorSource, /imageHeightPercent|verticalOverflowPercent/, 'A prévia deve calcular a área vertical disponível pelo aspecto natural da imagem.');
+assert.match(cropEditorSource, /naturalWidth.*naturalHeight/, 'A prévia deve usar as dimensões naturais carregadas da imagem.');
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
