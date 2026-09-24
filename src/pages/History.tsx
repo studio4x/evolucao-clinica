@@ -17,6 +17,7 @@ import { downloadPdfFile } from '../utils/prontuarioPdf';
 import { useClinicContextStore } from '../store/clinicContextStore';
 import { fetchClinicPatients } from '../services/clinicPatients';
 import { clinicEvolutionRequest } from '../services/clinicEvolutions';
+import { getHistoryPatientPath } from '../utils/clinicHistoryRouting';
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -58,9 +59,7 @@ export default function History() {
   const isClinicalProfessional = activeOrganization?.membershipRole === 'professional'
     && activeOrganization.clinicalAccessEnabled
     && activeOrganization.licenseActive;
-  const patientPath = (patientId: string) => isClinicalProfessional
-    ? `/painel/clinica/pacientes/${patientId}`
-    : `/painel/patients/${patientId}`;
+  const patientPath = (patientId: string) => getHistoryPatientPath(patientId, Boolean(isClinicalProfessional), patientsMap);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const [professional, setProfessional] = useState<any>(null);
@@ -99,7 +98,11 @@ export default function History() {
         }));
         const pMap: Record<string, any> = {};
         const clinicEvolutions = patientEntries.flatMap(({ patient, evolutions }) => {
-          pMap[patient.patient_id] = { ...patient, id: patient.patient_id };
+          pMap[patient.patient_id] = {
+            ...patient,
+            id: patient.patient_id,
+            organizationPatientId: patient.organization_patient_id,
+          };
           return evolutions;
         });
         setPatientsMap(pMap);

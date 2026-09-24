@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { getHistoryPatientPath } from "../src/utils/clinicHistoryRouting";
 
 const layout = readFileSync("src/components/Layout.tsx", "utf8");
 const selector = readFileSync("src/components/clinic/ClinicContextSelector.tsx", "utf8");
@@ -33,6 +34,11 @@ assert.match(history, /fetchClinicPatients/);
 assert.match(history, /clinicEvolutionRequest/);
 assert.doesNotMatch(history, /\.from\("evolutions"\)/);
 assert.match(clinicRoute, /location\.pathname === "\/painel\/clinica"/);
-assert.match(version, /v1\.10\.916/);
+assert.match(version, /v1\.10\.917/);
+
+const patientsMap = { "patient-123": { organizationPatientId: "org-patient-987" } };
+assert.equal(getHistoryPatientPath("patient-123", false, patientsMap), "/painel/patients/patient-123");
+assert.equal(getHistoryPatientPath("patient-123", true, patientsMap), "/painel/clinica/pacientes/org-patient-987");
+assert.notEqual(getHistoryPatientPath("patient-123", true, patientsMap), "/painel/clinica/pacientes/patient-123");
 
 console.log("clinic professional visual shell and clinic plan gating: PASS");
