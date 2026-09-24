@@ -41,11 +41,13 @@ assert.match(patientPhotoServiceSource, /upsert: false/);
 assert.doesNotMatch(patientPhotoServiceSource, /getPublicUrl/);
 assert.match(patientPhotoSource, /createPatientPhotoSignedUrl\(photoPath\)/);
 assert.match(patientsSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);
+assert.match(patientsSource, /shape="rounded" className="h-20 w-20"/, 'A lista deve usar foto quadrada maior com cantos suaves.');
 assert.match(patientsSource, /PATIENTS_GUIDE_STEPS/);
 assert.match(patientsSource, /PATIENTS_SUPPORT_HREF/);
 assert.match(patientsSource, /Como funciona a lista de pacientes/);
 assert.match(detailSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);
 assert.match(patientPhotoSource, /object-cover object-center/, 'A foto exibida deve usar o centro do recorte aplicado.');
+assert.match(patientPhotoSource, /shape === 'rounded' \? 'rounded-xl' : 'rounded-full'/, 'O formato quadrado deve ser opcional para preservar outros contextos.');
 assert.match(detailSource, /className="h-16 w-16 shrink-0 sm:h-20 sm:w-20 xl:h-16 xl:w-16"/, 'A foto do cabeçalho deve crescer sem perder o limite responsivo.');
 assert.match(serverSource, /\.from\("patient-photos"\)[\s\S]*?\.remove\(photoPaths\)/);
 

@@ -6,6 +6,7 @@ type PatientPhotoProps = {
   photoPath?: string | null;
   patientName?: string | null;
   className?: string;
+  shape?: 'circle' | 'rounded';
 };
 
 const getInitials = (name: string | null | undefined) => String(name || '')
@@ -15,7 +16,7 @@ const getInitials = (name: string | null | undefined) => String(name || '')
   .map((part) => part.charAt(0).toUpperCase())
   .join('');
 
-export function PatientPhoto({ photoPath, patientName, className = 'h-12 w-12' }: PatientPhotoProps) {
+export function PatientPhoto({ photoPath, patientName, className = 'h-12 w-12', shape = 'circle' }: PatientPhotoProps) {
   const [signedUrl, setSignedUrl] = useState('');
   const initials = useMemo(() => getInitials(patientName), [patientName]);
 
@@ -37,7 +38,7 @@ export function PatientPhoto({ photoPath, patientName, className = 'h-12 w-12' }
 
   return (
     <div
-      className={`flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-brand-border bg-brand-primary/10 text-brand-primary ${className}`}
+      className={`flex shrink-0 items-center justify-center overflow-hidden border border-brand-border bg-brand-primary/10 text-brand-primary ${shape === 'rounded' ? 'rounded-xl' : 'rounded-full'} ${className}`}
       role={!signedUrl ? 'img' : undefined}
       aria-label={!signedUrl ? `Paciente ${patientName || 'sem foto'}` : undefined}
     >

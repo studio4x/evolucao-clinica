@@ -245,7 +245,7 @@ export default function Patients() {
             {filteredPatients.map((patient) => (
               <div key={patient.id} className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-brand-bg transition-colors gap-4">
                 <div className="flex min-w-0 items-start gap-4">
-                  <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-14 w-14" />
+                  <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} shape="rounded" className="h-20 w-20" />
                   <div className="min-w-0">
                     <h3 className="font-semibold text-brand-text text-lg">{patient.full_name}</h3>
                     <div className="flex items-center space-x-2 mt-1">
