@@ -27,6 +27,6 @@ assert.doesNotMatch(
   'O card Prontuário não deve conter o CTA de Anamnese.',
 );
 assert.match(source, /PatientSessionsSummaryCard[\s\S]*PatientAnamnesisSummaryCard/, 'O card de Anamnese deve ficar depois do Controle de Sessões.');
-assert.match(source, /xl:col-start-2 xl:row-start-2[\s\S]*PatientAnamnesisSummaryCard/, 'O card de Anamnese deve ocupar a linha abaixo no desktop.');
+assert.match(source, /className="contents xl:block xl:order-none xl:col-start-2 xl:row-start-1 xl:space-y-6"[\s\S]*PatientSessionsSummaryCard[\s\S]*PatientAnamnesisSummaryCard/, 'Os cards de sessões e Anamnese devem compartilhar a coluna direita no desktop.');
 
 console.log('Patient detail tabs tests passed.');

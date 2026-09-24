@@ -2725,18 +2725,20 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          <div className={`order-3 xl:order-none xl:col-start-2 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
-            <PatientSessionsSummaryCard
-              patientId={patient.id}
-              href={`/painel/patients/${id}/sessions`}
-            />
-          </div>
+          <div className="contents xl:block xl:order-none xl:col-start-2 xl:row-start-1 xl:space-y-6">
+            <div className={`order-3 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
+              <PatientSessionsSummaryCard
+                patientId={patient.id}
+                href={`/painel/patients/${id}/sessions`}
+              />
+            </div>
 
-          <div className={`order-3 xl:order-none xl:col-start-2 xl:row-start-2 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
-            <PatientAnamnesisSummaryCard
-              patientId={patient.id}
-              href={`/painel/patients/${id}/anamnesis`}
-            />
+            <div className={`order-3 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
+              <PatientAnamnesisSummaryCard
+                patientId={patient.id}
+                href={`/painel/patients/${id}/anamnesis`}
+              />
+            </div>
           </div>
 
           <div className={`order-3 xl:order-none xl:col-span-2 ${mobileTabVisibility('files')}`}>
