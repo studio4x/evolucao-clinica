@@ -7,7 +7,6 @@ import {
 import {
   ArrowLeft,
   CheckCircle2,
-  ChevronDown,
   ClipboardList,
   Clock3,
   AlertTriangle,
@@ -28,6 +27,7 @@ import {
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { AnamnesisRenderer } from '../components/anamnesis/AnamnesisRenderer';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { showAlert, showConfirm } from '../store/modalStore';
@@ -44,17 +44,22 @@ import {
   fetchCurrentPatientAnamnesis,
   fetchPatientAnamnesisHistory,
   fetchPatientAnamnesisRevisions,
+  fetchPatientAnamnesisVersions,
   getRecommendedAnamnesisTemplate,
   hasMeaningfulAnamnesisAnswers,
   savePatientAnamnesis,
+  completePatientAnamnesis,
+  reopenPatientAnamnesis,
   startPatientAnamnesis,
   type AnamnesisAnswers,
-  type AnamnesisField,
   type AnamnesisSection,
   type AnamnesisTemplate,
   type PatientAnamnesis,
   type PatientAnamnesisRevision,
+  type PatientAnamnesisVersion,
 } from '../services/anamnesis';
+import { resolveAnamnesisFieldValue } from '../services/anamnesisValueResolver';
+import { buildPatientContextSnapshot } from '../services/anamnesisValueResolver';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -145,8 +150,9 @@ const fieldHasValue = (value: unknown) => {
 const answerSignature = (answers: AnamnesisAnswers) => JSON.stringify(answers || {});
 
 const orderSections = (sections: AnamnesisSection[] = []) => {
-  const goals = sections.filter((section) => section.key === 'goals');
-  const others = sections.filter((section) => section.key !== 'goals');
+  const ordered = [...sections].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const goals = ordered.filter((section) => section.key === 'goals');
+  const others = ordered.filter((section) => section.key !== 'goals');
   return [...others, ...goals];
 };
 
@@ -170,153 +176,6 @@ const revisionLabel = (eventType: PatientAnamnesisRevision['eventType']) => {
   }
 };
 
-type FieldProps = {
-  field: AnamnesisField;
-  value: AnamnesisAnswers[string];
-  disabled?: boolean;
-  onChange: (value: AnamnesisAnswers[string]) => void;
-};
-
-function AnamnesisFieldInput({ field, value, disabled = false, onChange }: FieldProps) {
-  const baseClass =
-    'w-full rounded-xl border border-brand-border bg-white px-3.5 py-3 text-sm text-brand-text outline-none transition-colors focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/10 disabled:cursor-not-allowed disabled:bg-brand-bg/60 disabled:text-brand-text-muted disabled:opacity-80';
-
-  if (field.type === 'textarea') {
-    return (
-      <textarea
-        value={typeof value === 'string' ? value : ''}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={field.placeholder}
-        rows={4}
-        disabled={disabled}
-        className={`${baseClass} min-h-[110px] resize-y disabled:resize-none`}
-      />
-    );
-  }
-
-  if (field.type === 'select') {
-    return (
-      <select
-        value={typeof value === 'string' ? value : ''}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        className={baseClass}
-      >
-        <option value="">Selecione...</option>
-        {(field.options || []).map((option) => (
-          <option key={option} value={option}>{option}</option>
-        ))}
-      </select>
-    );
-  }
-
-  if (field.type === 'multiselect') {
-    const selected = Array.isArray(value) ? value.map(String) : [];
-    return (
-      <div className="grid gap-2 sm:grid-cols-2">
-        {(field.options || []).map((option) => {
-          const checked = selected.includes(option);
-          return (
-            <label
-              key={option}
-              className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs transition-colors ${
-                disabled
-                  ? 'cursor-not-allowed bg-brand-bg/60 text-brand-text-muted opacity-80'
-                  : checked
-                    ? 'cursor-pointer border-brand-primary/30 bg-brand-primary/5 text-brand-primary'
-                    : 'cursor-pointer border-brand-border bg-white text-brand-text'
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={disabled}
-                onChange={(event) => {
-                  const next = event.target.checked
-                    ? [...selected, option]
-                    : selected.filter((item) => item !== option);
-                  onChange(next);
-                }}
-                className="h-4 w-4 rounded border-brand-border text-brand-primary focus:ring-brand-primary"
-              />
-              {option}
-            </label>
-          );
-        })}
-      </div>
-    );
-  }
-
-  if (field.type === 'yes_no') {
-    const current = typeof value === 'boolean' ? value : null;
-    return (
-      <div className="grid grid-cols-2 gap-2">
-        {[
-          { label: 'Sim', value: true },
-          { label: 'Não', value: false },
-        ].map((option) => (
-          <button
-            key={option.label}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(option.value)}
-            className={`rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
-              current === option.value
-                ? 'border-brand-primary bg-brand-primary/10 text-brand-primary'
-                : 'border-brand-border bg-white text-brand-text'
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
-  if (field.type === 'scale') {
-    const min = Number.isFinite(field.min) ? Number(field.min) : 0;
-    const max = Number.isFinite(field.max) ? Number(field.max) : 10;
-    const numeric = typeof value === 'number' ? value : min;
-    return (
-      <div className="space-y-2">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          value={numeric}
-          disabled={disabled}
-          onChange={(event) => onChange(Number(event.target.value))}
-          className="w-full accent-brand-primary disabled:cursor-not-allowed disabled:opacity-60"
-        />
-        <div className="flex justify-between text-[10px] text-brand-text-muted">
-          <span>{min}</span>
-          <span className="font-bold text-brand-primary">{numeric}</span>
-          <span>{max}</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <input
-      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'}
-      value={
-        typeof value === 'string' || typeof value === 'number'
-          ? value
-          : ''
-      }
-      onChange={(event) =>
-        onChange(field.type === 'number' && event.target.value !== '' ? Number(event.target.value) : event.target.value)
-      }
-      placeholder={field.placeholder}
-      min={field.type === 'number' ? field.min : undefined}
-      max={field.type === 'number' ? field.max : undefined}
-      disabled={disabled}
-      className={baseClass}
-    />
-  );
-}
-
 export default function PatientAnamnesis() {
   const { id: patientId } = useParams();
   const navigate = useNavigate();
@@ -336,6 +195,7 @@ export default function PatientAnamnesis() {
   const siteConfig = useSiteConfig();
 
   const [patientName, setPatientName] = useState('');
+  const [patientData, setPatientData] = useState<Record<string, any> | null>(null);
   const [professionalTitle, setProfessionalTitle] = useState('');
   const [professional, setProfessional] = useState<any>(null);
   const [templates, setTemplates] = useState<AnamnesisTemplate[]>([]);
@@ -343,6 +203,7 @@ export default function PatientAnamnesis() {
   const [current, setCurrent] = useState<PatientAnamnesis | null>(null);
   const [history, setHistory] = useState<PatientAnamnesis[]>([]);
   const [revisions, setRevisions] = useState<PatientAnamnesisRevision[]>([]);
+  const [clinicalVersions, setClinicalVersions] = useState<PatientAnamnesisVersion[]>([]);
   const [historyPreview, setHistoryPreview] = useState<PatientAnamnesis | null>(null);
   const [answers, setAnswers] = useState<AnamnesisAnswers>({});
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => new Set());
@@ -450,10 +311,10 @@ export default function PatientAnamnesis() {
   const filledFields = useMemo(
     () => activeSections.reduce(
       (total, section) =>
-        total + section.fields.filter((field) => fieldHasValue(answers[field.key])).length,
+        total + section.fields.filter((field) => fieldHasValue(resolveAnamnesisFieldValue(field, answers, patientData))).length,
       0
     ),
-    [activeSections, answers]
+    [activeSections, answers, patientData]
   );
 
   const isCompleted = current?.status === 'completed';
@@ -466,6 +327,11 @@ export default function PatientAnamnesis() {
   const loadRevisions = useCallback(async () => {
     if (!patientId) return;
     setRevisions(await fetchPatientAnamnesisRevisions(patientId));
+  }, [patientId]);
+
+  const loadClinicalVersions = useCallback(async () => {
+    if (!patientId) return;
+    setClinicalVersions(await fetchPatientAnamnesisVersions(patientId));
   }, [patientId]);
 
   useEffect(() => {
@@ -486,8 +352,9 @@ export default function PatientAnamnesis() {
           currentAnamnesis,
           previous,
           revisionHistory,
+          clinicalVersionHistory,
         ] = await Promise.all([
-          supabase.from('patients').select('id, full_name').eq('id', patientId).single(),
+          supabase.from('patients').select('id, full_name, birth_date, cpf, phone, postal_code, street, address_number, address_complement, neighborhood, city, state').eq('id', patientId).single(),
           supabase
             .from('professionals')
             .select('full_name, professional_title, professional_register, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at')
@@ -497,6 +364,7 @@ export default function PatientAnamnesis() {
           fetchCurrentPatientAnamnesis(patientId),
           fetchPatientAnamnesisHistory(patientId),
           fetchPatientAnamnesisRevisions(patientId),
+          fetchPatientAnamnesisVersions(patientId),
         ]);
 
         if (patientResult.error) throw patientResult.error;
@@ -508,6 +376,7 @@ export default function PatientAnamnesis() {
         const initialAnswers = currentAnamnesis?.answers || {};
 
         setPatientName(patientResult.data?.full_name || 'Paciente');
+        setPatientData(patientResult.data || null);
         setProfessionalTitle(title);
         setProfessional(profileResult.data || null);
         setTemplates(availableTemplates);
@@ -515,6 +384,7 @@ export default function PatientAnamnesis() {
         currentRef.current = currentAnamnesis;
         setHistory(previous);
         setRevisions(revisionHistory);
+        setClinicalVersions(clinicalVersionHistory);
         setAnswers(initialAnswers);
         answersRef.current = initialAnswers;
         setDirty(false);
@@ -524,13 +394,13 @@ export default function PatientAnamnesis() {
         if (currentAnamnesis) {
           setSelectedTemplateId(currentAnamnesis.templateId);
           selectedTemplateIdRef.current = currentAnamnesis.templateId;
-          const first = orderSections(currentAnamnesis.templateSnapshot.sections)?.[0]?.key;
-          setExpandedSections(new Set(first ? [first] : []));
+          const first = orderSections(currentAnamnesis.templateSnapshot.sections)?.[0];
+          setExpandedSections(new Set(first ? [first.id || first.key] : []));
         } else if (recommended) {
           setSelectedTemplateId(recommended.id);
           selectedTemplateIdRef.current = recommended.id;
-          const first = orderSections(recommended.schema.sections)?.[0]?.key;
-          setExpandedSections(new Set(first ? [first] : []));
+          const first = orderSections(recommended.schema.sections)?.[0];
+          setExpandedSections(new Set(first ? [first.id || first.key] : []));
         }
       } catch (error: any) {
         console.error('[Anamnesis] Erro ao carregar:', error);
@@ -792,8 +662,8 @@ export default function PatientAnamnesis() {
     lastPersistedSignatureRef.current = answerSignature(nextAnswers);
     lastQueuedSignatureRef.current = '';
     setSaveState('saved');
-    const first = orderSections(record.templateSnapshot.sections)?.[0]?.key;
-    setExpandedSections(new Set(first ? [first] : []));
+    const first = orderSections(record.templateSnapshot.sections)?.[0];
+    setExpandedSections(new Set(first ? [first.id || first.key] : []));
   }, []);
 
   const handleFieldChange = (key: string, value: AnamnesisAnswers[string]) => {
@@ -836,8 +706,8 @@ export default function PatientAnamnesis() {
       setDirty(false);
       dirtyRef.current = false;
       lastPersistedSignatureRef.current = answerSignature({});
-      const first = orderSections(nextTemplate.schema.sections)?.[0]?.key;
-      setExpandedSections(new Set(first ? [first] : []));
+      const first = orderSections(nextTemplate.schema.sections)?.[0];
+      setExpandedSections(new Set(first ? [first.id || first.key] : []));
       return;
     }
 
@@ -875,7 +745,7 @@ export default function PatientAnamnesis() {
 
       const created = await startPatientAnamnesis(patientId, nextTemplateId, true);
       setCurrentRecord(created);
-      await Promise.all([loadHistory(), loadRevisions()]);
+      await Promise.all([loadHistory(), loadRevisions(), loadClinicalVersions()]);
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao trocar modelo:', error);
       await showAlert(error?.message || 'Não foi possível trocar o modelo da anamnese.', {
@@ -931,7 +801,7 @@ export default function PatientAnamnesis() {
           } catch (copyError) {
             console.error('[Anamnesis] Nova anamnese criada, mas a cópia falhou:', copyError);
             setNewAnamnesisChoiceOpen(false);
-            await Promise.allSettled([loadHistory(), loadRevisions()]);
+            await Promise.allSettled([loadHistory(), loadRevisions(), loadClinicalVersions()]);
             await showAlert(
               'A nova anamnese foi criada e a anterior está preservada no histórico, mas não foi possível copiar as respostas. A nova versão foi mantida em branco para evitar inconsistências.',
               {
@@ -946,7 +816,7 @@ export default function PatientAnamnesis() {
       }
 
       setNewAnamnesisChoiceOpen(false);
-      await Promise.all([loadHistory(), loadRevisions()]);
+      await Promise.all([loadHistory(), loadRevisions(), loadClinicalVersions()]);
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao iniciar nova anamnese:', error);
       await showAlert(
@@ -975,6 +845,7 @@ export default function PatientAnamnesis() {
         pdfRecord = {
           ...syncedRecord,
           answers: { ...answersRef.current },
+          patientContextSnapshot: syncedRecord.patientContextSnapshot || buildPatientContextSnapshot(patientData),
         };
       }
 
@@ -1034,6 +905,26 @@ export default function PatientAnamnesis() {
     }
   };
 
+  const handleDownloadClinicalVersion = async (version: PatientAnamnesisVersion) => {
+    const base = currentRef.current;
+    if (!base) return;
+    await handleDownloadPdf({
+      ...base,
+      id: version.id,
+      templateVersionId: version.templateVersionId,
+      templateKey: version.templateKey,
+      templateName: version.templateName,
+      templateVersion: version.templateVersion,
+      templateSnapshot: version.templateSnapshot,
+      answers: version.answersSnapshot,
+      patientContextSnapshot: version.patientContextSnapshot,
+      status: 'completed',
+      completedAt: version.completedAt,
+      createdAt: version.createdAt,
+      updatedAt: version.completedAt,
+    });
+  };
+
   const handleComplete = async () => {
     if (!hasMeaningfulAnamnesisAnswers(answersRef.current)) {
       await showAlert('Preencha pelo menos uma informação antes de concluir a anamnese.', {
@@ -1047,17 +938,13 @@ export default function PatientAnamnesis() {
     setSaveState('saving');
     try {
       const record = await flushPendingSave() || await ensureCurrent();
-      const completedAt = new Date().toISOString();
-      const updated = await savePatientAnamnesis(record.id, {
-        status: 'completed',
-        completedAt,
-      });
+      const updated = await completePatientAnamnesis(record.id);
       currentRef.current = updated;
       setCurrent(updated);
       setDirty(false);
       dirtyRef.current = false;
       setSaveState('saved');
-      await loadRevisions();
+      await Promise.all([loadRevisions(), loadClinicalVersions()]);
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao concluir:', error);
       setSaveState('error');
@@ -1087,14 +974,11 @@ export default function PatientAnamnesis() {
 
     setSaveState('saving');
     try {
-      const updated = await savePatientAnamnesis(currentRef.current.id, {
-        status: 'draft',
-        completedAt: null,
-      });
+      const updated = await reopenPatientAnamnesis(currentRef.current.id);
       currentRef.current = updated;
       setCurrent(updated);
       setSaveState('saved');
-      await loadRevisions();
+      await Promise.all([loadRevisions(), loadClinicalVersions()]);
     } catch (error: any) {
       console.error('[Anamnesis] Erro ao reabrir:', error);
       setSaveState('error');
@@ -1349,61 +1233,16 @@ export default function PatientAnamnesis() {
             </div>
           )}
 
-          {activeSections.map((section, sectionIndex) => {
-            const expanded = expandedSections.has(section.key);
-            const sectionFilled = section.fields.filter((field) => fieldHasValue(answers[field.key])).length;
-
-            return (
-              <section key={section.key} className="card !overflow-visible border border-brand-border/70 bg-white">
-                <button
-                  type="button"
-                  onClick={() => toggleSection(section.key)}
-                  aria-expanded={expanded}
-                  className="flex w-full items-start justify-between gap-3 p-5 text-left sm:p-6"
-                >
-                  <div className="flex min-w-0 gap-3">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-primary/10 text-xs font-bold text-brand-primary">
-                      {sectionIndex + 1}
-                    </span>
-                    <div>
-                      <h2 className="text-sm font-bold text-brand-text">{section.title}</h2>
-                      {section.description && (
-                        <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">{section.description}</p>
-                      )}
-                      <p className="mt-1 text-[10px] font-semibold text-brand-text-muted">
-                        {sectionFilled} de {section.fields.length} campos preenchidos
-                      </p>
-                    </div>
-                  </div>
-                  <ChevronDown
-                    size={18}
-                    className={`mt-1 shrink-0 text-brand-text-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
-                  />
-                </button>
-
-                {expanded && (
-                  <div className="space-y-5 border-t border-brand-border/50 px-5 py-5 sm:px-6">
-                    {section.fields.map((field) => (
-                      <div key={field.key}>
-                        <label className="mb-1.5 block text-xs font-bold text-brand-text">
-                          {field.label}
-                        </label>
-                        {field.helpText && (
-                          <p className="mb-1.5 text-[10px] leading-relaxed text-brand-text-muted">{field.helpText}</p>
-                        )}
-                        <AnamnesisFieldInput
-                          field={field}
-                          value={answers[field.key]}
-                          disabled={isCompleted}
-                          onChange={(value) => handleFieldChange(field.key, value)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            );
-          })}
+          <AnamnesisRenderer
+            sections={activeSections}
+            answers={answers}
+            patient={patientData}
+            disabled={isCompleted}
+            expandedSections={expandedSections}
+            onToggleSection={toggleSection}
+      onChange={handleFieldChange}
+            fieldHasValue={fieldHasValue}
+          />
         </div>
 
         <aside className="space-y-4">
@@ -1456,6 +1295,23 @@ export default function PatientAnamnesis() {
                         Baixar PDF
                       </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {clinicalVersions.length > 0 && (
+            <details className="card overflow-hidden bg-white">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-5 text-sm font-bold text-brand-text">
+                <span className="flex items-center gap-2"><HistoryIcon size={16} className="text-brand-primary" />Versões clínicas concluídas</span>
+                <span className="rounded-full bg-brand-bg px-2 py-0.5 text-[10px] text-brand-text-muted">{clinicalVersions.length}</span>
+              </summary>
+              <div className="space-y-2 border-t border-brand-border/50 p-4">
+                {clinicalVersions.map((version) => (
+                  <div key={version.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-border/60 bg-brand-bg/20 p-3">
+                    <div><p className="text-xs font-semibold text-brand-text">Versão clínica {version.versionNumber}</p><p className="mt-1 text-[10px] text-brand-text-muted">Concluída em {formatDateTime(version.completedAt)}</p></div>
+                    <button type="button" onClick={() => void handleDownloadClinicalVersion(version)} disabled={Boolean(downloadingPdfId)} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-border px-3 py-2 text-xs font-bold text-brand-primary hover:bg-brand-bg disabled:opacity-50"><Download size={12} />Baixar PDF</button>
                   </div>
                 ))}
               </div>
@@ -1658,14 +1514,14 @@ export default function PatientAnamnesis() {
 
             <div className="max-h-[calc(88vh-92px)] space-y-5 overflow-y-auto p-5 sm:p-6">
               {orderSections(historyPreview.templateSnapshot.sections).map((section) => (
-                <section key={section.key}>
+                <section key={section.id || section.key}>
                   <h3 className="text-sm font-bold text-brand-text">{section.title}</h3>
                   <div className="mt-3 space-y-3">
                     {section.fields.map((field) => (
                       <div key={field.key} className="rounded-xl border border-brand-border/60 bg-brand-bg/20 p-3">
                         <p className="text-[10px] font-bold uppercase tracking-wider text-brand-text-muted">{field.label}</p>
                         <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-brand-text">
-                          {formatAnswer(historyPreview.answers[field.key])}
+                          {formatAnswer(resolveAnamnesisFieldValue(field, historyPreview.answers, historyPreview.patientContextSnapshot || patientData))}
                         </p>
                       </div>
                     ))}

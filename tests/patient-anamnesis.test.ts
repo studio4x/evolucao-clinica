@@ -62,7 +62,7 @@ assert.match(anamnesisPageSource, /handleStartNew\('copy'\)/);
 assert.match(anamnesisPageSource, /handleStartNew\('blank'\)/);
 assert.match(anamnesisPageSource, /setCurrentRecord\(created\)/);
 assert.match(anamnesisPageSource, /A nova anamnese foi criada e a anterior está preservada no histórico/);
-assert.match(anamnesisPageSource, /Promise\.allSettled\(\[loadHistory\(\), loadRevisions\(\)\]\)/);
+assert.match(anamnesisPageSource, /Promise\.allSettled\(\[loadHistory\(\), loadRevisions\(\), loadClinicalVersions\(\)\]\)/);
 assert.match(anamnesisPageSource, /orderSections/);
 assert.match(anamnesisPageSource, /section\.key === 'goals'/);
 assert.doesNotMatch(anamnesisPageSource, /Gemini|inteligência artificial|\bIA\b/);
@@ -73,6 +73,9 @@ assert.match(anamnesisServiceSource, /start_patient_anamnesis/);
 assert.match(anamnesisServiceSource, /fetchPatientAnamnesisRevisions/);
 assert.match(anamnesisServiceSource, /patient_anamnesis_revisions/);
 assert.match(anamnesisServiceSource, /is_current/);
+assert.match(anamnesisServiceSource, /complete_patient_anamnesis/);
+assert.match(anamnesisServiceSource, /reopen_patient_anamnesis/);
+assert.match(anamnesisServiceSource, /patient_anamnesis_versions/);
 
 assert.match(anamnesisCardSource, /Preencher anamnese/);
 assert.match(anamnesisCardSource, /Esta funcionalidade é somente para assinantes do Plano Anual/);
@@ -124,5 +127,13 @@ assert.match(integrityMigrationSource, /old\.status = 'draft' and new\.status = 
 assert.match(integrityMigrationSource, /new\.completed_at := now\(\)/);
 assert.match(integrityMigrationSource, /old\.status = 'completed' and new\.status = 'draft'/);
 assert.match(integrityMigrationSource, /new\.completed_at := null/);
+
+const foundationMigrationSource = readFileSync('supabase/migrations/20260924145553_anamnesis_foundation_versioning.sql', 'utf8');
+assert.match(foundationMigrationSource, /create table if not exists public\.anamnesis_template_versions/);
+assert.match(foundationMigrationSource, /create table if not exists public\.patient_anamnesis_versions/);
+assert.match(foundationMigrationSource, /complete_patient_anamnesis/);
+assert.match(foundationMigrationSource, /reopen_patient_anamnesis/);
+assert.match(foundationMigrationSource, /patient_context_snapshot/);
+assert.match(foundationMigrationSource, /basic_information/);
 
 console.log('Patient anamnesis tests passed.');

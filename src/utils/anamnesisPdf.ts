@@ -1,5 +1,6 @@
 import type { AnamnesisAnswers, AnamnesisSection, PatientAnamnesis } from '../services/anamnesis';
 import { generateProntuarioPDF } from './prontuarioPdf';
+import { resolveAnamnesisFieldValue } from '../services/anamnesisValueResolver';
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Não informado';
@@ -29,8 +30,9 @@ const sanitizeFileName = (value: string) =>
     .replace(/^_+|_+$/g, '') || 'Paciente';
 
 const orderSections = (sections: AnamnesisSection[] = []) => {
-  const goals = sections.filter((section) => section.key === 'goals');
-  const others = sections.filter((section) => section.key !== 'goals');
+  const ordered = [...sections].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const goals = ordered.filter((section) => section.key === 'goals');
+  const others = ordered.filter((section) => section.key !== 'goals');
   return [...others, ...goals];
 };
 
@@ -39,7 +41,7 @@ export const filterAnamnesisAnswersForSchema = (
   sections: AnamnesisSection[] = []
 ): AnamnesisAnswers => {
   const allowed = new Set(
-    sections.flatMap((section) => section.fields.map((field) => field.key))
+    sections.flatMap((section) => section.fields.flatMap((field) => [field.key, field.id].filter(Boolean) as string[]))
   );
 
   return Object.fromEntries(
@@ -68,7 +70,7 @@ export const buildAnamnesisPdfContent = (record: PatientAnamnesis) => {
 
     for (const field of section.fields) {
       lines.push(`**${field.label}**`);
-      lines.push(formatAnswer(record.answers[field.key]), '');
+      lines.push(formatAnswer(resolveAnamnesisFieldValue(field, record.answers, record.patientContextSnapshot)), '');
     }
   }
 
