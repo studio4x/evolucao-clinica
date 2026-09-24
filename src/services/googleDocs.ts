@@ -1,5 +1,6 @@
 import { markdownToGoogleDocsText, textRunToMarkdown, type RichTextStyleRange } from '../utils/richText';
 import { assertPublicEffectEnabled } from '../config/publicFlags';
+import { isGoogleScopeError } from './googleAuth';
 
 const GOOGLE_API_MAX_ATTEMPTS = 3;
 const EVOLUTION_DIVIDER = "────────────────────────────────────────────────────────";
@@ -55,8 +56,7 @@ async function googleApiFetch(url: string, options: RequestInit, context: string
       throw new Error(`UNAUTHENTICATED: ${errorText}`);
     }
     if (
-      response.status === 403 &&
-      /ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions|Insufficient Permission/i.test(errorText)
+      response.status === 403 && isGoogleScopeError(errorText)
     ) {
       throw new Error(`INSUFFICIENT_SCOPES: ${errorText}`);
     }
@@ -740,8 +740,7 @@ export async function uploadFileToGoogleDriveResumable(
         throw new Error(`UNAUTHENTICATED: ${errorText}`);
       }
       if (
-        response.status === 403 &&
-        /ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions|Insufficient Permission/i.test(errorText)
+        response.status === 403 && isGoogleScopeError(errorText)
       ) {
         throw new Error(`INSUFFICIENT_SCOPES: ${errorText}`);
       }

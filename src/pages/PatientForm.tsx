@@ -9,9 +9,10 @@ import { sendNotification } from '../services/notificationHelper';
 import { deferOnboarding, setOnboardingState, getOnboardingState } from '../utils/onboarding';
 import { classifyOnboardingError } from '../utils/onboardingState';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { GooglePermissionRecoveryModal } from '../components/common/GooglePermissionRecoveryModal';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, isGoogleScopeError, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
@@ -238,7 +239,15 @@ export default function PatientForm() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
+  const {
+    user,
+    googleAccessToken,
+    googleGrantedScopes,
+    googleAuthorizationStatus,
+    googleMissingScopes,
+    setGoogleAccessToken,
+    setGoogleAuthorizationStatus,
+  } = useAuthStore();
   const onboardingState = getOnboardingState(user?.id);
   // O parâmetro é o contexto explícito transmitido pelo fluxo de onboarding.
   // Um estado pendente, sozinho, não transforma uma criação comum em onboarding.
@@ -250,6 +259,7 @@ export default function PatientForm() {
   const ddi = `+${getWhatsAppCountryCallingCode(phoneCountry)}`;
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
+  const [isGooglePermissionModalOpen, setIsGooglePermissionModalOpen] = useState(false);
   const [isReauthenticating, setIsReauthenticating] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   
@@ -283,6 +293,14 @@ export default function PatientForm() {
   const [photoEditorUrl, setPhotoEditorUrl] = useState('');
   const [pendingPhotoBlob, setPendingPhotoBlob] = useState<Blob | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
+
+  useEffect(() => {
+    if (googleAuthorizationStatus === 'missing_scopes' && googleMissingScopes.some((scope) => scope === GOOGLE_SCOPE_SETS.clinicalDocs[0])) {
+      setIsGooglePermissionModalOpen(true);
+    } else if (googleAuthorizationStatus === 'authorized') {
+      setIsGooglePermissionModalOpen(false);
+    }
+  }, [googleAuthorizationStatus, googleMissingScopes]);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const pendingPatientIdRef = useRef<string | null>(null);
@@ -633,7 +651,7 @@ export default function PatientForm() {
     }
   };
 
-  const executeGoogleReauthentication = async () => {
+  const executeGoogleReauthentication = async (forceConsent = false) => {
     if (pendingPhotoBlob) {
       await showAlert('A foto escolhida ainda não foi salva. Salve o paciente antes de conectar o Google para não perder essa alteração.', {
         title: 'Salve a foto antes de continuar',
@@ -645,12 +663,15 @@ export default function PatientForm() {
     setIsReauthenticating(true);
     try {
       persistDraftNow();
+      setIsGooglePermissionModalOpen(false);
+      setGoogleAuthorizationStatus('unknown');
 
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-        loginHint: user?.email || undefined
+        loginHint: user?.email || undefined,
+        ...(forceConsent ? { prompt: 'consent' } : {}),
       });
       if (error) throw error;
     } catch (error) {
@@ -711,7 +732,10 @@ export default function PatientForm() {
         });
       }
       const msg = error.message || "";
-      if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials') || msg.includes('INSUFFICIENT_SCOPES')) {
+      if (isGoogleScopeError(error)) {
+        setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
+        setIsGooglePermissionModalOpen(true);
+      } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
         await showAlert("Sua conta precisa autorizar o Google Drive e o Google Docs. Seus dados preenchidos foram preservados; confirme a reconexão para continuar deste ponto.", {
           title: "Permissão do Google necessária",
           variant: "warning",
@@ -778,6 +802,7 @@ export default function PatientForm() {
   };
 
   const loadExplorerFolders = async (parentId: string, tokenOverride?: string, searchTerm: string = '', isGlobal: boolean = false) => {
+    if (googleAuthorizationStatus === 'missing_scopes') return;
     const token = tokenOverride || googleAccessToken;
     if (!token) return;
     
@@ -792,7 +817,10 @@ export default function PatientForm() {
       setExplorerFolders(sorted);
     } catch (error: any) {
       console.error("Explorer load error:", error);
-      if (error.message?.includes('401')) {
+      if (isGoogleScopeError(error)) {
+        setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
+        setShowExplorer(false);
+      } else if (error.message?.includes('401')) {
         setGoogleAccessToken(null);
         setShowExplorer(false);
       }
@@ -811,14 +839,14 @@ export default function PatientForm() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [explorerSearch, isGlobalSearch, showExplorer]);
+  }, [explorerSearch, isGlobalSearch, showExplorer, googleAuthorizationStatus]);
 
   useEffect(() => {
     if (showExplorer) {
       const current = explorerPath[explorerPath.length - 1];
       loadExplorerFolders(current.id);
     }
-  }, [showExplorer, explorerPath]);
+  }, [showExplorer, explorerPath, googleAuthorizationStatus]);
 
   const handleExplorerReauthenticate = async () => {
     if (pendingPhotoBlob) {
@@ -832,11 +860,14 @@ export default function PatientForm() {
     setIsReauthenticating(true);
     try {
       persistDraftNow();
+      setIsGooglePermissionModalOpen(false);
+      setGoogleAuthorizationStatus('unknown');
 
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+        prompt: 'consent',
         loginHint: user?.email || undefined
       });
       if (error) throw error;
@@ -853,7 +884,7 @@ export default function PatientForm() {
   };
 
   const handleCreateNewFolder = async () => {
-    if (!hasClinicalAccess) return;
+    if (!hasClinicalAccess || googleAuthorizationStatus === 'missing_scopes') return;
     
     // Pegar o local atual do explorador
     const currentFolder = explorerPath[explorerPath.length - 1];
@@ -880,6 +911,11 @@ export default function PatientForm() {
       });
     } catch (error: any) {
       console.error("Erro ao criar pasta:", error);
+      if (isGoogleScopeError(error)) {
+        setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
+        setShowExplorer(false);
+        return;
+      }
       await showAlert("Erro ao criar pasta no Google Drive.", {
         title: "Erro ao Criar Pasta",
         variant: "danger",
@@ -2090,6 +2126,13 @@ export default function PatientForm() {
         confirmLabel="Autorizar acesso ao Google"
         mode="onboarding"
         showCloseButton={false}
+      />
+
+      <GooglePermissionRecoveryModal
+        isOpen={isGooglePermissionModalOpen}
+        onClose={() => setIsGooglePermissionModalOpen(false)}
+        onReview={() => void executeGoogleReauthentication(true)}
+        isLoading={isReauthenticating}
       />
 
 

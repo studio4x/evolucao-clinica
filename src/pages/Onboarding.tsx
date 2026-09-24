@@ -9,6 +9,7 @@ import { chooseOnboardingMode, completeOnboarding, deferOnboarding, ensureOnboar
 import { classifyOnboardingError, isOnboardingChoiceRequired } from '../utils/onboardingState';
 import { listGoogleCalendarEvents } from '../services/googleCalendar';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { GooglePermissionRecoveryModal } from '../components/common/GooglePermissionRecoveryModal';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth } from '../services/googleAuth';
 import { trackEvent } from '../services/analytics';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
@@ -88,13 +89,23 @@ type WhatsAppOtpRequest = {
 export default function Onboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, isAuthReady } = useAuthStore();
+  const {
+    user,
+    googleAccessToken,
+    googleGrantedScopes,
+    googleAuthorizationStatus,
+    googleMissingScopes,
+    setGoogleAccessToken,
+    setGoogleAuthorizationStatus,
+    isAuthReady,
+  } = useAuthStore();
   const siteConfig = useSiteConfig();
   const assetSignature = getBrandAssetSignature(siteConfig);
   const [syncingAgenda, setSyncingAgenda] = useState(false);
   const [syncError, setSyncError] = useState('');
   const [syncSummary, setSyncSummary] = useState<AgendaSyncSummary | null>(null);
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [isGooglePermissionModalOpen, setIsGooglePermissionModalOpen] = useState(false);
   const [whatsappCountry, setWhatsappCountry] = useState<CountryCode>(DEFAULT_WHATSAPP_COUNTRY);
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [whatsappError, setWhatsappError] = useState('');
@@ -124,6 +135,14 @@ export default function Onboarding() {
   const showAgendaPendingStep = isAgendaStep && !agendaAlreadySynced && !syncSummary;
   const showCompletionStep = isCompleteStep || (isAgendaStep && (agendaAlreadySynced || syncSummary));
   const hasCalendarAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.calendarReadOnly);
+
+  useEffect(() => {
+    if (googleAuthorizationStatus === 'missing_scopes' && googleMissingScopes.includes(GOOGLE_SCOPE_SETS.calendarReadOnly[0])) {
+      setIsGooglePermissionModalOpen(true);
+    } else if (googleAuthorizationStatus === 'authorized') {
+      setIsGooglePermissionModalOpen(false);
+    }
+  }, [googleAuthorizationStatus, googleMissingScopes]);
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -341,6 +360,8 @@ export default function Onboarding() {
 
   const executeGoogleConnection = async () => {
     try {
+      setIsGooglePermissionModalOpen(false);
+      setGoogleAuthorizationStatus('unknown');
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'calendarReadOnly',
         currentGrantedScopes: googleGrantedScopes,
@@ -1340,6 +1361,13 @@ export default function Onboarding() {
         onConfirm={executeGoogleConnection}
         confirmLabel="Conectar com Google"
         mode="calendar"
+      />
+
+      <GooglePermissionRecoveryModal
+        isOpen={isGooglePermissionModalOpen}
+        onClose={() => setIsGooglePermissionModalOpen(false)}
+        onReview={() => void executeGoogleConnection()}
+        resourceLabel="Google Agenda"
       />
     </div>
   );

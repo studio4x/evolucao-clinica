@@ -8,6 +8,8 @@ interface AuthState {
   googleAccessUserId: string | null;
   googleAccessTokenIssuedAt: number | null;
   googleGrantedScopes: string[];
+  googleAuthorizationStatus: 'unknown' | 'authorized' | 'missing_scopes' | 'auth_required' | 'token_expired' | 'network_error';
+  googleMissingScopes: string[];
   isAuthReady: boolean;
   profileStatus: 'active' | 'pending' | 'inactive' | null;
   profileRole: 'admin' | 'therapist' | null;
@@ -20,6 +22,7 @@ interface AuthState {
   setGoogleAccessUserId: (userId: string | null) => void;
   setGoogleAccessTokenIssuedAt: (issuedAt: number | null) => void;
   setGoogleGrantedScopes: (scopes: string[]) => void;
+  setGoogleAuthorizationStatus: (status: AuthState['googleAuthorizationStatus'], missingScopes?: ReadonlyArray<string>) => void;
   setAuthReady: (ready: boolean) => void;
   setProfileInfo: (
     status: 'active' | 'pending' | 'inactive' | null,
@@ -39,6 +42,8 @@ export const useAuthStore = create<AuthState>()(
       googleAccessUserId: null,
       googleAccessTokenIssuedAt: null,
       googleGrantedScopes: [],
+      googleAuthorizationStatus: 'unknown',
+      googleMissingScopes: [],
       isAuthReady: false,
       profileStatus: null,
       profileRole: null,
@@ -54,6 +59,10 @@ export const useAuthStore = create<AuthState>()(
       setGoogleAccessUserId: (userId) => set({ googleAccessUserId: userId }),
       setGoogleAccessTokenIssuedAt: (issuedAt) => set({ googleAccessTokenIssuedAt: issuedAt }),
       setGoogleGrantedScopes: (googleGrantedScopes) => set({ googleGrantedScopes }),
+      setGoogleAuthorizationStatus: (googleAuthorizationStatus, googleMissingScopes = []) => set({
+        googleAuthorizationStatus,
+        googleMissingScopes: [...googleMissingScopes],
+      }),
       setAuthReady: (ready) => set({ isAuthReady: ready }),
       setProfileInfo: (status, role, subscriptionPlan = null, subscriptionStatus = null, subscriptionEndsAt = null, trialEndsAt = null) =>
         set({
@@ -73,6 +82,8 @@ export const useAuthStore = create<AuthState>()(
         googleAccessUserId: state.googleAccessUserId,
         googleAccessTokenIssuedAt: state.googleAccessTokenIssuedAt,
         googleGrantedScopes: state.googleGrantedScopes,
+        googleAuthorizationStatus: state.googleAuthorizationStatus,
+        googleMissingScopes: state.googleMissingScopes,
       }),
     }
   )

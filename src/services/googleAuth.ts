@@ -2,6 +2,13 @@ import { supabase } from '../supabaseClient';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
 import { assertPublicEffectEnabled } from '../config/publicFlags';
 import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
+export {
+  isGoogleScopeError,
+  parseGoogleScopes,
+  validateGoogleAccessTokenScopes,
+  type GoogleScopeValidationResult,
+} from '../utils/googleScopes';
+import { parseGoogleScopes } from '../utils/googleScopes';
 
 export const GOOGLE_SCOPES = {
   driveFile: 'https://www.googleapis.com/auth/drive.file',
@@ -17,6 +24,9 @@ export const GOOGLE_SCOPE_SETS = {
 } as const;
 
 export type GoogleScopeSetName = keyof typeof GOOGLE_SCOPE_SETS;
+
+export type GoogleAuthorizationStatus = 'unknown' | 'authorized' | 'missing_scopes' | 'auth_required' | 'token_expired' | 'network_error';
+
 
 const PENDING_GOOGLE_SCOPES_KEY = 'evolucao-clinica:google-oauth-scopes';
 const SILENT_GOOGLE_ATTEMPT_KEY = 'evolucao-clinica:google-silent-attempt';
@@ -40,16 +50,6 @@ export const hasGoogleScopes = (
   grantedScopes: ReadonlyArray<string>,
   requiredScopes: ReadonlyArray<string>
 ) => requiredScopes.every((scope) => grantedScopes.includes(scope));
-
-export const parseGoogleScopes = (value?: string | null) => {
-  if (!value) return [];
-  return normalizeScopes(
-    value
-      .split(/\s+/)
-      .map((scope) => scope.trim())
-      .filter(Boolean)
-  );
-};
 
 export const mergeGoogleScopes = (...scopeLists: Array<string[] | string | null | undefined>) => {
   const merged = scopeLists.flatMap((item) => {

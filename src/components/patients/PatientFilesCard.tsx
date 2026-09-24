@@ -37,6 +37,7 @@ import {
   getCurrentGoogleOAuthRedirectUrl,
   hasGoogleScopes,
   requestGoogleOAuth,
+  isGoogleScopeError,
 } from '../../services/googleAuth';
 import { isGoogleAccessTokenFresh } from '../../utils/googleAuthSession';
 import { hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
@@ -73,7 +74,7 @@ type PatientFilesCardProps = {
 
 const isGoogleAuthError = (error: unknown) => {
   const message = error instanceof Error ? error.message : String(error || '');
-  return /UNAUTHENTICATED|invalid authentication credentials|INSUFFICIENT_SCOPES|insufficient permissions|\b401\b/i.test(message);
+  return /UNAUTHENTICATED|invalid authentication credentials|\b401\b/i.test(message) || isGoogleScopeError(message);
 };
 
 const isGoogleFileMissingError = (error: unknown) => {
@@ -177,7 +178,9 @@ export default function PatientFilesCard({
     googleAccessToken,
     googleAccessTokenIssuedAt,
     googleGrantedScopes,
+    googleAuthorizationStatus,
     setGoogleAccessToken,
+    setGoogleAuthorizationStatus,
     profileRole,
     subscriptionPlan,
     subscriptionStatus,
@@ -218,6 +221,7 @@ export default function PatientFilesCard({
       || !hasYearlyAccess
       || !targetFolderId
       || !hasClinicalAccess
+      || googleAuthorizationStatus === 'missing_scopes'
       || hasFreshClinicalAccess
       || silentAuthorizationAttemptedRef.current
       || !canAttemptSilentGoogleOAuth()
@@ -244,7 +248,7 @@ export default function PatientFilesCard({
     }).finally(() => {
       setAuthLoading(false);
     });
-  }, [user, hasYearlyAccess, targetFolderId, hasClinicalAccess, hasFreshClinicalAccess, googleGrantedScopes]);
+  }, [user, hasYearlyAccess, targetFolderId, hasClinicalAccess, hasFreshClinicalAccess, googleGrantedScopes, googleAuthorizationStatus]);
 
   const loadFiles = async () => {
     if (!hasYearlyAccess) {
@@ -280,6 +284,7 @@ export default function PatientFilesCard({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+        prompt: 'consent',
         loginHint: user?.email || undefined,
       });
       if (error) throw error;
@@ -322,6 +327,8 @@ export default function PatientFilesCard({
       });
       return;
     }
+
+    if (googleAuthorizationStatus === 'missing_scopes') return;
 
     const accepted: PendingUpload[] = [];
     const rejected: string[] = [];
@@ -447,6 +454,9 @@ export default function PatientFilesCard({
         }
 
         const authenticationExpired = isGoogleAuthError(error);
+        if (isGoogleScopeError(error)) {
+          setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
+        }
         if (authenticationExpired) {
           setGoogleAccessToken(null);
         }

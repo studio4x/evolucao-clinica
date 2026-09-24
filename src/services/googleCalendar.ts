@@ -1,4 +1,5 @@
 import { assertPublicEffectEnabled } from '../config/publicFlags';
+import { isGoogleScopeError } from './googleAuth';
 
 export interface GoogleCalendarEvent {
   id: string;
@@ -37,8 +38,7 @@ export async function listGoogleCalendarEvents(
       throw new Error("UNAUTHENTICATED: " + errorText);
     }
     if (
-      response.status === 403 &&
-      /ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions|Insufficient Permission/i.test(errorText)
+      response.status === 403 && isGoogleScopeError(errorText)
     ) {
       throw new Error("INSUFFICIENT_SCOPES: " + errorText);
     }

@@ -61,7 +61,7 @@ import {
 } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
-import { clearPendingGoogleScopes, clearSilentGoogleOAuthAttempt, readPendingGoogleScopes } from './services/googleAuth';
+import { clearPendingGoogleScopes, clearSilentGoogleOAuthAttempt, readPendingGoogleScopes, validateGoogleAccessTokenScopes } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
@@ -294,7 +294,8 @@ export default function App() {
     setGoogleAccessToken,
     setGoogleAccessUserId,
     setGoogleAccessTokenIssuedAt,
-    setGoogleGrantedScopes
+    setGoogleGrantedScopes,
+    setGoogleAuthorizationStatus
   } = useAuthStore();
   const professionalChannelRef = useRef<any>(null);
   const siteConfig = useSiteConfig();
@@ -375,6 +376,7 @@ export default function App() {
     setGoogleAccessUserId(null);
     setGoogleAccessTokenIssuedAt(null);
     setGoogleGrantedScopes([]);
+    setGoogleAuthorizationStatus('unknown');
     setUser(null);
     setProfileInfo(null, null, null, null, null, null);
     setAnalyticsUser(null);
@@ -463,15 +465,17 @@ export default function App() {
             setGoogleAccessUserId(null);
             setGoogleAccessTokenIssuedAt(null);
             setGoogleGrantedScopes([]);
+            setGoogleAuthorizationStatus('unknown');
           }
 
-          if (pendingScopes.length > 0) {
-            const mergedScopes = Array.from(new Set([
-              ...currentState.googleGrantedScopes,
-              ...pendingScopes
-            ]));
-            setGoogleGrantedScopes(mergedScopes);
+          if (pendingScopes.length > 0 && session.provider_token) {
+            const validation = await validateGoogleAccessTokenScopes(session.provider_token, pendingScopes);
+            setGoogleGrantedScopes(validation.grantedScopes);
             setGoogleAccessUserId(session.user.id);
+            setGoogleAuthorizationStatus(validation.status, validation.missingScopes);
+            clearPendingGoogleScopes();
+          } else if (pendingScopes.length > 0) {
+            setGoogleAuthorizationStatus('auth_required', pendingScopes);
             clearPendingGoogleScopes();
           }
 
