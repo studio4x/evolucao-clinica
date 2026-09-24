@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowDown, ArrowUp, CheckCircle2, Eye, GripVertical, Info, Layers3, Loader2, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
-import { useBeforeUnload, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useBeforeUnload, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
@@ -64,6 +64,7 @@ function moveItem<T>(items: T[], index: number, direction: -1 | 1) {
 
 export default function AnamnesisBuilder() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { templateId } = useParams<{ templateId?: string }>();
   const [searchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
@@ -81,6 +82,11 @@ export default function AnamnesisBuilder() {
   const dirtyRef = useRef(false);
   const nameRef = useRef(name);
   const schemaRef = useRef(schema);
+  const requestedReturnTo = typeof location.state?.from === 'string' ? location.state.from : null;
+  const returnTo = requestedReturnTo && requestedReturnTo.startsWith('/painel/') && requestedReturnTo !== location.pathname
+    ? requestedReturnTo
+    : '/painel';
+  const returnToModels = () => navigate('/painel/anamnesis/modelos', { state: { from: returnTo } });
 
   const sourceTemplate = useMemo(
     () => templates.find((template) => template.id === searchParams.get('source')) || null,
@@ -221,7 +227,7 @@ export default function AnamnesisBuilder() {
   const handleBack = async () => {
     try {
       await flushDraft();
-      navigate('/painel/anamnesis/modelos');
+      returnToModels();
     } catch {
       await showAlert('Não foi possível salvar o último rascunho. A página foi mantida aberta para evitar perda de dados.', { title: 'Rascunho não salvo', variant: 'warning', icon: 'warning' });
     }
@@ -249,7 +255,7 @@ export default function AnamnesisBuilder() {
       setDraftSaveState('idle');
       setDirty(false);
       await showAlert(editingTemplate ? 'Nova versão publicada. Anamneses anteriores continuam preservadas.' : 'Modelo salvo e disponível para todos os seus pacientes.', { title: 'Modelo salvo', variant: 'success', icon: 'success' });
-      navigate('/painel/anamnesis/modelos');
+      returnToModels();
     } catch (error) {
       await showAlert(error instanceof Error ? error.message : 'Não foi possível salvar o modelo.', { title: 'Erro ao salvar', variant: 'danger' });
     } finally { setSaving(false); }
