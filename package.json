@@ -66,7 +66,7 @@
     "test:payment-confirmation": "tsx tests/payment-confirmation.test.ts",
     "test:google-play-coupon": "tsx tests/google-play-coupon.test.ts",
     "test:seo-social-sharing": "tsx tests/seo-social-sharing.test.ts",
-    "test:anamnesis": "tsx tests/patient-anamnesis.test.ts && tsx tests/anamnesis-foundation.test.ts",
+    "test:anamnesis": "tsx tests/patient-anamnesis.test.ts && tsx tests/anamnesis-foundation.test.ts && tsx tests/anamnesis-template-select.test.ts",
     "test:patient-session-control": "tsx tests/patient-session-control.test.ts",
     "test:patient-session-schedule": "tsx tests/patient-session-schedule.test.ts"
   },
