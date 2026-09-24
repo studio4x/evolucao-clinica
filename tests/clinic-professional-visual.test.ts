@@ -37,7 +37,7 @@ assert.match(history, /fetchClinicPatients/);
 assert.match(history, /clinicEvolutionRequest/);
 assert.doesNotMatch(history, /\.from\("evolutions"\)/);
 assert.match(clinicRoute, /location\.pathname === "\/painel\/clinica"/);
-assert.match(version, /v1\.10\.918/);
+assert.match(version, /v1\.10\.919/);
 
 assert.match(personalPatientDetail, /PatientDetailHeader/);
 assert.match(personalPatientDetail, /PatientDetailGrid/);
@@ -51,6 +51,8 @@ assert.doesNotMatch(clinicPatientDetail, /Dados cadastrais compartilhados nesta 
 assert.match(patientLayout, /safe-area-inset-top/);
 assert.match(patientLayout, /xl:grid-cols-3/);
 assert.match(patientLayout, /Seções do paciente/);
+assert.match(clinicPatientDetail, /overviewVisibility = activeMobileTab === "overview" \? "contents xl:block" : "hidden xl:block"/);
+assert.match(clinicPatientDetail, /historyVisibility = activeMobileTab === "history" \? "contents xl:block" : "hidden xl:block"/);
 
 const patientsMap = { "patient-123": { organizationPatientId: "org-patient-987" } };
 assert.equal(getHistoryPatientPath("patient-123", false, patientsMap), "/painel/patients/patient-123");

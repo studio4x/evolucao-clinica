@@ -64,8 +64,8 @@ export default function ClinicPatientDetail() {
   const candidates = members.filter((member) => !assignedIds.has(member.professional_id));
   const currentPrimaryId = patient?.assignments.find((assignment) => assignment.assignmentRole === "primary")?.professionalId;
   const primaryCandidates = members.filter((member) => member.status === "active" && member.clinical_access_enabled && member.professional_id !== currentPrimaryId);
-  const overviewVisibility = activeMobileTab === "overview" ? "contents" : "hidden xl:block";
-  const historyVisibility = activeMobileTab === "history" ? "contents" : "hidden xl:block";
+  const overviewVisibility = activeMobileTab === "overview" ? "contents xl:block" : "hidden xl:block";
+  const historyVisibility = activeMobileTab === "history" ? "contents xl:block" : "hidden xl:block";
 
   async function save() { if (!patient) return; setBusy(true); setError(null); try { const { data: { session } } = await supabase.auth.getSession(); if (!session?.access_token) throw new Error(); await updateClinicPatient(session.access_token, patient.organizationPatientId, { fullName, birthDate: birthDate || null, phone: phone || null }); setEditing(false); await load(); } catch { setError("Não foi possível salvar os dados do paciente."); } finally { setBusy(false); } }
   async function add(professionalId: string, role: "secondary" | "consultant") { setBusy(true); try { const { data: { session } } = await supabase.auth.getSession(); if (!session?.access_token) throw new Error(); await addClinicPatientAssignment(session.access_token, organizationPatientId, professionalId, role); await load(); } catch { setError("Não foi possível adicionar a atribuição."); } finally { setBusy(false); } }
