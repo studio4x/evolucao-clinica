@@ -35,12 +35,12 @@ assert.match(launcherSource, /setInsets\(handledTypes, Insets\.NONE\)/, 'tipos n
 assert.doesNotMatch(launcherSource, /Type\.ime\(\)/, 'IME não deve virar padding permanente');
 
 assert.match(appVersionSource, /APP_VERSION = "v1\.10\.\d+"/);
-assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.91"/);
-assert.match(gradleSource, /versionCode 91/);
-assert.match(gradleSource, /versionName "91"/);
-assert.match(twaManifestSource, /"appVersionCode": 91/);
-assert.match(twaManifestSource, /"appVersionName": "91"/);
-assert.match(twaManifestSource, /"appVersion": "91"/);
+assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.92"/);
+assert.match(gradleSource, /versionCode 92/);
+assert.match(gradleSource, /versionName "92"/);
+assert.match(twaManifestSource, /"appVersionCode": 92/);
+assert.match(twaManifestSource, /"appVersionName": "92"/);
+assert.match(twaManifestSource, /"appVersion": "92"/);
 
 // A release Android deve permanecer compatível com os requisitos de otimização do Google Play.
 assert.match(gradleSource, /minifyEnabled true/, 'R8 deve permanecer habilitado no release');

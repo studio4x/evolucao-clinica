@@ -14,6 +14,7 @@
      limitations under the License.
 -->
 <paths>
+    <cache-path path="patient-photo/" name="patient_photo" />
     <files-path path="twa_splash/" name="twa_splash" />
     <external-files-path path="Download/" name="download_files" />
 </paths>
