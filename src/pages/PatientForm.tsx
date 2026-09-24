@@ -240,9 +240,71 @@ const createPatientPhotoObjectUrl = (file: Blob) => {
 
 const PATIENT_PHOTO_BASE64_CHUNK_BYTES = 0x8000;
 
+const getPatientPhotoMimeType = (value: Blob): string => {
+  if (value.type) return value.type;
+  const name = 'name' in value ? String((value as Blob & { name?: string }).name || '') : '';
+  if (/\.jpe?g$/i.test(name)) return 'image/jpeg';
+  if (/\.png$/i.test(name)) return 'image/png';
+  if (/\.webp$/i.test(name)) return 'image/webp';
+  if (/\.(heic|heif)$/i.test(name)) return 'image/heic';
+  return 'application/octet-stream';
+};
+
+const readPatientPhotoAsArrayBuffer = async (value: Blob): Promise<ArrayBuffer> => {
+  try {
+    if (typeof value.arrayBuffer === 'function') {
+      return await value.arrayBuffer();
+    }
+  } catch {
+    // Alguns WebViews expõem arrayBuffer(), mas falham para Files vindos da galeria.
+  }
+
+  if (typeof FileReader !== 'function') throw new Error('FileReader indisponível');
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) {
+        resolve(reader.result);
+      } else {
+        reject(new Error('O navegador não retornou os bytes da foto.'));
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('Falha ao ler os bytes da foto.'));
+    reader.onabort = () => reject(new Error('A leitura da foto foi interrompida.'));
+    try {
+      reader.readAsArrayBuffer(value);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
+const readPatientPhotoWithFileReader = async (value: Blob): Promise<string> => {
+  if (typeof FileReader !== 'function') throw new Error('FileReader indisponível');
+  const mimeType = getPatientPhotoMimeType(value);
+  const readableValue = value.type ? value : value.slice(0, value.size, mimeType);
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string' && reader.result.startsWith('data:')) {
+        resolve(reader.result);
+      } else {
+        reject(new Error('O navegador não retornou uma prévia válida da foto.'));
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('Falha ao criar a prévia da foto.'));
+    reader.onabort = () => reject(new Error('A leitura da foto foi interrompida.'));
+    try {
+      reader.readAsDataURL(readableValue);
+    } catch (error) {
+      reject(error);
+    }
+  });
+};
+
 const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
   try {
-    const bytes = new Uint8Array(await value.arrayBuffer());
+    const bytes = new Uint8Array(await readPatientPhotoAsArrayBuffer(value));
     if (bytes.byteLength === 0) throw new Error('empty image');
 
     let binary = '';
@@ -251,14 +313,33 @@ const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
     }
 
     if (typeof window.btoa !== 'function') throw new Error('base64 unavailable');
-    return `data:${value.type || 'application/octet-stream'};base64,${window.btoa(binary)}`;
+    return `data:${getPatientPhotoMimeType(value)};base64,${window.btoa(binary)}`;
   } catch {
-    throw new Error('O navegador não conseguiu ler os bytes da foto. Tente JPG ou PNG; fotos HEIC/HEIF precisam ser convertidas antes.');
+    try {
+      return await readPatientPhotoWithFileReader(value);
+    } catch {
+      throw new Error('O navegador móvel não conseguiu ler este arquivo. Tente selecionar a foto novamente; se ela for HEIC/HEIF, a conversão será feita automaticamente.');
+    }
+  }
+};
+
+const hasHeicContainerSignature = async (value: Blob): Promise<boolean> => {
+  try {
+    const bytes = new Uint8Array(await readPatientPhotoAsArrayBuffer(value.slice(0, 64)));
+    if (bytes.length < 12) return false;
+    const text = (start: number, length: number) => String.fromCharCode(...bytes.slice(start, start + length));
+    if (text(4, 4) !== 'ftyp') return false;
+    const brands = [text(8, 4)];
+    for (let offset = 16; offset + 4 <= bytes.length; offset += 4) brands.push(text(offset, 4));
+    return brands.some((brand) => /^(heic|heif|heix|hevc|hevx|mif1|msf1)$/i.test(brand));
+  } catch {
+    return false;
   }
 };
 
 const preparePatientPhotoSource = async (file: File): Promise<Blob> => {
-  if (!isPatientPhotoHeic(file)) return file;
+  const isHeic = isPatientPhotoHeic(file) || await hasHeicContainerSignature(file);
+  if (!isHeic) return file;
 
   try {
     const { default: convertHeic } = await import('heic2any');
