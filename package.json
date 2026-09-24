@@ -47,6 +47,7 @@
     "test:offline-queue-sync": "tsx tests/offline-queue-sync.test.ts",
     "test:new-evolution-layout": "tsx tests/new-evolution-layout.test.ts",
     "test:patient-detail-header": "tsx tests/patient-detail-header.test.ts",
+    "test:patient-detail-tabs": "tsx tests/patient-detail-tabs.test.ts",
     "test:patient-files": "tsx tests/patient-files.test.ts",
     "test:pdf-download": "tsx tests/pdf-download-compatibility.test.ts",
     "test:google-auth": "tsx tests/google-auth-recovery.test.ts",

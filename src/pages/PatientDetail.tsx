@@ -2231,8 +2231,8 @@ export default function PatientDetail() {
   const lastReportObj = reports.find(r => r.id === lastGeneratedReportId);
   const isLastReportSigned = lastReportObj?.status === 'signed';
   const mobileTabVisibility = (tab: PatientMobileTab) => activeMobileTab === tab
-    ? `block xl:block patient-mobile-tab-enter-${mobileTabMotion}`
-    : 'hidden xl:block';
+    ? `block patient-mobile-tab-enter-${mobileTabMotion}`
+    : 'hidden';
 
   const swipePointerRef = useRef<{
     pointerId: number;
@@ -2581,8 +2581,12 @@ export default function PatientDetail() {
           </div>
         </div>
 
-        <nav className="xl:hidden w-full overflow-hidden" aria-label="Seções do paciente">
-          <div className="grid w-full grid-cols-5 items-stretch rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur">
+        <nav className="mt-3 w-full overflow-x-auto overscroll-x-contain" aria-label="Seções do paciente">
+          <div
+            className="flex min-w-max items-stretch gap-1 rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur sm:grid sm:min-w-0 sm:grid-cols-5"
+            role="tablist"
+            aria-label="Seções do paciente"
+          >
             {patientMobileTabs.map(({ id: tabId, label, icon: Icon }) => {
               const isActive = activeMobileTab === tabId;
               return (
@@ -2590,8 +2594,25 @@ export default function PatientDetail() {
                   key={tabId}
                   type="button"
                   onClick={() => changeMobileTab(tabId, patientMobileTabOrder.indexOf(tabId) > patientMobileTabOrder.indexOf(activeMobileTab) ? 'next' : 'previous')}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold leading-none transition-all ${
+                  id={`patient-tab-${tabId}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`patient-tabpanel-${tabId}`}
+                  tabIndex={isActive ? 0 : -1}
+                  onKeyDown={(event) => {
+                    if (!['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+                    event.preventDefault();
+                    const currentIndex = patientMobileTabOrder.indexOf(tabId);
+                    const nextIndex = event.key === 'Home'
+                      ? 0
+                      : event.key === 'End'
+                        ? patientMobileTabOrder.length - 1
+                        : (currentIndex + (event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1) + patientMobileTabOrder.length) % patientMobileTabOrder.length;
+                    const nextTab = patientMobileTabOrder[nextIndex];
+                    changeMobileTab(nextTab, nextIndex >= currentIndex ? 'next' : 'previous');
+                    requestAnimationFrame(() => document.getElementById(`patient-tab-${nextTab}`)?.focus());
+                  }}
+                  className={`flex min-h-14 min-w-[5.75rem] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[10px] font-semibold leading-none transition-all sm:min-w-0 ${
                     isActive
                       ? 'bg-brand-primary text-white shadow-sm shadow-brand-primary/25'
                       : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
@@ -2636,7 +2657,13 @@ export default function PatientDetail() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div
+        id={`patient-tabpanel-${activeMobileTab}`}
+        role="tabpanel"
+        aria-labelledby={`patient-tab-${activeMobileTab}`}
+        tabIndex={0}
+        className="grid grid-cols-1 gap-6 outline-none xl:grid-cols-3"
+      >
         <div className="contents xl:block xl:col-span-1 xl:space-y-6">
           <div className={`card p-6 order-2 xl:order-none ${mobileTabVisibility('overview')}`}>
             <h3 className="font-semibold text-brand-text mb-4">Prontuário</h3>
@@ -2722,7 +2749,7 @@ export default function PatientDetail() {
             />
           </div>
 
-          <div className={`order-3 xl:order-none ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'} xl:block`}>
+          <div className={`order-3 xl:order-none ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
             <PatientSessionsSummaryCard
               patientId={patient.id}
               href={`/painel/patients/${id}/sessions`}
