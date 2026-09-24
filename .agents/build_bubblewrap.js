@@ -74,6 +74,12 @@ async function verifyAndPublishArtifact(source, destination) {
   console.log(`Artefato assinado e verificado: ${path.basename(destination)}`);
 }
 
+async function verifyArtifactSignature(source) {
+  if (!fs.existsSync(source)) throw new Error(`Artefato não encontrado: ${source}`);
+  await run(javaTool('jarsigner'), ['-verify', source], false);
+  console.log(`AAB assinado e verificado na origem: ${source}`);
+}
+
 async function main() {
   requireEnvironment('ANDROID_KEYSTORE_PASSWORD');
   requireEnvironment('ANDROID_KEY_PASSWORD');
@@ -92,10 +98,7 @@ async function main() {
   console.log(`Gerando release Android ${version.name} (versionCode ${version.code})...`);
   await run(gradle, gradleArgs);
 
-  await verifyAndPublishArtifact(
-    path.join(artifactDirectory, 'bundle', 'release', 'app-release.aab'),
-    path.join(projectDir, 'app-release-bundle.aab')
-  );
+  await verifyArtifactSignature(path.join(artifactDirectory, 'bundle', 'release', 'app-release.aab'));
   await verifyAndPublishArtifact(
     path.join(artifactDirectory, 'apk', 'release', 'app-release.apk'),
     path.join(projectDir, 'app-release-signed.apk')

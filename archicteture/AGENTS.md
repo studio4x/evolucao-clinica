@@ -15,6 +15,9 @@ These instructions apply to any AI agent working in this repository.
 - `PLAY_STORE_VERSION` in `src/components/layout/AppVersion.tsx` must always be `1.0.<versionCode>`, using the numeric `versionCode` from `app/build.gradle`.
 - Example: `versionCode 41` means `PLAY_STORE_VERSION = "1.0.41"`.
 - Keep `versionName` in `app/build.gradle` and `appVersionCode`/`appVersionName` in `twa-manifest.json` synchronized with the same number when generating an Android bundle.
+- Todo AAB preparado para Google Play deve, depois de gerado, assinado e validado, ser entregue na raiz principal do repositório. O caminho canônico é `app-release-bundle.aab`; a cópia versionada usa `evolucao-clinica-v<PLAY_STORE_VERSION>-build<VERSION_CODE>.aab`.
+- Worktrees podem executar o build, mas `.agents/build_android_release.ps1` deve descobrir a raiz principal via `git-common-dir`. O arquivo canônico somente pode ser substituído após validação no AAB de origem e no destino, incluindo applicationId, versionCode, versionName, assinatura, `bundletool validate` quando disponível e SHA-256. AABs permanecem fora do Git.
+- O relatório final deve informar commit, versões, applicationId, caminhos absolutos, tamanho, SHA-256, resultado da validação da assinatura, resultado do `bundletool` e confirmação de que os arquivos no destino foram validados.
 
 ## Required Build Commands
 - `npm run build`

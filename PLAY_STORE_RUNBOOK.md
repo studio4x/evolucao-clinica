@@ -90,6 +90,25 @@ Após a conclusão com sucesso do script, dois arquivos principais serão gerado
 2. **`app-release-bundle.aab`**: 
    * **Uso**: Envio oficial para o **Google Play Console** (trilhas de Teste Interno, Fechado ou Produção).
 
+### Entrega canônica do AAB
+
+O build pode ser executado a partir de qualquer worktree. O script `.agents/build_android_release.ps1`
+descobre a raiz principal do repositório pelo `git-common-dir` e, somente depois de validar o AAB
+gerado, entrega os dois arquivos abaixo nessa raiz:
+
+* `app-release-bundle.aab` — arquivo canônico para o upload manual no Google Play Console;
+* `evolucao-clinica-v<PLAY_STORE_VERSION>-build<VERSION_CODE>.aab` — cópia versionada para histórico local.
+
+Antes de substituir o arquivo canônico, o fluxo confere dentro do AAB o `applicationId`, o
+`versionCode`, o `versionName`, a assinatura e a integridade com `bundletool` quando disponível.
+Depois da cópia, valida novamente os dois destinos e compara o SHA-256 da origem, do arquivo
+canônico e da cópia versionada. Em caso de falha, o arquivo canônico anterior é restaurado.
+
+AABs são ignorados pelo Git e não devem ser commitados. O relatório da release deve informar o
+commit usado, as versões, o `applicationId`, os caminhos absolutos, os tamanhos, os hashes,
+os resultados de assinatura/`bundletool` e a confirmação da validação no destino. Para validar
+com o bundletool, configure `BUNDLETOOL_JAR` apontando para um `bundletool-all` local.
+
 ---
 
 ## 📝 Notas da versão obrigatórias
