@@ -51,6 +51,16 @@ assert.doesNotMatch(
   'A restauração da sessão não pode abrir um novo fluxo OAuth do Google ao iniciar o app.'
 );
 
+const googleAuthSource = fs.readFileSync('src/services/googleAuth.ts', 'utf8');
+assert.match(googleAuthSource, /googleOAuthLaunch/, 'Chamadas simultâneas devem compartilhar o mesmo lançamento OAuth.');
+assert.match(googleAuthSource, /SILENT_GOOGLE_ATTEMPT_KEY/, 'A tentativa silenciosa deve ter proteção contra loops.');
+assert.match(googleAuthSource, /isGoogleAccessTokenFresh[\s\S]*return \{ status: 'ready' \}/, 'Token recente com escopos corretos deve continuar sem OAuth.');
+assert.doesNotMatch(
+  googleAuthSource,
+  /isExpandingScopes[\s\S]*resolvedPrompt = prompt \?\? .*consent/,
+  'Escopo novo não deve forçar consentimento em toda reconexão clínica.'
+);
+
 const supabaseClientSource = fs.readFileSync('src/supabaseClient.ts', 'utf8');
 assert.match(
   supabaseClientSource,
@@ -63,12 +73,12 @@ const newEvolutionSource = fs.readFileSync('src/pages/NewEvolution.tsx', 'utf8')
 const patientFilesSource = fs.readFileSync('src/components/patients/PatientFilesCard.tsx', 'utf8');
 assert.match(
   patientFilesSource,
-  /hasClinicalAccess[\s\S]*hasFreshClinicalAccess[\s\S]*prompt:\s*['"]none['"]/,
+  /hasClinicalAccess[\s\S]*hasFreshClinicalAccess[\s\S]*ensureGoogleAccess[\s\S]*requiredScopes:\s*'clinicalDocs'/,
   'O card de arquivos deve tentar renovar silenciosamente o acesso Google expirado.'
 );
 assert.match(
   patientDetailSource,
-  /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*setGoogleAccessToken\(null\)[\s\S]*requestGoogleOAuth\(/,
+  /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*ensureGoogleAccess\([\s\S]*requiredScopes:\s*'clinicalDocs'/,
   'A edição deve ser preservada antes de renovar o token Google expirado.'
 );
 assert.match(

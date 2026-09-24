@@ -61,7 +61,7 @@ import {
 } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
-import { clearPendingGoogleScopes, readPendingGoogleScopes } from './services/googleAuth';
+import { clearPendingGoogleScopes, clearSilentGoogleOAuthAttempt, readPendingGoogleScopes } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
@@ -391,6 +391,21 @@ export default function App() {
   };
 
   useEffect(() => {
+    // A falha de uma tentativa `prompt=none` volta pela URL sem sessão nova.
+    // Consumi-la aqui impede que a próxima montagem repita o mesmo redirect.
+    const oauthParams = new URLSearchParams(window.location.search);
+    const oauthError = oauthParams.get('error');
+    const oauthErrorCode = oauthParams.get('error_code');
+    if (oauthError || oauthErrorCode) {
+      const isGoogleInteractionFailure = [oauthError, oauthErrorCode]
+        .filter(Boolean)
+        .some((value) => /interaction_required|login_required|access_denied/i.test(value || ''));
+      if (isGoogleInteractionFailure) {
+        clearSilentGoogleOAuthAttempt();
+        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
+      }
+    }
+
     const trackMetaRegistrationBeforeAppAccess = (session: any) => {
       const existing = metaRegistrationTrackingRef.current;
       if (existing?.userId === session.user.id) return existing.promise;
@@ -469,6 +484,7 @@ export default function App() {
           if (isSameUser && hasProfile) {
             // Se o provider_token do Google mudou ou foi fornecido, atualiza
             if (session.provider_token) {
+              clearSilentGoogleOAuthAttempt();
               if (currentState.googleAccessToken !== session.provider_token) {
                 setGoogleAccessToken(session.provider_token);
                 setGoogleAccessUserId(session.user.id);
@@ -482,6 +498,7 @@ export default function App() {
 
           setUser(session.user);
           if (session.provider_token) {
+            clearSilentGoogleOAuthAttempt();
             setGoogleAccessToken(session.provider_token);
             setGoogleAccessUserId(session.user.id);
           } else {

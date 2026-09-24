@@ -912,7 +912,6 @@ export default function NewEvolution({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-        prompt: 'consent',
         loginHint: user?.email || undefined
       });
       if (error) throw error;

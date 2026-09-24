@@ -32,6 +32,8 @@ import {
 } from '../../utils/patientFileTypes';
 import {
   GOOGLE_SCOPE_SETS,
+  canAttemptSilentGoogleOAuth,
+  ensureGoogleAccess,
   getCurrentGoogleOAuthRedirectUrl,
   hasGoogleScopes,
   requestGoogleOAuth,
@@ -218,6 +220,7 @@ export default function PatientFilesCard({
       || !hasClinicalAccess
       || hasFreshClinicalAccess
       || silentAuthorizationAttemptedRef.current
+      || !canAttemptSilentGoogleOAuth()
     ) {
       return;
     }
@@ -225,18 +228,19 @@ export default function PatientFilesCard({
     silentAuthorizationAttemptedRef.current = true;
     setAuthLoading(true);
 
-    void requestGoogleOAuth({
+    void ensureGoogleAccess({
+      accessToken: googleAccessToken,
+      accessTokenIssuedAt: googleAccessTokenIssuedAt,
       requiredScopes: 'clinicalDocs',
       currentGrantedScopes: googleGrantedScopes,
       redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-      prompt: 'none',
       loginHint: user.email || undefined,
-    }).then(({ error }) => {
-      if (error) {
-        console.warn('[PatientFiles] Não foi possível renovar silenciosamente o Google Drive:', error);
+    }).then((result) => {
+      if (result.status === 'error') {
+        console.warn('[PatientFiles] Não foi possível renovar silenciosamente o Google Drive.');
       }
     }).catch((error) => {
-      console.warn('[PatientFiles] Falha ao iniciar a renovação silenciosa do Google Drive:', error);
+      console.warn('[PatientFiles] Falha ao iniciar a renovação silenciosa do Google Drive.', error instanceof Error ? error.message : 'unknown_error');
     }).finally(() => {
       setAuthLoading(false);
     });

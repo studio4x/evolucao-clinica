@@ -9,7 +9,7 @@ import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent, getGoogleDocEvolutionEntries, replaceEvolutionInGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, ensureGoogleAccess, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
 import DOMPurify from 'dompurify';
 import { useSiteConfig } from '../hooks/useSiteConfig';
@@ -513,17 +513,20 @@ export default function PatientDetail() {
   const reconnectGoogleAndResumeEvolutionEdit = async (recovery: EvolutionEditAuthRecovery) => {
     storeEvolutionEditAuthRecovery(recovery);
     evolutionEditAuthRecoveryRef.current = recovery;
-    setGoogleAccessToken(null);
-
-    const { error } = await requestGoogleOAuth({
+    const result = await ensureGoogleAccess({
+      accessToken: googleAccessToken,
+      accessTokenIssuedAt: googleAccessTokenIssuedAt,
       requiredScopes: 'clinicalDocs',
       currentGrantedScopes: googleGrantedScopes,
       redirectTo: getCurrentGoogleOAuthRedirectUrl(),
       loginHint: user?.email || undefined,
     });
 
-    if (error) {
-      throw new Error(error.message || 'Não foi possível renovar automaticamente a conexão com o Google.');
+    if (result.status === 'error') {
+      throw new Error(`401: ${result.error.message}`);
+    }
+    if (result.status === 'interactive_required') {
+      throw new Error('401: reconexão manual necessária');
     }
   };
 
@@ -1024,7 +1027,6 @@ export default function PatientDetail() {
               requiredScopes: 'clinicalDocs',
               currentGrantedScopes: googleGrantedScopes,
               redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-              prompt: 'consent',
               loginHint: user?.email || undefined
             });
 

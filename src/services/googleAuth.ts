@@ -1,6 +1,7 @@
 import { supabase } from '../supabaseClient';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
 import { assertPublicEffectEnabled } from '../config/publicFlags';
+import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
 
 export const GOOGLE_SCOPES = {
   driveFile: 'https://www.googleapis.com/auth/drive.file',
@@ -18,6 +19,8 @@ export const GOOGLE_SCOPE_SETS = {
 export type GoogleScopeSetName = keyof typeof GOOGLE_SCOPE_SETS;
 
 const PENDING_GOOGLE_SCOPES_KEY = 'evolucao-clinica:google-oauth-scopes';
+const SILENT_GOOGLE_ATTEMPT_KEY = 'evolucao-clinica:google-silent-attempt';
+const SILENT_GOOGLE_ATTEMPT_TTL_MS = 10 * 60 * 1000;
 export const NATIVE_GOOGLE_OAUTH_REDIRECT_URL = 'evolucaoclinica://auth-callback';
 const MIN_NATIVE_GOOGLE_OAUTH_CALLBACK_VERSION = 72;
 
@@ -106,6 +109,35 @@ type RequestGoogleOAuthParams = {
   loginHint?: string;
 };
 
+type EnsureGoogleAccessParams = Omit<RequestGoogleOAuthParams, 'prompt'> & {
+  accessToken?: string | null;
+  accessTokenIssuedAt?: number | null;
+  allowInteractive?: boolean;
+};
+
+export type EnsureGoogleAccessResult =
+  | { status: 'ready' }
+  | { status: 'silent_started' }
+  | { status: 'interactive_required' }
+  | { status: 'error'; error: Error };
+
+let googleOAuthLaunch: Promise<Awaited<ReturnType<typeof supabase.auth.signInWithOAuth>>> | null = null;
+
+const readSilentAttempt = () => {
+  const raw = localStorage.getItem(SILENT_GOOGLE_ATTEMPT_KEY);
+  const attemptedAt = raw ? Number(raw) : NaN;
+  return Number.isFinite(attemptedAt) ? attemptedAt : null;
+};
+
+export const clearSilentGoogleOAuthAttempt = () => {
+  localStorage.removeItem(SILENT_GOOGLE_ATTEMPT_KEY);
+};
+
+export const canAttemptSilentGoogleOAuth = (now = Date.now()) => {
+  const attemptedAt = readSilentAttempt();
+  return attemptedAt === null || now - attemptedAt > SILENT_GOOGLE_ATTEMPT_TTL_MS;
+};
+
 export const requestGoogleOAuth = async ({
   requiredScopes,
   currentGrantedScopes = [],
@@ -123,9 +155,9 @@ export const requestGoogleOAuth = async ({
 
   const scopes = buildGoogleScopes(requiredScopes, currentGrantedScopes);
   storePendingGoogleScopes(scopes);
-  const isLoginOnlyRequest = requiredScopes === 'login';
-  const isExpandingScopes = scopes.some((scope) => !currentGrantedScopes.includes(scope));
-  const resolvedPrompt = prompt ?? (!isLoginOnlyRequest && isExpandingScopes ? 'consent' : undefined);
+  // Google already asks for consent when a scope is genuinely new. Forcing
+  // consent on every clinical reauthentication defeats silent reuse.
+  const resolvedPrompt = prompt ?? undefined;
 
   if (typeof window !== 'undefined') {
     localStorage.setItem('oauth_redirect_path', window.location.pathname + window.location.search);
@@ -144,12 +176,59 @@ export const requestGoogleOAuth = async ({
     ? NATIVE_GOOGLE_OAUTH_REDIRECT_URL
     : redirectTo;
 
-  return supabase.auth.signInWithOAuth({
+  if (googleOAuthLaunch) return googleOAuthLaunch;
+
+  googleOAuthLaunch = supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       scopes: scopes.join(' '),
       redirectTo: resolvedRedirectTo,
       ...(Object.keys(queryParams).length > 0 ? { queryParams } : {}),
     },
+  }).finally(() => {
+    googleOAuthLaunch = null;
   });
+
+  return googleOAuthLaunch;
+};
+
+export const ensureGoogleAccess = async ({
+  accessToken,
+  accessTokenIssuedAt,
+  requiredScopes,
+  currentGrantedScopes = [],
+  redirectTo,
+  loginHint,
+  allowInteractive = false,
+}: EnsureGoogleAccessParams): Promise<EnsureGoogleAccessResult> => {
+  const required = Array.isArray(requiredScopes)
+    ? requiredScopes
+    : getGoogleScopeSet(requiredScopes);
+
+  if (accessToken && hasGoogleScopes(currentGrantedScopes, required)
+    && isGoogleAccessTokenFresh(accessToken, accessTokenIssuedAt)) {
+    return { status: 'ready' };
+  }
+
+  if (accessToken && hasGoogleScopes(currentGrantedScopes, required) && canAttemptSilentGoogleOAuth()) {
+    localStorage.setItem(SILENT_GOOGLE_ATTEMPT_KEY, String(Date.now()));
+    const { error } = await requestGoogleOAuth({
+      requiredScopes,
+      currentGrantedScopes,
+      redirectTo,
+      prompt: 'none',
+      loginHint,
+    });
+    return error ? { status: 'error', error } : { status: 'silent_started' };
+  }
+
+  if (!allowInteractive) return { status: 'interactive_required' };
+
+  const { error } = await requestGoogleOAuth({
+    requiredScopes,
+    currentGrantedScopes,
+    redirectTo,
+    loginHint,
+  });
+  return error ? { status: 'error', error } : { status: 'silent_started' };
 };
