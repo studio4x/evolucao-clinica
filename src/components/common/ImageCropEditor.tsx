@@ -196,10 +196,10 @@ export function ImageCropEditor({
           src={imageUrl}
           alt={imageAlt}
           draggable={false}
-          className="h-full w-full select-none object-cover transition-transform duration-75"
+          className="absolute left-1/2 top-1/2 h-full w-full select-none object-cover transition-transform duration-75"
           style={{
-            objectPosition: `${50 + cropPosition.x * 50}% ${50 + cropPosition.y * 50}%`,
-            transform: `scale(${cropZoom})`,
+            objectPosition: 'center center',
+            transform: `translate(calc(-50% - ${cropPosition.x * (cropZoom - 1) * 50}%), calc(-50% - ${cropPosition.y * (cropZoom - 1) * 50}%)) scale(${cropZoom})`,
             transformOrigin: 'center center',
           }}
         />

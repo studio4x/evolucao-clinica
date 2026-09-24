@@ -27,6 +27,7 @@ assert.match(cropEditorSource, /Aproximação/);
 assert.match(cropEditorSource, /transformOrigin: 'center center'/, 'O zoom do recorte deve permanecer centralizado na pré-visualização.');
 assert.match(cropEditorSource, /const DEFAULT_CROP_ZOOM = 1\.15/, 'O editor deve manter margem para deslocamento horizontal mesmo em fotos quadradas.');
 assert.match(cropEditorSource, /min="1\.05"/, 'O zoom mínimo deve preservar espaço para movimentar o recorte.');
+assert.match(cropEditorSource, /translate\(calc\(-50% - \$\{cropPosition\.x/, 'A prévia deve traduzir horizontalmente o recorte aplicado.');
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
@@ -51,6 +52,8 @@ assert.match(detailSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);
 assert.match(patientPhotoSource, /object-cover object-center/, 'A foto exibida deve usar o centro do recorte aplicado.');
 assert.match(patientPhotoSource, /shape === 'rounded' \? 'rounded-xl' : 'rounded-full'/, 'O formato quadrado deve ser opcional para preservar outros contextos.');
 assert.match(detailSource, /className="h-16 w-16 shrink-0 sm:h-20 sm:w-20 xl:h-16 xl:w-16"/, 'A foto do cabeçalho deve crescer sem perder o limite responsivo.');
+assert.match(formSource, /setPhotoEditorUrl\(storedPhotoUrl\)/, 'Uma foto já salva deve abrir diretamente no editor também no mobile.');
+assert.match(formSource, /setPhotoEditorUrl\(photoPreviewUrl\)/, 'O editor deve usar a imagem atualmente visualizada ao reajustar a foto.');
 assert.match(serverSource, /\.from\("patient-photos"\)[\s\S]*?\.remove\(photoPaths\)/);
 
 console.log('Patient private photo tests passed.');

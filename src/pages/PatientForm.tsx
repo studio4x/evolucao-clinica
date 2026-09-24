@@ -520,7 +520,9 @@ export default function PatientForm() {
             setPhotoRemoved(false);
             if (storedPhotoPath) {
               try {
-                setPhotoPreviewUrl(await createPatientPhotoSignedUrl(storedPhotoPath));
+                const storedPhotoUrl = await createPatientPhotoSignedUrl(storedPhotoPath);
+                setPhotoPreviewUrl(storedPhotoUrl);
+                setPhotoEditorUrl(storedPhotoUrl);
               } catch (photoError) {
                 console.warn('[PatientForm] Não foi possível carregar a foto privada:', photoError);
                 setPhotoPreviewUrl('');
@@ -1389,7 +1391,7 @@ export default function PatientForm() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (!photoEditorUrl) setPhotoEditorUrl(photoPreviewUrl);
+                      setPhotoEditorUrl(photoPreviewUrl);
                       setShowPhotoEditor((visible) => !visible);
                     }}
                     disabled={loading || preparingPhoto}
