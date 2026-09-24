@@ -47,6 +47,10 @@ import {
   readPatientFormDraft,
   writePatientFormDraft,
 } from '../utils/patientFormDraft';
+import {
+  getPatientGoogleSetupAlert,
+  getPatientGoogleSetupState,
+} from '../utils/patientGoogleSetup';
 
 declare global {
   interface Window {
@@ -109,15 +113,18 @@ function PatientEditGuideButton({ compact = false, expanded, onOpen }: PatientEd
   );
 }
 
-function PatientFormSection({ title, description, icon: Icon, children }: { title: string; description?: string; icon: React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>; children: React.ReactNode }) {
+function PatientFormSection({ title, description, icon: Icon, children, required = false, attention = false, sectionRef }: { title: string; description?: string; icon: React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>; children: React.ReactNode; required?: boolean; attention?: boolean; sectionRef?: React.Ref<HTMLElement> }) {
   return (
-    <section className="space-y-5 border-b border-brand-border/70 pb-8 last:border-b-0 last:pb-0" aria-labelledby={`patient-form-section-${title}`}>
+    <section ref={sectionRef} className={`space-y-5 border-b border-brand-border/70 pb-8 last:border-b-0 last:pb-0 scroll-mt-6 transition-shadow duration-300 ${attention ? 'rounded-2xl border border-brand-primary/60 bg-brand-primary/[0.025] p-4 shadow-[0_0_0_3px_rgba(37,99,235,0.08)] sm:p-5' : ''}`} aria-labelledby={`patient-form-section-${title}`}>
       <div className="flex items-start gap-3">
         <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-primary/8 text-brand-primary ring-1 ring-brand-primary/15">
           <Icon size={16} aria-hidden={true} />
         </span>
         <div className="min-w-0">
-          <h2 id={`patient-form-section-${title}`} className="text-base font-semibold text-brand-primary">{title}</h2>
+          <h2 id={`patient-form-section-${title}`} className="flex flex-wrap items-center gap-2 text-base font-semibold text-brand-primary">
+            <span>{title}</span>
+            {required && <span className="rounded-full border border-brand-primary/20 bg-brand-primary/5 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-brand-primary">Obrigatório</span>}
+          </h2>
           {description && <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">{description}</p>}
         </div>
       </div>
@@ -293,6 +300,11 @@ export default function PatientForm() {
   const [photoEditorUrl, setPhotoEditorUrl] = useState('');
   const [pendingPhotoBlob, setPendingPhotoBlob] = useState<Blob | null>(null);
   const [photoRemoved, setPhotoRemoved] = useState(false);
+  const [googleSetupAttention, setGoogleSetupAttention] = useState(false);
+  const googleSetupSectionRef = useRef<HTMLElement | null>(null);
+  const patientLoadedRef = useRef(!id);
+  const legacyGoogleSetupPendingRef = useRef(false);
+  const googleSetupAttentionTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (googleAuthorizationStatus === 'missing_scopes' && googleMissingScopes.some((scope) => scope === GOOGLE_SCOPE_SETS.clinicalDocs[0])) {
@@ -301,6 +313,10 @@ export default function PatientForm() {
       setIsGooglePermissionModalOpen(false);
     }
   }, [googleAuthorizationStatus, googleMissingScopes]);
+
+  useEffect(() => () => {
+    if (googleSetupAttentionTimerRef.current) window.clearTimeout(googleSetupAttentionTimerRef.current);
+  }, []);
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const pendingPatientIdRef = useRef<string | null>(null);
@@ -438,6 +454,8 @@ export default function PatientForm() {
 
   useEffect(() => {
     if (id) {
+      patientLoadedRef.current = false;
+      legacyGoogleSetupPendingRef.current = false;
       setDraftReady(false);
       const fetchPatient = async () => {
         try {
@@ -449,6 +467,8 @@ export default function PatientForm() {
           
           if (error) throw error;
           if (data) {
+            patientLoadedRef.current = true;
+            legacyGoogleSetupPendingRef.current = getPatientGoogleSetupState(data) !== 'complete';
             const storedPhone = splitStoredWhatsAppNumber(
               data.phone || '',
               DEFAULT_WHATSAPP_COUNTRY,
@@ -700,6 +720,17 @@ export default function PatientForm() {
         variant: "warning",
         icon: "warning"
       });
+      return;
+    }
+
+    if (!formData.target_folder_id) {
+      await showAlert('Selecione ou crie uma pasta no Google Drive antes de criar o prontuário.', {
+        title: 'Configure a pasta do paciente',
+        variant: 'warning',
+        icon: 'info',
+      });
+      googleSetupSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      googleSetupSectionRef.current?.querySelector<HTMLElement>('[data-google-folder-control]')?.focus({ preventScroll: true });
       return;
     }
 
@@ -1043,6 +1074,30 @@ export default function PatientForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    const googleSetupState = getPatientGoogleSetupState(formData);
+    const shouldRequireGoogleSetup = !id || !patientLoadedRef.current || !legacyGoogleSetupPendingRef.current;
+    if (shouldRequireGoogleSetup && googleSetupState !== 'complete') {
+      const alert = getPatientGoogleSetupAlert(googleSetupState);
+      setGoogleSetupAttention(true);
+      if (googleSetupAttentionTimerRef.current) window.clearTimeout(googleSetupAttentionTimerRef.current);
+      googleSetupAttentionTimerRef.current = window.setTimeout(() => setGoogleSetupAttention(false), 3200);
+      window.requestAnimationFrame(() => {
+        googleSetupSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const selector = googleSetupState === 'missing-document'
+          ? '[data-google-document-control]'
+          : '[data-google-folder-control]';
+        window.setTimeout(() => {
+          googleSetupSectionRef.current?.querySelector<HTMLElement>(selector)?.focus({ preventScroll: true });
+        }, 250);
+      });
+      await showAlert(alert.message, {
+        title: alert.title,
+        variant: 'warning',
+        icon: 'info',
+      });
+      return;
+    }
 
     const incompleteSchedule = formData.session_schedule.some((item) => (
       !Number.isInteger(Number(item.weekday))
@@ -1632,8 +1687,24 @@ export default function PatientForm() {
         </div>
         </PatientFormSection>
 
-        <PatientFormSection icon={FolderOpen} title="Prontuário e Google Drive" description="Vincule ou crie o prontuário do paciente no Google Drive.">
+        <PatientFormSection
+          icon={FolderOpen}
+          title="Prontuário e Google Drive"
+          description="Vincule ou crie o prontuário do paciente no Google Drive para concluir o cadastro."
+          required
+          attention={googleSetupAttention}
+          sectionRef={googleSetupSectionRef}
+        >
         <div>
+          <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-brand-border/70 bg-brand-bg/60 px-3 py-2.5 text-xs" role="status" aria-live="polite">
+            <span className={formData.target_folder_id ? 'font-semibold text-brand-primary' : 'text-brand-text-muted'}>
+              {formData.target_folder_id ? '✓' : '1.'} Pasta do Google Drive{formData.target_folder_id ? ' definida' : ''}
+            </span>
+            <ChevronRight size={14} className="hidden text-brand-text-muted sm:block" aria-hidden={true} />
+            <span className={formData.google_doc_id ? 'font-semibold text-brand-primary' : 'text-brand-text-muted'}>
+              {formData.google_doc_id ? '✓' : '2.'} Prontuário{formData.google_doc_id ? ' vinculado' : ''}
+            </span>
+          </div>
           <h3 className="text-lg font-medium text-brand-text mb-4">Prontuário no Google Docs</h3>
           
           {formData.google_doc_id ? (
@@ -1649,6 +1720,7 @@ export default function PatientForm() {
               </div>
               <button
                 type="button"
+                data-google-document-control
                 onClick={handlePicker}
                 className="btn-outline px-3 py-1.5 text-xs"
               >
@@ -1660,6 +1732,7 @@ export default function PatientForm() {
               {!hasClinicalAccess ? (
                 <button
                   type="button"
+                  data-google-folder-control
                   onClick={handleReauthenticate}
                   disabled={isReauthenticating}
                   className="col-span-1 md:col-span-2 flex items-center justify-center space-x-2 p-6 bg-yellow-50 border-2 border-yellow-200 border-dashed rounded-xl text-yellow-700 hover:bg-yellow-100 transition-colors"
@@ -1694,6 +1767,7 @@ export default function PatientForm() {
                         </div>
                         <button 
                           type="button"
+                          data-google-folder-control
                           onClick={() => {
                             setFormData(prev => ({ ...prev, target_folder_id: '', target_folder_name: '' }));
                             clearGoogleFolderPreference(user?.id);
@@ -1767,6 +1841,7 @@ export default function PatientForm() {
                       <div className="flex flex-col gap-2">
                         <button
                           type="button"
+                          data-google-folder-control
                           onClick={() => openExplorer('folder')}
                           className="w-full flex items-center justify-center space-x-2 p-4 bg-white border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all group"
                         >
@@ -1778,6 +1853,7 @@ export default function PatientForm() {
                         </button>
                         <button
                           type="button"
+                          data-google-folder-control
                           onClick={() => setShowLinkFolder(true)}
                           className="w-full flex items-center justify-center space-x-2 p-3 bg-white border border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-all group text-sm"
                         >
@@ -1793,6 +1869,7 @@ export default function PatientForm() {
 
                   <button
                     type="button"
+                    data-google-document-control
                     onClick={handleCreateDoc}
                     disabled={creatingDoc || !formData.full_name}
                     className="flex items-center justify-center space-x-2 p-4 border-2 border-brand-primary border-dashed rounded-xl text-brand-primary hover:bg-brand-primary/5 transition-colors disabled:opacity-50"
@@ -1807,6 +1884,7 @@ export default function PatientForm() {
 
                   <button
                     type="button"
+                    data-google-document-control
                     onClick={handlePicker}
                     className="flex items-center justify-center space-x-2 p-4 border-2 border-dashed border-brand-border rounded-xl text-brand-text-muted hover:border-brand-primary hover:text-brand-primary transition-colors bg-brand-bg/50 hover:bg-brand-primary/5"
                   >

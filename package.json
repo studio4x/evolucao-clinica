@@ -37,6 +37,7 @@
     "test:required-whatsapp-profile": "tsx tests/required-whatsapp-profile.test.ts",
     "test:patient-international-phone": "tsx tests/patient-international-phone.test.ts",
     "test:patient-form-draft": "tsx tests/patient-form-draft.test.ts",
+    "test:patient-google-setup": "tsx tests/patient-google-setup.test.ts",
     "test:patient-address-autocomplete": "tsx tests/patient-address-autocomplete.test.ts",
     "test:patient-photo": "tsx tests/patient-photo.test.ts",
     "test:audio-webview": "tsx tests/audio-webview-compatibility.test.ts",
