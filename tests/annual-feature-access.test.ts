@@ -14,7 +14,9 @@ assert.match(anamnesis, /grid grid-cols-1 gap-6 lg:grid-cols-5/, 'A Anamnese blo
 assert.match(anamnesis, /Disponível no Plano Anual/, 'A Anamnese bloqueada deve informar a disponibilidade no Plano Anual.');
 assert.match(anamnesis, /Fazer Upgrade Agora/, 'A Anamnese bloqueada deve oferecer o upgrade.');
 assert.match(anamnesisCard, /<Crown[^>]*fill-current/, 'O card de Anamnese deve identificar o recurso premium.');
-assert.match(patientFilesCard, /<Crown[^>]*fill-current/, 'O card de Arquivos do paciente deve identificar o recurso premium.');
+assert.match(patientFilesCard, /<Crown[^>]*/, 'O card de Arquivos do paciente deve identificar o recurso premium.');
+assert.match(patientFilesCard, /Como funcionam os Arquivos do paciente\?/, 'A aba Arquivos deve explicar a funcionalidade dentro da própria aba.');
+assert.match(patientFilesCard, /Fazer Upgrade Agora/, 'A aba Arquivos deve oferecer o upgrade dentro da própria aba.');
 assert.match(sessionsPage, /if \(!hasYearlyAccess\)/, 'O Controle de Sessões deve bloquear a página sem acesso anual.');
 assert.match(sessionsPage, /Disponível no Plano Anual/, 'A página bloqueada deve informar a disponibilidade no Plano Anual.');
 assert.match(sessionsCard, /if \(!hasYearlyAccess\)/, 'O resumo do Controle de Sessões não deve carregar dados sem acesso anual.');

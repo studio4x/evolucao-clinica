@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowRight,
   Check,
+  CheckCircle2,
   ChevronDown,
   ExternalLink,
   FolderOpen,
@@ -574,32 +576,41 @@ export default function PatientFilesCard({
 
   if (!hasYearlyAccess) {
     return (
-      <div className="card !overflow-visible p-5 sm:p-6 space-y-5">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-brand-primary/10 p-2.5 text-brand-primary">
-            <Paperclip size={19} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <section className="card space-y-6 rounded-3xl border border-brand-border bg-white p-8 lg:col-span-3">
+          <h2 className="flex items-center gap-2 text-xl font-bold text-brand-text">
+            <Paperclip className="text-brand-primary" size={24} />
+            <span>Como funcionam os Arquivos do paciente?</span>
+          </h2>
+          <div className="space-y-4">
+            {[
+              ['1', 'Vincule a pasta do paciente', 'Conecte o prontuário à pasta correspondente do seu Google Drive para manter os documentos organizados.'],
+              ['2', 'Adicione documentos e mídias', 'Envie documentos, imagens, áudios e vídeos diretamente pela aba Arquivos do paciente.'],
+              ['3', 'Consulte tudo no prontuário', 'Os arquivos ficam catalogados para consulta e acompanhamento junto ao histórico clínico.'],
+            ].map(([number, title, description]) => (
+              <div key={number} className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-lg bg-brand-bg p-2 font-bold text-brand-primary">{number}</div>
+                <div><h3 className="text-sm font-semibold text-brand-text">{title}</h3><p className="mt-0.5 text-xs text-brand-text-muted">{description}</p></div>
+              </div>
+            ))}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-semibold text-brand-text">Arquivos do paciente</h3>
-              <span className="inline-flex items-center gap-1 rounded-full bg-brand-primary/10 px-2 py-0.5 text-[10px] font-bold text-brand-primary">
-                <Crown size={11} className="fill-current" /> Plano Anual
-              </span>
+          <div className="border-t border-brand-border/60 pt-4">
+            <div className="flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-xs text-sky-800">
+              <CheckCircle2 className="mt-0.5 shrink-0 text-sky-600" size={16} />
+              <div><span className="mb-0.5 block font-bold">Organização e segurança:</span>Os arquivos permanecem na sua pasta vinculada do Google Drive e ficam disponíveis no prontuário para consulta.</div>
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
-              Documentos e arquivos ficam salvos na pasta vinculada do Google Drive.
-            </p>
           </div>
-        </div>
+        </section>
 
-        <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/[0.04] p-4">
-          <p className="text-xs leading-relaxed text-brand-text-muted">
-            Esta funcionalidade é somente para assinantes do Plano Anual.
-          </p>
-          <Link to="/painel/subscription" className="mt-3 inline-flex text-xs font-bold text-brand-primary hover:underline">
-            Conhecer o Plano Anual →
-          </Link>
-        </div>
+        <aside className="card relative flex flex-col justify-between overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white p-8 text-center shadow-sm lg:col-span-2">
+          <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 rounded-full bg-gradient-to-br from-amber-400/15 to-transparent blur-3xl" />
+          <div className="relative z-10 space-y-6">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"><Lock size={32} /></div>
+            <div className="space-y-2"><h2 className="text-lg font-bold text-amber-950">Disponível no Plano Anual</h2><p className="text-xs leading-relaxed text-amber-800/80">Os Arquivos do paciente são exclusivos para assinantes do Plano Anual.</p></div>
+            <div className="space-y-2.5 rounded-2xl border border-amber-200/50 bg-amber-50 p-4 text-left">{['Documentos organizados por paciente', 'Upload de documentos, imagens, áudios e vídeos', 'Consulta integrada ao prontuário'].map((benefit) => <div key={benefit} className="flex items-center gap-2 text-xs font-semibold text-amber-900"><Crown size={14} className="shrink-0 fill-amber-500 text-amber-600" />{benefit}</div>)}</div>
+          </div>
+          <div className="relative z-10 pt-8"><Link to="/painel/subscription" className="flex w-full cursor-pointer items-center justify-center space-x-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 font-bold text-white shadow-md shadow-orange-500/10 transition-all hover:from-amber-600 hover:to-orange-600"><span>Fazer Upgrade Agora</span><ArrowRight size={16} /></Link><p className="mt-2 text-[10px] text-amber-800/60">Mude para o Plano Anual para ativar os arquivos do paciente</p></div>
+        </aside>
       </div>
     );
   }
