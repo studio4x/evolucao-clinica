@@ -22,6 +22,7 @@ import {
   PlusCircle,
   RotateCcw,
   Save,
+  Settings2,
   X,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -1186,8 +1187,8 @@ export default function PatientAnamnesis() {
                   <button type="button" onClick={() => navigate('/painel/anamnesis/modelos/novo')} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs">
                     <PlusCircle size={14} />Criar minha própria anamnese
                   </button>
-                  <button type="button" onClick={() => navigate('/painel/anamnesis/modelos')} className="text-xs font-bold text-brand-primary hover:underline">
-                    Gerenciar modelos
+                  <button type="button" onClick={() => navigate('/painel/anamnesis/modelos', { state: { from: `/painel/patients/${patientId}/anamnesis` } })} className="btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-xs">
+                    <Settings2 size={14} />Gerenciar modelos
                   </button>
                 </div>
               </div>

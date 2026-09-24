@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowDown, ArrowUp, CheckCircle2, Eye, GripVertical, Info, Layers3, Loader2, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useBeforeUnload, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
@@ -41,6 +41,9 @@ const FIELD_TYPES: Array<{ value: AnamnesisFieldType; label: string }> = [
 ];
 
 const fieldLabel = (type: AnamnesisFieldType) => FIELD_TYPES.find((item) => item.value === type)?.label || 'Campo';
+const getDraftSignature = (name: string, schema: AnamnesisTemplateSchema) => JSON.stringify({ name, schema });
+
+type DraftSaveState = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
 const BUILDER_GUIDE_STEPS: FeatureGuideStep[] = [
   { title: 'Organize por seções', description: 'Crie seções para agrupar informações relacionadas e facilitar o preenchimento da Anamnese.', icon: Layers3 },
@@ -72,6 +75,12 @@ export default function AnamnesisBuilder() {
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [draftSaveState, setDraftSaveState] = useState<DraftSaveState>('idle');
+  const draftSaveTimerRef = useRef<number | null>(null);
+  const persistedDraftSignatureRef = useRef('');
+  const dirtyRef = useRef(false);
+  const nameRef = useRef(name);
+  const schemaRef = useRef(schema);
 
   const sourceTemplate = useMemo(
     () => templates.find((template) => template.id === searchParams.get('source')) || null,
@@ -81,6 +90,10 @@ export default function AnamnesisBuilder() {
     () => templates.find((template) => template.id === templateId) || null,
     [templateId, templates]
   );
+
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  useEffect(() => { nameRef.current = name; }, [name]);
+  useEffect(() => { schemaRef.current = schema; }, [schema]);
 
   useEffect(() => {
     let active = true;
@@ -92,20 +105,81 @@ export default function AnamnesisBuilder() {
       if (draft) {
         setName(draft.name);
         setSchema(draft.schema);
+        persistedDraftSignatureRef.current = getDraftSignature(draft.name, draft.schema);
+        setDraftSaveState('saved');
       } else if (base) {
         setName(templateId ? base.name : `Cópia de ${base.name}`);
         setSchema(cloneSchemaWithFreshIds(base.schema));
+        persistedDraftSignatureRef.current = '';
       }
       setLoaded(true);
     }).catch((error) => showAlert(error instanceof Error ? error.message : 'Não foi possível carregar os modelos.'));
     return () => { active = false; };
   }, [sourceTemplate, templateId, user?.id]);
 
+  const flushDraft = useCallback(async () => {
+    if (!loaded || !user?.id || !dirtyRef.current) return;
+    if (draftSaveTimerRef.current !== null) {
+      window.clearTimeout(draftSaveTimerRef.current);
+      draftSaveTimerRef.current = null;
+    }
+
+    const nextSignature = getDraftSignature(nameRef.current, schemaRef.current);
+    if (nextSignature === persistedDraftSignatureRef.current) {
+      setDirty(false);
+      setDraftSaveState('saved');
+      return;
+    }
+
+    setDraftSaveState('saving');
+    try {
+      writeBuilderDraft(user.id, templateId || null, { name: nameRef.current, schema: schemaRef.current });
+      persistedDraftSignatureRef.current = nextSignature;
+      setDirty(false);
+      setDraftSaveState('saved');
+    } catch (error) {
+      setDraftSaveState('error');
+      throw error;
+    }
+  }, [loaded, templateId, user?.id]);
+
   useEffect(() => {
-    if (!loaded || !user?.id) return;
-    const timer = window.setTimeout(() => writeBuilderDraft(user.id, templateId || null, { name, schema }), 500);
-    return () => window.clearTimeout(timer);
-  }, [loaded, name, schema, templateId, user?.id]);
+    if (!loaded || !user?.id || !dirty) return undefined;
+    setDraftSaveState('pending');
+    if (draftSaveTimerRef.current !== null) window.clearTimeout(draftSaveTimerRef.current);
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      draftSaveTimerRef.current = null;
+      void flushDraft().catch((error) => console.error('[AnamnesisBuilder] Não foi possível salvar o rascunho:', error));
+    }, 500);
+    return () => {
+      if (draftSaveTimerRef.current !== null) {
+        window.clearTimeout(draftSaveTimerRef.current);
+        draftSaveTimerRef.current = null;
+      }
+    };
+  }, [dirty, flushDraft, loaded, name, schema, user?.id]);
+
+  useBeforeUnload(useCallback((event) => {
+    if (!dirtyRef.current || !user?.id) return;
+    try {
+      writeBuilderDraft(user.id, templateId || null, { name: nameRef.current, schema: schemaRef.current });
+    } catch { /* o aviso do navegador ainda protege a alteração local */ }
+    event.preventDefault();
+    event.returnValue = '';
+  }, [templateId, user?.id]));
+
+  useEffect(() => {
+    const flushOnHide = () => {
+      if (dirtyRef.current) void flushDraft().catch((error) => console.error('[AnamnesisBuilder] Salvamento preventivo falhou:', error));
+    };
+    const handleVisibilityChange = () => { if (document.visibilityState === 'hidden') flushOnHide(); };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', flushOnHide);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', flushOnHide);
+    };
+  }, [flushDraft]);
 
   const updateSchema = (next: AnamnesisTemplateSchema) => {
     setSchema(normalizeBuilderSchema(next));
@@ -144,6 +218,15 @@ export default function AnamnesisBuilder() {
 
   const moveField = (section: AnamnesisSection, index: number, direction: -1 | 1) => updateSection(section.id || section.key, { fields: moveItem(section.fields, index, direction) });
 
+  const handleBack = async () => {
+    try {
+      await flushDraft();
+      navigate('/painel/anamnesis/modelos');
+    } catch {
+      await showAlert('Não foi possível salvar o último rascunho. A página foi mantida aberta para evitar perda de dados.', { title: 'Rascunho não salvo', variant: 'warning', icon: 'warning' });
+    }
+  };
+
   const save = async () => {
     const normalized = normalizeBuilderSchema(schema);
     const errors = validateBuilderSchema(name, normalized);
@@ -153,6 +236,7 @@ export default function AnamnesisBuilder() {
     }
     setSaving(true);
     try {
+      await flushDraft();
       if (editingTemplate) await publishPersonalAnamnesisTemplate(editingTemplate.id, { name, schema: normalized });
       else await createPersonalAnamnesisTemplate({
         name,
@@ -161,6 +245,8 @@ export default function AnamnesisBuilder() {
         sourceTemplateVersionId: sourceTemplate?.kind === 'system' ? sourceTemplate.currentVersionId : null,
       });
       if (user?.id) clearBuilderDraft(user.id, templateId || null);
+      persistedDraftSignatureRef.current = '';
+      setDraftSaveState('idle');
       setDirty(false);
       await showAlert(editingTemplate ? 'Nova versão publicada. Anamneses anteriores continuam preservadas.' : 'Modelo salvo e disponível para todos os seus pacientes.', { title: 'Modelo salvo', variant: 'success', icon: 'success' });
       navigate('/painel/anamnesis/modelos');
@@ -188,8 +274,8 @@ export default function AnamnesisBuilder() {
   if (!loaded) return <div className="flex min-h-[40vh] items-center justify-center"><Loader2 className="animate-spin text-brand-primary" /></div>;
 
   return <div className="w-full space-y-5 pb-10">
-    <button type="button" onClick={() => navigate('/painel/anamnesis/modelos')} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline"><ArrowLeft size={14} />Voltar para meus modelos</button>
-    <PanelPageHeader title={editingTemplate ? 'Editar modelo de anamnese' : sourceTemplate ? 'Personalizar modelo' : 'Criar minha própria anamnese'} description={sourceTemplate ? 'Você está usando um modelo existente como ponto de partida. As alterações serão feitas na sua própria versão, sem modificar o modelo original.' : 'Monte seções e campos do jeito que você trabalha. O modelo ficará disponível para todos os seus pacientes.'} titleActions={<FeatureGuideButton label="o Builder de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />} actions={<div className="flex flex-wrap items-center justify-end gap-2"><span className="md:hidden"><FeatureGuideButton compact label="o Builder de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span><button type="button" onClick={() => setPreviewOpen(true)} className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"><Eye size={15} />Visualizar</button><button type="button" onClick={() => void save()} disabled={saving} className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Salvar modelo</button></div>} />
+    <button type="button" onClick={() => void handleBack()} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline"><ArrowLeft size={14} />Voltar para meus modelos</button>
+    <PanelPageHeader title={editingTemplate ? 'Editar modelo de anamnese' : sourceTemplate ? 'Personalizar modelo' : 'Criar minha própria anamnese'} description={sourceTemplate ? 'Você está usando um modelo existente como ponto de partida. As alterações serão feitas na sua própria versão, sem modificar o modelo original.' : 'Monte seções e campos do jeito que você trabalha. O modelo ficará disponível para todos os seus pacientes.'} titleActions={<FeatureGuideButton label="o Builder de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />} actions={<div className="flex flex-wrap items-center justify-end gap-2"><span aria-live="polite" className={`text-[10px] font-semibold ${draftSaveState === 'error' ? 'text-red-600' : draftSaveState === 'saved' ? 'text-emerald-700' : 'text-brand-text-muted'}`}>{draftSaveState === 'pending' ? 'Alterações pendentes' : draftSaveState === 'saving' ? 'Salvando rascunho...' : draftSaveState === 'saved' ? 'Rascunho salvo' : draftSaveState === 'error' ? 'Rascunho não salvo' : ''}</span><span className="md:hidden"><FeatureGuideButton compact label="o Builder de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span><button type="button" onClick={() => setPreviewOpen(true)} className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"><Eye size={15} />Visualizar</button><button type="button" onClick={() => void save()} disabled={saving} className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Salvar modelo</button></div>} />
 
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <main className="space-y-4">

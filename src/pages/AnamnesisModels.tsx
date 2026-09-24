@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Archive, CheckCircle2, Copy, Edit3, ListChecks, Plus, RotateCcw, Sparkles, Users } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Archive, ArrowLeft, CheckCircle2, Copy, Edit3, ListChecks, Plus, RotateCcw, Sparkles, Users } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
@@ -19,9 +19,14 @@ const MODELS_GUIDE_STEPS: FeatureGuideStep[] = [
 
 export default function AnamnesisModels() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [templates, setTemplates] = useState<AnamnesisTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [guideOpen, setGuideOpen] = useState(false);
+  const requestedReturnTo = typeof location.state?.from === 'string' ? location.state.from : null;
+  const returnTo = requestedReturnTo && requestedReturnTo.startsWith('/painel/') && requestedReturnTo !== location.pathname
+    ? requestedReturnTo
+    : '/painel';
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,10 +61,13 @@ export default function AnamnesisModels() {
   );
 
   return <div className="w-full space-y-5 pb-10">
+    <button type="button" onClick={() => navigate(returnTo)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline focus:outline-none focus:ring-2 focus:ring-brand-primary/30 focus:ring-offset-2">
+      <ArrowLeft size={14} />Voltar
+    </button>
     <PanelPageHeader title="Modelos de anamnese" description="Crie modelos pessoais reutilizáveis para todos os seus pacientes, mantendo os modelos oficiais intactos." titleActions={<FeatureGuideButton label="os modelos de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />} actions={<div className="flex flex-wrap items-center justify-end gap-2"><span className="md:hidden"><FeatureGuideButton compact label="os modelos de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span><button type="button" onClick={() => navigate('/painel/anamnesis/modelos/novo')} className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs"><Plus size={15} />Criar minha própria anamnese</button></div>} />
     {loading ? <div className="card p-6 text-sm text-brand-text-muted">Carregando modelos...</div> : <>
-      <section className="space-y-3"><div><h2 className="text-lg font-bold text-brand-text">Meus modelos</h2><p className="text-xs text-brand-text-muted">Modelos privados, disponíveis somente para você e seus próprios pacientes.</p></div>{personal.length ? <div className="grid gap-3 lg:grid-cols-2">{personal.map(renderPersonal)}</div> : <div className="card p-5 text-sm text-brand-text-muted">Você ainda não criou um modelo pessoal.</div>}</section>
-      <section className="space-y-3"><div><h2 className="text-lg font-bold text-brand-text">Modelos recomendados</h2><p className="text-xs text-brand-text-muted">Você pode personalizar uma cópia; o modelo oficial não será alterado.</p></div><div className="grid gap-3 lg:grid-cols-2">{standard.map((template) => <article key={template.id} className={cardClass}><h3 className="font-bold text-brand-text">{template.name}</h3><p className="mt-1 text-xs text-brand-text-muted">Modelo oficial · versão {template.version}</p><button type="button" onClick={() => navigate(`/painel/anamnesis/modelos/novo?source=${template.id}`)} className="btn-outline mt-4 inline-flex items-center gap-1.5 px-3 py-2 text-xs"><Copy size={14} />Personalizar modelo</button></article>)}</div></section>
+      <section className="space-y-3"><div><h2 className="text-lg font-bold text-brand-text">Meus modelos</h2><p className="text-xs text-brand-text-muted">Modelos privados, disponíveis somente para você e seus próprios pacientes.</p></div>{personal.length ? <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">{personal.map(renderPersonal)}</div> : <div className="card p-5 text-sm text-brand-text-muted">Você ainda não criou um modelo pessoal.</div>}</section>
+      <section className="space-y-3"><div><h2 className="text-lg font-bold text-brand-text">Modelos recomendados</h2><p className="text-xs text-brand-text-muted">Você pode personalizar uma cópia; o modelo oficial não será alterado.</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">{standard.map((template) => <article key={template.id} className={cardClass}><h3 className="font-bold text-brand-text">{template.name}</h3><p className="mt-1 text-xs text-brand-text-muted">Modelo oficial · versão {template.version}</p><button type="button" onClick={() => navigate(`/painel/anamnesis/modelos/novo?source=${template.id}`)} className="btn-outline mt-4 inline-flex items-center gap-1.5 px-3 py-2 text-xs"><Copy size={14} />Personalizar modelo</button></article>)}</div></section>
     </>}
     <FeatureGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} eyebrow="Modelos de Anamnese" title="Como funcionam os modelos de Anamnese?" description="Nesta página você pode criar e organizar modelos de Anamnese para reutilizar com seus pacientes." steps={MODELS_GUIDE_STEPS} note="As Anamneses já registradas preservam suas informações e versões anteriores. Alterar um modelo não deve modificar silenciosamente registros clínicos já concluídos." />
   </div>;
