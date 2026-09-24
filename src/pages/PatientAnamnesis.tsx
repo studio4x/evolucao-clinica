@@ -1180,6 +1180,14 @@ export default function PatientAnamnesis() {
                 <p className="mt-1.5 text-[10px] leading-relaxed text-brand-text-muted">
                   Sugestão inicial baseada no seu perfil profissional{professionalTitle ? `: ${professionalTitle}` : ''}. Você pode escolher outro modelo quando necessário.
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => navigate('/painel/anamnesis/modelos/novo')} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs">
+                    <PlusCircle size={14} />Criar minha própria anamnese
+                  </button>
+                  <button type="button" onClick={() => navigate('/painel/anamnesis/modelos')} className="text-xs font-bold text-brand-primary hover:underline">
+                    Gerenciar modelos
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 md:justify-end">

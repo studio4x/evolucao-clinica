@@ -90,6 +90,8 @@ export function validateAnamnesisSchema(schema: unknown, options: { legacy?: boo
 
   const sectionIds = new Set<string>();
   const fieldIds = new Set<string>();
+  const sectionKeys = new Set<string>();
+  const fieldKeys = new Set<string>();
   const basicSections = schema.sections.filter((section) => isObject(section) && section.kind === 'basic_information');
   if (basicSections.length > 1) errors.push('O schema pode conter apenas uma seção Informações básicas.');
 
@@ -107,6 +109,11 @@ export function validateAnamnesisSchema(schema: unknown, options: { legacy?: boo
       if (sectionIds.has(sectionId)) errors.push(`ID de seção duplicado: ${sectionId}.`);
       sectionIds.add(sectionId);
     }
+    if (hasText(rawSection.key)) {
+      const sectionKey = String(rawSection.key);
+      if (sectionKeys.has(sectionKey)) errors.push(`Key de seção duplicada: ${sectionKey}.`);
+      sectionKeys.add(sectionKey);
+    }
 
     if (!Array.isArray(rawSection.fields)) return;
     rawSection.fields.forEach((rawField, fieldIndex) => {
@@ -122,6 +129,11 @@ export function validateAnamnesisSchema(schema: unknown, options: { legacy?: boo
         const fieldId = String(rawField.id);
         if (fieldIds.has(fieldId)) errors.push(`ID de campo duplicado: ${fieldId}.`);
         fieldIds.add(fieldId);
+      }
+      if (hasText(rawField.key)) {
+        const fieldKey = String(rawField.key);
+        if (fieldKeys.has(fieldKey)) errors.push(`Key de campo duplicada: ${fieldKey}.`);
+        fieldKeys.add(fieldKey);
       }
       if (['select', 'multiselect'].includes(String(rawField.type)) && !Array.isArray(rawField.options)) {
         errors.push(`Campo ${String(rawField.key)} exige options.`);

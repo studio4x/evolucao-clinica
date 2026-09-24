@@ -7,6 +7,12 @@ import {
 } from '../src/services/anamnesisSchema';
 import { buildPatientContextSnapshot, getAnamnesisFieldAnswerKey, resolveAnamnesisFieldValue } from '../src/services/anamnesisValueResolver';
 import { buildAnamnesisPdfContent } from '../src/utils/anamnesisPdf';
+import {
+  cloneSchemaWithFreshIds,
+  createBasicInformationSection,
+  createEmptyBuilderSchema,
+  validateBuilderSchema,
+} from '../src/services/anamnesisBuilder';
 
 const legacy = {
   sections: [{ key: 'history', title: 'Histórico', fields: [{ key: 'notes', label: 'Notas', type: 'textarea' }] }],
@@ -78,5 +84,21 @@ assert.match(legacyPdfContent, /Resposta legada QA/);
 assert.match(legacyPdfContent, /Escala legada/);
 assert.match(legacyPdfContent, /\n4\n/);
 assert.doesNotMatch(legacyPdfContent, /Informações básicas/);
+
+const builderSchema = createEmptyBuilderSchema();
+builderSchema.sections.push(createBasicInformationSection());
+builderSchema.sections.push({
+  id: 'section-custom', key: 'queixa_principal', title: 'Queixa principal', kind: 'standard', order: 1,
+  fields: [{ id: 'field-select', key: 'intensidade', label: 'Intensidade', type: 'select', options: ['Leve', 'Moderada', 'Intensa'], required: true, order: 0 }],
+});
+assert.equal(validateBuilderSchema('Anamnese pessoal', builderSchema).length, 0);
+assert.equal(builderSchema.sections.filter((section) => section.kind === 'basic_information').length, 1);
+const clonedBuilderSchema = cloneSchemaWithFreshIds(builderSchema);
+assert.notEqual(clonedBuilderSchema.sections[0].id, builderSchema.sections[0].id);
+assert.notEqual(clonedBuilderSchema.sections[1].fields[0].id, builderSchema.sections[1].fields[0].id);
+assert.equal(clonedBuilderSchema.sections[1].fields[0].key, 'intensidade');
+assert.ok(validateBuilderSchema('', builderSchema).some((error) => error.includes('nome')));
+const invalidBuilderSchema = { ...builderSchema, sections: [...builderSchema.sections, createBasicInformationSection()] };
+assert.ok(validateBuilderSchema('Inválido', invalidBuilderSchema).length > 0);
 
 console.log('Anamnesis foundation tests passed.');
