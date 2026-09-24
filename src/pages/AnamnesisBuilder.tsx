@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowDown, ArrowUp, CheckCircle2, Eye, GripVertical, Info, Layers3, Loader2, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { useBeforeUnload, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ActionModal } from '../components/common/ActionModal';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
@@ -43,6 +44,16 @@ const FIELD_TYPES: Array<{ value: AnamnesisFieldType; label: string }> = [
 const fieldLabel = (type: AnamnesisFieldType) => FIELD_TYPES.find((item) => item.value === type)?.label || 'Campo';
 const getDraftSignature = (name: string, schema: AnamnesisTemplateSchema) => JSON.stringify({ name, schema });
 
+const appendFieldToSchema = (currentSchema: AnamnesisTemplateSchema, sectionId: string) => {
+  const section = currentSchema.sections.find((item) => (item.id || item.key) === sectionId);
+  if (!section) return null;
+  const field: AnamnesisField = { id: createStableId(), key: createFieldKey('campo'), label: 'Novo campo', type: 'text', required: false, order: section.fields.length };
+  return normalizeBuilderSchema({
+    ...currentSchema,
+    sections: currentSchema.sections.map((item) => item === section ? { ...item, fields: [...item.fields, field] } : item),
+  });
+};
+
 type DraftSaveState = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
 const BUILDER_GUIDE_STEPS: FeatureGuideStep[] = [
@@ -73,6 +84,10 @@ export default function AnamnesisBuilder() {
   const [schema, setSchema] = useState<AnamnesisTemplateSchema>(createEmptyBuilderSchema());
   const [previewOpen, setPreviewOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [materializedTemplateId, setMaterializedTemplateId] = useState<string | null>(null);
+  const [saveBeforeAddFieldOpen, setSaveBeforeAddFieldOpen] = useState(false);
+  const [pendingAddFieldSectionId, setPendingAddFieldSectionId] = useState<string | null>(null);
+  const [newlyAddedFieldId, setNewlyAddedFieldId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -80,6 +95,8 @@ export default function AnamnesisBuilder() {
   const draftSaveTimerRef = useRef<number | null>(null);
   const persistedDraftSignatureRef = useRef('');
   const dirtyRef = useRef(false);
+  const savingRef = useRef(false);
+  const addFieldTriggerRef = useRef<HTMLButtonElement | null>(null);
   const nameRef = useRef(name);
   const schemaRef = useRef(schema);
   const requestedReturnTo = typeof location.state?.from === 'string' ? location.state.from : null;
@@ -93,13 +110,20 @@ export default function AnamnesisBuilder() {
     [searchParams, templates]
   );
   const editingTemplate = useMemo(
-    () => templates.find((template) => template.id === templateId) || null,
-    [templateId, templates]
+    () => templates.find((template) => template.id === (templateId || materializedTemplateId)) || null,
+    [materializedTemplateId, templateId, templates]
   );
 
   useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
   useEffect(() => { nameRef.current = name; }, [name]);
   useEffect(() => { schemaRef.current = schema; }, [schema]);
+
+  useEffect(() => {
+    if (!newlyAddedFieldId) return;
+    const fieldElement = Array.from(document.querySelectorAll('input[aria-label="Nome do campo"]')).find((input) => (input as HTMLInputElement).value === 'Novo campo') as HTMLInputElement | undefined;
+    fieldElement?.focus();
+    setNewlyAddedFieldId(null);
+  }, [newlyAddedFieldId, schema]);
 
   useEffect(() => {
     let active = true;
@@ -214,6 +238,16 @@ export default function AnamnesisBuilder() {
     updateSection(section.id || section.key, { fields: [...section.fields, field] });
   };
 
+  const handleAddField = (section: AnamnesisSection, trigger: HTMLButtonElement) => {
+    addFieldTriggerRef.current = trigger;
+    if (!editingTemplate) {
+      setPendingAddFieldSectionId(section.id || section.key);
+      setSaveBeforeAddFieldOpen(true);
+      return;
+    }
+    addField(section);
+  };
+
   const updateField = (section: AnamnesisSection, fieldId: string, patch: Partial<AnamnesisField>) => updateSection(section.id || section.key, { fields: section.fields.map((field) => field.id === fieldId ? { ...field, ...patch } : field) });
 
   const removeField = async (section: AnamnesisSection, field: AnamnesisField) => {
@@ -233,32 +267,68 @@ export default function AnamnesisBuilder() {
     }
   };
 
-  const save = async () => {
+  const save = async (options: { continueWithAddFieldSectionId?: string | null } = {}) => {
+    if (savingRef.current) return false;
     const normalized = normalizeBuilderSchema(schema);
     const errors = validateBuilderSchema(name, normalized);
     if (errors.length) {
       await showAlert(errors.join('\n'), { title: 'Revise o modelo', variant: 'warning' });
-      return;
+      return false;
     }
+    const wasEditing = Boolean(editingTemplate);
+    savingRef.current = true;
     setSaving(true);
     try {
       await flushDraft();
-      if (editingTemplate) await publishPersonalAnamnesisTemplate(editingTemplate.id, { name, schema: normalized });
-      else await createPersonalAnamnesisTemplate({
+      const savedTemplate = wasEditing
+        ? await publishPersonalAnamnesisTemplate(editingTemplate!.id, { name, schema: normalized })
+        : await createPersonalAnamnesisTemplate({
         name,
         schema: normalized,
         sourceTemplateId: sourceTemplate?.kind === 'system' ? sourceTemplate.id : null,
         sourceTemplateVersionId: sourceTemplate?.kind === 'system' ? sourceTemplate.currentVersionId : null,
       });
+
+      if (options.continueWithAddFieldSectionId && !wasEditing) {
+        const nextSchema = appendFieldToSchema(normalized, options.continueWithAddFieldSectionId);
+        if (!nextSchema) throw new Error('Não foi possível continuar a inclusão do campo nesta seção.');
+        if (user?.id) {
+          clearBuilderDraft(user.id, templateId || null);
+          writeBuilderDraft(user.id, savedTemplate.id, { name, schema: nextSchema });
+        }
+        setTemplates((current) => [...current.filter((template) => template.id !== savedTemplate.id), savedTemplate]);
+        setMaterializedTemplateId(savedTemplate.id);
+        setSchema(nextSchema);
+        setNewlyAddedFieldId(nextSchema.sections.find((section) => (section.id || section.key) === options.continueWithAddFieldSectionId)?.fields.at(-1)?.id || null);
+        setPendingAddFieldSectionId(null);
+        setSaveBeforeAddFieldOpen(false);
+        setDirty(true);
+        setDraftSaveState('saved');
+        navigate(`/painel/anamnesis/modelos/${savedTemplate.id}/editar`, { replace: true, state: { from: returnTo } });
+        return true;
+      }
+
       if (user?.id) clearBuilderDraft(user.id, templateId || null);
       persistedDraftSignatureRef.current = '';
       setDraftSaveState('idle');
       setDirty(false);
-      await showAlert(editingTemplate ? 'Nova versão publicada. Anamneses anteriores continuam preservadas.' : 'Modelo salvo e disponível para todos os seus pacientes.', { title: 'Modelo salvo', variant: 'success', icon: 'success' });
+      await showAlert(wasEditing ? 'Nova versão publicada. Anamneses anteriores continuam preservadas.' : 'Modelo salvo e disponível para todos os seus pacientes.', { title: 'Modelo salvo', variant: 'success', icon: 'success' });
       returnToModels();
+      return true;
     } catch (error) {
       await showAlert(error instanceof Error ? error.message : 'Não foi possível salvar o modelo.', { title: 'Erro ao salvar', variant: 'danger' });
-    } finally { setSaving(false); }
+      return false;
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  };
+
+  const closeSaveBeforeAddField = () => {
+    if (saving) return;
+    setSaveBeforeAddFieldOpen(false);
+    setPendingAddFieldSectionId(null);
+    window.requestAnimationFrame(() => addFieldTriggerRef.current?.focus());
   };
 
   const previewAnswers: AnamnesisAnswers = Object.fromEntries(schema.sections.flatMap((section) => section.fields.filter((field) => !field.patientReference).map((field) => [field.id || field.key, field.type === 'multiselect' ? [] : field.type === 'yes_no' ? null : field.type === 'scale' ? field.min ?? 0 : '']))) as AnamnesisAnswers;
@@ -294,7 +364,7 @@ export default function AnamnesisBuilder() {
           <div className="flex items-start gap-2"><GripVertical className="mt-2 hidden shrink-0 text-brand-text-muted sm:block" size={18} /><div className="min-w-0 flex-1 space-y-3"><div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]"><input aria-label={`Título da seção ${sectionIndex + 1}`} value={section.title} onChange={(event) => updateSection(section.id || section.key, { title: event.target.value })} className={`${INPUT} font-bold`} /><div className="flex items-center justify-end gap-1"><button type="button" onClick={() => moveSection(sectionIndex, -1)} disabled={sectionIndex === 0} aria-label="Mover seção para cima" className="rounded-lg border border-brand-border p-2 text-brand-text-muted disabled:opacity-30"><ArrowUp size={15} /></button><button type="button" onClick={() => moveSection(sectionIndex, 1)} disabled={sectionIndex === schema.sections.length - 1} aria-label="Mover seção para baixo" className="rounded-lg border border-brand-border p-2 text-brand-text-muted disabled:opacity-30"><ArrowDown size={15} /></button>{section.kind !== 'basic_information' && <button type="button" onClick={() => void removeSection(section)} aria-label="Excluir seção" className="rounded-lg border border-red-200 p-2 text-red-600"><Trash2 size={15} /></button>}</div></div><textarea aria-label={`Descrição da seção ${sectionIndex + 1}`} value={section.description || ''} onChange={(event) => updateSection(section.id || section.key, { description: event.target.value })} placeholder="Descrição opcional da seção" rows={2} className={`${INPUT} resize-y text-xs`} /></div></div>
           {section.kind === 'basic_information' && <div className="mt-4 rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3 text-xs leading-relaxed text-brand-text"><strong>Informações básicas</strong> usa os dados já cadastrados do paciente. Os campos nativos permanecem somente leitura; você pode acrescentar campos personalizados abaixo.</div>}
           <div className="mt-4 space-y-3">{section.fields.map((field, fieldIndex) => <div key={field.id} className={`rounded-xl border p-3 ${field.patientReference ? 'border-brand-primary/20 bg-brand-primary/5' : 'border-brand-border bg-brand-bg/20'}`}><div className="flex items-start gap-2"><div className="min-w-0 flex-1 space-y-3"><div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_180px]"><input aria-label="Nome do campo" value={field.label} disabled={Boolean(field.patientReference)} onChange={(event) => updateField(section, field.id || field.key, { label: event.target.value })} className={`${INPUT} ${field.patientReference ? 'cursor-not-allowed bg-brand-bg/60' : ''}`} /><select aria-label="Tipo do campo" value={field.type} disabled={Boolean(field.patientReference)} onChange={(event) => updateField(section, field.id || field.key, { type: event.target.value as AnamnesisFieldType, options: ['select', 'multiselect'].includes(event.target.value) ? (field.options?.length ? field.options : ['Opção 1']) : undefined })} className={INPUT}>{FIELD_TYPES.map((type) => <option key={type.value} value={type.value}>{fieldLabel(type.value)}</option>)}</select></div><div className="grid gap-3 sm:grid-cols-2"><input aria-label="Orientação do campo" value={field.helpText || ''} onChange={(event) => updateField(section, field.id || field.key, { helpText: event.target.value })} placeholder="Texto de orientação (opcional)" className={`${INPUT} text-xs`} /><input aria-label="Placeholder do campo" value={field.placeholder || ''} onChange={(event) => updateField(section, field.id || field.key, { placeholder: event.target.value })} placeholder="Placeholder (opcional)" className={`${INPUT} text-xs`} /></div>{['select', 'multiselect'].includes(field.type) && <div className="space-y-2 rounded-lg border border-brand-border/70 bg-white p-3"><p className="text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">Opções</p>{(field.options || []).map((option, optionIndex) => <div key={`${field.id}-${optionIndex}`} className="flex gap-2"><input aria-label={`Opção ${optionIndex + 1}`} value={option} onChange={(event) => updateField(section, field.id || field.key, { options: (field.options || []).map((item, index) => index === optionIndex ? event.target.value : item) })} className={`${INPUT} text-xs`} /><button type="button" onClick={() => updateField(section, field.id || field.key, { options: (field.options || []).filter((_, index) => index !== optionIndex) })} aria-label="Remover opção" className="rounded-lg border border-red-200 px-2 text-red-600"><X size={14} /></button></div>)}<button type="button" onClick={() => updateField(section, field.id || field.key, { options: [...(field.options || []), `Opção ${(field.options?.length || 0) + 1}`] })} className="text-xs font-bold text-brand-primary">+ Adicionar opção</button></div>}<label className="inline-flex items-center gap-2 text-xs font-semibold text-brand-text"><input type="checkbox" checked={Boolean(field.required)} disabled={Boolean(field.patientReference)} onChange={(event) => updateField(section, field.id || field.key, { required: event.target.checked })} className="h-4 w-4 rounded border-brand-border text-brand-primary" />Campo obrigatório</label>{renderFieldPreview(field)}</div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={() => moveField(section, fieldIndex, -1)} disabled={fieldIndex === 0} aria-label="Mover campo para cima" className="rounded-lg border border-brand-border p-2 text-brand-text-muted disabled:opacity-30"><ArrowUp size={14} /></button><button type="button" onClick={() => moveField(section, fieldIndex, 1)} disabled={fieldIndex === section.fields.length - 1} aria-label="Mover campo para baixo" className="rounded-lg border border-brand-border p-2 text-brand-text-muted disabled:opacity-30"><ArrowDown size={14} /></button>{!field.patientReference && <button type="button" onClick={() => void removeField(section, field)} aria-label="Excluir campo" className="rounded-lg border border-red-200 p-2 text-red-600"><Trash2 size={14} /></button>}</div></div></div>)}</div>
-          <button type="button" onClick={() => addField(section)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-brand-primary"><Plus size={15} />Adicionar campo</button>
+          <button ref={addFieldTriggerRef} type="button" onClick={(event) => handleAddField(section, event.currentTarget)} className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-brand-primary"><Plus size={15} />Adicionar campo</button>
         </section>)}
 
         <div className="flex flex-wrap gap-2"><button type="button" onClick={addSection} className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"><Plus size={15} />Adicionar seção</button>{!hasBasicInformationSection(schema) && <button type="button" onClick={addBasicInformation} className="btn-outline inline-flex items-center gap-2 border-brand-primary/30 px-3 py-2 text-xs text-brand-primary"><Plus size={15} />Adicionar Informações básicas</button>}</div>
@@ -303,6 +373,7 @@ export default function AnamnesisBuilder() {
     </div>
 
     <FeatureGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} eyebrow="Builder de Anamnese" title="Como criar seu modelo de Anamnese?" description={sourceTemplate ? 'Você está usando um modelo existente como ponto de partida. As alterações serão feitas na sua própria versão, sem modificar o modelo original.' : 'Monte uma estrutura de Anamnese que faça sentido para a sua rotina. Você pode organizar o modelo em seções e adicionar os campos que deseja preencher durante o atendimento.'} steps={BUILDER_GUIDE_STEPS} note="A estrutura do modelo ajuda a organizar o registro, mas o profissional continua responsável por definir quais informações são adequadas ao seu atendimento e por revisar o conteúdo registrado." />
+    <ActionModal open={saveBeforeAddFieldOpen} onClose={closeSaveBeforeAddField} onConfirm={() => { void save({ continueWithAddFieldSectionId: pendingAddFieldSectionId }); }} loading={saving} title="Salve o modelo para adicionar campos" description="Antes de adicionar novos campos, salve este modelo. Depois disso, você poderá continuar personalizando a anamnese normalmente." confirmLabel="Salvar modelo" cancelLabel="Agora não" />
     {previewOpen && <div role="dialog" aria-modal="true" aria-label="Visualização do modelo" className="fixed inset-0 z-[120] overflow-y-auto bg-slate-900/50 p-4 sm:p-8"><div className="mx-auto max-w-4xl rounded-2xl bg-brand-bg p-4 shadow-2xl sm:p-6"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-brand-primary">Visualização</p><h2 className="text-xl font-bold text-brand-text">{name || 'Modelo de anamnese'}</h2></div><button type="button" onClick={() => setPreviewOpen(false)} aria-label="Fechar visualização" className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-border/50"><X size={18} /></button></div><AnamnesisRenderer sections={previewSections} answers={previewAnswers} patient={previewPatient} disabled expandedSections={new Set(previewSections.map((section) => section.id || section.key))} onToggleSection={() => undefined} onChange={() => undefined} fieldHasValue={(value) => value !== null && value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0)} /></div></div>}
   </div>;
 }
