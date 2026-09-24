@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle2, ClipboardList, Clock3, Loader2, Lock } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ClipboardList, Clock3, Crown, Loader2, Lock } from 'lucide-react';
 import { fetchCurrentPatientAnamnesis, type PatientAnamnesis } from '../../services/anamnesis';
 import { useAuthStore } from '../../store/authStore';
 import { hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
@@ -78,7 +78,12 @@ export default function PatientAnamnesisSummaryCard({ patientId, href }: Props) 
           <ClipboardList size={20} />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="font-semibold text-brand-text">Anamnese</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold text-brand-text">Anamnese</h3>
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-600" title="Recurso Premium do Plano Anual">
+              <Crown size={10} className="fill-current" /> Plano Anual
+            </span>
+          </div>
 
           {!hasYearlyAccess ? (
             <div className="mt-2 space-y-2">

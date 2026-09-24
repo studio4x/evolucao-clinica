@@ -12,6 +12,7 @@ import {
   Clock3,
   AlertTriangle,
   Copy,
+  Crown,
   Download,
   Eye,
   FilePlus2,
@@ -1127,36 +1128,73 @@ export default function PatientAnamnesis() {
 
   if (!hasYearlyAccess) {
     return (
-      <div className="w-full space-y-5 pb-8">
-        <button
-          type="button"
-          onClick={() => navigate(`/painel/patients/${patientId}`)}
-          className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline"
-        >
-          <ArrowLeft size={14} />
-          Voltar para o paciente
-        </button>
+      <div className="w-full space-y-6 pb-12">
+        <button type="button" onClick={() => navigate(`/painel/patients/${patientId}`)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline"><ArrowLeft size={14} />Voltar para o paciente</button>
 
-        <div className="card mx-auto max-w-2xl p-6 sm:p-8">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-brand-primary/10 p-3 text-brand-primary">
-              <Lock size={24} />
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-brand-text">Geração de anamnese</h1>
-              <p className="mt-2 text-sm leading-relaxed text-brand-text-muted">
-                Esta funcionalidade é somente para assinantes do Plano Anual. A geração estruturada, o histórico e o PDF ficam disponíveis após a assinatura.
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate('/painel/subscription')}
-                className="btn-primary mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm"
-              >
-                Conhecer o Plano Anual
-              </button>
-            </div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="flex items-center text-3xl font-display font-bold text-brand-text">
+              <ClipboardList className="mr-3 shrink-0 text-brand-primary" size={32} />
+              <span>Geração de anamnese</span>
+              <span className="ml-3 hidden shrink-0 sm:inline-flex"><AnamnesisGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+            </h1>
+            <p className="mt-1 text-sm text-brand-text-muted">
+              Organize informações iniciais e dados relevantes para o acompanhamento clínico.
+            </p>
           </div>
+          <span className="sm:hidden"><AnamnesisGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
         </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+          <section className="card space-y-6 rounded-3xl border border-brand-border bg-white p-8 lg:col-span-3">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-brand-text">
+              <ClipboardList className="text-brand-primary" size={24} />
+              <span>Como funciona a Geração de Anamnese?</span>
+            </h2>
+            <div className="space-y-4">
+              {ANAMNESIS_GUIDE_STEPS.slice(0, 3).map((step, index) => (
+                <div key={step.title} className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-lg bg-brand-bg p-2 font-bold text-brand-primary">{index + 1}</div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-brand-text">{step.title}</h3>
+                    <p className="mt-0.5 text-xs text-brand-text-muted">{step.description}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-brand-border/60 pt-4">
+              <div className="flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-xs text-sky-800">
+                <CheckCircle2 className="mt-0.5 shrink-0 text-sky-600" size={16} />
+                <div>
+                  <span className="mb-0.5 block font-bold">Histórico preservado:</span>
+                  As versões concluídas ficam disponíveis para revisão e geração do PDF após a assinatura do Plano Anual.
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <aside className="card relative flex flex-col justify-between overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white p-8 text-center shadow-sm lg:col-span-2">
+            <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 rounded-full bg-gradient-to-br from-amber-400/15 to-transparent blur-3xl" />
+            <div className="relative z-10 space-y-6">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"><Lock size={32} /></div>
+              <div className="space-y-2"><h2 className="text-lg font-bold text-amber-950">Disponível no Plano Anual</h2><p className="text-xs leading-relaxed text-amber-800/80">A geração estruturada, o histórico e o PDF da anamnese ficam disponíveis para assinantes do Plano Anual.</p></div>
+              <div className="space-y-2.5 rounded-2xl border border-amber-200/50 bg-amber-50 p-4 text-left">
+                {['Modelos por especialidade', 'Salvamento automático das respostas', 'Histórico e PDF da anamnese'].map((benefit) => <div key={benefit} className="flex items-center gap-2 text-xs font-semibold text-amber-900"><CheckCircle2 size={14} className="shrink-0 text-amber-600" />{benefit}</div>)}
+              </div>
+            </div>
+            <div className="relative z-10 pt-8"><button type="button" onClick={() => navigate('/painel/subscription')} className="flex w-full cursor-pointer items-center justify-center space-x-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 font-bold text-white shadow-md shadow-orange-500/10 transition-all hover:from-amber-600 hover:to-orange-600"><span>Fazer Upgrade Agora</span><ArrowLeft className="rotate-180" size={16} /></button><p className="mt-2 text-[10px] text-amber-800/60">Mude para o Plano Anual e tenha acesso à funcionalidade completa</p></div>
+          </aside>
+        </div>
+        <FeatureGuideModal
+          open={guideOpen}
+          onClose={() => setGuideOpen(false)}
+          eyebrow="Anamnese"
+          title="Como funciona a Anamnese"
+          description="Entenda como preencher, salvar e revisar as versões da anamnese do paciente."
+          steps={ANAMNESIS_GUIDE_STEPS}
+          note="A Anamnese é uma funcionalidade exclusiva do Plano Anual."
+          supportHref={ANAMNESIS_SUPPORT_HREF}
+        />
       </div>
     );
   }
@@ -1186,7 +1224,7 @@ export default function PatientAnamnesis() {
         }
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <span className="md:hidden">
+            <span className="sm:hidden">
               <AnamnesisGuideButton
                 compact
                 expanded={guideOpen}

@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FolderOpen,
   Loader2,
+  Crown,
   Lock,
   Paperclip,
   Pencil,
@@ -582,7 +583,7 @@ export default function PatientFilesCard({
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold text-brand-text">Arquivos do paciente</h3>
               <span className="inline-flex items-center gap-1 rounded-full bg-brand-primary/10 px-2 py-0.5 text-[10px] font-bold text-brand-primary">
-                <Lock size={11} /> Plano Anual
+                <Crown size={11} className="fill-current" /> Plano Anual
               </span>
             </div>
             <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">
