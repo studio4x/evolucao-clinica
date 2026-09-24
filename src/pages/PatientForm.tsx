@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { v4 as uuidv4 } from 'uuid';
-import { Crop, FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle, ShieldCheck, Lock, Upload, UserRound } from 'lucide-react';
+import { Crop, FileText, Link as LinkIcon, Plus, Loader2, FolderOpen, X, FolderPlus, ChevronRight, ChevronLeft, Home, Search, Folder, RefreshCw, Trash2, File, HelpCircle, ShieldCheck, Lock, Upload, UserRound, Phone, MapPin, CalendarClock, StickyNote } from 'lucide-react';
 import { createGoogleDoc, createGoogleFolder, listGoogleFiles, deleteGoogleFile } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
 import { deferOnboarding, setOnboardingState, getOnboardingState } from '../utils/onboarding';
@@ -38,6 +38,13 @@ import {
   type PatientSessionScheduleEntry,
 } from '../utils/patientSessionSchedule';
 import { fetchBrazilianAddress, formatPostalCode, isCompletePostalCode } from '../services/cep';
+import {
+  clearPatientFormDraft,
+  getPatientFormDraftKey,
+  getLegacyPatientFormDraftKey,
+  readPatientFormDraft,
+  writePatientFormDraft,
+} from '../utils/patientFormDraft';
 
 declare global {
   interface Window {
@@ -108,12 +115,17 @@ function PatientEditGuideButton({ compact = false, expanded, onOpen }: PatientEd
   );
 }
 
-function PatientFormSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function PatientFormSection({ title, description, icon: Icon, children }: { title: string; description?: string; icon: React.ComponentType<{ size?: number; 'aria-hidden'?: boolean }>; children: React.ReactNode }) {
   return (
-    <section className="space-y-5 border-b border-brand-border/70 pb-7 last:border-b-0 last:pb-0" aria-labelledby={`patient-form-section-${title}`}>
-      <div>
-        <h2 id={`patient-form-section-${title}`} className="text-base font-semibold text-brand-text">{title}</h2>
-        {description && <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">{description}</p>}
+    <section className="space-y-5 border-b border-brand-border/70 pb-8 last:border-b-0 last:pb-0" aria-labelledby={`patient-form-section-${title}`}>
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-primary/8 text-brand-primary ring-1 ring-brand-primary/15">
+          <Icon size={16} aria-hidden={true} />
+        </span>
+        <div className="min-w-0">
+          <h2 id={`patient-form-section-${title}`} className="text-base font-semibold text-brand-primary">{title}</h2>
+          {description && <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">{description}</p>}
+        </div>
       </div>
       {children}
     </section>
@@ -145,15 +157,6 @@ type PatientFormValues = {
   state: string;
 };
 
-type PatientFormDraft = {
-  patientId?: string;
-  formData: PatientFormValues;
-  ddi?: string;
-  phoneCountry?: CountryCode;
-  savedAt: string;
-};
-
-const PATIENT_FORM_DRAFT_PREFIX = 'evolucao-clinica:patient-form-draft';
 const GOOGLE_FOLDER_PREFERENCE_PREFIX = 'evolucao-clinica:last-google-folder';
 
 const getGoogleFolderPreferenceKeys = (userId: string) => ({
@@ -238,29 +241,6 @@ const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
   }
 };
 
-const getPatientFormDraftKey = (userId: string) => `${PATIENT_FORM_DRAFT_PREFIX}:${userId}:${window.location.pathname}`;
-
-const readPatientFormDraft = (key: string): PatientFormDraft | null => {
-  const raw = sessionStorage.getItem(key);
-  if (!raw) return null;
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    return parsed as PatientFormDraft;
-  } catch {
-    return null;
-  }
-};
-
-const writePatientFormDraft = (key: string, draft: PatientFormDraft) => {
-  sessionStorage.setItem(key, JSON.stringify(draft));
-};
-
-const clearPatientFormDraft = (key: string) => {
-  sessionStorage.removeItem(key);
-};
-
 export default function PatientForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -272,7 +252,7 @@ export default function PatientForm() {
   const isOnboardingMode = searchParams.get('onboarding') === '1';
   const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
-  const restoredDraftUserRef = useRef<string | null>(null);
+  const restoredDraftScopeRef = useRef<string | null>(null);
   const [phoneCountry, setPhoneCountry] = useState<CountryCode>(DEFAULT_WHATSAPP_COUNTRY);
   const ddi = `+${getWhatsAppCountryCallingCode(phoneCountry)}`;
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
@@ -303,6 +283,8 @@ export default function PatientForm() {
   const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
   const [formData, setFormData] = useState<PatientFormValues>(emptyPatientFormValues);
+  const [draftReady, setDraftReady] = useState(false);
+  const [draftSaveStatus, setDraftSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [photoPath, setPhotoPath] = useState('');
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState('');
   const [photoEditorUrl, setPhotoEditorUrl] = useState('');
@@ -311,11 +293,52 @@ export default function PatientForm() {
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const pendingPatientIdRef = useRef<string | null>(null);
+  const draftBaselineRef = useRef<string | null>(null);
   const [postalCodeLookupState, setPostalCodeLookupState] = useState<'idle' | 'loading' | 'not-found' | 'error'>('idle');
   const postalCodeLookupRef = useRef<AbortController | null>(null);
   const lastLookedUpPostalCodeRef = useRef('');
 
   const getDraftPatientId = () => pendingPatientIdRef.current || id || undefined;
+
+  const getCurrentDraftKey = () => user?.id
+    ? getPatientFormDraftKey(user.id, id, isOnboardingMode)
+    : null;
+
+  const getLegacyDraftKey = () => user?.id
+    ? getLegacyPatientFormDraftKey(user.id, window.location.pathname)
+    : null;
+
+  const clearCurrentDraft = () => {
+    const currentKey = getCurrentDraftKey();
+    if (currentKey) clearPatientFormDraft(currentKey);
+    const legacyKey = getLegacyDraftKey();
+    if (legacyKey && legacyKey !== currentKey) clearPatientFormDraft(legacyKey);
+  };
+
+  const getDraftSignature = (values: PatientFormValues, country: CountryCode) => JSON.stringify({
+    formData: values,
+    phoneCountry: country,
+    ddi: `+${getWhatsAppCountryCallingCode(country)}`,
+  });
+
+  const persistDraftNow = () => {
+    const key = getCurrentDraftKey();
+    if (!key) return false;
+    const saved = writePatientFormDraft<PatientFormValues>(key, {
+      patientId: getDraftPatientId() || null,
+      formData,
+      ddi,
+      phoneCountry,
+      savedAt: new Date().toISOString(),
+    });
+    if (saved) {
+      draftBaselineRef.current = getDraftSignature(formData, phoneCountry);
+      setDraftSaveStatus('saved');
+    } else {
+      setDraftSaveStatus('error');
+    }
+    return saved;
+  };
 
   useEffect(() => {
     const fetchTemplates = async () => {
@@ -336,51 +359,75 @@ export default function PatientForm() {
 
   useEffect(() => {
     if (!user?.id || id) return;
-    if (restoredDraftUserRef.current === user.id) return;
 
-    const draft = readPatientFormDraft(getPatientFormDraftKey(user.id));
-    restoredDraftUserRef.current = user.id;
+    const key = getPatientFormDraftKey(user.id, undefined, isOnboardingMode);
+    if (restoredDraftScopeRef.current === key) return;
+    setDraftReady(false);
+    const draft = readPatientFormDraft<PatientFormValues>(key)
+      || readPatientFormDraft<PatientFormValues>(getLegacyPatientFormDraftKey(user.id, window.location.pathname));
+    restoredDraftScopeRef.current = key;
 
     if (draft) {
       pendingPatientIdRef.current = draft.patientId || null;
-      setFormData((prev) => ({ ...prev, ...draft.formData }));
+      const restoredFormData = { ...emptyPatientFormValues(), ...draft.formData };
+      draftBaselineRef.current = getDraftSignature(restoredFormData, draft.phoneCountry as CountryCode || DEFAULT_WHATSAPP_COUNTRY);
+      setFormData(restoredFormData);
       lastLookedUpPostalCodeRef.current = String(draft.formData?.postal_code || '').replace(/\D/g, '');
       const restoredPhone = splitStoredWhatsAppNumber(
         `${draft.ddi || ''}${draft.formData?.phone || ''}`,
         DEFAULT_WHATSAPP_COUNTRY,
       );
-      setPhoneCountry(draft.phoneCountry || restoredPhone.country);
+      setPhoneCountry((draft.phoneCountry as CountryCode) || restoredPhone.country);
+      setDraftReady(true);
       return;
     }
 
     const savedFolder = readGoogleFolderPreference(user.id);
-    if (savedFolder) {
-      setFormData((prev) => ({
-        ...prev,
+    const initialFormData = {
+      ...emptyPatientFormValues(),
+      ...(savedFolder ? {
         target_folder_id: savedFolder.id,
         target_folder_name: savedFolder.name,
-      }));
+      } : {}),
+    };
+    draftBaselineRef.current = getDraftSignature(initialFormData, phoneCountry);
+    if (savedFolder) {
+      setFormData(initialFormData);
     }
-  }, [id, user?.id]);
+    setDraftReady(true);
+  }, [id, isOnboardingMode, user?.id]);
 
   useEffect(() => {
-    if (!user?.id || id) return;
+    if (!user?.id || !draftReady) return;
+
+    const key = getCurrentDraftKey();
+    if (!key) return;
+    const signature = getDraftSignature(formData, phoneCountry);
+    if (signature === draftBaselineRef.current) return;
 
     const timer = window.setTimeout(() => {
-      writePatientFormDraft(getPatientFormDraftKey(user.id), {
-        patientId: getDraftPatientId(),
+      setDraftSaveStatus('saving');
+      const saved = writePatientFormDraft<PatientFormValues>(key, {
+        patientId: getDraftPatientId() || null,
         formData,
         ddi,
         phoneCountry,
         savedAt: new Date().toISOString(),
       });
-    }, 200);
+      if (saved) {
+        draftBaselineRef.current = signature;
+        setDraftSaveStatus('saved');
+      } else {
+        setDraftSaveStatus('error');
+      }
+    }, 400);
 
     return () => window.clearTimeout(timer);
-  }, [ddi, formData, id, phoneCountry, user?.id]);
+  }, [ddi, draftReady, formData, id, phoneCountry, user?.id]);
 
   useEffect(() => {
     if (id) {
+      setDraftReady(false);
       const fetchPatient = async () => {
         try {
           const { data, error } = await supabase
@@ -396,7 +443,7 @@ export default function PatientForm() {
               DEFAULT_WHATSAPP_COUNTRY,
             );
 
-            setFormData({
+            const patientFormData: PatientFormValues = {
               full_name: data.full_name || '',
               birth_date: data.birth_date || '',
               cpf: formatCpf(data.cpf || ''),
@@ -419,9 +466,24 @@ export default function PatientForm() {
               neighborhood: data.neighborhood || '',
               city: data.city || '',
               state: data.state || '',
-            });
+            };
+            const draft = user?.id
+              ? readPatientFormDraft<PatientFormValues>(getPatientFormDraftKey(user.id, id, isOnboardingMode))
+                || readPatientFormDraft<PatientFormValues>(getLegacyPatientFormDraftKey(user.id, window.location.pathname))
+              : null;
+            const draftIsNewer = Boolean(draft?.savedAt)
+              && (!data.updated_at || Date.parse(draft!.savedAt) > Date.parse(data.updated_at));
+            const restoredFormData = draftIsNewer
+              ? { ...patientFormData, ...draft!.formData }
+              : patientFormData;
+            const restoredPhoneCountry = draftIsNewer && draft?.phoneCountry
+              ? draft.phoneCountry as CountryCode
+              : storedPhone.country;
+            draftBaselineRef.current = getDraftSignature(restoredFormData, restoredPhoneCountry);
+            setFormData(restoredFormData);
             lastLookedUpPostalCodeRef.current = String(data.postal_code || '').replace(/\D/g, '');
-            setPhoneCountry(storedPhone.country);
+            setPhoneCountry(restoredPhoneCountry);
+            setDraftReady(true);
             const storedPhotoPath = String(data.photo_path || '');
             setPhotoPath(storedPhotoPath);
             setPhotoRemoved(false);
@@ -440,7 +502,7 @@ export default function PatientForm() {
       };
       fetchPatient();
     }
-  }, [id]);
+  }, [id, user?.id]);
 
   useEffect(() => () => postalCodeLookupRef.current?.abort(), []);
 
@@ -564,9 +626,7 @@ export default function PatientForm() {
     setIsExitingOnboarding(true);
     try {
       await deferOnboarding(user.id, 'patient');
-      if (!id) {
-        clearPatientFormDraft(getPatientFormDraftKey(user.id));
-      }
+      clearCurrentDraft();
       navigate('/painel/dashboard');
     } catch (error) {
       console.error('[PatientForm] Não foi possível sair do onboarding:', error);
@@ -581,17 +641,17 @@ export default function PatientForm() {
   };
 
   const executeGoogleReauthentication = async () => {
+    if (pendingPhotoBlob) {
+      await showAlert('A foto escolhida ainda não foi salva. Salve o paciente antes de conectar o Google para não perder essa alteração.', {
+        title: 'Salve a foto antes de continuar',
+        variant: 'warning',
+        icon: 'warning',
+      });
+      return;
+    }
     setIsReauthenticating(true);
     try {
-      if (user?.id && !id) {
-        writePatientFormDraft(getPatientFormDraftKey(user.id), {
-          patientId: getDraftPatientId(),
-          formData,
-          ddi,
-          phoneCountry,
-          savedAt: new Date().toISOString(),
-        });
-      }
+      persistDraftNow();
 
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
@@ -768,17 +828,17 @@ export default function PatientForm() {
   }, [showExplorer, explorerPath]);
 
   const handleExplorerReauthenticate = async () => {
+    if (pendingPhotoBlob) {
+      await showAlert('A foto escolhida ainda não foi salva. Salve o paciente antes de conectar o Google para não perder essa alteração.', {
+        title: 'Salve a foto antes de continuar',
+        variant: 'warning',
+        icon: 'warning',
+      });
+      return;
+    }
     setIsReauthenticating(true);
     try {
-      if (user?.id && !id) {
-        writePatientFormDraft(getPatientFormDraftKey(user.id), {
-          patientId: getDraftPatientId(),
-          formData,
-          ddi,
-          phoneCountry,
-          savedAt: new Date().toISOString(),
-        });
-      }
+      persistDraftNow();
 
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
@@ -1081,13 +1141,7 @@ export default function PatientForm() {
             patientName: formData.full_name
           });
           if (!id) {
-            writePatientFormDraft(getPatientFormDraftKey(user.id), {
-              patientId,
-              formData,
-              ddi,
-              phoneCountry,
-              savedAt: new Date().toISOString(),
-            });
+            persistDraftNow();
           }
           setIsOnboardingGateModalOpen(true);
           return;
@@ -1100,13 +1154,7 @@ export default function PatientForm() {
             patientName: formData.full_name
           });
           if (!id) {
-            writePatientFormDraft(getPatientFormDraftKey(user.id), {
-              patientId,
-              formData,
-              ddi,
-              phoneCountry,
-              savedAt: new Date().toISOString(),
-            });
+            persistDraftNow();
           }
           await showAlert('Antes de seguir para a evolução, crie ou vincule o prontuário do paciente no Google Docs.', {
             title: "Vincular Prontuário",
@@ -1125,15 +1173,11 @@ export default function PatientForm() {
           metadata: { step: 'patient', mode: onboardingState?.mode || 'guided', has_google_doc: true },
           dedupeKey: `onboarding_step_completed:${user.id}:patient`,
         });
-        if (!id) {
-          clearPatientFormDraft(getPatientFormDraftKey(user.id));
-        }
+        clearCurrentDraft();
         pendingPatientIdRef.current = null;
         navigate(`/painel/patients/${patientId}/evolutions/new?onboarding=1`);
       } else {
-        if (!id) {
-          clearPatientFormDraft(getPatientFormDraftKey(user.id));
-        }
+        clearCurrentDraft();
         pendingPatientIdRef.current = null;
         navigate('/painel/patients');
       }
@@ -1161,6 +1205,12 @@ export default function PatientForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancelForm = () => {
+    clearCurrentDraft();
+    pendingPatientIdRef.current = null;
+    navigate(isOnboardingMode ? '/onboarding' : '/painel/patients');
   };
 
   return (
@@ -1202,8 +1252,18 @@ export default function PatientForm() {
         ) : undefined}
       />
 
-      <form onSubmit={handleSubmit} className="card p-6 space-y-6">
-        <PatientFormSection title="Identificação do paciente" description="Dados principais para identificar o paciente no prontuário.">
+      <form onSubmit={handleSubmit} className="card space-y-8 p-4 sm:p-6">
+        <div className="flex min-h-5 items-center justify-end border-b border-brand-border/50 pb-3" aria-live="polite">
+          {draftReady && (
+            <span className={`text-[11px] font-medium ${draftSaveStatus === 'error' ? 'text-amber-700' : 'text-brand-text-muted'}`}>
+              {draftSaveStatus === 'saving' && 'Salvando rascunho...'}
+              {draftSaveStatus === 'saved' && 'Rascunho salvo automaticamente'}
+              {draftSaveStatus === 'error' && 'Não foi possível salvar o rascunho local'}
+            </span>
+          )}
+        </div>
+
+        <PatientFormSection icon={UserRound} title="Identificação do paciente" description="Dados principais para identificar o paciente no prontuário.">
         <div>
           <label className="block text-sm font-medium text-brand-text mb-1">Nome Completo</label>
           <input
@@ -1322,7 +1382,7 @@ export default function PatientForm() {
 
         </PatientFormSection>
 
-        <PatientFormSection title="Contato" description="Dados destinados ao contato com o paciente.">
+        <PatientFormSection icon={Phone} title="Contato" description="Dados destinados ao contato com o paciente.">
         <div>
           <label className="block text-sm font-medium text-brand-text mb-1">
             Telefone / WhatsApp <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
@@ -1369,7 +1429,7 @@ export default function PatientForm() {
         <p className="text-[11px] text-brand-text-muted">Os dados desta seção são destinados ao contato com o paciente.</p>
         </PatientFormSection>
 
-        <PatientFormSection title="Endereço" description="O CEP ajuda a preencher os dados automaticamente. Todos os campos continuam editáveis.">
+        <PatientFormSection icon={MapPin} title="Endereço" description="O CEP ajuda a preencher os dados automaticamente. Todos os campos continuam editáveis.">
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-brand-text">CEP <span className="text-brand-text-muted font-normal text-xs">(opcional)</span></label>
@@ -1409,7 +1469,7 @@ export default function PatientForm() {
           </div>
         </PatientFormSection>
 
-        <PatientFormSection title="Sessões e lembretes" description="Configure os dias, horários e lembretes relacionados às sessões do paciente.">
+        <PatientFormSection icon={CalendarClock} title="Sessões e lembretes" description="Configure os dias, horários e lembretes relacionados às sessões do paciente.">
         <div className="space-y-4">
           <div>
             <h3 className="text-lg font-medium text-brand-text">Dia da semana e Horário da sessão ou das sessões</h3>
@@ -1543,7 +1603,7 @@ export default function PatientForm() {
         </div>
         </PatientFormSection>
 
-        <PatientFormSection title="Prontuário e Google Drive" description="Vincule ou crie o prontuário do paciente no Google Drive.">
+        <PatientFormSection icon={FolderOpen} title="Prontuário e Google Drive" description="Vincule ou crie o prontuário do paciente no Google Drive.">
         <div>
           <h3 className="text-lg font-medium text-brand-text mb-4">Prontuário no Google Docs</h3>
           
@@ -1746,7 +1806,7 @@ export default function PatientForm() {
         </div>
         </PatientFormSection>
 
-        <PatientFormSection title="Informações adicionais">
+        <PatientFormSection icon={StickyNote} title="Informações adicionais">
           <div>
             <label className="block text-sm font-medium text-brand-text mb-1">Observações</label>
             <textarea
@@ -2006,7 +2066,7 @@ export default function PatientForm() {
           <div className="flex space-x-3 w-full sm:w-auto justify-end">
             <button
               type="button"
-              onClick={() => navigate(isOnboardingMode ? '/onboarding' : '/painel/patients')}
+              onClick={handleCancelForm}
               className="btn-outline"
             >
               {isOnboardingMode ? 'Voltar' : 'Cancelar'}
