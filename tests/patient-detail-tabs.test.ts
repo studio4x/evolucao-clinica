@@ -14,5 +14,12 @@ assert.match(source, /role="tabpanel"/);
 assert.match(source, /const mobileTabVisibility = \(tab: PatientMobileTab\) => activeMobileTab === tab/);
 assert.match(source, /const mobileTabVisibility = \(tab: PatientMobileTab\) => activeMobileTab === tab[\s\S]*?\? `block patient-mobile-tab-enter-/);
 assert.doesNotMatch(source, /mobileTabVisibility\([^)]*\)[\s\S]{0,80}xl:block/);
+assert.match(source, /className="w-full min-w-0 space-y-6 outline-none"/, 'O painel ativo deve ocupar toda a largura útil.');
+assert.match(source, /xl:grid-cols-\[minmax\(0,1\.4fr\)_minmax\(320px,1fr\)\]/, 'O Resumo deve usar uma composição responsiva de duas colunas no desktop largo.');
+assert.match(source, /xl:grid xl:w-full xl:min-w-0 xl:grid-cols-1/, 'Histórico e Relatórios devem compartilhar um container de largura total.');
+assert.match(source, /btn-outline flex h-10 min-h-10[\s\S]*Editar paciente/);
+assert.match(source, /btn-primary flex h-10 min-h-10[\s\S]*Nova evolução/);
+assert.match(source, /btn-outline hidden h-10 min-h-10[\s\S]*Excluir paciente/);
+assert.doesNotMatch(source, /xl:h-auto/, 'As ações desktop não devem depender de alturas automáticas diferentes.');
 
 console.log('Patient detail tabs tests passed.');

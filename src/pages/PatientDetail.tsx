@@ -2512,7 +2512,7 @@ export default function PatientDetail() {
             </span>
             <Link
               to={`/painel/patients/${id}/edit`}
-              className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0 xl:h-auto xl:w-auto xl:px-4"
+              className="btn-outline flex h-10 min-h-10 w-10 shrink-0 items-center justify-center p-0 xl:w-auto xl:px-4 xl:py-0"
               title="Editar paciente"
               aria-label="Editar paciente"
             >
@@ -2521,17 +2521,17 @@ export default function PatientDetail() {
             </Link>
             <Link
               to={`/painel/patients/${id}/evolutions/new`}
-              className="btn-primary flex h-10 w-10 shrink-0 items-center justify-center p-0 xl:h-auto xl:w-auto xl:px-4"
+              className="btn-primary flex h-10 min-h-10 w-10 shrink-0 items-center justify-center p-0 xl:w-auto xl:px-4 xl:py-0"
               title="Nova evolução"
               aria-label="Nova evolução"
             >
-              <Plus size={20} className="xl:mr-2" />
+              <Plus size={18} className="xl:mr-1.5" />
               <span className="hidden xl:inline">Nova Evolução</span>
             </Link>
             <button
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
-              className="btn-outline hidden h-10 shrink-0 border-red-200 px-4 text-red-600 hover:bg-red-50 hover:text-red-700 xl:inline-flex"
+              className="btn-outline hidden h-10 min-h-10 shrink-0 border-red-200 px-4 py-0 text-red-600 hover:bg-red-50 hover:text-red-700 xl:inline-flex"
               title="Excluir paciente"
               aria-label="Excluir paciente"
             >
@@ -2662,10 +2662,10 @@ export default function PatientDetail() {
         role="tabpanel"
         aria-labelledby={`patient-tab-${activeMobileTab}`}
         tabIndex={0}
-        className="grid grid-cols-1 gap-6 outline-none xl:grid-cols-3"
+        className="w-full min-w-0 space-y-6 outline-none"
       >
-        <div className="contents xl:block xl:col-span-1 xl:space-y-6">
-          <div className={`card p-6 order-2 xl:order-none ${mobileTabVisibility('overview')}`}>
+        <div className="contents xl:grid xl:w-full xl:min-w-0 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)] xl:gap-6">
+          <div className={`card order-2 p-6 xl:order-none xl:col-span-1 ${mobileTabVisibility('overview')}`}>
             <h3 className="font-semibold text-brand-text mb-4">Prontuário</h3>
             <div className="space-y-3">
               {patient.google_doc_id ? (
@@ -2749,14 +2749,14 @@ export default function PatientDetail() {
             />
           </div>
 
-          <div className={`order-3 xl:order-none ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
+          <div className={`order-3 xl:order-none xl:col-start-2 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
             <PatientSessionsSummaryCard
               patientId={patient.id}
               href={`/painel/patients/${id}/sessions`}
             />
           </div>
 
-          <div className={`order-3 xl:order-none ${mobileTabVisibility('files')}`}>
+          <div className={`order-3 xl:order-none xl:col-span-2 ${mobileTabVisibility('files')}`}>
             <PatientFilesCard
               patientId={patient.id}
               targetFolderId={patient.target_folder_id}
@@ -2766,7 +2766,7 @@ export default function PatientDetail() {
           </div>
 
           {/* Mural de Notas Rápidas (Sticky Note) */}
-          <div className={`card p-5 bg-amber-50/40 border border-amber-200/60 shadow-sm relative group overflow-hidden transition-all duration-300 hover:shadow-md order-4 xl:order-none ${mobileTabVisibility('overview')}`}>
+          <div className={`card order-4 bg-amber-50/40 p-5 shadow-sm relative group overflow-hidden border border-amber-200/60 transition-all duration-300 hover:shadow-md xl:order-none xl:col-span-1 ${mobileTabVisibility('overview')}`}>
             <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-bl from-amber-200/20 to-transparent pointer-events-none" />
             
             <div className="flex items-center justify-between mb-3">
@@ -2795,7 +2795,7 @@ export default function PatientDetail() {
             />
           </div>
 
-          <div className={`card p-6 space-y-4 order-6 xl:order-none ${mobileTabVisibility('reminders')}`}>
+          <div className={`card order-6 space-y-4 p-6 xl:order-none xl:col-span-2 ${mobileTabVisibility('reminders')}`}>
             <div className="flex items-center space-x-2 text-brand-primary">
               <Bell size={20} className="text-brand-primary" />
               <h3 className="font-semibold text-brand-text mb-0">Agenda de sessões e lembretes</h3>
@@ -2911,7 +2911,7 @@ export default function PatientDetail() {
           </div>
         </div>
 
-        <div className="contents xl:block xl:col-span-2 xl:space-y-6">
+        <div className="contents xl:grid xl:w-full xl:min-w-0 xl:grid-cols-1 xl:gap-6">
           {/* Card de Busca Semântica (Pesquisa Inteligente) */}
           <div className={`card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-4 xl:order-none ${mobileTabVisibility('history')}`}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />
