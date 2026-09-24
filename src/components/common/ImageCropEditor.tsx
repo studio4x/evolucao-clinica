@@ -40,6 +40,7 @@ const DEFAULT_ASPECT_OPTIONS: ImageCropAspectOption[] = [
 ];
 
 const clampPosition = (value: number) => Math.max(-1, Math.min(1, value));
+const DEFAULT_CROP_ZOOM = 1.15;
 
 export const createCroppedImageBlob = ({
   imageUrl,
@@ -108,7 +109,7 @@ export function ImageCropEditor({
   maxPreviewClassName = 'max-w-2xl',
 }: ImageCropEditorProps) {
   const [cropAspect, setCropAspect] = useState(initialAspect);
-  const [cropZoom, setCropZoom] = useState(1);
+  const [cropZoom, setCropZoom] = useState(DEFAULT_CROP_ZOOM);
   const [cropPosition, setCropPosition] = useState<CropPosition>({ x: 0, y: 0 });
   const [creating, setCreating] = useState(false);
   const dragStart = useRef<{
@@ -120,7 +121,7 @@ export function ImageCropEditor({
 
   useEffect(() => {
     setCropAspect(initialAspect);
-    setCropZoom(1);
+    setCropZoom(DEFAULT_CROP_ZOOM);
     setCropPosition({ x: 0, y: 0 });
   }, [imageUrl, initialAspect]);
 
@@ -176,7 +177,7 @@ export function ImageCropEditor({
           <h3 className="flex items-center gap-2 text-sm font-semibold text-brand-primary">
             <Crop size={17} /> {title}
           </h3>
-          <p className="mt-1 text-[10px] text-brand-text-muted">{description}</p>
+          <p className="mt-1 text-[10px] text-brand-text-muted">{description} Você pode mover o recorte na horizontal e na vertical.</p>
         </div>
         <span className="text-[10px] font-bold uppercase tracking-wide text-brand-primary">
           Proporção {selectedAspect?.label.split(' ').at(-1) || cropAspect}
@@ -232,7 +233,7 @@ export function ImageCropEditor({
           </span>
           <input
             type="range"
-            min="1"
+            min="1.05"
             max="3"
             step="0.05"
             value={cropZoom}
@@ -245,7 +246,7 @@ export function ImageCropEditor({
           <button
             type="button"
             onClick={() => {
-              setCropZoom(1);
+              setCropZoom(DEFAULT_CROP_ZOOM);
               setCropPosition({ x: 0, y: 0 });
             }}
             disabled={busy}

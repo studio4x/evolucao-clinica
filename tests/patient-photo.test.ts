@@ -25,6 +25,8 @@ assert.ok(
 assert.match(cropEditorSource, /Arraste para mover/);
 assert.match(cropEditorSource, /Aproximação/);
 assert.match(cropEditorSource, /transformOrigin: 'center center'/, 'O zoom do recorte deve permanecer centralizado na pré-visualização.');
+assert.match(cropEditorSource, /const DEFAULT_CROP_ZOOM = 1\.15/, 'O editor deve manter margem para deslocamento horizontal mesmo em fotos quadradas.');
+assert.match(cropEditorSource, /min="1\.05"/, 'O zoom mínimo deve preservar espaço para movimentar o recorte.');
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
