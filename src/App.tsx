@@ -16,6 +16,8 @@ const Patients = lazyWithRetry(() => import('./pages/Patients'), 'Patients');
 const PatientForm = lazyWithRetry(() => import('./pages/PatientForm'), 'PatientForm');
 const PatientDetail = lazyWithRetry(() => import('./pages/PatientDetail'), 'PatientDetail');
 const PatientAnamnesis = lazyWithRetry(() => import('./pages/PatientAnamnesis'), 'PatientAnamnesis');
+const AnamnesisModels = lazyWithRetry(() => import('./pages/AnamnesisModels'), 'AnamnesisModels');
+const AnamnesisBuilder = lazyWithRetry(() => import('./pages/AnamnesisBuilder'), 'AnamnesisBuilder');
 const PatientSessions = lazyWithRetry(() => import('./pages/PatientSessions'), 'PatientSessions');
 const NewEvolution = lazyWithRetry(() => import('./pages/NewEvolution'), 'NewEvolution');
 const History = lazyWithRetry(() => import('./pages/History'), 'History');
@@ -788,6 +790,9 @@ export default function App() {
             <Route path="patients/:id/edit" element={<PatientForm />} />
             <Route path="patients/:id" element={<PatientDetail />} />
             <Route path="patients/:id/anamnesis" element={<PatientAnamnesis />} />
+            <Route path="anamnesis/modelos" element={<AnamnesisModels />} />
+            <Route path="anamnesis/modelos/novo" element={<AnamnesisBuilder />} />
+            <Route path="anamnesis/modelos/:templateId/editar" element={<AnamnesisBuilder />} />
             <Route path="patients/:id/sessions" element={<PatientSessions />} />
             <Route path="patients/:id/evolutions/new" element={<NewEvolution />} />
             <Route path="history" element={<History />} />

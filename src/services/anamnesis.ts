@@ -21,6 +21,10 @@ export type AnamnesisTemplate = {
   kind?: 'system' | 'custom' | 'derived';
   status?: 'active' | 'archived';
   currentVersionId?: string | null;
+  ownerProfessionalId?: string | null;
+  sourceTemplateId?: string | null;
+  sourceTemplateVersionId?: string | null;
+  archivedAt?: string | null;
 };
 
 export type AnamnesisAnswers = Record<string, string | string[] | number | boolean | null>;
@@ -70,6 +74,10 @@ type TemplateRow = {
   kind?: AnamnesisTemplate['kind'];
   status?: AnamnesisTemplate['status'];
   current_version_id?: string | null;
+  owner_professional_id?: string | null;
+  source_template_id?: string | null;
+  source_template_version_id?: string | null;
+  archived_at?: string | null;
 };
 
 export type PatientAnamnesisVersion = {
@@ -153,6 +161,10 @@ const mapTemplate = (row: TemplateRow): AnamnesisTemplate => ({
   kind: row.kind,
   status: row.status,
   currentVersionId: row.current_version_id,
+  ownerProfessionalId: row.owner_professional_id,
+  sourceTemplateId: row.source_template_id,
+  sourceTemplateVersionId: row.source_template_version_id,
+  archivedAt: row.archived_at,
 });
 
 const mapAnamnesis = (row: AnamnesisRow): PatientAnamnesis => ({
@@ -231,12 +243,13 @@ export function hasMeaningfulAnamnesisAnswers(answers: AnamnesisAnswers) {
   });
 }
 
-export async function fetchAnamnesisTemplates() {
-  const { data, error } = await supabase
+export async function fetchAnamnesisTemplates(options: { includeArchived?: boolean } = {}) {
+  let query = supabase
     .from('anamnesis_templates')
-    .select('id, template_key, name, professional_group, professional_titles, version, schema, kind, status, current_version_id')
-    .eq('is_active', true)
-    .eq('status', 'active')
+    .select('id, template_key, name, professional_group, professional_titles, version, schema, kind, status, current_version_id, owner_professional_id, source_template_id, source_template_version_id, archived_at');
+  if (!options.includeArchived) query = query.eq('is_active', true);
+  const { data, error } = await query
+    .in('status', options.includeArchived ? ['active', 'archived'] : ['active'])
     .order('name', { ascending: true });
 
   if (error) throw error;
@@ -246,6 +259,45 @@ export async function fetchAnamnesisTemplates() {
     if (!validation.valid) throw new Error(`Modelo de Anamnese inválido: ${validation.errors.join(' ')}`);
     return mapped;
   });
+}
+
+export type AnamnesisTemplateDraftInput = {
+  name: string;
+  schema: AnamnesisTemplateSchema;
+  sourceTemplateId?: string | null;
+  sourceTemplateVersionId?: string | null;
+};
+
+const mapRpcTemplate = (data: unknown) => mapTemplate((Array.isArray(data) ? data[0] : data) as TemplateRow);
+
+export async function createPersonalAnamnesisTemplate(input: AnamnesisTemplateDraftInput) {
+  const { data, error } = await supabase.rpc('create_personal_anamnesis_template', {
+    p_name: input.name,
+    p_schema: input.schema,
+    p_source_template_id: input.sourceTemplateId || null,
+    p_source_template_version_id: input.sourceTemplateVersionId || null,
+  });
+  if (error) throw error;
+  return mapRpcTemplate(data);
+}
+
+export async function publishPersonalAnamnesisTemplate(templateId: string, input: AnamnesisTemplateDraftInput) {
+  const { data, error } = await supabase.rpc('publish_personal_anamnesis_template', {
+    p_template_id: templateId,
+    p_name: input.name,
+    p_schema: input.schema,
+  });
+  if (error) throw error;
+  return mapRpcTemplate(data);
+}
+
+export async function setPersonalAnamnesisTemplateStatus(templateId: string, status: 'active' | 'archived') {
+  const { data, error } = await supabase.rpc('set_personal_anamnesis_template_status', {
+    p_template_id: templateId,
+    p_status: status,
+  });
+  if (error) throw error;
+  return mapRpcTemplate(data);
 }
 
 export async function fetchCurrentPatientAnamnesis(patientId: string) {

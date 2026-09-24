@@ -22,12 +22,14 @@ import {
   PlusCircle,
   RotateCcw,
   Save,
+  Settings2,
   X,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { AnamnesisRenderer } from '../components/anamnesis/AnamnesisRenderer';
+import { AnamnesisTemplateSelect } from '../components/anamnesis/AnamnesisTemplateSelect';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { showAlert, showConfirm } from '../store/modalStore';
@@ -276,7 +278,7 @@ export default function PatientAnamnesis() {
     }
   }, []);
 
-  const templateOptions = useMemo(() => {
+  const templateOptions = useMemo<AnamnesisTemplate[]>(() => {
     if (!current || templates.some((template) => template.id === current.templateId)) return templates;
 
     return [
@@ -288,6 +290,12 @@ export default function PatientAnamnesis() {
         professionalTitles: [],
         version: current.templateVersion,
         schema: current.templateSnapshot,
+        kind: 'derived',
+        ownerProfessionalId: null,
+        currentVersionId: null,
+        sourceTemplateId: null,
+        sourceTemplateVersionId: null,
+        archivedAt: null,
       },
       ...templates,
     ];
@@ -1159,27 +1167,30 @@ export default function PatientAnamnesis() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">
-          <div className="card p-5 sm:p-6">
+          <div className="card !overflow-visible p-5 sm:p-6">
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-text">
                   Modelo do formulário
                 </label>
-                <select
+                <AnamnesisTemplateSelect
+                  options={templateOptions}
                   value={selectedTemplateId}
-                  onChange={(event) => void handleTemplateChange(event.target.value)}
+                  ownerProfessionalId={user?.id}
+                  onChange={(templateId) => void handleTemplateChange(templateId)}
                   disabled={switchingTemplate || startingNew || templates.length === 0}
-                  className="w-full rounded-xl border border-brand-border bg-white px-3.5 py-3 text-sm font-semibold text-brand-text outline-none focus:border-brand-primary disabled:opacity-50"
-                >
-                  {templateOptions.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
+                />
                 <p className="mt-1.5 text-[10px] leading-relaxed text-brand-text-muted">
                   Sugestão inicial baseada no seu perfil profissional{professionalTitle ? `: ${professionalTitle}` : ''}. Você pode escolher outro modelo quando necessário.
                 </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => navigate('/painel/anamnesis/modelos/novo')} className="btn-outline inline-flex items-center gap-1.5 px-3 py-2 text-xs">
+                    <PlusCircle size={14} />Criar minha própria anamnese
+                  </button>
+                  <button type="button" onClick={() => navigate('/painel/anamnesis/modelos', { state: { from: `/painel/patients/${patientId}/anamnesis` } })} className="btn-primary inline-flex items-center gap-1.5 px-3 py-2 text-xs">
+                    <Settings2 size={14} />Gerenciar modelos
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 md:justify-end">
