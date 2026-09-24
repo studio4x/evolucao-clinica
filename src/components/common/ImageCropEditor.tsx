@@ -126,6 +126,7 @@ export function ImageCropEditor({
   }, [imageUrl, initialAspect]);
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragStart.current = {
       x: cropPosition.x,
@@ -136,6 +137,7 @@ export function ImageCropEditor({
   };
 
   const handleDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch') return;
     const start = dragStart.current;
     if (!start) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -143,6 +145,29 @@ export function ImageCropEditor({
       x: clampPosition(start.x + ((event.clientX - start.pointerX) / bounds.width) * 2),
       y: clampPosition(start.y + ((event.clientY - start.pointerY) / bounds.height) * 2),
     });
+  };
+
+  const updateTouchPosition = (event: React.TouchEvent<HTMLDivElement>) => {
+    const start = dragStart.current;
+    const touch = event.touches[0];
+    if (!start || !touch) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    setCropPosition({
+      x: clampPosition(start.x + ((touch.clientX - start.pointerX) / bounds.width) * 2),
+      y: clampPosition(start.y + ((touch.clientY - start.pointerY) / bounds.height) * 2),
+    });
+  };
+
+  const handleTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0];
+    if (!touch) return;
+    dragStart.current = {
+      x: cropPosition.x,
+      y: cropPosition.y,
+      pointerX: touch.clientX,
+      pointerY: touch.clientY,
+    };
   };
 
   const handleApply = async () => {
@@ -191,6 +216,10 @@ export function ImageCropEditor({
         onPointerMove={handleDragMove}
         onPointerUp={() => { dragStart.current = null; }}
         onPointerCancel={() => { dragStart.current = null; }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={updateTouchPosition}
+        onTouchEnd={() => { dragStart.current = null; }}
+        onTouchCancel={() => { dragStart.current = null; }}
       >
         <img
           src={imageUrl}
@@ -238,6 +267,38 @@ export function ImageCropEditor({
             step="0.05"
             value={cropZoom}
             onChange={(event) => setCropZoom(Number(event.target.value))}
+            className="mt-3 w-full accent-brand-primary"
+          />
+        </label>
+
+        <label className="block">
+          <span className="flex justify-between text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">
+            <span>Posição horizontal</span><span>{Math.round(cropPosition.x * 100)}%</span>
+          </span>
+          <input
+            type="range"
+            min="-1"
+            max="1"
+            step="0.01"
+            value={cropPosition.x}
+            onChange={(event) => setCropPosition((current) => ({ ...current, x: Number(event.target.value) }))}
+            aria-label="Posição horizontal do recorte"
+            className="mt-3 w-full accent-brand-primary"
+          />
+        </label>
+
+        <label className="block">
+          <span className="flex justify-between text-[10px] font-bold uppercase tracking-wide text-brand-text-muted">
+            <span>Posição vertical</span><span>{Math.round(cropPosition.y * 100)}%</span>
+          </span>
+          <input
+            type="range"
+            min="-1"
+            max="1"
+            step="0.01"
+            value={cropPosition.y}
+            onChange={(event) => setCropPosition((current) => ({ ...current, y: Number(event.target.value) }))}
+            aria-label="Posição vertical do recorte"
             className="mt-3 w-full accent-brand-primary"
           />
         </label>

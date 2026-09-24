@@ -28,6 +28,8 @@ assert.match(cropEditorSource, /transformOrigin: 'center center'/, 'O zoom do re
 assert.match(cropEditorSource, /const DEFAULT_CROP_ZOOM = 1\.15/, 'O editor deve manter margem para deslocamento horizontal mesmo em fotos quadradas.');
 assert.match(cropEditorSource, /min="1\.05"/, 'O zoom mínimo deve preservar espaço para movimentar o recorte.');
 assert.match(cropEditorSource, /translate\(calc\(-50% - \$\{cropPosition\.x/, 'A prévia deve traduzir horizontalmente o recorte aplicado.');
+assert.match(cropEditorSource, /onTouchStart=\{handleTouchStart\}/, 'O editor deve aceitar arraste por toque no mobile.');
+assert.match(cropEditorSource, /aria-label="Posição horizontal do recorte"/, 'O editor deve oferecer ajuste horizontal explícito.');
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
