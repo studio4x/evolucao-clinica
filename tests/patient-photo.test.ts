@@ -6,6 +6,7 @@ const cropEditorSource = readFileSync('src/components/common/ImageCropEditor.tsx
 const customLogoSource = readFileSync('src/pages/CustomLogo.tsx', 'utf8');
 const patientPhotoSource = readFileSync('src/components/patients/PatientPhoto.tsx', 'utf8');
 const patientPhotoServiceSource = readFileSync('src/services/patientPhoto.ts', 'utf8');
+const patientPhotoPipelineSource = readFileSync('src/services/patientPhotoPipeline.ts', 'utf8');
 const patientsSource = readFileSync('src/pages/Patients.tsx', 'utf8');
 const detailSource = readFileSync('src/pages/PatientDetail.tsx', 'utf8');
 const serverSource = readFileSync('server.ts', 'utf8');
@@ -35,9 +36,11 @@ assert.match(cropEditorSource, /height: 'auto'/, 'A prévia deve preservar a pro
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
-assert.match(formSource, /readPatientPhotoAsDataUrl[\s\S]*?value\.arrayBuffer\(\)[\s\S]*?window\.btoa\(binary\)/);
+assert.match(formSource, /materializePatientPhoto\(file/);
+assert.match(formSource, /patientPhotoBytesToDataUrl\(materializedPhoto/);
+assert.match(formSource, /evolucao-clinica:patient-photo-diagnostics/);
 assert.doesNotMatch(formSource, /new FileReader\(\)/);
-assert.match(formSource, /handlePhotoSelection[\s\S]*?const input = event\.currentTarget[\s\S]*?readPatientPhotoAsDataUrl\(file\)[\s\S]*?createCroppedImageBlob\(\{[\s\S]*?imageUrl: sourceUrl[\s\S]*?readPatientPhotoAsDataUrl\(initialCrop\)[\s\S]*?setPendingPhotoBlob\(initialCrop\)[\s\S]*?setPhotoPreviewUrl\(previewUrl\)[\s\S]*?finally[\s\S]*?input\.value = ''/);
+assert.match(formSource, /handlePhotoSelection[\s\S]*?const input = event\.currentTarget[\s\S]*?materializePatientPhoto\(file[\s\S]*?patientPhotoBytesToDataUrl\(materializedPhoto[\s\S]*?createCroppedImageBlob\(\{[\s\S]*?imageUrl: sourceUrl[\s\S]*?finally[\s\S]*?input\.value = ''/);
 assert.doesNotMatch(formSource, /URL\.createObjectURL\(value\)/);
 assert.match(formSource, /A prévia é criada automaticamente/);
 assert.match(formSource, /uploadPatientPhoto\(/);
@@ -45,6 +48,11 @@ assert.match(formSource, /photo_path: nextPhotoPath \|\| null/);
 
 assert.match(patientPhotoServiceSource, /createSignedUrl\(photoPath, 60 \* 60\)/);
 assert.match(patientPhotoServiceSource, /upsert: false/);
+assert.match(patientPhotoPipelineSource, /FILE_ARRAY_BUFFER/);
+assert.match(patientPhotoPipelineSource, /RESPONSE_ARRAY_BUFFER/);
+assert.match(patientPhotoPipelineSource, /FILE_READER/);
+assert.match(patientPhotoPipelineSource, /new File\(\[bytes\]/);
+assert.match(patientPhotoPipelineSource, /getPatientPhotoMetadata/);
 assert.doesNotMatch(patientPhotoServiceSource, /getPublicUrl/);
 assert.match(patientPhotoSource, /createPatientPhotoSignedUrl\(photoPath\)/);
 assert.match(patientsSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);

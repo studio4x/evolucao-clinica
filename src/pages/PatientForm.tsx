@@ -26,6 +26,11 @@ import {
   validatePatientPhotoSource,
 } from '../services/patientPhoto';
 import {
+  materializePatientPhoto,
+  patientPhotoBytesToDataUrl,
+  type PatientPhotoDiagnostic,
+} from '../services/patientPhotoPipeline';
+import {
   DEFAULT_WHATSAPP_COUNTRY,
   formatWhatsAppNationalNumber,
   getWhatsAppCountryCallingCode,
@@ -224,22 +229,14 @@ const formatCpf = (value: string) => {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 };
 
-const PATIENT_PHOTO_BASE64_CHUNK_BYTES = 0x8000;
+const isPatientPhotoDiagnosticsEnabled = () => {
+  try { return import.meta.env.DEV || window.localStorage.getItem('evolucao-clinica:patient-photo-diagnostics') === '1'; } catch { return import.meta.env.DEV; }
+};
 
-const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
-  try {
-    const bytes = new Uint8Array(await value.arrayBuffer());
-    if (bytes.byteLength === 0) throw new Error('empty image');
-
-    let binary = '';
-    for (let offset = 0; offset < bytes.byteLength; offset += PATIENT_PHOTO_BASE64_CHUNK_BYTES) {
-      binary += String.fromCharCode(...bytes.subarray(offset, offset + PATIENT_PHOTO_BASE64_CHUNK_BYTES));
-    }
-
-    return `data:${value.type || 'application/octet-stream'};base64,${window.btoa(binary)}`;
-  } catch {
-    throw new Error('Não foi possível ler a imagem selecionada.');
-  }
+const logPatientPhotoDiagnostic = (entry: PatientPhotoDiagnostic) => {
+  if (!isPatientPhotoDiagnosticsEnabled()) return;
+  if (entry.status === 'FAIL') console.warn('[PatientPhoto]', entry.stage, entry.error, entry.metadata);
+  else console.info('[PatientPhoto]', entry.stage, entry.metadata || 'ok');
 };
 
 export default function PatientForm() {
@@ -590,7 +587,8 @@ export default function PatientForm() {
     setPreparingPhoto(true);
 
     try {
-      const sourceUrl = await readPatientPhotoAsDataUrl(file);
+      const materializedPhoto = await materializePatientPhoto(file, logPatientPhotoDiagnostic);
+      const sourceUrl = await patientPhotoBytesToDataUrl(materializedPhoto, logPatientPhotoDiagnostic);
       const initialCrop = await createCroppedImageBlob({
         imageUrl: sourceUrl,
         aspect: 1,
@@ -598,7 +596,7 @@ export default function PatientForm() {
         position: { x: 0, y: 0 },
         outputWidth: 600,
       });
-      const previewUrl = await readPatientPhotoAsDataUrl(initialCrop);
+      const previewUrl = await patientPhotoBytesToDataUrl(initialCrop, logPatientPhotoDiagnostic);
 
       setPendingPhotoBlob(initialCrop);
       setPhotoPreviewUrl(previewUrl);
@@ -607,7 +605,10 @@ export default function PatientForm() {
       setShowPhotoEditor(true);
     } catch (error) {
       console.error('[PatientForm] Não foi possível preparar a foto selecionada:', error);
-      await showAlert(`Erro ao preparar a foto: ${error instanceof Error ? error.message : error}`, {
+      const reason = error instanceof Error && /vazia|bytes|leitura|FileReader|Base64/i.test(error.message)
+        ? 'O arquivo ficou inacessível durante a leitura. Selecione a foto novamente.'
+        : 'O arquivo não pôde ser decodificado. Verifique se é uma imagem válida.';
+      await showAlert(`Não foi possível preparar "${file.name}". ${reason}`, {
         title: 'Erro na Foto',
         variant: 'danger',
         icon: 'warning',
@@ -619,7 +620,7 @@ export default function PatientForm() {
   };
 
   const handleApplyPatientPhotoCrop = async (croppedPhoto: Blob) => {
-    const previewUrl = await readPatientPhotoAsDataUrl(croppedPhoto);
+    const previewUrl = await patientPhotoBytesToDataUrl(croppedPhoto, logPatientPhotoDiagnostic);
     setPendingPhotoBlob(croppedPhoto);
     setPhotoPreviewUrl(previewUrl);
     setPhotoRemoved(false);
