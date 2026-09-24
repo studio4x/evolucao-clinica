@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
-import { Clock, LayoutDashboard, Loader2, Pencil, Plus, UserRound } from "lucide-react";
+import { Bell, Clock, FileText, Folder, LayoutDashboard, Loader2, Pencil, Plus, UserRound } from "lucide-react";
 import { ClinicPatientEvolutions } from "../components/clinic/ClinicPatientEvolutions";
 import { PatientDetailGrid, PatientDetailHeader } from "../components/patients/PatientDetailLayout";
 import { useAuthStore } from "../store/authStore";
@@ -14,11 +14,14 @@ import { getClinicAssignmentRoleLabel, getClinicMembershipRoleLabel } from "../u
 
 function roleLabel(role: string) { return getClinicAssignmentRoleLabel(role); }
 
-type ClinicMobileTab = "overview" | "history";
+type ClinicMobileTab = "overview" | "history" | "files" | "reminders" | "reports";
 
 const clinicMobileTabs = [
   { id: "overview", label: "Resumo", icon: LayoutDashboard },
   { id: "history", label: "Histórico", icon: Clock },
+  { id: "files", label: "Arquivos", icon: Folder },
+  { id: "reminders", label: "Lembretes", icon: Bell },
+  { id: "reports", label: "Relatórios", icon: FileText },
 ] as const;
 
 export default function ClinicPatientDetail() {
@@ -64,8 +67,7 @@ export default function ClinicPatientDetail() {
   const candidates = members.filter((member) => !assignedIds.has(member.professional_id));
   const currentPrimaryId = patient?.assignments.find((assignment) => assignment.assignmentRole === "primary")?.professionalId;
   const primaryCandidates = members.filter((member) => member.status === "active" && member.clinical_access_enabled && member.professional_id !== currentPrimaryId);
-  const overviewVisibility = activeMobileTab === "overview" ? "contents xl:block" : "hidden xl:block";
-  const historyVisibility = activeMobileTab === "history" ? "contents xl:block" : "hidden xl:block";
+  const tabVisibility = (tab: ClinicMobileTab) => activeMobileTab === tab ? "block" : "hidden";
 
   async function save() { if (!patient) return; setBusy(true); setError(null); try { const { data: { session } } = await supabase.auth.getSession(); if (!session?.access_token) throw new Error(); await updateClinicPatient(session.access_token, patient.organizationPatientId, { fullName, birthDate: birthDate || null, phone: phone || null }); setEditing(false); await load(); } catch { setError("Não foi possível salvar os dados do paciente."); } finally { setBusy(false); } }
   async function add(professionalId: string, role: "secondary" | "consultant") { setBusy(true); try { const { data: { session } } = await supabase.auth.getSession(); if (!session?.access_token) throw new Error(); await addClinicPatientAssignment(session.access_token, organizationPatientId, professionalId, role); await load(); } catch { setError("Não foi possível adicionar a atribuição."); } finally { setBusy(false); } }
@@ -78,6 +80,7 @@ export default function ClinicPatientDetail() {
       icon={UserRound}
       title={patient?.fullName || "Paciente"}
       description={patient?.status === "active" ? "Paciente ativo" : "Paciente arquivado"}
+      status={patient?.status === "active" ? "active" : "archived"}
       actions={patient && <>
         {isManager && <button disabled={busy} onClick={() => void lifecycle(patient.status === "active" ? "archive" : "reactivate")} className="btn-outline h-10 w-10 shrink-0 p-0 sm:h-auto sm:w-auto sm:px-4" title={patient.status === "active" ? "Arquivar paciente" : "Reativar paciente"}><span className="sm:hidden">{patient.status === "active" ? "A" : "R"}</span><span className="hidden sm:inline">{patient.status === "active" ? "Arquivar" : "Reativar"}</span></button>}
         {canEdit && <button disabled={busy} onClick={() => setEditing((value) => !value)} className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4" title="Editar paciente"><Pencil size={16} className="sm:mr-1.5" /><span className="hidden sm:inline">{editing ? "Cancelar" : "Editar"}</span></button>}
@@ -89,11 +92,16 @@ export default function ClinicPatientDetail() {
     />
     {error && <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700" role="alert">{error}</div>}
     <PatientDetailGrid>
-      <div className={`${overviewVisibility} xl:col-span-1 xl:space-y-6`}>
+      <div id="patient-tabpanel-overview" role="tabpanel" aria-labelledby="patient-tab-overview" className={`${tabVisibility("overview")} xl:grid xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)] xl:col-span-2 xl:gap-6`}>
+        <div className="space-y-6">
         <section className="card order-2 p-6 xl:order-none"><div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-brand-text">Dados do paciente</h2><p className="mt-1 text-sm text-brand-text-muted">{patient?.currentAssignmentRole ? `Acesso: ${roleLabel(patient.currentAssignmentRole)}` : "Acesso clínico"} · {patient?.status === "active" ? "Ativo" : "Arquivado"}</p></div>{patient?.patientStatus && <span className="rounded-full border border-brand-border bg-brand-bg px-3 py-1 text-xs font-semibold text-brand-text-muted">{patient.patientStatus}</span>}</div>{!patient ? <div className="mt-6 flex items-center gap-2 text-sm text-brand-text-muted"><Loader2 className="animate-spin" size={18} /> Carregando paciente...</div> : editing ? <div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-semibold sm:col-span-2">Nome<input value={fullName} onChange={(event) => setFullName(event.target.value)} className="input-field mt-2 font-normal" /></label><label className="text-sm font-semibold">Nascimento<input type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} className="input-field mt-2 font-normal" /></label><label className="text-sm font-semibold">Telefone<input value={phone} onChange={(event) => setPhone(event.target.value)} className="input-field mt-2 font-normal" /></label><button disabled={busy} onClick={() => void save()} className="btn-primary sm:col-span-2">Salvar alterações</button></div> : <dl className="mt-5 grid gap-4 sm:grid-cols-3"><div><dt className="text-xs text-brand-text-muted">Nome</dt><dd className="mt-1 font-semibold text-brand-text">{patient.fullName}</dd></div><div><dt className="text-xs text-brand-text-muted">Nascimento</dt><dd className="mt-1 font-semibold text-brand-text">{patient.birthDate || "Não informado"}</dd></div><div><dt className="text-xs text-brand-text-muted">Telefone</dt><dd className="mt-1 font-semibold text-brand-text">{patient.phone || "Não informado"}</dd></div></dl>}</section>
         {patient && <section className="card order-3 p-6 xl:order-none"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold text-brand-text">Profissionais vinculados</h2><p className="mt-1 text-xs text-brand-text-muted">Acesso e autoria permanecem controlados pela clínica.</p></div><span className="rounded-full bg-brand-bg px-2.5 py-1 text-xs font-semibold text-brand-text-muted">{patient.assignments.length}</span></div><div className="mt-4 space-y-3">{patient.assignments.map((assignment) => <div key={assignment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-brand-border bg-brand-bg/60 p-3"><div><p className="font-semibold text-brand-text">{assignment.fullName || "Profissional"}</p><p className="text-xs text-brand-text-muted">{assignment.professionalTitle || "Profissional"}</p></div><div className="flex items-center gap-2"><span className="rounded-full border border-brand-border bg-white px-3 py-1 text-xs font-semibold">{roleLabel(assignment.assignmentRole)}</span>{isManager && assignment.assignmentRole !== "primary" && <button disabled={busy} onClick={() => void revoke(assignment.id)} className="text-xs font-semibold text-red-700">Revogar</button>}</div></div>)}{!patient.assignments.length && <p className="text-sm text-brand-text-muted">Nenhum profissional vinculado.</p>}</div>{isManager && primaryCandidates.length > 0 && <div className="mt-5 rounded-xl border border-brand-border bg-brand-bg p-4"><h3 className="font-semibold text-brand-text">Reatribuir profissional principal</h3><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]"><select id="clinic-primary-target" defaultValue="" className="input-field bg-white text-sm"><option value="">Selecione o novo profissional principal</option>{primaryCandidates.map((member) => <option key={member.professional_id} value={member.professional_id}>{member.full_name || "Profissional"} · {getClinicMembershipRoleLabel(member.membership_role)}</option>)}</select><button disabled={busy} onClick={() => void reassignPrimary()} className="btn-primary">Reatribuir</button></div><label className="mt-3 flex items-center gap-2 text-sm"><input id="clinic-primary-keep" type="checkbox" /> Manter o profissional principal anterior como secundário</label></div>}{isManager && candidates.length > 0 && <div className="mt-4"><select defaultValue="" onChange={(event) => { const [id, role] = event.target.value.split(":"); if (id && role) void add(id, role as "secondary" | "consultant"); event.currentTarget.value = ""; }} className="input-field text-sm"><option value="">Adicionar profissional...</option>{candidates.map((member) => <optgroup key={member.professional_id} label={member.full_name || "Profissional"}><option value={`${member.professional_id}:secondary`}>Profissional secundário</option><option value={`${member.professional_id}:consultant`}>Consultor</option></optgroup>)}</select></div>}</section>}
+        </div>
       </div>
-      <div className={`${historyVisibility} xl:col-span-2 xl:space-y-6`}>{patient && patient.canReadEvolutions && <ClinicPatientEvolutions key={`${patient.organizationPatientId}:${user?.id}`} patient={patient} />}{patient && !patient.canReadEvolutions && <section className="card p-6"><h2 className="font-semibold text-brand-text">Histórico de evoluções</h2><p className="mt-2 text-sm text-brand-text-muted">Seu acesso clínico não inclui o histórico deste paciente.</p></section>}</div>
+      <div id="patient-tabpanel-history" role="tabpanel" aria-labelledby="patient-tab-history" className={`${tabVisibility("history")} xl:col-span-2`}>{patient && patient.canReadEvolutions && <ClinicPatientEvolutions key={`${patient.organizationPatientId}:${user?.id}`} patient={patient} />}{patient && !patient.canReadEvolutions && <section className="card p-6"><h2 className="font-semibold text-brand-text">Histórico de evoluções</h2><p className="mt-2 text-sm text-brand-text-muted">Seu acesso clínico não inclui o histórico deste paciente.</p></section>}</div>
+      <div id="patient-tabpanel-files" role="tabpanel" aria-labelledby="patient-tab-files" className={`${tabVisibility("files")} xl:col-span-2`}><section className="card p-6"><div className="flex items-center gap-2 text-brand-primary"><Folder size={20} /><h2 className="font-semibold text-brand-text">Arquivos</h2></div><p className="mt-3 text-sm text-brand-text-muted">Arquivos ainda não estão disponíveis neste contexto clínico.</p></section></div>
+      <div id="patient-tabpanel-reminders" role="tabpanel" aria-labelledby="patient-tab-reminders" className={`${tabVisibility("reminders")} xl:col-span-2`}><section className="card p-6"><div className="flex items-center gap-2 text-brand-primary"><Bell size={20} /><h2 className="font-semibold text-brand-text">Agenda de sessões e lembretes</h2></div><p className="mt-3 text-sm text-brand-text-muted">Lembretes ainda precisam de um adapter clínico autorizado.</p></section></div>
+      <div id="patient-tabpanel-reports" role="tabpanel" aria-labelledby="patient-tab-reports" className={`${tabVisibility("reports")} xl:col-span-2`}><section className="card p-6"><div className="flex items-center gap-2 text-brand-primary"><FileText size={20} /><h2 className="font-semibold text-brand-text">Relatórios</h2></div><p className="mt-3 text-sm text-brand-text-muted">Relatórios pessoais não estão disponíveis neste contexto clínico.</p></section></div>
     </PatientDetailGrid>
   </div>;
 }

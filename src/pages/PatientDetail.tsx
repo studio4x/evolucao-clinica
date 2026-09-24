@@ -149,16 +149,17 @@ type ConfirmationDialogState = {
   resolve: (confirmed: boolean) => void;
 };
 
-type PatientMobileTab = 'overview' | 'history' | 'reminders' | 'reports';
+type PatientMobileTab = 'overview' | 'history' | 'files' | 'reminders' | 'reports';
 type SwipeDirection = 'next' | 'previous';
 
 const patientMobileTabs: { id: PatientMobileTab; label: string; icon: typeof FileText }[] = [
   { id: 'overview', label: 'Resumo', icon: LayoutDashboard },
   { id: 'history', label: 'Histórico', icon: Clock },
+  { id: 'files', label: 'Arquivos', icon: Folder },
   { id: 'reminders', label: 'Lembretes', icon: Bell },
   { id: 'reports', label: 'Relatórios', icon: FileText },
 ];
-const patientMobileTabOrder: PatientMobileTab[] = ['overview', 'history', 'reminders', 'reports'];
+const patientMobileTabOrder: PatientMobileTab[] = ['overview', 'history', 'files', 'reminders', 'reports'];
 
 
 
@@ -2584,6 +2585,14 @@ export default function PatientDetail() {
               rows={6}
               className="w-full bg-transparent focus:outline-none text-xs text-amber-900 leading-relaxed placeholder-amber-700/40 resize-none font-sans"
             />
+          </div>
+
+          <div className={`card p-6 space-y-4 order-5 xl:order-none ${mobileTabVisibility('files')}`}>
+            <div className="flex items-center space-x-2 text-brand-primary">
+              <Folder size={20} className="text-brand-primary" />
+              <h3 className="font-semibold text-brand-text mb-0">Arquivos</h3>
+            </div>
+            <p className="text-sm text-brand-text-muted">Os arquivos do paciente ficam disponíveis conforme o acesso autorizado ao Google Drive.</p>
           </div>
 
           <div className={`card p-6 space-y-4 order-6 xl:order-none ${mobileTabVisibility('reminders')}`}>
