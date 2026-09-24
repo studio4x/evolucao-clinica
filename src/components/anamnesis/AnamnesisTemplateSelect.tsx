@@ -74,7 +74,7 @@ export function AnamnesisTemplateSelect({
 
   const isOwnedByUser = (template: AnamnesisTemplate) => Boolean(ownerProfessionalId && template.ownerProfessionalId === ownerProfessionalId);
 
-  return <div ref={rootRef} className="relative w-full">
+  return <div ref={rootRef} className={`relative w-full ${open ? 'z-[60]' : 'z-0'}`}>
     <button
       type="button"
       onClick={() => !disabled && setOpen((currentOpen) => !currentOpen)}
@@ -93,7 +93,7 @@ export function AnamnesisTemplateSelect({
       <ChevronDown size={18} className={`shrink-0 text-brand-text-muted transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
     </button>
 
-    {open && <div id={listboxId} role="listbox" aria-label="Modelos de anamnese" className="absolute left-0 right-0 z-30 mt-2 max-h-64 overflow-y-auto rounded-xl border border-brand-border bg-white p-1.5 shadow-xl">
+    {open && <div id={listboxId} role="listbox" aria-label="Modelos de anamnese" className="absolute left-0 right-0 z-[70] mt-2 max-h-64 overflow-y-auto rounded-xl border border-brand-border bg-white p-1.5 shadow-xl">
       {options.map((option, index) => {
         const isSelected = option.id === value;
         const isActive = index === activeIndex;

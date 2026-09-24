@@ -1167,7 +1167,7 @@ export default function PatientAnamnesis() {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">
-          <div className="card p-5 sm:p-6">
+          <div className="card !overflow-visible p-5 sm:p-6">
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
               <div>
                 <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-brand-text">

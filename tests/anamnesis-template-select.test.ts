@@ -16,6 +16,9 @@ assert.match(selectorSource, /event\.key === 'ArrowDown'/);
 assert.match(selectorSource, /event\.key === 'ArrowUp'/);
 assert.match(selectorSource, /event\.key === 'Enter' \|\| event\.key === ' '/);
 assert.match(selectorSource, /pointerdown/);
+assert.match(selectorSource, /className=\{`relative w-full \$\{open \? 'z-\[60\]' : 'z-0'\}`\}/);
+assert.match(selectorSource, /className="absolute left-0 right-0 z-\[70\] mt-2 max-h-64 overflow-y-auto/);
+assert.match(selectorSource, /onClick=\{\(\) => selectOption\(option\)\}/);
 assert.doesNotMatch(selectorSource, /startsWith\(['"]Cópia de/);
 assert.doesNotMatch(selectorSource, /includes\(['"]Cópia/);
 
@@ -25,5 +28,6 @@ assert.match(pageSource, /onChange=\{\(templateId\) => void handleTemplateChange
 assert.match(pageSource, /disabled=\{switchingTemplate \|\| startingNew \|\| templates\.length === 0\}/);
 assert.match(pageSource, /ownerProfessionalId: null/);
 assert.match(pageSource, /name: `\$\{current\.templateName\} · versão utilizada`/);
+assert.match(pageSource, /<div className="card !overflow-visible p-5 sm:p-6">[\s\S]*Modelo do formulário[\s\S]*<\/div>/);
 
 console.log('Anamnesis template selector tests passed.');
