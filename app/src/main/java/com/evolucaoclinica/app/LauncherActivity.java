@@ -74,6 +74,7 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -82,6 +83,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
@@ -89,6 +91,8 @@ public class LauncherActivity extends ComponentActivity {
     private static final String LOG_TAG = "EvolucaoAudio";
     private static final int REQUEST_PERMISSIONS = 1001;
     private static final int REQUEST_FILE_CHOOSER = 1002;
+    private static final long MAX_PATIENT_PHOTO_BYTES = 25L * 1024L * 1024L;
+    private static final long PATIENT_PHOTO_CACHE_MAX_AGE_MS = 24L * 60L * 60L * 1000L;
     private static final String[] AUDIO_FILE_CHOOSER_MIME_TYPES = {
             "audio/*",
             "audio/ogg",
@@ -104,6 +108,7 @@ public class LauncherActivity extends ComponentActivity {
     private WebView webView;
     private SwipeRefreshLayout swipeRefreshLayout;
     private ValueCallback<Uri[]> filePathCallback;
+    private boolean patientPhotoChooserPending;
     private Uri sharedFileUri;
     private String sharedFileMimeType;
     private String sharedFileName;
@@ -159,6 +164,7 @@ public class LauncherActivity extends ComponentActivity {
         }
 
         captureShareIntent(getIntent());
+        cleanupPatientPhotoCache();
         requestRequiredPermissions();
         initializeFirebaseAnalytics();
         paymentSheet = new PaymentSheet(this, this::onPaymentSheetResult);
@@ -1580,6 +1586,7 @@ public class LauncherActivity extends ComponentActivity {
             public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (filePathCallback != null) filePathCallback.onReceiveValue(null);
                 filePathCallback = callback;
+                patientPhotoChooserPending = acceptsImageFiles(params.getAcceptTypes());
                 Intent intent = params.createIntent();
                 String[] requestedTypes = params.getAcceptTypes();
                 ArrayList<String> acceptedMimeTypes = new ArrayList<>();
@@ -1617,7 +1624,9 @@ public class LauncherActivity extends ComponentActivity {
                     startActivityForResult(intent, REQUEST_FILE_CHOOSER);
                 } catch (Exception exception) {
                     filePathCallback = null;
+                    patientPhotoChooserPending = false;
                     callback.onReceiveValue(null);
+                    showPatientPhotoPickerError();
                     return false;
                 }
                 return true;
@@ -1640,6 +1649,123 @@ public class LauncherActivity extends ComponentActivity {
             }
         }
         return false;
+    }
+
+    private boolean acceptsImageFiles(String[] requestedTypes) {
+        if (requestedTypes == null || requestedTypes.length == 0) return false;
+        for (String requestedType : requestedTypes) {
+            if (requestedType == null) continue;
+            String normalized = requestedType.trim().toLowerCase(java.util.Locale.ROOT);
+            if (normalized.startsWith("image/")
+                    || normalized.endsWith(".jpg")
+                    || normalized.endsWith(".jpeg")
+                    || normalized.endsWith(".png")
+                    || normalized.endsWith(".webp")
+                    || normalized.endsWith(".heic")
+                    || normalized.endsWith(".heif")) return true;
+        }
+        return false;
+    }
+
+    private File patientPhotoCacheDirectory() {
+        return new File(getCacheDir(), "patient-photo");
+    }
+
+    private void cleanupPatientPhotoCache() {
+        File directory = patientPhotoCacheDirectory();
+        File[] files = directory.listFiles();
+        if (files == null) return;
+        long cutoff = System.currentTimeMillis() - PATIENT_PHOTO_CACHE_MAX_AGE_MS;
+        for (File file : files) if (file.isFile() && file.lastModified() < cutoff) file.delete();
+    }
+
+    private String normalizedPatientPhotoMimeType(String mimeType) {
+        String normalized = mimeType == null ? "" : mimeType.trim().toLowerCase(java.util.Locale.ROOT);
+        if (normalized.equals("image/jpeg") || normalized.equals("image/png")
+                || normalized.equals("image/webp") || normalized.equals("image/heic")
+                || normalized.equals("image/heif")) return normalized;
+        return "image/jpeg";
+    }
+
+    private String patientPhotoExtension(String mimeType) {
+        if ("image/png".equals(mimeType)) return ".png";
+        if ("image/webp".equals(mimeType)) return ".webp";
+        if ("image/heic".equals(mimeType)) return ".heic";
+        if ("image/heif".equals(mimeType)) return ".heif";
+        return ".jpg";
+    }
+
+    private Uri copyPatientPhotoToPrivateCache(Uri sourceUri) throws Exception {
+        if (sourceUri == null) throw new IllegalArgumentException("uri ausente");
+        String mimeType = normalizedPatientPhotoMimeType(getContentResolver().getType(sourceUri));
+        File directory = patientPhotoCacheDirectory();
+        if (!directory.exists() && !directory.mkdirs()) throw new IllegalStateException("cache indisponível");
+        File destination = new File(directory, "photo-" + UUID.randomUUID() + patientPhotoExtension(mimeType));
+        long copied = 0;
+        try (InputStream input = "file".equalsIgnoreCase(sourceUri.getScheme())
+                ? new FileInputStream(new File(sourceUri.getPath()))
+                : getContentResolver().openInputStream(sourceUri);
+             OutputStream output = new FileOutputStream(destination)) {
+            if (input == null) throw new IllegalStateException("stream indisponível");
+            byte[] buffer = new byte[32 * 1024];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                copied += read;
+                if (copied > MAX_PATIENT_PHOTO_BYTES) throw new IllegalStateException("arquivo excede o limite");
+                output.write(buffer, 0, read);
+            }
+        } catch (Exception exception) {
+            destination.delete();
+            throw exception;
+        }
+        return FileProvider.getUriForFile(this, getString(R.string.providerAuthority), destination);
+    }
+
+    private void logPatientPhotoPickerEvent(String stage, String outcome, Uri uri) {
+        String scheme = uri == null || uri.getScheme() == null ? "unknown" : uri.getScheme().toLowerCase(java.util.Locale.ROOT);
+        Log.i(LOG_TAG, "PatientPhotoPicker stage=" + stage + " outcome=" + outcome + " scheme=" + scheme);
+        if (!analyticsConsentGranted) return;
+        try {
+            if (firebaseAnalytics == null) initializeFirebaseAnalytics();
+            if (firebaseAnalytics == null) return;
+            Bundle params = new Bundle();
+            params.putString("stage", stage);
+            params.putString("outcome", outcome);
+            params.putString("scheme", scheme);
+            params.putString("mime_group", "image");
+            firebaseAnalytics.logEvent("patient_photo_native_picker", params);
+        } catch (Exception ignored) {
+            // Diagnóstico nunca pode interromper o seletor ou o upload.
+        }
+    }
+
+    private void showPatientPhotoPickerError() {
+        Toast.makeText(this, "Não foi possível preparar a foto. Selecione a imagem novamente.", Toast.LENGTH_LONG).show();
+    }
+
+    private void deliverPatientPhotoResults(ValueCallback<Uri[]> callback, Uri[] results) {
+        new Thread(() -> {
+            ArrayList<Uri> copiedResults = new ArrayList<>();
+            try {
+                for (Uri result : results) copiedResults.add(copyPatientPhotoToPrivateCache(result));
+                runOnUiThread(() -> {
+                    logPatientPhotoPickerEvent("copy", "success", results.length > 0 ? results[0] : null);
+                    callback.onReceiveValue(copiedResults.toArray(new Uri[0]));
+                });
+            } catch (Exception exception) {
+                for (Uri copied : copiedResults) {
+                    try {
+                        File file = new File(patientPhotoCacheDirectory(), copied.getLastPathSegment());
+                        if (file.exists()) file.delete();
+                    } catch (Exception ignored) { }
+                }
+                runOnUiThread(() -> {
+                    logPatientPhotoPickerEvent("copy", "failure", results.length > 0 ? results[0] : null);
+                    showPatientPhotoPickerError();
+                    callback.onReceiveValue(null);
+                });
+            }
+        }, "patient-photo-copy").start();
     }
 
     private void refreshWebAppCacheIfNeeded(WebView webView, String url) {
@@ -1722,10 +1848,19 @@ public class LauncherActivity extends ComponentActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == REQUEST_FILE_CHOOSER && filePathCallback != null) {
+            ValueCallback<Uri[]> callback = filePathCallback;
+            filePathCallback = null;
+            boolean copyPhoto = patientPhotoChooserPending;
+            patientPhotoChooserPending = false;
             Uri[] results = resultCode == RESULT_OK && data != null
                     ? WebChromeClient.FileChooserParams.parseResult(resultCode, data) : null;
-            filePathCallback.onReceiveValue(results);
-            filePathCallback = null;
+            if (copyPhoto && results != null && results.length > 0) {
+                logPatientPhotoPickerEvent("selected", "received", results[0]);
+                deliverPatientPhotoResults(callback, results);
+            } else {
+                if (copyPhoto) logPatientPhotoPickerEvent("selected", "cancelled", null);
+                callback.onReceiveValue(results);
+            }
         }
     }
 }
