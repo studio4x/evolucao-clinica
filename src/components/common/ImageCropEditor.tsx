@@ -111,6 +111,7 @@ export function ImageCropEditor({
   const [cropAspect, setCropAspect] = useState(initialAspect);
   const [cropZoom, setCropZoom] = useState(DEFAULT_CROP_ZOOM);
   const [cropPosition, setCropPosition] = useState<CropPosition>({ x: 0, y: 0 });
+  const [imageAspect, setImageAspect] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const dragStart = useRef<{
     x: number;
@@ -123,6 +124,7 @@ export function ImageCropEditor({
     setCropAspect(initialAspect);
     setCropZoom(DEFAULT_CROP_ZOOM);
     setCropPosition({ x: 0, y: 0 });
+    setImageAspect(null);
   }, [imageUrl, initialAspect]);
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -194,6 +196,17 @@ export function ImageCropEditor({
 
   const busy = applying || creating;
   const selectedAspect = aspectOptions.find((option) => option.value === cropAspect);
+  const fittedImageAspect = imageAspect || cropAspect;
+  const imageWidthPercent = fittedImageAspect > cropAspect
+    ? (fittedImageAspect / cropAspect) * cropZoom * 100
+    : cropZoom * 100;
+  const imageHeightPercent = fittedImageAspect > cropAspect
+    ? cropZoom * 100
+    : (cropAspect / fittedImageAspect) * cropZoom * 100;
+  const horizontalOverflowPercent = Math.max(0, (imageWidthPercent - 100) / 2);
+  const verticalOverflowPercent = Math.max(0, (imageHeightPercent - 100) / 2);
+  const imageLeftPercent = 50 - cropPosition.x * horizontalOverflowPercent;
+  const imageTopPercent = 50 - cropPosition.y * verticalOverflowPercent;
 
   return (
     <div className="rounded-2xl border border-brand-primary/20 bg-brand-primary/5 p-4 sm:p-5">
@@ -225,11 +238,19 @@ export function ImageCropEditor({
           src={imageUrl}
           alt={imageAlt}
           draggable={false}
-          className="absolute left-1/2 top-1/2 h-full w-full select-none object-cover transition-transform duration-75"
+          className="absolute select-none transition-[width,height,left,top] duration-75"
+          onLoad={(event) => {
+            const { naturalWidth, naturalHeight } = event.currentTarget;
+            if (naturalWidth > 0 && naturalHeight > 0) {
+              setImageAspect(naturalWidth / naturalHeight);
+            }
+          }}
           style={{
-            objectPosition: 'center center',
-            transform: `translate(calc(-50% - ${cropPosition.x * (cropZoom - 1) * 50}%), calc(-50% - ${cropPosition.y * (cropZoom - 1) * 50}%)) scale(${cropZoom})`,
-            transformOrigin: 'center center',
+            width: `${imageWidthPercent}%`,
+            height: `${imageHeightPercent}%`,
+            left: `${imageLeftPercent}%`,
+            top: `${imageTopPercent}%`,
+            transform: 'translate(-50%, -50%)',
           }}
         />
         <div className="pointer-events-none absolute inset-0 border-8 border-white/25" />
