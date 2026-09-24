@@ -24,6 +24,7 @@ assert.match(personalRoute, /isPersonalShellRouteAllowedForClinicalProfessional/
 assert.match(personalRoute, /pathname === "\/painel\/tutorial"/);
 assert.match(app, /ClinicalAdminContextGuard><Dashboard \/><\/ClinicalAdminContextGuard>/);
 assert.match(app, /ClinicalAdminContextGuard><History \/><\/ClinicalAdminContextGuard>/);
+assert.match(app, /organization\.membershipRole !== 'professional'/);
 assert.doesNotMatch(app, /PanelDashboardRoute|PanelHistoryRoute|ClinicProfessionalHistory/);
 assert.match(dashboard, /isClinicalProfessional/);
 assert.match(dashboard, /fetchClinicPatients/);
@@ -31,7 +32,7 @@ assert.match(dashboard, /clinicEvolutionRequest/);
 assert.match(history, /fetchClinicPatients/);
 assert.match(history, /clinicEvolutionRequest/);
 assert.doesNotMatch(history, /\.from\("evolutions"\)/);
-assert.doesNotMatch(clinicRoute, /location\.pathname === "\/painel\/clinica"/);
-assert.match(version, /v1\.10\.915/);
+assert.match(clinicRoute, /location\.pathname === "\/painel\/clinica"/);
+assert.match(version, /v1\.10\.916/);
 
 console.log("clinic professional visual shell and clinic plan gating: PASS");

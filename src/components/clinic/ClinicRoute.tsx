@@ -31,7 +31,7 @@ export function ClinicRoute({ children }: { children: ReactNode }) {
   }
   if (organization.membershipRole === "professional") {
     if (!organization.clinicalAccessEnabled || !organization.licenseActive) return <Navigate to="/painel/dashboard" replace />;
-    if (location.pathname === "/painel/clinica/equipe" || location.pathname === "/painel/clinica/auditoria" || location.pathname === "/painel/clinica/contratar") {
+    if (location.pathname === "/painel/clinica" || location.pathname === "/painel/clinica/equipe" || location.pathname === "/painel/clinica/auditoria" || location.pathname === "/painel/clinica/contratar") {
       return <Navigate to="/painel/clinica/pacientes" replace />;
     }
   }

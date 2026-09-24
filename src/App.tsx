@@ -374,7 +374,13 @@ function ClinicalAdminContextGuard({ children }: { children: React.ReactNode }) 
   const organization = activeContext.type === 'organization'
     ? organizations.find(({ id }) => id === activeContext.organizationId)
     : null;
-  if (organization) return <Navigate to="/painel/clinica" replace />;
+  if (organization && organization.membershipRole !== 'professional') {
+    return <Navigate to="/painel/clinica" replace />;
+  }
+  if (organization?.membershipRole === 'professional'
+    && (!organization.clinicalAccessEnabled || !organization.licenseActive)) {
+    return <Navigate to="/painel/subscription" replace />;
+  }
   return <>{children}</>;
 }
 
