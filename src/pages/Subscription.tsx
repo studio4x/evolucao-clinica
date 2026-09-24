@@ -888,7 +888,7 @@ export default function Subscription() {
                       {displayedFeatures.map((feature: string, idx: number) => (
                         <li key={idx} className="flex items-center space-x-3">
                           <Check className="w-5 h-5 text-brand-primary flex-shrink-0" />
-                          <span>
+                          <span className={isYearly && idx === 0 ? 'rounded-md bg-brand-primary/10 px-1.5 py-0.5 font-semibold text-brand-primary' : undefined}>
                             {feature}
                             <FeatureTooltip feature={feature} />
                           </span>

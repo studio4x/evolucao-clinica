@@ -1289,7 +1289,7 @@ export default function LandingPage() {
                         {displayedFeatures.map((feature: string, idx: number) => (
                           <li key={idx} className={`flex items-center gap-2 ${isYearly && idx === 0 ? 'font-semibold text-brand-primary' : ''}`}>
                             <Check size={16} className="text-brand-primary flex-shrink-0" />
-                            <span>
+                            <span className={isYearly && idx === 0 ? 'rounded-md bg-brand-primary/10 px-1.5 py-0.5 font-semibold text-brand-primary' : undefined}>
                               {feature}
                               <FeatureTooltip feature={feature} />
                             </span>
