@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Download, ExternalLink, Globe2, Info, RefreshCw, Settings2, ShieldCheck, Smartphone, Sparkles } from 'lucide-react';
 import { APP_VERSION } from '../layout/AppVersion';
@@ -6,6 +6,7 @@ import { getInstalledAppInfo } from '../../utils/installedAppInfo';
 import {
   AndroidAppUpdateState,
   formatAvailablePlayStoreVersion,
+  getNativeAppUpdateSnapshot,
   getUpdatePresentation,
   isNativeAndroidApp,
   openGooglePlay,
@@ -22,37 +23,27 @@ const platformLabels = {
 export function AboutAppCard() {
   const [appInfo] = useState(getInstalledAppInfo);
   const isAndroid = appInfo.platform === 'android';
-  const [updateState, setUpdateState] = useState<AndroidAppUpdateState>(isAndroid ? 'checking' : 'idle');
-  const [availableVersionCode, setAvailableVersionCode] = useState<number | null>(null);
-  const updateCheckInFlight = useRef(false);
+  const [updateSnapshot, setUpdateSnapshot] = useState(getNativeAppUpdateSnapshot);
   const openPrivacyPreferences = () => window.dispatchEvent(new Event('cookie-consent-open'));
 
   const checkForUpdate = () => {
-    if (!isNativeAndroidApp() || updateCheckInFlight.current) return;
-    updateCheckInFlight.current = true;
-    setUpdateState('checking');
-    setAvailableVersionCode(null);
-    if (!requestNativeAppUpdate()) {
-      updateCheckInFlight.current = false;
-      setUpdateState('unavailable');
-    }
+    if (!isNativeAndroidApp()) return;
+    requestNativeAppUpdate({ force: true });
   };
 
   useEffect(() => {
     if (!isAndroid) return undefined;
 
-    const unsubscribe = subscribeToNativeAppUpdate((payload) => {
-      updateCheckInFlight.current = false;
-      setUpdateState(payload.status);
-      setAvailableVersionCode(payload.availableVersionCode);
-    });
-    checkForUpdate();
+    const unsubscribe = subscribeToNativeAppUpdate(() => setUpdateSnapshot(getNativeAppUpdateSnapshot()));
+    setUpdateSnapshot(getNativeAppUpdateSnapshot());
     return unsubscribe;
   }, [isAndroid]);
 
+  const updateState: AndroidAppUpdateState = updateSnapshot.state;
+  const availableVersionCode = updateSnapshot.availableVersionCode;
   const updatePresentation = updateState === 'idle'
     ? null
-    : getUpdatePresentation(updateState, availableVersionCode);
+    : getUpdatePresentation(updateState, availableVersionCode, updateSnapshot.availableVersionName);
 
   return (
     <section className="card overflow-hidden bg-white shadow-sm border border-brand-border/60" aria-labelledby="about-app-card-title">
@@ -134,12 +125,12 @@ export function AboutAppCard() {
                         <p className="text-xs font-medium">Versão instalada: v{appInfo.displayVersion ?? 'indisponível'}</p>
                       </>
                     )}
-                    {updateState === 'update_available' && (
+                  {updateState === 'update_available' && (
                       <>
                         <p className="text-xs leading-relaxed">Há uma versão mais recente do Evolução Clínica disponível na Google Play.</p>
                         <div className="space-y-1 text-xs font-medium">
                           <p>Versão instalada: v{appInfo.displayVersion ?? 'indisponível'}</p>
-                          <p>Versão disponível: v{formatAvailablePlayStoreVersion(availableVersionCode)}</p>
+                          <p>Versão disponível: v{formatAvailablePlayStoreVersion(availableVersionCode, updateSnapshot.availableVersionName)}</p>
                         </div>
                         <button
                           type="button"

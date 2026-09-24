@@ -51,6 +51,7 @@ import LandingPage from './pages/LandingPage';
 
 import { CookieConsent } from './components/CookieConsent';
 import { CustomModalContainer } from './components/common/CustomModalContainer';
+import { NativeAppUpdatePrompt } from './components/common/NativeAppUpdatePrompt';
 import { appendBrandAssetVersion, getBrandAssetSignature, getBrandSocialShareUrl } from './utils/brandAssets';
 import {
   canAccessApplication,
@@ -750,6 +751,7 @@ export default function App() {
       <InstallPrompt />
       <PermissionNotice />
       <CustomModalContainer />
+      <NativeAppUpdatePrompt />
       <NativeBillingRestore />
       <PushPermissionPrompt />
       <SpeedInsights />

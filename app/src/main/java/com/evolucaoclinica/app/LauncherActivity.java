@@ -1371,8 +1371,12 @@ public class LauncherActivity extends ComponentActivity {
 
                 if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE) {
                     int availableVersionCode = appUpdateInfo.availableVersionCode();
-                    if (availableVersionCode <= 0) {
-                        emitAppUpdateStatus("unavailable", null);
+                    if (availableVersionCode <= 0 || availableVersionCode <= getInstalledVersionCode()) {
+                        if (availableVersionCode > 0) {
+                            emitAppUpdateStatus("up_to_date", null);
+                        } else {
+                            emitAppUpdateStatus("unavailable", null);
+                        }
                         return;
                     }
                     emitAppUpdateStatus("update_available", availableVersionCode);

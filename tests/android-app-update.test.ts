@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   formatAvailablePlayStoreVersion,
+  getNativeAppUpdateSnapshot,
   getUpdatePresentation,
   NATIVE_APP_UPDATE_EVENT,
   openGooglePlay,
@@ -11,6 +12,7 @@ import {
 
 const root = resolve(process.cwd());
 const aboutCardSource = readFileSync(resolve(root, 'src/components/profile/AboutAppCard.tsx'), 'utf8');
+const promptSource = readFileSync(resolve(root, 'src/components/common/NativeAppUpdatePrompt.tsx'), 'utf8');
 const updateUtilitySource = readFileSync(resolve(root, 'src/utils/androidAppUpdate.ts'), 'utf8');
 const bridgeSource = readFileSync(resolve(root, 'app/src/main/java/com/evolucaoclinica/app/LauncherActivity.java'), 'utf8');
 const gradleSource = readFileSync(resolve(root, 'app/build.gradle'), 'utf8');
@@ -18,6 +20,7 @@ const gradleSource = readFileSync(resolve(root, 'app/build.gradle'), 'utf8');
 assert.equal(getUpdatePresentation('checking').title, 'Verificando atualização...');
 assert.equal(getUpdatePresentation('up_to_date').title, 'Seu aplicativo está atualizado');
 assert.equal(getUpdatePresentation('update_available', 89).availableVersion, '1.0.89');
+assert.equal(getUpdatePresentation('update_available').title, 'Nova versão disponível');
 assert.match(getUpdatePresentation('unavailable').title, /Não foi possível verificar/);
 assert.equal(NATIVE_APP_UPDATE_EVENT, 'native-app-update-status');
 assert.equal(formatAvailablePlayStoreVersion(89), '1.0.89');
@@ -26,6 +29,10 @@ assert.match(updateUtilitySource, /Seu aplicativo está atualizado/);
 assert.match(aboutCardSource, /Atualizar pela Google Play/);
 assert.match(aboutCardSource, /Não foi possível verificar automaticamente/);
 assert.match(aboutCardSource, /requestNativeAppUpdate/);
+assert.match(promptSource, /initializeNativeAppUpdateCheck/);
+assert.match(promptSource, /Agora não/);
+assert.match(promptSource, /Atualizar aplicativo/);
+assert.match(promptSource, /isNativeAndroidApp/);
 assert.match(bridgeSource, /public void checkForUpdate\(\)/);
 assert.match(bridgeSource, /public void openPlayStore\(\)/);
 assert.match(bridgeSource, /native-app-update-status/);
@@ -36,19 +43,45 @@ assert.doesNotMatch(gradleSource, /app-update-ktx/);
 const originalWindow = globalThis.window;
 let nativeCheckCalls = 0;
 let nativeOpenCalls = 0;
+const nativeListeners = new Map<string, EventListener>();
 Object.assign(globalThis, {
   window: {
     NativeAppInfoBridge: {
       checkForUpdate: () => { nativeCheckCalls += 1; },
       openPlayStore: () => { nativeOpenCalls += 1; }
     },
+    addEventListener: (name: string, listener: EventListener) => nativeListeners.set(name, listener),
+    dispatchEvent: (event: Event) => { nativeListeners.get(event.type)?.(event); return true; },
+    navigator: { userAgent: '' },
     matchMedia: () => ({ matches: false }),
-    sessionStorage: { getItem: () => null },
+    sessionStorage: { getItem: (key: string) => key === 'evolucao-clinica:native-version-code' ? '91' : null },
     location: { assign: () => { throw new Error('web fallback must not run'); } }
   }
 });
 assert.equal(requestNativeAppUpdate(), true);
 assert.equal(nativeCheckCalls, 1);
+const nativeWindow = globalThis.window;
+nativeWindow.dispatchEvent?.(new CustomEvent(NATIVE_APP_UPDATE_EVENT, {
+  detail: {
+    status: 'update_available',
+    installedVersionCode: 91,
+    installedVersionName: '91',
+    availableVersionCode: 92
+  }
+}));
+assert.equal(getNativeAppUpdateSnapshot().state, 'update_available');
+nativeWindow.dispatchEvent?.(new CustomEvent(NATIVE_APP_UPDATE_EVENT, {
+  detail: {
+    status: 'update_available',
+    installedVersionCode: 93,
+    installedVersionName: '93',
+    availableVersionCode: 92
+  }
+}));
+assert.equal(getNativeAppUpdateSnapshot().state, 'up_to_date');
+assert.equal(requestNativeAppUpdate(), true);
+assert.equal(requestNativeAppUpdate(), true);
+assert.equal(nativeCheckCalls, 2);
 assert.equal(openGooglePlay(), 'native');
 assert.equal(nativeOpenCalls, 1);
 
@@ -56,6 +89,8 @@ let fallbackUrl = '';
 Object.assign(globalThis, {
   window: {
     NativeAppInfoBridge: {},
+    addEventListener: () => undefined,
+    navigator: { userAgent: '' },
     matchMedia: () => ({ matches: false }),
     sessionStorage: { getItem: () => null },
     location: { assign: (url: string) => { fallbackUrl = url; } }
