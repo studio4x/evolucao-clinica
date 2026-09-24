@@ -10,6 +10,7 @@ const anamnesisServiceSource = readFileSync('src/services/anamnesis.ts', 'utf8')
 const anamnesisCardSource = readFileSync('src/components/patients/PatientAnamnesisSummaryCard.tsx', 'utf8');
 const anamnesisModelsSource = readFileSync('src/pages/AnamnesisModels.tsx', 'utf8');
 const anamnesisBuilderSource = readFileSync('src/pages/AnamnesisBuilder.tsx', 'utf8');
+const anamnesisRendererSource = readFileSync('src/components/anamnesis/AnamnesisRenderer.tsx', 'utf8');
 const anamnesisPdfSource = readFileSync('src/utils/anamnesisPdf.ts', 'utf8');
 const prontuarioPdfSource = readFileSync('src/utils/prontuarioPdf.ts', 'utf8');
 const baseMigrationSource = readFileSync('supabase/migrations/20260918192205_add_versioned_patient_anamnesis.sql', 'utf8');
@@ -102,6 +103,17 @@ assert.match(anamnesisBuilderSource, /sourceTemplate \? 'Você está usando um m
 assert.match(anamnesisBuilderSource, /sourceTemplateId: sourceTemplate\?\.kind === 'system'/);
 assert.match(anamnesisBuilderSource, /templateId \? items\.find/);
 assert.match(anamnesisBuilderSource, /md:hidden/);
+assert.match(anamnesisBuilderSource, /renderFieldPreview/);
+assert.match(anamnesisBuilderSource, /Pré-visualização/);
+assert.match(anamnesisBuilderSource, /Nome do campo/);
+assert.match(anamnesisBuilderSource, /Adicione opções para visualizar este campo/);
+assert.match(anamnesisBuilderSource, /disabled onChange=\{\(\) => undefined\}/);
+assert.match(anamnesisRendererSource, /export function AnamnesisFieldInput/);
+assert.match(anamnesisRendererSource, /field\.type === 'textarea'/);
+assert.match(anamnesisRendererSource, /field\.type === 'select'/);
+assert.match(anamnesisRendererSource, /field\.type === 'multiselect'/);
+assert.match(anamnesisRendererSource, /field\.type === 'yes_no'/);
+assert.match(anamnesisRendererSource, /type=\{field\.type === 'number' \? 'number' : field\.type === 'date' \? 'date' : 'text'\}/);
 
 assert.match(anamnesisPdfSource, /generateAnamnesisPDF/);
 assert.match(anamnesisPdfSource, /generateProntuarioPDF/);
