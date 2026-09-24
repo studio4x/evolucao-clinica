@@ -81,6 +81,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "firebase-admin": "^13.10.0",
+    "heic2any": "^0.0.4",
     "idb-keyval": "^6.2.2",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",

@@ -23,6 +23,7 @@ import {
   createPatientPhotoSignedUrl,
   removePatientPhoto,
   uploadPatientPhoto,
+  isPatientPhotoHeic,
   validatePatientPhotoSource,
 } from '../services/patientPhoto';
 import {
@@ -253,6 +254,26 @@ const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
     return `data:${value.type || 'application/octet-stream'};base64,${window.btoa(binary)}`;
   } catch {
     throw new Error('O navegador não conseguiu ler os bytes da foto. Tente JPG ou PNG; fotos HEIC/HEIF precisam ser convertidas antes.');
+  }
+};
+
+const preparePatientPhotoSource = async (file: File): Promise<Blob> => {
+  if (!isPatientPhotoHeic(file)) return file;
+
+  try {
+    const { default: convertHeic } = await import('heic2any');
+    const converted = await convertHeic({
+      blob: file,
+      toType: 'image/jpeg',
+      quality: 0.92,
+    });
+    const convertedBlob = Array.isArray(converted) ? converted[0] : converted;
+    if (!convertedBlob || convertedBlob.size <= 0) throw new Error('empty conversion');
+    return convertedBlob.type === 'image/jpeg'
+      ? convertedBlob
+      : convertedBlob.slice(0, convertedBlob.size, 'image/jpeg');
+  } catch {
+    throw new Error('Não foi possível converter a foto HEIC/HEIF neste dispositivo. Tente JPG ou PNG.');
   }
 };
 
@@ -609,7 +630,8 @@ export default function PatientForm() {
 
     let sourceUrl = '';
     try {
-      sourceUrl = createPatientPhotoObjectUrl(file);
+      const preparedPhoto = await preparePatientPhotoSource(file);
+      sourceUrl = createPatientPhotoObjectUrl(preparedPhoto);
       let initialCrop: Blob;
       try {
         initialCrop = await createCroppedImageBlob({
@@ -623,7 +645,7 @@ export default function PatientForm() {
         });
       } catch (objectUrlError) {
         revokePatientPhotoObjectUrl(sourceUrl);
-        sourceUrl = await readPatientPhotoAsDataUrl(file);
+        sourceUrl = await readPatientPhotoAsDataUrl(preparedPhoto);
         try {
           initialCrop = await createCroppedImageBlob({
             imageUrl: sourceUrl,
@@ -651,7 +673,7 @@ export default function PatientForm() {
       revokePatientPhotoObjectUrl(sourceUrl);
       console.error('[PatientForm] Não foi possível preparar a foto selecionada:', error);
       const reason = error instanceof Error ? error.message : 'O celular não conseguiu abrir este arquivo.';
-      await showAlert(`Não foi possível preparar "${file.name}". ${reason} Verifique se a foto está em JPG, PNG ou WEBP e tente novamente.`, {
+      await showAlert(`Não foi possível preparar "${file.name}". ${reason} Verifique se a foto está em JPG, PNG, WEBP ou HEIC/HEIF e tente novamente.`, {
         title: 'Erro na Foto',
         variant: 'danger',
         icon: 'warning',
@@ -1426,7 +1448,7 @@ export default function PatientForm() {
                   <span>{preparingPhoto ? 'Preparando foto...' : photoPreviewUrl ? 'Trocar foto' : 'Adicionar foto'}</span>
                   <input
                     type="file"
-                    accept="image/png,image/jpeg,image/jpg,image/webp"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/heic,image/heif,.heic,.heif"
                     onChange={(event) => void handlePhotoSelection(event)}
                     disabled={loading || preparingPhoto}
                     className="hidden"
@@ -1457,7 +1479,7 @@ export default function PatientForm() {
                 )}
               </div>
               <p className="text-[10px] leading-relaxed text-brand-text-muted">
-                Formatos PNG, JPG ou WEBP, até 10 MB. A prévia é criada automaticamente; use “Ajustar foto” se quiser mudar o enquadramento.
+                Formatos PNG, JPG, WEBP ou HEIC/HEIF, até 10 MB. Fotos HEIC/HEIF são convertidas para JPEG no dispositivo. A prévia é criada automaticamente; use “Ajustar foto” se quiser mudar o enquadramento.
               </p>
             </div>
           </div>

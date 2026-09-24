@@ -46,6 +46,16 @@ const DEFAULT_ASPECT_OPTIONS: ImageCropAspectOption[] = [
 const clampPosition = (value: number) => Math.max(-1, Math.min(1, value));
 const DEFAULT_CROP_ZOOM = 1.15;
 
+const getRenderedImageAspect = (image: HTMLImageElement): number | null => {
+  const renderedBounds = image.getBoundingClientRect();
+  const renderedAspect = renderedBounds.width / renderedBounds.height;
+  if (renderedAspect > 0) return renderedAspect;
+
+  return image.naturalWidth > 0 && image.naturalHeight > 0
+    ? image.naturalWidth / image.naturalHeight
+    : null;
+};
+
 export const createCroppedImageBlob = ({
   imageUrl,
   aspect,
@@ -122,6 +132,7 @@ export function ImageCropEditor({
   const [cropPosition, setCropPosition] = useState<CropPosition>({ x: 0, y: 0 });
   const [imageAspect, setImageAspect] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
+  const imageRef = useRef<HTMLImageElement | null>(null);
   const dragStart = useRef<{
     x: number;
     y: number;
@@ -134,6 +145,17 @@ export function ImageCropEditor({
     setCropZoom(DEFAULT_CROP_ZOOM);
     setCropPosition({ x: 0, y: 0 });
     setImageAspect(null);
+
+    const syncImageAspect = () => {
+      const image = imageRef.current;
+      if (!image?.complete) return;
+      const nextAspect = getRenderedImageAspect(image);
+      if (nextAspect) setImageAspect(nextAspect);
+    };
+
+    syncImageAspect();
+    const frame = window.requestAnimationFrame(syncImageAspect);
+    return () => window.cancelAnimationFrame(frame);
   }, [imageUrl, initialAspect]);
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -246,19 +268,14 @@ export function ImageCropEditor({
         onTouchCancel={() => { dragStart.current = null; }}
       >
         <img
+          ref={imageRef}
           src={imageUrl}
           alt={imageAlt}
           draggable={false}
           className="absolute max-w-none select-none transition-[width,left,top] duration-75"
           onLoad={(event) => {
-            const { naturalWidth, naturalHeight } = event.currentTarget;
-            const renderedBounds = event.currentTarget.getBoundingClientRect();
-            const renderedAspect = renderedBounds.width / renderedBounds.height;
-            if (renderedAspect > 0) {
-              setImageAspect(renderedAspect);
-            } else if (naturalWidth > 0 && naturalHeight > 0) {
-              setImageAspect(naturalWidth / naturalHeight);
-            }
+            const nextAspect = getRenderedImageAspect(event.currentTarget);
+            if (nextAspect) setImageAspect(nextAspect);
           }}
           style={{
             width: `${imageWidthPercent}%`,

@@ -10,12 +10,14 @@ const patientsSource = readFileSync('src/pages/Patients.tsx', 'utf8');
 const detailSource = readFileSync('src/pages/PatientDetail.tsx', 'utf8');
 const serverSource = readFileSync('server.ts', 'utf8');
 const migrationSource = readFileSync('supabase/migrations/20260920131514_add_private_patient_photos.sql', 'utf8');
+const jpegMigrationSource = readFileSync('supabase/migrations/20260924184838_allow_patient_photo_jpeg.sql', 'utf8');
 
 assert.match(migrationSource, /add column if not exists photo_path text/i);
 assert.match(migrationSource, /'patient-photos',[\s\S]*?false,[\s\S]*?2097152/);
 assert.match(migrationSource, /patient_photos_select_own[\s\S]*?to authenticated[\s\S]*?auth\.uid\(\)/);
 assert.match(migrationSource, /patient_photos_insert_own[\s\S]*?to authenticated[\s\S]*?auth\.uid\(\)/);
 assert.match(migrationSource, /patient_photos_delete_own[\s\S]*?to authenticated[\s\S]*?auth\.uid\(\)/);
+assert.match(jpegMigrationSource, /allowed_mime_types\s*=\s*array\['image\/jpeg',\s*'image\/png',\s*'image\/webp'\]/i);
 
 assert.match(cropEditorSource, /createCroppedImageBlob/);
 assert.ok(
@@ -37,15 +39,19 @@ assert.match(cropEditorSource, /naturalWidth.*naturalHeight/, 'A prévia deve us
 assert.match(cropEditorSource, /className="absolute max-w-none/, 'A prévia não pode ser limitada ao tamanho da moldura pelo estilo global das imagens.');
 assert.match(cropEditorSource, /height: 'auto'/, 'A prévia deve preservar a proporção natural da imagem.');
 assert.match(cropEditorSource, /getBoundingClientRect\(\)/, 'A prévia deve usar a proporção efetivamente renderizada, inclusive para fotos com orientação EXIF.');
+assert.match(cropEditorSource, /imageRef/);
+assert.match(cropEditorSource, /requestAnimationFrame\(syncImageAspect\)/, 'A prévia deve recalcular a proporção quando o carregamento ocorrer antes do efeito inicial no mobile.');
 assert.match(cropEditorSource, /outputMimeType.*image\/jpeg|image\/jpeg.*outputMimeType/, 'O editor deve permitir exportar a foto do paciente em JPEG comprimido.');
 assert.match(cropEditorSource, /outputQuality/, 'O editor deve aceitar qualidade controlada na compressão.');
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
 assert.match(formSource, /createPatientPhotoObjectUrl/);
+assert.match(formSource, /preparePatientPhotoSource/);
+assert.match(formSource, /import\('heic2any'\)/, 'Fotos HEIC/HEIF devem ser convertidas antes do recorte.');
 assert.match(formSource, /value\.arrayBuffer\(\)/, 'O WebView deve ter um fallback que copia os bytes antes de limpar o input.');
 assert.doesNotMatch(formSource, /new FileReader\(\)/);
-assert.match(formSource, /handlePhotoSelection[\s\S]*?const input = event\.currentTarget[\s\S]*?createPatientPhotoObjectUrl\(file\)[\s\S]*?createCroppedImageBlob\(\{[\s\S]*?imageUrl: sourceUrl[\s\S]*?outputMimeType: 'image\/jpeg'[\s\S]*?outputQuality: 0\.9[\s\S]*?createPatientPhotoObjectUrl\(initialCrop\)[\s\S]*?setPendingPhotoBlob\(initialCrop\)[\s\S]*?setPhotoPreviewUrl\(previewUrl\)[\s\S]*?finally[\s\S]*?input\.value = ''/);
+assert.match(formSource, /handlePhotoSelection[\s\S]*?const input = event\.currentTarget[\s\S]*?preparePatientPhotoSource\(file\)[\s\S]*?createPatientPhotoObjectUrl\(preparedPhoto\)[\s\S]*?createCroppedImageBlob\(\{[\s\S]*?imageUrl: sourceUrl[\s\S]*?outputMimeType: 'image\/jpeg'[\s\S]*?outputQuality: 0\.9[\s\S]*?createPatientPhotoObjectUrl\(initialCrop\)[\s\S]*?setPendingPhotoBlob\(initialCrop\)[\s\S]*?setPhotoPreviewUrl\(previewUrl\)[\s\S]*?finally[\s\S]*?input\.value = ''/);
 assert.match(formSource, /Não foi possível preparar/);
 assert.match(formSource, /file\.name/);
 assert.match(formSource, /outputMimeType="image\/jpeg"/);
@@ -58,6 +64,8 @@ assert.match(patientPhotoServiceSource, /createSignedUrl\(photoPath, 60 \* 60\)/
 assert.match(patientPhotoServiceSource, /upsert: false/);
 assert.match(patientPhotoServiceSource, /-photo\.jpg/);
 assert.match(patientPhotoServiceSource, /contentType: 'image\/jpeg'/);
+assert.match(patientPhotoServiceSource, /image\/heic/);
+assert.match(patientPhotoServiceSource, /isPatientPhotoHeic/);
 assert.doesNotMatch(patientPhotoServiceSource, /getPublicUrl/);
 assert.match(patientPhotoSource, /createPatientPhotoSignedUrl\(photoPath\)/);
 assert.match(patientsSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);
