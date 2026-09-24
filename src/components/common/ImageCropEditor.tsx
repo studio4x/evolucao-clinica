@@ -199,6 +199,7 @@ export function ImageCropEditor({
           style={{
             objectPosition: `${50 + cropPosition.x * 50}% ${50 + cropPosition.y * 50}%`,
             transform: `scale(${cropZoom})`,
+            transformOrigin: 'center center',
           }}
         />
         <div className="pointer-events-none absolute inset-0 border-8 border-white/25" />

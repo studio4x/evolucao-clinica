@@ -24,6 +24,7 @@ assert.ok(
 );
 assert.match(cropEditorSource, /Arraste para mover/);
 assert.match(cropEditorSource, /Aproximação/);
+assert.match(cropEditorSource, /transformOrigin: 'center center'/, 'O zoom do recorte deve permanecer centralizado na pré-visualização.');
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
@@ -44,6 +45,8 @@ assert.match(patientsSource, /PATIENTS_GUIDE_STEPS/);
 assert.match(patientsSource, /PATIENTS_SUPPORT_HREF/);
 assert.match(patientsSource, /Como funciona a lista de pacientes/);
 assert.match(detailSource, /<PatientPhoto photoPath=\{patient\.photo_path\}/);
+assert.match(patientPhotoSource, /object-cover object-center/, 'A foto exibida deve usar o centro do recorte aplicado.');
+assert.match(detailSource, /className="h-16 w-16 shrink-0 sm:h-20 sm:w-20 xl:h-16 xl:w-16"/, 'A foto do cabeçalho deve crescer sem perder o limite responsivo.');
 assert.match(serverSource, /\.from\("patient-photos"\)[\s\S]*?\.remove\(photoPaths\)/);
 
 console.log('Patient private photo tests passed.');

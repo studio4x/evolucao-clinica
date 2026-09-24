@@ -2483,7 +2483,7 @@ export default function PatientDetail() {
       <div className="sticky inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,var(--app-safe-area-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 items-start gap-3 xl:items-center">
-            <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-11 w-11 shrink-0 sm:h-12 sm:w-12" />
+            <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-16 w-16 shrink-0 sm:h-20 sm:w-20 xl:h-16 xl:w-16" />
             <div className="min-w-0 flex-1 xl:flex xl:items-center xl:gap-3">
               <h1 className="line-clamp-2 max-w-full break-words text-2xl font-display font-bold leading-tight text-brand-text xl:truncate xl:text-3xl">
                 {patient.full_name}

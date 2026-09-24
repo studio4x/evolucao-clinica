@@ -1366,7 +1366,7 @@ export default function PatientForm() {
           <div className="flex flex-col gap-4 rounded-2xl border border-brand-border/70 bg-brand-bg/30 p-4 sm:flex-row sm:items-center">
             <div className="flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-brand-primary/10 text-brand-primary shadow-sm">
               {photoPreviewUrl ? (
-                <img src={photoPreviewUrl} alt="Prévia da foto do paciente" className="h-full w-full object-cover" />
+                <img src={photoPreviewUrl} alt="Prévia da foto do paciente" className="h-full w-full object-cover object-center" />
               ) : (
                 <UserRound size={44} aria-hidden="true" />
               )}

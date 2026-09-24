@@ -42,7 +42,7 @@ export function PatientPhoto({ photoPath, patientName, className = 'h-12 w-12' }
       aria-label={!signedUrl ? `Paciente ${patientName || 'sem foto'}` : undefined}
     >
       {signedUrl ? (
-        <img src={signedUrl} alt={`Foto de ${patientName || 'paciente'}`} className="h-full w-full object-cover" />
+        <img src={signedUrl} alt={`Foto de ${patientName || 'paciente'}`} className="h-full w-full object-cover object-center" />
       ) : initials ? (
         <span className="text-sm font-bold" aria-hidden="true">{initials}</span>
       ) : (
