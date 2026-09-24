@@ -6,6 +6,7 @@ import {
   normalizeAnamnesisSchema,
 } from '../src/services/anamnesisSchema';
 import { buildPatientContextSnapshot, getAnamnesisFieldAnswerKey, resolveAnamnesisFieldValue } from '../src/services/anamnesisValueResolver';
+import { buildAnamnesisPdfContent } from '../src/utils/anamnesisPdf';
 
 const legacy = {
   sections: [{ key: 'history', title: 'Histórico', fields: [{ key: 'notes', label: 'Notas', type: 'textarea' }] }],
@@ -41,5 +42,41 @@ assert.deepEqual(buildPatientContextSnapshot({
   full_name: 'Maria', birth_date: null, cpf: null, phone: '5511999999999', postal_code: null,
   street: null, address_number: null, address_complement: null, neighborhood: null, city: 'São Paulo', state: 'SP',
 });
+
+const legacyCompatibilitySchema = {
+  sections: [{
+    key: 'history',
+    title: 'Histórico legado',
+    fields: [
+      { key: 'legacy_notes', label: 'Notas do registro legado', type: 'textarea' as const },
+      { key: 'legacy_scale', label: 'Escala legada', type: 'scale' as const, min: 1, max: 5 },
+    ],
+  }],
+};
+const legacyCompatibilityAnswers = { legacy_notes: 'Resposta legada QA', legacy_scale: 4 };
+const legacyCompatibilityRecord = {
+  templateName: 'Geral',
+  templateVersion: 1,
+  status: 'completed',
+  createdAt: '2026-09-24T17:47:46.887Z',
+  updatedAt: '2026-09-24T17:47:46.887Z',
+  completedAt: '2026-09-24T17:47:46.887Z',
+  templateSnapshot: legacyCompatibilitySchema,
+  answers: legacyCompatibilityAnswers,
+  patientContextSnapshot: null,
+} as any;
+
+assert.equal(validateAnamnesisSchema(legacyCompatibilitySchema, { legacy: true }).valid, true);
+assert.equal(legacyCompatibilitySchema.sections.some((section) => section.key === BASIC_INFORMATION_SECTION_KEY), false);
+assert.equal(getAnamnesisFieldAnswerKey(legacyCompatibilitySchema.sections[0].fields[0]), 'legacy_notes');
+assert.equal(resolveAnamnesisFieldValue(legacyCompatibilitySchema.sections[0].fields[0], legacyCompatibilityAnswers, null), 'Resposta legada QA');
+assert.equal(resolveAnamnesisFieldValue(legacyCompatibilitySchema.sections[0].fields[1], legacyCompatibilityAnswers, null), 4);
+assert.equal(legacyCompatibilityRecord.patientContextSnapshot, null);
+const legacyPdfContent = buildAnamnesisPdfContent(legacyCompatibilityRecord);
+assert.match(legacyPdfContent, /Histórico legado/);
+assert.match(legacyPdfContent, /Resposta legada QA/);
+assert.match(legacyPdfContent, /Escala legada/);
+assert.match(legacyPdfContent, /\n4\n/);
+assert.doesNotMatch(legacyPdfContent, /Informações básicas/);
 
 console.log('Anamnesis foundation tests passed.');
