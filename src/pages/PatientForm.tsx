@@ -37,6 +37,7 @@ import {
   sessionScheduleToLegacy,
   type PatientSessionScheduleEntry,
 } from '../utils/patientSessionSchedule';
+import { fetchBrazilianAddress, formatPostalCode, isCompletePostalCode } from '../services/cep';
 
 declare global {
   interface Window {
@@ -107,6 +108,18 @@ function PatientEditGuideButton({ compact = false, expanded, onOpen }: PatientEd
   );
 }
 
+function PatientFormSection({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-5 border-b border-brand-border/70 pb-7 last:border-b-0 last:pb-0" aria-labelledby={`patient-form-section-${title}`}>
+      <div>
+        <h2 id={`patient-form-section-${title}`} className="text-base font-semibold text-brand-text">{title}</h2>
+        {description && <p className="mt-1 text-xs leading-relaxed text-brand-text-muted">{description}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 type PatientFormValues = {
   full_name: string;
   birth_date: string;
@@ -123,6 +136,13 @@ type PatientFormValues = {
   evolution_reminder_delay_hours: number;
   session_schedule: PatientSessionScheduleEntry[];
   default_template_id: string;
+  postal_code: string;
+  street: string;
+  address_number: string;
+  address_complement: string;
+  neighborhood: string;
+  city: string;
+  state: string;
 };
 
 type PatientFormDraft = {
@@ -183,6 +203,13 @@ const emptyPatientFormValues = (): PatientFormValues => ({
   evolution_reminder_delay_hours: 1,
   session_schedule: [],
   default_template_id: '',
+  postal_code: '',
+  street: '',
+  address_number: '',
+  address_complement: '',
+  neighborhood: '',
+  city: '',
+  state: '',
 });
 
 const formatCpf = (value: string) => {
@@ -240,11 +267,9 @@ export default function PatientForm() {
   const [searchParams] = useSearchParams();
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken } = useAuthStore();
   const onboardingState = getOnboardingState(user?.id);
-  const isOnboardingMode = searchParams.get('onboarding') === '1' || (!id && (
-    onboardingState?.step === 'patient'
-    || onboardingState?.step === 'evolution'
-    || onboardingState?.step === 'agenda'
-  ));
+  // O parâmetro é o contexto explícito transmitido pelo fluxo de onboarding.
+  // Um estado pendente, sozinho, não transforma uma criação comum em onboarding.
+  const isOnboardingMode = searchParams.get('onboarding') === '1';
   const hasGoogleSession = Boolean(googleAccessToken);
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const restoredDraftUserRef = useRef<string | null>(null);
@@ -286,6 +311,9 @@ export default function PatientForm() {
   const [showPhotoEditor, setShowPhotoEditor] = useState(false);
   const [preparingPhoto, setPreparingPhoto] = useState(false);
   const pendingPatientIdRef = useRef<string | null>(null);
+  const [postalCodeLookupState, setPostalCodeLookupState] = useState<'idle' | 'loading' | 'not-found' | 'error'>('idle');
+  const postalCodeLookupRef = useRef<AbortController | null>(null);
+  const lastLookedUpPostalCodeRef = useRef('');
 
   const getDraftPatientId = () => pendingPatientIdRef.current || id || undefined;
 
@@ -316,6 +344,7 @@ export default function PatientForm() {
     if (draft) {
       pendingPatientIdRef.current = draft.patientId || null;
       setFormData((prev) => ({ ...prev, ...draft.formData }));
+      lastLookedUpPostalCodeRef.current = String(draft.formData?.postal_code || '').replace(/\D/g, '');
       const restoredPhone = splitStoredWhatsAppNumber(
         `${draft.ddi || ''}${draft.formData?.phone || ''}`,
         DEFAULT_WHATSAPP_COUNTRY,
@@ -382,8 +411,16 @@ export default function PatientForm() {
               evolution_reminder_active: data.evolution_reminder_active ?? false,
               evolution_reminder_delay_hours: Number(data.evolution_reminder_delay_hours ?? 1),
               session_schedule: normalizePatientSessionSchedule(data.session_schedule, data.session_days, data.session_time),
-              default_template_id: data.default_template_id || ''
+              default_template_id: data.default_template_id || '',
+              postal_code: formatPostalCode(data.postal_code || ''),
+              street: data.street || '',
+              address_number: data.address_number || '',
+              address_complement: data.address_complement || '',
+              neighborhood: data.neighborhood || '',
+              city: data.city || '',
+              state: data.state || '',
             });
+            lastLookedUpPostalCodeRef.current = String(data.postal_code || '').replace(/\D/g, '');
             setPhoneCountry(storedPhone.country);
             const storedPhotoPath = String(data.photo_path || '');
             setPhotoPath(storedPhotoPath);
@@ -404,6 +441,40 @@ export default function PatientForm() {
       fetchPatient();
     }
   }, [id]);
+
+  useEffect(() => () => postalCodeLookupRef.current?.abort(), []);
+
+  const lookupPostalCode = async (value: string) => {
+    const normalized = value.replace(/\D/g, '');
+    if (!isCompletePostalCode(normalized) || normalized === lastLookedUpPostalCodeRef.current) return;
+    postalCodeLookupRef.current?.abort();
+    const controller = new AbortController();
+    postalCodeLookupRef.current = controller;
+    lastLookedUpPostalCodeRef.current = normalized;
+    setPostalCodeLookupState('loading');
+    try {
+      const address = await fetchBrazilianAddress(normalized, controller.signal);
+      if (!address) {
+        setPostalCodeLookupState('not-found');
+        return;
+      }
+      setFormData((current) => ({
+        ...current,
+        postal_code: address.postal_code,
+        street: address.street,
+        address_complement: address.address_complement || current.address_complement,
+        neighborhood: address.neighborhood,
+        city: address.city,
+        state: address.state,
+      }));
+      setPostalCodeLookupState('idle');
+    } catch (error) {
+      if ((error as Error)?.name === 'AbortError') return;
+      lastLookedUpPostalCodeRef.current = '';
+      console.warn('[PatientForm] Não foi possível consultar o CEP:', error);
+      setPostalCodeLookupState('error');
+    }
+  };
 
   const handlePhotoSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const input = event.currentTarget;
@@ -945,6 +1016,13 @@ export default function PatientForm() {
         session_time: legacySchedule.sessionTime,
         default_template_id: formData.default_template_id || null,
         photo_path: nextPhotoPath || null,
+        postal_code: formData.postal_code.replace(/\D/g, '') || null,
+        street: formData.street || null,
+        address_number: formData.address_number || null,
+        address_complement: formData.address_complement || null,
+        neighborhood: formData.neighborhood || null,
+        city: formData.city || null,
+        state: formData.state || null,
       };
 
       // Só inclui campos do Google Drive se eles tiverem valor (ou envia null de forma explícita)
@@ -1125,6 +1203,7 @@ export default function PatientForm() {
       />
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-6">
+        <PatientFormSection title="Identificação do paciente" description="Dados principais para identificar o paciente no prontuário.">
         <div>
           <label className="block text-sm font-medium text-brand-text mb-1">Nome Completo</label>
           <input
@@ -1241,6 +1320,9 @@ export default function PatientForm() {
           />
         </div>
 
+        </PatientFormSection>
+
+        <PatientFormSection title="Contato" description="Dados destinados ao contato com o paciente.">
         <div>
           <label className="block text-sm font-medium text-brand-text mb-1">
             Telefone / WhatsApp <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
@@ -1284,57 +1366,50 @@ export default function PatientForm() {
             Usado para enviar mensagens rápidas de aniversário via WhatsApp.
           </p>
         </div>
+        <p className="text-[11px] text-brand-text-muted">Os dados desta seção são destinados ao contato com o paciente.</p>
+        </PatientFormSection>
 
-        <div>
-          <label className="block text-sm font-medium text-brand-text mb-1">Observações</label>
-          <textarea
-            rows={4}
-            value={formData.notes}
-            onChange={e => setFormData({...formData, notes: e.target.value})}
-            className="input-field p-2"
-          />
-        </div>
+        <PatientFormSection title="Endereço" description="O CEP ajuda a preencher os dados automaticamente. Todos os campos continuam editáveis.">
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-brand-text">CEP <span className="text-brand-text-muted font-normal text-xs">(opcional)</span></label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                  placeholder="00000-000"
+                  value={formData.postal_code}
+                  onChange={(event) => {
+                    const postal_code = formatPostalCode(event.target.value);
+                    if (postal_code.replace(/\D/g, '') !== lastLookedUpPostalCodeRef.current) setPostalCodeLookupState('idle');
+                    setFormData((current) => ({ ...current, postal_code }));
+                  }}
+                  onBlur={(event) => void lookupPostalCode(event.target.value)}
+                  className="input-field p-2 sm:max-w-xs"
+                  maxLength={9}
+                />
+                {postalCodeLookupState === 'loading' && <span className="absolute inset-y-0 left-44 flex items-center gap-1 text-xs text-brand-text-muted"><Loader2 size={13} className="animate-spin" /> Buscando endereço...</span>}
+              </div>
+              {postalCodeLookupState === 'not-found' && <p className="mt-1 text-xs text-amber-700">CEP não encontrado. Confira o número ou preencha o endereço manualmente.</p>}
+              {postalCodeLookupState === 'error' && <p className="mt-1 text-xs text-amber-700">Não foi possível localizar este CEP. Você pode preencher o endereço manualmente.</p>}
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
+              <label className="text-sm font-medium text-brand-text">Logradouro<input type="text" autoComplete="street-address" value={formData.street} onChange={(e) => setFormData({ ...formData, street: e.target.value })} className="input-field mt-1 p-2" /></label>
+              <label className="text-sm font-medium text-brand-text">Número<input type="text" autoComplete="address-line2" value={formData.address_number} onChange={(e) => setFormData({ ...formData, address_number: e.target.value })} className="input-field mt-1 p-2" /></label>
+            </div>
+            <label className="text-sm font-medium text-brand-text">Complemento <span className="text-brand-text-muted font-normal text-xs">(opcional)</span><input type="text" value={formData.address_complement} onChange={(e) => setFormData({ ...formData, address_complement: e.target.value })} className="input-field mt-1 p-2" /></label>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_100px]">
+              <label className="text-sm font-medium text-brand-text">Bairro<input type="text" autoComplete="address-level3" value={formData.neighborhood} onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })} className="input-field mt-1 p-2" /></label>
+              <label className="text-sm font-medium text-brand-text">Cidade<input type="text" autoComplete="address-level2" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} className="input-field mt-1 p-2" /></label>
+              <label className="text-sm font-medium text-brand-text">UF<input type="text" autoComplete="address-level1" maxLength={2} value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase().slice(0, 2) })} className="input-field mt-1 p-2" /></label>
+            </div>
+            <p className="text-[11px] leading-relaxed text-brand-text-muted">Precisa registrar outras informações sobre o paciente? Histórico, queixas, antecedentes e demais informações relevantes para o acompanhamento podem ser registrados na Anamnese.</p>
+          </div>
+        </PatientFormSection>
 
-        <div>
-          <label className="block text-sm font-medium text-brand-text mb-1">Template de Evolução Padrão</label>
-          <select
-            value={formData.default_template_id}
-            onChange={e => setFormData({...formData, default_template_id: e.target.value})}
-            className="input-field p-2"
-          >
-            <option value="">Sem template padrão (Formatação Geral)</option>
-            {templates.map(t => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={() => setIsTemplateHelpOpen(true)}
-            className="mt-1.5 text-xs text-brand-primary hover:text-brand-primary-hover hover:underline flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0"
-          >
-            <HelpCircle className="w-3.5 h-3.5" />
-            Não sabe qual escolher? Ver diferenças dos templates
-          </button>
-          <p className="text-xs text-brand-text-muted mt-1.5">
-            Define o formato metodológico clínico padrão para as evoluções deste paciente (ex: SOAP, ABA, TCC).
-          </p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-brand-text mb-1">Status</label>
-          <select
-            value={formData.status}
-            onChange={e => setFormData({...formData, status: e.target.value as 'active' | 'inactive'})}
-            className="input-field p-2"
-          >
-            <option value="active">Ativo</option>
-            <option value="inactive">Inativo</option>
-          </select>
-        </div>
-
-        <div className="border-t border-brand-border pt-6 space-y-4">
+        <PatientFormSection title="Sessões e lembretes" description="Configure os dias, horários e lembretes relacionados às sessões do paciente.">
+        <div className="space-y-4">
           <div>
             <h3 className="text-lg font-medium text-brand-text">Dia da semana e Horário da sessão ou das sessões</h3>
             <p className="mt-1 text-xs text-brand-text-muted">
@@ -1465,8 +1540,10 @@ export default function PatientForm() {
             )}
           </div>
         </div>
+        </PatientFormSection>
 
-        <div className="border-t border-brand-border pt-6">
+        <PatientFormSection title="Prontuário e Google Drive" description="Vincule ou crie o prontuário do paciente no Google Drive.">
+        <div>
           <h3 className="text-lg font-medium text-brand-text mb-4">Prontuário no Google Docs</h3>
           
           {formData.google_doc_id ? (
@@ -1666,6 +1743,54 @@ export default function PatientForm() {
             )}
           </p>
         </div>
+        </PatientFormSection>
+
+        <PatientFormSection title="Informações adicionais">
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">Observações</label>
+            <textarea
+              rows={4}
+              value={formData.notes}
+              onChange={e => setFormData({...formData, notes: e.target.value})}
+              className="input-field p-2"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">Template de Evolução Padrão</label>
+            <select
+              value={formData.default_template_id}
+              onChange={e => setFormData({...formData, default_template_id: e.target.value})}
+              className="input-field p-2"
+            >
+              <option value="">Sem template padrão (Formatação Geral)</option>
+              {templates.map(t => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => setIsTemplateHelpOpen(true)}
+              className="mt-1.5 text-xs text-brand-primary hover:text-brand-primary-hover hover:underline flex items-center gap-1 font-medium bg-transparent border-0 cursor-pointer p-0"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              Não sabe qual escolher? Ver diferenças dos templates
+            </button>
+            <p className="text-xs text-brand-text-muted mt-1.5">Define o formato metodológico clínico padrão para as evoluções deste paciente (ex: SOAP, ABA, TCC).</p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-brand-text mb-1">Status</label>
+            <select
+              value={formData.status}
+              onChange={e => setFormData({...formData, status: e.target.value as 'active' | 'inactive'})}
+              className="input-field p-2"
+            >
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+            </select>
+          </div>
+        </PatientFormSection>
 
         {/* Custom Folder Explorer Modal */}
         {showExplorer && (
