@@ -20,7 +20,6 @@ import { getReportBodyContent } from '../utils/reportContent';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { showAlert } from '../store/modalStore';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
-import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { PatientPhoto } from '../components/patients/PatientPhoto';
 import { removePatientPhoto } from '../services/patientPhoto';
 import { RichTextEditor, RichTextPreview } from '../components/common/RichTextEditor';
@@ -233,6 +232,7 @@ export default function PatientDetail() {
   const [syncingFromGoogleDocs, setSyncingFromGoogleDocs] = useState(false);
   const [googleDocSyncMessage, setGoogleDocSyncMessage] = useState('');
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+  const [showPatientActionsMenu, setShowPatientActionsMenu] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -2480,62 +2480,106 @@ export default function PatientDetail() {
           .patient-mobile-tab-enter-next, .patient-mobile-tab-enter-previous { animation: none; }
         }
       `}</style>
-      <div className="xl:hidden h-40" aria-hidden="true" />
+      <div className="xl:hidden h-56" aria-hidden="true" />
       <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,var(--app-safe-area-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
-        <PanelPageHeader
-          title={(
-            <span className="flex min-w-0 items-center gap-3">
-              <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-11 w-11 sm:h-12 sm:w-12" />
-              <span className="truncate">{patient.full_name}</span>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex min-w-0 items-start gap-3 xl:items-center">
+            <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-11 w-11 shrink-0 sm:h-12 sm:w-12" />
+            <div className="min-w-0 flex-1 xl:flex xl:items-center xl:gap-3">
+              <h1 className="line-clamp-2 max-w-full break-words text-2xl font-display font-bold leading-tight text-brand-text xl:truncate xl:text-3xl">
+                {patient.full_name}
+              </h1>
               {patient.status === 'active' ? (
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                <span className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 xl:mt-0">
                   <BadgeCheck size={14} aria-hidden="true" />
                   <span>Paciente ativo</span>
                 </span>
               ) : (
-                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                <span className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 xl:mt-0">
                   <CircleOff size={14} aria-hidden="true" />
                   <span>Paciente inativo</span>
                 </span>
               )}
-            </span>
-          )}
-          titleActions={<FeatureGuideButton label="os Detalhes do Paciente" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
-          mobileActionsInline
-          actions={<>
-            <span className="sm:hidden">
+              <span className="hidden xl:inline-flex xl:ml-1">
+                <FeatureGuideButton label="os Detalhes do Paciente" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
+              </span>
+            </div>
+          </div>
+
+          <div className="flex w-full items-center justify-end gap-2 xl:w-auto">
+            <span className="xl:hidden">
               <FeatureGuideButton compact label="os Detalhes do Paciente" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
             </span>
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="btn-outline h-10 w-10 shrink-0 p-0 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 sm:h-auto sm:w-auto sm:px-4"
-              title="Excluir paciente"
-              aria-label="Excluir paciente"
-            >
-              <Trash2 size={18} className="sm:mr-1.5" />
-              <span className="hidden sm:inline">Excluir</span>
-            </button>
             <Link
               to={`/painel/patients/${id}/edit`}
-              className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
+              className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0 xl:h-auto xl:w-auto xl:px-4"
               title="Editar paciente"
               aria-label="Editar paciente"
             >
-              <Edit3 size={18} className="sm:mr-1.5" />
-              <span className="hidden sm:inline">Editar</span>
+              <Edit3 size={18} className="xl:mr-1.5" />
+              <span className="hidden xl:inline">Editar</span>
             </Link>
             <Link
               to={`/painel/patients/${id}/evolutions/new`}
-              className="btn-primary flex h-10 w-10 shrink-0 items-center justify-center p-0 sm:h-auto sm:w-auto sm:px-4"
+              className="btn-primary flex h-10 w-10 shrink-0 items-center justify-center p-0 xl:h-auto xl:w-auto xl:px-4"
               title="Nova evolução"
               aria-label="Nova evolução"
             >
-              <Plus size={20} className="sm:mr-2" />
-              <span className="hidden sm:inline">Nova Evolução</span>
+              <Plus size={20} className="xl:mr-2" />
+              <span className="hidden xl:inline">Nova Evolução</span>
             </Link>
-          </>}
-        />
+            <button
+              type="button"
+              onClick={() => setShowDeleteConfirm(true)}
+              className="btn-outline hidden h-10 shrink-0 border-red-200 px-4 text-red-600 hover:bg-red-50 hover:text-red-700 xl:inline-flex"
+              title="Excluir paciente"
+              aria-label="Excluir paciente"
+            >
+              <Trash2 size={18} className="mr-1.5" />
+              <span>Excluir</span>
+            </button>
+            <div className="relative xl:hidden">
+              <button
+                type="button"
+                onClick={() => setShowPatientActionsMenu((open) => !open)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') setShowPatientActionsMenu(false);
+                }}
+                aria-label="Mais ações do paciente"
+                aria-haspopup="menu"
+                aria-expanded={showPatientActionsMenu}
+                title="Mais ações"
+                className="btn-outline flex h-10 w-10 shrink-0 items-center justify-center p-0"
+              >
+                <MoreVertical size={19} aria-hidden="true" />
+              </button>
+              {showPatientActionsMenu && (
+                <>
+                  <button
+                    type="button"
+                    aria-label="Fechar menu de mais ações"
+                    onClick={() => setShowPatientActionsMenu(false)}
+                    className="fixed inset-0 z-[60] cursor-default xl:hidden"
+                  />
+                  <div role="menu" aria-label="Mais ações do paciente" className="absolute right-0 top-12 z-[70] min-w-52 rounded-xl border border-brand-border bg-white p-1.5 shadow-xl">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setShowPatientActionsMenu(false);
+                        setShowDeleteConfirm(true);
+                      }}
+                      className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 size={17} aria-hidden="true" />
+                      <span>Excluir paciente</span>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
 
         <nav className="xl:hidden w-full overflow-hidden" aria-label="Seções do paciente">
           <div className="grid w-full grid-cols-5 items-stretch rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur">
