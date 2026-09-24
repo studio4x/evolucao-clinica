@@ -241,7 +241,11 @@ export function ImageCropEditor({
           className="absolute max-w-none select-none transition-[width,left,top] duration-75"
           onLoad={(event) => {
             const { naturalWidth, naturalHeight } = event.currentTarget;
-            if (naturalWidth > 0 && naturalHeight > 0) {
+            const renderedBounds = event.currentTarget.getBoundingClientRect();
+            const renderedAspect = renderedBounds.width / renderedBounds.height;
+            if (renderedAspect > 0) {
+              setImageAspect(renderedAspect);
+            } else if (naturalWidth > 0 && naturalHeight > 0) {
               setImageAspect(naturalWidth / naturalHeight);
             }
           }}
