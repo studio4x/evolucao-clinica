@@ -34,6 +34,8 @@ assert.match(cropEditorSource, /aria-label="Posição horizontal do recorte"/, '
 assert.match(cropEditorSource, /imageWidthPercent|horizontalOverflowPercent/, 'A prévia deve calcular a área horizontal disponível pelo aspecto natural da imagem.');
 assert.match(cropEditorSource, /imageHeightPercent|verticalOverflowPercent/, 'A prévia deve calcular a área vertical disponível pelo aspecto natural da imagem.');
 assert.match(cropEditorSource, /naturalWidth.*naturalHeight/, 'A prévia deve usar as dimensões naturais carregadas da imagem.');
+assert.match(cropEditorSource, /className="absolute max-w-none/, 'A prévia não pode ser limitada ao tamanho da moldura pelo estilo global das imagens.');
+assert.match(cropEditorSource, /height: 'auto'/, 'A prévia deve preservar a proporção natural da imagem.');
 assert.match(customLogoSource, /<ImageCropEditor/);
 assert.match(formSource, /<ImageCropEditor/);
 assert.match(formSource, /initialAspect=\{1\}/);
