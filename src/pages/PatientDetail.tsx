@@ -2580,9 +2580,9 @@ export default function PatientDetail() {
           </div>
         </div>
 
-        <nav className="mt-3 w-full overflow-x-auto overscroll-x-contain" aria-label="Seções do paciente">
+        <nav className="mt-3 w-full overflow-visible" aria-label="Seções do paciente">
           <div
-            className="flex min-w-max items-stretch gap-0 rounded-2xl border border-brand-border bg-white/80 p-0 shadow-sm backdrop-blur sm:grid sm:min-w-0 sm:grid-cols-5 sm:gap-1 sm:p-1.5"
+            className="grid w-full min-w-0 grid-cols-5 items-stretch gap-0 rounded-2xl border border-brand-border bg-white/80 p-0 shadow-sm backdrop-blur sm:gap-1 sm:p-1.5"
             role="tablist"
             aria-label="Seções do paciente"
           >
@@ -2611,7 +2611,7 @@ export default function PatientDetail() {
                     changeMobileTab(nextTab, nextIndex >= currentIndex ? 'next' : 'previous');
                     requestAnimationFrame(() => document.getElementById(`patient-tab-${nextTab}`)?.focus());
                   }}
-                  className={`flex min-h-14 min-w-[5.75rem] flex-1 flex-col items-center justify-center gap-1 px-2 text-[10px] font-semibold leading-none transition-all first:rounded-l-2xl last:rounded-r-2xl sm:min-w-0 sm:rounded-xl ${
+                  className={`flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[10px] font-semibold leading-none transition-all first:rounded-l-2xl last:rounded-r-2xl sm:rounded-xl sm:px-2 ${
                     isActive
                       ? 'bg-brand-primary text-white shadow-sm shadow-brand-primary/25'
                       : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'

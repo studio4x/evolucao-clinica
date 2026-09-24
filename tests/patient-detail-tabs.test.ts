@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync('src/pages/PatientDetail.tsx', 'utf8');
 
 assert.match(source, /const patientMobileTabs[\s\S]*Resumo[\s\S]*Histórico[\s\S]*Arquivos[\s\S]*Lembretes[\s\S]*Relatórios/);
-assert.match(source, /<nav className="mt-3 w-full overflow-x-auto overscroll-x-contain"/);
+assert.match(source, /<nav className="mt-3 w-full overflow-visible"/);
 assert.match(source, /role="tablist"/);
 assert.match(source, /role="tab"/);
 assert.match(source, /aria-selected=\{isActive\}/);
@@ -17,6 +17,7 @@ assert.doesNotMatch(source, /mobileTabVisibility\([^)]*\)[\s\S]{0,80}xl:block/);
 assert.match(source, /className="w-full min-w-0 space-y-6 outline-none"/, 'O painel ativo deve ocupar toda a largura útil.');
 assert.match(source, /xl:grid-cols-\[minmax\(0,1\.4fr\)_minmax\(320px,1fr\)\]/, 'O Resumo deve usar uma composição responsiva de duas colunas no desktop largo.');
 assert.match(source, /xl:grid xl:w-full xl:min-w-0 xl:grid-cols-1/, 'Histórico e Relatórios devem compartilhar um container de largura total.');
+assert.match(source, /className="grid w-full min-w-0 grid-cols-5/, 'Todas as abas devem aparecer juntas no mobile, sem rolagem horizontal.');
 assert.match(source, /btn-outline flex h-10 min-h-10[\s\S]*Editar paciente/);
 assert.match(source, /btn-primary flex h-10 min-h-10[\s\S]*Nova evolução/);
 assert.match(source, /btn-outline hidden h-10 min-h-10[\s\S]*Excluir paciente/);

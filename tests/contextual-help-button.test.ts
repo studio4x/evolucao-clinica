@@ -14,7 +14,7 @@ assert.match(cssSource, /z-index:\s*60;/, 'z-index deve manter o botão acima da
 
 // 2. Validar componente FeatureGuideButton
 assert.match(featureButtonSource, /app-floating-help-mobile/, 'FeatureGuideButton deve usar a classe flutuante mobile');
-assert.match(featureButtonSource, /md:static/, 'FeatureGuideButton deve resetar para posicionamento estático em telas desktop (md)');
+assert.match(featureButtonSource, /createPortal/, 'FeatureGuideButton mobile deve sair do contexto do cabeçalho e ser fixado no body');
 assert.match(featureButtonSource, /HelpCircle/, 'Ícone de ajuda ? deve ser preservado');
 assert.match(featureButtonSource, /title="Como funciona"/, 'Atributo title deve ser mantido');
 assert.match(featureButtonSource, /aria-expanded/, 'Atributos de acessibilidade devem ser mantidos');
