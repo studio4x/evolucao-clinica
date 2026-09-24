@@ -14,6 +14,8 @@ type CreateCroppedImageBlobOptions = {
   zoom: number;
   position: CropPosition;
   outputWidth: number;
+  outputMimeType?: 'image/png' | 'image/jpeg';
+  outputQuality?: number;
 };
 
 type ImageCropEditorProps = {
@@ -27,6 +29,8 @@ type ImageCropEditorProps = {
   initialAspect?: number;
   aspectOptions?: ImageCropAspectOption[];
   outputWidth?: number;
+  outputMimeType?: 'image/png' | 'image/jpeg';
+  outputQuality?: number;
   applyLabel?: string;
   applyingLabel?: string;
   maxPreviewClassName?: string;
@@ -48,6 +52,8 @@ export const createCroppedImageBlob = ({
   zoom,
   position,
   outputWidth,
+  outputMimeType = 'image/png',
+  outputQuality = 0.92,
 }: CreateCroppedImageBlobOptions) => new Promise<Blob>((resolve, reject) => {
   const image = new window.Image();
   if (/^https?:\/\//i.test(imageUrl)) {
@@ -86,10 +92,11 @@ export const createCroppedImageBlob = ({
     );
     canvas.toBlob(
       (blob) => blob ? resolve(blob) : reject(new Error('Não foi possível gerar o recorte da imagem.')),
-      'image/png',
+      outputMimeType,
+      outputQuality,
     );
   };
-  image.onerror = () => reject(new Error('Não foi possível carregar esta imagem para recorte.'));
+  image.onerror = () => reject(new Error('Não foi possível decodificar a imagem. O arquivo pode estar corrompido ou em HEIC/HEIF; selecione JPG, PNG ou WEBP.'));
   image.src = imageUrl;
 });
 
@@ -104,6 +111,8 @@ export function ImageCropEditor({
   initialAspect = 3,
   aspectOptions = DEFAULT_ASPECT_OPTIONS,
   outputWidth = 1800,
+  outputMimeType = 'image/png',
+  outputQuality = 0.92,
   applyLabel = 'Aplicar corte',
   applyingLabel = 'Aplicando...',
   maxPreviewClassName = 'max-w-2xl',
@@ -181,6 +190,8 @@ export function ImageCropEditor({
         zoom: cropZoom,
         position: cropPosition,
         outputWidth,
+        outputMimeType,
+        outputQuality,
       });
       await onApply(blob);
     } catch (error) {

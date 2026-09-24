@@ -3,11 +3,15 @@ import { supabase } from '../supabaseClient';
 export const PATIENT_PHOTO_BUCKET = 'patient-photos';
 export const MAX_PATIENT_PHOTO_SOURCE_BYTES = 10 * 1024 * 1024;
 export const PATIENT_PHOTO_SOURCE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+const PATIENT_PHOTO_SOURCE_EXTENSIONS = /\.(png|jpe?g|webp)$/i;
 
 export const validatePatientPhotoSource = (file: File): string | null => {
-  if (!PATIENT_PHOTO_SOURCE_TYPES.includes(file.type)) {
-    return 'Envie uma imagem nos formatos PNG, JPG ou WEBP.';
+  const hasSupportedType = PATIENT_PHOTO_SOURCE_TYPES.includes(file.type.toLowerCase());
+  const hasSupportedExtension = PATIENT_PHOTO_SOURCE_EXTENSIONS.test(file.name);
+  if (!hasSupportedType && !hasSupportedExtension) {
+    return 'O celular informou um formato não compatível. Selecione uma imagem JPG, PNG ou WEBP; fotos HEIC/HEIF precisam ser convertidas antes.';
   }
+  if (file.size <= 0) return 'A imagem selecionada está vazia ou indisponível. Tente selecionar a foto novamente.';
   if (file.size > MAX_PATIENT_PHOTO_SOURCE_BYTES) {
     return 'A imagem original deve ter no máximo 10 MB.';
   }
@@ -32,12 +36,12 @@ export const uploadPatientPhoto = async ({
   patientId: string;
   photo: Blob;
 }): Promise<string> => {
-  const photoPath = `${professionalId}/${patientId}/${Date.now()}-photo.png`;
+  const photoPath = `${professionalId}/${patientId}/${Date.now()}-photo.jpg`;
   const { error } = await supabase.storage
     .from(PATIENT_PHOTO_BUCKET)
     .upload(photoPath, photo, {
       cacheControl: '3600',
-      contentType: 'image/png',
+      contentType: 'image/jpeg',
       upsert: false,
     });
   if (error) throw error;

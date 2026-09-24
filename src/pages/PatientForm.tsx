@@ -224,6 +224,19 @@ const formatCpf = (value: string) => {
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 };
 
+const isPatientPhotoObjectUrl = (url: string) => url.startsWith('blob:');
+
+const revokePatientPhotoObjectUrl = (url: string) => {
+  if (isPatientPhotoObjectUrl(url)) URL.revokeObjectURL(url);
+};
+
+const createPatientPhotoObjectUrl = (file: Blob) => {
+  if (typeof URL.createObjectURL !== 'function') {
+    throw new Error('Este navegador não conseguiu criar uma prévia temporária da foto. Atualize o aplicativo e tente novamente.');
+  }
+  return URL.createObjectURL(file);
+};
+
 const PATIENT_PHOTO_BASE64_CHUNK_BYTES = 0x8000;
 
 const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
@@ -236,9 +249,10 @@ const readPatientPhotoAsDataUrl = async (value: Blob): Promise<string> => {
       binary += String.fromCharCode(...bytes.subarray(offset, offset + PATIENT_PHOTO_BASE64_CHUNK_BYTES));
     }
 
+    if (typeof window.btoa !== 'function') throw new Error('base64 unavailable');
     return `data:${value.type || 'application/octet-stream'};base64,${window.btoa(binary)}`;
   } catch {
-    throw new Error('Não foi possível ler a imagem selecionada.');
+    throw new Error('O navegador não conseguiu ler os bytes da foto. Tente JPG ou PNG; fotos HEIC/HEIF precisam ser convertidas antes.');
   }
 };
 
@@ -305,6 +319,10 @@ export default function PatientForm() {
   const patientLoadedRef = useRef(!id);
   const legacyGoogleSetupPendingRef = useRef(false);
   const googleSetupAttentionTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    new Set([photoPreviewUrl, photoEditorUrl]).forEach(revokePatientPhotoObjectUrl);
+  }, [photoPreviewUrl, photoEditorUrl]);
 
   useEffect(() => {
     if (googleAuthorizationStatus === 'missing_scopes' && googleMissingScopes.some((scope) => scope === GOOGLE_SCOPE_SETS.clinicalDocs[0])) {
@@ -589,16 +607,40 @@ export default function PatientForm() {
 
     setPreparingPhoto(true);
 
+    let sourceUrl = '';
     try {
-      const sourceUrl = await readPatientPhotoAsDataUrl(file);
-      const initialCrop = await createCroppedImageBlob({
-        imageUrl: sourceUrl,
-        aspect: 1,
-        zoom: 1,
-        position: { x: 0, y: 0 },
-        outputWidth: 600,
-      });
-      const previewUrl = await readPatientPhotoAsDataUrl(initialCrop);
+      sourceUrl = createPatientPhotoObjectUrl(file);
+      let initialCrop: Blob;
+      try {
+        initialCrop = await createCroppedImageBlob({
+          imageUrl: sourceUrl,
+          aspect: 1,
+          zoom: 1,
+          position: { x: 0, y: 0 },
+          outputWidth: 600,
+          outputMimeType: 'image/jpeg',
+          outputQuality: 0.9,
+        });
+      } catch (objectUrlError) {
+        revokePatientPhotoObjectUrl(sourceUrl);
+        sourceUrl = await readPatientPhotoAsDataUrl(file);
+        try {
+          initialCrop = await createCroppedImageBlob({
+            imageUrl: sourceUrl,
+            aspect: 1,
+            zoom: 1,
+            position: { x: 0, y: 0 },
+            outputWidth: 600,
+            outputMimeType: 'image/jpeg',
+            outputQuality: 0.9,
+          });
+        } catch (dataUrlError) {
+          const firstReason = objectUrlError instanceof Error ? objectUrlError.message : '';
+          const secondReason = dataUrlError instanceof Error ? dataUrlError.message : '';
+          throw new Error(secondReason || firstReason || 'O celular não conseguiu decodificar a foto.');
+        }
+      }
+      const previewUrl = createPatientPhotoObjectUrl(initialCrop);
 
       setPendingPhotoBlob(initialCrop);
       setPhotoPreviewUrl(previewUrl);
@@ -606,8 +648,10 @@ export default function PatientForm() {
       setPhotoRemoved(false);
       setShowPhotoEditor(true);
     } catch (error) {
+      revokePatientPhotoObjectUrl(sourceUrl);
       console.error('[PatientForm] Não foi possível preparar a foto selecionada:', error);
-      await showAlert(`Erro ao preparar a foto: ${error instanceof Error ? error.message : error}`, {
+      const reason = error instanceof Error ? error.message : 'O celular não conseguiu abrir este arquivo.';
+      await showAlert(`Não foi possível preparar "${file.name}". ${reason} Verifique se a foto está em JPG, PNG ou WEBP e tente novamente.`, {
         title: 'Erro na Foto',
         variant: 'danger',
         icon: 'warning',
@@ -619,9 +663,10 @@ export default function PatientForm() {
   };
 
   const handleApplyPatientPhotoCrop = async (croppedPhoto: Blob) => {
-    const previewUrl = await readPatientPhotoAsDataUrl(croppedPhoto);
+    const previewUrl = createPatientPhotoObjectUrl(croppedPhoto);
     setPendingPhotoBlob(croppedPhoto);
     setPhotoPreviewUrl(previewUrl);
+    setPhotoEditorUrl(previewUrl);
     setPhotoRemoved(false);
     setShowPhotoEditor(false);
   };
@@ -1426,6 +1471,8 @@ export default function PatientForm() {
               initialAspect={1}
               aspectOptions={[{ value: 1, label: 'Quadrado 1:1' }]}
               outputWidth={600}
+              outputMimeType="image/jpeg"
+              outputQuality={0.9}
               maxPreviewClassName="max-w-md"
               onApply={handleApplyPatientPhotoCrop}
               onError={(error) => showAlert(`Erro ao ajustar a foto: ${error instanceof Error ? error.message : error}`, { title: 'Erro no Ajuste', variant: 'danger', icon: 'warning' })}
