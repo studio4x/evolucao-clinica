@@ -587,7 +587,7 @@ export default function Notifications() {
         description="Gerencie seus alertas na plataforma, notificações push e configurações de e-mail."
         titleActions={<NotificationsGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         actions={(
-          <span className="md:hidden">
+          <span className="sm:hidden">
             <NotificationsGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
           </span>
         )}

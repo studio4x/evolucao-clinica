@@ -660,7 +660,7 @@ export default function Subscription() {
         description="Escolha o plano ideal para automatizar seus prontuários e evoluções clínicas com inteligência artificial de ponta."
         titleActions={<FeatureGuideButton label="Planos e Assinatura" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         actions={(
-          <span className="md:hidden">
+          <span className="sm:hidden">
             <FeatureGuideButton compact label="Planos e Assinatura" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
           </span>
         )}

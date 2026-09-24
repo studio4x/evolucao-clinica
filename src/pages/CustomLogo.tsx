@@ -276,13 +276,13 @@ export default function CustomLogo() {
           <h1 className="flex items-center text-3xl font-display font-bold text-brand-text">
             <Image className="mr-3 shrink-0 text-brand-primary" size={32} />
             <span>Logotipo Personalizado</span>
-            <span className="ml-3 hidden shrink-0 md:inline-flex"><CustomLogoGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+            <span className="ml-3 hidden shrink-0 sm:inline-flex"><CustomLogoGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           </h1>
           <p className="mt-1 text-sm text-brand-text-muted">
             Personalize o timbre dos seus relatórios, PDIs e evoluções clínicas.
           </p>
         </div>
-        <span className="md:hidden"><CustomLogoGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+        <span className="sm:hidden"><CustomLogoGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
       </div>
 
       {successMessage && (

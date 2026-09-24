@@ -681,7 +681,7 @@ export default function History() {
         titleActions={<HistoryGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         actions={(
           <div className="flex items-center gap-2">
-            <span className="md:hidden">
+            <span className="sm:hidden">
               <HistoryGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
             </span>
             {evolutions.length > 0 && (

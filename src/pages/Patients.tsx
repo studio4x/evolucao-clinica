@@ -204,7 +204,7 @@ export default function Patients() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <span className="md:hidden">
+            <span className="sm:hidden">
               <PatientsGuideButton
                 compact
                 expanded={guideOpen}

@@ -1324,7 +1324,7 @@ export default function PatientForm() {
               </button>
             )}
             {id && (
-              <span className="md:hidden">
+              <span className="sm:hidden">
                 <PatientEditGuideButton
                   compact
                   expanded={guideOpen}

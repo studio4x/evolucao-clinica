@@ -271,10 +271,10 @@ export default function BackupExport() {
     <div className="w-full space-y-6 pb-12">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center text-3xl font-display font-bold text-brand-text"><Cloud className="mr-3 shrink-0 text-brand-primary" size={32} /><span>Backup e Exportação de Dados</span><span className="ml-3 hidden shrink-0 md:inline-flex"><BackupGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span></h1>
+          <h1 className="flex items-center text-3xl font-display font-bold text-brand-text"><Cloud className="mr-3 shrink-0 text-brand-primary" size={32} /><span>Backup e Exportação de Dados</span><span className="ml-3 hidden shrink-0 sm:inline-flex"><BackupGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span></h1>
           <p className="mt-1 text-sm text-brand-text-muted">Proteja, exporte e restaure os dados da sua conta.</p>
         </div>
-        <span className="md:hidden"><BackupGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+        <span className="sm:hidden"><BackupGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
       </div>
 
       {successMessage && (

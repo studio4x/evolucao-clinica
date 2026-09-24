@@ -564,7 +564,7 @@ export default function PatientSessions() {
           />
         }
         actions={
-          <span className="md:hidden">
+          <span className="sm:hidden">
             <SessionGuideButton
               compact
               expanded={guideOpen}

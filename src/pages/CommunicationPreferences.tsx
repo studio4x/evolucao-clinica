@@ -172,7 +172,7 @@ export default function CommunicationPreferences() {
           description="Escolha quais mensagens de relacionamento deseja receber."
           titleActions={<CommunicationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
           actions={(
-            <span className="md:hidden">
+            <span className="sm:hidden">
               <CommunicationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
             </span>
           )}

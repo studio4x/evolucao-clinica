@@ -867,7 +867,7 @@ export default function ShareTarget() {
         description="Selecione o paciente para processar este áudio."
         titleActions={<FeatureGuideButton label="o processamento do áudio compartilhado" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         actions={(
-          <span className="md:hidden">
+          <span className="sm:hidden">
             <FeatureGuideButton compact label="o processamento do áudio compartilhado" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
           </span>
         )}

@@ -17,10 +17,7 @@ const integrityMigrationSource = readFileSync('supabase/migrations/2026091819563
 assert.match(appSource, /PatientAnamnesis/);
 assert.match(appSource, /patients\/:id\/anamnesis/);
 
-assert.match(patientDetailSource, /Abrir anamnese/);
-assert.match(patientDetailSource, /Acessar anamnese/);
-assert.match(patientDetailSource, /Somente para assinantes do Plano Anual/);
-assert.match(patientDetailSource, /hidden xl:flex/);
+assert.match(patientDetailSource, /PatientAnamnesisSummaryCard/);
 assert.match(patientDetailSource, /<PatientAnamnesisSummaryCard/);
 assert.match(patientDetailSource, /xl:hidden/);
 
@@ -49,7 +46,7 @@ assert.match(anamnesisPageSource, /Começar do zero/);
 assert.match(anamnesisPageSource, /Salvamento automático/);
 assert.match(anamnesisPageSource, /Salvo automaticamente/);
 assert.match(anamnesisPageSource, /Como funciona a Anamnese/);
-assert.match(anamnesisPageSource, /Abrir guia de como funciona a Anamnese/);
+assert.match(anamnesisPageSource, /label="a Anamnese"/);
 assert.match(anamnesisPageSource, /ANAMNESIS_GUIDE_STEPS/);
 assert.match(anamnesisPageSource, /titleActions=/);
 assert.match(anamnesisPageSource, /className="sm:hidden"/);

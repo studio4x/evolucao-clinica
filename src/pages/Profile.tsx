@@ -544,7 +544,7 @@ export default function Profile() {
         description="Gerencie suas informações pessoais e visualize seus detalhes de acesso."
         titleActions={<ProfileGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         actions={(
-          <span className="md:hidden">
+          <span className="sm:hidden">
             <ProfileGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
           </span>
         )}

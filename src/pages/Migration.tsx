@@ -239,13 +239,13 @@ export default function Migration() {
             <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
               <Database className="text-brand-primary mr-3 shrink-0" size={32} />
               <span>Migração de Prontuários</span>
-              <span className="ml-3 hidden shrink-0 md:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+              <span className="ml-3 hidden shrink-0 sm:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
             </h2>
             <p className="text-brand-text-muted text-sm mt-1">
               Solicite a migração do histórico do seu consultório com apoio da nossa equipe.
             </p>
           </div>
-          <span className="md:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+          <span className="sm:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
         </div>
 
         {/* Promo and Upgrade Banner */}
@@ -357,7 +357,7 @@ export default function Migration() {
           <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
             <Database className="text-brand-primary mr-3 shrink-0" size={32} />
             <span>Migração de Prontuários</span>
-            <span className="ml-3 hidden shrink-0 md:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+            <span className="ml-3 hidden shrink-0 sm:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           </h2>
           <p className="text-brand-text-muted text-sm mt-1">
             Envie as informações do seu sistema anterior para importarmos seus prontuários sem custo adicional.
@@ -365,7 +365,7 @@ export default function Migration() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="md:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+          <span className="sm:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           <button
             onClick={() => loadRequests(true)}
             className="p-3 bg-white hover:bg-brand-bg border border-brand-border text-brand-text-muted hover:text-brand-text rounded-2xl transition-all"
