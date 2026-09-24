@@ -10,6 +10,9 @@ const clinicRoute = readFileSync("src/components/clinic/ClinicRoute.tsx", "utf8"
 const app = readFileSync("src/App.tsx", "utf8");
 const dashboard = readFileSync("src/pages/Dashboard.tsx", "utf8");
 const history = readFileSync("src/pages/History.tsx", "utf8");
+const personalPatientDetail = readFileSync("src/pages/PatientDetail.tsx", "utf8");
+const clinicPatientDetail = readFileSync("src/pages/ClinicPatientDetail.tsx", "utf8");
+const patientLayout = readFileSync("src/components/patients/PatientDetailLayout.tsx", "utf8");
 const version = readFileSync("src/components/layout/AppVersion.tsx", "utf8");
 
 assert.match(layout, /isClinicalProfessional/);
@@ -34,7 +37,20 @@ assert.match(history, /fetchClinicPatients/);
 assert.match(history, /clinicEvolutionRequest/);
 assert.doesNotMatch(history, /\.from\("evolutions"\)/);
 assert.match(clinicRoute, /location\.pathname === "\/painel\/clinica"/);
-assert.match(version, /v1\.10\.917/);
+assert.match(version, /v1\.10\.918/);
+
+assert.match(personalPatientDetail, /PatientDetailHeader/);
+assert.match(personalPatientDetail, /PatientDetailGrid/);
+assert.match(clinicPatientDetail, /PatientDetailHeader/);
+assert.match(clinicPatientDetail, /PatientDetailGrid/);
+assert.match(clinicPatientDetail, /organizationPatientId.*evolucoes.*nova/);
+assert.match(clinicPatientDetail, /patient\.canCreateEvolution/);
+assert.match(clinicPatientDetail, /canEdit/);
+assert.match(clinicPatientDetail, /patient\.canReadEvolutions && <ClinicPatientEvolutions/);
+assert.doesNotMatch(clinicPatientDetail, /Dados cadastrais compartilhados nesta organização/);
+assert.match(patientLayout, /safe-area-inset-top/);
+assert.match(patientLayout, /xl:grid-cols-3/);
+assert.match(patientLayout, /Seções do paciente/);
 
 const patientsMap = { "patient-123": { organizationPatientId: "org-patient-987" } };
 assert.equal(getHistoryPatientPath("patient-123", false, patientsMap), "/painel/patients/patient-123");
