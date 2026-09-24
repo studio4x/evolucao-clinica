@@ -209,6 +209,11 @@ export default function Layout() {
   const activeOrganization = activeContext.type === 'organization'
     ? organizations.find(({ id }) => id === activeContext.organizationId)
     : null;
+  const isClinicContext = publicEffectFlags.clinicFeature && activeContext.type === 'organization';
+  const isClinicalProfessional = isClinicContext
+    && activeOrganization?.membershipRole === 'professional'
+    && activeOrganization.clinicalAccessEnabled
+    && activeOrganization.licenseActive;
   const clinicNavItems: PanelNavItem[] = [
     { name: 'Pacientes', path: '/painel/clinica/pacientes', icon: Users },
     ...(['owner', 'manager'].includes(activeOrganization?.membershipRole || '')
@@ -218,8 +223,9 @@ export default function Layout() {
     { name: 'Plano Clínica', path: ['owner', 'manager'].includes(activeOrganization?.membershipRole || '') ? '/painel/clinica/contratar' : '/painel/subscription', icon: CreditCard },
     { name: 'Sobre o app', path: '/painel/about', icon: Info },
   ];
-  const isClinicContext = publicEffectFlags.clinicFeature && activeContext.type === 'organization';
-  const navItems = isClinicContext ? clinicNavItems : personalNavItems;
+  // Clinical professionals use the same visual/navigation shell as individual
+  // professionals. Owner/manager remain in the dedicated administrative shell.
+  const navItems = isClinicContext && !isClinicalProfessional ? clinicNavItems : personalNavItems;
 
   const personalBottomNavItems: PanelNavItem[] = [
     { name: 'Início', path: '/painel/dashboard', icon: LayoutDashboard },
@@ -234,7 +240,7 @@ export default function Layout() {
     { name: 'Perfil', path: '/painel/profile', icon: User },
     { name: 'Mais', path: '#menu', icon: Menu },
   ];
-  const bottomNavItems = isClinicContext ? clinicBottomNavItems : personalBottomNavItems;
+  const bottomNavItems = isClinicContext && !isClinicalProfessional ? clinicBottomNavItems : personalBottomNavItems;
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">

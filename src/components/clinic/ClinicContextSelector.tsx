@@ -43,9 +43,9 @@ export function ClinicContextSelector({ collapsed = false }: ClinicContextSelect
     const organization = organizations[0];
     return (
       <div className={`block ${collapsed ? "px-1" : "px-0"}`} data-testid="clinic-context-static">
-        <span className={`mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-brand-text-muted ${collapsed ? "justify-center" : ""}`}>
+        <span className={`mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-brand-text-muted ${collapsed ? "justify-center" : ""}`} title={collapsed ? "Vinculado à clínica" : undefined}>
           <Building2 size={14} aria-hidden="true" />
-          {!collapsed && "Contexto atual"}
+          {!collapsed && "Vinculado à clínica"}
         </span>
         {!collapsed && (
           <div className="rounded-lg border border-brand-border bg-white px-3 py-2">
@@ -60,9 +60,9 @@ export function ClinicContextSelector({ collapsed = false }: ClinicContextSelect
   return (
     <label className={`block ${collapsed ? "px-1" : "px-0"}`}>
       <span className="sr-only">Selecionar contexto</span>
-      <span className={`mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-brand-text-muted ${collapsed ? "justify-center" : ""}`}>
+      <span className={`mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-brand-text-muted ${collapsed ? "justify-center" : ""}`} title={collapsed ? "Vinculado à clínica" : undefined}>
         <Building2 size={14} aria-hidden="true" />
-        {!collapsed && "Contexto atual"}
+        {!collapsed && (activeContext.type === "organization" ? "Vinculado à clínica" : "Contexto atual")}
       </span>
       <span className="relative block">
         <select

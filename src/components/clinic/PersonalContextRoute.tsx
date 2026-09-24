@@ -3,8 +3,14 @@ import { Navigate } from "react-router-dom";
 import { useClinicContextStore } from "../../store/clinicContextStore";
 
 export function PersonalContextRoute({ children }: { children: ReactNode }) {
-  const activeContext = useClinicContextStore((state) => state.activeContext);
-  if (activeContext.type === "organization") return <Navigate to="/painel/clinica" replace />;
+  const { activeContext, organizations } = useClinicContextStore();
+  if (activeContext.type === "organization") {
+    const organization = organizations.find(({ id }) => id === activeContext.organizationId);
+    const destination = organization?.membershipRole === "professional"
+      ? "/painel/clinica/pacientes"
+      : "/painel/clinica";
+    return <Navigate to={destination} replace />;
+  }
   return <>{children}</>;
 }
 
