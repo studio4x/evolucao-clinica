@@ -2480,8 +2480,7 @@ export default function PatientDetail() {
           .patient-mobile-tab-enter-next, .patient-mobile-tab-enter-previous { animation: none; }
         }
       `}</style>
-      <div className="xl:hidden h-56" aria-hidden="true" />
-      <div className="fixed inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,var(--app-safe-area-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
+      <div className="sticky inset-x-0 top-0 z-50 space-y-3 border-b border-brand-border/70 bg-brand-bg/95 px-4 pb-3 pt-[max(1rem,var(--app-safe-area-top))] shadow-sm backdrop-blur-xl xl:static xl:space-y-0 xl:border-0 xl:bg-transparent xl:px-0 xl:pb-0 xl:pt-0 xl:shadow-none xl:backdrop-blur-none">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 items-start gap-3 xl:items-center">
             <PatientPhoto photoPath={patient.photo_path} patientName={patient.full_name} className="h-11 w-11 shrink-0 sm:h-12 sm:w-12" />
@@ -2583,7 +2582,7 @@ export default function PatientDetail() {
 
         <nav className="mt-3 w-full overflow-x-auto overscroll-x-contain" aria-label="Seções do paciente">
           <div
-            className="flex min-w-max items-stretch gap-1 rounded-2xl border border-brand-border bg-white/80 p-1.5 shadow-sm backdrop-blur sm:grid sm:min-w-0 sm:grid-cols-5"
+            className="flex min-w-max items-stretch gap-0 rounded-2xl border border-brand-border bg-white/80 p-0 shadow-sm backdrop-blur sm:grid sm:min-w-0 sm:grid-cols-5 sm:gap-1 sm:p-1.5"
             role="tablist"
             aria-label="Seções do paciente"
           >
@@ -2612,7 +2611,7 @@ export default function PatientDetail() {
                     changeMobileTab(nextTab, nextIndex >= currentIndex ? 'next' : 'previous');
                     requestAnimationFrame(() => document.getElementById(`patient-tab-${nextTab}`)?.focus());
                   }}
-                  className={`flex min-h-14 min-w-[5.75rem] flex-1 flex-col items-center justify-center gap-1 rounded-xl px-2 text-[10px] font-semibold leading-none transition-all sm:min-w-0 ${
+                  className={`flex min-h-14 min-w-[5.75rem] flex-1 flex-col items-center justify-center gap-1 px-2 text-[10px] font-semibold leading-none transition-all first:rounded-l-2xl last:rounded-r-2xl sm:min-w-0 sm:rounded-xl ${
                     isActive
                       ? 'bg-brand-primary text-white shadow-sm shadow-brand-primary/25'
                       : 'text-brand-text-muted hover:bg-brand-bg hover:text-brand-primary'
@@ -2664,7 +2663,7 @@ export default function PatientDetail() {
         tabIndex={0}
         className="w-full min-w-0 space-y-6 outline-none"
       >
-        <div className="contents xl:grid xl:w-full xl:min-w-0 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)] xl:gap-6">
+        <div className="flex flex-col gap-6 xl:grid xl:w-full xl:min-w-0 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)] xl:gap-6">
           <div className={`card order-2 p-6 xl:order-none xl:col-span-1 ${mobileTabVisibility('overview')}`}>
             <h3 className="font-semibold text-brand-text mb-4">Prontuário</h3>
             <div className="space-y-3">
@@ -2725,7 +2724,7 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          <div className="contents xl:block xl:order-none xl:col-start-2 xl:row-start-1 xl:space-y-6">
+          <div className="flex flex-col gap-6 xl:block xl:order-none xl:col-start-2 xl:row-start-1 xl:space-y-6">
             <div className={`order-3 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
               <PatientSessionsSummaryCard
                 patientId={patient.id}
@@ -2896,7 +2895,7 @@ export default function PatientDetail() {
           </div>
         </div>
 
-        <div className="contents xl:grid xl:w-full xl:min-w-0 xl:grid-cols-1 xl:gap-6">
+        <div className="flex flex-col gap-6 xl:grid xl:w-full xl:min-w-0 xl:grid-cols-1 xl:gap-6">
           {/* Card de Busca Semântica (Pesquisa Inteligente) */}
           <div className={`card p-6 bg-gradient-to-br from-brand-primary/5 via-transparent to-brand-primary/5 border-brand-primary/20 shadow-sm relative overflow-hidden order-4 xl:order-none ${mobileTabVisibility('history')}`}>
             <div className="absolute top-0 right-0 w-32 h-32 bg-brand-primary/5 rounded-full blur-3xl pointer-events-none" />

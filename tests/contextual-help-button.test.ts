@@ -10,7 +10,7 @@ assert.match(cssSource, /\.app-floating-help-mobile\s*\{/, 'Regra CSS .app-float
 assert.match(cssSource, /position:\s*fixed;/, 'Deve utilizar posicionamento fixed no mobile');
 assert.match(cssSource, /left:\s*max\(1rem,\s*var\(--app-safe-area-left\)\);/, 'Deve ter margem à esquerda e respeitar safe area');
 assert.match(cssSource, /bottom:\s*calc\(4\.5rem\s*\+\s*var\(--app-safe-area-bottom\)\);/, 'Deve ficar posicionado acima da barra inferior de navegação e respeitar safe area');
-assert.match(cssSource, /z-index:\s*40;/, 'z-index deve ser 40 (acima dos cards, abaixo do menu z-100 e modais z-50+)');
+assert.match(cssSource, /z-index:\s*60;/, 'z-index deve manter o botão acima da navegação móvel e abaixo dos overlays');
 
 // 2. Validar componente FeatureGuideButton
 assert.match(featureButtonSource, /app-floating-help-mobile/, 'FeatureGuideButton deve usar a classe flutuante mobile');

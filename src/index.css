@@ -124,7 +124,7 @@
   position: fixed;
   left: max(1rem, var(--app-safe-area-left));
   bottom: calc(4.5rem + var(--app-safe-area-bottom));
-  z-index: 40;
+  z-index: 60;
 }
 
 /* O aviso da anamnese fica atrás da navegação móvel quando está ocioso e
