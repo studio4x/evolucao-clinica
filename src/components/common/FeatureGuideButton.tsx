@@ -17,7 +17,7 @@ export function FeatureGuideButton({ label, compact = false, expanded, onOpen }:
         aria-label={`Abrir guia de como funciona ${label}`}
         aria-haspopup="dialog"
         aria-expanded={expanded}
-        className="app-floating-help-mobile inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-white/95 text-brand-primary shadow-md backdrop-blur-sm transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
+        className="app-floating-help-mobile md:hidden inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-white/95 text-brand-primary shadow-md backdrop-blur-sm transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30"
         title="Como funciona"
       >
         <HelpCircle size={16} />
