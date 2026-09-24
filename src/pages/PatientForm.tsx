@@ -27,6 +27,10 @@ import {
   validatePatientPhotoSource,
 } from '../services/patientPhoto';
 import {
+  materializePatientPhoto,
+  type PatientPhotoDiagnostic,
+} from '../services/patientPhotoPipeline';
+import {
   DEFAULT_WHATSAPP_COUNTRY,
   formatWhatsAppNationalNumber,
   getWhatsAppCountryCallingCode,
@@ -226,6 +230,16 @@ const formatCpf = (value: string) => {
 };
 
 const isPatientPhotoObjectUrl = (url: string) => url.startsWith('blob:');
+
+const isPatientPhotoDiagnosticsEnabled = () => {
+  try { return import.meta.env.DEV || window.localStorage.getItem('evolucao-clinica:patient-photo-diagnostics') === '1'; } catch { return import.meta.env.DEV; }
+};
+
+const logPatientPhotoDiagnostic = (entry: PatientPhotoDiagnostic) => {
+  if (!isPatientPhotoDiagnosticsEnabled()) return;
+  if (entry.status === 'FAIL') console.warn('[PatientPhoto]', entry.stage, entry.error, entry.metadata);
+  else console.info('[PatientPhoto]', entry.stage, entry.metadata || 'ok');
+};
 
 const revokePatientPhotoObjectUrl = (url: string) => {
   if (isPatientPhotoObjectUrl(url)) URL.revokeObjectURL(url);
@@ -711,7 +725,8 @@ export default function PatientForm() {
 
     let sourceUrl = '';
     try {
-      const preparedPhoto = await preparePatientPhotoSource(file);
+      const materializedPhoto = await materializePatientPhoto(file, logPatientPhotoDiagnostic);
+      const preparedPhoto = await preparePatientPhotoSource(materializedPhoto);
       sourceUrl = createPatientPhotoObjectUrl(preparedPhoto);
       let initialCrop: Blob;
       try {

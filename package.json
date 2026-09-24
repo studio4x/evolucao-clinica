@@ -39,7 +39,7 @@
     "test:patient-form-draft": "tsx tests/patient-form-draft.test.ts",
     "test:patient-google-setup": "tsx tests/patient-google-setup.test.ts",
     "test:patient-address-autocomplete": "tsx tests/patient-address-autocomplete.test.ts",
-    "test:patient-photo": "tsx tests/patient-photo.test.ts",
+    "test:patient-photo": "tsx tests/patient-photo.test.ts && tsx tests/patient-photo-pipeline.test.ts",
     "test:audio-webview": "tsx tests/audio-webview-compatibility.test.ts",
     "test:audio-limits": "tsx tests/audio-limits.test.ts && tsx tests/audio-budget-migration.test.ts && tsx tests/audio-duration-authority.test.ts",
     "test:audio-idempotency": "tsx tests/audio-idempotency.test.ts",
