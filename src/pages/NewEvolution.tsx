@@ -1651,7 +1651,7 @@ export default function NewEvolution({
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="sm:hidden">
+          <span className="md:hidden">
             <FeatureGuideButton compact label="a Nova Evolução" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
           </span>
           <span className="text-sm font-medium text-brand-primary bg-brand-primary/10 px-3 py-1 rounded-full">

@@ -14,6 +14,7 @@ import {
 } from '../services/backupService';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 
 interface DriveBackup {
   id: string;
@@ -72,20 +73,12 @@ type BackupGuideButtonProps = {
 
 function BackupGuideButton({ compact = false, expanded, onOpen }: BackupGuideButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Abrir guia de como funciona o Backup e Exportação de Dados"
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
-      className={compact
-        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
-        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
-      title={compact ? 'Como funciona' : undefined}
-    >
-      <HelpCircle size={16} />
-      {!compact && <span>Como funciona</span>}
-    </button>
+    <FeatureGuideButton
+      label="o Backup e Exportação de Dados"
+      compact={compact}
+      expanded={expanded}
+      onOpen={onOpen}
+    />
   );
 }
 
@@ -278,10 +271,10 @@ export default function BackupExport() {
     <div className="w-full space-y-6 pb-12">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="flex items-center text-3xl font-display font-bold text-brand-text"><Cloud className="mr-3 shrink-0 text-brand-primary" size={32} /><span>Backup e Exportação de Dados</span><span className="ml-3 hidden shrink-0 sm:inline-flex"><BackupGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span></h1>
+          <h1 className="flex items-center text-3xl font-display font-bold text-brand-text"><Cloud className="mr-3 shrink-0 text-brand-primary" size={32} /><span>Backup e Exportação de Dados</span><span className="ml-3 hidden shrink-0 md:inline-flex"><BackupGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span></h1>
           <p className="mt-1 text-sm text-brand-text-muted">Proteja, exporte e restaure os dados da sua conta.</p>
         </div>
-        <span className="sm:hidden"><BackupGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+        <span className="md:hidden"><BackupGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
       </div>
 
       {successMessage && (

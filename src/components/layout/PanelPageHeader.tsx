@@ -19,7 +19,7 @@ export function PanelPageHeader({ title, description, icon: Icon, titleActions, 
         <h1 className={`flex items-center font-display font-bold text-brand-text ${mobileActionsInline ? 'min-w-0 text-2xl sm:text-3xl' : 'text-3xl'}`}>
           {Icon && <Icon className="mr-3 shrink-0 text-brand-primary" size={32} />}
           <span className={mobileActionsInline ? 'truncate' : undefined}>{title}</span>
-          {titleActions && <span className="ml-3 hidden shrink-0 items-center sm:inline-flex">{titleActions}</span>}
+          {titleActions && <span className="ml-3 hidden shrink-0 items-center md:inline-flex">{titleActions}</span>}
         </h1>
         {description && <p className="mt-1 text-sm text-brand-text-muted">{description}</p>}
       </div>

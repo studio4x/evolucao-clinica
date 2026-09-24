@@ -50,7 +50,7 @@ export default function AboutApp() {
         title="Sobre o app"
         description="Conheça o Evolução Clínica e consulte as informações da versão em uso neste dispositivo."
         titleActions={<FeatureGuideButton label="Sobre o app" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
-        actions={<span className="sm:hidden"><FeatureGuideButton label="Sobre o app" compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>}
+        actions={<span className="md:hidden"><FeatureGuideButton label="Sobre o app" compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>}
       />
 
       <AboutAppCard />

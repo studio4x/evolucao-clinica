@@ -10,6 +10,7 @@ import { deferOnboarding, setOnboardingState, getOnboardingState } from '../util
 import { classifyOnboardingError } from '../utils/onboardingState';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { showAlert, showConfirm, showPrompt } from '../store/modalStore';
@@ -98,20 +99,12 @@ type PatientEditGuideButtonProps = {
 
 function PatientEditGuideButton({ compact = false, expanded, onOpen }: PatientEditGuideButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Abrir guia de como funciona a edição do paciente"
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
-      className={compact
-        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
-        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
-      title={compact ? 'Como funciona' : undefined}
-    >
-      <HelpCircle size={16} />
-      {!compact && <span>Como funciona</span>}
-    </button>
+    <FeatureGuideButton
+      label="a edição do paciente"
+      compact={compact}
+      expanded={expanded}
+      onOpen={onOpen}
+    />
   );
 }
 
@@ -1240,7 +1233,7 @@ export default function PatientForm() {
               </button>
             )}
             {id && (
-              <span className="sm:hidden">
+              <span className="md:hidden">
                 <PatientEditGuideButton
                   compact
                   expanded={guideOpen}

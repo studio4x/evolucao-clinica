@@ -13,6 +13,7 @@ import { useSiteConfig } from '../hooks/useSiteConfig';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
 import { downloadPdfFile } from '../utils/prontuarioPdf';
 
@@ -59,20 +60,12 @@ type HistoryGuideButtonProps = {
 
 function HistoryGuideButton({ compact = false, expanded, onOpen }: HistoryGuideButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Abrir guia de como funciona o Histórico de Evoluções"
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
-      className={compact
-        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
-        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
-      title={compact ? 'Como funciona' : undefined}
-    >
-      <HelpCircle size={16} />
-      {!compact && <span>Como funciona</span>}
-    </button>
+    <FeatureGuideButton
+      label="o Histórico de Evoluções"
+      compact={compact}
+      expanded={expanded}
+      onOpen={onOpen}
+    />
   );
 }
 
@@ -688,7 +681,7 @@ export default function History() {
         titleActions={<HistoryGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         actions={(
           <div className="flex items-center gap-2">
-            <span className="sm:hidden">
+            <span className="md:hidden">
               <HistoryGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
             </span>
             {evolutions.length > 0 && (

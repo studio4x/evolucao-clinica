@@ -8,6 +8,7 @@ import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { getDocumentLogoPreviewStyle, normalizeCustomLogoSettings } from '../utils/documentLogo';
 import { ImageCropEditor } from '../components/common/ImageCropEditor';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 
 const CUSTOM_LOGO_GUIDE_STEPS: FeatureGuideStep[] = [
   {
@@ -52,20 +53,12 @@ type CustomLogoGuideButtonProps = {
 
 function CustomLogoGuideButton({ compact = false, expanded, onOpen }: CustomLogoGuideButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Abrir guia de como funciona o Logotipo Personalizado"
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
-      className={compact
-        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
-        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
-      title={compact ? 'Como funciona' : undefined}
-    >
-      <HelpCircle size={16} />
-      {!compact && <span>Como funciona</span>}
-    </button>
+    <FeatureGuideButton
+      label="o Logotipo Personalizado"
+      compact={compact}
+      expanded={expanded}
+      onOpen={onOpen}
+    />
   );
 }
 
@@ -283,13 +276,13 @@ export default function CustomLogo() {
           <h1 className="flex items-center text-3xl font-display font-bold text-brand-text">
             <Image className="mr-3 shrink-0 text-brand-primary" size={32} />
             <span>Logotipo Personalizado</span>
-            <span className="ml-3 hidden shrink-0 sm:inline-flex"><CustomLogoGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+            <span className="ml-3 hidden shrink-0 md:inline-flex"><CustomLogoGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           </h1>
           <p className="mt-1 text-sm text-brand-text-muted">
             Personalize o timbre dos seus relatórios, PDIs e evoluções clínicas.
           </p>
         </div>
-        <span className="sm:hidden"><CustomLogoGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+        <span className="md:hidden"><CustomLogoGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
       </div>
 
       {successMessage && (

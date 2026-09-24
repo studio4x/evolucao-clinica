@@ -5,6 +5,7 @@ import { useAuthStore } from '../store/authStore';
 import { createMigrationRequest, fetchMyMigrationRequests, getMigrationAttachmentUrl, MigrationRequest } from '../services/migration';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 
 const MIGRATION_GUIDE_STEPS: FeatureGuideStep[] = [
   {
@@ -49,20 +50,12 @@ type MigrationGuideButtonProps = {
 
 function MigrationGuideButton({ compact = false, expanded, onOpen }: MigrationGuideButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Abrir guia de como funciona a Migração de Prontuários"
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
-      className={compact
-        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
-        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
-      title={compact ? 'Como funciona' : undefined}
-    >
-      <HelpCircle size={16} />
-      {!compact && <span>Como funciona</span>}
-    </button>
+    <FeatureGuideButton
+      label="a Migração de Prontuários"
+      compact={compact}
+      expanded={expanded}
+      onOpen={onOpen}
+    />
   );
 }
 
@@ -246,13 +239,13 @@ export default function Migration() {
             <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
               <Database className="text-brand-primary mr-3 shrink-0" size={32} />
               <span>Migração de Prontuários</span>
-              <span className="ml-3 hidden shrink-0 sm:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+              <span className="ml-3 hidden shrink-0 md:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
             </h2>
             <p className="text-brand-text-muted text-sm mt-1">
               Solicite a migração do histórico do seu consultório com apoio da nossa equipe.
             </p>
           </div>
-          <span className="sm:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+          <span className="md:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
         </div>
 
         {/* Promo and Upgrade Banner */}
@@ -364,7 +357,7 @@ export default function Migration() {
           <h2 className="text-3xl font-display font-bold text-brand-text flex items-center">
             <Database className="text-brand-primary mr-3 shrink-0" size={32} />
             <span>Migração de Prontuários</span>
-            <span className="ml-3 hidden shrink-0 sm:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+            <span className="ml-3 hidden shrink-0 md:inline-flex"><MigrationGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           </h2>
           <p className="text-brand-text-muted text-sm mt-1">
             Envie as informações do seu sistema anterior para importarmos seus prontuários sem custo adicional.
@@ -372,7 +365,7 @@ export default function Migration() {
         </div>
 
         <div className="flex items-center gap-2 self-start sm:self-auto">
-          <span className="sm:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+          <span className="md:hidden"><MigrationGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
           <button
             onClick={() => loadRequests(true)}
             className="p-3 bg-white hover:bg-brand-bg border border-brand-border text-brand-text-muted hover:text-brand-text rounded-2xl transition-all"

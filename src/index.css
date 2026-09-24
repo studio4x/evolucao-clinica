@@ -119,6 +119,14 @@
   bottom: calc(6rem + var(--app-safe-area-bottom));
 }
 
+/* Botão flutuante de ajuda contextual no mobile (canto inferior esquerdo, acima da bottom nav) */
+.app-floating-help-mobile {
+  position: fixed;
+  left: max(1rem, var(--app-safe-area-left));
+  bottom: calc(4.5rem + var(--app-safe-area-bottom));
+  z-index: 40;
+}
+
 /* O aviso da anamnese fica atrás da navegação móvel quando está ocioso e
    sobe temporariamente para informar o salvamento sem disputar espaço com ela. */
 .app-anamnesis-save-notice {

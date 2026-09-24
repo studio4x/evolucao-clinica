@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { mergeNotificationSettings } from '../utils/notificationSettings';
 import { 
@@ -54,20 +55,12 @@ type NotificationsGuideButtonProps = {
 
 function NotificationsGuideButton({ compact = false, expanded, onOpen }: NotificationsGuideButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Abrir guia de como funciona a Central de Notificações"
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
-      className={compact
-        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
-        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
-      title={compact ? 'Como funciona' : undefined}
-    >
-      <HelpCircle size={16} />
-      {!compact && <span>Como funciona</span>}
-    </button>
+    <FeatureGuideButton
+      label="a Central de Notificações"
+      compact={compact}
+      expanded={expanded}
+      onOpen={onOpen}
+    />
   );
 }
 
@@ -594,7 +587,7 @@ export default function Notifications() {
         description="Gerencie seus alertas na plataforma, notificações push e configurações de e-mail."
         titleActions={<NotificationsGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         actions={(
-          <span className="sm:hidden">
+          <span className="md:hidden">
             <NotificationsGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
           </span>
         )}

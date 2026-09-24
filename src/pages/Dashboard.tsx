@@ -478,7 +478,7 @@ export default function Dashboard() {
           titleActions={<FeatureGuideButton label="o Dashboard" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />}
         />
         <div className="flex items-center gap-3">
-          <span className="sm:hidden">
+          <span className="md:hidden">
             <FeatureGuideButton compact label="o Dashboard" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />
           </span>
           <Link 

@@ -6,6 +6,7 @@ import { Activity, Bell, Calendar, FileText, HelpCircle, MessageCircle, Plus, Se
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { PatientPhoto } from '../components/patients/PatientPhoto';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 
 type PatientEvolution = {
   patient_id: string;
@@ -127,20 +128,12 @@ type PatientsGuideButtonProps = {
 
 function PatientsGuideButton({ compact = false, expanded, onOpen }: PatientsGuideButtonProps) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label="Abrir guia de como funciona a lista de pacientes"
-      aria-haspopup="dialog"
-      aria-expanded={expanded}
-      className={compact
-        ? 'inline-flex h-9 w-9 items-center justify-center rounded-full border border-brand-primary/25 bg-brand-primary/5 text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'
-        : 'inline-flex items-center gap-2 rounded-xl border border-brand-primary/25 bg-brand-primary/5 px-3 py-2 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 focus:outline-none focus:ring-2 focus:ring-brand-primary/30'}
-      title={compact ? 'Como funciona' : undefined}
-    >
-      <HelpCircle size={16} />
-      {!compact && <span>Como funciona</span>}
-    </button>
+    <FeatureGuideButton
+      label="a lista de pacientes"
+      compact={compact}
+      expanded={expanded}
+      onOpen={onOpen}
+    />
   );
 }
 
@@ -211,7 +204,7 @@ export default function Patients() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <span className="sm:hidden">
+            <span className="md:hidden">
               <PatientsGuideButton
                 compact
                 expanded={guideOpen}
