@@ -223,9 +223,16 @@ export default function Layout() {
     { name: 'Plano Clínica', path: ['owner', 'manager'].includes(activeOrganization?.membershipRole || '') ? '/painel/clinica/contratar' : '/painel/subscription', icon: CreditCard },
     { name: 'Sobre o app', path: '/painel/about', icon: Info },
   ];
+  const clinicalProfessionalNavItems = personalNavItems
+    .filter((item) => !['Migração de Prontuários', 'Logotipo Personalizado', 'Backup e Exportação'].includes(item.name))
+    .map((item) => item.name === 'Pacientes'
+      ? { ...item, path: '/painel/clinica/pacientes' }
+      : item);
   // Clinical professionals use the same visual/navigation shell as individual
   // professionals. Owner/manager remain in the dedicated administrative shell.
-  const navItems = isClinicContext && !isClinicalProfessional ? clinicNavItems : personalNavItems;
+  const navItems = isClinicContext
+    ? (isClinicalProfessional ? clinicalProfessionalNavItems : clinicNavItems)
+    : personalNavItems;
 
   const personalBottomNavItems: PanelNavItem[] = [
     { name: 'Início', path: '/painel/dashboard', icon: LayoutDashboard },
@@ -240,7 +247,12 @@ export default function Layout() {
     { name: 'Perfil', path: '/painel/profile', icon: User },
     { name: 'Mais', path: '#menu', icon: Menu },
   ];
-  const bottomNavItems = isClinicContext && !isClinicalProfessional ? clinicBottomNavItems : personalBottomNavItems;
+  const clinicalProfessionalBottomNavItems = personalBottomNavItems.map((item) => item.name === 'Pacientes'
+    ? { ...item, path: '/painel/clinica/pacientes' }
+    : item);
+  const bottomNavItems = isClinicContext
+    ? (isClinicalProfessional ? clinicalProfessionalBottomNavItems : clinicBottomNavItems)
+    : personalBottomNavItems;
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">

@@ -6,20 +6,29 @@ const selector = readFileSync("src/components/clinic/ClinicContextSelector.tsx",
 const subscription = readFileSync("src/pages/ContextSubscription.tsx", "utf8");
 const personalRoute = readFileSync("src/components/clinic/PersonalContextRoute.tsx", "utf8");
 const clinicRoute = readFileSync("src/components/clinic/ClinicRoute.tsx", "utf8");
+const app = readFileSync("src/App.tsx", "utf8");
+const history = readFileSync("src/pages/ClinicProfessionalHistory.tsx", "utf8");
 const version = readFileSync("src/components/layout/AppVersion.tsx", "utf8");
 
 assert.match(layout, /isClinicalProfessional/);
-assert.match(layout, /isClinicContext && !isClinicalProfessional \? clinicNavItems : personalNavItems/);
-assert.match(layout, /isClinicContext && !isClinicalProfessional \? clinicBottomNavItems : personalBottomNavItems/);
+assert.match(layout, /isClinicalProfessional \? clinicalProfessionalNavItems : clinicNavItems/);
+assert.match(layout, /path: '\/painel\/clinica\/pacientes'/);
 assert.match(layout, /membershipRole === 'professional'/);
 assert.match(selector, /Vinculado à clínica/);
 assert.match(subscription, /Seu acesso ao Evolução Clínica está vinculado à licença da clínica\./);
 assert.match(subscription, /!organization\.clinicalAccessEnabled/);
 assert.match(subscription, /!organization\.licenseActive/);
 assert.doesNotMatch(subscription, /StripeSubscriptionButton/);
-assert.match(personalRoute, /organization\?\.membershipRole === "professional"/);
-assert.match(personalRoute, /\/painel\/clinica\/pacientes/);
+assert.match(personalRoute, /isPersonalShellRouteAllowedForClinicalProfessional/);
+assert.match(personalRoute, /pathname === "\/painel\/tutorial"/);
+assert.match(app, /function PanelDashboardRoute/);
+assert.match(app, /function PanelHistoryRoute/);
+assert.match(app, /path="dashboard" element={<PanelDashboardRoute \/>}/);
+assert.match(app, /path="history" element={<PanelHistoryRoute \/>}/);
+assert.match(history, /fetchClinicPatients/);
+assert.match(history, /clinicEvolutionRequest/);
+assert.doesNotMatch(history, /\.from\("evolutions"\)/);
 assert.doesNotMatch(clinicRoute, /location\.pathname === "\/painel\/clinica"/);
-assert.match(version, /v1\.10\.914/);
+assert.match(version, /v1\.10\.915/);
 
 console.log("clinic professional visual shell and clinic plan gating: PASS");
