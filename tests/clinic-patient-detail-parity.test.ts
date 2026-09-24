@@ -12,6 +12,8 @@ assert.match(detail, /canEdit/);
 assert.match(detail, /Dados do paciente/);
 assert.match(detail, /Profissionais vinculados/);
 assert.match(detail, /patient\.canReadEvolutions && <ClinicPatientEvolutions/);
+assert.match(detail, /tabVisibility\("overview"\)\} grid xl:grid-cols-/);
+assert.doesNotMatch(detail, /tabVisibility\("overview"\)\} xl:grid/);
 assert.match(detail, /Arquivos ainda não estão disponíveis neste contexto clínico/);
 assert.match(detail, /Lembretes ainda precisam de um adapter clínico autorizado/);
 assert.match(detail, /Relatórios pessoais não estão disponíveis neste contexto clínico/);
