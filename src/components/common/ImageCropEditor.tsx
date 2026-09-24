@@ -209,7 +209,7 @@ export function ImageCropEditor({
           src={imageUrl}
           alt={imageAlt}
           draggable={false}
-          className="absolute select-none transition-[width,height,left,top] duration-75"
+          className="absolute max-w-none select-none transition-[width,left,top] duration-75"
           onLoad={(event) => {
             const { naturalWidth, naturalHeight } = event.currentTarget;
             if (naturalWidth > 0 && naturalHeight > 0) {
@@ -218,7 +218,7 @@ export function ImageCropEditor({
           }}
           style={{
             width: `${imageWidthPercent}%`,
-            height: `${imageHeightPercent}%`,
+            height: 'auto',
             left: `${imageLeftPercent}%`,
             top: `${imageTopPercent}%`,
             transform: 'translate(-50%, -50%)',
