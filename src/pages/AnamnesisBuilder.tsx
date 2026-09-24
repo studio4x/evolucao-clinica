@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowDown, ArrowUp, Eye, GripVertical, Info, Loader2, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowDown, ArrowUp, CheckCircle2, Eye, GripVertical, Info, Layers3, Loader2, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { AnamnesisRenderer } from '../components/anamnesis/AnamnesisRenderer';
 import { useAuthStore } from '../store/authStore';
 import { showAlert, showConfirm } from '../store/modalStore';
@@ -40,6 +42,15 @@ const FIELD_TYPES: Array<{ value: AnamnesisFieldType; label: string }> = [
 
 const fieldLabel = (type: AnamnesisFieldType) => FIELD_TYPES.find((item) => item.value === type)?.label || 'Campo';
 
+const BUILDER_GUIDE_STEPS: FeatureGuideStep[] = [
+  { title: 'Organize por seções', description: 'Crie seções para agrupar informações relacionadas e facilitar o preenchimento da Anamnese.', icon: Layers3 },
+  { title: 'Adicione os campos', description: 'Dentro de cada seção, escolha os campos necessários e configure as opções disponíveis.', icon: Plus },
+  { title: 'Use “Informações básicas”', description: 'A seção Informações básicas reúne dados cadastrais do paciente que já existem no Evolução Clínica. Quando utilizada, esses dados podem ser preenchidos automaticamente a partir do cadastro do paciente, conforme o comportamento atualmente implementado. Você também pode adicionar campos personalizados nessa seção.', icon: Info },
+  { title: 'Visualize antes de publicar', description: 'Use a visualização do modelo para conferir como a Anamnese ficará para preenchimento.', icon: Eye },
+  { title: 'Publique para reutilizar', description: 'Depois de publicar, o modelo ficará disponível para utilização com seus pacientes.', icon: CheckCircle2 },
+  { title: 'Atualize quando precisar', description: 'Você poderá continuar ajustando seu modelo. Ao publicar alterações, uma nova versão deve ser utilizada nos próximos usos, preservando os registros anteriores conforme as regras de versionamento já implementadas.', icon: Sparkles },
+];
+
 function moveItem<T>(items: T[], index: number, direction: -1 | 1) {
   const next = index + direction;
   if (next < 0 || next >= items.length) return items;
@@ -60,6 +71,7 @@ export default function AnamnesisBuilder() {
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const sourceTemplate = useMemo(
     () => templates.find((template) => template.id === searchParams.get('source')) || null,
@@ -165,7 +177,7 @@ export default function AnamnesisBuilder() {
 
   return <div className="w-full space-y-5 pb-10">
     <button type="button" onClick={() => navigate('/painel/anamnesis/modelos')} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline"><ArrowLeft size={14} />Voltar para meus modelos</button>
-    <PanelPageHeader title={editingTemplate ? 'Editar modelo de anamnese' : sourceTemplate ? 'Personalizar modelo' : 'Criar minha própria anamnese'} description="Monte seções e campos do jeito que você trabalha. O modelo ficará disponível para todos os seus pacientes." actions={<div className="flex flex-wrap gap-2"><button type="button" onClick={() => setPreviewOpen(true)} className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"><Eye size={15} />Visualizar</button><button type="button" onClick={() => void save()} disabled={saving} className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Salvar modelo</button></div>} />
+    <PanelPageHeader title={editingTemplate ? 'Editar modelo de anamnese' : sourceTemplate ? 'Personalizar modelo' : 'Criar minha própria anamnese'} description={sourceTemplate ? 'Você está usando um modelo existente como ponto de partida. As alterações serão feitas na sua própria versão, sem modificar o modelo original.' : 'Monte seções e campos do jeito que você trabalha. O modelo ficará disponível para todos os seus pacientes.'} titleActions={<FeatureGuideButton label="o Builder de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />} actions={<div className="flex flex-wrap items-center justify-end gap-2"><span className="md:hidden"><FeatureGuideButton compact label="o Builder de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span><button type="button" onClick={() => setPreviewOpen(true)} className="btn-outline inline-flex items-center gap-2 px-3 py-2 text-xs"><Eye size={15} />Visualizar</button><button type="button" onClick={() => void save()} disabled={saving} className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Salvar modelo</button></div>} />
 
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
       <main className="space-y-4">
@@ -186,6 +198,7 @@ export default function AnamnesisBuilder() {
       <aside className="card h-fit space-y-3 p-5"><h2 className="text-sm font-bold text-brand-text">Como funciona</h2><p className="text-xs leading-relaxed text-brand-text-muted">Edite o rascunho livremente. A versão só é criada quando você clicar em “Salvar modelo”.</p><ul className="space-y-2 text-xs text-brand-text-muted"><li>• IDs permanecem estáveis ao renomear ou reordenar.</li><li>• Cada publicação cria uma nova versão.</li><li>• Anamneses antigas não mudam.</li></ul>{dirty && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[10px] font-semibold text-amber-800">Alterações não publicadas preservadas neste dispositivo.</p>}</aside>
     </div>
 
+    <FeatureGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} eyebrow="Builder de Anamnese" title="Como criar seu modelo de Anamnese?" description={sourceTemplate ? 'Você está usando um modelo existente como ponto de partida. As alterações serão feitas na sua própria versão, sem modificar o modelo original.' : 'Monte uma estrutura de Anamnese que faça sentido para a sua rotina. Você pode organizar o modelo em seções e adicionar os campos que deseja preencher durante o atendimento.'} steps={BUILDER_GUIDE_STEPS} note="A estrutura do modelo ajuda a organizar o registro, mas o profissional continua responsável por definir quais informações são adequadas ao seu atendimento e por revisar o conteúdo registrado." />
     {previewOpen && <div role="dialog" aria-modal="true" aria-label="Visualização do modelo" className="fixed inset-0 z-[120] overflow-y-auto bg-slate-900/50 p-4 sm:p-8"><div className="mx-auto max-w-4xl rounded-2xl bg-brand-bg p-4 shadow-2xl sm:p-6"><div className="mb-4 flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wide text-brand-primary">Visualização</p><h2 className="text-xl font-bold text-brand-text">{name || 'Modelo de anamnese'}</h2></div><button type="button" onClick={() => setPreviewOpen(false)} aria-label="Fechar visualização" className="rounded-lg p-2 text-brand-text-muted hover:bg-brand-border/50"><X size={18} /></button></div><AnamnesisRenderer sections={previewSections} answers={previewAnswers} patient={previewPatient} disabled expandedSections={new Set(previewSections.map((section) => section.id || section.key))} onToggleSection={() => undefined} onChange={() => undefined} fieldHasValue={(value) => value !== null && value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0)} /></div></div>}
   </div>;
 }

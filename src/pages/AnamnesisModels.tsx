@@ -1,16 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Archive, Copy, Edit3, Plus, RotateCcw } from 'lucide-react';
+import { Archive, CheckCircle2, Copy, Edit3, ListChecks, Plus, RotateCcw, Sparkles, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
+import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
+import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { fetchAnamnesisTemplates, setPersonalAnamnesisTemplateStatus, type AnamnesisTemplate } from '../services/anamnesis';
 import { showAlert, showConfirm } from '../store/modalStore';
 
 const cardClass = 'rounded-2xl border border-brand-border bg-white p-4 shadow-sm';
 
+const MODELS_GUIDE_STEPS: FeatureGuideStep[] = [
+  { title: 'Use os modelos disponíveis', description: 'Você pode utilizar os modelos de Anamnese já disponíveis no Evolução Clínica como ponto de partida.', icon: ListChecks },
+  { title: 'Crie seu próprio modelo', description: 'Se preferir, crie uma estrutura personalizada de acordo com a sua rotina de atendimento.', icon: Sparkles },
+  { title: 'Personalize um modelo existente', description: 'Use um modelo disponível como base e adapte-o às suas necessidades. A personalização cria o seu próprio modelo e não altera o modelo original do Evolução Clínica.', icon: Copy },
+  { title: 'Reutilize com seus pacientes', description: 'Depois de publicado, seu modelo fica disponível para ser utilizado nas Anamneses dos seus pacientes.', icon: Users },
+  { title: 'Continue aprimorando', description: 'Quando você fizer alterações e publicar uma nova versão, os próximos usos poderão utilizar a versão mais recente do modelo.', icon: CheckCircle2 },
+];
+
 export default function AnamnesisModels() {
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<AnamnesisTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -45,10 +56,11 @@ export default function AnamnesisModels() {
   );
 
   return <div className="w-full space-y-5 pb-10">
-    <PanelPageHeader title="Modelos de anamnese" description="Crie modelos pessoais reutilizáveis para todos os seus pacientes, mantendo os modelos oficiais intactos." actions={<button type="button" onClick={() => navigate('/painel/anamnesis/modelos/novo')} className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs"><Plus size={15} />Criar minha própria anamnese</button>} />
+    <PanelPageHeader title="Modelos de anamnese" description="Crie modelos pessoais reutilizáveis para todos os seus pacientes, mantendo os modelos oficiais intactos." titleActions={<FeatureGuideButton label="os modelos de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} />} actions={<div className="flex flex-wrap items-center justify-end gap-2"><span className="md:hidden"><FeatureGuideButton compact label="os modelos de Anamnese" expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span><button type="button" onClick={() => navigate('/painel/anamnesis/modelos/novo')} className="btn-primary inline-flex items-center gap-2 px-3 py-2 text-xs"><Plus size={15} />Criar minha própria anamnese</button></div>} />
     {loading ? <div className="card p-6 text-sm text-brand-text-muted">Carregando modelos...</div> : <>
       <section className="space-y-3"><div><h2 className="text-lg font-bold text-brand-text">Meus modelos</h2><p className="text-xs text-brand-text-muted">Modelos privados, disponíveis somente para você e seus próprios pacientes.</p></div>{personal.length ? <div className="grid gap-3 lg:grid-cols-2">{personal.map(renderPersonal)}</div> : <div className="card p-5 text-sm text-brand-text-muted">Você ainda não criou um modelo pessoal.</div>}</section>
       <section className="space-y-3"><div><h2 className="text-lg font-bold text-brand-text">Modelos recomendados</h2><p className="text-xs text-brand-text-muted">Você pode personalizar uma cópia; o modelo oficial não será alterado.</p></div><div className="grid gap-3 lg:grid-cols-2">{standard.map((template) => <article key={template.id} className={cardClass}><h3 className="font-bold text-brand-text">{template.name}</h3><p className="mt-1 text-xs text-brand-text-muted">Modelo oficial · versão {template.version}</p><button type="button" onClick={() => navigate(`/painel/anamnesis/modelos/novo?source=${template.id}`)} className="btn-outline mt-4 inline-flex items-center gap-1.5 px-3 py-2 text-xs"><Copy size={14} />Personalizar modelo</button></article>)}</div></section>
     </>}
+    <FeatureGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} eyebrow="Modelos de Anamnese" title="Como funcionam os modelos de Anamnese?" description="Nesta página você pode criar e organizar modelos de Anamnese para reutilizar com seus pacientes." steps={MODELS_GUIDE_STEPS} note="As Anamneses já registradas preservam suas informações e versões anteriores. Alterar um modelo não deve modificar silenciosamente registros clínicos já concluídos." />
   </div>;
 }
