@@ -1384,6 +1384,7 @@ export default function PatientForm() {
                     const postal_code = formatPostalCode(event.target.value);
                     if (postal_code.replace(/\D/g, '') !== lastLookedUpPostalCodeRef.current) setPostalCodeLookupState('idle');
                     setFormData((current) => ({ ...current, postal_code }));
+                    if (isCompletePostalCode(postal_code)) void lookupPostalCode(postal_code);
                   }}
                   onBlur={(event) => void lookupPostalCode(event.target.value)}
                   className="input-field p-2 sm:max-w-xs"
