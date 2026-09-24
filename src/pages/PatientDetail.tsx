@@ -2690,23 +2690,6 @@ export default function PatientDetail() {
                 </div>
               )}
 
-              <Link
-                to={`/painel/patients/${id}/anamnesis`}
-                className={`hidden xl:flex w-full items-center justify-center space-x-2 rounded-xl px-4 py-2 transition-colors text-sm font-medium ${
-                  hasYearlyAccess
-                    ? 'bg-brand-primary text-white hover:bg-brand-primary/90'
-                    : 'border border-brand-primary/30 bg-brand-primary/5 text-brand-primary hover:bg-brand-primary/10'
-                }`}
-              >
-                <ClipboardList size={16} />
-                <span className="flex flex-col items-start leading-tight">
-                  <span>{hasYearlyAccess ? 'Abrir anamnese' : 'Acessar anamnese'}</span>
-                  {!hasYearlyAccess && (
-                    <span className="text-[10px] font-normal opacity-80">Somente para assinantes do Plano Anual</span>
-                  )}
-                </span>
-              </Link>
-
               {patient.target_folder_id && hasYearlyAccess && (
                 <a
                   href={`https://drive.google.com/drive/folders/${encodeURIComponent(patient.target_folder_id)}`}
@@ -2742,17 +2725,17 @@ export default function PatientDetail() {
             </div>
           </div>
 
-          <div className={`order-3 xl:hidden ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
-            <PatientAnamnesisSummaryCard
-              patientId={patient.id}
-              href={`/painel/patients/${id}/anamnesis`}
-            />
-          </div>
-
           <div className={`order-3 xl:order-none xl:col-start-2 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
             <PatientSessionsSummaryCard
               patientId={patient.id}
               href={`/painel/patients/${id}/sessions`}
+            />
+          </div>
+
+          <div className={`order-3 xl:order-none xl:col-start-2 xl:row-start-2 ${activeMobileTab === 'overview' ? 'block patient-mobile-tab-enter-' + mobileTabMotion : 'hidden'}`}>
+            <PatientAnamnesisSummaryCard
+              patientId={patient.id}
+              href={`/painel/patients/${id}/anamnesis`}
             />
           </div>
 

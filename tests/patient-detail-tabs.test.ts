@@ -21,5 +21,12 @@ assert.match(source, /btn-outline flex h-10 min-h-10[\s\S]*Editar paciente/);
 assert.match(source, /btn-primary flex h-10 min-h-10[\s\S]*Nova evolução/);
 assert.match(source, /btn-outline hidden h-10 min-h-10[\s\S]*Excluir paciente/);
 assert.doesNotMatch(source, /xl:h-auto/, 'As ações desktop não devem depender de alturas automáticas diferentes.');
+assert.doesNotMatch(
+  source,
+  /to=\{`\/painel\/patients\/\$\{id\}\/anamnesis`\}[\s\S]{0,500}<ClipboardList/,
+  'O card Prontuário não deve conter o CTA de Anamnese.',
+);
+assert.match(source, /PatientSessionsSummaryCard[\s\S]*PatientAnamnesisSummaryCard/, 'O card de Anamnese deve ficar depois do Controle de Sessões.');
+assert.match(source, /xl:col-start-2 xl:row-start-2[\s\S]*PatientAnamnesisSummaryCard/, 'O card de Anamnese deve ocupar a linha abaixo no desktop.');
 
 console.log('Patient detail tabs tests passed.');
