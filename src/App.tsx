@@ -55,7 +55,6 @@ const ClinicPatientDetail = lazyWithRetry(() => import('./pages/ClinicPatientDet
 const ClinicInvitationAccept = lazyWithRetry(() => import('./pages/ClinicInvitationAccept'), 'ClinicInvitationAccept');
 const ClinicBilling = lazyWithRetry(() => import('./pages/ClinicBilling'), 'ClinicBilling');
 const ClinicBillingSuccess = lazyWithRetry(() => import('./pages/ClinicBilling').then((module) => ({ default: module.ClinicBillingSuccess })), 'ClinicBillingSuccess');
-const ClinicProfessionalHistory = lazyWithRetry(() => import('./pages/ClinicProfessionalHistory'), 'ClinicProfessionalHistory');
 
 // LandingPage é mantida estática para velocidade máxima de FCP/LCP na Home
 import LandingPage from './pages/LandingPage';
@@ -370,32 +369,13 @@ function RootRoute() {
   return <LandingPage />;
 }
 
-function PanelDashboardRoute() {
+function ClinicalAdminContextGuard({ children }: { children: React.ReactNode }) {
   const { activeContext, organizations } = useClinicContextStore();
   const organization = activeContext.type === 'organization'
     ? organizations.find(({ id }) => id === activeContext.organizationId)
     : null;
-  const clinicalProfessional = organization?.membershipRole === 'professional'
-    && organization.clinicalAccessEnabled
-    && organization.licenseActive;
-  if (clinicalProfessional) return <ClinicShell />;
-  if (organization?.membershipRole === 'professional') return <Navigate to="/painel/subscription" replace />;
   if (organization) return <Navigate to="/painel/clinica" replace />;
-  return <Dashboard />;
-}
-
-function PanelHistoryRoute() {
-  const { activeContext, organizations } = useClinicContextStore();
-  const organization = activeContext.type === 'organization'
-    ? organizations.find(({ id }) => id === activeContext.organizationId)
-    : null;
-  const clinicalProfessional = organization?.membershipRole === 'professional'
-    && organization.clinicalAccessEnabled
-    && organization.licenseActive;
-  if (clinicalProfessional) return <ClinicProfessionalHistory />;
-  if (organization?.membershipRole === 'professional') return <Navigate to="/painel/subscription" replace />;
-  if (organization) return <Navigate to="/painel/clinica" replace />;
-  return <History />;
+  return <>{children}</>;
 }
 
 
@@ -995,14 +975,14 @@ export default function App() {
             <Route path="clinica/pacientes/:organizationPatientId" element={<ClinicRoute><ClinicPatientDetail /></ClinicRoute>} />
             <Route path="clinica/contratar" element={<ClinicRoute><ClinicBilling /></ClinicRoute>} />
             <Route path="clinica/contratacao/sucesso" element={<ClinicRoute><ClinicBillingSuccess /></ClinicRoute>} />
-            <Route path="dashboard" element={<PanelDashboardRoute />} />
+            <Route path="dashboard" element={<ClinicalAdminContextGuard><Dashboard /></ClinicalAdminContextGuard>} />
             <Route path="patients" element={<PersonalContextRoute><Patients /></PersonalContextRoute>} />
             <Route path="patients/new" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />
             <Route path="patients/:id/edit" element={<PersonalContextRoute><PatientForm /></PersonalContextRoute>} />
             <Route path="patients/:id" element={<PersonalContextRoute><PatientDetail /></PersonalContextRoute>} />
             <Route path="patients/:id/sessions" element={<PersonalContextRoute><PatientSessions /></PersonalContextRoute>} />
             <Route path="patients/:id/evolutions/new" element={<PersonalContextRoute><NewEvolution /></PersonalContextRoute>} />
-            <Route path="history" element={<PanelHistoryRoute />} />
+            <Route path="history" element={<ClinicalAdminContextGuard><History /></ClinicalAdminContextGuard>} />
             <Route path="tutorial" element={<PersonalContextRoute><Tutorial /></PersonalContextRoute>} />
             <Route path="share-target" element={<PersonalContextRoute><ShareTarget /></PersonalContextRoute>} />
             <Route path="subscription" element={<ContextSubscription />} />

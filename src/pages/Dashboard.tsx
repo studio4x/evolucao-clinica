@@ -10,6 +10,9 @@ import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { showAlert, showConfirm } from '../store/modalStore';
 import { OnboardingProgressCard } from '../components/onboarding/OnboardingProgressCard';
+import { useClinicContextStore } from '../store/clinicContextStore';
+import { fetchClinicPatients } from '../services/clinicPatients';
+import { clinicEvolutionRequest } from '../services/clinicEvolutions';
 const normalizeText = (text: string): string => {
   if (!text) return '';
   return text
@@ -68,12 +71,24 @@ const matchPatientWithEvent = (patient: any, summary: string, description: strin
 
 export default function Dashboard() {
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan, subscriptionStatus, subscriptionEndsAt, profileRole } = useAuthStore();
+  const { activeContext, organizations } = useClinicContextStore();
+  const activeOrganization = activeContext.type === 'organization'
+    ? organizations.find(({ id }) => id === activeContext.organizationId)
+    : null;
+  const isClinicalProfessional = activeOrganization?.membershipRole === 'professional'
+    && activeOrganization.clinicalAccessEnabled
+    && activeOrganization.licenseActive;
+  const patientListPath = isClinicalProfessional ? '/painel/clinica/pacientes' : '/painel/patients';
+  const newPatientPath = isClinicalProfessional ? '/painel/clinica/pacientes/new' : '/painel/patients/new';
+  const patientPath = (patient: any) => isClinicalProfessional
+    ? `/painel/clinica/pacientes/${patient.organizationPatientId || patient.organization_patient_id}`
+    : `/painel/patients/${patient.id}`;
   const hasCalendarAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.calendarReadOnly);
   const [stats, setStats] = useState({
     totalPatients: 0,
     recentEvolutions: 0,
     errorEvolutions: 0,
-    totalMinutes: 0
+    totalMinutes: 0 as number | null
   });
   const [loading, setLoading] = useState(true);
 
@@ -125,7 +140,7 @@ export default function Dashboard() {
   );
   const endsAtDate = subscriptionEndsAt ? new Date(subscriptionEndsAt) : null;
   const isSubscriptionExpired = endsAtDate ? endsAtDate < new Date() : false;
-  const showSubscriptionCta = profileRole !== 'admin' && (!hasPaidSubscription || !hasActiveSubscription || isSubscriptionExpired);
+  const showSubscriptionCta = !isClinicalProfessional && profileRole !== 'admin' && (!hasPaidSubscription || !hasActiveSubscription || isSubscriptionExpired);
 
   const handleWhatsAppClick = async (e: React.MouseEvent, fullName: string, phone: string) => {
     e.preventDefault();
@@ -189,13 +204,36 @@ export default function Dashboard() {
       setCalendarError(null);
 
       // 1. Busca pacientes ativos (com birth_date e phone para calcular aniversários e WhatsApp)
-      const { data: patientsData, error: patientsError } = await supabase
-        .from('patients')
-        .select('id, full_name, birth_date, phone')
-        .eq('professional_id', user.id)
-        .eq('status', 'active');
-
-      if (patientsError) throw patientsError;
+      let patientsData: any[];
+      let evolutionsThisWeek: any[];
+      if (isClinicalProfessional && activeOrganization) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('session_required');
+        const clinicPatients = await fetchClinicPatients(session.access_token, activeOrganization.id);
+        patientsData = clinicPatients.map((patient) => ({
+          ...patient,
+          id: patient.patient_id,
+          organizationPatientId: patient.organization_patient_id,
+        }));
+        const clinicEvolutionResults = await Promise.all(clinicPatients.map(async (patient) => {
+          try {
+            const result = await clinicEvolutionRequest(patient.organization_patient_id);
+            return result.evolutions || [];
+          } catch {
+            return [];
+          }
+        }));
+        evolutionsThisWeek = clinicEvolutionResults.flat();
+      } else {
+        const { data, error: patientsError } = await supabase
+          .from('patients')
+          .select('id, full_name, birth_date, phone')
+          .eq('professional_id', user.id)
+          .eq('status', 'active');
+        if (patientsError) throw patientsError;
+        patientsData = data || [];
+        evolutionsThisWeek = [];
+      }
       setPatients(patientsData || []);
 
       // 2. Busca evoluções realizadas nesta semana (de segunda-feira até hoje, no fuso local do terapeuta)
@@ -220,15 +258,17 @@ export default function Dashboard() {
       const localTodayStr = formatDateStr(now);
       const localTomorrowStr = formatDateStr(tomorrow);
 
-      const { data: evolutionsThisWeek, error: evolutionsError } = await supabase
-        .from('evolutions')
-        .select('id, patient_id, session_date')
-        .is('organization_id', null)
-        .eq('professional_id', user.id)
-        .gte('session_date', startOfWeekStr)
-        .lte('session_date', localTomorrowStr);
-
-      if (evolutionsError) throw evolutionsError;
+      if (!isClinicalProfessional) {
+        const { data, error: evolutionsError } = await supabase
+          .from('evolutions')
+          .select('id, patient_id, session_date')
+          .is('organization_id', null)
+          .eq('professional_id', user.id)
+          .gte('session_date', startOfWeekStr)
+          .lte('session_date', localTomorrowStr);
+        if (evolutionsError) throw evolutionsError;
+        evolutionsThisWeek = data || [];
+      }
 
       // Mantemos o set apenas para compatibilidade, se necessário em algum lugar
       const evolvedSet = new Set<string>(evolutionsThisWeek?.map(e => e.patient_id) || []);
@@ -302,7 +342,7 @@ export default function Dashboard() {
     } finally {
       setCalendarLoading(false);
     }
-  }, [user, googleAccessToken, hasCalendarAccess, setGoogleAccessToken]);
+  }, [activeOrganization, isClinicalProfessional, user, googleAccessToken, hasCalendarAccess, setGoogleAccessToken]);
 
   useEffect(() => {
     fetchCalendarAndPatients();
@@ -325,14 +365,22 @@ export default function Dashboard() {
 
     const fetchBirthdays = async () => {
       try {
-        const { data, error } = await supabase
-          .from('patients')
-          .select('id, full_name, birth_date, phone')
-          .eq('professional_id', user.id)
-          .eq('status', 'active')
-          .not('birth_date', 'is', null);
-
-        if (error) throw error;
+        let data: any[];
+        if (isClinicalProfessional && activeOrganization) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) throw new Error('session_required');
+          const clinicPatients = await fetchClinicPatients(session.access_token, activeOrganization.id);
+          data = clinicPatients.map((patient) => ({ ...patient, id: patient.patient_id, organizationPatientId: patient.organization_patient_id }));
+        } else {
+          const result = await supabase
+            .from('patients')
+            .select('id, full_name, birth_date, phone')
+            .eq('professional_id', user.id)
+            .eq('status', 'active')
+            .not('birth_date', 'is', null);
+          if (result.error) throw result.error;
+          data = result.data || [];
+        }
 
         const now = new Date();
         const todayMM = now.getMonth() + 1;
@@ -363,7 +411,7 @@ export default function Dashboard() {
     };
 
     fetchBirthdays();
-  }, [user]);
+  }, [activeOrganization, isClinicalProfessional, user]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -371,47 +419,36 @@ export default function Dashboard() {
       const uid = user.id;
 
       try {
-        // Busca total de pacientes
-        const { count: patientsCount, error: patientsError } = await supabase
-          .from('patients')
-          .select('*', { count: 'exact', head: true })
-          .eq('professional_id', uid)
-          .eq('status', 'active');
-          
-        if (patientsError) throw patientsError;
-
-        // Busca total de evoluções
-        const { count: evolutionsCount, error: evolutionsError } = await supabase
-          .from('evolutions')
-          .select('*', { count: 'exact', head: true })
-        .is('organization_id', null)
-          .eq('professional_id', uid);
-          
-        if (evolutionsError) throw evolutionsError;
-
-        // Busca total de falhas em evoluções
-        const { count: errorsCount, error: errorsError } = await supabase
-          .from('evolutions')
-          .select('*', { count: 'exact', head: true })
-        .is('organization_id', null)
-          .eq('professional_id', uid)
-          .eq('transcription_status', 'failed');
-          
-        if (errorsError) throw errorsError;
-
-        // Busca logs de uso para calcular total de minutos
-        const { data: usageLogs, error: usageError } = await supabase
-          .from('usage_logs')
-          .select('audio_duration_seconds')
-          .eq('professional_id', uid);
-
-        if (usageError) throw usageError;
-
-        let totalSeconds = 0;
-        usageLogs?.forEach(log => {
-          totalSeconds += Number(log.audio_duration_seconds || 0);
-        });
-        const totalMinutes = totalSeconds / 60;
+        let patientsCount = 0;
+        let evolutionsCount = 0;
+        let errorsCount = 0;
+        let totalMinutes: number | null = 0;
+        if (isClinicalProfessional && activeOrganization) {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) throw new Error('session_required');
+          const clinicPatients = await fetchClinicPatients(session.access_token, activeOrganization.id);
+          patientsCount = clinicPatients.length;
+          const clinicEvolutionResults = await Promise.all(clinicPatients.map(async (patient) => {
+            try { return (await clinicEvolutionRequest(patient.organization_patient_id)).evolutions || []; } catch { return []; }
+          }));
+          const clinicEvolutions = clinicEvolutionResults.flat();
+          evolutionsCount = clinicEvolutions.length;
+          errorsCount = clinicEvolutions.filter((evolution: any) => evolution.transcription_status === 'failed').length;
+          totalMinutes = null;
+        } else {
+          const patientsResult = await supabase.from('patients').select('*', { count: 'exact', head: true }).eq('professional_id', uid).eq('status', 'active');
+          if (patientsResult.error) throw patientsResult.error;
+          patientsCount = patientsResult.count || 0;
+          const evolutionsResult = await supabase.from('evolutions').select('*', { count: 'exact', head: true }).is('organization_id', null).eq('professional_id', uid);
+          if (evolutionsResult.error) throw evolutionsResult.error;
+          evolutionsCount = evolutionsResult.count || 0;
+          const errorsResult = await supabase.from('evolutions').select('*', { count: 'exact', head: true }).is('organization_id', null).eq('professional_id', uid).eq('transcription_status', 'failed');
+          if (errorsResult.error) throw errorsResult.error;
+          errorsCount = errorsResult.count || 0;
+          const usageResult = await supabase.from('usage_logs').select('audio_duration_seconds').eq('professional_id', uid);
+          if (usageResult.error) throw usageResult.error;
+          totalMinutes = (usageResult.data || []).reduce((total, log) => total + Number(log.audio_duration_seconds || 0), 0) / 60;
+        }
 
         setStats({
           totalPatients: patientsCount || 0,
@@ -428,7 +465,7 @@ export default function Dashboard() {
     };
 
     fetchDashboardData();
-  }, [user]);
+  }, [activeOrganization, isClinicalProfessional, user]);
 
   if (loading) return <div>Carregando...</div>;
 
@@ -450,7 +487,7 @@ export default function Dashboard() {
             <span>Ver Tutorial</span>
           </Link>
           <Link 
-            to="/painel/patients/new" 
+            to={newPatientPath}
             className="btn-primary flex items-center shadow-lg shadow-brand-primary/20"
           >
             <Plus size={20} className="mr-2" />
@@ -544,7 +581,7 @@ export default function Dashboard() {
 
       {/* Main Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        <Link to="/painel/patients" className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
+        <Link to={patientListPath} className="group relative overflow-hidden card p-0 border-0 shadow-lg hover:shadow-xl transition-all flex flex-col">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
           <div className="p-6 relative z-10 flex grow justify-between items-center">
             <div className="space-y-1 min-w-0">
@@ -597,7 +634,7 @@ export default function Dashboard() {
             </div>
             <div className="text-right">
               <p className="text-4xl xl:text-5xl font-display font-bold text-brand-text/20 group-hover:text-purple-500/40 transition-colors shrink-0 tabular-nums">
-                {stats.totalMinutes.toFixed(1)}
+                {stats.totalMinutes === null ? '—' : stats.totalMinutes.toFixed(1)}
               </p>
             </div>
           </div>
@@ -628,7 +665,7 @@ export default function Dashboard() {
                 className="flex items-center justify-between p-3 bg-pink-50 border border-pink-200 rounded-xl hover:bg-pink-100/70 transition-colors"
               >
                 <Link
-                  to={`/painel/patients/${p.id}`}
+                  to={patientPath(p)}
                   className="flex items-center space-x-3 flex-1 min-w-0"
                 >
                   <div className="w-9 h-9 rounded-full bg-pink-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow">
@@ -652,7 +689,7 @@ export default function Dashboard() {
                       </svg>
                     </button>
                   )}
-                  <Link to={`/painel/patients/${p.id}`} className="p-1 hover:text-pink-600 transition-colors ml-1">
+                  <Link to={patientPath(p)} className="p-1 hover:text-pink-600 transition-colors ml-1">
                     <ArrowRight size={14} className="text-pink-400" />
                   </Link>
                 </div>
@@ -666,7 +703,7 @@ export default function Dashboard() {
                 className="flex items-center justify-between p-3 bg-brand-bg/50 border border-brand-border rounded-xl hover:bg-pink-50/70 hover:border-pink-200 transition-colors"
               >
                 <Link
-                  to={`/painel/patients/${p.id}`}
+                  to={patientPath(p)}
                   className="flex items-center space-x-3 flex-1 min-w-0"
                 >
                   <div className="w-9 h-9 rounded-full bg-brand-primary/10 flex items-center justify-center text-brand-primary font-bold text-sm flex-shrink-0">
@@ -691,7 +728,7 @@ export default function Dashboard() {
                       </svg>
                     </button>
                   )}
-                  <Link to={`/painel/patients/${p.id}`} className="p-1 hover:text-pink-600 transition-colors ml-1">
+                  <Link to={patientPath(p)} className="p-1 hover:text-pink-600 transition-colors ml-1">
                     <ArrowRight size={14} className="text-brand-text-muted" />
                   </Link>
                 </div>
@@ -851,7 +888,9 @@ export default function Dashboard() {
                       </span>
                     ) : event.patient ? (
                       <Link
-                        to={`/painel/patients/${event.patient.id}/evolutions/new?date=${event.eventDateStr}`}
+                        to={isClinicalProfessional
+                          ? `/painel/clinica/pacientes/${event.patient.organizationPatientId}`
+                          : `/painel/patients/${event.patient.id}/evolutions/new?date=${event.eventDateStr}`}
                         className="btn-primary py-1.5 px-3 text-xs flex items-center space-x-1.5 shadow-sm"
                       >
                         <Mic size={14} />

@@ -14,6 +14,9 @@ import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/documentLogo';
 import { downloadPdfFile } from '../utils/prontuarioPdf';
+import { useClinicContextStore } from '../store/clinicContextStore';
+import { fetchClinicPatients } from '../services/clinicPatients';
+import { clinicEvolutionRequest } from '../services/clinicEvolutions';
 
 const getBase64ImageFromUrl = async (url: string): Promise<string> => {
   const res = await fetch(url);
@@ -48,6 +51,16 @@ export default function History() {
   const [isClearing, setIsClearing] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { user, googleAccessToken, googleGrantedScopes, setGoogleAccessToken, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const { activeContext, organizations } = useClinicContextStore();
+  const activeOrganization = activeContext.type === 'organization'
+    ? organizations.find(({ id }) => id === activeContext.organizationId)
+    : null;
+  const isClinicalProfessional = activeOrganization?.membershipRole === 'professional'
+    && activeOrganization.clinicalAccessEnabled
+    && activeOrganization.licenseActive;
+  const patientPath = (patientId: string) => isClinicalProfessional
+    ? `/painel/clinica/pacientes/${patientId}`
+    : `/painel/patients/${patientId}`;
   const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
 
   const [professional, setProfessional] = useState<any>(null);
@@ -72,6 +85,28 @@ export default function History() {
   const fetchHistory = async () => {
     if (!user) return;
     try {
+      if (isClinicalProfessional && activeOrganization) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) throw new Error('session_required');
+        const clinicPatients = await fetchClinicPatients(session.access_token, activeOrganization.id);
+        const patientEntries = await Promise.all(clinicPatients.map(async (patient) => {
+          try {
+            const result = await clinicEvolutionRequest(patient.organization_patient_id);
+            return { patient, evolutions: result.evolutions || [] };
+          } catch {
+            return { patient, evolutions: [] };
+          }
+        }));
+        const pMap: Record<string, any> = {};
+        const clinicEvolutions = patientEntries.flatMap(({ patient, evolutions }) => {
+          pMap[patient.patient_id] = { ...patient, id: patient.patient_id };
+          return evolutions;
+        });
+        setPatientsMap(pMap);
+        setEvolutions(clinicEvolutions);
+        setProfessional({ full_name: user.user_metadata?.full_name || user.email || 'Profissional' });
+        return;
+      }
       const { data: evos, error: evosError } = await supabase
         .from('evolutions')
         .select('*')
@@ -371,9 +406,10 @@ export default function History() {
 
   useEffect(() => {
     fetchHistory();
-  }, [user]);
+  }, [activeOrganization, isClinicalProfessional, user]);
 
   const handleReprocess = async (evo: any) => {
+    if (isClinicalProfessional) return;
     if (!user) return;
     
     let currentToken = googleAccessToken;
@@ -536,6 +572,7 @@ export default function History() {
   };
 
   const handleClearEvolutions = async () => {
+    if (isClinicalProfessional) return;
     setIsClearing(true);
     try {
       const { error } = await supabase
@@ -566,6 +603,7 @@ export default function History() {
   };
 
   const handleSaveToGoogleDocs = async (evo: any) => {
+    if (isClinicalProfessional) return;
     if (!hasClinicalAccess || !googleAccessToken) {
       alert("Google Drive não autenticado. Por favor, conecte sua conta Google no painel.");
       return;
@@ -630,7 +668,7 @@ export default function History() {
       <PanelPageHeader
         icon={Clock}
         title="Histórico de Evoluções"
-        actions={evolutions.length > 0 && (
+        actions={!isClinicalProfessional && evolutions.length > 0 && (
           <button 
             onClick={() => setShowClearConfirm(true)}
             className="text-red-600 hover:text-red-700 flex items-center space-x-1 text-sm font-medium transition-colors"
@@ -641,7 +679,7 @@ export default function History() {
         )}
       />
 
-      {showClearConfirm && (
+      {!isClinicalProfessional && showClearConfirm && (
         <div className="bg-red-50 border rounded-2xl p-6 border-red-100 shadow-sm">
           <p className="text-red-900 font-medium mb-2">Deseja limpar todo o seu histórico de evoluções?</p>
           <p className="text-sm text-red-700 mb-4">
@@ -708,7 +746,7 @@ export default function History() {
                           )
                         )}
                       </div>
-                      <Link to={`/painel/patients/${evo.patient_id}`} className="text-brand-primary hover:text-brand-primary-hover hover:underline font-semibold text-lg">
+                      <Link to={patientPath(evo.patient_id)} className="text-brand-primary hover:text-brand-primary-hover hover:underline font-semibold text-lg">
                         {patient?.full_name || 'Paciente Desconhecido'}
                       </Link>
                     </div>
@@ -760,7 +798,7 @@ export default function History() {
                             <div className="fixed inset-0 z-10" onClick={() => setActiveDropdownId(null)} />
                             <div className="absolute right-0 top-9 w-72 bg-white border border-brand-border rounded-xl shadow-lg py-1.5 z-20 animate-in fade-in slide-in-from-top-1 duration-150">
                               {/* 1. Salvar no Google Docs (se configurado e pendente) */}
-                              {patient?.google_doc_id && evo.google_doc_append_status !== 'completed' && (
+                              {!isClinicalProfessional && patient?.google_doc_id && evo.google_doc_append_status !== 'completed' && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -778,7 +816,7 @@ export default function History() {
                               )}
 
                               {/* 2. Salvar no Drive (se assinado e com pasta configurada) */}
-                              {evo.status === 'signed' && hasClinicalAccess && googleAccessToken && patient?.target_folder_id && (
+                              {!isClinicalProfessional && evo.status === 'signed' && hasClinicalAccess && googleAccessToken && patient?.target_folder_id && (
                                 <button
                                   type="button"
                                   onClick={async () => {
@@ -830,7 +868,7 @@ export default function History() {
                               )}
 
                               {/* 3. Acessar Documento */}
-                              {patient?.google_doc_id && (
+                              {!isClinicalProfessional && patient?.google_doc_id && (
                                 <a
                                   href={`https://docs.google.com/document/d/${patient.google_doc_id}/edit`}
                                   target="_blank"
@@ -864,7 +902,7 @@ export default function History() {
 
                               {/* 5. Acessar Paciente */}
                               <Link
-                                to={`/painel/patients/${evo.patient_id}`}
+                                to={patientPath(evo.patient_id)}
                                 onClick={() => setActiveDropdownId(null)}
                                 className="w-full text-left px-4 py-2 hover:bg-brand-bg flex items-start space-x-2.5 transition-colors cursor-pointer border-t border-brand-border/40 mt-1 pt-1.5"
                               >
