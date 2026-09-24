@@ -15,6 +15,7 @@ export const MONTHLY_PLAN_FEATURES = [
 export const YEARLY_PLAN_RECENT_FEATURES = [
   'Arquivos do paciente no Google Drive',
   'Geração de anamnese estruturada',
+  'Controle de sessões com assinatura e fechamento mensal',
 ];
 
 export const YEARLY_PLAN_FEATURES = [

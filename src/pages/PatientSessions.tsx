@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3,
-  Download, Edit3, Eye, FileText, HelpCircle, Loader2, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
+  ArrowLeft, ArrowRight, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3,
+  Crown, Download, Edit3, Eye, FileText, HelpCircle, Loader2, Lock, PenLine, Plus, Trash2, X, ShieldAlert, ShieldCheck
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useAuthStore } from '../store/authStore';
@@ -105,8 +105,10 @@ function SessionGuideButton({ compact = false, expanded, onOpen }: SessionGuideB
 
 export default function PatientSessions() {
   const siteConfig = useSiteConfig();
+  const navigate = useNavigate();
   const { id } = useParams();
-  const user = useAuthStore((state) => state.user);
+  const { user, profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt } = useAuthStore();
+  const hasYearlyAccess = hasActiveYearlyAccess({ profileRole, subscriptionPlan, subscriptionStatus, subscriptionEndsAt });
   const [patient, setPatient] = useState<any>(null);
   const [professional, setProfessional] = useState<any>(null);
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
@@ -136,7 +138,7 @@ export default function PatientSessions() {
   const [guideOpen, setGuideOpen] = useState(false);
 
   const load = async () => {
-    if (!id || !user) return;
+    if (!id || !user || !hasYearlyAccess) return;
     setLoading(true);
     try {
       const [{ data: patientData, error: patientError }, { data: profData, error: profError }, sessionData, closureData, packageData, evolutionResult] = await Promise.all([
@@ -164,7 +166,7 @@ export default function PatientSessions() {
     }
   };
 
-  useEffect(() => { void load(); }, [id, user?.id, month.getFullYear(), month.getMonth()]);
+  useEffect(() => { void load(); }, [hasYearlyAccess, id, user?.id, month.getFullYear(), month.getMonth()]);
 
   const monthLabel = useMemo(
     () => new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(month),
@@ -491,6 +493,56 @@ export default function PatientSessions() {
     catch (error: any) { void showAlert(error.message || 'Não foi possível cancelar o pacote.', { title: 'Pacote de sessões', variant: 'danger', icon: 'warning' }); }
     finally { setWorking(false); }
   };
+
+  if (!hasYearlyAccess) {
+    return (
+      <div className="space-y-6 pb-12">
+        <Link to={id ? `/painel/patients/${id}` : '/painel/patients'} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-primary hover:underline">
+          <ArrowLeft size={14} />
+          Voltar para o paciente
+        </Link>
+
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="flex items-center text-3xl font-display font-bold text-brand-text">
+              <CalendarDays className="mr-3 shrink-0 text-brand-primary" size={32} />
+              <span>Controle de Sessões</span>
+              <span className="ml-3 hidden shrink-0 sm:inline-flex"><SessionGuideButton expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+            </h1>
+            <p className="mt-1 text-sm text-brand-text-muted">Organize e acompanhe os atendimentos, assinaturas e registros clínicos deste paciente.</p>
+          </div>
+          <span className="sm:hidden"><SessionGuideButton compact expanded={guideOpen} onOpen={() => setGuideOpen(true)} /></span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+          <section className="card space-y-6 rounded-3xl border border-brand-border bg-white p-8 lg:col-span-3">
+            <h2 className="flex items-center gap-2 text-xl font-bold text-brand-text"><CalendarDays className="text-brand-primary" size={24} /><span>Como funciona o Controle de Sessões?</span></h2>
+            <div className="space-y-4">
+              {SESSION_GUIDE_STEPS.slice(0, 3).map((step, index) => (
+                <div key={step.title} className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-lg bg-brand-bg p-2 font-bold text-brand-primary">{index + 1}</div>
+                  <div><h3 className="text-sm font-semibold text-brand-text">{step.title}</h3><p className="mt-0.5 text-xs text-brand-text-muted">{step.description}</p></div>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-brand-border/60 pt-4"><div className="flex items-start gap-3 rounded-2xl bg-sky-50 p-4 text-xs text-sky-800"><ShieldCheck className="mt-0.5 shrink-0 text-sky-600" size={16} /><div><span className="mb-0.5 block font-bold">Registros protegidos:</span>As assinaturas e o fechamento mensal preservam o acompanhamento dos atendimentos.</div></div></div>
+          </section>
+
+          <aside className="card relative flex flex-col justify-between overflow-hidden rounded-3xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white p-8 text-center shadow-sm lg:col-span-2">
+            <div className="pointer-events-none absolute right-0 top-0 h-32 w-32 rounded-full bg-gradient-to-br from-amber-400/15 to-transparent blur-3xl" />
+            <div className="relative z-10 space-y-6">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20"><Lock size={32} /></div>
+              <div className="space-y-2"><h2 className="text-lg font-bold text-amber-950">Disponível no Plano Anual</h2><p className="text-xs leading-relaxed text-amber-800/80">O Controle de Sessões é exclusivo para assinantes do Plano Anual.</p></div>
+              <div className="space-y-2.5 rounded-2xl border border-amber-200/50 bg-amber-50 p-4 text-left">{['Agenda e registro dos atendimentos', 'Assinatura do paciente ou responsável', 'Fechamento mensal e exportação em PDF'].map((benefit) => <div key={benefit} className="flex items-center gap-2 text-xs font-semibold text-amber-900"><Crown size={14} className="shrink-0 fill-amber-500 text-amber-600" />{benefit}</div>)}</div>
+            </div>
+            <div className="relative z-10 pt-8"><button type="button" onClick={() => navigate('/painel/subscription')} className="flex w-full cursor-pointer items-center justify-center space-x-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-3.5 font-bold text-white shadow-md shadow-orange-500/10 transition-all hover:from-amber-600 hover:to-orange-600"><span>Fazer Upgrade Agora</span><ArrowRight size={16} /></button><p className="mt-2 text-[10px] text-amber-800/60">Mude para o Plano Anual para ativar o controle completo</p></div>
+          </aside>
+        </div>
+
+        <FeatureGuideModal open={guideOpen} onClose={() => setGuideOpen(false)} eyebrow="Controle de Sessões" title="Como funciona o Controle de Sessões" description="Use este fluxo para planejar, registrar, assinar e acompanhar os atendimentos do paciente." steps={SESSION_GUIDE_STEPS} note="O Controle de Sessões é uma funcionalidade exclusiva do Plano Anual." supportHref={SESSION_SUPPORT_HREF} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-24">

@@ -34,6 +34,7 @@ const FEATURE_DESCRIPTIONS: Record<string, string> = {
   'até 60 minutos de áudio por evolução': 'No Plano Anual, cada evolução pode reunir até 60 minutos de áudio. A franquia mensal de transcrição continua sendo de até 20 horas.',
   'arquivos do paciente no google drive': 'No Plano Anual, adicione documentos, imagens, áudios e vídeos à pasta do paciente no Google Drive e mantenha o catálogo organizado no prontuário.',
   'geração de anamnese estruturada': 'No Plano Anual, crie uma anamnese estruturada por especialidade, salve versões e gere o PDF do registro.',
+  'controle de sessões com assinatura e fechamento mensal': 'Organize os atendimentos do paciente, registre assinaturas e feche cada mês com exportação em PDF no Plano Anual.',
   'economia de 57% em relação a 12 mensalidades': 'O valor anual de R$ 199 representa aproximadamente 57% de economia em relação a 12 mensalidades de R$ 39.',
   'desconto de ~17% sobre o valor': 'Ao contratar o plano anual, você economiza comparado ao pagamento mensal acumulado.',
   'desconto de ~17% sobre o valor mensal': 'Ao contratar o plano anual, você economiza comparado ao pagamento mensal acumulado.',
