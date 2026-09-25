@@ -177,11 +177,27 @@ export const buildSnapshot = (definition: any, input: { fieldIds?: unknown; sect
   return { schemaVersion: 1, templateVersionId: input.templateVersionId, templateName: input.templateName, versionNumber: input.versionNumber, sections: selected };
 };
 
-export const statusFor = (request: any, response: any, incorporated: boolean) => {
+const timestampToEpochMs = (value: unknown) => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (value instanceof Date) {
+    const time = value.getTime();
+    return Number.isFinite(time) ? time : null;
+  }
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? time : null;
+};
+
+export const isRequestExpired = (request: any, nowMs = Date.now()) => {
+  const expiresAtMs = timestampToEpochMs(request?.expires_at);
+  return expiresAtMs === null || nowMs >= expiresAtMs;
+};
+
+export const statusFor = (request: any, response: any, incorporated: boolean, nowMs = Date.now()) => {
   if (request.revoked_at) return 'revoked';
-  if (request.expires_at && new Date(request.expires_at).getTime() <= Date.now() && !request.submitted_at) return 'expired';
   if (incorporated) return 'incorporated';
   if (request.submitted_at || response?.submitted_at) return 'responded';
+  if (isRequestExpired(request, nowMs)) return 'expired';
   if ((response?.revision || 0) > 0 || response?.respondent_name || response?.respondent_relationship) return 'in_progress';
   return 'awaiting';
 };
@@ -240,7 +256,7 @@ export function registerAnamnesisLinkFormRoutes(
     if (!session) return null;
     const found = await getRequest(session.requestId);
     if (!found) return null;
-    if (found.request.revoked_at || (!found.request.submitted_at && new Date(found.request.expires_at).getTime() <= Date.now())) return null;
+    if (found.request.revoked_at || isRequestExpired(found.request)) return null;
     return { ...found, session };
   };
 
@@ -347,7 +363,7 @@ export function registerAnamnesisLinkFormRoutes(
     if (!rate.allowed) return sendRateLimited(res);
     const found = await getRequestByHash(supabaseAdmin, hashToken(token));
     if (!found) return unavailable(res);
-    if (found.request.revoked_at || new Date(found.request.expires_at).getTime() <= Date.now()) return unavailable(res, 410);
+    if (found.request.revoked_at || isRequestExpired(found.request)) return unavailable(res, 410);
     if (found.request.submitted_at || found.response?.submitted_at) return res.status(409).json({ error: 'Este formulário já foi enviado.', code: 'submitted' });
     const [{ data: patient }, { data: professional }] = await Promise.all([
       supabaseAdmin.from('patients').select('full_name').eq('id', found.request.patient_id).maybeSingle(),
@@ -418,8 +434,8 @@ export function registerAnamnesisLinkFormRoutes(
     if (!isFeatureEnabled()) return unavailable(res);
     const session = requestIdFromSession(req);
     if (!session) return unavailable(res);
-    const found = await getRequest(session.requestId);
-    if (!found || found.request.revoked_at) return unavailable(res);
+    const found = await publicSessionRequest(req);
+    if (!found) return unavailable(res);
     return res.json({ session: createPublicSession(found.request.id, found.request.expires_at), status: statusFor(found.request, found.response, found.incorporations.length > 0), submittedAt: found.response?.submitted_at || found.request.submitted_at || null });
   });
 }
