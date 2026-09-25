@@ -82,6 +82,7 @@ export default function PublicAnamnesisForm() {
       const payload = await response.json().catch(() => ({}));
       if (response.status === 409) { setMessage('conflict'); return; }
       if (!response.ok) throw new Error(payload.error || 'Não foi possível salvar agora.');
+      if (payload.session) sessionStorage.setItem(sessionStorageKey, payload.session);
       setRevision(payload.revision); setSaved(true);
     } catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível salvar agora.'); } finally { setSaving(false); }
   };

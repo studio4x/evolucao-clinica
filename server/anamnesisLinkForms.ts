@@ -362,7 +362,7 @@ export function registerAnamnesisLinkFormRoutes(
     if (!isFeatureEnabled()) return unavailable(res);
     const found = await publicSessionRequest(req);
     if (!found) return unavailable(res);
-    return res.json({ snapshot: found.request.snapshot, respondentType: found.request.respondent_type, draft: found.response?.draft_answers || {}, revision: found.response?.revision || 0, respondentName: found.response?.respondent_name || '', respondentRelationship: found.response?.respondent_relationship || '', status: statusFor(found.request, found.response, found.incorporations.length > 0) });
+    return res.json({ session: createPublicSession(found.request.id, found.request.expires_at), snapshot: found.request.snapshot, respondentType: found.request.respondent_type, draft: found.response?.draft_answers || {}, revision: found.response?.revision || 0, respondentName: found.response?.respondent_name || '', respondentRelationship: found.response?.respondent_relationship || '', status: statusFor(found.request, found.response, found.incorporations.length > 0) });
   });
 
   app.patch('/api/public/anamnesis-link/draft', async (req: UserRequest, res: Response) => {
@@ -372,6 +372,10 @@ export function registerAnamnesisLinkFormRoutes(
     const rate = await consumeRate(supabaseAdmin, `draft:${found.request.id}`, 30, 10 * 60);
     if (rate.unavailable) return res.status(503).json({ error: 'Salvamento temporariamente indisponível.' });
     if (!rate.allowed) return sendRateLimited(res);
+    if (found.response?.last_saved_at && Date.now() - new Date(found.response.last_saved_at).getTime() < 1_800) {
+      res.setHeader('Retry-After', '2');
+      return res.status(429).json({ error: 'Aguarde o salvamento anterior terminar.' });
+    }
     if (Number(req.body?.baseRevision) !== found.response?.revision) return res.status(409).json({ error: 'Este formulário mudou em outra aba. Recarregue a versão mais recente.', code: 'revision_conflict', revision: found.response?.revision || 0 });
     const validation = validateAnswers(found.request.snapshot, req.body?.answers, false);
     if (!validation.valid) return res.status(400).json({ error: 'Revise os campos informados.', fieldErrors: validation.errors });
@@ -382,7 +386,7 @@ export function registerAnamnesisLinkFormRoutes(
     const { data, error } = await supabaseAdmin.from('patient_anamnesis_request_responses').update({ draft_answers: req.body.answers, respondent_name: respondentName || null, respondent_relationship: respondentRelationship || null, revision: nextRevision, last_saved_at: new Date().toISOString() }).eq('request_id', found.request.id).eq('revision', found.response?.revision || 0).is('submitted_at', null).select('revision, last_saved_at').maybeSingle();
     if (error || !data) return res.status(409).json({ error: 'Este formulário mudou em outra aba. Recarregue a versão mais recente.', code: 'revision_conflict' });
     await supabaseAdmin.from('patient_anamnesis_requests').update({ last_activity_at: new Date().toISOString() }).eq('id', found.request.id);
-    return res.json({ ok: true, revision: data.revision, savedAt: data.last_saved_at });
+    return res.json({ ok: true, session: createPublicSession(found.request.id, found.request.expires_at), revision: data.revision, savedAt: data.last_saved_at });
   });
 
   app.post('/api/public/anamnesis-link/submit', async (req: UserRequest, res: Response) => {
@@ -416,7 +420,7 @@ export function registerAnamnesisLinkFormRoutes(
     if (!session) return unavailable(res);
     const found = await getRequest(session.requestId);
     if (!found || found.request.revoked_at) return unavailable(res);
-    return res.json({ status: statusFor(found.request, found.response, found.incorporations.length > 0), submittedAt: found.response?.submitted_at || found.request.submitted_at || null });
+    return res.json({ session: createPublicSession(found.request.id, found.request.expires_at), status: statusFor(found.request, found.response, found.incorporations.length > 0), submittedAt: found.response?.submitted_at || found.request.submitted_at || null });
   });
 }
 
