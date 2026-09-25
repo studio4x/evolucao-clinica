@@ -67,7 +67,8 @@
     "test:google-play-coupon": "tsx tests/google-play-coupon.test.ts",
     "test:seo-social-sharing": "tsx tests/seo-social-sharing.test.ts",
     "test:anamnesis": "tsx tests/patient-anamnesis.test.ts && tsx tests/anamnesis-foundation.test.ts && tsx tests/anamnesis-template-select.test.ts && tsx tests/anamnesis-builder-ux.test.ts",
-    "test:anamnesis-link": "tsx tests/anamnesis-link-forms.test.ts && tsx tests/anamnesis-link-sharing.test.ts",
+    "test:anamnesis-link": "tsx tests/anamnesis-link-forms.test.ts && tsx tests/anamnesis-link-sharing.test.ts && tsx tests/public-anamnesis-refresh.test.ts && tsx tests/public-anamnesis-branding.test.ts",
+    "test:anamnesis-refresh": "tsx tests/public-anamnesis-refresh.test.ts && tsx tests/public-anamnesis-branding.test.ts",
     "test:patient-session-control": "tsx tests/patient-session-control.test.ts",
     "test:patient-session-schedule": "tsx tests/patient-session-schedule.test.ts"
   },

@@ -80,6 +80,36 @@ const initials = (value: unknown) => trimString(value)
   .map((part) => `${Array.from(part)[0]?.toUpperCase() || ''}.`)
   .join(' ');
 
+type PublicBranding = { logo?: string };
+
+export const hasActivePublicBrandingAccess = (professional: any) => {
+  if (professional?.role === 'admin' || professional?.subscription_plan === 'none') return true;
+  const eligiblePlan = professional?.subscription_plan === 'yearly' || professional?.subscription_plan === 'courtesy';
+  const activeStatus = professional?.subscription_status === 'active' || professional?.subscription_status === 'trialing';
+  const endsAt = professional?.subscription_ends_at ? Date.parse(String(professional.subscription_ends_at)) : null;
+  return eligiblePlan && activeStatus && (endsAt === null || Number.isNaN(endsAt) || endsAt >= Date.now());
+};
+
+export const safePublicBrandLogoUrl = (value: unknown, supabaseUrl: string) => {
+  const rawUrl = trimString(value);
+  if (!rawUrl) return null;
+  try {
+    const parsed = new URL(rawUrl);
+    const expectedOrigin = new URL(supabaseUrl).origin;
+    if (parsed.protocol !== 'https:' || parsed.origin !== expectedOrigin) return null;
+    if (!parsed.pathname.startsWith('/storage/v1/object/public/brand/custom_logos/')) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+};
+
+const getPublicBranding = (professional: any, supabaseUrl: string): PublicBranding => {
+  if (!hasActivePublicBrandingAccess(professional)) return {};
+  const logo = safePublicBrandLogoUrl(professional?.custom_logo_url, supabaseUrl);
+  return logo ? { logo } : {};
+};
+
 const getFields = (snapshot: any) => (Array.isArray(snapshot?.sections) ? snapshot.sections : []).flatMap((section: any) =>
   (Array.isArray(section?.fields) ? section.fields : []).map((field: any) => ({ section, field }))
 );
@@ -233,9 +263,9 @@ const requestIdFromSession = (req: Request) => readPublicSession(String(req.head
 
 export function registerAnamnesisLinkFormRoutes(
   app: Express,
-  options: { supabaseAdmin: SupabaseClient; requireAuth: AuthMiddleware; publicOrigin: string }
+  options: { supabaseAdmin: SupabaseClient; requireAuth: AuthMiddleware; publicOrigin: string; supabaseUrl: string }
 ) {
-  const { supabaseAdmin, requireAuth, publicOrigin } = options;
+  const { supabaseAdmin, requireAuth, publicOrigin, supabaseUrl } = options;
   app.use('/api/anamnesis-link-forms', express.json({ limit: '512kb' }));
   app.use('/api/public/anamnesis-link', expressJsonForPublic(), applyPublicHeaders);
 
@@ -258,6 +288,21 @@ export function registerAnamnesisLinkFormRoutes(
     if (!found) return null;
     if (found.request.revoked_at || isRequestExpired(found.request)) return null;
     return { ...found, session };
+  };
+
+  const loadPublicContext = async (professionalId: string, patientId: string) => {
+    const [{ data: patient }, { data: professional }] = await Promise.all([
+      supabaseAdmin.from('patients').select('full_name').eq('id', patientId).maybeSingle(),
+      supabaseAdmin.from('professionals').select('full_name, professional_title, role, subscription_plan, subscription_status, subscription_ends_at, custom_logo_url').eq('id', professionalId).maybeSingle(),
+    ]);
+    return {
+      identity: {
+        patientInitials: initials(patient?.full_name),
+        professionalFirstName: firstName(professional?.full_name),
+        professionalTitle: trimString(professional?.professional_title) || null,
+      },
+      branding: getPublicBranding(professional, supabaseUrl),
+    };
   };
 
   app.get('/api/anamnesis-link-forms/requests', requireAuth, async (req: UserRequest, res) => {
@@ -364,21 +409,19 @@ export function registerAnamnesisLinkFormRoutes(
     const found = await getRequestByHash(supabaseAdmin, hashToken(token));
     if (!found) return unavailable(res);
     if (found.request.revoked_at || isRequestExpired(found.request)) return unavailable(res, 410);
-    if (found.request.submitted_at || found.response?.submitted_at) return res.status(409).json({ error: 'Este formulário já foi enviado.', code: 'submitted' });
-    const [{ data: patient }, { data: professional }] = await Promise.all([
-      supabaseAdmin.from('patients').select('full_name').eq('id', found.request.patient_id).maybeSingle(),
-      supabaseAdmin.from('professionals').select('full_name, title').eq('id', found.request.professional_id).maybeSingle(),
-    ]);
+    const publicContext = await loadPublicContext(found.request.professional_id, found.request.patient_id);
+    if (found.request.submitted_at || found.response?.submitted_at) return res.status(409).json({ error: 'Este formulário já foi enviado.', code: 'submitted', branding: publicContext.branding });
     const now = new Date().toISOString();
     await supabaseAdmin.from('patient_anamnesis_requests').update({ first_opened_at: found.request.first_opened_at || now, last_activity_at: now }).eq('id', found.request.id);
-    return res.json({ session: createPublicSession(found.request.id, found.request.expires_at), expiresAt: found.request.expires_at, respondentType: found.request.respondent_type, identity: { patientInitials: initials(patient?.full_name), professionalFirstName: firstName(professional?.full_name), professionalTitle: trimString(professional?.title) || null }, snapshot: found.request.snapshot, draft: found.response?.draft_answers || {}, revision: found.response?.revision || 0, respondentName: found.response?.respondent_name || '', respondentRelationship: found.response?.respondent_relationship || '' });
+    return res.json({ session: createPublicSession(found.request.id, found.request.expires_at), expiresAt: found.request.expires_at, respondentType: found.request.respondent_type, identity: publicContext.identity, branding: publicContext.branding, snapshot: found.request.snapshot, draft: found.response?.draft_answers || {}, revision: found.response?.revision || 0, respondentName: found.response?.respondent_name || '', respondentRelationship: found.response?.respondent_relationship || '' });
   });
 
   app.get('/api/public/anamnesis-link/form', async (req: UserRequest, res: Response) => {
     if (!isFeatureEnabled()) return unavailable(res);
     const found = await publicSessionRequest(req);
     if (!found) return unavailable(res);
-    return res.json({ session: createPublicSession(found.request.id, found.request.expires_at), snapshot: found.request.snapshot, respondentType: found.request.respondent_type, draft: found.response?.draft_answers || {}, revision: found.response?.revision || 0, respondentName: found.response?.respondent_name || '', respondentRelationship: found.response?.respondent_relationship || '', status: statusFor(found.request, found.response, found.incorporations.length > 0) });
+    const publicContext = await loadPublicContext(found.request.professional_id, found.request.patient_id);
+    return res.json({ session: createPublicSession(found.request.id, found.request.expires_at), identity: publicContext.identity, branding: publicContext.branding, snapshot: found.request.snapshot, respondentType: found.request.respondent_type, draft: found.response?.draft_answers || {}, revision: found.response?.revision || 0, respondentName: found.response?.respondent_name || '', respondentRelationship: found.response?.respondent_relationship || '', status: statusFor(found.request, found.response, found.incorporations.length > 0) });
   });
 
   app.patch('/api/public/anamnesis-link/draft', async (req: UserRequest, res: Response) => {

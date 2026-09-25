@@ -340,7 +340,7 @@ export default function CustomLogo() {
         <>
           <div className="card space-y-5 border border-brand-border/60 bg-white p-6 shadow-sm md:p-8">
           <p className="text-xs leading-relaxed text-brand-text-muted">
-            Envie uma imagem com o seu logotipo profissional ou da sua clínica. Formatos aceitos: PNG, JPG ou WEBP (máx. 2MB). Este logotipo substituirá a marca padrão da plataforma no cabeçalho das evoluções e relatórios clínicos impressos e em PDF.
+            Envie uma imagem com o seu logotipo profissional ou da sua clínica. Formatos aceitos: PNG, JPG ou WEBP (máx. 2MB). Este logotipo substituirá a marca padrão da plataforma no cabeçalho das evoluções e relatórios clínicos impressos e em PDF. Seu logotipo também aparecerá nas Anamneses enviadas para preenchimento.
           </p>
 
           <div className="flex flex-col items-center gap-5 sm:flex-row">

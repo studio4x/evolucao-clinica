@@ -1915,6 +1915,7 @@ registerAnamnesisLinkFormRoutes(app, {
   supabaseAdmin,
   requireAuth,
   publicOrigin: PRODUCTION_ORIGIN,
+  supabaseUrl: serverEnvironment.supabase.url,
 });
 // Middleware
 app.use(express.json({
