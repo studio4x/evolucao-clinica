@@ -1,6 +1,6 @@
 import { markdownToGoogleDocsText, textRunToMarkdown, type RichTextStyleRange } from '../utils/richText';
 import { assertPublicEffectEnabled } from '../config/publicFlags';
-import { isGoogleScopeError } from './googleAuth';
+import { isGoogleScopeError } from '../utils/googleScopes';
 
 const GOOGLE_API_MAX_ATTEMPTS = 3;
 const EVOLUTION_DIVIDER = "────────────────────────────────────────────────────────";
