@@ -30,6 +30,7 @@ import { useAuthStore } from '../store/authStore';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { AnamnesisRenderer } from '../components/anamnesis/AnamnesisRenderer';
 import { AnamnesisTemplateSelect } from '../components/anamnesis/AnamnesisTemplateSelect';
+import { AnamnesisLinkRequests } from '../components/anamnesis/AnamnesisLinkRequests';
 import { FeatureGuideModal, type FeatureGuideStep } from '../components/common/FeatureGuideModal';
 import { FeatureGuideButton } from '../components/common/FeatureGuideButton';
 import { showAlert, showConfirm } from '../store/modalStore';
@@ -1164,6 +1165,8 @@ export default function PatientAnamnesis() {
           </div>
         }
       />
+
+      {patientId && <AnamnesisLinkRequests patientId={patientId} current={current} />}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">

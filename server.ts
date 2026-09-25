@@ -99,6 +99,7 @@ import { getConversionFunnel } from "./server/admin/conversionFunnel.js";
 import { getProfessionalFunnelBoard, PROFESSIONAL_FUNNEL_STAGES } from "./server/admin/professionalFunnel.js";
 import { buildProfessionalFunnelMessage } from "./src/utils/professionalFunnelMessages.js";
 import { loadServerEnvironment } from "./server/config/environment.js";
+import { registerAnamnesisLinkFormRoutes } from "./server/anamnesisLinkForms.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -1910,6 +1911,11 @@ async function deleteProfessionalAccount(targetUserId: string) {
 app.use("/api/integrations/whatsapp/opt-out", express.json({ limit: "8kb" }));
 app.use("/api/integrations/whatsapp/user-lookup", express.json({ limit: "2kb" }));
 app.use("/api/onboarding/whatsapp-verification", express.json({ limit: "2kb" }));
+registerAnamnesisLinkFormRoutes(app, {
+  supabaseAdmin,
+  requireAuth,
+  publicOrigin: PRODUCTION_ORIGIN,
+});
 // Middleware
 app.use(express.json({
   limit: '10mb',

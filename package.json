@@ -67,6 +67,7 @@
     "test:google-play-coupon": "tsx tests/google-play-coupon.test.ts",
     "test:seo-social-sharing": "tsx tests/seo-social-sharing.test.ts",
     "test:anamnesis": "tsx tests/patient-anamnesis.test.ts && tsx tests/anamnesis-foundation.test.ts && tsx tests/anamnesis-template-select.test.ts && tsx tests/anamnesis-builder-ux.test.ts",
+    "test:anamnesis-link": "tsx tests/anamnesis-link-forms.test.ts",
     "test:patient-session-control": "tsx tests/patient-session-control.test.ts",
     "test:patient-session-schedule": "tsx tests/patient-session-schedule.test.ts"
   },
@@ -75,6 +76,7 @@
     "@supabase/supabase-js": "^2.108.2",
     "@types/dompurify": "^3.0.5",
     "@types/marked": "^5.0.2",
+    "@types/qrcode": "^1.5.6",
     "@vercel/speed-insights": "^2.0.0",
     "date-fns": "^4.1.0",
     "dompurify": "^3.4.11",
@@ -95,6 +97,7 @@
     "nodemailer": "^9.0.1",
     "pdf-parse": "^1.1.1",
     "pg": "^8.21.0",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.14.0",

@@ -8,6 +8,7 @@ export const publicEffectFlags = {
   billing: enabled("VITE_BILLING_ENABLED"),
   google: enabled("VITE_GOOGLE_INTEGRATIONS_ENABLED"),
   clinicFeature: enabled("VITE_CLINIC_FEATURE_ENABLED"),
+  patientAnamnesisLinkForms: enabled("VITE_PATIENT_ANAMNESIS_LINK_FORMS_ENABLED"),
 };
 
 export function assertPublicEffectEnabled(effect: keyof typeof publicEffectFlags) {

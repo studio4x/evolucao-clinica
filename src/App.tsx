@@ -41,6 +41,7 @@ const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'), 'Priv
 const TermsOfService = lazyWithRetry(() => import('./pages/TermsOfService'), 'TermsOfService');
 const DeleteAccount = lazyWithRetry(() => import('./pages/DeleteAccount'), 'DeleteAccount');
 const PublicReportView = lazyWithRetry(() => import('./pages/PublicReportView'), 'PublicReportView');
+const PublicAnamnesisForm = lazyWithRetry(() => import('./pages/PublicAnamnesisForm'), 'PublicAnamnesisForm');
 const Feedback = lazyWithRetry(() => import('./pages/Feedback'), 'Feedback');
 const PublicJourneyIndex = lazyWithRetry(() => import('./pages/PublicJourneyIndex'), 'PublicJourneyIndex');
 const CommunicationPreferences = lazyWithRetry(() => import('./pages/CommunicationPreferences'), 'CommunicationPreferences');
@@ -133,6 +134,10 @@ function AnalyticsRouteObserver() {
   const lastPageRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (location.pathname.startsWith('/preencher/anamnese')) {
+      lastPageRef.current = null;
+      return;
+    }
     const sendPageView = () => {
       captureAcquisitionData();
       if (isPublicAcquisitionPathname(location.pathname)) {
@@ -164,6 +169,23 @@ function AnalyticsRouteObserver() {
   }, [location.hash, location.pathname, location.search]);
 
   return null;
+}
+
+function RuntimeChrome() {
+  const location = useLocation();
+  const isPublicAnamnesis = location.pathname.startsWith('/preencher/anamnese');
+  if (isPublicAnamnesis) return <AnalyticsRouteObserver />;
+  return <>
+    <EnvironmentBanner />
+    <AnalyticsRouteObserver />
+    <CookieConsent />
+    <InstallPrompt />
+    <PermissionNotice />
+    <CustomModalContainer />
+    <NativeBillingRestore />
+    <PushPermissionPrompt />
+    <SpeedInsights />
+  </>;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -304,6 +326,7 @@ export default function App() {
   const assetSignature = getBrandAssetSignature(siteConfig);
 
   useEffect(() => {
+    if (window.location.pathname.startsWith('/preencher/anamnese')) return;
     clearLazyRetryQueryParam();
     captureAcquisitionData();
     const captureAllowedNativeAttribution = () => {
@@ -395,6 +418,10 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (window.location.pathname.startsWith('/preencher/anamnese')) {
+      setAuthReady(true);
+      return;
+    }
     // A falha de uma tentativa `prompt=none` volta pela URL sem sessão nova.
     // Consumi-la aqui impede que a próxima montagem repita o mesmo redirect.
     const oauthParams = new URLSearchParams(window.location.search);
@@ -744,17 +771,9 @@ export default function App() {
     };
   }, [setUser, setAuthReady, setProfileInfo, setGoogleAccessToken, setGoogleAccessUserId, setGoogleAccessTokenIssuedAt, setGoogleGrantedScopes]);
 
-  return (
+    return (
     <Router>
-      <EnvironmentBanner />
-      <AnalyticsRouteObserver />
-      <CookieConsent />
-      <InstallPrompt />
-      <PermissionNotice />
-      <CustomModalContainer />
-      <NativeBillingRestore />
-      <PushPermissionPrompt />
-      <SpeedInsights />
+      <RuntimeChrome />
       
       <ChunkLoadErrorBoundary>
         <Suspense fallback={<SplashScreen message="Carregando..." />}>
@@ -773,6 +792,8 @@ export default function App() {
           <Route path="/feedback/continuidade" element={<ContinuityFeedback />} />
           <Route path="/reativar-teste" element={<TrialExtensionRedeem />} />
           <Route path="/public/reports/:reportId" element={<PublicReportView />} />
+          <Route path="/preencher/anamnese" element={<PublicAnamnesisForm />} />
+          <Route path="/preencher/anamnese/:token" element={<PublicAnamnesisForm />} />
           <Route path="/jornada" element={<PublicJourneyIndex />} />
           <Route path="/jornada/:journeySlug" element={<PublicJourneyIndex />} />
           <Route path="/jornada/:journeySlug/:contentSlug" element={<PublicJourneyIndex />} />
