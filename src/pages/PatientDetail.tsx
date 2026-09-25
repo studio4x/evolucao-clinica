@@ -278,6 +278,12 @@ export default function PatientDetail() {
     return true;
   };
 
+  const markGoogleAccessRecoveryNeeded = () => {
+    if (googleAuthorizationStatus === 'missing_scopes') return;
+    setGoogleAuthorizationStatus('token_expired');
+    setGoogleAccessToken(null);
+  };
+
   const handleExplicitGoogleReconnect = async () => {
     if (isGoogleReconnecting) return;
     setIsGoogleReconnecting(true);
@@ -849,11 +855,7 @@ export default function PatientDetail() {
                 });
 
                 if (shouldReconnectGoogle) {
-                  await requestGoogleOAuth({
-                    requiredScopes: 'clinicalDocs',
-                    currentGrantedScopes: googleGrantedScopes,
-                    redirectTo: getCurrentGoogleOAuthRedirectUrl()
-                  });
+                  await handleExplicitGoogleReconnect();
                 }
                 await fetchData();
                 return;
@@ -1011,12 +1013,7 @@ export default function PatientDetail() {
 
       if (!hasClinicalAccess) {
         alert("Para ler o prontuário no Google Docs, reconecte sua conta Google pelo aviso exibido nesta página.");
-        setGoogleAuthorizationStatus('token_expired');
-        await requestGoogleOAuth({
-          requiredScopes: 'clinicalDocs',
-          currentGrantedScopes: googleGrantedScopes,
-          redirectTo: getCurrentGoogleOAuthRedirectUrl()
-        });
+        markGoogleAccessRecoveryNeeded();
         return;
       }
 
@@ -1364,12 +1361,7 @@ export default function PatientDetail() {
   const handleGenerateAiReport = async () => {
     if (!hasClinicalAccess) {
       alert("Para ler o prontuário no Google Docs, reconecte sua conta Google pelo aviso exibido nesta página.");
-      setGoogleAuthorizationStatus('token_expired');
-      await requestGoogleOAuth({
-        requiredScopes: 'clinicalDocs',
-        currentGrantedScopes: googleGrantedScopes,
-        redirectTo: getCurrentGoogleOAuthRedirectUrl()
-      });
+      markGoogleAccessRecoveryNeeded();
       return;
     }
 
@@ -1479,12 +1471,7 @@ export default function PatientDetail() {
       let currentToken = googleAccessToken;
       
       if (!currentToken || !hasClinicalAccess) {
-        const { error } = await requestGoogleOAuth({
-          requiredScopes: 'clinicalDocs',
-          currentGrantedScopes: googleGrantedScopes,
-          redirectTo: getCurrentGoogleOAuthRedirectUrl()
-        });
-        if (error) throw error;
+        markGoogleAccessRecoveryNeeded();
         return;
       }
 
@@ -1567,12 +1554,8 @@ export default function PatientDetail() {
 
     let currentToken = googleAccessToken;
     if (!currentToken || !hasClinicalAccess) {
-      alert("Para salvar no Google Docs, precisamos renovar seu acesso ao Google. Você será redirecionado.");
-      await requestGoogleOAuth({
-        requiredScopes: 'clinicalDocs',
-        currentGrantedScopes: googleGrantedScopes,
-        redirectTo: getCurrentGoogleOAuthRedirectUrl()
-      });
+      alert("Para salvar no Google Docs, reconecte sua conta Google pelo aviso exibido nesta página.");
+      markGoogleAccessRecoveryNeeded();
       return;
     }
 
@@ -1976,19 +1959,9 @@ export default function PatientDetail() {
 
     // 1. Check for Google Token
     if (!currentToken || !hasClinicalAccess) {
-      try {
-        const { error } = await requestGoogleOAuth({
-          requiredScopes: 'clinicalDocs',
-          currentGrantedScopes: googleGrantedScopes,
-          redirectTo: getCurrentGoogleOAuthRedirectUrl()
-        });
-        if (error) throw error;
-        return;
-      } catch (error) {
-        console.error("Re-auth error:", error);
-        alert("Erro ao autenticar com o Google.");
-        return;
-      }
+      alert("Para reprocessar a evolução, reconecte sua conta Google pelo aviso exibido nesta página.");
+      markGoogleAccessRecoveryNeeded();
+      return;
     }
 
     if (!patient || !patient.google_doc_id) {
@@ -2256,12 +2229,7 @@ export default function PatientDetail() {
     if (!hasClinicalAccess || !googleAccessToken) {
       if (options.manual) {
         setGoogleDocSyncMessage('Renove a conexão com o Google para sincronizar o prontuário.');
-        await requestGoogleOAuth({
-          requiredScopes: 'clinicalDocs',
-          currentGrantedScopes: googleGrantedScopes,
-          redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-          loginHint: user.email || undefined,
-        });
+        markGoogleAccessRecoveryNeeded();
       }
       return;
     }

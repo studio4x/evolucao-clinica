@@ -238,11 +238,14 @@ export default function PatientFilesCard({
     if (authLoading) return;
     setAuthLoading(true);
     try {
+      const shouldRequestConsent = googleAuthorizationStatus === 'unknown'
+        || googleAuthorizationStatus === 'auth_required'
+        || googleAuthorizationStatus === 'missing_scopes';
       const { error } = await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-        prompt: 'consent',
+        ...(shouldRequestConsent ? { prompt: 'consent' as const } : {}),
         loginHint: user?.email || undefined,
       });
       if (error) throw error;

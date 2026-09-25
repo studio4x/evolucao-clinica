@@ -8,7 +8,7 @@ assert.equal(isGoogleAccessTokenFresh('token', now - 1_000, now), true);
 assert.equal(
   isGoogleAccessTokenFresh('token', now - GOOGLE_ACCESS_TOKEN_REFRESH_AFTER_MS, now),
   false,
-  'O token deve ser renovado preventivamente ao atingir 45 minutos.'
+  'O helper deve classificar como antigo um token que atingiu 45 minutos; isso não dispara OAuth no fluxo clínico.'
 );
 assert.equal(isGoogleAccessTokenFresh(null, now, now), false);
 assert.equal(isGoogleAccessTokenFresh('token', null, now), false);
@@ -81,6 +81,19 @@ assert.match(
 );
 assert.doesNotMatch(patientFilesSource, /ensureGoogleAccess|canAttemptSilentGoogleOAuth|silentAuthorizationAttemptedRef|isGoogleAccessTokenFresh/, 'Montar o card não pode iniciar nem bloquear OAuth pelo TTL.');
 assert.match(
+  patientFilesSource,
+  /const shouldRequestConsent = googleAuthorizationStatus === 'unknown'[\s\S]*googleAuthorizationStatus === 'missing_scopes'[\s\S]*shouldRequestConsent \? \{ prompt: 'consent' as const \} : \{\}/,
+  'A primeira autorização e escopos ausentes podem pedir consentimento explícito.'
+);
+const consentDecisionStart = patientFilesSource.indexOf('const shouldRequestConsent =');
+const consentDecisionEnd = patientFilesSource.indexOf('const { error } = await requestGoogleOAuth', consentDecisionStart);
+const consentDecisionSource = patientFilesSource.slice(consentDecisionStart, consentDecisionEnd);
+assert.doesNotMatch(
+  consentDecisionSource,
+  /token_expired/,
+  'A reconexão por expiração não deve forçar consentimento.'
+);
+assert.match(
   patientDetailSource,
   /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*setGoogleAuthorizationStatus\('token_expired'\)[\s\S]*setGoogleAccessToken\(null\)/,
   'A edição deve ser preservada e marcada para reconexão explícita após falha real.'
@@ -99,6 +112,38 @@ assert.match(
   patientDetailSource,
   /setActiveMobileTab\(recovery\.activeMobileTab\)/,
   'A reconexão deve restaurar a aba móvel em que o usuário estava.'
+);
+const patientDetailOAuthOccurrences = [...patientDetailSource.matchAll(/requestGoogleOAuth\(/g)];
+assert.equal(
+  patientDetailOAuthOccurrences.length,
+  1,
+  'PatientDetail deve iniciar OAuth somente no handler explícito de reconexão.'
+);
+const explicitReconnectStart = patientDetailSource.indexOf('const handleExplicitGoogleReconnect');
+const explicitReconnectEnd = patientDetailSource.indexOf('// Estados para as configurações de lembretes', explicitReconnectStart);
+assert.ok(
+  explicitReconnectStart >= 0 && explicitReconnectEnd > explicitReconnectStart,
+  'O handler explícito de reconexão deve permanecer presente.'
+);
+assert.ok(
+  patientDetailOAuthOccurrences[0].index! > explicitReconnectStart
+    && patientDetailOAuthOccurrences[0].index! < explicitReconnectEnd,
+  'A única chamada OAuth deve estar dentro do handler explícito de reconexão.'
+);
+assert.match(
+  patientDetailSource,
+  /GoogleReconnectPrompt[\s\S]*handleExplicitGoogleReconnect\(\)/,
+  'O prompt deve iniciar a reconexão somente pela confirmação explícita do usuário.'
+);
+assert.match(
+  patientDetailSource,
+  /markGoogleAccessRecoveryNeeded\(\)[\s\S]*return;/,
+  'Handlers sem acesso ao Google devem preparar o estado e retornar sem iniciar OAuth.'
+);
+assert.match(
+  patientDetailSource,
+  /if \(googleAuthorizationStatus === 'missing_scopes'\) return;[\s\S]*setGoogleAuthorizationStatus\('token_expired'\)/,
+  'A expiração deve preparar token_expired sem substituir um estado de escopos ausentes.'
 );
 assert.doesNotMatch(
   patientDetailSource,
@@ -120,7 +165,7 @@ assert.match(newEvolutionSource, /GooglePermissionRecoveryModal/, 'Escopos ausen
 assert.match(appSource, /setGoogleAccessToken\(session\.provider_token\);[\s\S]*setGoogleAccessUserId\(session\.user\.id\);/, 'Um provider token igual também deve atualizar o issuedAt sem iniciar OAuth.');
 
 const appVersionSource = fs.readFileSync('src/components/layout/AppVersion.tsx', 'utf8');
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.984"/);
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.985"/);
 assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.93"/);
 
 console.log('Google authentication recovery tests passed.');
