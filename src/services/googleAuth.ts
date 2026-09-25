@@ -1,7 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
 import { assertPublicEffectEnabled } from '../config/publicFlags';
-import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
 export {
   isGoogleScopeError,
   parseGoogleScopes,
@@ -29,8 +28,6 @@ export type GoogleAuthorizationStatus = 'unknown' | 'authorized' | 'missing_scop
 
 
 const PENDING_GOOGLE_SCOPES_KEY = 'evolucao-clinica:google-oauth-scopes';
-const SILENT_GOOGLE_ATTEMPT_KEY = 'evolucao-clinica:google-silent-attempt';
-const SILENT_GOOGLE_ATTEMPT_TTL_MS = 10 * 60 * 1000;
 export const NATIVE_GOOGLE_OAUTH_REDIRECT_URL = 'evolucaoclinica://auth-callback';
 const MIN_NATIVE_GOOGLE_OAUTH_CALLBACK_VERSION = 72;
 
@@ -111,31 +108,20 @@ type RequestGoogleOAuthParams = {
 
 type EnsureGoogleAccessParams = Omit<RequestGoogleOAuthParams, 'prompt'> & {
   accessToken?: string | null;
-  accessTokenIssuedAt?: number | null;
   allowInteractive?: boolean;
 };
 
 export type EnsureGoogleAccessResult =
   | { status: 'ready' }
-  | { status: 'silent_started' }
+  | { status: 'interactive_started' }
   | { status: 'interactive_required' }
   | { status: 'error'; error: Error };
 
 let googleOAuthLaunch: Promise<Awaited<ReturnType<typeof supabase.auth.signInWithOAuth>>> | null = null;
 
-const readSilentAttempt = () => {
-  const raw = localStorage.getItem(SILENT_GOOGLE_ATTEMPT_KEY);
-  const attemptedAt = raw ? Number(raw) : NaN;
-  return Number.isFinite(attemptedAt) ? attemptedAt : null;
-};
-
-export const clearSilentGoogleOAuthAttempt = () => {
-  localStorage.removeItem(SILENT_GOOGLE_ATTEMPT_KEY);
-};
-
-export const canAttemptSilentGoogleOAuth = (now = Date.now()) => {
-  const attemptedAt = readSilentAttempt();
-  return attemptedAt === null || now - attemptedAt > SILENT_GOOGLE_ATTEMPT_TTL_MS;
+export const isGoogleAuthenticationError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /UNAUTHENTICATED|invalid authentication credentials|\b401\b/i.test(message);
 };
 
 export const requestGoogleOAuth = async ({
@@ -171,7 +157,8 @@ export const requestGoogleOAuth = async ({
   };
 
   // O WebView Android abre a autorização no navegador do sistema. O deep link
-  // retorna o resultado para o mesmo WebView, inclusive em renovações silenciosas.
+  // retorna o resultado para o mesmo WebView; este caminho só deve ser chamado
+  // por uma ação explícita do usuário.
   const resolvedRedirectTo = isNativeGoogleOAuthClient()
     ? NATIVE_GOOGLE_OAUTH_REDIRECT_URL
     : redirectTo;
@@ -194,7 +181,6 @@ export const requestGoogleOAuth = async ({
 
 export const ensureGoogleAccess = async ({
   accessToken,
-  accessTokenIssuedAt,
   requiredScopes,
   currentGrantedScopes = [],
   redirectTo,
@@ -205,21 +191,10 @@ export const ensureGoogleAccess = async ({
     ? requiredScopes
     : getGoogleScopeSet(requiredScopes);
 
-  if (accessToken && hasGoogleScopes(currentGrantedScopes, required)
-    && isGoogleAccessTokenFresh(accessToken, accessTokenIssuedAt)) {
+  // A locally stored issuedAt is not evidence that Google rejected the token.
+  // The real Google operation must be attempted before asking the user to reconnect.
+  if (accessToken && hasGoogleScopes(currentGrantedScopes, required)) {
     return { status: 'ready' };
-  }
-
-  if (accessToken && hasGoogleScopes(currentGrantedScopes, required) && canAttemptSilentGoogleOAuth()) {
-    localStorage.setItem(SILENT_GOOGLE_ATTEMPT_KEY, String(Date.now()));
-    const { error } = await requestGoogleOAuth({
-      requiredScopes,
-      currentGrantedScopes,
-      redirectTo,
-      prompt: 'none',
-      loginHint,
-    });
-    return error ? { status: 'error', error } : { status: 'silent_started' };
   }
 
   if (!allowInteractive) return { status: 'interactive_required' };
@@ -230,5 +205,5 @@ export const ensureGoogleAccess = async ({
     redirectTo,
     loginHint,
   });
-  return error ? { status: 'error', error } : { status: 'silent_started' };
+  return error ? { status: 'error', error } : { status: 'interactive_started' };
 };

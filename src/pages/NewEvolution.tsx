@@ -7,6 +7,7 @@ import { Mic, Square, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, Tras
 import { appendToGoogleDoc, replaceEvolutionInGoogleDoc } from '../services/googleDocs';
 import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { GoogleSecurityModal } from '../components/common/GoogleSecurityModal';
+import { GooglePermissionRecoveryModal } from '../components/common/GooglePermissionRecoveryModal';
 import TemplateExplanationModal from '../components/common/TemplateExplanationModal';
 import { rememberMicrophonePermission } from '../utils/microphonePermission';
 
@@ -265,6 +266,8 @@ export default function NewEvolution({
     googleAccessToken, 
     googleGrantedScopes, 
     setGoogleAccessToken, 
+    googleAuthorizationStatus,
+    setGoogleAuthorizationStatus,
     isAuthReady,
     subscriptionStatus,
     subscriptionPlan,
@@ -296,13 +299,16 @@ export default function NewEvolution({
     })();
     return () => { cancelled = true; };
   }, [isAuthReady, user?.id]);
-  const hasClinicalAccess = hasGoogleSession && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
+  const hasClinicalAccess = hasGoogleSession
+    && googleAuthorizationStatus !== 'missing_scopes'
+    && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const googleClinicalAccessState = hasClinicalAccess
     ? 'ready'
     : hasGoogleSession
       ? 'connected_missing_permissions'
       : 'not_connected';
   const hasMissingGooglePermissions = googleClinicalAccessState === 'connected_missing_permissions';
+  const needsGoogleReconnect = googleAuthorizationStatus === 'token_expired';
 
   useEffect(() => {
     if (!isAuthReady || !user?.id || googleAccessToken) return;
@@ -373,6 +379,7 @@ export default function NewEvolution({
   const [guideOpen, setGuideOpen] = useState(false);
   const [isOnboardingGateModalOpen, setIsOnboardingGateModalOpen] = useState(false);
   const [isGoogleAccessNoticeOpen, setIsGoogleAccessNoticeOpen] = useState(false);
+  const [isGooglePermissionRecoveryOpen, setIsGooglePermissionRecoveryOpen] = useState(false);
   const [templates, setTemplates] = useState<any[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [isTemplateHelpOpen, setIsTemplateHelpOpen] = useState(false);
@@ -778,8 +785,17 @@ export default function NewEvolution({
 
   useEffect(() => {
     if (!isAuthReady || embedded || isOnboardingMode || !patient?.id || hasClinicalAccess) return;
+    if (googleAuthorizationStatus === 'token_expired') return;
+    if (googleAuthorizationStatus === 'missing_scopes') return;
     setIsGoogleAccessNoticeOpen(true);
-  }, [embedded, hasClinicalAccess, isAuthReady, isOnboardingMode, patient?.id]);
+  }, [embedded, googleAuthorizationStatus, hasClinicalAccess, isAuthReady, isOnboardingMode, patient?.id]);
+
+  useEffect(() => {
+    if (googleAuthorizationStatus === 'missing_scopes') {
+      setIsGoogleAccessNoticeOpen(false);
+      setIsGooglePermissionRecoveryOpen(true);
+    }
+  }, [googleAuthorizationStatus]);
 
   // Efeito para verificar rascunhos não finalizados
   useEffect(() => {
@@ -897,9 +913,10 @@ export default function NewEvolution({
     }
   };
 
-  const handleReauthenticate = async () => {
+  const handleReauthenticate = async (prompt?: 'consent' | 'none') => {
     setIsReauthenticating(true);
     try {
+      const resolvedPrompt = prompt ?? (googleAuthorizationStatus === 'missing_scopes' ? 'consent' : undefined);
       sessionStorage.setItem(
         AUTH_REAUTH_RECOVERY_KEY,
         JSON.stringify({
@@ -912,6 +929,7 @@ export default function NewEvolution({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
         redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+        ...(resolvedPrompt ? { prompt: resolvedPrompt } : {}),
         loginHint: user?.email || undefined
       });
       if (error) throw error;
@@ -998,9 +1016,11 @@ export default function NewEvolution({
       console.error("Erro ao salvar prontuário:", err);
       let msg = err.message || "Erro desconhecido ao salvar prontuário.";
       if (msg.includes("INSUFFICIENT_SCOPES")) {
+        setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
         msg = "Sua conta Google está conectada, mas ainda não liberou as permissões clínicas completas. Renove a autenticação para aprovar o acesso ao Google Drive e Docs.";
       } else if (msg.includes("UNAUTHENTICATED") || msg.includes("401")) {
         msg = "Sua sessão do Google expirou. Por favor, renove sua autenticação.";
+        setGoogleAuthorizationStatus('token_expired');
         setGoogleAccessToken(null);
       }
       setModalError(msg);
@@ -1592,11 +1612,13 @@ export default function NewEvolution({
       } else if (msg.includes('429') || msg.includes('exhausted')) {
         msg = "O limite de processamento do provedor de IA foi atingido momentaneamente. Aguarde cerca de 60 segundos e clique em 'Tentar Novamente'.";
       } else if (msg.includes('INSUFFICIENT_SCOPES')) {
+        setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
         msg = "Sua conta Google foi conectada, mas este token ainda não tem os escopos clinicos completos. Clique em 'Renovar Autenticacao' para aprovar o acesso ao Google Drive e Docs.";
       } else if (msg.includes('401') || msg.includes('UNAUTHENTICATED') || msg.includes('Invalid Credentials')) {
         msg = hasGoogleSession
           ? "Sua sessão do Google expirou. Por favor, renove a autenticação clicando no botão abaixo."
           : "Você ainda não autenticou o Google neste fluxo. Volte ao cadastro do paciente para vincular a conta e criar o prontuário antes de continuar.";
+        setGoogleAuthorizationStatus('token_expired');
         setGoogleAccessToken(null);
       }
       
@@ -2000,12 +2022,16 @@ export default function NewEvolution({
               <AlertCircle className="w-8 h-8 text-yellow-600" />
               <div className="space-y-1 text-center">
                 <p className="text-yellow-900 font-medium">
-                  {hasMissingGooglePermissions
+                  {needsGoogleReconnect
+                    ? 'Sua conexão com o Google expirou.'
+                    : hasMissingGooglePermissions
                     ? 'Google conectado, mas faltam permissões para usar o prontuário.'
                     : 'Você ainda não autenticou o Google neste fluxo.'}
                 </p>
                 <p className="text-sm text-yellow-800/90">
-                  {hasMissingGooglePermissions
+                  {needsGoogleReconnect
+                    ? 'Reconecte para continuar. O conteúdo preenchido permanece preservado.'
+                    : hasMissingGooglePermissions
                     ? 'Reconecte sua conta e aceite as permissões do Google Drive solicitadas para continuar.'
                     : 'Conecte sua conta Google para continuar com a evolução.'}
                 </p>
@@ -2023,7 +2049,7 @@ export default function NewEvolution({
                   className="flex items-center space-x-2 px-4 py-2 bg-yellow-600 text-white rounded-xl hover:bg-yellow-700 disabled:opacity-50 transition-colors"
                 >
                   {isReauthenticating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                  <span>{hasMissingGooglePermissions ? 'Reconectar Google' : (isOnboardingMode ? 'Voltar ao cadastro do paciente' : 'Conectar com Google')}</span>
+                  <span>{needsGoogleReconnect || hasMissingGooglePermissions ? 'Reconectar Google' : (isOnboardingMode ? 'Voltar ao cadastro do paciente' : 'Conectar com Google')}</span>
                 </button>
                 {!isOnboardingMode && (
                   <button
@@ -2212,7 +2238,7 @@ export default function NewEvolution({
                   <p className="text-sm text-red-700 font-medium">{modalError}</p>
                   {!hasClinicalAccess && (
                     <button
-                      onClick={handleReauthenticate}
+                      onClick={() => void handleReauthenticate()}
                       className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-medium transition-colors"
                     >
                       Reconectar Google
@@ -2310,6 +2336,17 @@ export default function NewEvolution({
         confirmLabel="Voltar ao cadastro do paciente"
         mode="onboarding"
         showCloseButton={false}
+      />
+
+      <GooglePermissionRecoveryModal
+        isOpen={isGooglePermissionRecoveryOpen}
+        onClose={() => setIsGooglePermissionRecoveryOpen(false)}
+        onReview={() => {
+          setIsGooglePermissionRecoveryOpen(false);
+          void handleReauthenticate('consent');
+        }}
+        isLoading={isReauthenticating}
+        resourceLabel="Google Drive e Google Docs"
       />
 
       <GoogleSecurityModal

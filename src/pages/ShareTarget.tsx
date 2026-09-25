@@ -8,9 +8,8 @@ import { convertEvolutionToTemplate } from '../services/evolutionTemplateConvers
 import { addPendingEvolution } from '../services/offlineQueue';
 import { sendNotification } from '../services/notificationHelper';
 import { appendToGoogleDoc, replaceEvolutionInGoogleDoc, validateGoogleDocAccess } from '../services/googleDocs';
-import { GOOGLE_SCOPE_SETS, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, isGoogleAuthenticationError, isGoogleScopeError, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import { getInstalledAppInfo } from '../utils/installedAppInfo';
-import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
 import { Mic, Upload, Loader2, CheckCircle, AlertCircle, RefreshCw, X, Save, Eye, ExternalLink, Play, Pause, FileText } from 'lucide-react';
 import { PanelPageHeader } from '../components/layout/PanelPageHeader';
 import { RichTextEditor } from '../components/common/RichTextEditor';
@@ -249,7 +248,7 @@ const readShareTargetAuthRecovery = (): ShareTargetAuthRecovery | null => {
 
 export default function ShareTarget() {
   const navigate = useNavigate();
-  const { user, googleAccessToken, googleAccessTokenIssuedAt, googleGrantedScopes, setGoogleAccessToken, subscriptionPlan } = useAuthStore();
+  const { user, googleAccessToken, googleGrantedScopes, googleAuthorizationStatus, setGoogleAccessToken, setGoogleAuthorizationStatus, subscriptionPlan } = useAuthStore();
   const authRecoveryRef = useRef(readShareTargetAuthRecovery());
   const [patients, setPatients] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -292,8 +291,9 @@ export default function ShareTarget() {
   const [modalSaving, setModalSaving] = useState(false);
   const [modalConverting, setModalConverting] = useState(false);
   const [modalError, setModalError] = useState('');
-  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
-  const hasFreshClinicalAccess = hasClinicalAccess && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
+  const hasClinicalAccess = Boolean(googleAccessToken)
+    && googleAuthorizationStatus !== 'missing_scopes'
+    && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const needsGoogleReconnect = !hasClinicalAccess || isGoogleReconnectNeededMessage(errorMessage) || isGoogleReconnectNeededMessage(modalError);
   const nativeShare = getNativeShareBridge();
   const hasNativeAudioPlayback = Boolean(nativeShare && typeof nativeShare.playSharedFile === 'function');
@@ -302,10 +302,10 @@ export default function ShareTarget() {
     && Boolean(installedAppInfo.versionCode && installedAppInfo.versionCode < 75);
 
   useEffect(() => {
-    if (hasFreshClinicalAccess) {
+    if (hasClinicalAccess) {
       sessionStorage.removeItem(SHARE_TARGET_AUTH_RECOVERY_KEY);
     }
-  }, [hasFreshClinicalAccess]);
+  }, [hasClinicalAccess]);
 
   // O áudio compartilhado e seus dados de processamento ainda podem estar em
   // memória. Impedir o pull-to-refresh evita que sejam perdidos acidentalmente.
@@ -529,7 +529,7 @@ export default function ShareTarget() {
     navigate('/painel/dashboard');
   };
 
-  const handleReauthenticate = async (prompt: 'none' | 'consent' = 'consent') => {
+  const handleReauthenticate = async (prompt: 'none' | 'consent' = googleAuthorizationStatus === 'missing_scopes' ? 'consent' : 'none') => {
     setIsReauthenticating(true);
     try {
       sessionStorage.setItem(SHARE_TARGET_AUTH_RECOVERY_KEY, JSON.stringify({
@@ -635,11 +635,9 @@ export default function ShareTarget() {
       return;
     }
 
-    if (!hasFreshClinicalAccess) {
+    if (!hasClinicalAccess) {
       setErrorMessage('');
       setStatus('idle');
-      const wasPreviouslyConnected = hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
-      await handleReauthenticate(wasPreviouslyConnected ? 'none' : 'consent');
       return;
     }
 
@@ -651,11 +649,18 @@ export default function ShareTarget() {
       }
     } catch (error: any) {
       const message = error?.message || String(error);
-      if (isGoogleReconnectNeededMessage(message)) {
-        setGoogleAccessToken(null);
-        setErrorMessage('');
+      if (isGoogleScopeError(error)) {
+        setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
+        setErrorMessage('O Google não liberou todas as permissões clínicas. Use o botão abaixo para revisar as permissões.');
         setStatus('idle');
-        await handleReauthenticate(message.includes('INSUFFICIENT_SCOPES') ? 'consent' : 'none');
+        return;
+      }
+
+      if (isGoogleAuthenticationError(error)) {
+        setGoogleAuthorizationStatus('token_expired');
+        setGoogleAccessToken(null);
+        setErrorMessage('Sua conexão com o Google expirou. O conteúdo permanece preservado; use o botão abaixo para reconectar.');
+        setStatus('idle');
         return;
       }
 
@@ -1076,8 +1081,7 @@ export default function ShareTarget() {
                     <div className="ml-3 flex-1">
                       <h3 className="text-sm font-medium text-amber-900">Conexão Google indisponível</h3>
                       <p className="mt-1 text-sm text-amber-800">
-                        A conexão com o Google expirou ou está sem as permissões clínicas completas.
-                        Renove antes de processar o áudio.
+                        Reconecte o Google ou revise as permissões clínicas antes de processar o áudio.
                       </p>
                       <button
                         onClick={() => handleReauthenticate()}
@@ -1089,7 +1093,7 @@ export default function ShareTarget() {
                         ) : (
                           <RefreshCw className="h-4 w-4 mr-1.5" />
                         )}
-                        Renovar Autenticação do Google
+                        Reconectar Google
                       </button>
                     </div>
                   </div>

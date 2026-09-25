@@ -35,14 +35,12 @@ import {
 } from '../../utils/patientFileTypes';
 import {
   GOOGLE_SCOPE_SETS,
-  canAttemptSilentGoogleOAuth,
-  ensureGoogleAccess,
   getCurrentGoogleOAuthRedirectUrl,
   hasGoogleScopes,
+  isGoogleAuthenticationError,
   requestGoogleOAuth,
   isGoogleScopeError,
 } from '../../services/googleAuth';
-import { isGoogleAccessTokenFresh } from '../../utils/googleAuthSession';
 import { hasActiveYearlyAccess } from '../../utils/subscriptionAccess';
 import { showAlert, showConfirm } from '../../store/modalStore';
 
@@ -73,11 +71,6 @@ type PatientFilesCardProps = {
   targetFolderId?: string | null;
   targetFolderName?: string | null;
   editPatientHref: string;
-};
-
-const isGoogleAuthError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error || '');
-  return /UNAUTHENTICATED|invalid authentication credentials|\b401\b/i.test(message) || isGoogleScopeError(message);
 };
 
 const isGoogleFileMissingError = (error: unknown) => {
@@ -179,7 +172,6 @@ export default function PatientFilesCard({
   const {
     user,
     googleAccessToken,
-    googleAccessTokenIssuedAt,
     googleGrantedScopes,
     googleAuthorizationStatus,
     setGoogleAccessToken,
@@ -203,12 +195,10 @@ export default function PatientFilesCard({
   const [savingType, setSavingType] = useState(false);
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
-  const silentAuthorizationAttemptedRef = useRef(false);
 
   const hasClinicalAccess = Boolean(googleAccessToken)
+    && googleAuthorizationStatus !== 'missing_scopes'
     && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
-  const hasFreshClinicalAccess = hasClinicalAccess
-    && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
   const hasYearlyAccess = hasActiveYearlyAccess({
     profileRole,
     subscriptionPlan,
@@ -216,42 +206,7 @@ export default function PatientFilesCard({
     subscriptionEndsAt,
   });
 
-  const canUpload = hasYearlyAccess && Boolean(targetFolderId) && hasFreshClinicalAccess;
-
-  useEffect(() => {
-    if (
-      !user
-      || !hasYearlyAccess
-      || !targetFolderId
-      || !hasClinicalAccess
-      || googleAuthorizationStatus === 'missing_scopes'
-      || hasFreshClinicalAccess
-      || silentAuthorizationAttemptedRef.current
-      || !canAttemptSilentGoogleOAuth()
-    ) {
-      return;
-    }
-
-    silentAuthorizationAttemptedRef.current = true;
-    setAuthLoading(true);
-
-    void ensureGoogleAccess({
-      accessToken: googleAccessToken,
-      accessTokenIssuedAt: googleAccessTokenIssuedAt,
-      requiredScopes: 'clinicalDocs',
-      currentGrantedScopes: googleGrantedScopes,
-      redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-      loginHint: user.email || undefined,
-    }).then((result) => {
-      if (result.status === 'error') {
-        console.warn('[PatientFiles] Não foi possível renovar silenciosamente o Google Drive.');
-      }
-    }).catch((error) => {
-      console.warn('[PatientFiles] Falha ao iniciar a renovação silenciosa do Google Drive.', error instanceof Error ? error.message : 'unknown_error');
-    }).finally(() => {
-      setAuthLoading(false);
-    });
-  }, [user, hasYearlyAccess, targetFolderId, hasClinicalAccess, hasFreshClinicalAccess, googleGrantedScopes, googleAuthorizationStatus]);
+  const canUpload = hasYearlyAccess && Boolean(targetFolderId) && hasClinicalAccess;
 
   const loadFiles = async () => {
     if (!hasYearlyAccess) {
@@ -322,7 +277,7 @@ export default function PatientFilesCard({
       return;
     }
 
-    if (!hasFreshClinicalAccess) {
+    if (!hasClinicalAccess) {
       await showAlert('Conecte novamente sua conta Google antes de selecionar arquivos para este paciente.', {
         title: 'Conexão com o Google necessária',
         variant: 'warning',
@@ -330,8 +285,6 @@ export default function PatientFilesCard({
       });
       return;
     }
-
-    if (googleAuthorizationStatus === 'missing_scopes') return;
 
     const accepted: PendingUpload[] = [];
     const rejected: string[] = [];
@@ -456,11 +409,13 @@ export default function PatientFilesCard({
           }
         }
 
-        const authenticationExpired = isGoogleAuthError(error);
-        if (isGoogleScopeError(error)) {
+        const missingScopes = isGoogleScopeError(error);
+        const authenticationExpired = isGoogleAuthenticationError(error);
+        if (missingScopes) {
           setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
         }
         if (authenticationExpired) {
+          setGoogleAuthorizationStatus('token_expired');
           setGoogleAccessToken(null);
         }
 
@@ -534,7 +489,7 @@ export default function PatientFilesCard({
     );
     if (!confirmed) return;
 
-    if (!googleAccessToken || !hasFreshClinicalAccess) {
+    if (!googleAccessToken || !hasClinicalAccess) {
       await showAlert('Reconecte sua conta Google antes de excluir um arquivo do Drive.', {
         title: 'Conexão com o Google necessária',
         variant: 'warning',
@@ -548,7 +503,8 @@ export default function PatientFilesCard({
       try {
         await deleteGoogleFile(googleAccessToken, file.googleDriveFileId);
       } catch (driveError) {
-        if (isGoogleAuthError(driveError)) {
+        if (isGoogleAuthenticationError(driveError)) {
+          setGoogleAuthorizationStatus('token_expired');
           setGoogleAccessToken(null);
           throw driveError;
         }
@@ -653,7 +609,7 @@ export default function PatientFilesCard({
             </div>
           </div>
         </div>
-      ) : !hasFreshClinicalAccess ? (
+      ) : !hasClinicalAccess ? (
         <div className="rounded-2xl border border-brand-primary/15 bg-brand-primary/[0.04] p-4">
           <div className="flex items-start gap-3">
             <RefreshCw size={18} className="mt-0.5 shrink-0 text-brand-primary" />

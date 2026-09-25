@@ -9,8 +9,7 @@ import { jsPDF } from 'jspdf';
 import { marked } from 'marked';
 import { appendToGoogleDoc, appendTextToGoogleDoc, createGoogleDoc, updateGoogleDocContent, getFolderHierarchy, getGoogleDocContent, getGoogleDocEvolutionEntries, replaceEvolutionInGoogleDoc, uploadPdfToGoogleDrive } from '../services/googleDocs';
 import { sendNotification } from '../services/notificationHelper';
-import { GOOGLE_SCOPE_SETS, ensureGoogleAccess, hasGoogleScopes, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
-import { isGoogleAccessTokenFresh } from '../utils/googleAuthSession';
+import { GOOGLE_SCOPE_SETS, hasGoogleScopes, isGoogleAuthenticationError, isGoogleScopeError, requestGoogleOAuth, getCurrentGoogleOAuthRedirectUrl } from '../services/googleAuth';
 import DOMPurify from 'dompurify';
 import { useSiteConfig } from '../hooks/useSiteConfig';
 import { generateReportPDF } from '../utils/reportPdf';
@@ -19,6 +18,7 @@ import { drawDocumentLogo, normalizeCustomLogoSettings } from '../utils/document
 import { getReportBodyContent } from '../utils/reportContent';
 import { trackLifecycleEvent } from '../services/lifecycleTelemetry';
 import { showAlert } from '../store/modalStore';
+import { GoogleReconnectPrompt } from '../components/common/GoogleReconnectPrompt';
 import { hasActiveYearlyAccess } from '../utils/subscriptionAccess';
 import { PatientPhoto } from '../components/patients/PatientPhoto';
 import { removePatientPhoto } from '../services/patientPhoto';
@@ -124,11 +124,6 @@ const stripMarkdown = (md: string): string => {
     .trim();
 };
 
-const isGoogleAuthenticationError = (error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error || '');
-  return /UNAUTHENTICATED|invalid authentication credentials|INSUFFICIENT_SCOPES|insufficient permissions|401/i.test(message);
-};
-
 const EVOLUTION_EDIT_AUTH_RECOVERY_KEY = 'patient-detail:resume-evolution-edit-after-google-auth';
 const EVOLUTION_EDIT_AUTH_RECOVERY_MAX_AGE_MS = 15 * 60 * 1000;
 
@@ -231,6 +226,7 @@ export default function PatientDetail() {
   const [syncingEvolutionId, setSyncingEvolutionId] = useState<string | null>(null);
   const [syncingFromGoogleDocs, setSyncingFromGoogleDocs] = useState(false);
   const [googleDocSyncMessage, setGoogleDocSyncMessage] = useState('');
+  const [isGoogleReconnecting, setIsGoogleReconnecting] = useState(false);
   const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
   const [showPatientActionsMenu, setShowPatientActionsMenu] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
@@ -240,16 +236,18 @@ export default function PatientDetail() {
   const { 
     user, 
     googleAccessToken, 
-    googleAccessTokenIssuedAt,
     googleGrantedScopes, 
+    googleAuthorizationStatus,
     setGoogleAccessToken,
+    setGoogleAuthorizationStatus,
     subscriptionStatus,
     subscriptionEndsAt,
     profileRole,
     subscriptionPlan
   } = useAuthStore();
-  const hasClinicalAccess = Boolean(googleAccessToken) && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
-  const hasFreshClinicalAccess = hasClinicalAccess && isGoogleAccessTokenFresh(googleAccessToken, googleAccessTokenIssuedAt);
+  const hasClinicalAccess = Boolean(googleAccessToken)
+    && googleAuthorizationStatus !== 'missing_scopes'
+    && hasGoogleScopes(googleGrantedScopes, GOOGLE_SCOPE_SETS.clinicalDocs);
   const hasYearlyAccess = hasActiveYearlyAccess({
     profileRole,
     subscriptionPlan,
@@ -278,6 +276,30 @@ export default function PatientDetail() {
       return false;
     }
     return true;
+  };
+
+  const handleExplicitGoogleReconnect = async () => {
+    if (isGoogleReconnecting) return;
+    setIsGoogleReconnecting(true);
+    try {
+      const { error } = await requestGoogleOAuth({
+        requiredScopes: 'clinicalDocs',
+        currentGrantedScopes: googleGrantedScopes,
+        redirectTo: getCurrentGoogleOAuthRedirectUrl(),
+        loginHint: user?.email || undefined,
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      console.error('Erro ao iniciar reconexão do Google:', error);
+      setGoogleAuthorizationStatus('token_expired');
+      await showAlert(error?.message || 'Não foi possível iniciar a reconexão com o Google.', {
+        title: 'Reconexão não iniciada',
+        variant: 'danger',
+        icon: 'warning',
+      });
+    } finally {
+      setIsGoogleReconnecting(false);
+    }
   };
 
   // Estados para as configurações de lembretes
@@ -513,21 +535,8 @@ export default function PatientDetail() {
   const reconnectGoogleAndResumeEvolutionEdit = async (recovery: EvolutionEditAuthRecovery) => {
     storeEvolutionEditAuthRecovery(recovery);
     evolutionEditAuthRecoveryRef.current = recovery;
-    const result = await ensureGoogleAccess({
-      accessToken: googleAccessToken,
-      accessTokenIssuedAt: googleAccessTokenIssuedAt,
-      requiredScopes: 'clinicalDocs',
-      currentGrantedScopes: googleGrantedScopes,
-      redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-      loginHint: user?.email || undefined,
-    });
-
-    if (result.status === 'error') {
-      throw new Error(`401: ${result.error.message}`);
-    }
-    if (result.status === 'interactive_required') {
-      throw new Error('401: reconexão manual necessária');
-    }
+    setGoogleAuthorizationStatus('token_expired');
+    setGoogleAccessToken(null);
   };
 
   const handleSaveEditedEvolution = async (
@@ -567,7 +576,7 @@ export default function PatientDetail() {
         savedAt: Date.now(),
       };
 
-      if (requiresGoogleSync && (!hasFreshClinicalAccess || !googleAccessToken)) {
+      if (requiresGoogleSync && (!hasClinicalAccess || !googleAccessToken)) {
         await reconnectGoogleAndResumeEvolutionEdit({ ...authRecovery, savedAt: Date.now() });
         return;
       }
@@ -605,6 +614,11 @@ export default function PatientDetail() {
 
           if (rollbackError) {
             console.error('Erro ao restaurar a evolução após falha no Google Docs:', rollbackError);
+          }
+
+          if (isGoogleScopeError(syncError)) {
+            setGoogleAuthorizationStatus('missing_scopes', GOOGLE_SCOPE_SETS.clinicalDocs);
+            throw new Error('A conta Google ainda não liberou todas as permissões clínicas necessárias.');
           }
 
           if (isGoogleAuthenticationError(syncError)) {
@@ -669,12 +683,12 @@ export default function PatientDetail() {
     }
 
     const evolutionStillExists = evolutions.some((evolution) => evolution.id === recovery.evolutionId);
-    if (!evolutionStillExists || !patient?.google_doc_id || !hasFreshClinicalAccess) return;
+    if (!evolutionStillExists || !patient?.google_doc_id || !hasClinicalAccess) return;
     if (evolutionEditAutoResumeStartedRef.current) return;
 
     evolutionEditAutoResumeStartedRef.current = true;
     void handleSaveEditedEvolution(recovery.evolutionId, recovery);
-  }, [evolutions, hasFreshClinicalAccess, id, loading, patient?.google_doc_id, user?.id]);
+  }, [evolutions, hasClinicalAccess, id, loading, patient?.google_doc_id, user?.id]);
 
   const closeEvolutionEditor = () => {
     clearEvolutionEditAuthRecovery();
@@ -822,6 +836,7 @@ export default function PatientDetail() {
               console.error('A evolução foi assinada, mas não foi possível salvar o PDF no Google Drive:', uploadError);
 
               if (isGoogleAuthenticationError(uploadError)) {
+                setGoogleAuthorizationStatus('token_expired');
                 setGoogleAccessToken(null);
                 const shouldReconnectGoogle = await requestConfirmation({
                   title: 'Evolução assinada; reconectar Google Drive?',
@@ -995,7 +1010,8 @@ export default function PatientDetail() {
       }
 
       if (!hasClinicalAccess) {
-        alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
+        alert("Para ler o prontuário no Google Docs, reconecte sua conta Google pelo aviso exibido nesta página.");
+        setGoogleAuthorizationStatus('token_expired');
         await requestGoogleOAuth({
           requiredScopes: 'clinicalDocs',
           currentGrantedScopes: googleGrantedScopes,
@@ -1021,21 +1037,9 @@ export default function PatientDetail() {
         setPrintingProntuario(false);
 
         if (isGoogleAuthenticationError(err)) {
+          setGoogleAuthorizationStatus('token_expired');
           setGoogleAccessToken(null);
-          try {
-            const { error: reauthenticationError } = await requestGoogleOAuth({
-              requiredScopes: 'clinicalDocs',
-              currentGrantedScopes: googleGrantedScopes,
-              redirectTo: getCurrentGoogleOAuthRedirectUrl(),
-              loginHint: user?.email || undefined
-            });
-
-            if (reauthenticationError) throw reauthenticationError;
-            return;
-          } catch (reauthenticationError: any) {
-            console.error('Erro ao renovar autenticação do Google:', reauthenticationError);
-            alert('Sua sessão do Google expirou. Não foi possível renová-la automaticamente. Tente novamente.');
-          }
+          alert('Sua sessão do Google expirou. A edição foi preservada; use “Reconectar Google” para continuar.');
           return;
         }
 
@@ -1359,7 +1363,8 @@ export default function PatientDetail() {
 
   const handleGenerateAiReport = async () => {
     if (!hasClinicalAccess) {
-      alert("Para ler o prontuário no Google Docs, precisamos renovar seu acesso à sua conta Google. Você será redirecionado.");
+      alert("Para ler o prontuário no Google Docs, reconecte sua conta Google pelo aviso exibido nesta página.");
+      setGoogleAuthorizationStatus('token_expired');
       await requestGoogleOAuth({
         requiredScopes: 'clinicalDocs',
         currentGrantedScopes: googleGrantedScopes,
@@ -1401,13 +1406,9 @@ export default function PatientDetail() {
 
       if (response.status === 401) {
         if (result.error && (result.error.includes("Google") || result.error.includes("Sessão do Google"))) {
-          alert("Sua sessão do Google expirou. Vamos redirecionar você para reautenticar de forma segura.");
+          alert("Sua sessão do Google expirou. Use “Reconectar Google” para continuar.");
+          setGoogleAuthorizationStatus('token_expired');
           setGoogleAccessToken(null);
-          await requestGoogleOAuth({
-            requiredScopes: 'clinicalDocs',
-            currentGrantedScopes: googleGrantedScopes,
-            redirectTo: getCurrentGoogleOAuthRedirectUrl()
-          });
           return;
         } else {
           alert("Sua sessão de acesso expirou por razões de segurança. Você será redirecionado para a tela de login.");
@@ -1542,7 +1543,8 @@ export default function PatientDetail() {
       console.error("Erro ao exportar:", err);
       let msg = err.message || "Erro desconhecido";
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
-        alert("Sua sessão do Google expirou. Por favor, reautentique no painel.");
+        alert("Sua sessão do Google expirou. Use “Reconectar Google” para continuar.");
+        setGoogleAuthorizationStatus('token_expired');
         setGoogleAccessToken(null);
       } else if (msg.includes('userRateLimitExceeded') || msg.includes('rateLimitExceeded') || msg.includes('quotaExceeded') || msg.includes('403')) {
         alert("O Google está limitando temporariamente essa ação. Tente novamente em alguns segundos.");
@@ -1621,7 +1623,8 @@ export default function PatientDetail() {
       console.error("Erro ao salvar no Google Docs:", err);
       const msg = err.message || "Erro desconhecido";
       if (msg.includes('401') || msg.includes('UNAUTHENTICATED')) {
-        alert("Sua sessão do Google expirou. Por favor, reautentique no painel.");
+        alert("Sua sessão do Google expirou. Use “Reconectar Google” para continuar.");
+        setGoogleAuthorizationStatus('token_expired');
         setGoogleAccessToken(null);
       } else {
         alert("Erro ao salvar no Google Docs: " + msg);
@@ -2250,7 +2253,7 @@ export default function PatientDetail() {
 
   const syncEvolutionsFromGoogleDocs = async (options: { manual?: boolean } = {}) => {
     if (googleDocSyncInFlightRef.current || !patient?.google_doc_id || !user?.id) return;
-    if (!hasFreshClinicalAccess || !googleAccessToken) {
+    if (!hasClinicalAccess || !googleAccessToken) {
       if (options.manual) {
         setGoogleDocSyncMessage('Renove a conexão com o Google para sincronizar o prontuário.');
         await requestGoogleOAuth({
@@ -2333,6 +2336,7 @@ export default function PatientDetail() {
     } catch (error: any) {
       console.error('Erro ao sincronizar alterações do Google Docs:', error);
       if (isGoogleAuthenticationError(error)) {
+        setGoogleAuthorizationStatus('token_expired');
         setGoogleAccessToken(null);
         setGoogleDocSyncMessage('A conexão com o Google expirou. Reconecte para sincronizar as alterações.');
       } else {
@@ -2345,12 +2349,12 @@ export default function PatientDetail() {
   };
 
   useEffect(() => {
-    if (loading || !patient?.google_doc_id || !hasFreshClinicalAccess || evolutions.length === 0) return;
+    if (loading || !patient?.google_doc_id || !hasClinicalAccess || evolutions.length === 0) return;
     void syncEvolutionsFromGoogleDocs();
-  }, [loading, patient?.google_doc_id, hasFreshClinicalAccess, id]);
+  }, [loading, patient?.google_doc_id, hasClinicalAccess, id]);
 
   useEffect(() => {
-    if (!patient?.google_doc_id || !hasFreshClinicalAccess) return;
+    if (!patient?.google_doc_id || !hasClinicalAccess) return;
 
     const syncAfterReturningToApp = () => {
       if (document.visibilityState !== 'visible') return;
@@ -2364,7 +2368,7 @@ export default function PatientDetail() {
       window.removeEventListener('focus', syncAfterReturningToApp);
       document.removeEventListener('visibilitychange', syncAfterReturningToApp);
     };
-  }, [patient?.google_doc_id, hasFreshClinicalAccess, evolutions, editingEvolutionId]);
+  }, [patient?.google_doc_id, hasClinicalAccess, evolutions, editingEvolutionId]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (
@@ -2462,6 +2466,12 @@ export default function PatientDetail() {
       onPointerCancel={handlePointerCancel}
       onClickCapture={handleSwipeClickCapture}
     >
+      {googleAuthorizationStatus === 'token_expired' && (
+        <GoogleReconnectPrompt
+          onReconnect={() => void handleExplicitGoogleReconnect()}
+          isLoading={isGoogleReconnecting}
+        />
+      )}
       <style>{`
         @media (max-width: 1279px) {
           .patient-mobile-swipe-surface { touch-action: pan-y pinch-zoom; }

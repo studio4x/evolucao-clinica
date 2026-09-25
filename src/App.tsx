@@ -64,7 +64,7 @@ import {
 } from './utils/onboarding';
 import { InstallPrompt } from './components/common/InstallPrompt';
 import { PermissionNotice } from './components/common/PermissionNotice';
-import { clearPendingGoogleScopes, clearSilentGoogleOAuthAttempt, readPendingGoogleScopes, validateGoogleAccessTokenScopes } from './services/googleAuth';
+import { clearPendingGoogleScopes, readPendingGoogleScopes, validateGoogleAccessTokenScopes } from './services/googleAuth';
 import { clearLazyRetryQueryParam, lazyWithRetry } from './utils/lazyWithRetry';
 import { ChunkLoadErrorBoundary } from './components/common/ChunkLoadErrorBoundary';
 import { addNativeBillingListener, hasNativeBillingBridge, verifyGooglePlaySubscription } from './services/billing';
@@ -422,21 +422,6 @@ export default function App() {
       setAuthReady(true);
       return;
     }
-    // A falha de uma tentativa `prompt=none` volta pela URL sem sessão nova.
-    // Consumi-la aqui impede que a próxima montagem repita o mesmo redirect.
-    const oauthParams = new URLSearchParams(window.location.search);
-    const oauthError = oauthParams.get('error');
-    const oauthErrorCode = oauthParams.get('error_code');
-    if (oauthError || oauthErrorCode) {
-      const isGoogleInteractionFailure = [oauthError, oauthErrorCode]
-        .filter(Boolean)
-        .some((value) => /interaction_required|login_required|access_denied/i.test(value || ''));
-      if (isGoogleInteractionFailure) {
-        clearSilentGoogleOAuthAttempt();
-        window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.hash}`);
-      }
-    }
-
     const trackMetaRegistrationBeforeAppAccess = (session: any) => {
       const existing = metaRegistrationTrackingRef.current;
       if (existing?.userId === session.user.id) return existing.promise;
@@ -515,13 +500,11 @@ export default function App() {
           const hasProfile = currentState.profileStatus !== null;
 
           if (isSameUser && hasProfile) {
-            // Se o provider_token do Google mudou ou foi fornecido, atualiza
+            // Reaplicar também o mesmo provider_token atualiza o issuedAt sem
+            // iniciar OAuth: a operação Google continua sendo a autoridade real.
             if (session.provider_token) {
-              clearSilentGoogleOAuthAttempt();
-              if (currentState.googleAccessToken !== session.provider_token) {
-                setGoogleAccessToken(session.provider_token);
-                setGoogleAccessUserId(session.user.id);
-              }
+              setGoogleAccessToken(session.provider_token);
+              setGoogleAccessUserId(session.user.id);
             }
             setAuthReady(true);
             return;
@@ -531,7 +514,6 @@ export default function App() {
 
           setUser(session.user);
           if (session.provider_token) {
-            clearSilentGoogleOAuthAttempt();
             setGoogleAccessToken(session.provider_token);
             setGoogleAccessUserId(session.user.id);
           } else {

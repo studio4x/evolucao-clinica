@@ -43,6 +43,8 @@ assert.match(
   /validateGoogleDocAccess\(googleAccessToken, patient\.google_doc_id\)/,
   'O acesso ao Google Docs deve ser validado antes do processamento clínico.'
 );
+assert.doesNotMatch(shareTargetSource, /hasFreshClinicalAccess|isGoogleAccessTokenFresh/, 'Áudio compartilhado não pode bloquear a tentativa pelo TTL local.');
+assert.match(shareTargetSource, /isGoogleAuthenticationError\(error\)[\s\S]*setGoogleAuthorizationStatus\('token_expired'\)[\s\S]*setGoogleAccessToken\(null\)/, 'Falha real no áudio compartilhado deve preparar reconexão explícita.');
 
 const appSource = fs.readFileSync('src/App.tsx', 'utf8');
 assert.doesNotMatch(
@@ -53,8 +55,9 @@ assert.doesNotMatch(
 
 const googleAuthSource = fs.readFileSync('src/services/googleAuth.ts', 'utf8');
 assert.match(googleAuthSource, /googleOAuthLaunch/, 'Chamadas simultâneas devem compartilhar o mesmo lançamento OAuth.');
-assert.match(googleAuthSource, /SILENT_GOOGLE_ATTEMPT_KEY/, 'A tentativa silenciosa deve ter proteção contra loops.');
-assert.match(googleAuthSource, /isGoogleAccessTokenFresh[\s\S]*return \{ status: 'ready' \}/, 'Token recente com escopos corretos deve continuar sem OAuth.');
+assert.doesNotMatch(googleAuthSource, /SILENT_GOOGLE_ATTEMPT_KEY|prompt:\s*['"]none['"]/, 'O serviço não deve iniciar OAuth silencioso ou criar um loop de redirects.');
+assert.match(googleAuthSource, /if \(accessToken && hasGoogleScopes\(currentGrantedScopes, required\)\) \{[\s\S]*return \{ status: 'ready' \}/, 'Token com escopos corretos deve permitir a operação independentemente do TTL local.');
+assert.doesNotMatch(googleAuthSource, /isGoogleAccessTokenFresh/, 'A idade local do token não pode bloquear uma operação clínica.');
 assert.doesNotMatch(
   googleAuthSource,
   /isExpandingScopes[\s\S]*resolvedPrompt = prompt \?\? .*consent/,
@@ -73,23 +76,19 @@ const newEvolutionSource = fs.readFileSync('src/pages/NewEvolution.tsx', 'utf8')
 const patientFilesSource = fs.readFileSync('src/components/patients/PatientFilesCard.tsx', 'utf8');
 assert.match(
   patientFilesSource,
-  /hasClinicalAccess[\s\S]*hasFreshClinicalAccess[\s\S]*ensureGoogleAccess[\s\S]*requiredScopes:\s*'clinicalDocs'/,
-  'O card de arquivos deve tentar renovar silenciosamente o acesso Google expirado.'
+  /const canUpload = hasYearlyAccess && Boolean\(targetFolderId\) && hasClinicalAccess/,
+  'O card de arquivos deve permitir a tentativa com token e escopos conhecidos, sem depender do TTL local.'
 );
+assert.doesNotMatch(patientFilesSource, /ensureGoogleAccess|canAttemptSilentGoogleOAuth|silentAuthorizationAttemptedRef|isGoogleAccessTokenFresh/, 'Montar o card não pode iniciar nem bloquear OAuth pelo TTL.');
 assert.match(
   patientDetailSource,
-  /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*ensureGoogleAccess\([\s\S]*requiredScopes:\s*'clinicalDocs'/,
-  'A edição deve ser preservada antes de renovar o token Google expirado.'
-);
-assert.match(
-  patientDetailSource,
-  /hasFreshClinicalAccess[\s\S]*reconnectGoogleAndResumeEvolutionEdit/,
-  'O salvamento deve renovar preventivamente um token Google antigo.'
+  /storeEvolutionEditAuthRecovery\(recovery\)[\s\S]*setGoogleAuthorizationStatus\('token_expired'\)[\s\S]*setGoogleAccessToken\(null\)/,
+  'A edição deve ser preservada e marcada para reconexão explícita após falha real.'
 );
 assert.match(
   patientDetailSource,
   /isGoogleAuthenticationError\(syncError\)[\s\S]*reconnectGoogleAndResumeEvolutionEdit/,
-  'Um 401 do Google Docs deve iniciar a reconexão automática.'
+  'Um 401 do Google Docs deve preservar a edição e preparar a reconexão explícita.'
 );
 assert.match(
   patientDetailSource,
@@ -116,5 +115,12 @@ assert.match(
   /if \(!isAuthReady \|\| embedded \|\| isOnboardingMode/,
   'A evolução embutida no Controle de Sessões não deve abrir reconexão automaticamente ao ser acessada.'
 );
+assert.match(newEvolutionSource, /googleAuthorizationStatus === 'token_expired'/, 'Token expirado deve usar a UX curta de reconexão.');
+assert.match(newEvolutionSource, /GooglePermissionRecoveryModal/, 'Escopos ausentes devem permanecer no fluxo específico de permissões.');
+assert.match(appSource, /setGoogleAccessToken\(session\.provider_token\);[\s\S]*setGoogleAccessUserId\(session\.user\.id\);/, 'Um provider token igual também deve atualizar o issuedAt sem iniciar OAuth.');
+
+const appVersionSource = fs.readFileSync('src/components/layout/AppVersion.tsx', 'utf8');
+assert.match(appVersionSource, /APP_VERSION = "v1\.10\.984"/);
+assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.93"/);
 
 console.log('Google authentication recovery tests passed.');

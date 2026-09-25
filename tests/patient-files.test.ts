@@ -44,7 +44,7 @@ assert.match(patientFilesSource, /deleteGoogleFile/);
 assert.match(patientFilesSource, /googleDriveWebViewLink/);
 assert.match(patientFilesSource, /Vincular pasta/);
 assert.match(patientFilesSource, /card !overflow-visible/);
-assert.match(patientFilesSource, /Esta funcionalidade é somente para assinantes do Plano Anual/);
+assert.match(patientFilesSource, /Os Arquivos do paciente são exclusivos para assinantes do Plano Anual/);
 assert.match(patientFilesSource, /Plano Anual/);
 assert.match(patientFilesSource, /open \? 'z-\[70\]' : 'z-0'/);
 assert.match(patientFilesSource, /absolute z-\[80\]/);
