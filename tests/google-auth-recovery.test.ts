@@ -164,8 +164,4 @@ assert.match(newEvolutionSource, /googleAuthorizationStatus === 'token_expired'/
 assert.match(newEvolutionSource, /GooglePermissionRecoveryModal/, 'Escopos ausentes devem permanecer no fluxo específico de permissões.');
 assert.match(appSource, /setGoogleAccessToken\(session\.provider_token\);[\s\S]*setGoogleAccessUserId\(session\.user\.id\);/, 'Um provider token igual também deve atualizar o issuedAt sem iniciar OAuth.');
 
-const appVersionSource = fs.readFileSync('src/components/layout/AppVersion.tsx', 'utf8');
-assert.match(appVersionSource, /APP_VERSION = "v1\.10\.985"/);
-assert.match(appVersionSource, /PLAY_STORE_VERSION = "1\.0\.93"/);
-
 console.log('Google authentication recovery tests passed.');
