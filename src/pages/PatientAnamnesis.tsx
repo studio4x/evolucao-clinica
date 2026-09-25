@@ -363,7 +363,7 @@ export default function PatientAnamnesis() {
           revisionHistory,
           clinicalVersionHistory,
         ] = await Promise.all([
-          supabase.from('patients').select('id, full_name, birth_date, cpf, phone, postal_code, street, address_number, address_complement, neighborhood, city, state').eq('id', patientId).single(),
+          supabase.from('patients').select('id, full_name, birth_date, cpf, phone, email, postal_code, street, address_number, address_complement, neighborhood, city, state').eq('id', patientId).single(),
           supabase
             .from('professionals')
             .select('full_name, professional_title, professional_register, custom_logo_url, custom_logo_settings, role, subscription_plan, subscription_status, subscription_ends_at')
@@ -1166,7 +1166,7 @@ export default function PatientAnamnesis() {
         }
       />
 
-      {patientId && <AnamnesisLinkRequests patientId={patientId} current={current} />}
+      {patientId && <AnamnesisLinkRequests patientId={patientId} current={current} patient={patientData} onEnsureCurrent={ensureCurrent} />}
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="space-y-4">

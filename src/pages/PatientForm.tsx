@@ -56,6 +56,10 @@ import {
   getPatientGoogleSetupAlert,
   getPatientGoogleSetupState,
 } from '../utils/patientGoogleSetup';
+import {
+  isValidPatientEmail,
+  normalizePatientEmail,
+} from '../utils/anamnesisLinkSharing';
 
 declare global {
   interface Window {
@@ -143,6 +147,7 @@ type PatientFormValues = {
   birth_date: string;
   cpf: string;
   phone: string;
+  email: string;
   notes: string;
   status: 'active' | 'inactive';
   google_doc_id: string;
@@ -201,6 +206,7 @@ const emptyPatientFormValues = (): PatientFormValues => ({
   birth_date: '',
   cpf: '',
   phone: '',
+  email: '',
   notes: '',
   status: 'active',
   google_doc_id: '',
@@ -613,6 +619,7 @@ export default function PatientForm() {
               birth_date: data.birth_date || '',
               cpf: formatCpf(data.cpf || ''),
               phone: storedPhone.nationalNumber,
+              email: normalizePatientEmail(data.email || ''),
               notes: data.notes || '',
               status: (data.status === 'inactive' ? 'inactive' : 'active'),
               google_doc_id: data.google_doc_id || '',
@@ -1240,6 +1247,16 @@ export default function PatientForm() {
     e.preventDefault();
     if (!user) return;
 
+    const normalizedEmail = normalizePatientEmail(formData.email);
+    if (normalizedEmail && !isValidPatientEmail(normalizedEmail)) {
+      await showAlert('Informe um endereço de e-mail válido ou deixe o campo em branco.', {
+        title: 'E-mail inválido',
+        variant: 'warning',
+        icon: 'warning',
+      });
+      return;
+    }
+
     const googleSetupState = getPatientGoogleSetupState(formData);
     const shouldRequireGoogleSetup = !id || !patientLoadedRef.current || !legacyGoogleSetupPendingRef.current;
     if (shouldRequireGoogleSetup && googleSetupState !== 'complete') {
@@ -1315,6 +1332,7 @@ export default function PatientForm() {
         phone: formData.phone
           ? `${ddi} ${formatWhatsAppNationalNumber(formData.phone, phoneCountry)}`
           : null,
+        email: normalizedEmail || null,
         notes: formData.notes,
         status: formData.status,
         updated_at: new Date().toISOString(),
@@ -1675,6 +1693,24 @@ export default function PatientForm() {
           </div>
           <p className="text-xs text-brand-text-muted mt-1">
             Usado para enviar mensagens rápidas de aniversário via WhatsApp.
+          </p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-brand-text mb-1">
+            E-mail <span className="text-brand-text-muted font-normal text-xs">(opcional)</span>
+          </label>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="paciente@exemplo.com"
+            value={formData.email}
+            onChange={e => setFormData({ ...formData, email: e.target.value })}
+            className="input-field p-2"
+            maxLength={254}
+          />
+          <p className="text-xs text-brand-text-muted mt-1">
+            Usado para compartilhar formulários de Anamnese. Não cria uma conta de acesso.
           </p>
         </div>
         <p className="text-[11px] text-brand-text-muted">Os dados desta seção são destinados ao contato com o paciente.</p>
