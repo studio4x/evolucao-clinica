@@ -44,7 +44,7 @@ assert.match(page, /Voltar para o paciente/);
 assert.match(page, /title=\{`Controle de Sessões\$\{patient\?\.full_name/);
 assert.match(page, /description="Organize e acompanhe os atendimentos/);
 assert.match(page, /Como funciona o Controle de Sessões/);
-assert.match(page, /Abrir guia de como funciona o Controle de Sessões/);
+assert.match(page, /label="o Controle de Sessões"/);
 assert.match(page, /SESSION_GUIDE_STEPS/);
 assert.match(page, /SESSION_SUPPORT_HREF/);
 assert.match(page, /supportHref=\{SESSION_SUPPORT_HREF\}/);
