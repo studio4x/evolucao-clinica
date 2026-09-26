@@ -100,6 +100,7 @@ import { getProfessionalFunnelBoard, PROFESSIONAL_FUNNEL_STAGES } from "./server
 import { buildProfessionalFunnelMessage } from "./src/utils/professionalFunnelMessages.js";
 import { loadServerEnvironment } from "./server/config/environment.js";
 import { registerAnamnesisLinkFormRoutes } from "./server/anamnesisLinkForms.js";
+import { registerEvolutionAudioAssetRoutes } from "./server/evolutionAudioAssets.js";
 
 dotenv.config();
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -1941,6 +1942,14 @@ app.get("/api/ai/audio-policy", requireAuth, async (req: any, res) => {
     maxEvolutionDurationSeconds: resolved.policy.maxDurationSeconds,
     maxFileBytes: resolved.policy.maxFileBytes,
   });
+});
+
+registerEvolutionAudioAssetRoutes({
+  app,
+  requireAuth,
+  supabaseAdmin,
+  resolveAudioPolicy: resolveServerAudioPolicy,
+  getAudioDurationSeconds: getAudioDurationSecondsFromBuffer,
 });
 
 const ACQUISITION_TELEMETRY_EVENTS = new Set([
